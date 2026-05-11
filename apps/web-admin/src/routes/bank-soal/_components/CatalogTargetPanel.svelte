@@ -54,7 +54,7 @@
 		</span>
 	</summary>
 	<div class="border-t border-border px-4 pb-4 pt-3">
-		<p class="mb-3 text-xs text-muted-foreground">Target ini hanya membantu kesiapan paket/event; daftar Bank Soal tetap menjadi repositori reusable.</p>
+		<p class="mb-3 text-xs text-muted-foreground">Target ini hanya membantu kesiapan paket/kegiatan; daftar Bank Soal tetap menjadi bank soal pakai ulang.</p>
 		<div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.42fr)]">
 			<div class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
 				{#each questionTargets as target (target.subject_id)}

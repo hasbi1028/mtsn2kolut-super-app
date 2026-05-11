@@ -55,7 +55,7 @@
 	const statusFilters: Array<{ value: StatusFilter; label: string }> = [
 		{ value: 'all', label: 'Semua' },
 		{ value: 'active', label: 'Aktif' },
-		{ value: 'draft', label: 'Draft' },
+		{ value: 'draft', label: 'Konsep' },
 		{ value: 'finished', label: 'Selesai' },
 	];
 
@@ -63,8 +63,8 @@
 		ulangan: 'Ulangan', uts: 'UTS', uas: 'UAS', uam: 'UAM', tryout: 'Try Out', lainnya: 'Lainnya'
 	};
 	const scopeLabel: Record<string, string> = { class: 'Per Kelas', grade: 'Per Tingkat', school: 'Seluruh Sekolah' };
-	const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Aktif', finished: 'Selesai' };
-	const eventHomeCopy = 'Daftar ringkas kegiatan CBT. Buka satu kegiatan untuk mengikuti wizard kesiapan paket, sesi, monitoring, dan hasil.';
+	const statusLabel: Record<string, string> = { draft: 'Konsep', active: 'Aktif', finished: 'Selesai' };
+	const eventHomeCopy = 'Daftar ringkas kegiatan ujian. Buka satu kegiatan untuk mengikuti alur kesiapan paket, sesi, pemantauan, dan hasil.';
 
 	function statusClass(status: string) {
 		if (status === 'active') return 'bg-primary/15 text-primary border-primary/20';
@@ -197,7 +197,7 @@
 	}
 
 	function handleOverviewRenderError(error: unknown) {
-		console.error('CBT events render failed', error);
+		console.error('Daftar kegiatan asesmen belum dapat ditampilkan', error);
 	}
 
 	function showToast(msg: string) {
@@ -311,18 +311,18 @@
 	});
 </script>
 
-<svelte:head><title>Kegiatan & Sesi CBT — MTSN 2 Kolut</title></svelte:head>
+<svelte:head><title>Kegiatan & Sesi Ujian — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-5">
 	<section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
 		<div class="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
 			<div class="min-w-0">
-				<p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Kegiatan & Sesi CBT</p>
-				<h1 class="mt-1 text-2xl font-semibold tracking-tight text-foreground">Kegiatan & Sesi CBT</h1>
+				<p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Kegiatan & Sesi Ujian</p>
+				<h1 class="mt-1 text-2xl font-semibold tracking-tight text-foreground">Kegiatan & Sesi Ujian</h1>
 				<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{eventHomeCopy}</p>
 			</div>
 			<div class="flex flex-wrap gap-2 lg:justify-end">
-				<a href={resolve('/asesmen')} class="inline-flex rounded-md border border-input bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/50">Beranda CBT</a>
+				<a href={resolve('/asesmen')} class="inline-flex rounded-md border border-input bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/50">Beranda Ujian</a>
 				<a href={resolve('/asesmen/kegiatan/new')} class="inline-flex rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Buat Kegiatan</a>
 			</div>
 		</div>
@@ -332,7 +332,7 @@
 		<Card.Root class="border-border shadow-sm">
 			<Card.Header class="pb-2">
 				<Card.Title class="text-base">{editId ? 'Edit Kegiatan' : 'Buat Kegiatan'}</Card.Title>
-				<Card.Description>Isi identitas kegiatan sekali, lalu lanjutkan ke wizard kesiapan untuk paket, sesi, monitoring, dan hasil.</Card.Description>
+				<Card.Description>Isi identitas kegiatan sekali, lalu lanjutkan ke alur kesiapan untuk paket, sesi, pemantauan, dan hasil.</Card.Description>
 			</Card.Header>
 			<Card.Content class="space-y-4">
 				<div class="grid gap-3 sm:grid-cols-2">

@@ -82,10 +82,10 @@
 	const checklistItems = [
 		'Ruang, kursi, dan nomor meja sesuai daftar peserta',
 		'Jaringan internet dan listrik sudah dicek sebelum sesi dimulai',
-		'Token ruang diumumkan hanya setelah peserta siap di ruang dan dipakai sebagai validasi login APK/portal',
-		'Perangkat cadangan / prosedur login ulang sudah diketahui pengawas',
-		'Pengawas menyampaikan tata tertib, waktu, dan prosedur submit',
-		'Semua peserta akhir sesi sudah submit atau diberi catatan kejadian'
+		'Kode ruang diumumkan hanya setelah peserta siap di ruang dan dipakai sebagai pemeriksaan masuk APK/portal',
+		'Perangkat cadangan / prosedur masuk ulang sudah diketahui pengawas',
+		'Pengawas menyampaikan tata tertib, waktu, dan prosedur kirim ujian',
+		'Semua peserta akhir sesi sudah kirim ujian atau diberi catatan kejadian'
 	];
 
 	let printPackPromise = $state<Promise<PrintPackData> | null>(null);
@@ -121,7 +121,7 @@
 	}
 
 	function handlePrintPackRenderError(error: unknown) {
-		console.error('CBT room proctor print pack render failed', error);
+		console.error('Paket cetak pengawas ruang belum dapat ditampilkan', error);
 	}
 
 	function sortParticipants(rows: ProctoringRow[]) {
@@ -148,7 +148,7 @@
 	}
 
 	function submittedLabel(value: string | null) {
-		return value ? 'Sudah submit' : 'Belum submit';
+		return value ? 'Sudah kirim' : 'Belum kirim';
 	}
 
 	function proctorRoleLabel(role: string) {
@@ -216,10 +216,10 @@
 				<div>
 					<a href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/proctoring`)} class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
 						<ArrowLeftIcon class="size-3.5" />
-						Kembali ke dashboard ruang
+						Kembali ke panel ruang
 					</a>
 					<h1 class="mt-2 text-2xl font-semibold tracking-tight">Paket Pengawas Ruang CBT</h1>
-					<p class="text-sm text-muted-foreground">Daftar hadir, token, denah meja, kontak operator, dan checklist kesiapan.</p>
+					<p class="text-sm text-muted-foreground">Daftar hadir, kode ujian, denah meja, kontak operator, dan daftar pemeriksaan kesiapan.</p>
 				</div>
 				<Button onclick={() => window.print()}>
 					<PrinterIcon class="mr-2 size-4" />
@@ -255,9 +255,9 @@
 					</div>
 				</div>
 				<div class="border border-primary/20 bg-primary/10 p-4 text-center">
-					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Token Ruang</p>
+					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Kode Ruang</p>
 					<p class="mt-3 font-mono text-3xl font-bold tracking-[0.18em] text-primary">{room.room_token || '—'}</p>
-					<p class="mt-3 text-[11px] leading-4 text-primary">Dipakai sebagai kunci ruang untuk membuka akses token siswa di portal dan/atau validasi login APK. Jangan diberikan sebelum peserta berada di ruang ujian.</p>
+					<p class="mt-3 text-[11px] leading-4 text-primary">Dipakai sebagai kunci ruang untuk membuka akses kode ujian siswa di portal dan/atau pemeriksaan masuk APK. Jangan diberikan sebelum peserta berada di ruang ujian.</p>
 				</div>
 			</section>
 
@@ -271,7 +271,7 @@
 					<p class="mt-1 text-2xl font-bold">{room.capacity}</p>
 				</div>
 				<div class="border border-border bg-card p-3">
-					<p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Submit</p>
+					<p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Kirim</p>
 					<p class="mt-1 text-2xl font-bold">{room.submitted_count}</p>
 				</div>
 				<div class="border border-border bg-card p-3">
@@ -323,7 +323,7 @@
 			</section>
 
 			<section class="border border-border bg-card p-4">
-				<h3 class="text-sm font-bold uppercase tracking-[0.16em]">Daftar Hadir dan Token Siswa</h3>
+					<h3 class="text-sm font-bold uppercase tracking-[0.16em]">Daftar Hadir dan Kode Ujian Siswa</h3>
 				<div class="mt-3 overflow-x-auto">
 					<table class="min-w-full text-left text-[11px]">
 						<thead class="bg-muted text-muted-foreground">
@@ -332,7 +332,7 @@
 								<th class="border px-2 py-1.5 text-center">Meja</th>
 								<th class="border px-2 py-1.5">NIS</th>
 								<th class="border px-2 py-1.5">Nama Peserta</th>
-								<th class="border px-2 py-1.5">Token</th>
+								<th class="border px-2 py-1.5">Kode Ujian</th>
 								<th class="border px-2 py-1.5">Status</th>
 								<th class="border px-2 py-1.5">Paraf Masuk</th>
 								<th class="border px-2 py-1.5">Paraf Keluar / Catatan</th>
@@ -377,7 +377,7 @@
 				</div>
 
 				<div class="border border-border bg-card p-4">
-					<h3 class="text-sm font-bold uppercase tracking-[0.16em]">Checklist Kesiapan</h3>
+					<h3 class="text-sm font-bold uppercase tracking-[0.16em]">Daftar Pemeriksaan Kesiapan</h3>
 					<div class="mt-3 space-y-2 text-xs">
 						{#each checklistItems as item (item)}
 							<div class="flex items-start gap-2">

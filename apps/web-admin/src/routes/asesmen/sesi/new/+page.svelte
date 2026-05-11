@@ -219,7 +219,7 @@
 	}
 
 	function handleRenderError(error: unknown) {
-		console.error('CBT session create render failed', error);
+		console.error('Form sesi ujian belum dapat ditampilkan', error);
 	}
 
 	async function createSession() {
@@ -265,14 +265,14 @@
 	});
 </script>
 
-<svelte:head><title>{eventId ? 'Buat Sesi Event CBT' : 'Buat Sesi CBT'} — MTSN 2 Kolut</title></svelte:head>
+<svelte:head><title>{eventId ? 'Buat Sesi Kegiatan Ujian' : 'Buat Sesi Ujian'} — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
 	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-2">
 				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Jadwal dan Token CBT</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground">{eventId ? 'Buat Sesi Event' : 'Buat Sesi CBT'}</h1>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">{eventId ? 'Buat Sesi Event' : 'Buat Sesi Ujian'}</h1>
 				<p class="text-sm leading-6 text-muted-foreground">Buat draft sesi dari paket siap pakai, lalu lanjutkan ke peserta, ruang, pengawas, dan token dari daftar sesi.</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
@@ -291,7 +291,7 @@
 					<p class="font-semibold">Sesi untuk kegiatan: {eventContext?.title ?? eventId}</p>
 					<p class="mt-1 text-success">Payload pembuatan sesi membawa <code class="rounded bg-card px-1">event_id</code>. Paket global atau event lain disembunyikan dari pilihan sesi ini.</p>
 				</div>
-				<Button href={resolve(`/asesmen/paket/new?event_id=${eventId}`)} variant="outline" size="sm">Buat Paket Event</Button>
+				<Button href={resolve(`/asesmen/paket/new?event_id=${eventId}`)} variant="outline" size="sm">Buat Paket Kegiatan</Button>
 			</div>
 		</div>
 	{:else}

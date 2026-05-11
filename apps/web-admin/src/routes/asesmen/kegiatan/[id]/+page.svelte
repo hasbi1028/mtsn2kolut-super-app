@@ -115,16 +115,16 @@
 	let targetEssay = $state(5);
 	let targetSettingsBusy = $state(false);
 
-	const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Aktif', finished: 'Selesai' };
+	const statusLabel: Record<string, string> = { draft: 'Konsep', active: 'Aktif', finished: 'Selesai' };
 	const scopeLabel: Record<string, string> = { class: 'Per Kelas', grade: 'Per Tingkat', school: 'Seluruh Sekolah' };
 	const questionRequirementScopeLabel: Record<string, string> = {
 		per_rombel: 'Per rombel + mapel + guru',
 		per_level: 'Per tingkat + mapel + guru',
-		pool_level_subject: 'Pool tingkat + mapel',
+		pool_level_subject: 'Kumpulan tingkat + mapel',
 	};
 	const questionRequirementStatusLabel: Record<string, string> = {
 		published_only: 'Hanya soal terbit',
-		all_progress: 'Draft/review/terbit dihitung',
+		all_progress: 'Konsep/verifikasi/terbit dihitung',
 	};
 
 	function isRecord(value: unknown): value is Record<string, unknown> {
@@ -187,7 +187,7 @@
 		results = [];
 		detailPromise = fetchDetail().then((detail) => {
 			if (requestId !== detailRequestId) {
-				if (!info) throw new Error('Permintaan dashboard kegiatan dibatalkan');
+				if (!info) throw new Error('Permintaan panel kegiatan dibatalkan');
 				return { info, results, overview: null, sessions: [], packages: [], questionCompleteness: null };
 			}
 			applyDetail(detail);
@@ -205,11 +205,11 @@
 
 	function detailErrorMessage(error: unknown) {
 		if (error instanceof Error && error.message.trim()) return error.message;
-		return 'Gagal memuat wizard kesiapan kegiatan';
+		return 'Gagal memuat alur kesiapan kegiatan';
 	}
 
 	function handleDetailRenderError(error: unknown) {
-		console.error('CBT event readiness wizard render failed', error);
+		console.error('Pemeriksaan kesiapan kegiatan asesmen belum dapat ditampilkan', error);
 	}
 
 	function fmtScore(score: string | null) {
@@ -255,10 +255,10 @@
 			{ label: 'Penugasan', helper: 'Guru pembuat soal dan reviewer kegiatan', count: countFrom(overview?.member_count, null), href: `/asesmen/kegiatan/${eventId}/members`, action: 'Atur penugasan' },
 			{ label: 'Kebutuhan Soal', helper: 'Target kebutuhan event; Bank Soal tetap repositori mandiri sebelum dipakai paket', count: countFrom(overview?.published_question_count ?? overview?.question_count, null), href: `/bank-soal/tambah?event_id=${eventId}`, action: 'Cek target kebutuhan' },
 			{ label: 'Review Repositori', helper: 'Antrean review dari Bank Soal sebelum soal diterbitkan dan masuk paket', count: countFrom(overview?.review_count, null), href: '/bank-soal/verifikasi', action: 'Review repositori' },
-			{ label: 'Paket Event', helper: 'Prioritas persiapan: paket yang tertaut event agar sesi ujian bisa memakai paket yang tepat', count: countFrom(overview?.package_count, packageFallback), href: `/asesmen/paket?event_id=${eventId}`, action: 'Kelola paket event' },
+			{ label: 'Paket Kegiatan', helper: 'Prioritas persiapan: paket yang tertaut event agar sesi ujian bisa memakai paket yang tepat', count: countFrom(overview?.package_count, packageFallback), href: `/asesmen/paket?event_id=${eventId}`, action: 'Kelola paket event' },
 			{ label: 'Sesi/Jadwal', helper: 'Sesi, status, dan jadwal operasional', count: countFrom(overview?.session_count, sessionFallback), href: `/asesmen/sesi?event_id=${eventId}`, action: 'Kelola sesi' },
 			{ label: 'Ruang/Pengawas/Kursi', helper: roomIssues > 0 ? `${roomIssues} sesi masih perlu dirapikan${proctorIssues > 0 ? `, ${proctorIssues} butuh pengawas` : ''}` : 'Cek ruang, pengawas, kapasitas, dan nomor meja', count: countFrom(overview?.room_count, detail.sessions.length > 0 ? detail.sessions.reduce((sum, session) => sum + (session.room_count ?? 0), 0) : null), href: `/asesmen/sesi?event_id=${eventId}&readiness=not_ready`, action: 'Cek ruang' },
-			{ label: 'Token/Kartu', helper: 'Token peserta dan kartu ujian siap cetak', count: countFrom(overview?.token_count ?? overview?.card_count, null), href: `/asesmen/kegiatan/${eventId}/exam-cards`, action: 'Cetak kartu' },
+			{ label: 'Token/Kartu', helper: 'Kode ujian peserta dan kartu ujian siap cetak', count: countFrom(overview?.token_count ?? overview?.card_count, null), href: `/asesmen/kegiatan/${eventId}/exam-cards`, action: 'Cetak kartu' },
 			{ label: 'Hasil', helper: 'Rekap nilai gabungan tersedia di tab Hasil', count: countFrom(overview?.result_count, detail.results.length), href: `/asesmen/kegiatan/${eventId}#hasil`, action: 'Buka tab hasil' },
 		];
 		return items.map((item) => ({ ...item, tone: item.label === 'Ruang/Pengawas/Kursi' && roomIssues > 0 ? 'warning' : checklistTone(item.count) }));
@@ -283,12 +283,12 @@
 				id: 'persiapan',
 				title: 'Paket Soal',
 				description: 'Tim, kebutuhan soal, review, dan paket yang akan dipakai sesi.',
-				items: ['Penugasan', 'Kebutuhan Soal', 'Review Repositori', 'Paket Event'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
+				items: ['Penugasan', 'Kebutuhan Soal', 'Review Repositori', 'Paket Kegiatan'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
 			},
 			{
 				id: 'operasional',
 				title: 'Kegiatan & Sesi',
-				description: 'Jadwal, ruang, pengawas, kursi, token, dan kartu ujian.',
+				description: 'Jadwal, ruang, pengawas, kursi, kode ujian, dan kartu ujian.',
 				items: ['Sesi/Jadwal', 'Token/Kartu'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
 			},
 			{
@@ -310,7 +310,7 @@
 		const needsAttention = checklist.filter((item) => item.tone === 'warning');
 		const preferredLabels = detail.info.status === 'finished'
 			? ['Hasil', 'Token/Kartu', 'Sesi/Jadwal']
-			: ['Paket Event', 'Sesi/Jadwal', 'Ruang/Pengawas/Kursi', 'Token/Kartu', 'Hasil'];
+			: ['Paket Kegiatan', 'Sesi/Jadwal', 'Ruang/Pengawas/Kursi', 'Token/Kartu', 'Hasil'];
 		const preferred = preferredLabels.map((label) => checklist.find((item) => item.label === label)).filter((item): item is ChecklistItem => Boolean(item));
 		const ordered = [...needsAttention, ...preferred, ...checklist].filter((item, index, source) => source.findIndex((candidate) => candidate.label === item.label) === index);
 		return ordered.slice(0, 3).map((item, index) => ({ ...item, priority: index === 0 ? 'Utama' : `Langkah ${index + 1}` }));
@@ -318,7 +318,7 @@
 
 	function exportCSV() {
 		if (!info || results.length === 0) return;
-		const header = csvRow(['NIS', 'Nama', 'Kelas', 'Sesi', 'Skor', 'Waktu Submit']);
+		const header = csvRow(['NIS', 'Nama', 'Kelas', 'Sesi', 'Skor', 'Waktu Kirim Jawaban']);
 		const rows = results.map(r => csvRow([r.nis, r.student_nama, r.class_code, r.session_title, fmtScore(r.score), r.submitted_at ?? '']));
 		const csv = [header, ...rows].join('\n');
 		const blob = new Blob([csv], { type: 'text/csv' });
@@ -493,7 +493,7 @@
 
 <div class="space-y-6 p-6">
 	<div class="flex items-center gap-2 text-sm text-muted-foreground">
-		<a href={resolve('/asesmen/kegiatan')} class="hover:text-foreground">Kegiatan & Sesi CBT</a>
+		<a href={resolve('/asesmen/kegiatan')} class="hover:text-foreground">Kegiatan & Sesi Ujian</a>
 		<span>/</span>
 		<span class="text-foreground font-medium truncate max-w-xs">{info?.title ?? 'Pusat Kendali'}</span>
 	</div>

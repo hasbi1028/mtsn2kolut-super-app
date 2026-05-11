@@ -109,7 +109,7 @@
 
 	async function fetchPayload(): Promise<PagePayload> {
 		const [nextInfo, academic, nextUsers, nextMembers] = await Promise.all([
-			fetch(clientApiPath`/api/asesmen/events/${eventId}`).then((response) => readClientApiData<CbtEvent>(response, 'Gagal memuat kegiatan CBT')),
+			fetch(clientApiPath`/api/asesmen/events/${eventId}`).then((response) => readClientApiData<CbtEvent>(response, 'Gagal memuat kegiatan ujian')),
 			fetch('/api/bank-soal/soal-support/subjects').then((response) => readClientApiData<AcademicPayload>(response, 'Gagal memuat mapel')),
 			fetch('/api/users').then((response) => readClientApiData<UsersPayload>(response, 'Gagal memuat pengguna')),
 			fetch(clientApiPath`/api/asesmen/events/${eventId}/members`).then((response) => readClientApiData<EventMember[]>(response, 'Gagal memuat penugasan'))

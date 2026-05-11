@@ -53,25 +53,25 @@
 
 	let importIntroCopy = $derived(
 		specialEventQuestionMode
-			? 'CSV disimpan sebagai soal khusus kegiatan terpilih. Pakai mode ini hanya untuk stok event yang tidak boleh masuk repositori reusable.'
-			: 'CSV disimpan sebagai draft Bank Soal reusable tanpa event_id, sehingga bisa dipakai ulang lintas paket.'
+			? 'CSV disimpan sebagai soal khusus kegiatan terpilih. Pakai mode ini hanya untuk stok kegiatan yang tidak boleh masuk bank soal pakai ulang.'
+			: 'CSV disimpan sebagai konsep Bank Soal pakai ulang tanpa kegiatan khusus, sehingga bisa dipakai ulang lintas paket.'
 	);
 	let importScopeCopy = $derived(
 		specialEventQuestionMode
-			? 'Khusus event: soal dikaitkan ke kegiatan yang sedang dipilih.'
-			: 'Reusable: konteks kegiatan hanya membantu cek kebutuhan, bukan tujuan import.'
+			? 'Khusus kegiatan: soal dikaitkan ke kegiatan yang sedang dipilih.'
+			: 'Pakai ulang: konteks kegiatan hanya membantu cek kebutuhan, bukan tujuan impor.'
 	);
 	let readyImportCount = $derived(importResult?.would_import ?? importResult?.valid ?? importResult?.imported ?? 0);
 	let hasImportErrors = $derived((importResult?.errors.length ?? 0) > 0);
 	let canConfirmImport = $derived(Boolean(importSubjectId && hasImportFile && importDryRunDone && readyImportCount > 0 && !hasImportErrors));
 	let importFileSizeLabel = $derived(formatFileSize(importFileSize));
-	let importFileStateLabel = $derived(importDryRunDone ? (hasImportErrors ? 'Perlu perbaikan' : 'Preview bersih') : 'Belum preview');
+	let importFileStateLabel = $derived(importDryRunDone ? (hasImportErrors ? 'Perlu perbaikan' : 'Pratinjau bersih') : 'Belum pratinjau');
 
 	let importSteps = $derived([
-		{ label: '1. Template', desc: 'Pakai struktur CSV resmi agar kolom tipe, kunci, dan opsi konsisten.', ready: true },
+		{ label: '1. Format Isian', desc: 'Pakai struktur CSV resmi agar kolom tipe, kunci, dan opsi konsisten.', ready: true },
 		{ label: '2. Mapel & File', desc: importSubjectId && hasImportFile ? `${importFileName || 'CSV dipilih'} · ${importFileSizeLabel}` : 'Pilih mata pelajaran dan unggah CSV.', ready: Boolean(importSubjectId && hasImportFile) },
-		{ label: '3. Preview Dry-run', desc: importDryRunDone ? (hasImportErrors ? 'Ada error yang perlu diperbaiki.' : `${readyImportCount} soal siap diimport.`) : 'Wajib sebelum import final.', ready: importDryRunDone && !hasImportErrors },
-		{ label: '4. Konfirmasi', desc: canConfirmImport ? 'Import final sudah aman dijalankan.' : 'Menunggu preview bersih.', ready: canConfirmImport },
+		{ label: '3. Cek Data', desc: importDryRunDone ? (hasImportErrors ? 'Ada masalah yang perlu diperbaiki.' : `${readyImportCount} soal siap diimpor.`) : 'Wajib sebelum impor final.', ready: importDryRunDone && !hasImportErrors },
+		{ label: '4. Konfirmasi', desc: canConfirmImport ? 'Impor final sudah aman dijalankan.' : 'Menunggu pratinjau bersih.', ready: canConfirmImport },
 	]);
 
 	function handleSubjectChange(event: Event) {
@@ -89,7 +89,7 @@
 	<div class="border-b border-primary/20 bg-gradient-to-r from-primary/10 via-card to-warning/10 p-4 md:p-5">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 			<div class="min-w-0">
-				<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Studio Import Bank Soal</p>
+				<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Studio Impor Bank Soal</p>
 				<h2 id="legacy-import-title" class="mt-1 text-xl font-black uppercase italic tracking-tight text-foreground">Masukkan banyak soal sekaligus</h2>
 				<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{importIntroCopy}</p>
 				<div class="mt-3 flex flex-wrap gap-2">
@@ -98,7 +98,7 @@
 				</div>
 			</div>
 			<LoadingButton variant="outline" size="sm" onclick={onTemplate} loading={templateBusy} loadingLabel="Mengunduh..." class="h-9 shrink-0 bg-card text-xs">
-				Download Template CSV
+				Unduh Format Isian CSV
 			</LoadingButton>
 		</div>
 	</div>
@@ -179,8 +179,8 @@
 					{#if importDryRunDone}
 						<p class="mt-3 border-t border-success/20 pt-2 text-xs font-semibold {hasImportErrors ? 'text-warning' : 'text-success'}">
 							{hasImportErrors
-								? 'Preview menemukan error. Perbaiki file CSV lalu jalankan dry-run ulang sebelum import.'
-								: 'Preview dry-run bersih. Konfirmasi Import sudah aman dijalankan.'}
+								? 'Pratinjau menemukan masalah. Perbaiki file CSV lalu cek data ulang sebelum impor.'
+								: 'Pratinjau cek data bersih. Konfirmasi impor sudah aman dijalankan.'}
 						</p>
 					{/if}
 					{#if importResult.errors.length > 0}
@@ -201,8 +201,8 @@
 		{/if}
 		<div class="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
 			<Button variant="outline" onclick={onBack}>Kembali ke Daftar</Button>
-				<LoadingButton onclick={onDryRun} loading={importBusy} loadingLabel="Preview..." disabled={importBusy || !importSubjectId || !hasImportFile} variant="outline" class="disabled:opacity-50">
-					Preview Dry-run
+				<LoadingButton onclick={onDryRun} loading={importBusy} loadingLabel="Pratinjau..." disabled={importBusy || !importSubjectId || !hasImportFile} variant="outline" class="disabled:opacity-50">
+					Pratinjau Dry-run
 				</LoadingButton>
 				<LoadingButton onclick={onConfirmImport} loading={importBusy} loadingLabel="Import..." disabled={importBusy || !canConfirmImport} class="bg-success text-background hover:bg-success disabled:opacity-50">
 					Konfirmasi Import

@@ -554,7 +554,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	let canPublishWorkflow = $derived(canPublishBankSoal(data.user));
 	let canDeleteQuestion = $derived(canDeleteBankSoal(data.user));
 	let selectedEvent = $derived(events.find((event) => event.id === selectedEventId) ?? null);
-	let selectedEventTitle = $derived(selectedEvent?.title ?? 'Bank soal reusable');
+	let selectedEventTitle = $derived(selectedEvent?.title ?? 'Bank soal pakai ulang');
 	let specialEventAttachId = $derived(specialEventQuestionMode && selectedEventId ? selectedEventId : '');
 	let roleLabel = $derived.by(() => {
 		if (roles.includes('admin')) return 'Admin bank soal';
@@ -562,10 +562,10 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		return roles.length > 0 ? roles.join(', ') : 'Pengguna';
 	});
 	let selectedImportContext = $derived.by(() => {
-		if (!selectedEvent) return 'Bank Soal reusable tanpa event';
+		if (!selectedEvent) return 'Bank Soal pakai ulang tanpa kegiatan';
 		const eventLabel = `${selectedEvent.title}${selectedEvent.status ? ` (${selectedEvent.status})` : ''}`;
 		if (specialEventQuestionMode) return `Soal khusus kegiatan untuk ${eventLabel}`;
-		return `Bank Soal reusable; filter kegiatan aktif: ${eventLabel}. CSV tidak membawa event_id`;
+		return `Bank Soal pakai ulang; filter kegiatan aktif: ${eventLabel}. CSV tidak membawa event_id`;
 	});
 	let exportButtonLabel = $derived(questionExportButtonLabel(roles));
 	let exportSuccessMessage = $derived(questionExportSuccessMessage(roles));
@@ -600,7 +600,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	]);
 	let selectedSubject = $derived(subjects.find((subject) => subject.id === fSubjectId) ?? null);
 	let composerModeLabel = $derived(fAuthoringMode === 'advance' ? 'Mode advance' : 'Mode pemula');
-	let composerScopeLabel = $derived(specialEventQuestionMode ? `Khusus ${selectedEventTitle}` : 'Bank soal reusable');
+	let composerScopeLabel = $derived(specialEventQuestionMode ? `Khusus ${selectedEventTitle}` : 'Bank soal pakai ulang');
 	let composerStageCards = $derived.by<ComposerStageCard[]>(() => [
 		{
 			label: 'Metadata',
@@ -1113,7 +1113,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				readClientApiData<AcademicPayload>(response, 'Gagal memuat data akademik')
 			),
 			fetch('/api/asesmen/events').then((response) =>
-				readClientApiData<EventsPayload>(response, 'Gagal memuat kegiatan CBT')
+				readClientApiData<EventsPayload>(response, 'Gagal memuat kegiatan ujian')
 			),
 			targetsPromise,
 		]);
@@ -1222,7 +1222,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	function handleQuestionsRenderError(error: unknown, reset: () => void) {
-		console.error('Question composer render failed', error);
+		console.error('Penyusun soal belum dapat ditampilkan', error);
 		reset();
 	}
 
@@ -1418,7 +1418,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 
 	async function saveQuestionTarget() {
 		if (!selectedEventId || !filterSubject) {
-			toast.warning('Pilih konteks kegiatan dan mapel sebelum mengatur kebutuhan soal paket/event.');
+			toast.warning('Pilih kegiatan dan mapel sebelum mengatur kebutuhan soal paket/kegiatan.');
 			return;
 		}
 		targetBusy = true;
@@ -1471,7 +1471,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		}
 		const notes = bulkNotes.trim();
 		if (action === 'reject' && notes.length < 8) {
-			toast.warning('Catatan bulk reject minimal 8 karakter.');
+			toast.warning('Catatan penolakan massal minimal 8 karakter.');
 			return;
 		}
 		bulkBusy = true;
@@ -1481,7 +1481,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ action, question_ids: ids, notes })
 			});
-			const payload = await readClientApiData<BulkWorkflowResponse>(res, 'Aksi bulk gagal');
+			const payload = await readClientApiData<BulkWorkflowResponse>(res, 'Aksi massal gagal');
 			const results = Array.isArray(payload) ? payload : payload.results ?? [];
 			const ok = results.filter((item) => item.ok ?? item.success ?? !item.error).length;
 			const failed = Math.max(0, results.length - ok);
@@ -1490,7 +1490,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			bulkNotes = '';
 			await refreshOverview(currentPage);
 		} catch (error) {
-			toast.error(mutationErrorMessage(error, 'Aksi bulk gagal'));
+			toast.error(mutationErrorMessage(error, 'Aksi massal gagal'));
 		} finally {
 			bulkBusy = false;
 		}
@@ -1931,7 +1931,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		const note = (q.review_notes ?? '').toLowerCase();
 		if (note.includes('analisis butir')) return 'Analisis Butir';
 		if ((q.reviewer_username ?? '').trim()) return `Reviewer: ${q.reviewer_username}`;
-		return 'Workflow Review';
+		return 'Alur Verifikasi';
 	}
 
 	function revisionReason(q: Question): string {
@@ -2168,7 +2168,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	async function requestCloseComposer() {
 		if (hasDraftWork && draftStatus) {
 			const confirmed = await confirmAction({
-				title: 'Tutup Komposer?',
+				title: 'Tutup Penyusun Soal?',
 				message: 'Draft lokal tetap disimpan otomatis. Kembali ke daftar soal dan lanjutkan nanti?',
 				confirmLabel: 'Tutup',
 				tone: 'warning'
@@ -2264,7 +2264,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 
 	function importFileValidationMessage(file: File): string {
 		if (file.size <= 0) return 'File CSV kosong. Pilih file yang berisi data soal.';
-		if (!file.name.trim().toLowerCase().endsWith('.csv')) return 'File import harus berekstensi .csv.';
+		if (!file.name.trim().toLowerCase().endsWith('.csv')) return 'File impor harus berekstensi .csv.';
 		return '';
 	}
 
@@ -2431,9 +2431,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	async function importLegacyCSV(dryRun = false) {
-		if (!requireOnlineAction('Import CSV Bank Soal')) return;
+		if (!requireOnlineAction('Impor CSV Bank Soal')) return;
 		if (!importSubjectId) {
-			toast.error('Pilih mata pelajaran untuk import');
+			toast.error('Pilih mata pelajaran untuk impor');
 			return;
 		}
 		if (!importFile) {
@@ -2444,15 +2444,15 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			const importErrors = importResult?.errors.length ?? 0;
 			const readyImportCount = importResult?.would_import ?? importResult?.valid ?? importResult?.imported ?? 0;
 			if (!importDryRunDone) {
-				toast.warning('Jalankan Preview Dry-run sebelum konfirmasi import.');
+				toast.warning('Jalankan pratinjau cek data sebelum konfirmasi impor.');
 				return;
 			}
 			if (importErrors > 0) {
-				toast.warning('Perbaiki error dry-run sebelum konfirmasi import.');
+				toast.warning('Perbaiki masalah hasil cek data sebelum konfirmasi impor.');
 				return;
 			}
 			if (readyImportCount <= 0) {
-				toast.warning('Tidak ada baris valid untuk diimport.');
+				toast.warning('Tidak ada baris valid untuk diimpor.');
 				return;
 			}
 		}
@@ -2467,7 +2467,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				method: 'POST',
 				body: form,
 			});
-			const result = await readClientApiData<LegacyImportResult>(res, 'Import CSV gagal');
+			const result = await readClientApiData<LegacyImportResult>(res, 'Impor CSV gagal');
 			importResult = {
 				total_rows: result.total_rows ?? 0,
 				valid: result.valid ?? result.would_import ?? result.imported ?? 0,
@@ -2486,7 +2486,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				await refreshOverview(1);
 			}
 		} catch (error) {
-			toast.error(mutationErrorMessage(error, 'Import CSV gagal'));
+			toast.error(mutationErrorMessage(error, 'Impor CSV gagal'));
 		} finally {
 			importBusy = false;
 		}
@@ -2501,7 +2501,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	async function downloadCSVResponse(response: Response, fallbackFilename: string) {
 		if (!response.ok) {
 			const payload = await response.json().catch(() => null) as { error?: string; message?: string } | null;
-			throw new Error(payload?.error ?? payload?.message ?? 'Download CSV gagal');
+			throw new Error(payload?.error ?? payload?.message ?? 'Unduh CSV gagal');
 		}
 		const blob = await response.blob();
 		const url = URL.createObjectURL(blob);
@@ -2530,14 +2530,14 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	async function downloadQuestionsTemplateCSV() {
-		if (!requireOnlineAction('Download template CSV')) return;
+		if (!requireOnlineAction('Unduh format isian CSV')) return;
 		templateBusy = true;
 		try {
 			const response = await fetch('/api/bank-soal/questions/template');
 			await downloadCSVResponse(response, 'template-bank-soal-cbt.csv');
-			toast.success('Template CSV bank soal berhasil diunduh');
+			toast.success('Format isian CSV bank soal berhasil diunduh');
 		} catch (error) {
-			toast.error(mutationErrorMessage(error, 'Download template CSV gagal'));
+			toast.error(mutationErrorMessage(error, 'Unduh format isian CSV gagal'));
 		} finally {
 			templateBusy = false;
 		}
@@ -2564,9 +2564,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			return;
 		}
 		if (!(await confirmAction({
-			title: 'Ajukan Review Ulang',
-			message: 'Ajukan revisi soal ini ke reviewer? Pastikan isi, kunci/rubrik, dan metadata sudah diperbaiki.',
-			confirmLabel: 'Ajukan Review',
+			title: 'Ajukan Ulang',
+			message: 'Ajukan revisi soal ini ke pemeriksa? Pastikan isi, kunci/rubrik, dan metadata sudah diperbaiki.',
+			confirmLabel: 'Ajukan Verifikasi',
 			tone: 'warning'
 		}))) return;
 		workflowBusyId = q.id;
@@ -2662,7 +2662,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		}
 		if (!(await confirmAction({
 			title: 'Terbitkan Soal',
-			message: 'Terbitkan soal ini agar bisa dipilih ke paket ujian CBT? Setelah diterbitkan, perubahan isi harus melalui duplikasi/revisi.',
+			message: 'Terbitkan soal ini agar bisa dipilih ke paket Ujian Berbasis Komputer? Setelah diterbitkan, perubahan isi harus melalui duplikasi/revisi.',
 			confirmLabel: 'Terbitkan',
 			tone: 'warning'
 		}))) return;
@@ -2811,7 +2811,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			specialEventQuestionMode = true;
 			applied = true;
 		}
-		if (applied) draftStatus = 'Konteks event/mapel diterapkan dari Kelengkapan Soal';
+		if (applied) draftStatus = 'Konteks kegiatan/mapel diterapkan dari Kelengkapan Soal';
 		return applied;
 	}
 
@@ -2939,7 +2939,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 						{/if}
 					</div>
 					<p class="mt-1 font-semibold">
-						{offlineStatus || (offlineQueueCount > 0 ? 'Perubahan lokal menunggu sinkronisasi.' : 'Komposer siap menyimpan draft lokal.')}
+						{offlineStatus || (offlineQueueCount > 0 ? 'Perubahan lokal menunggu sinkronisasi.' : 'Penyusun soal siap menyimpan draft lokal.')}
 					</p>
 					<p class="mt-0.5 text-xs opacity-80">
 						Draft: {offlineDraftQueueCount} · Review: {offlineReviewQueueCount}. Token login tidak disimpan di IndexedDB; sinkronisasi tetap lewat sesi httpOnly.
@@ -2973,11 +2973,11 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				<div class="min-w-0">
 					<p class="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Cakupan soal</p>
 					<h2 class="mt-1 text-sm font-semibold text-foreground">
-						{specialEventQuestionMode ? `Khusus ${selectedEventTitle}` : 'Bank soal reusable'}
+						{specialEventQuestionMode ? `Khusus ${selectedEventTitle}` : 'Bank soal pakai ulang'}
 					</h2>
 					<p class="mt-1 text-xs leading-5 text-muted-foreground">
 						{specialEventQuestionMode
-							? 'Soal disimpan untuk kegiatan terpilih dan tidak masuk stok reusable lintas kegiatan.'
+							? 'Soal disimpan untuk kegiatan terpilih dan tidak masuk stok pakai ulang lintas kegiatan.'
 							: 'Soal masuk repositori bersama agar bisa dipakai ulang di paket atau kegiatan lain.'}
 					</p>
 				</div>
@@ -3249,7 +3249,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 												disabled={!canSubmitRevisionReview(q) || (workflowBusyId !== '' && workflowBusyId !== q.id)}
 												class="rounded px-2 py-1 text-xs text-success transition-colors hover:bg-success/10 disabled:cursor-not-allowed disabled:opacity-40"
 											>
-												{workflowBusyId === q.id ? 'Mengajukan...' : 'Review Ulang'}
+												{workflowBusyId === q.id ? 'Mengajukan...' : 'Ajukan Ulang'}
 											</button>
 										{/if}
 										{#if canDecideReview(q)}
@@ -3567,7 +3567,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			<div class="flex justify-end gap-2 border-t border-border pt-4">
 				<Button variant="outline" onclick={closeQuestionPreview}>Tutup</Button>
 				{#if questionPreview}
-					<Button class="bg-success text-background hover:bg-success" onclick={duplicatePreviewQuestion}>Duplikat untuk Revisi</Button>
+					<Button class="bg-success text-background hover:bg-success" onclick={duplicatePreviewQuestion}>Salin untuk Revisi</Button>
 				{/if}
 			</div>
 		</div>
@@ -3599,7 +3599,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	</div>
 {/snippet}
 
-{#snippet composerPreview()}
+{#snippet composerPratinjau()}
 	<div class="mb-4">
 		<div class="mb-1 flex items-center justify-between">
 			<span class="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Kesiapan Review</span>
@@ -3657,7 +3657,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 
 	<div>
 		<p class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-			Preview Siswa
+			Pratinjau Siswa
 		</p>
 		<div class="rounded-lg border border-border bg-card p-3 space-y-3" dir={fIsRtl ? 'rtl' : undefined}>
 			{#if isAdvanceMode && fStimulus}
@@ -3794,7 +3794,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			<div class="shrink-0 border-b border-primary/20 bg-gradient-to-r from-primary/10 via-card to-warning/10 px-4 py-4 md:px-5">
 				<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
 					<div class="min-w-0">
-						<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Studio Komposer Bank Soal</p>
+						<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Studio Penyusun soal Bank Soal</p>
 						<div class="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
 							<h2 class="text-xl font-black uppercase italic tracking-tight text-foreground">
 								{editingId ? 'Edit Butir Soal' : 'Penyusunan Soal Baru'}
@@ -3826,7 +3826,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 							class="h-8 text-xs lg:hidden"
 							onclick={openInspector}
 						>
-							Preview
+							Pratinjau
 						</Button>
 						<Button
 							type="button"
@@ -4337,7 +4337,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 						</div>
 						<aside class={`space-y-4 min-w-0 xl:sticky xl:top-0 xl:self-start ${composerMobilePanel === 'write' ? 'hidden lg:block' : 'block'}`}>
 						<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
-							{@render composerPreview()}
+							{@render composerPratinjau()}
 						</div>
 					</aside>
 				</div>

@@ -29,7 +29,7 @@
 	<div class="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
 		<div class="min-w-0">
 			<p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Bank Soal</p>
-			<h1 class="mt-1 text-2xl font-semibold tracking-tight text-foreground">Kelola repositori soal reusable</h1>
+			<h1 class="mt-1 text-2xl font-semibold tracking-tight text-foreground">Kelola bank soal pakai ulang</h1>
 			<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
 				Bank Soal berdiri sebagai repositori bersama. Kegiatan CBT hanya menjadi konteks atau filter opsional saat soal dipakai untuk paket/event tertentu.
 			</p>

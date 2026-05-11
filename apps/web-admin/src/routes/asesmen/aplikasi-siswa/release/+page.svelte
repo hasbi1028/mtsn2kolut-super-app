@@ -27,53 +27,53 @@
 	};
 
 	const backendChecks = [
-		'Response login masih memuat field siswa, sesi, ruang, dan progres yang dipakai Flutter.',
-		'Perubahan field soal tidak merusak renderer pilihan ganda, uraian, rich text, gambar, dan audio.',
-		'`time_remaining_seconds` tetap akurat untuk countdown, restore, dan submit guard.',
-		'Perubahan event warning atau error code sudah ditinjau dampaknya ke restore flow mobile.',
-		'Perubahan payload dicatat memakai template release note exam payload.'
+		'Data masuk ujian masih memuat siswa, sesi, ruang, dan progres yang dipakai aplikasi siswa.',
+		'Perubahan data soal tidak mengganggu tampilan pilihan ganda, uraian, teks kaya, gambar, dan audio.',
+		'Sisa waktu tetap akurat untuk hitung mundur, pemulihan sesi, dan pengaman kirim ujian.',
+		'Perubahan peringatan kegiatan atau kode masalah sudah ditinjau dampaknya ke alur pemulihan aplikasi siswa.',
+		'Perubahan data yang dikirim dicatat memakai format catatan rilis data ujian.'
 	];
 
 	const mobileChecks = [
-		'`flutter analyze` hijau.',
-		'`flutter test` hijau.',
-		'Login token berhasil pada APK build terbaru.',
-		'Restore sesi masih berjalan pada perangkat uji utama.',
-		'Submit berhasil saat koneksi sehat.',
+		'Pemeriksaan kode aplikasi siswa lulus.',
+		'Tes aplikasi siswa lulus.',
+		'Masuk dengan kode ujian berhasil pada APK rilis terbaru.',
+		'Pemulihan sesi masih berjalan pada perangkat uji utama.',
+		'Kirim ujian berhasil saat koneksi sehat.',
 		'Status `Waspada` dan `Menurun` masih muncul sesuai simulasi gangguan.'
 	];
 
 	const rolloutChecks = [
-		'APK release sudah dibagikan lewat kanal resmi sekolah.',
-		'Pengawas sudah membaca Operator Quick Start.',
-		'Perangkat uji tercatat di Device Test Matrix.',
-		'BYOD trial procedure sudah diikuti untuk gelombang uji yang akan berjalan.',
-		'Tidak ada perubahan backend exam yang belum direview terhadap mobile contract.'
+		'APK rilis sudah dibagikan lewat kanal resmi sekolah.',
+		'Pengawas sudah membaca Panduan Cepat Operator.',
+		'Perangkat uji tercatat di Tabel Uji Perangkat.',
+		'Prosedur uji coba BYOD sudah diikuti untuk gelombang uji yang akan berjalan.',
+		'Tidak ada perubahan layanan ujian yang belum diperiksa terhadap kesesuaian aplikasi siswa.'
 	];
 
 	const releaseArtifacts = [
 		{
-			title: 'Exam API Contract',
+			title: 'Kontrak Layanan Ujian',
 			path: 'docs/exam-api.md',
-			description: 'Referensi kontrak endpoint exam dan checklist kompatibilitas payload mobile.'
+			description: 'Referensi kontrak layanan ujian dan daftar pemeriksaan kesesuaian data yang dikirim ke aplikasi siswa.'
 		},
 		{
-			title: 'Payload Release Template',
+			title: 'Format Catatan Rilis Data Ujian',
 			path: 'docs/exam-payload-release-template.md',
-			description: 'Template release note setiap kali backend mengubah payload exam yang menyentuh Flutter.'
+			description: 'Format catatan rilis setiap kali layanan sistem mengubah data ujian yang menyentuh aplikasi siswa.'
 		},
 		{
-			title: 'Release Checklist',
+			title: 'Daftar Pemeriksaan Rilis',
 			path: 'apps/mobile/RELEASE_CHECKLIST.md',
-			description: 'Checklist operasional build, verifikasi, dan distribusi APK internal.'
+			description: 'Daftar pemeriksaan operasional rilis, verifikasi, dan distribusi APK internal.'
 		},
 		{
-			title: 'Mobile APK Release Center',
+			title: 'Pusat Rilis APK Siswa',
 			path: 'docs/mobile-apk-release-center.md',
-			description: 'Runbook publish APK terbaru ke endpoint SvelteKit/cloudflared tanpa rebuild web.'
+			description: 'Panduan menerbitkan APK terbaru ke alamat layanan sistem tanpa membangun ulang web.'
 		},
 		{
-			title: 'Operator Quick Start',
+			title: 'Panduan Cepat Operator',
 			path: 'apps/mobile/OPERATOR_QUICKSTART.md',
 			description: 'Panduan singkat pengawas saat siswa mulai ujian dan ketika koneksi mulai bermasalah.'
 		}
@@ -89,7 +89,7 @@
 			if (!response.ok) throw new Error(`HTTP ${response.status}`);
 			release = await response.json();
 		} catch (error) {
-			releaseError = error instanceof Error ? error.message : 'Manifest rilis belum tersedia.';
+			releaseError = error instanceof Error ? error.message : 'Data rilis belum tersedia.';
 		}
 	});
 
@@ -124,24 +124,24 @@
 </script>
 
 <svelte:head>
-	<title>Readiness Release Mobile — MTsN 2 Kolaka Utara</title>
+	<title>Kesiapan Rilis Aplikasi Siswa — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 <div class="space-y-6">
 	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-3">
-				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Perangkat & Kesiapan · Monitoring</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Checklist Rilis CBT Mobile BYOD</h1>
+				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Perangkat & Kesiapan · Pemantauan</p>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Daftar Pemeriksaan Rilis Aplikasi Siswa BYOD</h1>
 				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
-					Bagian pendukung sebelum backend exam atau APK mobile dipakai di gelombang berikutnya.
-					Monitoring hari-H tetap dimulai dari sesi aktif dan dashboard ruang.
+					Bagian pendukung sebelum layanan ujian atau APK aplikasi siswa dipakai di gelombang berikutnya.
+					Pemantauan hari-H tetap dimulai dari sesi aktif dan panel ruang.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-3">
-				<Button href="/asesmen/aplikasi-siswa">Kembali ke Monitoring</Button>
-				<Button href="/asesmen/pengawasan" variant="outline">Dashboard Ruang</Button>
-				<Button href="/asesmen/aplikasi-siswa/matrix" variant="outline">Buka Matriks Perangkat</Button>
+				<Button href="/asesmen/aplikasi-siswa">Kembali ke Pemantauan</Button>
+				<Button href="/asesmen/pengawasan" variant="outline">Panel Ruang</Button>
+				<Button href="/asesmen/aplikasi-siswa/matrix" variant="outline">Buka Tabel Perangkat</Button>
 			</div>
 		</div>
 	</section>
@@ -152,12 +152,12 @@
 				<div>
 					<div class="flex flex-wrap items-center gap-2">
 						<Badge class="border-primary/20 bg-primary/10 text-primary">APK Resmi</Badge>
-						<Badge class="border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">Production</Badge>
-						<Badge class="border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300">Anti-cheat aktif</Badge>
+						<Badge class="border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">Rilis utama</Badge>
+						<Badge class="border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300">Pengawasan aktif</Badge>
 					</div>
-					<Card.Title class="mt-3 text-xl text-foreground">Download APK CBT Mobile Terbaru</Card.Title>
+					<Card.Title class="mt-3 text-xl text-foreground">Unduh APK Aplikasi Siswa Terbaru</Card.Title>
 					<Card.Description>
-						Data diambil otomatis dari manifest server. Jika APK baru dipublish, info dan link ini ikut berubah tanpa edit halaman.
+						Data diambil otomatis dari data rilis layanan sistem. Jika APK baru diterbitkan, info dan tautan ini ikut berubah tanpa edit halaman.
 					</Card.Description>
 				</div>
 				{#if release}
@@ -173,19 +173,19 @@
 				<div class="space-y-5">
 					<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 						<div class="rounded-2xl border border-border bg-muted/40 p-4">
-							<p class="text-xs uppercase tracking-wide text-muted-foreground">Nama App</p>
+							<p class="text-xs uppercase tracking-wide text-muted-foreground">Nama Aplikasi</p>
 							<p class="mt-1 text-sm font-semibold text-foreground">{release.app_name}</p>
 						</div>
 						<div class="rounded-2xl border border-border bg-muted/40 p-4">
 							<p class="text-xs uppercase tracking-wide text-muted-foreground">Versi</p>
-							<p class="mt-1 text-sm font-semibold text-foreground">v{release.version_name} · code {release.version_code}</p>
+							<p class="mt-1 text-sm font-semibold text-foreground">v{release.version_name} · kode {release.version_code}</p>
 						</div>
 						<div class="rounded-2xl border border-border bg-muted/40 p-4">
 							<p class="text-xs uppercase tracking-wide text-muted-foreground">Ukuran</p>
 							<p class="mt-1 text-sm font-semibold text-foreground">{formatBytes(release.size_bytes)}</p>
 						</div>
 						<div class="rounded-2xl border border-border bg-muted/40 p-4">
-							<p class="text-xs uppercase tracking-wide text-muted-foreground">Build</p>
+							<p class="text-xs uppercase tracking-wide text-muted-foreground">Dibuat</p>
 							<p class="mt-1 text-sm font-semibold text-foreground">{formatDate(release.build_time)}</p>
 						</div>
 					</div>
@@ -196,25 +196,25 @@
 					</div>
 
 					<div class="flex flex-wrap gap-3">
-						<Button href={release.download_url} class="h-10" download>Download APK Terbaru</Button>
-						<Button href={release.checksum_url} class="h-10" variant="outline" download>Download Checksum</Button>
-						<Button class="h-10" variant="outline" onclick={copyDownloadLink}>{copied ? 'Link Tersalin' : 'Salin Link'}</Button>
+						<Button href={release.download_url} class="h-10" download>Unduh APK Terbaru</Button>
+						<Button href={release.checksum_url} class="h-10" variant="outline" download>Unduh Data Pemeriksaan</Button>
+						<Button class="h-10" variant="outline" onclick={copyDownloadLink}>{copied ? 'Tautan Tersalin' : 'Salin Tautan'}</Button>
 					</div>
 
 					<div class="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-900 dark:text-amber-100">
 						<p class="font-semibold">Sumber resmi APK</p>
-						<p>Install hanya dari domain <span class="font-mono">{release.server_url}</span>. Jangan gunakan APK dari sumber lain.</p>
+						<p>Pasang hanya dari domain <span class="font-mono">{release.server_url}</span>. Jangan gunakan APK dari sumber lain.</p>
 					</div>
 				</div>
 				<div class="flex flex-col items-center justify-center rounded-2xl border border-border bg-muted/30 p-4 text-center">
-					<img src={release.qr_url} alt="QR download APK CBT Mobile" class="h-44 w-44 rounded-xl bg-white p-2" />
-					<p class="mt-3 text-sm font-semibold text-foreground">Scan untuk download</p>
+					<img src={release.qr_url} alt="QR unduh APK CBT Mobile" class="h-44 w-44 rounded-xl bg-white p-2" />
+					<p class="mt-3 text-sm font-semibold text-foreground">Pindai untuk unduh</p>
 					<p class="mt-1 break-all text-xs leading-5 text-muted-foreground">{release.absolute_download_url}</p>
 				</div>
 			{:else}
 				<div class="lg:col-span-2 rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-sm leading-6 text-muted-foreground">
-					<p class="font-semibold text-foreground">Manifest APK belum terbaca.</p>
-					<p class="mt-1">{releaseError || 'Memuat latest.json dari server...'}</p>
+					<p class="font-semibold text-foreground">Data rilis APK belum terbaca.</p>
+					<p class="mt-1">{releaseError || 'Memuat data rilis terbaru dari layanan sistem...'}</p>
 				</div>
 			{/if}
 		</Card.Content>
@@ -224,15 +224,15 @@
 		<Card.Content class="grid gap-4 pt-6 md:grid-cols-3">
 			<div>
 				<p class="text-sm font-semibold text-primary">Pantau Ujian</p>
-				<p class="mt-1 text-sm leading-6 text-muted-foreground">Hari-H tetap diarahkan ke Monitoring, sesi hari ini, dan dashboard ruang.</p>
+				<p class="mt-1 text-sm leading-6 text-muted-foreground">Hari-H tetap diarahkan ke Pemantauan, sesi hari ini, dan panel ruang.</p>
 			</div>
 			<div>
 				<p class="text-sm font-semibold text-primary">Panduan BYOD</p>
-				<p class="mt-1 text-sm leading-6 text-muted-foreground">Status guide dan checklist submit dipakai saat pengawas membaca kondisi siswa.</p>
+				<p class="mt-1 text-sm leading-6 text-muted-foreground">Panduan status dan daftar pemeriksaan kirim dipakai saat pengawas membaca kondisi siswa.</p>
 			</div>
 			<div>
 				<p class="text-sm font-semibold text-primary">Perangkat & Kesiapan</p>
-				<p class="mt-1 text-sm leading-6 text-muted-foreground">Halaman ini fokus pada readiness backend, APK, operator, dan artefak rollout.</p>
+				<p class="mt-1 text-sm leading-6 text-muted-foreground">Halaman ini fokus pada kesiapan layanan sistem, APK, operator, dan bahan rilis.</p>
 			</div>
 		</Card.Content>
 	</Card.Root>
@@ -240,16 +240,16 @@
 	<div class="grid gap-6 xl:grid-cols-3">
 		<Card.Root class="border-border shadow-sm">
 			<Card.Header>
-				<Card.Title class="text-lg text-foreground">Checklist Backend</Card.Title>
+				<Card.Title class="text-lg text-foreground">Pemeriksaan Layanan Sistem</Card.Title>
 				<Card.Description>
-					Pastikan perubahan backend exam tidak diam-diam merusak kontrak yang dipakai Flutter.
+					Pastikan perubahan layanan ujian tidak diam-diam merusak kontrak yang dipakai aplikasi siswa.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content>
 				<ul class="space-y-3">
 					{#each backendChecks as item (item)}
 						<li class="flex gap-3 rounded-2xl border border-border bg-muted/50 px-4 py-3 text-sm leading-6 text-foreground">
-							<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">API</span>
+							<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">SISTEM</span>
 							<span>{item}</span>
 						</li>
 					{/each}
@@ -259,16 +259,16 @@
 
 		<Card.Root class="border-border shadow-sm">
 			<Card.Header>
-				<Card.Title class="text-lg text-foreground">Checklist Mobile</Card.Title>
+				<Card.Title class="text-lg text-foreground">Pemeriksaan APK</Card.Title>
 				<Card.Description>
-					Pastikan app Flutter dan uji perangkat inti masih sehat sebelum APK diteruskan ke lapangan.
+					Pastikan aplikasi siswa dan uji perangkat inti masih sehat sebelum APK diteruskan ke lapangan.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content>
 				<ul class="space-y-3">
 					{#each mobileChecks as item (item)}
 						<li class="flex gap-3 rounded-2xl border border-border bg-muted/50 px-4 py-3 text-sm leading-6 text-foreground">
-							<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">APP</span>
+							<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">APK</span>
 							<span>{item}</span>
 						</li>
 					{/each}
@@ -278,9 +278,9 @@
 
 		<Card.Root class="border-border shadow-sm">
 			<Card.Header>
-				<Card.Title class="text-lg text-foreground">Checklist Rollout</Card.Title>
+				<Card.Title class="text-lg text-foreground">Pemeriksaan Rilis</Card.Title>
 				<Card.Description>
-					Pastikan operator, pengawas, dan artefak trial sudah benar-benar siap dipakai di gelombang uji berikutnya.
+					Pastikan operator, pengawas, dan bahan uji coba sudah benar-benar siap dipakai di gelombang uji berikutnya.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content>
@@ -300,7 +300,7 @@
 		<Card.Header>
 			<Card.Title class="text-lg text-foreground">Artefak Rilis yang Harus Dicek</Card.Title>
 			<Card.Description>
-				Buka dokumen-dokumen ini sebelum menyatakan perubahan backend atau APK mobile aman untuk gelombang BYOD berikutnya.
+				Buka dokumen-dokumen ini sebelum menyatakan perubahan layanan sistem atau APK aplikasi siswa aman untuk gelombang BYOD berikutnya.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="grid gap-4 lg:grid-cols-2">

@@ -44,12 +44,12 @@
 
 	const roleCopy: Record<LauncherRole, { name: string; description: string }> = {
 		admin: {
-			name: 'Admin CBT',
-			description: 'Mulai dari persiapan ujian, sesi dan token, pemantauan hari-H, lalu hasil.'
+			name: 'Admin Ujian',
+			description: 'Mulai dari persiapan ujian, sesi ujian dan kode ujian, pemantauan hari-H, lalu hasil.'
 		},
 		guru: {
 			name: 'Guru',
-			description: 'CBT dipakai untuk membaca persiapan, membantu pelaksanaan bila ditugaskan, dan membuka hasil. Penulisan soal ada di modul Bank Soal.'
+			description: 'Ujian Berbasis Komputer dipakai untuk membaca persiapan, membantu pelaksanaan bila ditugaskan, dan membuka hasil. Penulisan soal ada di modul Bank Soal.'
 		},
 		staf: {
 			name: 'Staf',
@@ -70,7 +70,7 @@
 		{
 			number: '1',
 			title: 'Siapkan',
-			description: 'Paket, kegiatan, jadwal, peserta, ruang, dan token siap sebelum hari ujian.'
+			description: 'Paket, kegiatan, jadwal, peserta, ruang, dan kode ujian siap sebelum hari ujian.'
 		},
 		{
 			number: '2',
@@ -96,7 +96,7 @@
 		{
 			phase: 'Siapkan',
 			title: 'Baca Persiapan',
-			description: 'Lihat jalur paket, kegiatan, sesi, dan token yang disiapkan untuk ujian.',
+			description: 'Lihat jalur paket, kegiatan, sesi ujian, dan kode ujian yang disiapkan untuk ujian.',
 			href: '/asesmen/persiapan',
 			roles: ['guru'],
 			priority: { guru: 1 }
@@ -119,8 +119,8 @@
 		},
 		{
 			phase: 'Siapkan',
-			title: 'Atur Sesi & Token',
-			description: 'Kelola sesi, kartu ujian, dan token dari pusat kegiatan CBT.',
+			title: 'Atur Sesi & Kode Ujian',
+			description: 'Kelola sesi ujian, kartu ujian, dan kode ujian dari pusat kegiatan ujian.',
 			href: '/asesmen/kegiatan',
 			roles: ['admin'],
 			priority: { admin: 2 }
@@ -136,7 +136,7 @@
 		{
 			phase: 'Jalankan',
 			title: 'Panduan BYOD',
-			description: 'Baca ringkasan status perangkat, koneksi, dan kesiapan submit.',
+			description: 'Baca ringkasan status perangkat, koneksi, dan kesiapan kirim ujian.',
 			href: '/asesmen/aplikasi-siswa',
 			roles: ['staf'],
 			priority: { staf: 2 }
@@ -160,7 +160,7 @@
 	});
 	const visibleSecondaryLinks = $derived(secondaryLinks.filter((link) => link.roles.some((role) => roleSet.has(role))));
 	const roleName = $derived(launcherRole ? roleCopy[launcherRole].name : 'Peran ini');
-	const roleDescription = $derived(launcherRole ? roleCopy[launcherRole].description : 'CBT belum menyediakan pintasan untuk peran aktif ini. Gunakan menu utama sesuai tugas masing-masing.');
+	const roleDescription = $derived(launcherRole ? roleCopy[launcherRole].description : 'Belum ada pintasan ujian untuk peran aktif ini. Gunakan menu utama sesuai tugas masing-masing.');
 
 	function resolveLauncherRole(roleSetValue: ReadonlySet<KnownRole>): LauncherRole | undefined {
 		if (roleSetValue.has('admin')) return 'admin';
@@ -183,13 +183,13 @@
 </script>
 
 <svelte:head>
-	<title>Beranda CBT — MTsN 2 Kolaka Utara</title>
+	<title>Beranda Ujian — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 <div class="space-y-8">
 	<section class="rounded-3xl border border-border bg-card p-6 shadow-sm md:p-8">
 		<div class="max-w-4xl space-y-4">
-			<p class="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Beranda CBT</p>
+			<p class="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Beranda Ujian</p>
 			<div class="space-y-3">
 				<h1 class="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Apa yang perlu dikerjakan hari ini?</h1>
 				<p class="max-w-2xl text-base leading-7 text-muted-foreground">
@@ -248,7 +248,7 @@
 			<Card.Root class="border-dashed border-border bg-muted/50 shadow-sm">
 				<Card.Header>
 					<Card.Title class="text-lg text-foreground">Tidak ada tugas CBT untuk peran ini</Card.Title>
-					<Card.Description>Halaman ini tidak membuka modul yang tidak relevan dengan role aktif.</Card.Description>
+					<Card.Description>Halaman ini tidak membuka modul yang tidak relevan dengan peran aktif.</Card.Description>
 				</Card.Header>
 				<Card.Footer>
 					<Button href={resolve('/')} variant="outline">Kembali ke Beranda</Button>

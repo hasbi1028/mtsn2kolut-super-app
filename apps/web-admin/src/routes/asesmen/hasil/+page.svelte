@@ -18,7 +18,7 @@
 	const adminResultPaths: ResultPath[] = [
 		{
 			title: 'Hasil Kegiatan',
-			description: 'Lihat rekap hasil dari daftar kegiatan CBT.',
+			description: 'Lihat rekap hasil dari daftar kegiatan ujian.',
 			href: '/asesmen/kegiatan'
 		},
 		{
@@ -40,13 +40,13 @@
 			href: '/asesmen/pelaksanaan'
 		},
 		{
-			title: 'Panduan Monitoring',
+			title: 'Panduan Pemantauan',
 			description: 'Gunakan panduan BYOD saat membaca kondisi ujian yang sedang berlangsung.',
 			href: '/asesmen/aplikasi-siswa'
 		},
 		{
-			title: 'Dashboard CBT',
-			description: 'Kembali ke dashboard CBT untuk memilih pekerjaan yang tersedia untuk akun guru.',
+			title: 'Beranda Ujian',
+			description: 'Kembali ke beranda ujian untuk memilih pekerjaan yang tersedia untuk akun guru.',
 			href: '/asesmen'
 		}
 	];
@@ -68,11 +68,11 @@
 					{#if userRoles.includes('admin')}
 						Pilih pekerjaan hasil yang ingin dibuka. Rekap kegiatan, hasil sesi, dan analisis soal tetap berada di halaman detail yang sudah tersedia.
 					{:else}
-						Untuk guru, halaman ini menjadi pintu informasi hasil. Rekap detail dibuka melalui alur yang disediakan admin atau dari dashboard CBT.
+						Untuk guru, halaman ini menjadi pintu informasi hasil. Rekap detail dibuka melalui alur yang disediakan admin atau dari beranda CBT.
 					{/if}
 				</p>
 			</div>
-			<Button href={resolve('/asesmen')} variant="outline">Kembali ke Dashboard CBT</Button>
+			<Button href={resolve('/asesmen')} variant="outline">Kembali ke Beranda Ujian</Button>
 		</section>
 
 		<section class="grid gap-4 lg:grid-cols-3" aria-label="Pilihan Hasil CBT">
@@ -105,7 +105,7 @@
 					href={resolve('/asesmen')}
 					class="inline-flex rounded-md border border-primary/20 bg-card px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/10"
 				>
-					Kembali ke Dashboard CBT
+					Kembali ke Beranda Ujian
 				</a>
 			</div>
 		</div>

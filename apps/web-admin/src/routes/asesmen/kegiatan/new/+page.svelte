@@ -26,7 +26,7 @@
 		lainnya: 'Lainnya'
 	};
 	const scopeLabel: Record<string, string> = { class: 'Per Kelas', grade: 'Per Tingkat', school: 'Seluruh Sekolah' };
-	const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Aktif', finished: 'Selesai' };
+	const statusLabel: Record<string, string> = { draft: 'Konsep', active: 'Aktif', finished: 'Selesai' };
 
 	let years = $state<AcademicYear[]>([]);
 	let formPromise = $state<Promise<FormData> | null>(null);
@@ -76,7 +76,7 @@
 	}
 
 	function handleRenderError(error: unknown) {
-		console.error('CBT event create render failed', error);
+		console.error('Form kegiatan asesmen belum dapat ditampilkan', error);
 	}
 
 	function toggleTargetLevel(level: string, checked: boolean) {
@@ -116,15 +116,15 @@
 	onMount(loadForm);
 </script>
 
-<svelte:head><title>Buat Kegiatan CBT — MTSN 2 Kolut</title></svelte:head>
+<svelte:head><title>Buat Kegiatan Asesmen — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
 	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-2">
-				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Create Flow CBT</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Buat Kegiatan CBT</h1>
-				<p class="text-sm leading-6 text-muted-foreground">Isi identitas kegiatan sekali, lalu lanjutkan ke paket, sesi, peserta, dan token dari daftar kegiatan.</p>
+				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Alur Pembuatan CBT</p>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Buat Kegiatan Asesmen</h1>
+				<p class="text-sm leading-6 text-muted-foreground">Isi identitas kegiatan sekali, lalu lanjutkan ke paket, sesi, peserta, dan kode ujian dari daftar kegiatan.</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
 				<Button href={resolve('/asesmen/persiapan')} variant="outline">Persiapan CBT</Button>
@@ -146,14 +146,14 @@
 		{/snippet}
 
 		{#snippet failed(error, reset)}
-			<RecoveryPanel title="Form Kegiatan Belum Siap" message={errorMessage(error, 'Gagal memuat tahun ajaran')} onRetry={() => retryForm(reset)} />
+			<RecoveryPanel title="Isian Kegiatan Belum Siap" message={errorMessage(error, 'Gagal memuat tahun ajaran')} onRetry={() => retryForm(reset)} />
 		{/snippet}
 
 		{#snippet children()}
 			<Card.Root class="border-border shadow-sm">
 				<Card.Header>
 					<Card.Title class="text-base">Identitas Kegiatan</Card.Title>
-					<Card.Description>Payload mengikuti endpoint <code>/api/asesmen/events</code> yang dipakai form lama.</Card.Description>
+					<Card.Description>Data isian mengikuti layanan kegiatan yang sudah dipakai sistem.</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-4">
 					<div class="grid gap-3 sm:grid-cols-2">

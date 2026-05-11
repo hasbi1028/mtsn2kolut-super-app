@@ -642,7 +642,7 @@
 		return params.toString() ? `${resolve('/bank-soal/verifikasi')}?${params.toString()}` : resolve('/bank-soal/verifikasi');
 	}
 
-	function questionPreview(question: Question): string {
+	function questionPratinjau(question: Question): string {
 		const text = htmlToPlainText(question.stem_html || question.question_text || '').replace(/\s+/g, ' ').trim();
 		if (!text) return '(Isi soal belum tersedia)';
 		return text.length > 180 ? `${text.slice(0, 180)}...` : text;
@@ -836,7 +836,7 @@
 	}
 
 	function handleQuestionsRenderError(error: unknown, reset: () => void) {
-		console.error('Bank soal render failed', error);
+		console.error('Daftar Bank Soal belum dapat ditampilkan', error);
 		reset();
 	}
 
@@ -1015,7 +1015,7 @@
 			<div class="flex items-start justify-between gap-3">
 				<div>
 					<h2 class="text-base font-semibold text-foreground">Aksi Cepat</h2>
-					<p class="mt-1 text-xs text-muted-foreground">Shortcut workflow utama Bank Soal</p>
+					<p class="mt-1 text-xs text-muted-foreground">Pintasan alur utama Bank Soal</p>
 				</div>
 				<SparklesIcon class="size-5 text-warning" />
 			</div>
@@ -1037,7 +1037,7 @@
 				{#if canImport}
 					<a href={importHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
 						<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground"><UploadIcon class="size-5" /></span>
-						<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Import dari Word/Excel</span><span class="block text-xs text-muted-foreground">Preview, mapping, lalu konfirmasi</span></span>
+						<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Impor dari Word/Excel</span><span class="block text-xs text-muted-foreground">Pratinjau, pemetaan, lalu konfirmasi</span></span>
 					</a>
 				{/if}
 				{#if canReview}
@@ -1057,7 +1057,7 @@
 				{#if canSettings}
 					<a href={settingsHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
 						<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-border text-foreground"><SettingsIcon class="size-5" /></span>
-						<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Pengaturan & SOP</span><span class="block text-xs text-muted-foreground">Workflow, standar kualitas, dan integrasi</span></span>
+						<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Pengaturan & SOP</span><span class="block text-xs text-muted-foreground">Alur kerja, standar kualitas, dan integrasi</span></span>
 					</a>
 				{/if}
 			</div>
@@ -1248,7 +1248,7 @@
 						<p class="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
 							{hasFilters
 								? 'Coba longgarkan filter atau cari dengan kode, materi, dan isi soal yang lebih umum.'
-								: 'Mulai dari komposer untuk menulis soal pertama, atau impor CSV dari arsip soal lama.'}
+								: 'Mulai dari penyusun soal untuk menulis soal pertama, atau impor CSV dari arsip soal lama.'}
 						</p>
 						<div class="mt-5 flex flex-wrap justify-center gap-2">
 							{#if hasFilters}
@@ -1297,7 +1297,7 @@
 														<Badge variant="outline" class="border-destructive/30 bg-destructive/10 text-destructive">Terkunci</Badge>
 													{/if}
 												</div>
-												<p class="line-clamp-2 text-sm leading-6 text-foreground">{questionPreview(question)}</p>
+												<p class="line-clamp-2 text-sm leading-6 text-foreground">{questionPratinjau(question)}</p>
 												<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
 													<span>{compactText(question.author_username, 'Penulis belum tercatat')}</span>
 													<span>{difficultyLabel(question.difficulty)}</span>
@@ -1351,7 +1351,7 @@
 								<div class="flex items-start justify-between gap-3">
 									<div class="min-w-0">
 										<p class="font-mono text-xs font-semibold text-primary">{compactText(question.code, 'Tanpa kode')}</p>
-										<h2 class="mt-1 line-clamp-3 text-sm font-semibold leading-6 text-foreground">{questionPreview(question)}</h2>
+										<h2 class="mt-1 line-clamp-3 text-sm font-semibold leading-6 text-foreground">{questionPratinjau(question)}</h2>
 									</div>
 									<Badge variant="outline" class={workflowBadgeClass(question.workflow_status)}>
 										{workflowLabel(question.workflow_status)}
@@ -1385,7 +1385,7 @@
 								<Button href={questionHref(question)} variant="outline" class="w-full">
 									{#if isQuickEditable(question)}
 										<PencilIcon class="size-4" />
-										Edit di Komposer
+										Edit di Penyusun soal
 									{:else}
 										<EyeIcon class="size-4" />
 										Lihat Soal

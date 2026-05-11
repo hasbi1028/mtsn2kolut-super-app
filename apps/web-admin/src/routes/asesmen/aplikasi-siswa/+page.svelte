@@ -27,7 +27,7 @@
 		{
 			label: 'Tersambung',
 			tone: 'good',
-			meaning: 'Perangkat baru saja berkomunikasi baik dengan server dan tidak ada jawaban lokal yang tertahan.',
+			meaning: 'Perangkat baru saja berkomunikasi baik dengan layanan sistem dan tidak ada jawaban lokal yang tertahan.',
 			intervention: 'Siswa dapat lanjut mengerjakan soal seperti biasa.'
 		},
 		{
@@ -39,19 +39,19 @@
 		{
 			label: 'Waspada',
 			tone: 'warning',
-			meaning: 'Kontak server mulai lama. Belum tentu gagal, tetapi perangkat perlu refresh status.',
+			meaning: 'Kontak layanan sistem mulai lama. Belum tentu gagal, tetapi perangkat perlu memperbarui status.',
 			intervention: 'Minta siswa menekan sinkron ulang dan pastikan koneksi masih sehat.'
 		},
 		{
 			label: 'Gangguan',
 			tone: 'danger',
-			meaning: 'Aplikasi baru saja gagal menyimpan jawaban atau memperbarui status ke server.',
-			intervention: 'Pantau jaringan, jangan buru-buru submit, lalu coba sinkron ulang.'
+			meaning: 'Aplikasi baru saja gagal menyimpan jawaban atau memperbarui status ke layanan sistem.',
+			intervention: 'Pantau jaringan, jangan buru-buru mengirim ujian, lalu coba sinkron ulang.'
 		},
 		{
 			label: 'Menurun',
 			tone: 'danger',
-			meaning: 'Gangguan sinkron sudah berulang. Submit manual memang ditahan sampai sesi cukup pulih.',
+			meaning: 'Gangguan sinkron sudah berulang. Kirim ujian manual memang ditahan sampai sesi cukup pulih.',
 			intervention: 'Pengawas harus intervensi. Siswa tetap di layar ujian sampai status membaik.'
 		}
 	];
@@ -59,17 +59,17 @@
 	const preSubmitChecklist = [
 		'Status bukan Menurun.',
 		'Tidak ada jawaban lokal yang masih menunggu sinkron.',
-		'Refresh status terakhir berhasil.',
-		'Perangkat yang dipakai masih sama dengan perangkat saat login.',
+		'Pembaruan status terakhir berhasil.',
+		'Perangkat yang dipakai masih sama dengan perangkat saat masuk ujian.',
 		'Siswa tetap berada di layar ujian sebelum menekan Kirim Ujian.'
 	];
 
 	const trialFlow = [
-		'Sebelum sesi, pastikan APK terpasang dan API base URL yang dipakai benar.',
-		'Saat login, cek apakah ada kartu restore dan perhatikan label kesehatan sesi terakhir.',
-		'Selama ujian, pantau badge status app bar dan panel kesehatan koneksi di layar siswa.',
+		'Sebelum sesi, pastikan APK terpasang dan alamat layanan sistem yang dipakai benar.',
+		'Saat masuk ujian, cek apakah ada kartu pemulihan sesi dan perhatikan label kesehatan sesi terakhir.',
+		'Selama ujian, pantau penanda status di bagian atas aplikasi dan panel kesehatan koneksi di layar siswa.',
 		'Saat gangguan disimulasikan, minta siswa tetap berada di layar ujian sampai sinkron pulih.',
-		'Sebelum submit, ulangi checklist pengawas dan jangan izinkan kirim jika status masih Menurun.'
+		'Sebelum kirim ujian, ulangi daftar pemeriksaan pengawas dan jangan izinkan kirim jika status masih Menurun.'
 	];
 
 	const monitoringGroups: QuickLinkGroup[] = [
@@ -83,12 +83,12 @@
 					description: 'Daftar sesi yang perlu dipantau hari ini.'
 				},
 				{
-					label: 'Dashboard Ruang',
+					label: 'Panel Ruang',
 					href: '/asesmen/pengawasan',
-					description: 'Buka rekap ruang/proctoring untuk dashboard live.'
+					description: 'Buka rekap ruang dan pengawasan ujian untuk panel langsung.'
 				},
 				{
-					label: 'Status Guide',
+					label: 'Panduan Status',
 					href: '#status-guide',
 					description: 'Arti Tersambung, Lokal, Waspada, Gangguan, dan Menurun.'
 				}
@@ -96,20 +96,20 @@
 		},
 		{
 			title: 'Panduan BYOD',
-			description: 'Bahan pengawas saat perlu menjelaskan status, submit, dan alur trial kepada siswa.',
+			description: 'Bahan pengawas saat perlu menjelaskan status, kirim ujian, dan alur uji coba kepada siswa.',
 			links: [
 				{
 					label: 'Arti Status Koneksi',
 					href: '#status-guide',
-					description: 'Makna badge aplikasi mobile dan tindakan pengawas.'
+					description: 'Makna penanda status aplikasi siswa dan tindakan pengawas.'
 				},
 				{
-					label: 'Checklist Submit',
+					label: 'Daftar Pemeriksaan Kirim',
 					href: '#submit-checklist',
 					description: 'Pemeriksaan singkat sebelum siswa menekan Kirim Ujian.'
 				},
 				{
-					label: 'Alur Trial BYOD',
+					label: 'Alur Uji Coba BYOD',
 					href: '#trial-flow',
 					description: 'Urutan latihan untuk operator dan pengawas.'
 				}
@@ -117,17 +117,17 @@
 		},
 		{
 			title: 'Perangkat & Kesiapan',
-			description: 'Dibuka setelah kebutuhan monitoring terpenuhi: matrix perangkat dan release checklist.',
+			description: 'Dibuka setelah kebutuhan pemantauan terpenuhi: tabel perangkat dan daftar pemeriksaan rilis.',
 			links: [
 				{
-					label: 'Matriks Perangkat',
+					label: 'Tabel Perangkat',
 					href: '/asesmen/aplikasi-siswa/matrix',
-					description: 'Bandingkan vendor, model, koneksi, restore, audio, dan submit.'
+					description: 'Bandingkan vendor, model, koneksi, pemulihan sesi, audio, dan kirim ujian.'
 				},
 				{
-					label: 'Release Checklist',
+					label: 'Daftar Pemeriksaan Rilis',
 					href: '/asesmen/aplikasi-siswa/release',
-					description: 'Cek kesiapan backend, APK, operator, dan artefak rollout.'
+					description: 'Cek kesiapan layanan sistem, APK, operator, dan bahan rilis.'
 				}
 			]
 		}
@@ -154,18 +154,18 @@
 	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-3">
-				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Modul 4 dari 5 · Monitoring</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Monitoring CBT Mobile BYOD</h1>
+				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Modul 4 dari 5 · Pemantauan</p>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Panduan Aplikasi Siswa BYOD</h1>
 				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
-					Mulai dari kebutuhan hari-H: buka sesi aktif, pantau dashboard ruang, lalu gunakan status guide
+					Mulai dari kebutuhan hari-H: buka sesi aktif, pantau panel ruang, lalu gunakan panduan status
 					hanya saat pengawas perlu membaca sinyal koneksi siswa.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-3">
-				<Button href={resolve('/asesmen')} variant="outline">Beranda CBT</Button>
+				<Button href={resolve('/asesmen')} variant="outline">Beranda Ujian</Button>
 				<Button href="/asesmen/sesi?schedule=today">Pantau Sesi Hari Ini</Button>
-				<Button href="/asesmen/pengawasan" variant="outline">Dashboard Ruang</Button>
-				<Button href="#status-guide" variant="outline">Status Guide</Button>
+				<Button href="/asesmen/pengawasan" variant="outline">Panel Ruang</Button>
+				<Button href="#status-guide" variant="outline">Panduan Status</Button>
 			</div>
 		</div>
 	</section>
@@ -174,7 +174,7 @@
 		<Card.Header>
 			<Card.Title class="text-lg text-foreground">Pantau Ujian Dulu</Card.Title>
 			<Card.Description>
-				Tiga grup sederhana untuk monitoring: hari-H dulu, panduan setelahnya, perangkat dan kesiapan sebagai dukungan.
+				Tiga grup sederhana untuk pemantauan: hari-H dulu, panduan setelahnya, perangkat dan kesiapan sebagai dukungan.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="grid gap-4 lg:grid-cols-3">
@@ -198,9 +198,9 @@
 	<div class="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
 		<Card.Root id="status-guide" class="border-border shadow-sm">
 			<Card.Header>
-				<Card.Title class="text-lg text-foreground">Arti Status Koneksi Mobile</Card.Title>
+				<Card.Title class="text-lg text-foreground">Arti Status Koneksi Aplikasi Siswa</Card.Title>
 				<Card.Description>
-					Gunakan arti status ini saat mendampingi siswa. Fokus utamanya adalah kapan pengawas cukup memantau dan kapan harus menahan submit.
+					Gunakan arti status ini saat mendampingi siswa. Fokus utamanya adalah kapan pengawas cukup memantau dan kapan harus menahan kirim ujian.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content class="space-y-4">
@@ -221,7 +221,7 @@
 		<div class="space-y-6">
 			<Card.Root id="submit-checklist" class="border-border shadow-sm">
 				<Card.Header>
-					<Card.Title class="text-lg text-foreground">Checklist Sebelum Submit</Card.Title>
+					<Card.Title class="text-lg text-foreground">Daftar Pemeriksaan Sebelum Kirim</Card.Title>
 					<Card.Description>
 						Lima pemeriksaan singkat ini sebaiknya selalu diulang sebelum pengawas mengizinkan siswa menekan kirim ujian.
 					</Card.Description>
@@ -240,7 +240,7 @@
 
 			<Card.Root id="trial-flow" class="border-border shadow-sm">
 				<Card.Header>
-					<Card.Title class="text-lg text-foreground">Alur Trial BYOD</Card.Title>
+					<Card.Title class="text-lg text-foreground">Alur Uji Coba BYOD</Card.Title>
 					<Card.Description>
 						Gunakan urutan ini saat uji coba perangkat siswa agar hasil antar pengawas tetap konsisten.
 					</Card.Description>
@@ -263,42 +263,42 @@
 		<Card.Header>
 			<Card.Title class="text-lg text-foreground">Artefak Operasional</Card.Title>
 			<Card.Description>
-				Gunakan dokumen ini di repo yang sama untuk trial lapangan dan review kompatibilitas backend-mobile.
+				Gunakan dokumen ini di repositori yang sama untuk uji coba lapangan dan pemeriksaan kesesuaian layanan sistem dengan aplikasi siswa.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="grid gap-4 lg:grid-cols-5">
 			<div class="rounded-2xl border border-border bg-muted/50 p-4">
-				<p class="text-sm font-semibold text-foreground">Operator Quick Start</p>
+				<p class="text-sm font-semibold text-foreground">Panduan Cepat Operator</p>
 				<p class="mt-2 text-sm leading-6 text-muted-foreground">
 					Panduan singkat pengawas saat mendampingi siswa, termasuk arti status dan langkah saat koneksi mulai terganggu.
 				</p>
 				<p class="mt-3 font-mono text-xs text-muted-foreground">apps/mobile/OPERATOR_QUICKSTART.md</p>
 			</div>
 			<div class="rounded-2xl border border-border bg-muted/50 p-4">
-				<p class="text-sm font-semibold text-foreground">BYOD Trial Procedure</p>
+				<p class="text-sm font-semibold text-foreground">Prosedur Uji Coba BYOD</p>
 				<p class="mt-2 text-sm leading-6 text-muted-foreground">
-					Prosedur end-to-end untuk operator, pengawas, siswa, simulasi gangguan, dan keputusan submit readiness.
+					Prosedur lengkap untuk operator, pengawas, siswa, simulasi gangguan, dan keputusan kesiapan kirim ujian.
 				</p>
 				<p class="mt-3 font-mono text-xs text-muted-foreground">apps/mobile/BYOD_TRIAL_PROCEDURE.md</p>
 			</div>
 			<div class="rounded-2xl border border-border bg-muted/50 p-4">
-				<p class="text-sm font-semibold text-foreground">Device Test Matrix</p>
+				<p class="text-sm font-semibold text-foreground">Tabel Uji Perangkat</p>
 				<p class="mt-2 text-sm leading-6 text-muted-foreground">
-					Matriks vendor dan model perangkat untuk mencatat hasil uji install, restore, audio, gambar, dan submit.
+					Tabel vendor dan model perangkat untuk mencatat hasil uji pemasangan, pemulihan sesi, audio, gambar, dan kirim ujian.
 				</p>
 				<p class="mt-3 font-mono text-xs text-muted-foreground">apps/mobile/DEVICE_TEST_MATRIX.md</p>
 			</div>
 			<div class="rounded-2xl border border-border bg-muted/50 p-4">
-				<p class="text-sm font-semibold text-foreground">Ringkasan Matriks di Admin</p>
+				<p class="text-sm font-semibold text-foreground">Ringkasan Tabel di Admin</p>
 				<p class="mt-2 text-sm leading-6 text-muted-foreground">
-					Gunakan halaman matriks perangkat di admin untuk membaca struktur evaluasi vendor tanpa keluar dari dashboard.
+					Gunakan halaman tabel perangkat di admin untuk membaca struktur evaluasi vendor tanpa keluar dari beranda.
 				</p>
 				<p class="mt-3 font-mono text-xs text-muted-foreground">/asesmen/aplikasi-siswa/matrix</p>
 			</div>
 			<div class="rounded-2xl border border-border bg-muted/50 p-4">
-				<p class="text-sm font-semibold text-foreground">Readiness Release di Admin</p>
+				<p class="text-sm font-semibold text-foreground">Kesiapan Rilis di Admin</p>
 				<p class="mt-2 text-sm leading-6 text-muted-foreground">
-					Buka ringkasan backend, mobile, dan rollout checklist sebelum perubahan backend exam atau APK dinyatakan siap uji lapangan.
+					Buka ringkasan layanan sistem, aplikasi siswa, dan daftar pemeriksaan rilis sebelum perubahan layanan ujian atau APK dinyatakan siap uji lapangan.
 				</p>
 				<p class="mt-3 font-mono text-xs text-muted-foreground">/asesmen/aplikasi-siswa/release</p>
 			</div>

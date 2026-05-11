@@ -684,7 +684,7 @@
 	}
 
 	function handleSessionsRenderError(error: unknown) {
-		console.error('CBT sessions render failed', error);
+		console.error('Daftar sesi ujian belum dapat ditampilkan', error);
 	}
 
 	function showToast(msg: string, ok = true) {
@@ -885,13 +885,13 @@
 	});
 </script>
 
-	<svelte:head><title>{eventId ? 'Kegiatan & Sesi CBT' : 'Sesi CBT'} — MTSN 2 Kolut</title></svelte:head>
+	<svelte:head><title>{eventId ? 'Kegiatan & Sesi Ujian' : 'Sesi Ujian'} — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
 			<p class="text-xs font-semibold uppercase tracking-[0.16em] text-success">Kegiatan & Sesi</p>
-			<h1 class="text-2xl font-semibold text-foreground">Sesi CBT</h1>
+			<h1 class="text-2xl font-semibold text-foreground">Sesi Ujian</h1>
 			<p class="text-sm text-muted-foreground mt-1">Daftar sesi ujian sebagai bagian dari alur Kegiatan & Sesi{eventId ? ' untuk kegiatan ini' : ''}.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
@@ -909,7 +909,7 @@
 					<p class="font-semibold">Sesi untuk kegiatan: {eventContext?.title ?? eventId}</p>
 					<p class="mt-1 text-success">Daftar sesi dan payload pembuatan sesi membawa <code class="rounded bg-card px-1">event_id</code>. Item global atau event lain disembunyikan agar tidak terbaca sebagai sesi kegiatan ini.</p>
 				</div>
-				<a href={resolve(`/asesmen/paket?event_id=${eventId}`)} class="rounded-md border border-success/20 bg-card px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Paket Event</a>
+				<a href={resolve(`/asesmen/paket?event_id=${eventId}`)} class="rounded-md border border-success/20 bg-card px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Paket Kegiatan</a>
 			</div>
 		</div>
 	{:else}

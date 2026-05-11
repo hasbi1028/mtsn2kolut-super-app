@@ -115,7 +115,7 @@
 	}
 
 	function handleRenderError(error: unknown, reset: () => void) {
-		console.error('Bank Soal health dashboard render failed', error);
+		console.error('Ringkasan kesehatan Bank Soal belum dapat ditampilkan', error);
 		reset();
 	}
 
@@ -304,7 +304,7 @@
 					<div class="flex items-start justify-between gap-3">
 						<div>
 							<h2 class="text-base font-semibold text-foreground">Warning Operasional</h2>
-							<p class="mt-1 text-xs text-muted-foreground">Import, aset, dan tata kelola hanya dinilai saat evidence tersedia.</p>
+							<p class="mt-1 text-xs text-muted-foreground">Impor, aset, dan tata kelola hanya dinilai saat bukti pendukung tersedia.</p>
 						</div>
 						<AlertTriangleIcon class="size-5 text-warning" />
 					</div>

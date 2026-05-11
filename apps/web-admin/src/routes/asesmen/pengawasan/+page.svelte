@@ -53,7 +53,7 @@
 		{ value: 'all', label: 'Semua status' },
 		{ value: 'active', label: 'Aktif' },
 		{ value: 'scheduled', label: 'Terjadwal' },
-		{ value: 'draft', label: 'Draft' },
+		{ value: 'draft', label: 'Konsep' },
 		{ value: 'finished', label: 'Selesai' },
 	];
 
@@ -119,7 +119,7 @@
 	}
 
 	function handleRenderError(error: unknown) {
-		console.error('CBT proctor rooms render failed', error);
+		console.error('Ruang pengawasan ujian belum dapat ditampilkan', error);
 	}
 
 	function fmtDate(value: string | null | undefined) {
@@ -138,7 +138,7 @@
 
 	function statusLabel(status: string) {
 		const labels: Record<string, string> = {
-			draft: 'Draft',
+			draft: 'Konsep',
 			scheduled: 'Terjadwal',
 			active: 'Aktif',
 			finished: 'Selesai',
@@ -231,11 +231,11 @@
 					<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">CBT / Pengawas Ruang</p>
 					<h1 class="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Ruang Pengawas CBT</h1>
 					<p class="text-sm leading-6 text-muted-foreground">
-						Satu layar untuk menemukan ruang ujian yang perlu dipantau, membuka dashboard live, dan kembali ke Monitoring BYOD saat butuh status guide.
+						Satu layar untuk menemukan ruang ujian yang perlu dipantau, membuka panel langsung, dan kembali ke Panduan BYOD saat butuh panduan status.
 					</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
-					<Button href={resolve('/asesmen/aplikasi-siswa')} variant="outline">Monitoring BYOD</Button>
+					<Button href={resolve('/asesmen/aplikasi-siswa')} variant="outline">Panduan BYOD</Button>
 					<Button href={resolve('/asesmen/sesi')} variant="outline">Sesi Ujian</Button>
 				</div>
 			</section>
@@ -265,14 +265,14 @@
 
 			<section class="grid gap-3 border border-border bg-card p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_220px]">
 				<div>
-					<label for="proctor-room-search" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cari ruang / sesi / token</label>
+					<label for="proctor-room-search" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cari ruang / sesi / kode ruang</label>
 					<div class="relative">
 						<SearchIcon class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 						<input
 							id="proctor-room-search"
 							bind:value={query}
 							class="h-10 w-full rounded-md border border-border bg-card pl-9 pr-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring"
-							placeholder="Cari ruang, paket, token, atau pengawas"
+							placeholder="Cari ruang, paket, kode ruang, atau pengawas"
 						/>
 					</div>
 				</div>
@@ -293,7 +293,7 @@
 			{#if loadedRooms.length === 0}
 				<EmptyStatePanel
 					title="Belum Ada Ruang Pengawas"
-					description="Ruang akan muncul setelah operator menetapkan pengawas pada tab Ruangan di detail sesi CBT."
+					description="Ruang akan muncul setelah operator menetapkan pengawas pada tab Ruangan di detail sesi ujian."
 				/>
 			{:else if filteredRooms.length === 0}
 				<EmptyStatePanel
@@ -320,7 +320,7 @@
 									</div>
 								</div>
 								<div class="rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-center">
-									<p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Token Ruang</p>
+									<p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Kode Ruang</p>
 									<p class="font-mono text-lg font-bold tracking-[0.16em] text-primary">{room.room_token || '—'}</p>
 								</div>
 							</div>
@@ -331,11 +331,11 @@
 									<p class="font-semibold text-foreground">{room.participant_count}</p>
 								</div>
 								<div class="border border-border bg-muted/50 p-3">
-									<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Online</p>
+									<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Terhubung</p>
 									<p class="font-semibold text-primary">{room.online_count}</p>
 								</div>
 								<div class="border border-border bg-muted/50 p-3">
-									<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Submit</p>
+									<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Kirim</p>
 									<p class="font-semibold text-foreground">{room.submitted_count}</p>
 								</div>
 								<div class="border border-border bg-muted/50 p-3">
@@ -354,7 +354,7 @@
 							<div class="mt-4 flex flex-wrap gap-2">
 								<Button href={resolve(`/asesmen/sesi/${room.session_id}/rooms/${room.id}/proctoring`)}>
 									<ActivityIcon class="mr-2 size-4" />
-									Dashboard
+									Panel
 								</Button>
 								<Button href={resolve(`/asesmen/sesi/${room.session_id}/rooms/${room.id}/print-pack`)} variant="outline">
 									<PrinterIcon class="mr-2 size-4" />
@@ -385,7 +385,7 @@
 									<Table.Head>Sesi</Table.Head>
 									<Table.Head>Status</Table.Head>
 									<Table.Head class="text-center">Peserta</Table.Head>
-									<Table.Head class="text-center">Online</Table.Head>
+									<Table.Head class="text-center">Terhubung</Table.Head>
 									<Table.Head class="text-center">Atensi</Table.Head>
 									<Table.Head>Pengawas</Table.Head>
 									<Table.Head class="text-right">Aksi</Table.Head>
@@ -396,7 +396,7 @@
 									<Table.Row>
 										<Table.Cell>
 											<div class="font-medium text-foreground">{room.room_name}</div>
-											<div class="font-mono text-xs text-muted-foreground">Token {room.room_token || '—'}</div>
+											<div class="font-mono text-xs text-muted-foreground">Kode {room.room_token || '—'}</div>
 										</Table.Cell>
 										<Table.Cell>
 											<div class="font-medium text-foreground">{room.session_title}</div>
@@ -409,7 +409,7 @@
 										<Table.Cell class="max-w-64 truncate text-sm text-muted-foreground">{room.proctor_names || '—'}</Table.Cell>
 										<Table.Cell class="text-right">
 											<div class="flex flex-wrap justify-end gap-2">
-												<Button size="sm" href={resolve(`/asesmen/sesi/${room.session_id}/rooms/${room.id}/proctoring`)} variant="outline">Dashboard</Button>
+												<Button size="sm" href={resolve(`/asesmen/sesi/${room.session_id}/rooms/${room.id}/proctoring`)} variant="outline">Panel</Button>
 												<Button size="sm" href={resolve(`/asesmen/sesi/${room.session_id}/rooms/${room.id}/print-pack`)} variant="outline">Cetak</Button>
 											</div>
 										</Table.Cell>

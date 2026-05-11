@@ -255,7 +255,7 @@
 									loadingLabel="Mengajukan..."
 									disabled={!canSubmitRevisionReview(q) || (workflowBusyId !== '' && workflowBusyId !== q.id)}
 								>
-									Ajukan Review Ulang
+									Ajukan Ajukan Ulang
 								</LoadingButton>
 							{:else if action === 'review'}
 								{#if canReviewWorkflow}
