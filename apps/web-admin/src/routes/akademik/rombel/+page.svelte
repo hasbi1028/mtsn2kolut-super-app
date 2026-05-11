@@ -201,7 +201,7 @@
 
 	function rombelErrorMessage(error: unknown) {
 		if (error instanceof Error && error.message.trim()) return error.message;
-		return 'Data rombel belum dapat dimuat. Periksa koneksi backend lalu coba lagi.';
+		return 'Data rombel belum dapat dimuat. Periksa layanan sistem lalu coba lagi.';
 	}
 
 	function handleRenderError(error: unknown) {
@@ -224,7 +224,7 @@
 			<p class="text-sm font-medium text-primary">Akademik</p>
 			<h1 class="text-2xl font-semibold tracking-normal text-foreground">Rombel</h1>
 			<p class="mt-1 max-w-2xl text-sm text-muted-foreground">
-				Daftar kelas belajar beserta wali kelas, jumlah siswa, guru mapel, dan slot jadwal.
+				Daftar rombel beserta wali kelas, jumlah siswa, penugasan guru mapel, dan jam pelajaran.
 			</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
@@ -288,7 +288,7 @@
 				<Card.Title class="text-base">Daftar Rombel</Card.Title>
 				<Card.Description>
 					{quickEdit
-						? 'Edit kode, nama, tingkat, dan status aktif. Perubahan disimpan berurutan agar error per rombel tetap jelas.'
+						? 'Edit kode, nama, tingkat, dan status aktif. Perubahan disimpan berurutan agar masalah per rombel tetap jelas.'
 						: 'Gunakan detail rombel untuk melihat siswa, orang tua, wali kelas, guru mapel, jadwal, dan menetapkan wali kelas yang masih kosong.'}
 				</Card.Description>
 			</Card.Header>
@@ -307,7 +307,7 @@
 								<Table.Head>Tahun Ajaran</Table.Head>
 								<Table.Head>Wali Kelas</Table.Head>
 								<Table.Head class="text-right">Siswa</Table.Head>
-								<Table.Head class="text-right">Guru Mapel</Table.Head>
+								<Table.Head class="text-right">Penugasan Guru Mapel</Table.Head>
 								<Table.Head class="text-right">Jadwal</Table.Head>
 								<Table.Head>Status</Table.Head>
 								<Table.Head></Table.Head>
@@ -395,7 +395,7 @@
 													oncancel={(event) => updateDraft(rombel.id, 'is_active', event.originalValue)}
 												/>
 												{#if draft.is_active === 'false' && rombel.total_students > 0}
-													<p class="mt-1 max-w-40 text-xs text-muted-foreground">Backend akan menolak jika masih ada siswa aktif.</p>
+													<p class="mt-1 max-w-40 text-xs text-muted-foreground">Layanan sistem akan menolak jika masih ada siswa aktif.</p>
 												{/if}
 											</div>
 										{:else}
@@ -431,7 +431,7 @@
 		<DirtyChangeBar
 			count={dirtyCount}
 			saving={saveQuickBusy}
-			saveLabel={saveQuickBusy ? 'Menyimpan...' : 'Simpan Perubahan'}
+			saveLabel={saveQuickBusy ? 'Menyimpan...' : 'Simpan perubahan'}
 			discardLabel="Batalkan"
 			onsave={() => void saveChangedRombels()}
 			ondiscard={() => resetRombelDrafts()}

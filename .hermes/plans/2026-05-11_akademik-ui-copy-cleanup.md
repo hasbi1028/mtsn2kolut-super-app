@@ -258,6 +258,8 @@ npm --prefix apps/web-admin run check
 npm --prefix apps/web-admin run check
 ```
 
+**Implementation note:** Selesai pada Tahap 6. Halaman `apps/web-admin/src/routes/akademik/rombel/+page.svelte`, `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte`, `apps/web-admin/src/routes/akademik/jadwal/+page.svelte`, dan `apps/web-admin/src/routes/students/+page.svelte` dibersihkan dari istilah user-facing seperti `slot`, `backend`, `assignment`, `legacy`, `lifecycle`, `permission`, `preview`, `generate`, `CBT`, `portal`, `role`, dan `drawer`. Copy diganti menjadi `jam pelajaran`, `layanan sistem`, `penugasan`, `data wali lama`, `status siswa`, `izin pengelolaan akun siswa`, `pratinjau`, `buat akun`, `asesmen`, `akun orang tua`, `peran`, dan `panel siswa`.
+
 ---
 
 ## Task 7: Backend domain error copy audit
