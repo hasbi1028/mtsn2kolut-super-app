@@ -134,9 +134,27 @@ Fokus pada tambah soal, impor soal, verifikasi, analisis butir, pengaturan bank 
 
 Fokus pada pengguna, hak akses, riwayat aktivitas, permintaan perubahan akun, profil madrasah, dan ringkasan penggunaan.
 
+**Implementation Notes (2026-05-12):**
+
+- Membersihkan copy operator pada modul Pengaturan/Akun: users, account, analytics, audit logs, dan hak akses.
+- Istilah teknis user-facing yang diganti mencakup RBAC, role, permission, matrix, slug, diff, warning, analytics, audit trail, Core API, token/session, dan metadata.
+- Padanan utama: hak akses pengguna, peran, izin akses, tabel akses, alamat singkat, daftar perubahan, peringatan dampak, ringkasan penggunaan, riwayat aktivitas, layanan utama, kode akses/sesi, dan info.
+- Tidak mengubah route, endpoint, tipe data, nama variabel internal, atau logic pengelolaan akun/hak akses.
+- Audit residual Tahap 4–5: `visible 0`, `code_only 243`.
+- Verifikasi: `npm --prefix apps/web-admin run check` PASS (`0 errors and 0 warnings`).
+
 ## Tahap 5 — TU/Surat & Dokumen
 
 Fokus pada surat masuk/keluar, disposisi, arsip, surat keterangan, siklus dokumen, dan paket kelengkapan.
+
+**Implementation Notes (2026-05-12):**
+
+- Membersihkan copy operator pada modul TU/Surat dan Dokumen: dashboard TU, arsip, surat keterangan, surat masuk, dan siklus dokumen.
+- Istilah teknis user-facing yang diganti mencakup template, metadata, audit, UUID, event, dan istilah teknis dokumen yang tampil ke operator.
+- Padanan utama: format surat, info dokumen, pemeriksaan administrasi, ID pegawai, kejadian, dan riwayat pemeriksaan.
+- Tidak mengubah struktur data arsip/surat, API, route, atau alur pembuatan/verifikasi dokumen.
+- Audit residual Tahap 4–5: `visible 0`, `code_only 243`.
+- Verifikasi: `npm --prefix apps/web-admin run check` PASS (`0 errors and 0 warnings`).
 
 ## Tahap 6 — Pusaka/Kehadiran
 

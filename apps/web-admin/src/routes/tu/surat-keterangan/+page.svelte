@@ -127,7 +127,7 @@
 			fetch(`/api/tu/surat-keterangan?${certificateParams.toString()}`)
 		]);
 		const [nextTemplates, nextStudents, nextCertificates] = await Promise.all([
-			readClientApiData<CertificateTemplate[]>(templatesRes, 'Gagal memuat template surat'),
+			readClientApiData<CertificateTemplate[]>(templatesRes, 'Gagal memuat format surat'),
 			readClientApiData<StudentOption[]>(studentsRes, 'Gagal memuat data siswa'),
 			readClientApiData<StudentCertificate[]>(certificatesRes, 'Gagal memuat arsip surat')
 		]);
@@ -357,7 +357,7 @@
 									onchange={(event) => selectTemplate((event.currentTarget as HTMLSelectElement).value)}
 									class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 								>
-									<option value="">Pilih template</option>
+									<option value="">Pilih format surat</option>
 									{#each overview.templates as template (template.id)}
 										<option value={template.id}>{template.name}</option>
 									{/each}

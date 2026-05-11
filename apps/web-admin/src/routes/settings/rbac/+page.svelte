@@ -145,7 +145,7 @@
 			selectedRoleCode = nextRoleCode;
 			setDraftFromRole(nextRoleCode, nextOverview.rolePermissions);
 		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Gagal memuat data RBAC.';
+			errorMessage = error instanceof Error ? error.message : 'Gagal memuat data hak akses pengguna.';
 		} finally {
 			loading = false;
 		}
@@ -176,7 +176,7 @@
 
 	function startEditRole(role: RBACRole) {
 		if (!canEditRoleMetadata(role)) {
-			roleFormError = 'Role sistem tidak dapat diedit metadata/statusnya. Permission tetap dapat diatur melalui matrix dengan guard backend.';
+			roleFormError = 'Peran bawaan sistem tidak dapat diubah info/statusnya. Izin akses tetap dapat diatur melalui tabel pengaturan dengan pengaman layanan sistem.';
 			return;
 		}
 		selectedRoleCode = role.code;
@@ -198,11 +198,11 @@
 		mutationError = '';
 		const payload = sanitizeRoleMetadataPayload(roleDraft);
 		if (!payload.code || !payload.name) {
-			roleFormError = 'Kode role dan nama role wajib diisi.';
+			roleFormError = 'Kode peran dan nama peran wajib diisi.';
 			return;
 		}
 		if (roleFormMode === 'edit' && !canEditRoleMetadata(selectedRole)) {
-			roleFormError = 'Role sistem tidak dapat diedit metadata/statusnya.';
+			roleFormError = 'Peran bawaan sistem tidak dapat diubah info/statusnya.';
 			return;
 		}
 		roleActionLoading = true;
@@ -220,7 +220,7 @@
 			const refreshed = roles.find((role: RBACRole) => role.code === selectedRoleCode);
 			roleDraft = buildRoleMetadataDraft(refreshed ?? selectedRole);
 		} catch (error) {
-			roleFormError = error instanceof Error ? error.message : 'Gagal menyimpan metadata role.';
+			roleFormError = error instanceof Error ? error.message : 'Gagal menyimpan info peran.';
 		} finally {
 			roleActionLoading = false;
 		}
@@ -228,7 +228,7 @@
 
 	async function toggleRoleActive(role: RBACRole) {
 		if (!canEditRoleMetadata(role)) {
-			roleFormError = 'Role sistem tidak dapat dinonaktifkan dari UI.';
+			roleFormError = 'Peran bawaan sistem tidak dapat dinonaktifkan dari halaman ini.';
 			return;
 		}
 		roleFormError = '';
@@ -241,7 +241,7 @@
 			selectedRoleCode = role.code;
 			await loadRBACOverview();
 		} catch (error) {
-			roleFormError = error instanceof Error ? error.message : 'Gagal memperbarui status role.';
+			roleFormError = error instanceof Error ? error.message : 'Gagal memperbarui status peran.';
 		} finally {
 			roleStatusTarget = '';
 		}
@@ -279,7 +279,7 @@
 		mutationError = '';
 		const payload = sanitizePermissionMetadataPayload(permissionDraft);
 		if (!payload.code || !payload.module || !payload.action) {
-			permissionFormError = 'Module dan action permission wajib diisi.';
+			permissionFormError = 'Modul dan aksi izin akses wajib diisi.';
 			return;
 		}
 		permissionActionLoading = true;
@@ -302,7 +302,7 @@
 			const refreshed = permissions.find((permission: RBACPermission) => permission.code === selectedPermissionCode);
 			permissionDraft = buildPermissionMetadataDraft(refreshed ?? selectedPermission);
 		} catch (error) {
-			permissionFormError = error instanceof Error ? error.message : 'Gagal menyimpan metadata permission.';
+			permissionFormError = error instanceof Error ? error.message : 'Gagal menyimpan info izin akses.';
 		} finally {
 			permissionActionLoading = false;
 		}
@@ -310,7 +310,7 @@
 
 	async function togglePermissionActive(permission: RBACPermission) {
 		if (!canTogglePermissionStatus(permission)) {
-			permissionFormError = 'Permission kritikal tidak dapat dinonaktifkan dari UI untuk mencegah lockout admin.';
+			permissionFormError = 'Izin akses penting tidak dapat dinonaktifkan dari halaman ini untuk mencegah admin terkunci.';
 			return;
 		}
 		permissionFormError = '';
@@ -323,7 +323,7 @@
 			selectedPermissionCode = permission.code;
 			await loadRBACOverview();
 		} catch (error) {
-			permissionFormError = error instanceof Error ? error.message : 'Gagal memperbarui status permission.';
+			permissionFormError = error instanceof Error ? error.message : 'Gagal memperbarui status izin akses.';
 		} finally {
 			permissionStatusTarget = '';
 		}
@@ -334,7 +334,7 @@
 	}
 
 	function permissionListLabel(permissions: readonly string[]) {
-		return permissions.length > 0 ? permissions.join(', ') : 'Tidak ada permission eksplisit';
+		return permissions.length > 0 ? permissions.join(', ') : 'Tidak ada izin akses khusus';
 	}
 
 	function statusLabel(allowed: boolean) {
@@ -354,7 +354,7 @@
 		if (!selectedRole) return;
 		setDraftFromRole(selectedRole.code);
 		mutationError = '';
-		mutationMessage = 'Perubahan draft dikembalikan ke permission aktif saat ini.';
+		mutationMessage = 'Perubahan konsep dikembalikan ke izin akses aktif saat ini.';
 	}
 
 	async function confirmSaveRolePermissions() {
@@ -370,7 +370,7 @@
 			selectedRoleCode = roleCode;
 			await loadRBACOverview();
 		} catch (error) {
-			mutationError = error instanceof Error ? error.message : 'Gagal menyimpan permission role.';
+			mutationError = error instanceof Error ? error.message : 'Gagal menyimpan izin akses peran.';
 		} finally {
 			saving = false;
 		}
@@ -386,14 +386,14 @@
 </script>
 
 <svelte:head>
-	<title>Manajemen RBAC • MTsN 2 Kolaka Utara</title>
+	<title>Manajemen Hak Akses • MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 <section class="space-y-6 p-4 md:p-6">
 	<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 		<div>
 			<p class="text-sm font-semibold uppercase tracking-wide text-primary">Pengaturan Sistem</p>
-			<h1 class="text-2xl font-bold text-foreground md:text-3xl">Manajemen RBAC</h1>
+			<h1 class="text-2xl font-bold text-foreground md:text-3xl">Manajemen Hak Akses</h1>
 			<p class="mt-2 max-w-3xl text-sm text-muted-foreground">
 				Kelola role, permission, dan matrix hak akses secara dinamis. Halaman ini memisahkan “Edit Info” role dari “Atur Permission” agar perubahan akses lebih jelas dan aman.
 			</p>
@@ -420,7 +420,7 @@
 		</Card.Root>
 	{:else if errorMessage}
 		<RecoveryPanel
-			title="RBAC belum dapat dimuat"
+			title="Hak akses pengguna belum dapat dimuat"
 			message={errorMessage}
 			actionLabel="Coba Lagi"
 			onRetry={() => void loadRBACOverview()}
@@ -429,25 +429,25 @@
 		<div class="grid gap-4 md:grid-cols-4">
 			<Card.Root class="border-border shadow-sm">
 				<Card.Content class="p-5">
-					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Role</p>
+					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Peran</p>
 					<p class="mt-2 text-3xl font-bold text-foreground">{roles.length}</p>
 				</Card.Content>
 			</Card.Root>
 			<Card.Root class="border-border shadow-sm">
 				<Card.Content class="p-5">
-					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Permission</p>
+					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Izin Akses</p>
 					<p class="mt-2 text-3xl font-bold text-foreground">{permissions.length}</p>
 				</Card.Content>
 			</Card.Root>
 			<Card.Root class="border-border shadow-sm">
 				<Card.Content class="p-5">
-					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Role Sistem</p>
+					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Peran Sistem</p>
 					<p class="mt-2 text-3xl font-bold text-foreground">{systemRoles.length}</p>
 				</Card.Content>
 			</Card.Root>
 			<Card.Root class="border-border shadow-sm">
 				<Card.Content class="p-5">
-					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Role Custom</p>
+					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Peran Tambahan</p>
 					<p class="mt-2 text-3xl font-bold text-foreground">{customRoles.length}</p>
 				</Card.Content>
 			</Card.Root>
@@ -463,38 +463,38 @@
 		<div class="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
 			<Card.Root class="border-border shadow-sm">
 				<Card.Header>
-					<Card.Title>Role</Card.Title>
-					<p class="text-sm text-muted-foreground">Gunakan “Edit Info” untuk metadata role custom. Role sistem terkunci untuk info/status, tetapi permission dapat diatur dengan guard backend.</p>
+					<Card.Title>Peran</Card.Title>
+					<p class="text-sm text-muted-foreground">Gunakan “Edit Info” untuk info peran tambahan. Peran sistem terkunci untuk info/status, tetapi izin akses dapat diatur dengan pengaman layanan sistem.</p>
 				</Card.Header>
 				<Card.Content class="space-y-4">
 					<div class="rounded-2xl border border-border bg-muted/20 p-4">
 						<div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
 							<div>
-								<p class="text-sm font-semibold text-foreground">{roleFormMode === 'create' ? 'Tambah Role Custom' : 'Edit Info Role Custom'}</p>
-								<p class="text-xs text-muted-foreground">Role sistem tidak bisa diedit metadata/statusnya dari UI; backend tetap menjadi guard utama.</p>
+								<p class="text-sm font-semibold text-foreground">{roleFormMode === 'create' ? 'Tambah Peran Tambahan' : 'Edit Info Peran Tambahan'}</p>
+								<p class="text-xs text-muted-foreground">Peran sistem tidak bisa diubah info/statusnya dari halaman ini; layanan sistem tetap menjadi pengaman utama.</p>
 							</div>
-							<Button variant="outline" onclick={startCreateRole} disabled={roleActionLoading}>Role Baru</Button>
+							<Button variant="outline" onclick={startCreateRole} disabled={roleActionLoading}>Peran Baru</Button>
 						</div>
 						<div class="mt-4 grid gap-3 md:grid-cols-2">
 							<div class="space-y-1">
-								<label for="role-code" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Kode Role</label>
+								<label for="role-code" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Kode Peran</label>
 								<Input id="role-code" value={roleDraft.code} oninput={(event) => updateRoleCodeDraft(event.currentTarget.value)} placeholder="operator_asesmen" disabled={roleFormMode === 'edit' || roleActionLoading} />
 							</div>
 							<div class="space-y-1">
-								<label for="role-name" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nama Role</label>
+								<label for="role-name" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nama Peran</label>
 								<Input id="role-name" bind:value={roleDraft.name} placeholder="Operator Asesmen" disabled={roleActionLoading} />
 							</div>
 							<div class="space-y-1 md:col-span-2">
 								<label for="role-description" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Deskripsi</label>
-								<Input id="role-description" bind:value={roleDraft.description} placeholder="Ringkasan kewenangan role" disabled={roleActionLoading} />
+								<Input id="role-description" bind:value={roleDraft.description} placeholder="Ringkasan kewenangan peran" disabled={roleActionLoading} />
 							</div>
 						</div>
 						{#if roleFormError}
 							<div class="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{roleFormError}</div>
 						{/if}
 						<div class="mt-4 flex flex-wrap items-center justify-between gap-2">
-							<p class="text-xs text-muted-foreground">Kode disimpan dalam format slug snake_case. Permission role diatur terpisah pada matrix akses.</p>
-							<Button onclick={() => void saveRoleMetadata()} disabled={!canSaveRoleDraft || roleActionLoading}>{roleActionLoading ? 'Menyimpan…' : (roleFormMode === 'create' ? 'Buat Role' : 'Simpan Info Role')}</Button>
+							<p class="text-xs text-muted-foreground">Kode disimpan dalam format alamat singkat. Izin akses peran diatur terpisah pada tabel akses.</p>
+							<Button onclick={() => void saveRoleMetadata()} disabled={!canSaveRoleDraft || roleActionLoading}>{roleActionLoading ? 'Menyimpan…' : (roleFormMode === 'create' ? 'Buat Peran' : 'Simpan Info Peran')}</Button>
 						</div>
 					</div>
 					{#each roles as role (role.code)}
@@ -523,7 +523,7 @@
 							</Button>
 						</div>
 					{:else}
-						<EmptyStatePanel title="Belum ada role" description="Matrix RBAC belum mengembalikan data role." compact />
+						<EmptyStatePanel title="Belum ada peran" description="Tabel hak akses belum mengembalikan data peran." compact />
 					{/each}
 				</Card.Content>
 			</Card.Root>
@@ -532,8 +532,8 @@
 				<Card.Header>
 					<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
 						<div>
-							<Card.Title>Matrix Akses</Card.Title>
-							<p class="mt-1 text-sm text-muted-foreground">Pilih role, centang permission yang sesuai, lalu simpan setelah melihat diff dan warning dampak.</p>
+							<Card.Title>Tabel Akses</Card.Title>
+							<p class="mt-1 text-sm text-muted-foreground">Pilih peran, centang permission yang sesuai, lalu simpan setelah melihat diff dan warning dampak.</p>
 						</div>
 						{#if selectedRole}<Badge variant="secondary">{selectedRole.name || selectedRole.code}</Badge>{/if}
 					</div>
@@ -546,7 +546,7 @@
 
 						<div class="grid gap-3 md:grid-cols-3">
 							<div class="rounded-2xl border border-border p-4">
-								<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Permission Tersimpan</p>
+								<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Izin Akses Tersimpan</p>
 								<p class="mt-2 text-2xl font-bold text-foreground">{selectedRolePermissions.length}</p>
 							</div>
 							<div class="rounded-2xl border border-border p-4">
@@ -560,9 +560,9 @@
 						</div>
 
 						<div class="grid gap-3 md:grid-cols-[1fr_220px]">
-							<Input bind:value={permissionSearch} placeholder="Cari permission, contoh: bank_soal atau pengguna" />
+							<Input bind:value={permissionSearch} placeholder="Cari izin akses, contoh: bank_soal atau pengguna" />
 							<select bind:value={moduleFilter} class="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]">
-								<option value="all">Semua module</option>
+								<option value="all">Semua modul</option>
 								{#each moduleOptions as module (module)}
 									<option value={module}>{module}</option>
 								{/each}
@@ -601,7 +601,7 @@
 									</div>
 								</div>
 							{:else}
-								<EmptyStatePanel title="Permission tidak ditemukan" description="Ubah kata kunci pencarian atau filter module." compact />
+								<EmptyStatePanel title="Izin akses tidak ditemukan" description="Ubah kata kunci pencarian atau filter modul." compact />
 							{/each}
 						</div>
 
@@ -613,7 +613,7 @@
 								</div>
 								<div class="flex flex-wrap gap-2">
 									<Button variant="outline" onclick={resetPermissionDraft} disabled={!hasPermissionChanges || saving}>Reset Perubahan</Button>
-									<Button onclick={() => (confirmOpen = true)} disabled={!hasPermissionChanges || saving}>Simpan Permission Role</Button>
+									<Button onclick={() => (confirmOpen = true)} disabled={!hasPermissionChanges || saving}>Simpan Izin Akses Peran</Button>
 								</div>
 							</div>
 							{#if hasPermissionChanges}
@@ -639,7 +639,7 @@
 								<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
 									<div>
 										<p class="text-sm font-semibold text-foreground">Preview Menu & Dashboard</p>
-										<p class="text-xs text-muted-foreground">Dihitung dari draft permission role saat ini sebelum disimpan.</p>
+										<p class="text-xs text-muted-foreground">Dihitung dari konsep izin akses peran saat ini sebelum disimpan.</p>
 									</div>
 									<div class="flex flex-wrap gap-2">
 										<Badge variant="secondary">{uiPolicyPreview.visibleMenuItems.length} menu terlihat</Badge>
@@ -666,7 +666,7 @@
 													<p class="mt-2 break-words text-xs text-muted-foreground">Butuh: {permissionListLabel(item.evaluation.requiredPermissions)}</p>
 												</div>
 											{:else}
-												<EmptyStatePanel title="Tidak ada menu terlihat" description="Draft permission belum membuka menu selain akses dasar." compact />
+												<EmptyStatePanel title="Tidak ada menu terlihat" description="Konsep izin akses belum membuka menu selain akses dasar." compact />
 											{/each}
 										</div>
 									</div>
@@ -689,7 +689,7 @@
 													<p class="mt-2 break-words text-xs text-muted-foreground">Butuh: {permissionListLabel(item.evaluation.requiredPermissions)}</p>
 												</div>
 											{:else}
-												<EmptyStatePanel title="Semua menu terlihat" description="Draft permission membuka seluruh menu yang terdaftar." compact />
+												<EmptyStatePanel title="Semua menu terlihat" description="Konsep izin akses membuka seluruh menu yang terdaftar." compact />
 											{/each}
 											{#if uiPolicyPreview.hiddenMenuItems.length > 12}
 												<p class="text-xs text-muted-foreground">+{uiPolicyPreview.hiddenMenuItems.length - 12} menu lain tersembunyi.</p>
@@ -709,7 +709,7 @@
 													<p class="mt-2 break-words text-xs text-muted-foreground">Butuh: {permissionListLabel(widget.evaluation.requiredPermissions)}</p>
 												</div>
 											{:else}
-												<EmptyStatePanel title="Tidak ada widget terlihat" description="Draft permission belum membuka widget dashboard khusus." compact />
+												<EmptyStatePanel title="Tidak ada widget terlihat" description="Konsep izin akses belum membuka ringkasan dashboard khusus." compact />
 											{/each}
 										</div>
 									</div>
@@ -730,7 +730,7 @@
 							</div>
 						{/if}
 					{:else}
-						<EmptyStatePanel title="Pilih role" description="Pilih salah satu role untuk melihat dan mengatur permission." compact />
+						<EmptyStatePanel title="Pilih peran" description="Pilih salah satu peran untuk melihat dan mengatur izin akses." compact />
 					{/if}
 				</Card.Content>
 			</Card.Root>
@@ -740,10 +740,10 @@
 			<Card.Header>
 				<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
 					<div>
-						<Card.Title>Katalog Permission</Card.Title>
-						<p class="mt-1 text-sm text-muted-foreground">Kelola permission dinamis. Permission kritikal diberi guard UI tambahan dan backend tetap menjadi sumber kebenaran.</p>
+						<Card.Title>Katalog Izin Akses</Card.Title>
+						<p class="mt-1 text-sm text-muted-foreground">Kelola izin akses dinamis. Izin akses penting diberi pengaman halaman tambahan dan layanan sistem tetap menjadi sumber kebenaran.</p>
 					</div>
-					<Button variant="outline" onclick={startCreatePermission} disabled={permissionActionLoading}>Permission Baru</Button>
+					<Button variant="outline" onclick={startCreatePermission} disabled={permissionActionLoading}>Izin Akses Baru</Button>
 				</div>
 			</Card.Header>
 			<Card.Content class="space-y-5">
@@ -751,7 +751,7 @@
 					<div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
 						<div>
 							<p class="text-sm font-semibold text-foreground">{permissionFormMode === 'create' ? 'Tambah Permission' : 'Edit Permission'}</p>
-							<p class="text-xs text-muted-foreground">Kode permission dibentuk otomatis dari module.action.</p>
+							<p class="text-xs text-muted-foreground">Kode izin akses dibentuk otomatis dari modul.aksi.</p>
 						</div>
 						<Badge variant={permissionDraftPayload.code ? 'secondary' : 'outline'}>{permissionDraftPayload.code || 'module.action'}</Badge>
 					</div>
@@ -773,15 +773,15 @@
 						<div class="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{permissionFormError}</div>
 					{/if}
 					<div class="mt-4 flex flex-wrap items-center justify-between gap-2">
-						<p class="text-xs text-muted-foreground">Setelah permission dibuat, centang permission tersebut pada role yang membutuhkan akses.</p>
-						<Button onclick={() => void savePermissionMetadata()} disabled={!canSavePermissionDraft || permissionActionLoading}>{permissionActionLoading ? 'Menyimpan…' : (permissionFormMode === 'create' ? 'Buat Permission' : 'Simpan Permission')}</Button>
+						<p class="text-xs text-muted-foreground">Setelah izin akses dibuat, centang izin akses tersebut pada peran yang membutuhkan akses.</p>
+						<Button onclick={() => void savePermissionMetadata()} disabled={!canSavePermissionDraft || permissionActionLoading}>{permissionActionLoading ? 'Menyimpan…' : (permissionFormMode === 'create' ? 'Buat Izin Akses' : 'Simpan Izin Akses')}</Button>
 					</div>
 				</div>
 
 				<div class="grid gap-3 md:grid-cols-[1fr_180px_180px]">
-					<Input bind:value={permissionCatalogSearch} placeholder="Cari permission/module/action" />
+					<Input bind:value={permissionCatalogSearch} placeholder="Cari izin akses/modul/aksi" />
 					<select bind:value={permissionCatalogModule} class="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]">
-						<option value="all">Semua module</option>
+						<option value="all">Semua modul</option>
 						{#each moduleOptions as module (module)}<option value={module}>{module}</option>{/each}
 					</select>
 					<select bind:value={permissionCatalogStatus} class="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]">
@@ -813,7 +813,7 @@
 							</div>
 						</div>
 					{:else}
-						<EmptyStatePanel title="Permission tidak ditemukan" description="Ubah filter katalog permission." compact />
+						<EmptyStatePanel title="Izin akses tidak ditemukan" description="Ubah filter katalog izin akses." compact />
 					{/each}
 				</div>
 			</Card.Content>
@@ -825,9 +825,9 @@
 	<div class="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm" role="presentation">
 		<div class="w-full max-w-2xl rounded-2xl border border-border bg-card p-5 shadow-xl">
 			<div class="space-y-2">
-				<p class="text-lg font-semibold text-foreground">Konfirmasi Simpan Permission Role</p>
+				<p class="text-lg font-semibold text-foreground">Konfirmasi Simpan Izin Akses Peran</p>
 				<p class="text-sm text-muted-foreground">
-					Role target: <span class="font-semibold text-foreground">{selectedRole.name || selectedRole.code}</span>. Semua user dengan role ini akan diminta login ulang karena token/session dicabut oleh backend.
+					Peran target: <span class="font-semibold text-foreground">{selectedRole.name || selectedRole.code}</span>. Semua pengguna dengan peran ini akan diminta login ulang karena kode akses/sesi dicabut oleh layanan sistem.
 				</p>
 			</div>
 			{#if criticalChangedPermissions.length > 0}
@@ -837,21 +837,21 @@
 			{/if}
 			<div class="mt-4 grid gap-4 md:grid-cols-2">
 				<div>
-					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Permission Ditambah</p>
+					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Izin Akses Ditambah</p>
 					<div class="mt-2 flex flex-wrap gap-2">
-						{#each permissionDiff.added as code (code)}<Badge variant={isCriticalPermission(code) ? 'destructive' : 'secondary'}>{code}</Badge>{:else}<span class="text-sm text-muted-foreground">Tidak ada permission ditambah.</span>{/each}
+						{#each permissionDiff.added as code (code)}<Badge variant={isCriticalPermission(code) ? 'destructive' : 'secondary'}>{code}</Badge>{:else}<span class="text-sm text-muted-foreground">Tidak ada izin akses ditambah.</span>{/each}
 					</div>
 				</div>
 				<div>
-					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Permission Dicabut</p>
+					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Izin Akses Dicabut</p>
 					<div class="mt-2 flex flex-wrap gap-2">
-						{#each permissionDiff.removed as code (code)}<Badge variant={isCriticalPermission(code) ? 'destructive' : 'outline'}>{code}</Badge>{:else}<span class="text-sm text-muted-foreground">Tidak ada permission dicabut.</span>{/each}
+						{#each permissionDiff.removed as code (code)}<Badge variant={isCriticalPermission(code) ? 'destructive' : 'outline'}>{code}</Badge>{:else}<span class="text-sm text-muted-foreground">Tidak ada izin akses dicabut.</span>{/each}
 					</div>
 				</div>
 			</div>
 			<div class="mt-6 flex flex-col-reverse gap-2 md:flex-row md:justify-end">
 				<Button variant="outline" onclick={() => (confirmOpen = false)} disabled={saving}>Batal</Button>
-				<Button onclick={() => void confirmSaveRolePermissions()} disabled={saving}>{saving ? 'Menyimpan…' : 'Ya, Simpan Permission'}</Button>
+				<Button onclick={() => void confirmSaveRolePermissions()} disabled={saving}>{saving ? 'Menyimpan…' : 'Ya, Simpan Izin Akses'}</Button>
 			</div>
 		</div>
 	</div>

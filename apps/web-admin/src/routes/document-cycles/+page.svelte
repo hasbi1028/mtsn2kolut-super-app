@@ -304,7 +304,7 @@
 	];
 
 	const AUDIT_EVENT_TYPES: Array<[string, string]> = [
-		['', 'Semua event'],
+		['', 'Semua kejadian'],
 		['generated', 'Dibuat Generator'],
 		['updated', 'Detail Diperbarui'],
 		['status_changed', 'Status Berubah'],
@@ -941,7 +941,7 @@
 
 	function exportAuditCsv(obligation: DocumentCycleObligation, events: DocumentCycleEvent[]) {
 		const rows = [
-			['Waktu', 'Jenis Event', 'Aktor', 'Status Awal', 'Status Akhir', 'Catatan'],
+			['Waktu', 'Jenis Kejadian', 'Aktor', 'Status Awal', 'Status Akhir', 'Catatan'],
 			...events.map((event) => [
 				formatDateTime(event.created_at),
 				eventTypeLabel(event.event_type),
@@ -952,7 +952,7 @@
 			])
 		];
 		downloadCsv(`audit-siklus-${obligation.catalog_code}-${obligation.period_year}.csv`, rows);
-		toast.success('Riwayat audit diekspor');
+		toast.success('Riwayat pemeriksaan diekspor');
 	}
 
 	function exportSelectedAuditCsv(events: DocumentCycleEvent[]) {
@@ -1558,12 +1558,12 @@
 									<div class="rounded-md border border-border bg-muted/50 p-3">
 										<div class="mb-3 flex flex-col gap-3">
 											<div>
-												<p class="text-sm font-medium text-foreground">Riwayat Audit</p>
+												<p class="text-sm font-medium text-foreground">Riwayat Pemeriksaan</p>
 												<p class="text-xs text-muted-foreground">Jejak perubahan status, update detail, generator, dan reminder PIC.</p>
 											</div>
 											<div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] sm:items-end">
 												<div>
-													<label for="audit-event-type-filter" class="text-xs font-medium text-muted-foreground">Jenis Event</label>
+													<label for="audit-event-type-filter" class="text-xs font-medium text-muted-foreground">Jenis Kejadian</label>
 													<select id="audit-event-type-filter" bind:value={auditEventTypeFilter} class="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
 														{#each AUDIT_EVENT_TYPES as [value, label] (value)}
 															<option {value}>{label}</option>
@@ -1572,7 +1572,7 @@
 												</div>
 												<div>
 													<label for="audit-actor-filter" class="text-xs font-medium text-muted-foreground">Aktor</label>
-													<Input id="audit-actor-filter" class="mt-1" placeholder="username atau system" bind:value={auditActorFilter} />
+													<Input id="audit-actor-filter" class="mt-1" placeholder="username atau sistem" bind:value={auditActorFilter} />
 												</div>
 												<Button type="button" variant="outline" size="sm" onclick={() => applyAuditFilters()}>
 													<RefreshCcwIcon class="mr-2 size-3.5" />
@@ -1595,12 +1595,12 @@
 												</div>
 											{/snippet}
 											{#snippet failed(error, reset)}
-												<RecoveryPanel compact title="Riwayat Audit Belum Tersaji" message={errorMessage(error)} onRetry={() => retryEvents(reset)} />
+												<RecoveryPanel compact title="Riwayat Pemeriksaan Belum Tersaji" message={errorMessage(error)} onRetry={() => retryEvents(reset)} />
 											{/snippet}
 											{#snippet children(events)}
 												{@const currentEvents = events as DocumentCycleEvent[]}
 												<div class="mb-3 flex items-center justify-between gap-3">
-													<p class="text-xs text-muted-foreground">{currentEvents.length} event audit ditampilkan</p>
+													<p class="text-xs text-muted-foreground">{currentEvents.length} kejadian pemeriksaan ditampilkan</p>
 													<Button type="button" variant="outline" size="sm" disabled={currentEvents.length === 0} onclick={() => exportSelectedAuditCsv(currentEvents)}>
 														<DownloadIcon class="mr-2 size-3.5" />
 														Export CSV
@@ -1608,7 +1608,7 @@
 												</div>
 												{#if currentEvents.length === 0}
 													<div class="rounded-md border border-dashed border-border bg-card p-3 text-sm text-muted-foreground">
-														Belum ada riwayat audit untuk dokumen ini.
+														Belum ada riwayat pemeriksaan untuk dokumen ini.
 													</div>
 												{:else}
 													<div class="max-h-80 space-y-2 overflow-y-auto pr-1">
@@ -1876,7 +1876,7 @@
 					<Card.Root class="border-border">
 						<Card.Header class="pb-2">
 							<Card.Title class="text-base">{editingCatalogId ? 'Edit Katalog Siklus' : 'Tambah Katalog Siklus'}</Card.Title>
-							<Card.Description>Template ini menjadi dasar generator kewajiban dokumen tahunan.</Card.Description>
+							<Card.Description>Format ini menjadi dasar pembuatan kewajiban dokumen tahunan.</Card.Description>
 						</Card.Header>
 						<Card.Content>
 							<form class="space-y-4" onsubmit={(event) => { event.preventDefault(); void saveCatalog(); }}>

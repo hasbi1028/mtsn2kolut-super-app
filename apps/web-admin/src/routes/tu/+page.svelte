@@ -319,7 +319,7 @@
 					<Card.Root class="border-border">
 						<Card.Header class="pb-2">
 							<Card.Title class="text-base">RKT/RKJM dan Anggaran</Card.Title>
-							<Card.Description>Kontrol bukti program yang perlu terlihat saat audit administrasi.</Card.Description>
+							<Card.Description>Kontrol bukti program yang perlu terlihat saat pemeriksaan administrasi.</Card.Description>
 						</Card.Header>
 						<Card.Content class="p-0">
 							<div class="overflow-x-auto">

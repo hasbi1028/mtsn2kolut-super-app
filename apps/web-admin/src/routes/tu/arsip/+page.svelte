@@ -593,7 +593,7 @@
 							<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
 								<div>
 									<Card.Title class="text-base">Register Arsip</Card.Title>
-									<Card.Description>Dokumen yang sudah diunggah beserta metadata lokasi dan retensinya.</Card.Description>
+									<Card.Description>Dokumen yang sudah diunggah beserta info lokasi dan retensinya.</Card.Description>
 								</div>
 								<div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-[220px_150px_170px_150px_auto]">
 									<div>
@@ -699,7 +699,7 @@
 															<Button href={`/api/tu/archives/documents/${document.id}/file`} target="_blank" variant="outline" size="icon" title="Lihat file arsip">
 																<DownloadIcon class="size-4" />
 															</Button>
-															<Button variant="outline" size="icon" title="Edit metadata" onclick={() => editDocument(document)}>
+															<Button variant="outline" size="icon" title="Edit info dokumen" onclick={() => editDocument(document)}>
 																<PencilIcon class="size-4" />
 															</Button>
 															<LoadingButton
@@ -783,7 +783,7 @@
 					<Card.Root class="border-border">
 						<Card.Header>
 							<Card.Title class="text-base">{editingDocumentId ? 'Edit Metadata Arsip' : 'Unggah Arsip'}</Card.Title>
-							<Card.Description>{editingDocumentId ? 'Ubah metadata tanpa mengganti file tersimpan.' : 'Unggah file PDF, gambar, dokumen Office, teks, atau ZIP maksimal 25MB.'}</Card.Description>
+							<Card.Description>{editingDocumentId ? 'Ubah info dokumen tanpa mengganti file tersimpan.' : 'Unggah file PDF, gambar, dokumen Office, teks, atau ZIP maksimal 25MB.'}</Card.Description>
 						</Card.Header>
 						<Card.Content>
 							<form

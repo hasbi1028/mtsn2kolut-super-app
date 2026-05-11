@@ -246,7 +246,7 @@
 
 	async function createUser() {
 		if (!fUsername || !fPassword || fRoles.length === 0) {
-			toast.error('Username, password, dan minimal satu role wajib diisi');
+			toast.error('Username, password, dan minimal satu peran wajib diisi');
 			return;
 		}
 		fBusy = true;
@@ -338,21 +338,21 @@
 	async function updateRolesForUser(user: User, nextRoles: string[]) {
 		const roles = Array.from(new Set(nextRoles.filter(Boolean)));
 		if (roles.length === 0) {
-			toast.error('Minimal satu role wajib dipilih.');
+			toast.error('Minimal satu peran wajib dipilih.');
 			return;
 		}
 		if (user.roles.includes('admin') && !roles.includes('admin')) {
 			if (!(await confirmAction({
-				title: 'Lepas Role Admin',
+				title: 'Lepas Peran Admin',
 				message: `Lepas role admin dari "${user.username}"? Backend tetap akan menolak jika ini admin aktif terakhir.`,
-				confirmLabel: 'Update Role',
+				confirmLabel: 'Perbarui Peran',
 				tone: 'warning'
 			}))) return;
 		}
 		actionBusy = `roles:${user.id}`;
 		try {
 			await updateUserRoles(user.id, roles);
-			toast.success('Role pengguna diperbarui');
+			toast.success('Peran pengguna diperbarui');
 			await refreshOverview();
 		} catch (error) {
 			toast.error(overviewErrorMessage(error));
@@ -383,7 +383,7 @@
 		actionBusy = `password:${user.id}`;
 		try {
 			await resetUserPassword(user.id, password.trim());
-			toast.success('Password berhasil direset dan session user dicabut');
+			toast.success('Password berhasil direset dan sesi pengguna dicabut');
 		} catch (error) {
 			toast.error(overviewErrorMessage(error));
 		} finally {
@@ -399,7 +399,7 @@
 		if (normalizedType) {
 			profileID = window.prompt('Masukkan UUID profil tujuan:', user.employee_id || user.student_id || user.parent_id || '')?.trim() ?? '';
 			if (!profileID) {
-				toast.error('UUID profil wajib diisi.');
+				toast.error('ID profil wajib diisi.');
 				return;
 			}
 		}
@@ -453,7 +453,7 @@
 	async function runEmployeeGeneration() {
 		if (!(await confirmAction({
 			title: 'Generate Akun Pegawai',
-			message: 'Buat akun untuk pegawai siap generate? Username dan password awal memakai pola NPSN + 2 digit tahun lahir + nomor urut 3 digit, role default guru.',
+			message: 'Buat akun untuk pegawai siap digenerate? Username dan password awal memakai pola NPSN + 2 digit tahun lahir + nomor urut 3 digit, peran default guru.',
 			confirmLabel: 'Generate Akun',
 			tone: 'warning'
 		}))) return;
@@ -496,7 +496,7 @@
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
 			<h1 class="text-2xl font-semibold text-foreground">Manajemen Pengguna</h1>
-			<p class="text-sm text-muted-foreground mt-1">Kelola akun akses sistem dengan RBAC terpadu</p>
+			<p class="text-sm text-muted-foreground mt-1">Kelola akun akses sistem dengan hak akses terpadu</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button variant="outline" href="/settings/user-change-requests">Permintaan Data Resmi</Button>
@@ -509,7 +509,7 @@
 	<AsyncContent promise={usersPromise} onerror={handleOverviewRenderError}>
 		{#snippet pending()}
 			<div class="grid gap-3 md:grid-cols-4">
-				{#each ['Total Akun', 'Akun Aktif', 'Multi-Role', 'Terhubung Profil'] as label (label)}
+				{#each ['Total Akun', 'Akun Aktif', 'Multi-Peran', 'Terhubung Profil'] as label (label)}
 					<div class="rounded-2xl border border-border bg-muted/50 px-4 py-4">
 						<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
 						<Skeleton class="mt-3 h-8 w-16" />
@@ -541,9 +541,9 @@
 					<p class="text-sm text-muted-foreground">akun yang saat ini masih aktif digunakan</p>
 				</div>
 				<div class="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-warning">Multi-Role</p>
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-warning">Multi-Peran</p>
 					<p class="mt-2 text-2xl font-semibold text-foreground">{overview.users.filter((item) => (item.roles ?? []).length > 1).length}</p>
-					<p class="text-sm text-muted-foreground">akun yang memegang lebih dari satu role</p>
+					<p class="text-sm text-muted-foreground">akun yang memegang lebih dari satu peran</p>
 				</div>
 				<div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
 					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Terhubung Profil</p>
@@ -597,7 +597,7 @@
 						{:else if candidateMode === 'parent'}
 							<p class="text-xs text-muted-foreground">Ortu per kelas anak — Pilih kelas anak untuk menarik orang tua/wali terkait.</p>
 						{:else}
-							<p class="text-xs text-muted-foreground">Role admin murni tidak wajib ditautkan ke profil.</p>
+							<p class="text-xs text-muted-foreground">Peran admin murni tidak wajib ditautkan ke profil.</p>
 						{/if}
 
 						{#if candidateRequiresClass}
@@ -648,7 +648,7 @@
 		<Card.Header class="flex flex-row items-start justify-between gap-3 pb-2">
 			<div>
 				<Card.Title class="text-base">Generate Akun dari Data Pegawai</Card.Title>
-				<p class="mt-1 text-sm text-muted-foreground">Username/password awal: NPSN profil madrasah + 2 digit tahun lahir + nomor urut 3 digit. Role default: guru.</p>
+				<p class="mt-1 text-sm text-muted-foreground">Username/password awal: NPSN profil madrasah + 2 digit tahun lahir + nomor urut 3 digit. Peran default: guru.</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
 				<Button variant="outline" onclick={() => void previewEmployeeGeneration()} disabled={generationBusy !== null}>Preview</Button>
@@ -701,27 +701,27 @@
 	<Card.Root class="border-border bg-muted/20 shadow-sm">
 		<Card.Header class="flex flex-row items-start justify-between gap-3 pb-2">
 			<div>
-				<Card.Title class="text-base">Manajemen RBAC</Card.Title>
-				<p class="mt-1 text-sm text-muted-foreground">Halaman ini fokus ke akun pengguna dan assignment role. Editor role, permission, matrix akses, diff perubahan, dan guard permission kritikal dipusatkan di halaman RBAC khusus.</p>
+				<Card.Title class="text-base">Manajemen Hak Akses</Card.Title>
+				<p class="mt-1 text-sm text-muted-foreground">Halaman ini fokus ke akun pengguna dan penugasan peran. Pengaturan peran, izin akses, tabel akses, daftar perubahan, dan pengaman izin penting dipusatkan di halaman hak akses khusus.</p>
 			</div>
-			<Button variant="outline" href="/settings/rbac">Buka Manajemen RBAC</Button>
+			<Button variant="outline" href="/settings/rbac">Buka Manajemen Hak Akses</Button>
 		</Card.Header>
 		<Card.Content>
 			<div class="grid gap-3 md:grid-cols-3">
 				<div class="rounded-2xl border border-border bg-card p-4">
-					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Role Aktif</p>
+					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Peran Aktif</p>
 					<p class="mt-2 text-2xl font-semibold text-foreground">{rbac.roles.filter((role) => role.is_active !== false).length}</p>
 					<p class="text-xs text-muted-foreground">dipakai sebagai pilihan assignment pengguna</p>
 				</div>
 				<div class="rounded-2xl border border-border bg-card p-4">
-					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Permission</p>
+					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Izin Akses</p>
 					<p class="mt-2 text-2xl font-semibold text-foreground">{rbac.permissions.length}</p>
-					<p class="text-xs text-muted-foreground">dikelola melalui katalog permission RBAC</p>
+					<p class="text-xs text-muted-foreground">dikelola melalui katalog izin akses</p>
 				</div>
 				<div class="rounded-2xl border border-border bg-card p-4">
 					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Scope Halaman Ini</p>
 					<p class="mt-2 text-sm font-semibold text-foreground">User lifecycle</p>
-					<p class="text-xs text-muted-foreground">buat akun, tautkan profil, reset password, status akun, dan assignment role</p>
+					<p class="text-xs text-muted-foreground">buat akun, tautkan profil, reset password, status akun, dan penugasan peran</p>
 				</div>
 			</div>
 		</Card.Content>
@@ -756,7 +756,7 @@
 					<Table.Header>
 						<Table.Row class="bg-muted/50">
 							<Table.Head>Username / Display Name</Table.Head>
-							<Table.Head>Role Dinamis</Table.Head>
+							<Table.Head>Peran Dinamis</Table.Head>
 							<Table.Head>Profil Terhubung</Table.Head>
 							<Table.Head>Status</Table.Head>
 							<Table.Head>Last Login</Table.Head>
@@ -900,7 +900,7 @@
 					{:else}
 						<EmptyStatePanel
 							title="Belum ada data pengguna"
-							description="Tambahkan akun pertama agar role sekolah dan akses portal bisa mulai dikelola dari panel ini."
+							description="Tambahkan akun pertama agar peran sekolah dan akses portal bisa mulai dikelola dari panel ini."
 						/>
 					{/each}
 				</div>

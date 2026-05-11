@@ -54,13 +54,13 @@
 		{ value: '', label: 'Semua source' },
 		{ value: 'public_website', label: 'Public website' },
 		{ value: 'web_admin', label: 'Web Admin' },
-		{ value: 'core_api', label: 'Core API' },
+		{ value: 'core_api', label: 'Layanan Utama' },
 		{ value: 'mobile_app', label: 'Mobile App' },
 		{ value: 'system', label: 'System' }
 	];
 
 	const roleOptions = [
-		{ value: '', label: 'Semua role' },
+		{ value: '', label: 'Semua peran' },
 		{ value: 'admin', label: 'Admin' },
 		{ value: 'guru', label: 'Guru' },
 		{ value: 'staf', label: 'Staf' },
@@ -104,8 +104,8 @@
 		const activeGroup = selectedGroup;
 		const params = analyticsParams('60');
 		analyticsPromise = Promise.all([
-			fetch(clientApiPathWithQuery('/api/internal-analytics/summary', params)).then((response) => readClientApiData<InternalAnalyticsSummary>(response, 'Gagal memuat ringkasan analytics internal.')),
-			fetch(clientApiPathWithQuery('/api/internal-analytics/daily', params)).then((response) => readClientApiData<InternalAnalyticsDailyResult>(response, 'Gagal memuat tren harian analytics internal.')),
+			fetch(clientApiPathWithQuery('/api/internal-analytics/summary', params)).then((response) => readClientApiData<InternalAnalyticsSummary>(response, 'Gagal memuat ringkasan penggunaan internal.')),
+			fetch(clientApiPathWithQuery('/api/internal-analytics/daily', params)).then((response) => readClientApiData<InternalAnalyticsDailyResult>(response, 'Gagal memuat tren harian ringkasan penggunaan.')),
 			fetch(clientApiPathWithQuery('/api/internal-analytics/daily', analyticsParams('60', { event_group: 'public', source_surface: '', role: '', result: '' }))).then((response) => readClientApiData<InternalAnalyticsDailyResult>(response, 'Gagal memuat agregat pengunjung.')),
 			fetch(clientApiPathWithQuery('/api/internal-analytics/daily', analyticsParams('80', { event_group: '', source_surface: 'web_admin' }))).then((response) => readClientApiData<InternalAnalyticsDailyResult>(response, 'Gagal memuat aktivitas modul.')),
 			fetch(clientApiPathWithQuery('/api/internal-analytics/daily', analyticsParams('60', { event_group: 'security', source_surface: '', role: '' }))).then((response) => readClientApiData<InternalAnalyticsDailyResult>(response, 'Gagal memuat sinyal security.'))
@@ -119,7 +119,7 @@
 
 	function analyticsErrorMessage(error: unknown) {
 		if (error instanceof Error && error.message.trim()) return error.message;
-		return 'Analytics internal belum dapat dimuat.';
+		return 'Ringkasan penggunaan internal belum dapat dimuat.';
 	}
 
 	function retryAnalytics(reset?: () => void) {
@@ -180,7 +180,7 @@
 			const response = await fetch(clientApiPathWithQuery('/api/internal-analytics/export', analyticsParams('10000')));
 			if (!response.ok) {
 				const payload = await response.json().catch(() => null) as { error?: string; message?: string } | null;
-				throw new Error(payload?.error || payload?.message || 'Export analytics internal gagal.');
+				throw new Error(payload?.error || payload?.message || 'Ekspor ringkasan penggunaan internal gagal.');
 			}
 			const blob = await response.blob();
 			const url = URL.createObjectURL(blob);
@@ -214,14 +214,14 @@
 </script>
 
 <svelte:head>
-	<title>Analytics Internal</title>
+	<title>Ringkasan Penggunaan Internal</title>
 </svelte:head>
 
 <div class="space-y-6">
 	<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 		<div>
 			<p class="text-sm font-medium uppercase tracking-wide text-muted-foreground">Sistem</p>
-			<h1 class="text-2xl font-semibold text-foreground">Analytics Internal</h1>
+			<h1 class="text-2xl font-semibold text-foreground">Ringkasan Penggunaan Internal</h1>
 			<p class="mt-2 max-w-3xl text-sm text-muted-foreground">
 				Ringkasan agregat pemakaian modul untuk evaluasi layanan sekolah. Data mentah dan detail sensitif tidak ditampilkan di halaman ini.
 			</p>
@@ -262,7 +262,7 @@
 			</select>
 		</div>
 		<div>
-			<label for="analytics-role" class="mb-1 block text-xs font-medium text-muted-foreground">Role</label>
+			<label for="analytics-role" class="mb-1 block text-xs font-medium text-muted-foreground">Peran</label>
 			<select id="analytics-role" bind:value={selectedRole} onchange={reloadWithFilter} class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
 				{#each roleOptions as option (option.value)}
 					<option value={option.value}>{option.label}</option>
@@ -305,7 +305,7 @@
 		{/snippet}
 
 		{#snippet failed(error, reset)}
-			<RecoveryPanel title="Analytics Internal Belum Tersaji" message={analyticsErrorMessage(error)} onRetry={() => retryAnalytics(reset)} />
+			<RecoveryPanel title="Ringkasan Penggunaan Internal Belum Tersaji" message={analyticsErrorMessage(error)} onRetry={() => retryAnalytics(reset)} />
 		{/snippet}
 
 		{#snippet children(value)}
@@ -317,7 +317,7 @@
 				<div class="grid gap-4 md:grid-cols-3">
 					<Card.Root>
 						<Card.Header class="pb-2">
-							<Card.Description>Total Event Agregat</Card.Description>
+							<Card.Description>Total Aktivitas Tercatat</Card.Description>
 						</Card.Header>
 						<Card.Content>
 							<p class="text-3xl font-semibold text-primary">{formatNumber(summary.total_count)}</p>
@@ -347,7 +347,7 @@
 				{#if !hasInternalAnalyticsData(overview)}
 					<Card.Root class="border-dashed bg-muted/30">
 						<Card.Content class="space-y-2 pt-6">
-							<p class="text-sm font-medium text-foreground">Belum ada agregat analytics internal.</p>
+							<p class="text-sm font-medium text-foreground">Belum ada ringkasan penggunaan internal.</p>
 							<p class="text-sm text-muted-foreground">
 								Halaman siap digunakan, tetapi periode atau filter ini belum memiliki data agregat yang dapat ditampilkan.
 							</p>
@@ -359,7 +359,7 @@
 					<Card.Root>
 						<Card.Header>
 							<Card.Title class="text-base">Distribusi Group</Card.Title>
-							<Card.Description>Jumlah event yang sudah diringkas per area modul.</Card.Description>
+							<Card.Description>Jumlah aktivitas yang sudah diringkas per area modul.</Card.Description>
 						</Card.Header>
 						<Card.Content class="space-y-3">
 							{#if summary.groups.length > 0}
@@ -377,8 +377,8 @@
 
 					<Card.Root>
 						<Card.Header>
-							<Card.Title class="text-base">Event Teratas</Card.Title>
-							<Card.Description>Nama event allowlisted dengan jumlah tertinggi.</Card.Description>
+							<Card.Title class="text-base">Aktivitas Teratas</Card.Title>
+							<Card.Description>Nama aktivitas yang tercatat dengan jumlah tertinggi.</Card.Description>
 						</Card.Header>
 						<Card.Content class="space-y-3">
 							{#if summary.top_events.length > 0}
@@ -392,7 +392,7 @@
 									</div>
 								{/each}
 							{:else}
-								<p class="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Belum ada event teratas untuk periode ini.</p>
+								<p class="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Belum ada aktivitas teratas untuk periode ini.</p>
 							{/if}
 						</Card.Content>
 					</Card.Root>
@@ -400,16 +400,16 @@
 			{:else if activeTab === 'visitors'}
 				{@const topPublic = topEvent(overview.publicDaily.items)}
 				<div class="grid gap-4 md:grid-cols-3">
-					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Event Pengunjung</p><p class="mt-2 text-3xl font-semibold text-primary">{formatNumber(totalCount(overview.publicDaily.items))}</p></Card.Content></Card.Root>
-					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Event Teratas</p><p class="mt-2 text-xl font-semibold text-primary">{topPublic ? topPublic[0] : '—'}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Aktivitas Pengunjung</p><p class="mt-2 text-3xl font-semibold text-primary">{formatNumber(totalCount(overview.publicDaily.items))}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Aktivitas Teratas</p><p class="mt-2 text-xl font-semibold text-primary">{topPublic ? topPublic[0] : '—'}</p></Card.Content></Card.Root>
 					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Source</p><p class="mt-2 text-xl font-semibold text-primary">Public website</p></Card.Content></Card.Root>
 				</div>
 			{:else if activeTab === 'modules'}
 				{@const topAdmin = topEvent(overview.adminDaily.items)}
 				<div class="grid gap-4 md:grid-cols-3">
 					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Aktivitas Web Admin</p><p class="mt-2 text-3xl font-semibold text-primary">{formatNumber(totalCount(overview.adminDaily.items))}</p></Card.Content></Card.Root>
-					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Event Teratas</p><p class="mt-2 text-xl font-semibold text-primary">{topAdmin ? topAdmin[0] : '—'}</p></Card.Content></Card.Root>
-					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Role Filter</p><p class="mt-2 text-xl font-semibold text-primary">{selectedRole || 'Semua'}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Aktivitas Teratas</p><p class="mt-2 text-xl font-semibold text-primary">{topAdmin ? topAdmin[0] : '—'}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Filter Peran</p><p class="mt-2 text-xl font-semibold text-primary">{selectedRole || 'Semua'}</p></Card.Content></Card.Root>
 				</div>
 			{:else if activeTab === 'security'}
 				{@const topSecurity = topEvent(overview.securityDaily.items)}
@@ -421,8 +421,8 @@
 			{:else}
 				<Card.Root>
 					<Card.Header>
-						<Card.Title class="text-base">Audit dan Export Agregat</Card.Title>
-						<Card.Description>Export memakai data agregat harian sesuai filter aktif. Permintaan export ikut dicatat sebagai event security agregat.</Card.Description>
+						<Card.Title class="text-base">Riwayat dan Ekspor Agregat</Card.Title>
+						<Card.Description>Ekspor memakai data agregat harian sesuai filter aktif. Permintaan ekspor ikut dicatat sebagai aktivitas keamanan agregat.</Card.Description>
 					</Card.Header>
 					<Card.Content class="space-y-4">
 						<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -443,7 +443,7 @@
 				<Card.Header>
 					<Card.Title class="text-base">Tren Harian</Card.Title>
 					<Card.Description>
-						{activeTab === 'visitors' ? 'Agregat event public website.' : activeTab === 'modules' ? 'Agregat aktivitas Web Admin.' : activeTab === 'security' ? 'Agregat sinyal security.' : 'Agregat harian berdasarkan filter aktif.'}
+						{activeTab === 'visitors' ? 'Agregat kunjungan publik website.' : activeTab === 'modules' ? 'Agregat aktivitas Web Admin.' : activeTab === 'security' ? 'Agregat sinyal security.' : 'Agregat harian berdasarkan filter aktif.'}
 					</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-3">
