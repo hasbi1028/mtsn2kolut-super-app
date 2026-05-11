@@ -143,6 +143,8 @@ export const academicCopy = {
 npm --prefix apps/web-admin run check
 ```
 
+**Implementation note:** Selesai pada Tahap 2. Kamus copy dibuat di `apps/web-admin/src/lib/academic/copy.ts` dengan kelompok `actions`, `labels`, `helper`, `empty`, `status`, dan `terms` untuk dipakai bertahap pada halaman Akademik.
+
 ---
 
 ## Task 3: Bersihkan halaman Tahun Ajaran
