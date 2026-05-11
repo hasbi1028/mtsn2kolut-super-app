@@ -15,6 +15,7 @@
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { academicCopy } from '$lib/academic/copy';
 	import { bindBeforeUnload, confirmDiscardChanges } from '$lib/client/unsaved-changes';
 	import { clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import type { EditableOption } from '$lib/components/editable/types';
@@ -175,7 +176,7 @@
 		if (!draft.code.trim()) return 'Kode mapel wajib diisi.';
 		if (!draft.name.trim()) return 'Nama mapel wajib diisi.';
 		if (!categoryOptions.some((option) => option.value === draft.category)) return 'Kategori mapel tidak valid.';
-		if (!Number.isInteger(hours) || hours < 0 || hours > 60) return 'JP per pekan harus 0-60.';
+		if (!Number.isInteger(hours) || hours < 0 || hours > 60) return 'JP per minggu harus 0-60.';
 		if (!Number.isInteger(order) || order < 0) return 'Urutan tampil tidak boleh negatif.';
 		return '';
 	}
@@ -274,7 +275,7 @@
 
 	function subjectErrorMessage(error: unknown) {
 		if (error instanceof Error && error.message.trim()) return error.message;
-		return 'Data mapel belum dapat dimuat. Periksa koneksi backend lalu coba lagi.';
+		return 'Data mapel belum dapat dimuat. Periksa koneksi layanan sistem lalu coba lagi.';
 	}
 
 	function handleRenderError(error: unknown) {
@@ -296,7 +297,7 @@
 		<div>
 			<p class="text-sm font-medium text-primary">Akademik</p>
 			<h1 class="text-2xl font-semibold tracking-normal text-foreground">Mapel</h1>
-			<p class="mt-1 max-w-2xl text-sm text-muted-foreground">Kelola kode, nama, kategori, penilaian, rapor, kegiatan jadwal, JP default, dan urutan tampil.</p>
+			<p class="mt-1 max-w-2xl text-sm text-muted-foreground">Kelola kode, nama, kategori, pemakaian asesmen, rapor, aktivitas jadwal, JP per minggu, dan urutan tampil.</p>
 		</div>
 		<Button variant="outline" onclick={() => void refreshSubjects()} disabled={refreshBusy || saveBusy} aria-label="Muat ulang mapel">
 			<RefreshCw class={`mr-2 size-4 ${refreshBusy ? 'animate-spin' : ''}`} />
@@ -330,19 +331,19 @@
 		<div class="grid gap-3 md:grid-cols-3">
 			<Card.Root>
 				<Card.Header class="pb-2">
-					<Card.Description>Mapel Aktif</Card.Description>
+					<Card.Description>Mapel aktif</Card.Description>
 					<Card.Title class="text-2xl">{summary.active}</Card.Title>
 				</Card.Header>
 			</Card.Root>
 			<Card.Root>
 				<Card.Header class="pb-2">
-					<Card.Description>Dipakai Asesmen</Card.Description>
+					<Card.Description>{academicCopy.labels.assessmentSubject}</Card.Description>
 					<Card.Title class="text-2xl">{summary.assessment}</Card.Title>
 				</Card.Header>
 			</Card.Root>
 			<Card.Root>
 				<Card.Header class="pb-2">
-					<Card.Description>Kegiatan Jadwal</Card.Description>
+					<Card.Description>{academicCopy.labels.scheduleActivity}</Card.Description>
 					<Card.Title class="text-2xl">{summary.schedule}</Card.Title>
 				</Card.Header>
 			</Card.Root>
@@ -351,7 +352,7 @@
 		<Card.Root>
 			<Card.Header>
 				<Card.Title class="text-base">Tambah Mapel</Card.Title>
-				<Card.Description>Gunakan kode singkat yang konsisten dengan Bank Soal, rapor, dan jadwal.</Card.Description>
+				<Card.Description>Gunakan kode singkat yang konsisten dengan bank soal, rapor, dan jadwal.</Card.Description>
 			</Card.Header>
 			<Card.Content>
 				<div class="grid gap-3 md:grid-cols-6">
@@ -377,11 +378,11 @@
 						</select>
 					</div>
 					<div class="space-y-1">
-						<label for="subject-hours" class="text-sm font-medium">JP/Pekan</label>
+						<label for="subject-hours" class="text-sm font-medium">{academicCopy.labels.weeklyHours}</label>
 						<Input id="subject-hours" type="number" min="0" max="60" bind:value={newWeeklyHours} disabled={createBusy} />
 					</div>
 					<div class="space-y-1">
-						<label for="subject-order" class="text-sm font-medium">Urutan</label>
+						<label for="subject-order" class="text-sm font-medium">{academicCopy.labels.displayOrder}</label>
 						<Input id="subject-order" type="number" min="0" bind:value={newDisplayOrder} disabled={createBusy} />
 					</div>
 				</div>
@@ -397,7 +398,7 @@
 		<Card.Root>
 			<Card.Header>
 				<Card.Title class="text-base">Daftar Mapel</Card.Title>
-				<Card.Description>Perubahan disimpan berurutan agar error per mapel tetap mudah dilacak.</Card.Description>
+				<Card.Description>Perubahan disimpan berurutan agar masalah pada tiap mapel mudah ditemukan.</Card.Description>
 			</Card.Header>
 			<Card.Content class="p-0">
 				<div class="overflow-x-auto">
@@ -407,11 +408,11 @@
 								<Table.Head>Kode</Table.Head>
 								<Table.Head>Nama</Table.Head>
 								<Table.Head>Kategori</Table.Head>
-								<Table.Head>Asesmen</Table.Head>
-								<Table.Head>Rapor</Table.Head>
-								<Table.Head>Kegiatan</Table.Head>
-								<Table.Head>JP/Pekan</Table.Head>
-								<Table.Head>Urutan</Table.Head>
+								<Table.Head>Dipakai untuk asesmen</Table.Head>
+								<Table.Head>Masuk rapor</Table.Head>
+								<Table.Head>Aktivitas jadwal</Table.Head>
+								<Table.Head>{academicCopy.labels.weeklyHours}</Table.Head>
+								<Table.Head>{academicCopy.labels.displayOrder}</Table.Head>
 								<Table.Head>Status</Table.Head>
 							</Table.Row>
 						</Table.Header>
@@ -464,7 +465,7 @@
 											value={draft.is_assessment_subject}
 											options={booleanOptions}
 											allowEmpty={false}
-											ariaLabel={`Edit flag asesmen ${subject.name}`}
+											ariaLabel={`Ubah pemakaian asesmen ${subject.name}`}
 											dirty={(draft.is_assessment_subject === 'true') !== subject.is_assessment_subject}
 											disabled={saveBusy}
 											oninput={(value) => updateDraft(subject.id, 'is_assessment_subject', value)}
@@ -476,7 +477,7 @@
 											value={draft.is_report_subject}
 											options={booleanOptions}
 											allowEmpty={false}
-											ariaLabel={`Edit flag rapor ${subject.name}`}
+											ariaLabel={`Ubah pemakaian rapor ${subject.name}`}
 											dirty={(draft.is_report_subject === 'true') !== subject.is_report_subject}
 											disabled={saveBusy}
 											oninput={(value) => updateDraft(subject.id, 'is_report_subject', value)}
@@ -488,7 +489,7 @@
 											value={draft.is_schedule_activity}
 											options={booleanOptions}
 											allowEmpty={false}
-											ariaLabel={`Edit flag kegiatan ${subject.name}`}
+											ariaLabel={`Ubah aktivitas jadwal ${subject.name}`}
 											dirty={(draft.is_schedule_activity === 'true') !== subject.is_schedule_activity}
 											disabled={saveBusy}
 											oninput={(value) => updateDraft(subject.id, 'is_schedule_activity', value)}
@@ -499,7 +500,7 @@
 										<EditableTextCell
 											value={draft.default_weekly_hours}
 											inputType="number"
-											ariaLabel={`Edit JP per pekan ${subject.name}`}
+											ariaLabel={`Ubah JP per minggu ${subject.name}`}
 											dirty={draftNumber(draft.default_weekly_hours) !== (subject.default_weekly_hours ?? 0)}
 											invalid={!Number.isInteger(draftNumber(draft.default_weekly_hours)) || draftNumber(draft.default_weekly_hours) < 0 || draftNumber(draft.default_weekly_hours) > 60}
 											invalidMessage="0-60"
@@ -545,7 +546,7 @@
 							{:else}
 								<Table.Row>
 									<Table.Cell colspan={9} class="p-4">
-										<EmptyStatePanel compact title="Belum ada mapel" description="Tambahkan mapel pertama untuk dipakai Bank Soal, rapor, guru mapel, dan jadwal." />
+										<EmptyStatePanel compact title="Belum ada mapel" description="Tambahkan mapel pertama untuk dipakai bank soal, rapor, guru mapel, dan jadwal." />
 									</Table.Cell>
 								</Table.Row>
 							{/each}
@@ -557,8 +558,8 @@
 		<DirtyChangeBar
 			count={dirtyCount}
 			saving={saveBusy}
-			saveLabel={saveBusy ? 'Menyimpan...' : 'Simpan Perubahan'}
-			discardLabel="Batalkan"
+			saveLabel={saveBusy ? 'Menyimpan...' : academicCopy.actions.saveAll}
+			discardLabel={academicCopy.actions.cancel}
 			onsave={() => void saveChangedSubjects()}
 			ondiscard={() => resetSubjectDrafts()}
 		/>
