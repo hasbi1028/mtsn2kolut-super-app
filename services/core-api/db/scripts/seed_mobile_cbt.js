@@ -41,6 +41,14 @@ const seedConfig = {
     code: 'CBT-MOBILE',
     name: 'Simulasi CBT Mobile',
   },
+  event: {
+    title: 'Seed CBT Operasional - Jangan Pakai Data Nyata',
+    examType: 'tryout',
+    scope: 'grade',
+    targetLevels: ['7'],
+    targetPg: 3,
+    targetEssay: 1,
+  },
   package: {
     title: 'Paket Simulasi Flutter CBT Mobile',
     description: 'Data seed untuk uji manual aplikasi Flutter CBT mobile.',
@@ -405,7 +413,119 @@ function questionValues(subjectId, question) {
   ];
 }
 
-async function upsertPackage(client, subjectId) {
+async function upsertEvent(client, academicYearId) {
+  const existing = await maybeOne(
+    client,
+    `
+      SELECT id
+      FROM cbt_exam_events
+      WHERE title = $1
+      ORDER BY created_at DESC
+      LIMIT 1
+    `,
+    [seedConfig.event.title],
+  );
+
+  if (existing) {
+    return one(
+      client,
+      `
+        UPDATE cbt_exam_events
+        SET exam_type = $2,
+            scope = $3,
+            target_levels = $4::text[],
+            academic_year_id = $5,
+            status = 'active',
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING id
+      `,
+      [
+        existing.id,
+        seedConfig.event.examType,
+        seedConfig.event.scope,
+        seedConfig.event.targetLevels,
+        academicYearId,
+      ],
+    );
+  }
+
+  return one(
+    client,
+    `
+      INSERT INTO cbt_exam_events (title, exam_type, scope, target_levels, academic_year_id, status)
+      VALUES ($1, $2, $3, $4::text[], $5, 'active')
+      RETURNING id
+    `,
+    [
+      seedConfig.event.title,
+      seedConfig.event.examType,
+      seedConfig.event.scope,
+      seedConfig.event.targetLevels,
+      academicYearId,
+    ],
+  );
+}
+
+async function upsertQuestionRequirement(client, eventId, subjectId) {
+  const existing = await maybeOne(
+    client,
+    `
+      SELECT id
+      FROM cbt_event_question_requirements
+      WHERE event_id = $1
+        AND level = $2
+        AND subject_id = $3
+      ORDER BY created_at DESC
+      LIMIT 1
+    `,
+    [eventId, seedConfig.event.targetLevels[0], subjectId],
+  );
+
+  if (existing) {
+    return one(
+      client,
+      `
+        UPDATE cbt_event_question_requirements
+        SET scope_mode = 'pool_level_subject',
+            class_id = NULL,
+            target_pg = $2,
+            target_essay = $3,
+            status_filter = 'published_only',
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING id
+      `,
+      [existing.id, seedConfig.event.targetPg, seedConfig.event.targetEssay],
+    );
+  }
+
+  return one(
+    client,
+    `
+      INSERT INTO cbt_event_question_requirements (
+        event_id, scope_mode, level, class_id, subject_id, target_pg, target_essay, status_filter
+      )
+      VALUES ($1, 'pool_level_subject', $2, NULL, $3, $4, $5, 'published_only')
+      RETURNING id
+    `,
+    [eventId, seedConfig.event.targetLevels[0], subjectId, seedConfig.event.targetPg, seedConfig.event.targetEssay],
+  );
+}
+
+async function linkEventQuestions(client, eventId, questionRows) {
+  await client.query(
+    `
+      UPDATE cbt_questions
+      SET event_id = $1,
+          updated_at = NOW()
+      WHERE id = ANY($2::uuid[])
+    `,
+    [eventId, questionRows.map((row) => row.id)],
+  );
+}
+
+async function upsertPackage(client, subjectId, eventId) {
   const existing = await maybeOne(
     client,
     `
@@ -423,9 +543,15 @@ async function upsertPackage(client, subjectId) {
       client,
       `
         UPDATE cbt_packages
-        SET description = $2,
-            duration_minutes = $3,
+        SET event_id = $2,
+            description = $3,
+            duration_minutes = $4,
             randomize_questions = TRUE,
+            randomize_options = TRUE,
+            source_mode = 'event_pool',
+            draw_pg_count = $5,
+            draw_essay_count = $6,
+            random_seed = 'seed-cbt-operasional',
             is_active = TRUE,
             updated_at = NOW()
         WHERE id = $1
@@ -433,8 +559,11 @@ async function upsertPackage(client, subjectId) {
       `,
       [
         existing.id,
+        eventId,
         seedConfig.package.description,
         seedConfig.package.durationMinutes,
+        seedConfig.event.targetPg,
+        seedConfig.event.targetEssay,
       ],
     );
   }
@@ -443,16 +572,20 @@ async function upsertPackage(client, subjectId) {
     client,
     `
       INSERT INTO cbt_packages (
-        subject_id, title, description, duration_minutes, randomize_questions, is_active
+        subject_id, event_id, title, description, duration_minutes, randomize_questions,
+        randomize_options, source_mode, draw_pg_count, draw_essay_count, random_seed, is_active
       )
-      VALUES ($1, $2, $3, $4, TRUE, TRUE)
+      VALUES ($1, $2, $3, $4, $5, TRUE, TRUE, 'event_pool', $6, $7, 'seed-cbt-operasional', TRUE)
       RETURNING id
     `,
     [
       subjectId,
+      eventId,
       seedConfig.package.title,
       seedConfig.package.description,
       seedConfig.package.durationMinutes,
+      seedConfig.event.targetPg,
+      seedConfig.event.targetEssay,
     ],
   );
 }
@@ -472,7 +605,7 @@ async function linkPackageQuestions(client, packageId, questionRows) {
   }
 }
 
-async function upsertSession(client, packageId, classId, startAt, endAt) {
+async function upsertSession(client, packageId, classId, eventId, startAt, endAt) {
   const existing = await maybeOne(
     client,
     `
@@ -490,11 +623,12 @@ async function upsertSession(client, packageId, classId, startAt, endAt) {
       client,
       `
         UPDATE cbt_exam_sessions
-        SET scheduled_start = $2,
-            scheduled_end = $3,
+        SET event_id = $2,
+            scheduled_start = $3,
+            scheduled_end = $4,
             status = 'active',
             scope_type = 'class',
-            scope_ref = $4,
+            scope_ref = $5,
             mix_policy = 'same_class',
             assignment_mode = 'manual',
             allow_cross_grade = FALSE,
@@ -503,7 +637,7 @@ async function upsertSession(client, packageId, classId, startAt, endAt) {
         WHERE id = $1
         RETURNING id
       `,
-      [existing.id, startAt, endAt, classId],
+      [existing.id, eventId, startAt, endAt, classId],
     );
   }
 
@@ -511,16 +645,16 @@ async function upsertSession(client, packageId, classId, startAt, endAt) {
     client,
     `
       INSERT INTO cbt_exam_sessions (
-        package_id, class_id, scope_type, scope_ref, mix_policy, assignment_mode,
+        package_id, event_id, class_id, scope_type, scope_ref, mix_policy, assignment_mode,
         allow_cross_grade, is_special_event, title, scheduled_start, scheduled_end, status
       )
       VALUES (
-        $1, $2, 'class', $3, 'same_class', 'manual',
-        FALSE, FALSE, $4, $5, $6, 'active'
+        $1, $2, $3, 'class', $4, 'same_class', 'manual',
+        FALSE, FALSE, $5, $6, $7, 'active'
       )
       RETURNING id
     `,
-    [packageId, classId, classId, seedConfig.session.title, startAt, endAt],
+    [packageId, eventId, classId, classId, seedConfig.session.title, startAt, endAt],
   );
 }
 
@@ -781,14 +915,17 @@ async function main() {
     const academicYear = await upsertAcademicYear(client);
     const schoolClass = await upsertSchoolClass(client, academicYear.id);
     const subject = await upsertSubject(client);
+    const event = await upsertEvent(client, academicYear.id);
+    await upsertQuestionRequirement(client, event.id, subject.id);
     const students = await upsertStudents(client, schoolClass.id);
     const questionRows = [];
     for (const question of questions) {
       questionRows.push(await upsertQuestion(client, subject.id, question));
     }
-    const cbtPackage = await upsertPackage(client, subject.id);
+    await linkEventQuestions(client, event.id, questionRows);
+    const cbtPackage = await upsertPackage(client, subject.id, event.id);
     await linkPackageQuestions(client, cbtPackage.id, questionRows);
-    const session = await upsertSession(client, cbtPackage.id, schoolClass.id, startAt, endAt);
+    const session = await upsertSession(client, cbtPackage.id, schoolClass.id, event.id, startAt, endAt);
     const room = await upsertRoom(client, session.id);
     const participants = await upsertParticipants(client, session.id, room.id, students);
     const assets = await seedAssets(client, questionRows);
@@ -797,6 +934,7 @@ async function main() {
 
     console.log('Seed CBT mobile siap dipakai.');
     console.log('');
+    console.log(`Kegiatan : ${seedConfig.event.title}`);
     console.log(`Sesi     : ${seedConfig.session.title}`);
     console.log(`Jadwal   : ${formatWita(startAt)} - ${formatWita(endAt)} WITA`);
     console.log(`Ruang    : ${room.room_name}`);
