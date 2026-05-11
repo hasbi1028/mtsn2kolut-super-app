@@ -178,6 +178,8 @@ npm --prefix apps/web-admin run check
 npm --prefix apps/web-admin run check
 ```
 
+**Implementation note:** Selesai pada Tahap 3. Halaman `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte` dibersihkan dari istilah user-facing seperti `Preview`, `Apply`, `Rollover`, `Dry-run`, `Challenge`, `Slot`, dan istilah teknis backend/API; diganti menjadi `Pratinjau kenaikan kelas`, `Terapkan kenaikan kelas`, `Cek data sebelum impor`, `Kalimat konfirmasi`, dan `Jadwal`.
+
 ---
 
 ## Task 4: Bersihkan Dashboard Akademik
