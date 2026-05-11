@@ -34,9 +34,9 @@ func (q *Queries) AddCbtPackageQuestion(ctx context.Context, arg AddCbtPackageQu
 }
 
 const createCbtPackage = `-- name: CreateCbtPackage :one
-INSERT INTO cbt_packages (id, event_id, subject_id, title, description, duration_minutes, randomize_questions, is_active)
-VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
-RETURNING id, subject_id, title, description, duration_minutes, randomize_questions, is_active, created_at, updated_at, event_id
+INSERT INTO cbt_packages (id, event_id, subject_id, title, description, duration_minutes, randomize_questions, is_active, source_mode, randomize_options, draw_pg_count, draw_essay_count, random_seed, composition_log)
+VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+RETURNING id, subject_id, title, description, duration_minutes, randomize_questions, is_active, created_at, updated_at, event_id, source_mode, randomize_options, draw_pg_count, draw_essay_count, random_seed, composition_log
 `
 
 type CreateCbtPackageParams struct {
@@ -47,6 +47,12 @@ type CreateCbtPackageParams struct {
 	DurationMinutes    int32       `json:"duration_minutes"`
 	RandomizeQuestions bool        `json:"randomize_questions"`
 	IsActive           bool        `json:"is_active"`
+	SourceMode         string      `json:"source_mode"`
+	RandomizeOptions   bool        `json:"randomize_options"`
+	DrawPgCount        int32       `json:"draw_pg_count"`
+	DrawEssayCount     int32       `json:"draw_essay_count"`
+	RandomSeed         string      `json:"random_seed"`
+	CompositionLog     []byte      `json:"composition_log"`
 }
 
 func (q *Queries) CreateCbtPackage(ctx context.Context, arg CreateCbtPackageParams) (CbtPackage, error) {
@@ -58,6 +64,12 @@ func (q *Queries) CreateCbtPackage(ctx context.Context, arg CreateCbtPackagePara
 		arg.DurationMinutes,
 		arg.RandomizeQuestions,
 		arg.IsActive,
+		arg.SourceMode,
+		arg.RandomizeOptions,
+		arg.DrawPgCount,
+		arg.DrawEssayCount,
+		arg.RandomSeed,
+		arg.CompositionLog,
 	)
 	var i CbtPackage
 	err := row.Scan(
@@ -71,6 +83,12 @@ func (q *Queries) CreateCbtPackage(ctx context.Context, arg CreateCbtPackagePara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.EventID,
+		&i.SourceMode,
+		&i.RandomizeOptions,
+		&i.DrawPgCount,
+		&i.DrawEssayCount,
+		&i.RandomSeed,
+		&i.CompositionLog,
 	)
 	return i, err
 }
@@ -90,6 +108,10 @@ func (q *Queries) DeleteCbtPackage(ctx context.Context, id pgtype.UUID) (int64, 
 const getCbtPackageQuestionQuality = `-- name: GetCbtPackageQuestionQuality :one
 SELECT
   p.is_active,
+  COALESCE(p.randomize_options, FALSE)::boolean AS randomize_options,
+  COALESCE(p.source_mode, 'teacher_class')::text AS source_mode,
+  COALESCE(p.draw_pg_count, 0)::int AS draw_pg_count,
+  COALESCE(p.draw_essay_count, 0)::int AS draw_essay_count,
   COUNT(q.id)::int AS total_questions,
   COUNT(q.id) FILTER (WHERE q.status = 'published')::int AS published_questions,
   COUNT(q.id) FILTER (WHERE q.status <> 'published')::int AS unpublished_questions,
@@ -106,11 +128,15 @@ GROUP BY p.id, p.is_active
 `
 
 type GetCbtPackageQuestionQualityRow struct {
-	IsActive             bool  `json:"is_active"`
-	TotalQuestions       int32 `json:"total_questions"`
-	PublishedQuestions   int32 `json:"published_questions"`
-	UnpublishedQuestions int32 `json:"unpublished_questions"`
-	MetadataGapQuestions int32 `json:"metadata_gap_questions"`
+	IsActive             bool   `json:"is_active"`
+	RandomizeOptions     bool   `json:"randomize_options"`
+	SourceMode           string `json:"source_mode"`
+	DrawPgCount          int32  `json:"draw_pg_count"`
+	DrawEssayCount       int32  `json:"draw_essay_count"`
+	TotalQuestions       int32  `json:"total_questions"`
+	PublishedQuestions   int32  `json:"published_questions"`
+	UnpublishedQuestions int32  `json:"unpublished_questions"`
+	MetadataGapQuestions int32  `json:"metadata_gap_questions"`
 }
 
 func (q *Queries) GetCbtPackageQuestionQuality(ctx context.Context, id pgtype.UUID) (GetCbtPackageQuestionQualityRow, error) {
@@ -118,6 +144,10 @@ func (q *Queries) GetCbtPackageQuestionQuality(ctx context.Context, id pgtype.UU
 	var i GetCbtPackageQuestionQualityRow
 	err := row.Scan(
 		&i.IsActive,
+		&i.RandomizeOptions,
+		&i.SourceMode,
+		&i.DrawPgCount,
+		&i.DrawEssayCount,
 		&i.TotalQuestions,
 		&i.PublishedQuestions,
 		&i.UnpublishedQuestions,
@@ -208,7 +238,14 @@ func (q *Queries) GetExamQuestions(ctx context.Context, packageID pgtype.UUID) (
 
 const listCbtEventPackages = `-- name: ListCbtEventPackages :many
 SELECT p.id, p.event_id, p.subject_id, s.name AS subject_name, s.code AS subject_code,
-       p.title, p.description, p.duration_minutes, p.randomize_questions, p.is_active,
+       p.title, p.description, p.duration_minutes, p.randomize_questions,
+       COALESCE(p.randomize_options, FALSE)::boolean AS randomize_options,
+       COALESCE(p.source_mode, 'teacher_class')::text AS source_mode,
+       COALESCE(p.draw_pg_count, 0)::int AS draw_pg_count,
+       COALESCE(p.draw_essay_count, 0)::int AS draw_essay_count,
+       COALESCE(p.random_seed, '')::text AS random_seed,
+       COALESCE(p.composition_log, '{}'::jsonb) AS composition_log,
+       p.is_active,
        p.created_at, p.updated_at,
        COUNT(pq.question_id)::int AS question_count,
        COUNT(pq.question_id) FILTER (WHERE q.status = 'published')::int AS published_question_count,
@@ -232,6 +269,12 @@ type ListCbtEventPackagesRow struct {
 	Description            string             `json:"description"`
 	DurationMinutes        int32              `json:"duration_minutes"`
 	RandomizeQuestions     bool               `json:"randomize_questions"`
+	RandomizeOptions       bool               `json:"randomize_options"`
+	SourceMode             string             `json:"source_mode"`
+	DrawPgCount            int32              `json:"draw_pg_count"`
+	DrawEssayCount         int32              `json:"draw_essay_count"`
+	RandomSeed             string             `json:"random_seed"`
+	CompositionLog         []byte             `json:"composition_log"`
 	IsActive               bool               `json:"is_active"`
 	CreatedAt              pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
@@ -259,6 +302,12 @@ func (q *Queries) ListCbtEventPackages(ctx context.Context, eventID pgtype.UUID)
 			&i.Description,
 			&i.DurationMinutes,
 			&i.RandomizeQuestions,
+			&i.RandomizeOptions,
+			&i.SourceMode,
+			&i.DrawPgCount,
+			&i.DrawEssayCount,
+			&i.RandomSeed,
+			&i.CompositionLog,
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -347,7 +396,14 @@ func (q *Queries) ListCbtPackageQuestions(ctx context.Context, eventID pgtype.UU
 
 const listCbtPackages = `-- name: ListCbtPackages :many
 SELECT p.id, p.event_id, p.subject_id, s.name AS subject_name, s.code AS subject_code,
-       p.title, p.description, p.duration_minutes, p.randomize_questions, p.is_active,
+       p.title, p.description, p.duration_minutes, p.randomize_questions,
+       COALESCE(p.randomize_options, FALSE)::boolean AS randomize_options,
+       COALESCE(p.source_mode, 'teacher_class')::text AS source_mode,
+       COALESCE(p.draw_pg_count, 0)::int AS draw_pg_count,
+       COALESCE(p.draw_essay_count, 0)::int AS draw_essay_count,
+       COALESCE(p.random_seed, '')::text AS random_seed,
+       COALESCE(p.composition_log, '{}'::jsonb) AS composition_log,
+       p.is_active,
        p.created_at, p.updated_at,
        COUNT(pq.question_id)::int AS question_count
 FROM cbt_packages p
@@ -368,6 +424,12 @@ type ListCbtPackagesRow struct {
 	Description        string             `json:"description"`
 	DurationMinutes    int32              `json:"duration_minutes"`
 	RandomizeQuestions bool               `json:"randomize_questions"`
+	RandomizeOptions   bool               `json:"randomize_options"`
+	SourceMode         string             `json:"source_mode"`
+	DrawPgCount        int32              `json:"draw_pg_count"`
+	DrawEssayCount     int32              `json:"draw_essay_count"`
+	RandomSeed         string             `json:"random_seed"`
+	CompositionLog     []byte             `json:"composition_log"`
 	IsActive           bool               `json:"is_active"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
@@ -393,6 +455,12 @@ func (q *Queries) ListCbtPackages(ctx context.Context, eventID pgtype.UUID) ([]L
 			&i.Description,
 			&i.DurationMinutes,
 			&i.RandomizeQuestions,
+			&i.RandomizeOptions,
+			&i.SourceMode,
+			&i.DrawPgCount,
+			&i.DrawEssayCount,
+			&i.RandomSeed,
+			&i.CompositionLog,
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.UpdatedAt,

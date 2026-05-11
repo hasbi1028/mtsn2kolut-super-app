@@ -77,6 +77,11 @@ func (h *CbtPackage) Create(w http.ResponseWriter, r *http.Request) {
 		Description        string           `json:"description"`
 		DurationMinutes    int32            `json:"duration_minutes"`
 		RandomizeQuestions bool             `json:"randomize_questions"`
+		RandomizeOptions   bool             `json:"randomize_options"`
+		SourceMode         string           `json:"source_mode"`
+		DrawPgCount        int32            `json:"draw_pg_count"`
+		DrawEssayCount     int32            `json:"draw_essay_count"`
+		RandomSeed         string           `json:"random_seed"`
 		IsActive           bool             `json:"is_active"`
 		QuestionIDs        []string         `json:"question_ids"`
 		QuestionWeights    map[string]int32 `json:"question_weights"`
@@ -115,6 +120,11 @@ func (h *CbtPackage) Create(w http.ResponseWriter, r *http.Request) {
 		Description:        body.Description,
 		DurationMinutes:    body.DurationMinutes,
 		RandomizeQuestions: body.RandomizeQuestions,
+		RandomizeOptions:   body.RandomizeOptions,
+		SourceMode:         body.SourceMode,
+		DrawPgCount:        body.DrawPgCount,
+		DrawEssayCount:     body.DrawEssayCount,
+		RandomSeed:         body.RandomSeed,
 		IsActive:           body.IsActive,
 		QuestionIDs:        questionIDs,
 		QuestionWeights:    body.QuestionWeights,
@@ -124,10 +134,15 @@ func (h *CbtPackage) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.auditPackageEvent(r.Context(), "CBT_PACKAGE_CREATE", "cbt_package", pgUUIDString(row.ID), map[string]any{
-		"event_id":       pgUUIDString(row.EventID),
-		"subject_id":     pgUUIDString(row.SubjectID),
-		"title":          row.Title,
-		"question_count": len(questionIDs),
+		"event_id":            pgUUIDString(row.EventID),
+		"subject_id":          pgUUIDString(row.SubjectID),
+		"title":               row.Title,
+		"question_count":      len(questionIDs),
+		"source_mode":         body.SourceMode,
+		"randomize_questions": body.RandomizeQuestions,
+		"randomize_options":   body.RandomizeOptions,
+		"draw_pg_count":       body.DrawPgCount,
+		"draw_essay_count":    body.DrawEssayCount,
 	})
 	api.Created(w, row)
 }

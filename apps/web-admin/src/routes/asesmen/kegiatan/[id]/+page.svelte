@@ -51,6 +51,7 @@
 			target_essay: number; available_essay: number; missing_essay: number;
 		};
 		rows: QuestionCompletenessRow[];
+		contributions?: Array<{ level: string; subject_id: string; subject_name: string; teacher_name: string; teacher_username: string; available_pg: number; available_essay: number }>;
 		excluded_levels?: string[];
 	};
 	type EventOverview = {
@@ -612,10 +613,25 @@
 									<div class="rounded-xl bg-warning/10 p-3"><p class="text-xs text-muted-foreground">Belum lengkap</p><p class="text-lg font-semibold text-warning">{completeness.summary.incomplete_rows}</p></div>
 									<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Kekurangan total</p><p class="text-lg font-semibold text-foreground">PG {completeness.summary.missing_pg} · Esai {completeness.summary.missing_essay}</p></div>
 								</div>
-								{#if completeness.excluded_levels?.length}
-									<p class="rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-muted-foreground">Tingkat tidak dihitung karena di luar target event: {completeness.excluded_levels.join(', ')}.</p>
-								{/if}
-								<div class="grid gap-2 md:grid-cols-3">
+				{#if completeness.excluded_levels?.length}
+					<p class="rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-muted-foreground">Tingkat tidak dihitung karena di luar target event: {completeness.excluded_levels.join(', ')}.</p>
+				{/if}
+				{#if completeness.contributions?.length && completeness.requirements?.scope_mode === 'pool_level_subject'}
+					<details class="rounded-xl border border-border bg-muted/30 p-3 text-xs text-foreground">
+						<summary class="cursor-pointer font-semibold">Kontribusi guru ke pool mapel ({completeness.contributions.length})</summary>
+						<div class="mt-2 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+							{#each completeness.contributions.slice(0, 12) as row (`${row.level}-${row.subject_id}-${row.teacher_username}`)}
+								<div class="rounded-lg border border-border bg-card p-2">
+									<p class="font-medium">{row.level} · {row.subject_name}</p>
+									<p class="text-muted-foreground">{row.teacher_name || row.teacher_username || 'Guru belum tertaut'}</p>
+									<p class="mt-1 font-semibold">PG {row.available_pg} · Esai {row.available_essay}</p>
+								</div>
+							{/each}
+						</div>
+						{#if completeness.contributions.length > 12}<p class="mt-2 text-muted-foreground">Menampilkan 12 kontribusi pertama; ekspor CSV untuk data lengkap.</p>{/if}
+					</details>
+				{/if}
+				<div class="grid gap-2 md:grid-cols-3">
 									<select bind:value={completenessLevel} class="rounded-lg border border-border bg-background px-3 py-2 text-sm">
 										<option value="">Semua tingkat</option>
 										{#each completenessLevels(detail) as level (level)}<option value={level}>Tingkat {level}</option>{/each}
@@ -638,7 +654,7 @@
 							<Table.Root>
 								<Table.Header><Table.Row class="bg-muted/50"><Table.Head>Tingkat</Table.Head><Table.Head>Rombel</Table.Head><Table.Head>Mapel</Table.Head><Table.Head>Guru</Table.Head><Table.Head class="text-center">PG</Table.Head><Table.Head class="text-center">Esai</Table.Head><Table.Head>Status</Table.Head></Table.Row></Table.Header>
 								<Table.Body>
-									{#each filteredRows as row (`${row.class_id}-${row.subject_id}-${row.teacher_employee_id}`)}
+									{#each filteredRows as row (`${row.level}-${row.class_id}-${row.subject_id}-${row.teacher_employee_id}`)}
 										<Table.Row>
 											<Table.Cell><Badge variant="outline" class="bg-card">{row.level}</Badge></Table.Cell>
 											<Table.Cell class="font-medium">{row.class_name || row.class_code}</Table.Cell>

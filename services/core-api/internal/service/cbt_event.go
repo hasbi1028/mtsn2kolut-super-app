@@ -26,6 +26,7 @@ type cbtEventStore interface {
 	ListCbtEventSessionsReadiness(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventSessionsReadinessRow, error)
 	ListCbtEventSubjectMatrix(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventSubjectMatrixRow, error)
 	ListCbtEventQuestionCompletenessRows(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventQuestionCompletenessRowsRow, error)
+	ListCbtEventQuestionPoolContributions(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventQuestionPoolContributionsRow, error)
 	ListCbtEventQuestionCompletenessExcludedLevels(ctx context.Context, id pgtype.UUID) ([]string, error)
 	GetCbtEventQuestionRequirements(ctx context.Context, id pgtype.UUID) (db.GetCbtEventQuestionRequirementsRow, error)
 	UpsertCbtEventQuestionRequirements(ctx context.Context, arg db.UpsertCbtEventQuestionRequirementsParams) (db.UpsertCbtEventQuestionRequirementsRow, error)
@@ -182,10 +183,11 @@ func (s *CbtEvent) ListSubjectMatrix(ctx context.Context, eventID pgtype.UUID) (
 }
 
 type CbtQuestionCompleteness struct {
-	Requirements   db.GetCbtEventQuestionRequirementsRow `json:"requirements"`
-	Summary        CbtQuestionCompletenessSummary        `json:"summary"`
-	Rows           []CbtQuestionCompletenessRow          `json:"rows"`
-	ExcludedLevels []string                              `json:"excluded_levels"`
+	Requirements   db.GetCbtEventQuestionRequirementsRow         `json:"requirements"`
+	Summary        CbtQuestionCompletenessSummary                `json:"summary"`
+	Rows           []CbtQuestionCompletenessRow                  `json:"rows"`
+	Contributions  []db.ListCbtEventQuestionPoolContributionsRow `json:"contributions"`
+	ExcludedLevels []string                                      `json:"excluded_levels"`
 }
 
 type CbtQuestionCompletenessSummary struct {
@@ -235,7 +237,14 @@ func (s *CbtEvent) QuestionCompleteness(ctx context.Context, eventID pgtype.UUID
 	if err != nil {
 		return CbtQuestionCompleteness{}, err
 	}
-	out := CbtQuestionCompleteness{Requirements: requirements, Rows: []CbtQuestionCompletenessRow{}, ExcludedLevels: excluded}
+	contributions, err := s.q.ListCbtEventQuestionPoolContributions(ctx, eventID)
+	if err != nil {
+		return CbtQuestionCompleteness{}, err
+	}
+	if contributions == nil {
+		contributions = []db.ListCbtEventQuestionPoolContributionsRow{}
+	}
+	out := CbtQuestionCompleteness{Requirements: requirements, Rows: []CbtQuestionCompletenessRow{}, Contributions: contributions, ExcludedLevels: excluded}
 	for _, row := range rows {
 		missingPg := maxInt32(row.TargetPg-row.AvailablePg, 0)
 		missingEssay := maxInt32(row.TargetEssay-row.AvailableEssay, 0)

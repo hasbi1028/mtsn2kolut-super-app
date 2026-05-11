@@ -209,6 +209,10 @@ func (f *fakeCbtEventStore) ListCbtEventQuestionCompletenessRows(ctx context.Con
 	return f.completenessRows, nil
 }
 
+func (f *fakeCbtEventStore) ListCbtEventQuestionPoolContributions(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventQuestionPoolContributionsRow, error) {
+	return []db.ListCbtEventQuestionPoolContributionsRow{}, nil
+}
+
 func (f *fakeCbtEventStore) ListCbtEventQuestionCompletenessExcludedLevels(ctx context.Context, id pgtype.UUID) ([]string, error) {
 	return f.excludedLevels, nil
 }

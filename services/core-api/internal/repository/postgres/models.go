@@ -1059,6 +1059,12 @@ type CbtPackage struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	EventID            pgtype.UUID        `json:"event_id"`
+	SourceMode         string             `json:"source_mode"`
+	RandomizeOptions   bool               `json:"randomize_options"`
+	DrawPgCount        int32              `json:"draw_pg_count"`
+	DrawEssayCount     int32              `json:"draw_essay_count"`
+	RandomSeed         string             `json:"random_seed"`
+	CompositionLog     []byte             `json:"composition_log"`
 }
 
 type CbtPackageQuestion struct {
