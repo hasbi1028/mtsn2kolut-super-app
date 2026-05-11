@@ -20,6 +20,7 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { academicCopy } from '$lib/academic/copy';
 	import { readClientApiData } from '$lib/client/api';
 
 	type AcademicDashboardSummary = {
@@ -75,43 +76,43 @@
 			summary.subject_assignments_missing_teacher +
 			summary.timetable_conflicts
 	);
-	const readinessLabel = $derived(readinessIssues === 0 ? 'Siap operasional' : `${readinessIssues} hal perlu ditangani`);
+	const readinessLabel = $derived(readinessIssues === 0 ? 'Data siap dipakai' : `${readinessIssues} data perlu diperiksa`);
 
 	const statusCards = $derived.by<StatusCard[]>(() => [
 		{
-			label: 'Rombel Aktif',
+			label: 'Rombel aktif',
 			value: summary.total_classes,
 			description: 'Rombel aktif pada tahun ajaran berjalan.',
 			tone: 'default'
 		},
 		{
-			label: 'Siswa Aktif',
+			label: 'Siswa aktif',
 			value: summary.total_active_students,
-			description: 'Siswa aktif yang tercatat di master data.',
+			description: 'Siswa aktif yang tercatat di data induk.',
 			tone: 'default'
 		},
 		{
-			label: 'Siswa Tanpa Rombel',
+			label: 'Siswa belum memiliki rombel',
 			value: summary.students_without_class,
-			description: 'Perlu dipetakan ke rombel aktif.',
+			description: 'Perlu ditempatkan ke rombel aktif.',
 			tone: summary.students_without_class > 0 ? 'warning' : 'default'
 		},
 		{
-			label: 'Rombel Tanpa Wali',
+			label: 'Rombel belum memiliki wali kelas',
 			value: summary.classes_without_homeroom,
 			description: 'Rombel aktif belum memiliki wali kelas aktif.',
 			tone: summary.classes_without_homeroom > 0 ? 'warning' : 'default'
 		},
 		{
-			label: 'Guru Mapel Belum Lengkap',
+			label: 'Penugasan guru mapel belum lengkap',
 			value: summary.subject_assignments_missing_teacher,
-			description: 'Penugasan mapel dengan guru tidak aktif atau hilang.',
+			description: 'Ada mapel yang belum memiliki guru aktif.',
 			tone: summary.subject_assignments_missing_teacher > 0 ? 'warning' : 'default'
 		},
 		{
-			label: 'Jadwal Bentrok',
+			label: 'Jadwal perlu diperiksa',
 			value: summary.timetable_conflicts,
-			description: 'Bentrok kelas, guru, atau ruang pada jadwal aktif.',
+			description: 'Ada jadwal kelas, guru, atau ruang yang bertabrakan.',
 			tone: summary.timetable_conflicts > 0 ? 'danger' : 'default'
 		}
 	]);
@@ -120,7 +121,7 @@
 		{
 			label: 'Tempatkan semua siswa aktif ke rombel',
 			count: summary.students_without_class,
-			description: 'Siswa tanpa rombel akan sulit dipakai oleh jadwal, asesmen, dan portal.',
+			description: 'Siswa tanpa rombel akan sulit dipakai untuk jadwal, asesmen, dan akses layanan siswa.',
 			href: resolve('/students')
 		},
 		{
@@ -136,16 +137,16 @@
 			href: resolve('/akademik/guru-mapel')
 		},
 		{
-			label: 'Selesaikan jadwal bentrok',
+			label: 'Periksa jadwal yang bertabrakan',
 			count: summary.timetable_conflicts,
-			description: 'Bentrok jadwal perlu dibenahi sebelum dipakai harian.',
+			description: 'Jadwal yang bertabrakan perlu dibenahi sebelum dipakai harian.',
 			href: resolve('/akademik/jadwal')
 		}
 	]);
 
 	async function fetchDashboard(): Promise<AcademicDashboardSummary> {
 		return await fetch('/api/academic/dashboard').then((response) =>
-			readClientApiData<AcademicDashboardSummary>(response, 'Gagal memuat dashboard akademik')
+			readClientApiData<AcademicDashboardSummary>(response, 'Gagal memuat ringkasan akademik')
 		);
 	}
 
@@ -171,7 +172,7 @@
 
 	function dashboardErrorMessage(error: unknown) {
 		if (error instanceof Error && error.message.trim()) return error.message;
-		return 'Dashboard akademik belum dapat dimuat. Periksa koneksi backend lalu coba lagi.';
+		return 'Ringkasan akademik belum dapat dimuat. Periksa koneksi layanan sistem lalu coba lagi.';
 	}
 
 	function handleRenderError(error: unknown) {
@@ -188,19 +189,19 @@
 </script>
 
 <svelte:head>
-	<title>Dashboard Akademik | MTsN 2 Kolaka Utara</title>
+	<title>Ringkasan Akademik | MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 <div class="space-y-6">
 	<div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
 		<div>
 			<p class="text-sm font-medium text-primary">Akademik</p>
-			<h1 class="text-2xl font-semibold tracking-normal text-foreground">Dashboard Akademik</h1>
+			<h1 class="text-2xl font-semibold tracking-normal text-foreground">Ringkasan Akademik</h1>
 			<p class="mt-1 max-w-2xl text-sm text-muted-foreground">
-				Ringkasan kesiapan tahun ajaran, rombel, siswa, wali kelas, guru mapel, dan jadwal.
+				Ringkasan kelengkapan data tahun ajaran, rombel, siswa, wali kelas, guru mapel, dan jadwal.
 			</p>
 		</div>
-		<Button variant="outline" onclick={() => void refreshDashboard()} disabled={refreshBusy} aria-label="Muat ulang dashboard akademik">
+		<Button variant="outline" onclick={() => void refreshDashboard()} disabled={refreshBusy} aria-label="Muat ulang ringkasan akademik">
 			<RefreshCw class={`mr-2 size-4 ${refreshBusy ? 'animate-spin' : ''}`} />
 			Muat Ulang
 		</Button>
@@ -224,7 +225,7 @@
 
 		{#snippet failed(error, reset)}
 			<RecoveryPanel
-				title="Dashboard Akademik Belum Tersaji"
+				title="Ringkasan Akademik Belum Tersaji"
 				message={dashboardErrorMessage(error)}
 				onRetry={() => {
 					reset?.();
@@ -240,7 +241,7 @@
 						<School class="size-6" />
 					</div>
 					<div class="space-y-1">
-						<p class="text-sm text-muted-foreground">Tahun ajaran aktif</p>
+						<p class="text-sm text-muted-foreground">{academicCopy.labels.activeAcademicYear}</p>
 						<h2 class="text-xl font-semibold text-foreground">{activeYearLabel}</h2>
 						<p class="text-sm text-muted-foreground">Semester {semesterLabel}</p>
 					</div>
@@ -275,8 +276,8 @@
 		<div class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
 			<Card.Root>
 				<Card.Header>
-					<Card.Title class="text-base">Checklist Kesiapan Akademik</Card.Title>
-					<Card.Description>Item dengan angka di atas nol perlu ditangani sebelum data akademik dipakai penuh.</Card.Description>
+					<Card.Title class="text-base">{academicCopy.labels.academicDataCompleteness}</Card.Title>
+					<Card.Description>{academicCopy.helper.academicDataCompleteness}</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-3">
 					{#each checklist as item (item.label)}
@@ -285,9 +286,9 @@
 								<div class="flex flex-wrap items-center gap-2">
 									<p class="font-medium text-foreground">{item.label}</p>
 									{#if item.count === 0}
-										<Badge class="border-primary/20 bg-primary/15 text-primary">Beres</Badge>
+										<Badge class="border-primary/20 bg-primary/15 text-primary">Lengkap</Badge>
 									{:else}
-										<Badge class="border-amber-300 bg-amber-50 text-amber-800">{item.count} perlu dicek</Badge>
+										<Badge class="border-amber-300 bg-amber-50 text-amber-800">{item.count} perlu diperiksa</Badge>
 									{/if}
 								</div>
 								<p class="text-sm text-muted-foreground">{item.description}</p>
@@ -322,7 +323,7 @@
 						<UserCheck class="size-4 text-primary" />
 						<span class="text-left">
 							<span class="block font-medium">Guru Mapel</span>
-							<span class="block text-xs text-muted-foreground">Atur matrix guru per mapel dan rombel</span>
+							<span class="block text-xs text-muted-foreground">Atur tabel penugasan guru per mapel dan rombel</span>
 						</span>
 					</Button>
 					<Button variant="outline" class="h-auto justify-start gap-3 py-3" href={resolve('/akademik/jadwal')}>
@@ -336,7 +337,7 @@
 						<BookOpenCheck class="size-4 text-primary" />
 						<span class="text-left">
 							<span class="block font-medium">Tahun Ajaran</span>
-							<span class="block text-xs text-muted-foreground">Aktivasi, preview rollover, dan import-export</span>
+							<span class="block text-xs text-muted-foreground">Aktivasi, pratinjau kenaikan kelas, dan impor/unduh data</span>
 						</span>
 					</Button>
 				</Card.Content>
