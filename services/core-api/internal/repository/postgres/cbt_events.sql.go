@@ -119,7 +119,16 @@ func (q *Queries) DeleteCbtEventSubjectTarget(ctx context.Context, arg DeleteCbt
 }
 
 const deleteCbtExamEvent = `-- name: DeleteCbtExamEvent :execrows
-DELETE FROM cbt_exam_events WHERE id = $1 AND status = 'draft'
+DELETE FROM cbt_exam_events e
+WHERE e.id = $1
+  AND (
+    e.status = 'draft'
+    OR NOT EXISTS (
+      SELECT 1
+      FROM cbt_exam_sessions s
+      WHERE s.event_id = e.id
+    )
+  )
 `
 
 func (q *Queries) DeleteCbtExamEvent(ctx context.Context, id pgtype.UUID) (int64, error) {
