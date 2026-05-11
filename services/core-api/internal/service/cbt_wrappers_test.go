@@ -113,25 +113,27 @@ func TestPusakaAttendanceListPropagatesErrors(t *testing.T) {
 }
 
 type fakeCbtEventStore struct {
-	listRows        []db.ListCbtExamEventsRow
-	listErr         error
-	getID           pgtype.UUID
-	overviewRow     db.GetCbtEventOverviewSummaryRow
-	overviewID      pgtype.UUID
-	resultsRows     []db.GetEventResultsRow
-	resultsErr      error
-	resultsID       pgtype.UUID
-	cardsRows       []db.GetEventExamCardsRow
-	cardsErr        error
-	cardsID         pgtype.UUID
-	createArg       db.CreateCbtExamEventParams
-	updateStatusArg db.UpdateCbtExamEventStatusParams
-	updateArg       db.UpdateCbtExamEventParams
-	deleteID        pgtype.UUID
-	packagesRows    []db.ListCbtEventPackagesRow
-	sessionsRows    []db.ListCbtEventSessionsReadinessRow
-	matrixRows      []db.ListCbtEventSubjectMatrixRow
-	membersByUser   []db.CbtEventMember
+	listRows         []db.ListCbtExamEventsRow
+	listErr          error
+	getID            pgtype.UUID
+	overviewRow      db.GetCbtEventOverviewSummaryRow
+	overviewID       pgtype.UUID
+	resultsRows      []db.GetEventResultsRow
+	resultsErr       error
+	resultsID        pgtype.UUID
+	cardsRows        []db.GetEventExamCardsRow
+	cardsErr         error
+	cardsID          pgtype.UUID
+	createArg        db.CreateCbtExamEventParams
+	updateStatusArg  db.UpdateCbtExamEventStatusParams
+	updateArg        db.UpdateCbtExamEventParams
+	deleteID         pgtype.UUID
+	packagesRows     []db.ListCbtEventPackagesRow
+	sessionsRows     []db.ListCbtEventSessionsReadinessRow
+	matrixRows       []db.ListCbtEventSubjectMatrixRow
+	completenessRows []db.ListCbtEventQuestionCompletenessRowsRow
+	excludedLevels   []string
+	membersByUser    []db.CbtEventMember
 }
 
 func (f *fakeCbtEventStore) ListCbtExamEvents(ctx context.Context) ([]db.ListCbtExamEventsRow, error) {
@@ -199,6 +201,14 @@ func (f *fakeCbtEventStore) ListCbtEventSessionsReadiness(ctx context.Context, e
 
 func (f *fakeCbtEventStore) ListCbtEventSubjectMatrix(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventSubjectMatrixRow, error) {
 	return f.matrixRows, nil
+}
+
+func (f *fakeCbtEventStore) ListCbtEventQuestionCompletenessRows(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventQuestionCompletenessRowsRow, error) {
+	return f.completenessRows, nil
+}
+
+func (f *fakeCbtEventStore) ListCbtEventQuestionCompletenessExcludedLevels(ctx context.Context, id pgtype.UUID) ([]string, error) {
+	return f.excludedLevels, nil
 }
 
 func (f *fakeCbtEventStore) GetCbtEventMember(ctx context.Context, arg db.GetCbtEventMemberParams) (db.GetCbtEventMemberRow, error) {

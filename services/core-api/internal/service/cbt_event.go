@@ -25,6 +25,8 @@ type cbtEventStore interface {
 	ListCbtEventPackages(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventPackagesRow, error)
 	ListCbtEventSessionsReadiness(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventSessionsReadinessRow, error)
 	ListCbtEventSubjectMatrix(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventSubjectMatrixRow, error)
+	ListCbtEventQuestionCompletenessRows(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventQuestionCompletenessRowsRow, error)
+	ListCbtEventQuestionCompletenessExcludedLevels(ctx context.Context, id pgtype.UUID) ([]string, error)
 	CreateCbtExamEvent(ctx context.Context, arg db.CreateCbtExamEventParams) (db.CbtExamEvent, error)
 	UpdateCbtExamEventStatus(ctx context.Context, arg db.UpdateCbtExamEventStatusParams) (db.CbtExamEvent, error)
 	UpdateCbtExamEvent(ctx context.Context, arg db.UpdateCbtExamEventParams) (db.CbtExamEvent, error)
@@ -175,6 +177,100 @@ func (s *CbtEvent) ListSubjectMatrix(ctx context.Context, eventID pgtype.UUID) (
 		return []db.ListCbtEventSubjectMatrixRow{}, nil
 	}
 	return rows, nil
+}
+
+type CbtQuestionCompleteness struct {
+	Summary        CbtQuestionCompletenessSummary `json:"summary"`
+	Rows           []CbtQuestionCompletenessRow   `json:"rows"`
+	ExcludedLevels []string                       `json:"excluded_levels"`
+}
+
+type CbtQuestionCompletenessSummary struct {
+	TotalRows      int32 `json:"total_rows"`
+	CompleteRows   int32 `json:"complete_rows"`
+	IncompleteRows int32 `json:"incomplete_rows"`
+	TargetPg       int32 `json:"target_pg"`
+	AvailablePg    int32 `json:"available_pg"`
+	MissingPg      int32 `json:"missing_pg"`
+	TargetEssay    int32 `json:"target_essay"`
+	AvailableEssay int32 `json:"available_essay"`
+	MissingEssay   int32 `json:"missing_essay"`
+}
+
+type CbtQuestionCompletenessRow struct {
+	Level             string      `json:"level"`
+	ClassID           pgtype.UUID `json:"class_id"`
+	ClassCode         string      `json:"class_code"`
+	ClassName         string      `json:"class_name"`
+	SubjectID         pgtype.UUID `json:"subject_id"`
+	SubjectName       string      `json:"subject_name"`
+	SubjectCode       string      `json:"subject_code"`
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+	TeacherName       string      `json:"teacher_name"`
+	TeacherUsername   string      `json:"teacher_username"`
+	TargetPg          int32       `json:"target_pg"`
+	AvailablePg       int32       `json:"available_pg"`
+	MissingPg         int32       `json:"missing_pg"`
+	TargetEssay       int32       `json:"target_essay"`
+	AvailableEssay    int32       `json:"available_essay"`
+	MissingEssay      int32       `json:"missing_essay"`
+	Complete          bool        `json:"complete"`
+}
+
+func (s *CbtEvent) QuestionCompleteness(ctx context.Context, eventID pgtype.UUID) (CbtQuestionCompleteness, error) {
+	rows, err := s.q.ListCbtEventQuestionCompletenessRows(ctx, eventID)
+	if err != nil {
+		return CbtQuestionCompleteness{}, err
+	}
+	excluded, err := s.q.ListCbtEventQuestionCompletenessExcludedLevels(ctx, eventID)
+	if err != nil {
+		return CbtQuestionCompleteness{}, err
+	}
+	out := CbtQuestionCompleteness{Rows: []CbtQuestionCompletenessRow{}, ExcludedLevels: excluded}
+	for _, row := range rows {
+		missingPg := maxInt32(row.TargetPg-row.AvailablePg, 0)
+		missingEssay := maxInt32(row.TargetEssay-row.AvailableEssay, 0)
+		complete := missingPg == 0 && missingEssay == 0
+		out.Rows = append(out.Rows, CbtQuestionCompletenessRow{
+			Level:             row.Level,
+			ClassID:           row.ClassID,
+			ClassCode:         row.ClassCode,
+			ClassName:         row.ClassName,
+			SubjectID:         row.SubjectID,
+			SubjectName:       row.SubjectName,
+			SubjectCode:       row.SubjectCode,
+			TeacherEmployeeID: row.TeacherEmployeeID,
+			TeacherName:       row.TeacherName,
+			TeacherUsername:   row.TeacherUsername,
+			TargetPg:          row.TargetPg,
+			AvailablePg:       row.AvailablePg,
+			MissingPg:         missingPg,
+			TargetEssay:       row.TargetEssay,
+			AvailableEssay:    row.AvailableEssay,
+			MissingEssay:      missingEssay,
+			Complete:          complete,
+		})
+		out.Summary.TotalRows++
+		if complete {
+			out.Summary.CompleteRows++
+		} else {
+			out.Summary.IncompleteRows++
+		}
+		out.Summary.TargetPg += row.TargetPg
+		out.Summary.AvailablePg += row.AvailablePg
+		out.Summary.MissingPg += missingPg
+		out.Summary.TargetEssay += row.TargetEssay
+		out.Summary.AvailableEssay += row.AvailableEssay
+		out.Summary.MissingEssay += missingEssay
+	}
+	return out, nil
+}
+
+func maxInt32(v, floor int32) int32 {
+	if v < floor {
+		return floor
+	}
+	return v
 }
 
 func (s *CbtEvent) GetResults(ctx context.Context, id pgtype.UUID) ([]db.GetEventResultsRow, error) {

@@ -231,6 +231,95 @@ LEFT JOIN LATERAL (
 ) sessions ON TRUE
 ORDER BY subjects.subject_name ASC, subjects.subject_code ASC;
 
+-- name: ListCbtEventQuestionCompletenessRows :many
+WITH event_scope AS (
+  SELECT id, academic_year_id, target_levels
+  FROM cbt_exam_events
+  WHERE id = $1
+), target_assignments AS (
+  SELECT
+    c.level,
+    c.id AS class_id,
+    c.code AS class_code,
+    c.name AS class_name,
+    a.subject_id,
+    s.name AS subject_name,
+    s.code AS subject_code,
+    a.teacher_employee_id,
+    e.nama AS teacher_name,
+    COALESCE(u.username, '')::text AS teacher_username,
+    CASE c.level
+      WHEN 'VII' THEN 7
+      WHEN 'VIII' THEN 8
+      WHEN 'IX' THEN 9
+      ELSE NULL
+    END::smallint AS numeric_grade_level
+  FROM event_scope ev
+  JOIN school_classes c ON c.academic_year_id = ev.academic_year_id
+    AND c.is_active = TRUE
+    AND (
+      COALESCE(array_length(ev.target_levels, 1), 0) = 0
+      OR c.level = ANY(ev.target_levels)
+    )
+  JOIN class_subject_assignments a ON a.class_id = c.id
+  JOIN subjects s ON s.id = a.subject_id AND s.is_active = TRUE
+  JOIN employees e ON e.id = a.teacher_employee_id
+  LEFT JOIN LATERAL (
+    SELECT username
+    FROM users ux
+    WHERE ux.employee_id = e.id AND ux.deleted_at IS NULL
+    ORDER BY ux.created_at DESC
+    LIMIT 1
+  ) u ON TRUE
+)
+SELECT
+  ta.level,
+  ta.class_id,
+  ta.class_code,
+  ta.class_name,
+  ta.subject_id,
+  ta.subject_name,
+  ta.subject_code,
+  ta.teacher_employee_id,
+  ta.teacher_name,
+  ta.teacher_username,
+  20::int AS target_pg,
+  COALESCE(COUNT(q.id) FILTER (WHERE q.question_type = 'multiple_choice'), 0)::int AS available_pg,
+  5::int AS target_essay,
+  COALESCE(COUNT(q.id) FILTER (WHERE q.question_type = 'essay'), 0)::int AS available_essay
+FROM target_assignments ta
+LEFT JOIN cbt_questions q ON q.subject_id = ta.subject_id
+  AND q.author_username = ta.teacher_username
+  AND (
+    q.event_id = $1
+    OR (q.event_id IS NULL AND q.status = 'published')
+  )
+  AND (ta.numeric_grade_level IS NULL OR q.grade_level = ta.numeric_grade_level)
+  AND q.status <> 'archived'
+  AND q.workflow_status <> 'rejected'
+GROUP BY
+  ta.level,
+  ta.class_id,
+  ta.class_code,
+  ta.class_name,
+  ta.subject_id,
+  ta.subject_name,
+  ta.subject_code,
+  ta.teacher_employee_id,
+  ta.teacher_name,
+  ta.teacher_username
+ORDER BY ta.level ASC, ta.class_name ASC, ta.subject_name ASC, ta.teacher_name ASC;
+
+-- name: ListCbtEventQuestionCompletenessExcludedLevels :many
+SELECT DISTINCT c.level
+FROM cbt_exam_events e
+JOIN school_classes c ON c.academic_year_id = e.academic_year_id
+WHERE e.id = $1
+  AND c.is_active = TRUE
+  AND COALESCE(array_length(e.target_levels, 1), 0) > 0
+  AND NOT (c.level = ANY(e.target_levels))
+ORDER BY c.level ASC;
+
 -- name: ListCbtEventSessionsReadiness :many
 SELECT
   ses.id,

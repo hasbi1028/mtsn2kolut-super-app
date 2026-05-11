@@ -27,6 +27,7 @@ type cbtEventService interface {
 	Overview(ctx context.Context, id pgtype.UUID) (service.CbtEventOverview, error)
 	ListPackages(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventPackagesRow, error)
 	ListSessions(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventSessionsReadinessRow, error)
+	QuestionCompleteness(ctx context.Context, eventID pgtype.UUID) (service.CbtQuestionCompleteness, error)
 	GetResults(ctx context.Context, id pgtype.UUID) ([]db.GetEventResultsRow, error)
 	GetExamCards(ctx context.Context, id pgtype.UUID) ([]db.GetEventExamCardsRow, error)
 	Create(ctx context.Context, in service.CreateCbtEventInput) (db.CbtExamEvent, error)
@@ -153,6 +154,27 @@ func (h *CbtEvent) ListSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := h.svc.ListSessions(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
+}
+
+func (h *CbtEvent) QuestionCompleteness(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	if !h.requireEventReadAccess(w, r, id) {
+		return
+	}
+	rows, err := h.svc.QuestionCompleteness(r.Context(), id)
 	if err != nil {
 		api.Internal(w, err)
 		return
