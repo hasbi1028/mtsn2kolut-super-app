@@ -24,6 +24,8 @@ type rombelService interface {
 	ListStudentsWithParents(ctx context.Context, classID pgtype.UUID) ([]db.ListStudentsByClassWithParentsRow, error)
 	ListSubjectAssignments(ctx context.Context, classID pgtype.UUID) ([]db.ListRombelSubjectAssignmentsRow, error)
 	GetSubjectAssignment(ctx context.Context, arg db.GetRombelSubjectAssignmentParams) (db.GetRombelSubjectAssignmentRow, error)
+	GetSubjectAssignmentMatrix(ctx context.Context) (service.SubjectAssignmentMatrix, error)
+	UpdateSubjectAssignmentMatrixCell(ctx context.Context, in service.SubjectAssignmentMatrixCellInput) (db.GetSubjectAssignmentMatrixCellRow, error)
 	CreateSubjectAssignment(ctx context.Context, arg db.CreateRombelSubjectAssignmentParams) (db.CreateRombelSubjectAssignmentRow, error)
 	UpdateSubjectAssignment(ctx context.Context, arg db.UpdateRombelSubjectAssignmentParams) (db.UpdateRombelSubjectAssignmentRow, error)
 	DeleteSubjectAssignment(ctx context.Context, arg db.DeleteRombelSubjectAssignmentParams) error
@@ -236,6 +238,53 @@ func (h *Rombel) GetSubjectAssignment(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		writeClientError(w, err, "Penugasan guru mapel tidak ditemukan")
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *Rombel) GetSubjectAssignmentMatrix(w http.ResponseWriter, r *http.Request) {
+	if !rombelReadAllowed(w, r) {
+		return
+	}
+	matrix, err := h.svc.GetSubjectAssignmentMatrix(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, matrix)
+}
+
+func (h *Rombel) UpdateSubjectAssignmentMatrixCell(w http.ResponseWriter, r *http.Request) {
+	if !rombelManageAllowed(w, r) {
+		return
+	}
+	var body subjectAssignmentMatrixCellRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	classID, err := parseUUID(body.ClassID)
+	if err != nil {
+		api.BadRequest(w, "class_id invalid")
+		return
+	}
+	subjectID, err := parseUUID(body.SubjectID)
+	if err != nil {
+		api.BadRequest(w, "subject_id invalid")
+		return
+	}
+	teacherID, ok := parseOptionalUUIDParam(w, body.TeacherEmployeeID, "teacher_employee_id")
+	if !ok {
+		return
+	}
+	row, err := h.svc.UpdateSubjectAssignmentMatrixCell(r.Context(), service.SubjectAssignmentMatrixCellInput{
+		ClassID:           classID,
+		SubjectID:         subjectID,
+		TeacherEmployeeID: teacherID,
+	})
+	if err != nil {
+		writeClientError(w, err, "Data guru mapel tidak valid")
 		return
 	}
 	api.OK(w, row)
@@ -457,6 +506,12 @@ type homeroomAssignmentRequest struct {
 }
 
 type subjectAssignmentRequest struct {
+	SubjectID         string `json:"subject_id"`
+	TeacherEmployeeID string `json:"teacher_employee_id"`
+}
+
+type subjectAssignmentMatrixCellRequest struct {
+	ClassID           string `json:"class_id"`
 	SubjectID         string `json:"subject_id"`
 	TeacherEmployeeID string `json:"teacher_employee_id"`
 }

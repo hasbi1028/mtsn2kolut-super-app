@@ -2015,12 +2015,18 @@ type StudentViolation struct {
 }
 
 type Subject struct {
-	ID        pgtype.UUID        `json:"id"`
-	Code      string             `json:"code"`
-	Name      string             `json:"name"`
-	IsActive  bool               `json:"is_active"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID                  pgtype.UUID        `json:"id"`
+	Code                string             `json:"code"`
+	Name                string             `json:"name"`
+	IsActive            bool               `json:"is_active"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	Category            string             `json:"category"`
+	IsAssessmentSubject bool               `json:"is_assessment_subject"`
+	IsReportSubject     bool               `json:"is_report_subject"`
+	IsScheduleActivity  bool               `json:"is_schedule_activity"`
+	DefaultWeeklyHours  int32              `json:"default_weekly_hours"`
+	DisplayOrder        int32              `json:"display_order"`
 }
 
 type TimetableSlot struct {

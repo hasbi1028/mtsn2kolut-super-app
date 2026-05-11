@@ -11,6 +11,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countSubjectCodeConflicts = `-- name: CountSubjectCodeConflicts :one
+SELECT COUNT(*)::int
+FROM subjects
+WHERE id <> $1
+  AND LOWER(code) = LOWER($2)
+`
+
+type CountSubjectCodeConflictsParams struct {
+	ID   pgtype.UUID `json:"id"`
+	Code string      `json:"code"`
+}
+
+func (q *Queries) CountSubjectCodeConflicts(ctx context.Context, arg CountSubjectCodeConflictsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countSubjectCodeConflicts, arg.ID, arg.Code)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createAcademicYear = `-- name: CreateAcademicYear :one
 INSERT INTO academic_years (id, name, start_date, end_date, is_active)
 VALUES (gen_random_uuid(), $1, $2, $3, $4)
@@ -107,19 +126,57 @@ func (q *Queries) CreateSchoolClass(ctx context.Context, arg CreateSchoolClassPa
 }
 
 const createSubject = `-- name: CreateSubject :one
-INSERT INTO subjects (id, code, name, is_active)
-VALUES (gen_random_uuid(), $1, $2, $3)
-RETURNING id, code, name, is_active, created_at, updated_at
+INSERT INTO subjects (
+    id,
+    code,
+    name,
+    category,
+    is_assessment_subject,
+    is_report_subject,
+    is_schedule_activity,
+    default_weekly_hours,
+    display_order,
+    is_active
+)
+VALUES (
+    gen_random_uuid(),
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    $6,
+    $7,
+    $8,
+    $9
+)
+RETURNING id, code, name, is_active, created_at, updated_at, category, is_assessment_subject, is_report_subject, is_schedule_activity, default_weekly_hours, display_order
 `
 
 type CreateSubjectParams struct {
-	Code     string `json:"code"`
-	Name     string `json:"name"`
-	IsActive bool   `json:"is_active"`
+	Code                string `json:"code"`
+	Name                string `json:"name"`
+	Category            string `json:"category"`
+	IsAssessmentSubject bool   `json:"is_assessment_subject"`
+	IsReportSubject     bool   `json:"is_report_subject"`
+	IsScheduleActivity  bool   `json:"is_schedule_activity"`
+	DefaultWeeklyHours  int32  `json:"default_weekly_hours"`
+	DisplayOrder        int32  `json:"display_order"`
+	IsActive            bool   `json:"is_active"`
 }
 
 func (q *Queries) CreateSubject(ctx context.Context, arg CreateSubjectParams) (Subject, error) {
-	row := q.db.QueryRow(ctx, createSubject, arg.Code, arg.Name, arg.IsActive)
+	row := q.db.QueryRow(ctx, createSubject,
+		arg.Code,
+		arg.Name,
+		arg.Category,
+		arg.IsAssessmentSubject,
+		arg.IsReportSubject,
+		arg.IsScheduleActivity,
+		arg.DefaultWeeklyHours,
+		arg.DisplayOrder,
+		arg.IsActive,
+	)
 	var i Subject
 	err := row.Scan(
 		&i.ID,
@@ -128,6 +185,12 @@ func (q *Queries) CreateSubject(ctx context.Context, arg CreateSubjectParams) (S
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Category,
+		&i.IsAssessmentSubject,
+		&i.IsReportSubject,
+		&i.IsScheduleActivity,
+		&i.DefaultWeeklyHours,
+		&i.DisplayOrder,
 	)
 	return i, err
 }
@@ -334,6 +397,29 @@ func (q *Queries) GetAcademicStats(ctx context.Context) (GetAcademicStatsRow, er
 	return i, err
 }
 
+const getActiveAcademicYear = `-- name: GetActiveAcademicYear :one
+SELECT id, name, start_date, end_date, is_active, created_at, updated_at
+FROM academic_years
+WHERE is_active = TRUE
+ORDER BY start_date DESC, name DESC
+LIMIT 1
+`
+
+func (q *Queries) GetActiveAcademicYear(ctx context.Context) (AcademicYear, error) {
+	row := q.db.QueryRow(ctx, getActiveAcademicYear)
+	var i AcademicYear
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.StartDate,
+		&i.EndDate,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getClassSubjectAssignment = `-- name: GetClassSubjectAssignment :one
 SELECT a.id, a.class_id, c.name AS class_name, c.code AS class_code,
        a.subject_id, s.name AS subject_name, s.code AS subject_code,
@@ -375,6 +461,136 @@ func (q *Queries) GetClassSubjectAssignment(ctx context.Context, id pgtype.UUID)
 		&i.TeacherName,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getSubject = `-- name: GetSubject :one
+SELECT
+    id,
+    code,
+    name,
+    category,
+    is_assessment_subject,
+    is_report_subject,
+    is_schedule_activity,
+    default_weekly_hours,
+    display_order,
+    is_active,
+    created_at,
+    updated_at
+FROM subjects
+WHERE id = $1
+`
+
+type GetSubjectRow struct {
+	ID                  pgtype.UUID        `json:"id"`
+	Code                string             `json:"code"`
+	Name                string             `json:"name"`
+	Category            string             `json:"category"`
+	IsAssessmentSubject bool               `json:"is_assessment_subject"`
+	IsReportSubject     bool               `json:"is_report_subject"`
+	IsScheduleActivity  bool               `json:"is_schedule_activity"`
+	DefaultWeeklyHours  int32              `json:"default_weekly_hours"`
+	DisplayOrder        int32              `json:"display_order"`
+	IsActive            bool               `json:"is_active"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetSubject(ctx context.Context, id pgtype.UUID) (GetSubjectRow, error) {
+	row := q.db.QueryRow(ctx, getSubject, id)
+	var i GetSubjectRow
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.Category,
+		&i.IsAssessmentSubject,
+		&i.IsReportSubject,
+		&i.IsScheduleActivity,
+		&i.DefaultWeeklyHours,
+		&i.DisplayOrder,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getSubjectAssignmentByClassSubject = `-- name: GetSubjectAssignmentByClassSubject :one
+SELECT id, class_id, subject_id, teacher_employee_id, created_at, updated_at
+FROM class_subject_assignments
+WHERE class_id = $1
+  AND subject_id = $2
+`
+
+type GetSubjectAssignmentByClassSubjectParams struct {
+	ClassID   pgtype.UUID `json:"class_id"`
+	SubjectID pgtype.UUID `json:"subject_id"`
+}
+
+func (q *Queries) GetSubjectAssignmentByClassSubject(ctx context.Context, arg GetSubjectAssignmentByClassSubjectParams) (ClassSubjectAssignment, error) {
+	row := q.db.QueryRow(ctx, getSubjectAssignmentByClassSubject, arg.ClassID, arg.SubjectID)
+	var i ClassSubjectAssignment
+	err := row.Scan(
+		&i.ID,
+		&i.ClassID,
+		&i.SubjectID,
+		&i.TeacherEmployeeID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getSubjectAssignmentMatrixCell = `-- name: GetSubjectAssignmentMatrixCell :one
+SELECT
+    c.id AS class_id,
+    s.id AS subject_id,
+    csa.id AS assignment_id,
+    csa.teacher_employee_id,
+    COALESCE(e.nama, '') AS teacher_name,
+    CASE
+        WHEN csa.id IS NULL THEN 'missing_assignment'
+        WHEN e.id IS NULL OR e.is_active = FALSE THEN 'missing_teacher'
+        ELSE 'complete'
+    END::text AS status
+FROM school_classes c
+CROSS JOIN subjects s
+LEFT JOIN class_subject_assignments csa ON csa.class_id = c.id AND csa.subject_id = s.id
+LEFT JOIN employees e ON e.id = csa.teacher_employee_id
+JOIN academic_years ay ON ay.id = c.academic_year_id AND ay.is_active = TRUE
+WHERE c.id = $1
+  AND c.is_active = TRUE
+  AND s.id = $2
+  AND s.is_active = TRUE
+`
+
+type GetSubjectAssignmentMatrixCellParams struct {
+	ClassID   pgtype.UUID `json:"class_id"`
+	SubjectID pgtype.UUID `json:"subject_id"`
+}
+
+type GetSubjectAssignmentMatrixCellRow struct {
+	ClassID           pgtype.UUID `json:"class_id"`
+	SubjectID         pgtype.UUID `json:"subject_id"`
+	AssignmentID      pgtype.UUID `json:"assignment_id"`
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+	TeacherName       string      `json:"teacher_name"`
+	Status            string      `json:"status"`
+}
+
+func (q *Queries) GetSubjectAssignmentMatrixCell(ctx context.Context, arg GetSubjectAssignmentMatrixCellParams) (GetSubjectAssignmentMatrixCellRow, error) {
+	row := q.db.QueryRow(ctx, getSubjectAssignmentMatrixCell, arg.ClassID, arg.SubjectID)
+	var i GetSubjectAssignmentMatrixCellRow
+	err := row.Scan(
+		&i.ClassID,
+		&i.SubjectID,
+		&i.AssignmentID,
+		&i.TeacherEmployeeID,
+		&i.TeacherName,
+		&i.Status,
 	)
 	return i, err
 }
@@ -521,25 +737,257 @@ func (q *Queries) ListSchoolClasses(ctx context.Context) ([]ListSchoolClassesRow
 	return items, nil
 }
 
-const listSubjects = `-- name: ListSubjects :many
-SELECT id, code, name, is_active, created_at, updated_at
-FROM subjects
-ORDER BY name ASC
+const listSubjectAssignmentMatrixCells = `-- name: ListSubjectAssignmentMatrixCells :many
+SELECT
+    c.id AS class_id,
+    s.id AS subject_id,
+    csa.id AS assignment_id,
+    csa.teacher_employee_id,
+    COALESCE(e.nama, '') AS teacher_name,
+    CASE
+        WHEN csa.id IS NULL THEN 'missing_assignment'
+        WHEN e.id IS NULL OR e.is_active = FALSE THEN 'missing_teacher'
+        ELSE 'complete'
+    END::text AS status
+FROM school_classes c
+CROSS JOIN subjects s
+LEFT JOIN class_subject_assignments csa ON csa.class_id = c.id AND csa.subject_id = s.id
+LEFT JOIN employees e ON e.id = csa.teacher_employee_id
+WHERE c.academic_year_id = $1
+  AND c.is_active = TRUE
+  AND s.is_active = TRUE
+ORDER BY s.display_order ASC, s.name ASC, c.level ASC, c.name ASC
 `
 
-func (q *Queries) ListSubjects(ctx context.Context) ([]Subject, error) {
+type ListSubjectAssignmentMatrixCellsRow struct {
+	ClassID           pgtype.UUID `json:"class_id"`
+	SubjectID         pgtype.UUID `json:"subject_id"`
+	AssignmentID      pgtype.UUID `json:"assignment_id"`
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+	TeacherName       string      `json:"teacher_name"`
+	Status            string      `json:"status"`
+}
+
+func (q *Queries) ListSubjectAssignmentMatrixCells(ctx context.Context, academicYearID pgtype.UUID) ([]ListSubjectAssignmentMatrixCellsRow, error) {
+	rows, err := q.db.Query(ctx, listSubjectAssignmentMatrixCells, academicYearID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSubjectAssignmentMatrixCellsRow{}
+	for rows.Next() {
+		var i ListSubjectAssignmentMatrixCellsRow
+		if err := rows.Scan(
+			&i.ClassID,
+			&i.SubjectID,
+			&i.AssignmentID,
+			&i.TeacherEmployeeID,
+			&i.TeacherName,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSubjectAssignmentMatrixClasses = `-- name: ListSubjectAssignmentMatrixClasses :many
+SELECT id, code, name, level
+FROM school_classes
+WHERE academic_year_id = $1
+  AND is_active = TRUE
+ORDER BY level ASC, name ASC
+`
+
+type ListSubjectAssignmentMatrixClassesRow struct {
+	ID    pgtype.UUID `json:"id"`
+	Code  string      `json:"code"`
+	Name  string      `json:"name"`
+	Level string      `json:"level"`
+}
+
+func (q *Queries) ListSubjectAssignmentMatrixClasses(ctx context.Context, academicYearID pgtype.UUID) ([]ListSubjectAssignmentMatrixClassesRow, error) {
+	rows, err := q.db.Query(ctx, listSubjectAssignmentMatrixClasses, academicYearID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSubjectAssignmentMatrixClassesRow{}
+	for rows.Next() {
+		var i ListSubjectAssignmentMatrixClassesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.Level,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSubjectAssignmentMatrixSubjects = `-- name: ListSubjectAssignmentMatrixSubjects :many
+SELECT
+    id,
+    code,
+    name,
+    category,
+    is_assessment_subject,
+    is_report_subject,
+    is_schedule_activity,
+    default_weekly_hours,
+    display_order
+FROM subjects
+WHERE is_active = TRUE
+ORDER BY display_order ASC, name ASC
+`
+
+type ListSubjectAssignmentMatrixSubjectsRow struct {
+	ID                  pgtype.UUID `json:"id"`
+	Code                string      `json:"code"`
+	Name                string      `json:"name"`
+	Category            string      `json:"category"`
+	IsAssessmentSubject bool        `json:"is_assessment_subject"`
+	IsReportSubject     bool        `json:"is_report_subject"`
+	IsScheduleActivity  bool        `json:"is_schedule_activity"`
+	DefaultWeeklyHours  int32       `json:"default_weekly_hours"`
+	DisplayOrder        int32       `json:"display_order"`
+}
+
+func (q *Queries) ListSubjectAssignmentMatrixSubjects(ctx context.Context) ([]ListSubjectAssignmentMatrixSubjectsRow, error) {
+	rows, err := q.db.Query(ctx, listSubjectAssignmentMatrixSubjects)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSubjectAssignmentMatrixSubjectsRow{}
+	for rows.Next() {
+		var i ListSubjectAssignmentMatrixSubjectsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.Category,
+			&i.IsAssessmentSubject,
+			&i.IsReportSubject,
+			&i.IsScheduleActivity,
+			&i.DefaultWeeklyHours,
+			&i.DisplayOrder,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSubjectAssignmentMatrixTeachers = `-- name: ListSubjectAssignmentMatrixTeachers :many
+SELECT
+    id,
+    COALESCE(nip, '')::text AS nip,
+    nama,
+    unit_kerja
+FROM employees
+WHERE is_active = TRUE
+ORDER BY nama ASC
+`
+
+type ListSubjectAssignmentMatrixTeachersRow struct {
+	ID        pgtype.UUID `json:"id"`
+	Nip       string      `json:"nip"`
+	Nama      string      `json:"nama"`
+	UnitKerja string      `json:"unit_kerja"`
+}
+
+func (q *Queries) ListSubjectAssignmentMatrixTeachers(ctx context.Context) ([]ListSubjectAssignmentMatrixTeachersRow, error) {
+	rows, err := q.db.Query(ctx, listSubjectAssignmentMatrixTeachers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSubjectAssignmentMatrixTeachersRow{}
+	for rows.Next() {
+		var i ListSubjectAssignmentMatrixTeachersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nip,
+			&i.Nama,
+			&i.UnitKerja,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSubjects = `-- name: ListSubjects :many
+SELECT
+    id,
+    code,
+    name,
+    category,
+    is_assessment_subject,
+    is_report_subject,
+    is_schedule_activity,
+    default_weekly_hours,
+    display_order,
+    is_active,
+    created_at,
+    updated_at
+FROM subjects
+ORDER BY display_order ASC, name ASC
+`
+
+type ListSubjectsRow struct {
+	ID                  pgtype.UUID        `json:"id"`
+	Code                string             `json:"code"`
+	Name                string             `json:"name"`
+	Category            string             `json:"category"`
+	IsAssessmentSubject bool               `json:"is_assessment_subject"`
+	IsReportSubject     bool               `json:"is_report_subject"`
+	IsScheduleActivity  bool               `json:"is_schedule_activity"`
+	DefaultWeeklyHours  int32              `json:"default_weekly_hours"`
+	DisplayOrder        int32              `json:"display_order"`
+	IsActive            bool               `json:"is_active"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListSubjects(ctx context.Context) ([]ListSubjectsRow, error) {
 	rows, err := q.db.Query(ctx, listSubjects)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Subject{}
+	items := []ListSubjectsRow{}
 	for rows.Next() {
-		var i Subject
+		var i ListSubjectsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Code,
 			&i.Name,
+			&i.Category,
+			&i.IsAssessmentSubject,
+			&i.IsReportSubject,
+			&i.IsScheduleActivity,
+			&i.DefaultWeeklyHours,
+			&i.DisplayOrder,
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -552,4 +1000,119 @@ func (q *Queries) ListSubjects(ctx context.Context) ([]Subject, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateSubject = `-- name: UpdateSubject :one
+UPDATE subjects
+SET code = $1,
+    name = $2,
+    category = $3,
+    is_assessment_subject = $4,
+    is_report_subject = $5,
+    is_schedule_activity = $6,
+    default_weekly_hours = $7,
+    display_order = $8,
+    is_active = $9,
+    updated_at = NOW()
+WHERE id = $10
+RETURNING id, code, name, is_active, created_at, updated_at, category, is_assessment_subject, is_report_subject, is_schedule_activity, default_weekly_hours, display_order
+`
+
+type UpdateSubjectParams struct {
+	Code                string      `json:"code"`
+	Name                string      `json:"name"`
+	Category            string      `json:"category"`
+	IsAssessmentSubject bool        `json:"is_assessment_subject"`
+	IsReportSubject     bool        `json:"is_report_subject"`
+	IsScheduleActivity  bool        `json:"is_schedule_activity"`
+	DefaultWeeklyHours  int32       `json:"default_weekly_hours"`
+	DisplayOrder        int32       `json:"display_order"`
+	IsActive            bool        `json:"is_active"`
+	ID                  pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateSubject(ctx context.Context, arg UpdateSubjectParams) (Subject, error) {
+	row := q.db.QueryRow(ctx, updateSubject,
+		arg.Code,
+		arg.Name,
+		arg.Category,
+		arg.IsAssessmentSubject,
+		arg.IsReportSubject,
+		arg.IsScheduleActivity,
+		arg.DefaultWeeklyHours,
+		arg.DisplayOrder,
+		arg.IsActive,
+		arg.ID,
+	)
+	var i Subject
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Category,
+		&i.IsAssessmentSubject,
+		&i.IsReportSubject,
+		&i.IsScheduleActivity,
+		&i.DefaultWeeklyHours,
+		&i.DisplayOrder,
+	)
+	return i, err
+}
+
+const upsertSubjectAssignmentMatrixCell = `-- name: UpsertSubjectAssignmentMatrixCell :one
+WITH validated AS (
+    SELECT
+        $1::uuid AS class_id,
+        $2::uuid AS subject_id,
+        $3::uuid AS teacher_employee_id
+    WHERE EXISTS (
+        SELECT 1
+        FROM school_classes c
+        JOIN academic_years ay ON ay.id = c.academic_year_id AND ay.is_active = TRUE
+        WHERE c.id = $1::uuid
+          AND c.is_active = TRUE
+    )
+      AND EXISTS (
+        SELECT 1
+        FROM subjects s
+        WHERE s.id = $2::uuid
+          AND s.is_active = TRUE
+      )
+      AND EXISTS (
+        SELECT 1
+        FROM employees e
+        WHERE e.id = $3::uuid
+          AND e.is_active = TRUE
+      )
+)
+INSERT INTO class_subject_assignments (id, class_id, subject_id, teacher_employee_id)
+SELECT gen_random_uuid(), class_id, subject_id, teacher_employee_id
+FROM validated
+ON CONFLICT (class_id, subject_id)
+DO UPDATE SET teacher_employee_id = EXCLUDED.teacher_employee_id,
+              updated_at = NOW()
+RETURNING id, class_id, subject_id, teacher_employee_id, created_at, updated_at
+`
+
+type UpsertSubjectAssignmentMatrixCellParams struct {
+	ClassID           pgtype.UUID `json:"class_id"`
+	SubjectID         pgtype.UUID `json:"subject_id"`
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+}
+
+func (q *Queries) UpsertSubjectAssignmentMatrixCell(ctx context.Context, arg UpsertSubjectAssignmentMatrixCellParams) (ClassSubjectAssignment, error) {
+	row := q.db.QueryRow(ctx, upsertSubjectAssignmentMatrixCell, arg.ClassID, arg.SubjectID, arg.TeacherEmployeeID)
+	var i ClassSubjectAssignment
+	err := row.Scan(
+		&i.ID,
+		&i.ClassID,
+		&i.SubjectID,
+		&i.TeacherEmployeeID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

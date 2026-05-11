@@ -11,10 +11,13 @@ import (
 
 	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
+	"mtsn2kolut-super-app/backend/internal/service"
 )
 
 type fakeRombelService struct {
 	updateIdentityArg    db.UpdateRombelIdentityParams
+	matrixUpdateArg      service.SubjectAssignmentMatrixCellInput
+	matrixCalled         bool
 	listSubjectClassID   pgtype.UUID
 	getSubjectArg        db.GetRombelSubjectAssignmentParams
 	createSubjectArg     db.CreateRombelSubjectAssignmentParams
@@ -76,6 +79,34 @@ func (f *fakeRombelService) GetSubjectAssignment(_ context.Context, arg db.GetRo
 		return db.GetRombelSubjectAssignmentRow{}, f.err
 	}
 	return db.GetRombelSubjectAssignmentRow{ID: arg.ID, ClassID: arg.ClassID, SubjectName: "Matematika"}, nil
+}
+
+func (f *fakeRombelService) GetSubjectAssignmentMatrix(context.Context) (service.SubjectAssignmentMatrix, error) {
+	f.matrixCalled = true
+	if f.err != nil {
+		return service.SubjectAssignmentMatrix{}, f.err
+	}
+	return service.SubjectAssignmentMatrix{
+		AcademicYearID:   handlerTestUUID(208),
+		AcademicYearName: "2025/2026",
+		Classes:          []db.ListSubjectAssignmentMatrixClassesRow{{ID: handlerTestUUID(209), Code: "VII.A", Name: "VII A", Level: "VII"}},
+		Subjects:         []db.ListSubjectAssignmentMatrixSubjectsRow{{ID: handlerTestUUID(210), Code: "MTK", Name: "Matematika"}},
+		Teachers:         []db.ListSubjectAssignmentMatrixTeachersRow{{ID: handlerTestUUID(211), Nama: "Guru Mapel"}},
+		Cells:            []db.ListSubjectAssignmentMatrixCellsRow{},
+	}, nil
+}
+
+func (f *fakeRombelService) UpdateSubjectAssignmentMatrixCell(_ context.Context, in service.SubjectAssignmentMatrixCellInput) (db.GetSubjectAssignmentMatrixCellRow, error) {
+	f.matrixUpdateArg = in
+	if f.err != nil {
+		return db.GetSubjectAssignmentMatrixCellRow{}, f.err
+	}
+	return db.GetSubjectAssignmentMatrixCellRow{
+		ClassID:           in.ClassID,
+		SubjectID:         in.SubjectID,
+		TeacherEmployeeID: in.TeacherEmployeeID,
+		Status:            "complete",
+	}, nil
 }
 
 func (f *fakeRombelService) CreateSubjectAssignment(_ context.Context, arg db.CreateRombelSubjectAssignmentParams) (db.CreateRombelSubjectAssignmentRow, error) {
@@ -271,6 +302,27 @@ func TestRombelSubjectAssignmentsSuccess(t *testing.T) {
 	h.DeleteSubjectAssignment(rec, req)
 	if rec.Code != http.StatusNoContent || fake.deleteSubjectArg.ClassID != classID || fake.deleteSubjectArg.ID != assignmentID {
 		t.Fatalf("DeleteSubjectAssignment() status/arg = %d/%+v, want 204 scoped delete arg", rec.Code, fake.deleteSubjectArg)
+	}
+}
+
+func TestRombelSubjectAssignmentMatrixSuccess(t *testing.T) {
+	classID := handlerTestUUID(214)
+	subjectID := handlerTestUUID(215)
+	teacherID := handlerTestUUID(216)
+	fake := &fakeRombelService{}
+	h := &Rombel{svc: fake}
+
+	rec := httptest.NewRecorder()
+	h.GetSubjectAssignmentMatrix(rec, adminRequest(http.MethodGet, "/api/academic/subject-assignment-matrix", ""))
+	if rec.Code != http.StatusOK || !fake.matrixCalled {
+		t.Fatalf("GetSubjectAssignmentMatrix() status/called = %d/%v, want 200/true; body=%s", rec.Code, fake.matrixCalled, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	body := `{"class_id":"` + classID.String() + `","subject_id":"` + subjectID.String() + `","teacher_employee_id":"` + teacherID.String() + `"}`
+	h.UpdateSubjectAssignmentMatrixCell(rec, adminRequest(http.MethodPut, "/api/academic/subject-assignment-matrix", body))
+	if rec.Code != http.StatusOK || fake.matrixUpdateArg.ClassID != classID || fake.matrixUpdateArg.SubjectID != subjectID || fake.matrixUpdateArg.TeacherEmployeeID != teacherID {
+		t.Fatalf("UpdateSubjectAssignmentMatrixCell() status/arg = %d/%+v, want 200 mapped ids", rec.Code, fake.matrixUpdateArg)
 	}
 }
 

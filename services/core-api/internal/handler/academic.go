@@ -21,7 +21,7 @@ type Academic struct {
 type academicService interface {
 	ListYears(ctx context.Context) ([]db.AcademicYear, error)
 	ListClasses(ctx context.Context) ([]db.ListSchoolClassesRow, error)
-	ListSubjects(ctx context.Context) ([]db.Subject, error)
+	ListSubjects(ctx context.Context) ([]db.ListSubjectsRow, error)
 	ListAssignments(ctx context.Context) ([]db.ListClassSubjectAssignmentsRow, error)
 	ListTimetableSlots(ctx context.Context) ([]db.ListTimetableSlotsRow, error)
 	GetStats(ctx context.Context) (db.GetAcademicStatsRow, error)
@@ -29,6 +29,7 @@ type academicService interface {
 	CreateYear(ctx context.Context, p db.CreateAcademicYearParams) (db.AcademicYear, error)
 	CreateClass(ctx context.Context, p db.CreateSchoolClassParams) (db.SchoolClass, error)
 	CreateSubject(ctx context.Context, p db.CreateSubjectParams) (db.Subject, error)
+	UpdateSubject(ctx context.Context, p db.UpdateSubjectParams) (db.Subject, error)
 	CreateAssignment(ctx context.Context, p db.CreateClassSubjectAssignmentParams) (db.ClassSubjectAssignment, error)
 	CreateTimetableSlot(ctx context.Context, p db.CreateTimetableSlotParams) (db.TimetableSlot, error)
 	UpdateTimetableSlot(ctx context.Context, p db.UpdateTimetableSlotParams) (db.TimetableSlot, error)
@@ -174,22 +175,14 @@ func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		api.Created(w, row)
 	case "subjects":
-		var body struct {
-			Code     string `json:"code"`
-			Name     string `json:"name"`
-			IsActive bool   `json:"is_active"`
-		}
+		var body subjectRequest
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			api.BadRequest(w, "invalid json")
 			return
 		}
-		row, err := h.svc.CreateSubject(r.Context(), db.CreateSubjectParams{
-			Code:     body.Code,
-			Name:     body.Name,
-			IsActive: body.IsActive,
-		})
+		row, err := h.svc.CreateSubject(r.Context(), createSubjectParams(body))
 		if err != nil {
-			api.Internal(w, err)
+			writeDomainOrInternal(w, err, "Data mapel tidak valid")
 			return
 		}
 		api.Created(w, row)
@@ -288,13 +281,27 @@ func (h *Academic) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	entity := chi.URLParam(r, "entity")
-	if entity != "timetables" {
-		api.NotFound(w)
-		return
-	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
+		return
+	}
+	if entity == "subjects" {
+		var body subjectRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			api.BadRequest(w, "invalid json")
+			return
+		}
+		row, err := h.svc.UpdateSubject(r.Context(), updateSubjectParams(id, body))
+		if err != nil {
+			writeClientError(w, err, "Data mapel tidak valid")
+			return
+		}
+		api.OK(w, row)
+		return
+	}
+	if entity != "timetables" {
+		api.NotFound(w)
 		return
 	}
 	var body struct {
@@ -382,4 +389,52 @@ func (h *Academic) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.NoContent(w)
+}
+
+type subjectRequest struct {
+	Code                string `json:"code"`
+	Name                string `json:"name"`
+	Category            string `json:"category"`
+	IsAssessmentSubject *bool  `json:"is_assessment_subject"`
+	IsReportSubject     *bool  `json:"is_report_subject"`
+	IsScheduleActivity  *bool  `json:"is_schedule_activity"`
+	DefaultWeeklyHours  int32  `json:"default_weekly_hours"`
+	DisplayOrder        int32  `json:"display_order"`
+	IsActive            *bool  `json:"is_active"`
+}
+
+func createSubjectParams(body subjectRequest) db.CreateSubjectParams {
+	return db.CreateSubjectParams{
+		Code:                body.Code,
+		Name:                body.Name,
+		Category:            body.Category,
+		IsAssessmentSubject: subjectBoolDefault(body.IsAssessmentSubject, true),
+		IsReportSubject:     subjectBoolDefault(body.IsReportSubject, true),
+		IsScheduleActivity:  subjectBoolDefault(body.IsScheduleActivity, false),
+		DefaultWeeklyHours:  body.DefaultWeeklyHours,
+		DisplayOrder:        body.DisplayOrder,
+		IsActive:            subjectBoolDefault(body.IsActive, true),
+	}
+}
+
+func updateSubjectParams(id pgtype.UUID, body subjectRequest) db.UpdateSubjectParams {
+	return db.UpdateSubjectParams{
+		ID:                  id,
+		Code:                body.Code,
+		Name:                body.Name,
+		Category:            body.Category,
+		IsAssessmentSubject: subjectBoolDefault(body.IsAssessmentSubject, true),
+		IsReportSubject:     subjectBoolDefault(body.IsReportSubject, true),
+		IsScheduleActivity:  subjectBoolDefault(body.IsScheduleActivity, false),
+		DefaultWeeklyHours:  body.DefaultWeeklyHours,
+		DisplayOrder:        body.DisplayOrder,
+		IsActive:            subjectBoolDefault(body.IsActive, true),
+	}
+}
+
+func subjectBoolDefault(value *bool, fallback bool) bool {
+	if value == nil {
+		return fallback
+	}
+	return *value
 }

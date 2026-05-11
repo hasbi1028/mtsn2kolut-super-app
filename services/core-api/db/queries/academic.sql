@@ -27,13 +27,85 @@ RETURNING *;
 DELETE FROM school_classes WHERE id = $1;
 
 -- name: ListSubjects :many
-SELECT id, code, name, is_active, created_at, updated_at
+SELECT
+    id,
+    code,
+    name,
+    category,
+    is_assessment_subject,
+    is_report_subject,
+    is_schedule_activity,
+    default_weekly_hours,
+    display_order,
+    is_active,
+    created_at,
+    updated_at
 FROM subjects
-ORDER BY name ASC;
+ORDER BY display_order ASC, name ASC;
 
 -- name: CreateSubject :one
-INSERT INTO subjects (id, code, name, is_active)
-VALUES (gen_random_uuid(), $1, $2, $3)
+INSERT INTO subjects (
+    id,
+    code,
+    name,
+    category,
+    is_assessment_subject,
+    is_report_subject,
+    is_schedule_activity,
+    default_weekly_hours,
+    display_order,
+    is_active
+)
+VALUES (
+    gen_random_uuid(),
+    sqlc.arg(code),
+    sqlc.arg(name),
+    sqlc.arg(category),
+    sqlc.arg(is_assessment_subject),
+    sqlc.arg(is_report_subject),
+    sqlc.arg(is_schedule_activity),
+    sqlc.arg(default_weekly_hours),
+    sqlc.arg(display_order),
+    sqlc.arg(is_active)
+)
+RETURNING *;
+
+-- name: GetSubject :one
+SELECT
+    id,
+    code,
+    name,
+    category,
+    is_assessment_subject,
+    is_report_subject,
+    is_schedule_activity,
+    default_weekly_hours,
+    display_order,
+    is_active,
+    created_at,
+    updated_at
+FROM subjects
+WHERE id = $1;
+
+-- name: CountSubjectCodeConflicts :one
+SELECT COUNT(*)::int
+FROM subjects
+WHERE id <> sqlc.arg(id)
+  AND LOWER(code) = LOWER(sqlc.arg(code));
+
+-- name: UpdateSubject :one
+UPDATE subjects
+SET code = sqlc.arg(code),
+    name = sqlc.arg(name),
+    category = sqlc.arg(category),
+    is_assessment_subject = sqlc.arg(is_assessment_subject),
+    is_report_subject = sqlc.arg(is_report_subject),
+    is_schedule_activity = sqlc.arg(is_schedule_activity),
+    default_weekly_hours = sqlc.arg(default_weekly_hours),
+    display_order = sqlc.arg(display_order),
+    is_active = sqlc.arg(is_active),
+    updated_at = NOW()
+WHERE id = sqlc.arg(id)
 RETURNING *;
 
 -- name: DeleteSubject :exec
@@ -182,3 +254,125 @@ JOIN school_classes c ON c.id = a.class_id
 JOIN subjects s ON s.id = a.subject_id
 JOIN employees e ON e.id = a.teacher_employee_id
 WHERE a.id = $1;
+
+-- name: GetActiveAcademicYear :one
+SELECT id, name, start_date, end_date, is_active, created_at, updated_at
+FROM academic_years
+WHERE is_active = TRUE
+ORDER BY start_date DESC, name DESC
+LIMIT 1;
+
+-- name: ListSubjectAssignmentMatrixClasses :many
+SELECT id, code, name, level
+FROM school_classes
+WHERE academic_year_id = $1
+  AND is_active = TRUE
+ORDER BY level ASC, name ASC;
+
+-- name: ListSubjectAssignmentMatrixSubjects :many
+SELECT
+    id,
+    code,
+    name,
+    category,
+    is_assessment_subject,
+    is_report_subject,
+    is_schedule_activity,
+    default_weekly_hours,
+    display_order
+FROM subjects
+WHERE is_active = TRUE
+ORDER BY display_order ASC, name ASC;
+
+-- name: ListSubjectAssignmentMatrixTeachers :many
+SELECT
+    id,
+    COALESCE(nip, '')::text AS nip,
+    nama,
+    unit_kerja
+FROM employees
+WHERE is_active = TRUE
+ORDER BY nama ASC;
+
+-- name: ListSubjectAssignmentMatrixCells :many
+SELECT
+    c.id AS class_id,
+    s.id AS subject_id,
+    csa.id AS assignment_id,
+    csa.teacher_employee_id,
+    COALESCE(e.nama, '') AS teacher_name,
+    CASE
+        WHEN csa.id IS NULL THEN 'missing_assignment'
+        WHEN e.id IS NULL OR e.is_active = FALSE THEN 'missing_teacher'
+        ELSE 'complete'
+    END::text AS status
+FROM school_classes c
+CROSS JOIN subjects s
+LEFT JOIN class_subject_assignments csa ON csa.class_id = c.id AND csa.subject_id = s.id
+LEFT JOIN employees e ON e.id = csa.teacher_employee_id
+WHERE c.academic_year_id = $1
+  AND c.is_active = TRUE
+  AND s.is_active = TRUE
+ORDER BY s.display_order ASC, s.name ASC, c.level ASC, c.name ASC;
+
+-- name: GetSubjectAssignmentMatrixCell :one
+SELECT
+    c.id AS class_id,
+    s.id AS subject_id,
+    csa.id AS assignment_id,
+    csa.teacher_employee_id,
+    COALESCE(e.nama, '') AS teacher_name,
+    CASE
+        WHEN csa.id IS NULL THEN 'missing_assignment'
+        WHEN e.id IS NULL OR e.is_active = FALSE THEN 'missing_teacher'
+        ELSE 'complete'
+    END::text AS status
+FROM school_classes c
+CROSS JOIN subjects s
+LEFT JOIN class_subject_assignments csa ON csa.class_id = c.id AND csa.subject_id = s.id
+LEFT JOIN employees e ON e.id = csa.teacher_employee_id
+JOIN academic_years ay ON ay.id = c.academic_year_id AND ay.is_active = TRUE
+WHERE c.id = sqlc.arg(class_id)
+  AND c.is_active = TRUE
+  AND s.id = sqlc.arg(subject_id)
+  AND s.is_active = TRUE;
+
+-- name: GetSubjectAssignmentByClassSubject :one
+SELECT id, class_id, subject_id, teacher_employee_id, created_at, updated_at
+FROM class_subject_assignments
+WHERE class_id = sqlc.arg(class_id)
+  AND subject_id = sqlc.arg(subject_id);
+
+-- name: UpsertSubjectAssignmentMatrixCell :one
+WITH validated AS (
+    SELECT
+        sqlc.arg(class_id)::uuid AS class_id,
+        sqlc.arg(subject_id)::uuid AS subject_id,
+        sqlc.arg(teacher_employee_id)::uuid AS teacher_employee_id
+    WHERE EXISTS (
+        SELECT 1
+        FROM school_classes c
+        JOIN academic_years ay ON ay.id = c.academic_year_id AND ay.is_active = TRUE
+        WHERE c.id = sqlc.arg(class_id)::uuid
+          AND c.is_active = TRUE
+    )
+      AND EXISTS (
+        SELECT 1
+        FROM subjects s
+        WHERE s.id = sqlc.arg(subject_id)::uuid
+          AND s.is_active = TRUE
+      )
+      AND EXISTS (
+        SELECT 1
+        FROM employees e
+        WHERE e.id = sqlc.arg(teacher_employee_id)::uuid
+          AND e.is_active = TRUE
+      )
+)
+INSERT INTO class_subject_assignments (id, class_id, subject_id, teacher_employee_id)
+SELECT gen_random_uuid(), class_id, subject_id, teacher_employee_id
+FROM validated
+ON CONFLICT (class_id, subject_id)
+DO UPDATE SET teacher_employee_id = EXCLUDED.teacher_employee_id,
+              updated_at = NOW()
+RETURNING *;

@@ -297,6 +297,8 @@ func main() {
 		r.Get("/api/academic", academicH.Overview)
 		r.Get("/api/academic/dashboard", academicH.GetDashboard)
 		r.Get("/api/academic/stats", academicH.GetStats)
+		r.Get("/api/academic/subject-assignment-matrix", rombelH.GetSubjectAssignmentMatrix)
+		r.With(requireAcademicManage).Put("/api/academic/subject-assignment-matrix", rombelH.UpdateSubjectAssignmentMatrixCell)
 		r.Get("/api/academic/rombel", rombelH.List)
 		r.Get("/api/academic/rombel/{id}", rombelH.Get)
 		r.With(requireAcademicManage).Put("/api/academic/rombel/{id}", rombelH.UpdateIdentity)
