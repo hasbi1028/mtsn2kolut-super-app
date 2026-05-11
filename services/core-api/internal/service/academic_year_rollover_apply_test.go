@@ -143,8 +143,8 @@ func TestAcademicApplyYearRolloverRequiresChallengeAndReusesExistingTargets(t *t
 		},
 	}
 	svc := &Academic{q: store}
-	if _, err := svc.ApplyYearRollover(context.Background(), YearRolloverApplyInput{TargetAcademicYearID: targetYearID, Confirmation: "SALAH"}); err == nil || !strings.Contains(err.Error(), "challenge") {
-		t.Fatalf("ApplyYearRollover(bad challenge) = %v, want challenge error", err)
+	if _, err := svc.ApplyYearRollover(context.Background(), YearRolloverApplyInput{TargetAcademicYearID: targetYearID, Confirmation: "SALAH"}); err == nil || !strings.Contains(err.Error(), "kalimat konfirmasi") {
+		t.Fatalf("ApplyYearRollover(bad challenge) = %v, want confirmation error", err)
 	}
 
 	result, err := svc.ApplyYearRollover(context.Background(), YearRolloverApplyInput{

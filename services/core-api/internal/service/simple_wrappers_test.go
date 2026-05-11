@@ -450,61 +450,61 @@ func TestPortalServiceStopsOverviewOnStoreErrors(t *testing.T) {
 }
 
 type fakeAcademicStore struct {
-	years             []db.AcademicYear
-	classes           []db.ListSchoolClassesRow
-	subjects          []db.ListSubjectsRow
-	assignments       []db.ListClassSubjectAssignmentsRow
-	timetableSlots    []db.ListTimetableSlotsRow
-	rolloverStudents  []db.ListYearRolloverStudentsRow
-	rolloverHomerooms []db.ListYearRolloverHomeroomAssignmentsRow
-	homeroomDetails   []db.ListYearRolloverHomeroomAssignmentDetailsRow
-	homeroomCounts    map[string]int32
-	importStudents    []db.ListAcademicImportStudentsRow
-	importTeachers    []db.ListAcademicImportTeachersRow
-	yearByID          map[string]db.AcademicYear
-	yearNameConflicts int32
-	deactivateCalled  bool
-	activateYearID    pgtype.UUID
-	activeYear        db.AcademicYear
-	activeYearErr     error
-	weeklyClasses     []db.ListWeeklyTimetableClassesRow
-	weeklyTeachers    []db.ListWeeklyTimetableTeachersRow
-	weeklySubjects    []db.ListWeeklyTimetableSubjectsRow
-	weeklyAssignments []db.ListWeeklyTimetableAssignmentsRow
-	weeklySlots       []db.ListWeeklyTimetableSlotsRow
-	weeklyConflicts   []db.ListTimetableConflictsRow
-	stats             db.GetAcademicStatsRow
-	dashboardSummary  db.GetAcademicDashboardSummaryRow
-	createYearArg     db.CreateAcademicYearParams
-	createClassArg    db.CreateSchoolClassParams
-	createClassResult db.SchoolClass
-	createHomerooms   []db.CreateHomeroomAssignmentParams
-	createSubjectArg  db.CreateSubjectParams
-	createAssignArg   db.CreateClassSubjectAssignmentParams
+	years              []db.AcademicYear
+	classes            []db.ListSchoolClassesRow
+	subjects           []db.ListSubjectsRow
+	assignments        []db.ListClassSubjectAssignmentsRow
+	timetableSlots     []db.ListTimetableSlotsRow
+	rolloverStudents   []db.ListYearRolloverStudentsRow
+	rolloverHomerooms  []db.ListYearRolloverHomeroomAssignmentsRow
+	homeroomDetails    []db.ListYearRolloverHomeroomAssignmentDetailsRow
+	homeroomCounts     map[string]int32
+	importStudents     []db.ListAcademicImportStudentsRow
+	importTeachers     []db.ListAcademicImportTeachersRow
+	yearByID           map[string]db.AcademicYear
+	yearNameConflicts  int32
+	deactivateCalled   bool
+	activateYearID     pgtype.UUID
+	activeYear         db.AcademicYear
+	activeYearErr      error
+	weeklyClasses      []db.ListWeeklyTimetableClassesRow
+	weeklyTeachers     []db.ListWeeklyTimetableTeachersRow
+	weeklySubjects     []db.ListWeeklyTimetableSubjectsRow
+	weeklyAssignments  []db.ListWeeklyTimetableAssignmentsRow
+	weeklySlots        []db.ListWeeklyTimetableSlotsRow
+	weeklyConflicts    []db.ListTimetableConflictsRow
+	stats              db.GetAcademicStatsRow
+	dashboardSummary   db.GetAcademicDashboardSummaryRow
+	createYearArg      db.CreateAcademicYearParams
+	createClassArg     db.CreateSchoolClassParams
+	createClassResult  db.SchoolClass
+	createHomerooms    []db.CreateHomeroomAssignmentParams
+	createSubjectArg   db.CreateSubjectParams
+	createAssignArg    db.CreateClassSubjectAssignmentParams
 	createAssignResult db.ClassSubjectAssignment
-	createSlotArg     db.CreateTimetableSlotParams
-	createSlotArgs    []db.CreateTimetableSlotParams
-	promoteArgs       []db.PromoteYearRolloverStudentParams
-	promoteAffected   map[string]int64
-	getSlotID         pgtype.UUID
-	getSlotErr        error
-	updateSlotArg     db.UpdateTimetableSlotParams
-	deleteYearID      pgtype.UUID
-	deleteClassID     pgtype.UUID
-	deleteSubjectID   pgtype.UUID
-	deleteAssignID    pgtype.UUID
-	deleteSlotID      pgtype.UUID
-	getAssignID       pgtype.UUID
-	getAssignRow      db.GetClassSubjectAssignmentRow
-	getAssignErr      error
-	lockKeys          []string
-	lockErr           error
-	conflictArgs      []db.CountTimetableConflictsParams
-	conflictCount     int32
-	conflictErr       error
-	roomArgs          []db.CountTimetableRoomConflictsParams
-	roomCount         int32
-	roomErr           error
+	createSlotArg      db.CreateTimetableSlotParams
+	createSlotArgs     []db.CreateTimetableSlotParams
+	promoteArgs        []db.PromoteYearRolloverStudentParams
+	promoteAffected    map[string]int64
+	getSlotID          pgtype.UUID
+	getSlotErr         error
+	updateSlotArg      db.UpdateTimetableSlotParams
+	deleteYearID       pgtype.UUID
+	deleteClassID      pgtype.UUID
+	deleteSubjectID    pgtype.UUID
+	deleteAssignID     pgtype.UUID
+	deleteSlotID       pgtype.UUID
+	getAssignID        pgtype.UUID
+	getAssignRow       db.GetClassSubjectAssignmentRow
+	getAssignErr       error
+	lockKeys           []string
+	lockErr            error
+	conflictArgs       []db.CountTimetableConflictsParams
+	conflictCount      int32
+	conflictErr        error
+	roomArgs           []db.CountTimetableRoomConflictsParams
+	roomCount          int32
+	roomErr            error
 }
 
 func (f *fakeAcademicStore) ListAcademicYears(ctx context.Context) ([]db.AcademicYear, error) {
@@ -936,8 +936,8 @@ func TestAcademicTimetableAvailabilityFailures(t *testing.T) {
 	}
 
 	svc := &Academic{q: &fakeAcademicStore{getAssignErr: errors.New("missing")}}
-	if _, err := svc.CreateTimetableSlot(context.Background(), slot); err == nil || err.Error() != "assignment tidak ditemukan" {
-		t.Fatalf("CreateTimetableSlot(assignment missing) = %v, want assignment error", err)
+	if _, err := svc.CreateTimetableSlot(context.Background(), slot); err == nil || err.Error() != "penugasan guru mapel tidak ditemukan" {
+		t.Fatalf("CreateTimetableSlot(assignment missing) = %v, want penugasan error", err)
 	}
 	svc = &Academic{q: &fakeAcademicStore{getSlotErr: errors.New("slot missing")}}
 	if _, err := svc.UpdateTimetableSlot(context.Background(), db.UpdateTimetableSlotParams{ID: slotID, AssignmentID: assignmentID}); err == nil || err.Error() != "slot missing" {
@@ -958,8 +958,8 @@ func TestAcademicTimetableAvailabilityFailures(t *testing.T) {
 	store = baseStore()
 	store.conflictCount = 1
 	svc = &Academic{q: store}
-	if _, err := svc.CreateTimetableSlot(context.Background(), slot); err == nil || err.Error() != "slot bentrok dengan jadwal kelas atau guru pada waktu yang sama" {
-		t.Fatalf("CreateTimetableSlot(class conflict) = %v, want class/guru conflict", err)
+	if _, err := svc.CreateTimetableSlot(context.Background(), slot); err == nil || err.Error() != "jam pelajaran bentrok dengan jadwal rombel atau guru pada waktu yang sama" {
+		t.Fatalf("CreateTimetableSlot(class conflict) = %v, want rombel/guru conflict", err)
 	}
 	store = baseStore()
 	store.roomErr = errors.New("room failed")
@@ -970,7 +970,7 @@ func TestAcademicTimetableAvailabilityFailures(t *testing.T) {
 	store = baseStore()
 	store.roomCount = 1
 	svc = &Academic{q: store}
-	if _, err := svc.CreateTimetableSlot(context.Background(), slot); err == nil || err.Error() != "slot bentrok dengan penggunaan ruang pada waktu yang sama" {
+	if _, err := svc.CreateTimetableSlot(context.Background(), slot); err == nil || err.Error() != "jam pelajaran bentrok dengan penggunaan ruang pada waktu yang sama" {
 		t.Fatalf("CreateTimetableSlot(room conflict) = %v, want room conflict", err)
 	}
 }

@@ -20,7 +20,7 @@ import (
 )
 
 const academicYearActivationChallenge = "AKTIFKAN"
-const academicYearRolloverApplyPrefix = "TERAPKAN ROLLOVER"
+const academicYearRolloverApplyPrefix = "TERAPKAN KENAIKAN KELAS"
 
 var academicYearNamePattern = regexp.MustCompile(`^\d{4}/\d{4}$`)
 
@@ -337,17 +337,17 @@ func (s *Academic) PreviewYearRollover(ctx context.Context, input YearRolloverPr
 	}
 
 	warnings := []string{
-		"Preview ini tidak mengubah database.",
-		"Apply wajib challenge eksplisit dan berjalan dalam transaksi; data tahun lama tidak dihapus.",
+		"Pratinjau ini belum menyimpan perubahan.",
+		"Penerapan kenaikan kelas wajib memakai kalimat konfirmasi dan berjalan aman; data tahun lama tidak dihapus.",
 	}
 	if len(classesToCreate) > 0 {
-		warnings = append(warnings, "Beberapa rombel tujuan belum ada dan akan dibuat saat apply.")
+		warnings = append(warnings, "Beberapa rombel tujuan belum ada dan akan dibuat saat penerapan kenaikan kelas.")
 	}
 	if len(studentsWithoutNext) > 0 {
 		warnings = append(warnings, "Ada siswa yang belum punya rombel tujuan atau berada di tingkat akhir.")
 	}
 	if len(inactiveTargetClasses) > 0 {
-		warnings = append(warnings, "Ada rombel tujuan yang sudah ada tetapi nonaktif; aktifkan manual sebelum apply bila ingin dipakai.")
+		warnings = append(warnings, "Ada rombel tujuan yang sudah ada tetapi nonaktif; aktifkan terlebih dahulu bila ingin dipakai.")
 	}
 
 	return YearRolloverPreview{
@@ -383,7 +383,7 @@ func (s *Academic) ApplyYearRollover(ctx context.Context, input YearRolloverAppl
 		}
 		expectedChallenge := yearRolloverApplyChallenge(source.Name, target.Name)
 		if !yearRolloverApplyAuthorized(input, expectedChallenge) {
-			return fmt.Errorf("%w: challenge apply rollover tidak sesuai", domain.ErrBadRequest)
+			return fmt.Errorf("%w: kalimat konfirmasi penerapan kenaikan kelas tidak sesuai", domain.ErrBadRequest)
 		}
 		applyResult, err := applyYearRolloverInStore(ctx, store, source, target)
 		if err != nil {
@@ -435,7 +435,7 @@ func applyYearRolloverInStore(ctx context.Context, store academicStore, source, 
 		TargetAcademicYearID:   pgUUIDString(target.ID),
 		TargetAcademicYearName: target.Name,
 		Warnings: []string{
-			"Apply berjalan dalam transaksi; data tahun lama tidak dihapus.",
+			"Penerapan kenaikan kelas berjalan aman; data tahun lama tidak dihapus.",
 		},
 	}
 
@@ -487,7 +487,7 @@ func applyYearRolloverInStore(ctx context.Context, store academicStore, source, 
 		result.Warnings = append(result.Warnings, fmt.Sprintf("%d rombel tujuan baru dibuat.", result.Counts.ClassesCreated))
 	}
 	if result.Counts.ClassesReused > 0 {
-		result.Warnings = append(result.Warnings, fmt.Sprintf("%d rombel tujuan existing dipakai ulang.", result.Counts.ClassesReused))
+		result.Warnings = append(result.Warnings, fmt.Sprintf("%d rombel tujuan yang sudah ada dipakai ulang.", result.Counts.ClassesReused))
 	}
 
 	if err := copyYearRolloverHomerooms(ctx, store, source, target, targetBySourceClass, &result); err != nil {
@@ -649,7 +649,7 @@ func promoteYearRolloverStudents(ctx context.Context, store academicStore, sourc
 			return err
 		}
 		if affected == 0 {
-			result.StudentsSkipped = append(result.StudentsSkipped, rolloverStudentWarning(student, "Data siswa sudah berubah sebelum apply selesai"))
+			result.StudentsSkipped = append(result.StudentsSkipped, rolloverStudentWarning(student, "Data siswa sudah berubah sebelum penerapan kenaikan kelas selesai"))
 			continue
 		}
 		result.Counts.StudentsPromoted++
@@ -671,7 +671,7 @@ func promoteYearRolloverStudents(ctx context.Context, store academicStore, sourc
 func (s *Academic) DryRunAcademicImport(ctx context.Context, input AcademicImportDryRunInput) (AcademicImportDryRunResult, error) {
 	kind := normalizeImportKind(input.Kind)
 	if kind == "" {
-		return AcademicImportDryRunResult{}, fmt.Errorf("%w: jenis import akademik tidak valid", domain.ErrBadRequest)
+		return AcademicImportDryRunResult{}, fmt.Errorf("%w: jenis data akademik yang akan diperiksa tidak valid", domain.ErrBadRequest)
 	}
 	records, err := readAcademicCSV(input.CSV)
 	if err != nil {
@@ -702,7 +702,7 @@ func (s *Academic) DryRunAcademicImport(ctx context.Context, input AcademicImpor
 		if len(rowErrors) > 0 {
 			result.ErrorCount++
 			result.RowErrors = append(result.RowErrors, rowErrors...)
-			result.Rows = append(result.Rows, AcademicImportRowPlan{Row: rowNumber, Action: "error", Summary: rowErrors[0].Message})
+			result.Rows = append(result.Rows, AcademicImportRowPlan{Row: rowNumber, Action: "needs_review", Summary: rowErrors[0].Message})
 			continue
 		}
 		switch plan.Action {
@@ -827,7 +827,7 @@ func validateAcademicImportRow(kind string, rowNumber int, row []string, header 
 	case "jadwal":
 		return validateTimetableImportRow(rowNumber, row, header, refs, seen)
 	default:
-		return AcademicImportRowPlan{}, []AcademicImportRowError{{Row: rowNumber, Message: "Jenis import tidak valid"}}
+		return AcademicImportRowPlan{}, []AcademicImportRowError{{Row: rowNumber, Message: "Jenis data yang akan diimpor tidak valid"}}
 	}
 }
 
@@ -894,7 +894,7 @@ func validateSubjectTeacherImportRow(rowNumber int, row []string, header map[str
 	class, subject, teacher, errs := resolveAcademicAssignmentRefs(rowNumber, row, header, refs)
 	key := "guru_mapel|" + normalizeLookupKey(cell(row, header, "kode rombel")) + "|" + normalizeLookupKey(cell(row, header, "kode mapel"))
 	if seenRow, duplicate := seen[key]; duplicate {
-		errs = append(errs, AcademicImportRowError{Row: rowNumber, Field: "Kode Mapel", Message: fmt.Sprintf("Assignment duplikat dengan baris %d", seenRow)})
+		errs = append(errs, AcademicImportRowError{Row: rowNumber, Field: "Kode Mapel", Message: fmt.Sprintf("Penugasan guru mapel duplikat dengan baris %d", seenRow)})
 	}
 	seen[key] = rowNumber
 	if len(errs) > 0 {
@@ -932,11 +932,11 @@ func validateTimetableImportRow(rowNumber int, row []string, header map[string]i
 	}
 	assignment, assignmentExists := refs.assignmentsByClassSubjectTeacher[importTripleKey(pgUUIDString(class.ID), pgUUIDString(subject.ID), pgUUIDString(teacher.ID))]
 	if len(errs) == 0 && !assignmentExists {
-		errs = append(errs, AcademicImportRowError{Row: rowNumber, Field: "Guru Mapel", Message: "Assignment guru mapel belum ada"})
+		errs = append(errs, AcademicImportRowError{Row: rowNumber, Field: "Guru Mapel", Message: "Penugasan guru mapel belum ada"})
 	}
 	key := "jadwal|" + normalizeLookupKey(cell(row, header, "kode rombel")) + "|" + normalizeLookupKey(cell(row, header, "kode mapel")) + "|" + strconv.Itoa(day) + "|" + normalizeImportTime(startValue) + "|" + normalizeImportTime(endValue)
 	if seenRow, duplicate := seen[key]; duplicate {
-		errs = append(errs, AcademicImportRowError{Row: rowNumber, Field: "Jam Mulai", Message: fmt.Sprintf("Slot jadwal duplikat dengan baris %d", seenRow)})
+		errs = append(errs, AcademicImportRowError{Row: rowNumber, Field: "Jam Mulai", Message: fmt.Sprintf("Jam pelajaran duplikat dengan baris %d", seenRow)})
 	}
 	seen[key] = rowNumber
 	if len(errs) > 0 {
@@ -944,9 +944,9 @@ func validateTimetableImportRow(rowNumber int, row []string, header map[string]i
 	}
 	slotKey := importTripleKey(pgUUIDString(assignment.ID), strconv.Itoa(day), normalizeImportTime(startValue)) + "|" + normalizeImportTime(endValue)
 	if _, exists := refs.slotsByAssignmentDayTime[slotKey]; exists {
-		return AcademicImportRowPlan{Row: rowNumber, Action: "update", Summary: "Perbarui slot " + class.Code + " " + subject.Code + " " + dayValue}, nil
+		return AcademicImportRowPlan{Row: rowNumber, Action: "update", Summary: "Perbarui jam pelajaran " + class.Code + " " + subject.Code + " " + dayValue}, nil
 	}
-	return AcademicImportRowPlan{Row: rowNumber, Action: "add", Summary: "Tambah slot " + class.Code + " " + subject.Code + " " + dayValue}, nil
+	return AcademicImportRowPlan{Row: rowNumber, Action: "add", Summary: "Tambah jam pelajaran " + class.Code + " " + subject.Code + " " + dayValue}, nil
 }
 
 func resolveAcademicAssignmentRefs(rowNumber int, row []string, header map[string]int, refs importDryRunReferences) (db.ListSchoolClassesRow, db.ListSubjectsRow, db.ListAcademicImportTeachersRow, []AcademicImportRowError) {
@@ -978,7 +978,7 @@ func resolveAcademicAssignmentRefs(rowNumber int, row []string, header map[strin
 
 func readAcademicCSV(raw string) ([][]string, error) {
 	if strings.TrimSpace(raw) == "" {
-		return nil, fmt.Errorf("%w: file CSV kosong", domain.ErrBadRequest)
+		return nil, fmt.Errorf("%w: file impor kosong", domain.ErrBadRequest)
 	}
 	reader := csv.NewReader(bytes.NewReader([]byte(strings.TrimPrefix(raw, "\ufeff"))))
 	reader.TrimLeadingSpace = true
@@ -990,12 +990,12 @@ func readAcademicCSV(raw string) ([][]string, error) {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("%w: CSV tidak valid pada baris %d", domain.ErrBadRequest, len(records)+1)
+			return nil, fmt.Errorf("%w: data impor tidak valid pada baris %d", domain.ErrBadRequest, len(records)+1)
 		}
 		records = append(records, record)
 	}
 	if len(records) == 0 {
-		return nil, fmt.Errorf("%w: file CSV kosong", domain.ErrBadRequest)
+		return nil, fmt.Errorf("%w: file impor kosong", domain.ErrBadRequest)
 	}
 	return records, nil
 }
@@ -1018,7 +1018,7 @@ func academicImportHeader(kind string, row []string) (map[string]int, error) {
 		}
 	}
 	if len(missing) > 0 {
-		return nil, fmt.Errorf("%w: header CSV kurang: %s", domain.ErrBadRequest, strings.Join(missing, ", "))
+		return nil, fmt.Errorf("%w: kolom data impor kurang: %s", domain.ErrBadRequest, strings.Join(missing, ", "))
 	}
 	return index, nil
 }
@@ -1163,7 +1163,7 @@ func timetableSlotKey(assignmentID pgtype.UUID, dayOfWeek int16, startTime, endT
 
 func rolloverCopiedNotes(notes, sourceYearName string) string {
 	notes = strings.TrimSpace(notes)
-	prefix := "Rollover dari " + strings.TrimSpace(sourceYearName)
+	prefix := "Disalin dari tahun ajaran " + strings.TrimSpace(sourceYearName)
 	if notes == "" {
 		return prefix
 	}

@@ -386,7 +386,7 @@ func (s *Academic) DeleteTimetableSlot(ctx context.Context, id pgtype.UUID) erro
 func (s *Academic) ensureTimetableSlotAvailable(ctx context.Context, store academicStore, assignmentID pgtype.UUID, dayOfWeek int16, startTime, endTime pgtype.Time, roomLabel string, excludeSlotID pgtype.UUID) error {
 	assignment, err := store.GetClassSubjectAssignment(ctx, assignmentID)
 	if err != nil {
-		return fmt.Errorf("assignment tidak ditemukan")
+		return fmt.Errorf("penugasan guru mapel tidak ditemukan")
 	}
 	if err := lockTimetableMutationScopes(ctx, store, dayOfWeek, assignment.ClassID, assignment.TeacherEmployeeID, roomLabel); err != nil {
 		return err
@@ -403,7 +403,7 @@ func (s *Academic) ensureTimetableSlotAvailable(ctx context.Context, store acade
 		return err
 	}
 	if conflicts > 0 {
-		return fmt.Errorf("slot bentrok dengan jadwal kelas atau guru pada waktu yang sama")
+		return fmt.Errorf("jam pelajaran bentrok dengan jadwal rombel atau guru pada waktu yang sama")
 	}
 	roomConflicts, err := store.CountTimetableRoomConflicts(ctx, db.CountTimetableRoomConflictsParams{
 		DayOfWeek:     dayOfWeek,
@@ -416,7 +416,7 @@ func (s *Academic) ensureTimetableSlotAvailable(ctx context.Context, store acade
 		return err
 	}
 	if roomConflicts > 0 {
-		return fmt.Errorf("slot bentrok dengan penggunaan ruang pada waktu yang sama")
+		return fmt.Errorf("jam pelajaran bentrok dengan penggunaan ruang pada waktu yang sama")
 	}
 	return nil
 }
