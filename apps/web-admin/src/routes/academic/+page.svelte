@@ -835,7 +835,7 @@
 							{#if !effectiveFocusClassId}
 								<EmptyStatePanel
 									title="Belum ada kelas untuk ditinjau"
-									description="Isi jadwal terlebih dahulu atau longgarkan filter agar matriks mingguan bisa ditampilkan."
+									description="Isi jadwal terlebih dahulu atau longgarkan filter agar tabel mingguan bisa ditampilkan."
 									compact
 								/>
 							{:else}

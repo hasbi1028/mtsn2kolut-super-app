@@ -7,6 +7,6 @@
 <WebsiteContentManager
 	kind="announcement"
 	title="Manajemen Pengumuman"
-	description="Kelola pengumuman resmi sekolah dengan workflow draft ke publish."
+	description="Kelola pengumuman resmi madrasah dari konsep sampai terbit."
 	publicBasePath="/pengumuman"
 />

@@ -186,9 +186,26 @@ Fokus pada portal siswa/orang tua, akun, nilai, rapor, dan status siswa.
 
 Fokus pada halaman, berita, pengumuman, publikasi, konsep, terbitkan, alamat halaman, dan lampiran.
 
+**Implementation Notes (2026-05-12):**
+
+- Meninjau modul Website/Publikasi: halaman website, berita, pengumuman, halaman publik berita/pengumuman, profil, dan kontak.
+- Membersihkan copy pengumuman dari istilah `workflow draft ke publish` menjadi bahasa operator: konsep sampai terbit.
+- Tidak mengubah route publik, jenis konten, komponen pengelola konten, slug internal, atau alur publikasi.
+- Audit residual Tahap 8–9: `visible 0`, `code_only 167`.
+- Verifikasi: `npm --prefix apps/web-admin run check` PASS (`0 errors and 0 warnings`).
+
 ## Tahap 9 — Operasional lain
 
 Fokus pada inventaris, perpustakaan, PPDB, tata kelola, notifikasi, dan dashboard umum.
+
+**Implementation Notes (2026-05-12):**
+
+- Meninjau modul operasional lain: Inventaris, Perpustakaan, PPDB, Tata Kelola, Notifikasi, Jurnal, Jadwal umum, dan halaman Academic lama.
+- Membersihkan istilah user-facing `matriks mingguan` pada halaman Academic lama menjadi `tabel mingguan`.
+- Sisa kandidat seperti MIME `text/csv` pada ekspor inventaris/tata kelola/jadwal terklasifikasi code-only karena bukan teks yang tampil ke operator.
+- Tidak mengubah route, ekspor CSV, logika inventaris/perpustakaan/PPDB/tata kelola, atau komponen publik.
+- Audit residual Tahap 8–9: `visible 0`, `code_only 167`.
+- Verifikasi: `npm --prefix apps/web-admin run check` PASS (`0 errors and 0 warnings`).
 
 ## Tahap 10 — Pesan layanan sistem
 
