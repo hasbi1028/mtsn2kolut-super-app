@@ -9,6 +9,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
+	import EntityDrawer from '$lib/components/EntityDrawer.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
@@ -42,6 +43,9 @@
 	let studentsPromise = $state<Promise<StudentsOverview> | null>(null);
 	let studentsRequestId = 0;
 	let search = $state('');
+	let selectedStudentIds = $state<Set<string>>(new Set());
+	let visibleSelectionCheckbox = $state<HTMLInputElement | null>(null);
+	let wasStudentDrawerOpen = false;
 
 	let formNis = $state('');
 	let formNisn = $state('');
@@ -74,6 +78,22 @@
 	const userPermissions = $derived(page.data.user?.permissions ?? []);
 	const canManageStudentAccounts = $derived(userRoles.includes('admin') || userPermissions.includes('student_accounts.manage'));
 	const studentAccountSummary = $derived(studentAccountResult ?? studentAccountPreview);
+	const editingStudent = $derived(editId ? (students.find((student) => student.id === editId) ?? null) : null);
+	const studentFormDirty = $derived(
+		editId
+			? Boolean(editingStudent) && (
+				formNis !== (editingStudent?.nis ?? '') ||
+				formNisn !== (editingStudent?.nisn ?? '') ||
+				formNama !== (editingStudent?.nama ?? '') ||
+				formGender !== (editingStudent?.gender ?? 'L') ||
+				formParentName !== (editingStudent?.parent_name ?? '') ||
+				formParentPhone !== (editingStudent?.parent_phone ?? '') ||
+				formClassId !== (editingStudent?.class_id ?? '') ||
+				formActive !== (editingStudent?.is_active ?? true) ||
+				formStatus !== (editingStudent?.status ?? 'active')
+			)
+			: Boolean(formNis || formNisn || formNama || formParentName || formParentPhone || formClassId || formGender !== 'L' || !formActive || formStatus !== 'active')
+	);
 
 	let filtered = $derived(
 		search.trim()
@@ -84,6 +104,10 @@
 			)
 			: students
 	);
+	const filteredStudentIds = $derived(filtered.map((student) => student.id));
+	const selectedCount = $derived(selectedStudentIds.size);
+	const filteredSelectedCount = $derived(filteredStudentIds.filter((id) => selectedStudentIds.has(id)).length);
+	const allFilteredStudentsSelected = $derived(filteredStudentIds.length > 0 && filteredSelectedCount === filteredStudentIds.length);
 
 	function isRecord(value: unknown): value is Record<string, unknown> {
 		return typeof value === 'object' && value !== null;
@@ -176,12 +200,21 @@
 		}
 	}
 
-	function resetForm() {
+	function clearFormFields() {
 		formNis = ''; formNisn = ''; formNama = ''; formGender = 'L';
 		formParentName = ''; formParentPhone = ''; formClassId = ''; formActive = true; formStatus = 'active';
 		editId = null;
 		studentFormStep = 'identity';
+	}
+
+	function resetForm() {
+		clearFormFields();
 		showForm = false;
+	}
+
+	function openCreate() {
+		clearFormFields();
+		showForm = true;
 	}
 
 	function openEdit(s: Student) {
@@ -197,7 +230,32 @@
 		editId = s.id;
 		studentFormStep = 'identity';
 		showForm = true;
-		window.scrollTo({ top: 0, behavior: 'smooth' });
+	}
+
+	function clearSelection() {
+		selectedStudentIds = new Set();
+	}
+
+	function updateStudentSelection(studentId: string, selected: boolean) {
+		const next = new Set(selectedStudentIds);
+		if (selected) next.add(studentId);
+		else next.delete(studentId);
+		selectedStudentIds = next;
+	}
+
+	function handleStudentSelectionChange(event: Event, studentId: string) {
+		const input = event.currentTarget as HTMLInputElement | null;
+		updateStudentSelection(studentId, Boolean(input?.checked));
+	}
+
+	function handleFilteredSelectionChange(event: Event) {
+		const input = event.currentTarget as HTMLInputElement | null;
+		const next = new Set(selectedStudentIds);
+		for (const id of filteredStudentIds) {
+			if (input?.checked) next.add(id);
+			else next.delete(id);
+		}
+		selectedStudentIds = next;
 	}
 
 	function nextStudentFormStep() {
@@ -363,6 +421,23 @@
 		}
 	}
 
+	$effect(() => {
+		if (visibleSelectionCheckbox) {
+			visibleSelectionCheckbox.indeterminate = filteredSelectedCount > 0 && !allFilteredStudentsSelected;
+		}
+	});
+
+	$effect(() => {
+		const activeIds = new Set(students.map((student) => student.id));
+		const next = new Set([...selectedStudentIds].filter((id) => activeIds.has(id)));
+		if (next.size !== selectedStudentIds.size) selectedStudentIds = next;
+	});
+
+	$effect(() => {
+		if (wasStudentDrawerOpen && !showForm) clearFormFields();
+		wasStudentDrawerOpen = showForm;
+	});
+
 	onMount(() => {
 		void load();
 	});
@@ -376,8 +451,8 @@
 			<h1 class="text-2xl font-semibold text-foreground">Data Siswa</h1>
 			<p class="text-sm text-muted-foreground mt-1">Kelola daftar siswa aktif madrasah</p>
 		</div>
-		<Button onclick={() => { if (showForm) resetForm(); else showForm = true; }}>
-			{showForm ? 'Batal' : '+ Tambah Siswa'}
+		<Button onclick={() => { if (showForm) resetForm(); else openCreate(); }}>
+			{showForm ? 'Tutup' : '+ Tambah Siswa'}
 		</Button>
 	</div>
 
@@ -501,12 +576,13 @@
 		{/if}
 	</Card.Root>
 
-	{#if showForm}
-		<Card.Root class="overflow-hidden border-border shadow-sm">
-			<Card.Header class="pb-2">
-				<Card.Title class="text-base">{editId ? 'Edit Data Siswa' : 'Tambah Siswa Baru'}</Card.Title>
-			</Card.Header>
-			<Card.Content>
+	<EntityDrawer
+		bind:open={showForm}
+		title={editId ? 'Edit Data Siswa' : 'Tambah Siswa Baru'}
+		subtitle={editId ? 'Perbarui identitas, kelas, wali, dan status siswa.' : 'Isi data pokok siswa untuk kelas, nilai, portal orang tua, dan CBT.'}
+		hasUnsavedChanges={studentFormDirty}
+		closeLabel="Tutup drawer siswa"
+	>
 				<div class="mb-4 grid gap-2 md:grid-cols-4">
 					{#each studentFormSteps as step, index (step.id)}
 						<button
@@ -595,7 +671,8 @@
 					{/if}
 				</div>
 
-				<div class="mt-4 flex flex-wrap gap-2">
+		{#snippet actions()}
+				<div class="flex flex-wrap gap-2">
 					{#if studentFormStepIndex > 0}
 						<Button variant="outline" onclick={previousStudentFormStep}>Kembali</Button>
 					{/if}
@@ -611,9 +688,8 @@
 					/>
 					<Button variant="outline" onclick={resetForm}>Batal</Button>
 				</div>
-			</Card.Content>
-		</Card.Root>
-	{/if}
+		{/snippet}
+	</EntityDrawer>
 
 	<AsyncContent promise={studentsPromise} onerror={handleOverviewRenderError}>
 		{#snippet pending()}
@@ -635,19 +711,38 @@
 		{#snippet children(value)}
 			{@const overview = value as StudentsOverview}
 		<Card.Root>
-			<Card.Header class="pb-3">
-				<div class="flex flex-col sm:flex-row sm:items-center gap-3">
-					<Card.Title class="text-base shrink-0">Daftar Siswa ({overview.students.length} total)</Card.Title>
-					<Input placeholder="Cari siswa berdasarkan nama, NIS, atau NISN..." bind:value={search} class="w-full sm:max-w-xs sm:ml-auto" />
-				</div>
-			</Card.Header>
-			<Card.Content class="p-0">
-				<div class="hidden overflow-x-auto lg:block">
-				<Table.Root>
-					<Table.Header>
-						<Table.Row>
-							<Table.Head>NIS</Table.Head>
-							<Table.Head>Nama</Table.Head>
+				<Card.Header class="pb-3">
+					<div class="flex flex-col sm:flex-row sm:items-center gap-3">
+						<Card.Title class="text-base shrink-0">Daftar Siswa ({overview.students.length} total)</Card.Title>
+						<Input placeholder="Cari siswa berdasarkan nama, NIS, atau NISN..." bind:value={search} class="w-full sm:max-w-xs sm:ml-auto" />
+					</div>
+					{#if selectedCount > 0}
+						<div class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-primary/20 bg-primary/10 px-3 py-2">
+							<div>
+								<p class="text-sm font-medium text-primary">{selectedCount} siswa dipilih</p>
+							</div>
+							<Button variant="outline" size="sm" class="bg-card" onclick={clearSelection}>Bersihkan pilihan</Button>
+						</div>
+					{/if}
+				</Card.Header>
+				<Card.Content class="p-0">
+					<div class="hidden overflow-x-auto lg:block">
+					<Table.Root>
+						<Table.Header>
+							<Table.Row>
+								<Table.Head class="w-12">
+									<input
+										bind:this={visibleSelectionCheckbox}
+										type="checkbox"
+										checked={allFilteredStudentsSelected}
+										disabled={filteredStudentIds.length === 0}
+										aria-label="Pilih semua siswa pada hasil filter"
+										onchange={handleFilteredSelectionChange}
+										class="rounded accent-green-700"
+									/>
+								</Table.Head>
+								<Table.Head>NIS</Table.Head>
+								<Table.Head>Nama</Table.Head>
 							<Table.Head>L/P</Table.Head>
 							<Table.Head>Kelas</Table.Head>
 							<Table.Head>Wali</Table.Head>
@@ -663,11 +758,20 @@
 						{#each filtered as s (s.id)}
 							{@const activeKey = lifecycleKey(s.id, 'active')}
 							{@const alumniKey = lifecycleKey(s.id, 'alumni')}
-							{@const mutatedKey = lifecycleKey(s.id, 'mutated')}
-							{@const accountCandidate = studentAccountCandidate(s)}
-							<Table.Row>
-								<Table.Cell class="font-mono text-sm">{s.nis}</Table.Cell>
-								<Table.Cell class="font-medium">{s.nama}</Table.Cell>
+								{@const mutatedKey = lifecycleKey(s.id, 'mutated')}
+								{@const accountCandidate = studentAccountCandidate(s)}
+								<Table.Row>
+									<Table.Cell>
+										<input
+											type="checkbox"
+											checked={selectedStudentIds.has(s.id)}
+											aria-label={`Pilih ${s.nama}`}
+											onchange={(event) => handleStudentSelectionChange(event, s.id)}
+											class="rounded accent-green-700"
+										/>
+									</Table.Cell>
+									<Table.Cell class="font-mono text-sm">{s.nis}</Table.Cell>
+									<Table.Cell class="font-medium">{s.nama}</Table.Cell>
 								<Table.Cell>
 									<Badge variant="outline" class="text-xs">
 										{s.gender === 'L' ? 'L' : 'P'}
@@ -735,10 +839,10 @@
 									</div>
 								</Table.Cell>
 							</Table.Row>
-						{:else}
-							<Table.Row>
-								<Table.Cell colspan={11} class="p-4">
-										<EmptyStatePanel
+							{:else}
+								<Table.Row>
+									<Table.Cell colspan={12} class="p-4">
+											<EmptyStatePanel
 											compact
 											eyebrow={search ? 'Filter Tidak Menemukan Hasil' : 'Mulai Data Pokok'}
 											title={search ? 'Tidak ada siswa yang cocok' : 'Belum ada data siswa'}
@@ -749,7 +853,7 @@
 											{#if search}
 												<Button variant="outline" size="sm" onclick={() => (search = '')}>Reset pencarian</Button>
 											{:else}
-												<Button size="sm" onclick={() => (showForm = true)}>Tambah siswa pertama</Button>
+												<Button size="sm" onclick={openCreate}>Tambah siswa pertama</Button>
 											{/if}
 										</EmptyStatePanel>
 								</Table.Cell>
@@ -767,9 +871,18 @@
 						{@const accountCandidate = studentAccountCandidate(s)}
 						<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
-								<div class="min-w-0">
-									<p class="text-sm font-semibold text-foreground">{s.nama}</p>
-									<p class="mt-1 font-mono text-xs text-muted-foreground">NIS {s.nis}{s.nisn ? ` • NISN ${s.nisn}` : ''}</p>
+								<div class="flex min-w-0 items-start gap-3">
+									<input
+										type="checkbox"
+										checked={selectedStudentIds.has(s.id)}
+										aria-label={`Pilih ${s.nama}`}
+										onchange={(event) => handleStudentSelectionChange(event, s.id)}
+										class="mt-1 rounded accent-green-700"
+									/>
+									<div class="min-w-0">
+										<p class="text-sm font-semibold text-foreground">{s.nama}</p>
+										<p class="mt-1 font-mono text-xs text-muted-foreground">NIS {s.nis}{s.nisn ? ` • NISN ${s.nisn}` : ''}</p>
+									</div>
 								</div>
 								{#if s.is_active}
 									<Badge class="bg-primary/15 text-primary border-primary/20">Aktif</Badge>
@@ -837,7 +950,7 @@
 								{#if search}
 									<Button variant="outline" size="sm" onclick={() => (search = '')}>Reset pencarian</Button>
 								{:else}
-									<Button size="sm" onclick={() => (showForm = true)}>Tambah siswa pertama</Button>
+									<Button size="sm" onclick={openCreate}>Tambah siswa pertama</Button>
 								{/if}
 							</EmptyStatePanel>
 					{/each}

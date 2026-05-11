@@ -299,6 +299,7 @@ func main() {
 		r.Get("/api/academic/stats", academicH.GetStats)
 		r.Get("/api/academic/rombel", rombelH.List)
 		r.Get("/api/academic/rombel/{id}", rombelH.Get)
+		r.With(requireAcademicManage).Put("/api/academic/rombel/{id}", rombelH.UpdateIdentity)
 		r.Get("/api/academic/rombel/{id}/students", rombelH.ListStudents)
 		r.Get("/api/academic/rombel/{id}/subject-assignments", rombelH.ListSubjectAssignments)
 		r.Get("/api/academic/rombel/{id}/subject-assignments/{assignmentID}", rombelH.GetSubjectAssignment)

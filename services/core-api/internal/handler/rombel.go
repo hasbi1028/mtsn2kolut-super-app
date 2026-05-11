@@ -20,6 +20,7 @@ import (
 type rombelService interface {
 	List(ctx context.Context) ([]db.ListRombelsRow, error)
 	Get(ctx context.Context, id pgtype.UUID) (db.GetRombelDetailRow, error)
+	UpdateIdentity(ctx context.Context, arg db.UpdateRombelIdentityParams) (db.UpdateRombelIdentityRow, error)
 	ListStudentsWithParents(ctx context.Context, classID pgtype.UUID) ([]db.ListStudentsByClassWithParentsRow, error)
 	ListSubjectAssignments(ctx context.Context, classID pgtype.UUID) ([]db.ListRombelSubjectAssignmentsRow, error)
 	GetSubjectAssignment(ctx context.Context, arg db.GetRombelSubjectAssignmentParams) (db.GetRombelSubjectAssignmentRow, error)
@@ -100,6 +101,38 @@ func (h *Rombel) Get(w http.ResponseWriter, r *http.Request) {
 		"timetable_slots":      timetable,
 		"homeroom_assignments": homerooms,
 	})
+}
+
+func (h *Rombel) UpdateIdentity(w http.ResponseWriter, r *http.Request) {
+	if !rombelManageAllowed(w, r) {
+		return
+	}
+	classID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body rombelIdentityRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	if body.IsActive == nil {
+		api.BadRequest(w, "is_active wajib diisi")
+		return
+	}
+	row, err := h.svc.UpdateIdentity(r.Context(), db.UpdateRombelIdentityParams{
+		ID:       classID,
+		Code:     body.Code,
+		Name:     body.Name,
+		Level:    body.Level,
+		IsActive: *body.IsActive,
+	})
+	if err != nil {
+		writeClientError(w, err, "Identitas rombel tidak valid")
+		return
+	}
+	api.OK(w, row)
 }
 
 func (h *Rombel) ListStudents(w http.ResponseWriter, r *http.Request) {
@@ -436,6 +469,13 @@ type timetableSlotRequest struct {
 	Room         string `json:"room"`
 	RoomLabel    string `json:"room_label"`
 	Notes        string `json:"notes"`
+}
+
+type rombelIdentityRequest struct {
+	Code     string `json:"code"`
+	Name     string `json:"name"`
+	Level    string `json:"level"`
+	IsActive *bool  `json:"is_active"`
 }
 
 type rombelStudentParent struct {
