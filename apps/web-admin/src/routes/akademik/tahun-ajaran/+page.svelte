@@ -43,6 +43,7 @@
 	};
 
 	type RolloverClassToCreate = {
+		source_class_id: string;
 		source_code: string;
 		source_name: string;
 		source_level: string;
@@ -51,12 +52,41 @@
 		target_level: string;
 	};
 
+	type RolloverApplyCounts = {
+		classes_created: number;
+		classes_reused: number;
+		students_promoted: number;
+		students_skipped: number;
+		homerooms_copied: number;
+		assignments_copied: number;
+		timetable_slots_copied: number;
+	};
+
+	type RolloverClassApply = RolloverClassToCreate & {
+		target_class_id: string;
+		action: 'created' | 'reused' | 'skipped_inactive_target' | string;
+	};
+
 	type RolloverStudentWarning = {
+		student_id?: string;
 		nis: string;
 		nisn: string;
 		nama: string;
+		from_class_id?: string;
 		from_class_code: string;
 		reason: string;
+	};
+
+	type RolloverStudentMove = {
+		student_id: string;
+		nis: string;
+		nisn: string;
+		nama: string;
+		from_class_id: string;
+		from_class_code: string;
+		to_class_id: string;
+		to_class_code: string;
+		to_class_name: string;
 	};
 
 	type RolloverPreview = {
@@ -64,10 +94,23 @@
 		source_academic_year_name: string;
 		target_academic_year_id: string;
 		target_academic_year_name: string;
+		apply_challenge: string;
 		counts: RolloverCounts;
 		classes_to_create: RolloverClassToCreate[];
-		students_to_promote: unknown[];
+		students_to_promote: RolloverStudentMove[];
 		students_without_next_class: RolloverStudentWarning[];
+		warnings: string[];
+	};
+
+	type RolloverApplyResult = {
+		source_academic_year_id: string;
+		source_academic_year_name: string;
+		target_academic_year_id: string;
+		target_academic_year_name: string;
+		counts: RolloverApplyCounts;
+		classes: RolloverClassApply[];
+		students_promoted: RolloverStudentMove[];
+		students_skipped: RolloverStudentWarning[];
 		warnings: string[];
 	};
 
@@ -118,6 +161,9 @@
 	let targetYearId = $state('');
 	let previewBusy = $state(false);
 	let rolloverPreview = $state<RolloverPreview | null>(null);
+	let applyBusy = $state(false);
+	let applyChallengeInput = $state('');
+	let rolloverApplyResult = $state<RolloverApplyResult | null>(null);
 
 	let importKind = $state<ImportKind>('siswa');
 	let importFile = $state<File | null>(null);
@@ -129,6 +175,18 @@
 	const targetYearOptions = $derived(years.filter((year) => year.id !== sourceYearId));
 	const createDisabled = $derived(!yearName.trim() || !startDate || !endDate || createBusy);
 	const canPreview = $derived(Boolean(targetYearId) && !previewBusy);
+	const previewMatchesSelection = $derived(Boolean(
+		rolloverPreview
+			&& rolloverPreview.target_academic_year_id === targetYearId
+			&& (!sourceYearId || rolloverPreview.source_academic_year_id === sourceYearId)
+	));
+	const canApplyRollover = $derived(Boolean(
+		rolloverPreview
+			&& previewMatchesSelection
+			&& applyChallengeInput.trim() === rolloverPreview.apply_challenge
+			&& !applyBusy
+			&& !previewBusy
+	));
 	const selectedImportKind = $derived(importKinds.find((item) => item.value === importKind) ?? importKinds[0]);
 
 	async function fetchOverview(): Promise<AcademicOverview> {
@@ -191,6 +249,11 @@
 
 	function handleRenderError(error: unknown) {
 		console.error('Tahun ajaran render failed', error);
+	}
+
+	function resetRolloverApplyState() {
+		applyChallengeInput = '';
+		rolloverApplyResult = null;
 	}
 
 	function formatDate(value: string) {
@@ -266,6 +329,7 @@
 			toast.success(`${year.name} sudah menjadi tahun ajaran aktif.`);
 			sourceYearId = year.id;
 			rolloverPreview = null;
+			resetRolloverApplyState();
 			await refreshOverview();
 		} catch (error) {
 			toast.error(errorMessage(error, 'Gagal mengaktifkan tahun ajaran.'));
@@ -277,6 +341,7 @@
 	async function previewRollover() {
 		if (!canPreview) return;
 		previewBusy = true;
+		resetRolloverApplyState();
 		try {
 			const response = await fetch('/api/academic/year-rollover/preview', {
 				method: 'POST',
@@ -290,9 +355,34 @@
 			toast.success('Preview kenaikan tahun ajaran selesai.');
 		} catch (error) {
 			rolloverPreview = null;
+			resetRolloverApplyState();
 			toast.error(errorMessage(error, 'Gagal membuat preview kenaikan.'));
 		} finally {
 			previewBusy = false;
+		}
+	}
+
+	async function applyRollover() {
+		if (!rolloverPreview || !canApplyRollover) return;
+		applyBusy = true;
+		try {
+			const response = await fetch('/api/academic/year-rollover/apply', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					source_academic_year_id: rolloverPreview.source_academic_year_id,
+					target_academic_year_id: rolloverPreview.target_academic_year_id,
+					confirmation: applyChallengeInput.trim()
+				})
+			});
+			rolloverApplyResult = await readClientApiData<RolloverApplyResult>(response, 'Apply rollover tidak tersedia.');
+			applyChallengeInput = '';
+			toast.success('Apply rollover tahun ajaran selesai.');
+			await refreshOverview();
+		} catch (error) {
+			toast.error(errorMessage(error, 'Gagal apply rollover tahun ajaran.'));
+		} finally {
+			applyBusy = false;
 		}
 	}
 
@@ -421,9 +511,9 @@
 				<p class="text-sm text-muted-foreground">Termasuk periode lama dan persiapan.</p>
 			</div>
 			<div class="rounded-lg border border-warning/30 bg-warning/10 px-4 py-4">
-				<p class="text-xs font-semibold uppercase text-warning">Preview Only</p>
-				<p class="mt-2 text-xl font-semibold text-foreground">Apply Ditunda</p>
-				<p class="text-sm text-muted-foreground">Rollover belum membuat mutasi data massal.</p>
+				<p class="text-xs font-semibold uppercase text-warning">Rollover Aman</p>
+				<p class="mt-2 text-xl font-semibold text-foreground">Preview + Challenge</p>
+				<p class="text-sm text-muted-foreground">Apply berjalan lewat Go API dan transaksi.</p>
 			</div>
 		</div>
 
@@ -526,7 +616,7 @@
 			<Card.Root>
 				<Card.Header class="pb-3">
 					<Card.Title id="rollover-title" class="text-base">Preview Kenaikan</Card.Title>
-					<Card.Description>Read-only. Tidak membuat rombel, tidak memindahkan siswa.</Card.Description>
+					<Card.Description>Jalankan preview sebelum apply. Data tahun lama tidak dihapus.</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-3">
 					<div>
@@ -551,9 +641,27 @@
 						<Eye class="mr-2 size-4" />
 						Lihat Preview
 					</LoadingButton>
-					<div class="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
-						<p class="font-medium">Apply rollover belum disediakan.</p>
-						<p class="mt-1 text-muted-foreground">Operasi mutasi massal menunggu safety token dan test kontrak khusus.</p>
+					<div class="rounded-md border border-border bg-muted/40 p-3 text-sm">
+						<p class="font-medium text-foreground">Apply Rollover</p>
+						<p class="mt-1 text-muted-foreground">Challenge dibuat dari hasil preview dan wajib diketik persis.</p>
+						<div class="mt-3 rounded-md border border-dashed border-border bg-background px-3 py-2 font-mono text-xs text-foreground">
+							{rolloverPreview?.apply_challenge ?? 'Jalankan preview dulu'}
+						</div>
+						<div class="mt-3">
+							<label for="rollover-apply-challenge" class="mb-1 block text-sm font-medium">Challenge Apply</label>
+							<Input
+								id="rollover-apply-challenge"
+								bind:value={applyChallengeInput}
+								placeholder="Ketik challenge dari preview"
+								disabled={!rolloverPreview || !previewMatchesSelection || applyBusy}
+							/>
+							{#if rolloverPreview && !previewMatchesSelection}
+								<p class="mt-1 text-xs text-warning">Preview tidak sesuai pilihan tahun saat ini. Jalankan preview ulang.</p>
+							{/if}
+						</div>
+						<LoadingButton class="mt-3 w-full" loading={applyBusy} loadingLabel="Apply berjalan..." disabled={!canApplyRollover} onclick={() => void applyRollover()}>
+							Terapkan Rollover
+						</LoadingButton>
 					</div>
 				</Card.Content>
 			</Card.Root>
@@ -561,10 +669,47 @@
 			<Card.Root>
 				<Card.Header class="pb-3">
 					<Card.Title class="text-base">Hasil Preview</Card.Title>
-					<Card.Description>Gunakan angka ini untuk menyiapkan rombel tujuan sebelum promosi manual.</Card.Description>
+					<Card.Description>Gunakan angka ini untuk meninjau dampak sebelum apply.</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-4">
 					{#if rolloverPreview}
+						{#if rolloverApplyResult}
+							<div class="rounded-lg border border-primary/20 bg-primary/10 p-4">
+								<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+									<div>
+										<p class="text-sm font-semibold text-primary">Apply Selesai</p>
+										<p class="text-sm text-muted-foreground">{rolloverApplyResult.source_academic_year_name} ke {rolloverApplyResult.target_academic_year_name}</p>
+									</div>
+									<Badge class="w-fit border-primary/20 bg-background text-primary" variant="outline">
+										<CheckCircle2 class="mr-1 size-3" />
+										Transaksional
+									</Badge>
+								</div>
+								<div class="mt-3 grid gap-2 md:grid-cols-4">
+									{#each [
+										['Rombel baru', rolloverApplyResult.counts.classes_created],
+										['Rombel reuse', rolloverApplyResult.counts.classes_reused],
+										['Siswa naik', rolloverApplyResult.counts.students_promoted],
+										['Siswa dilewati', rolloverApplyResult.counts.students_skipped],
+										['Wali kelas', rolloverApplyResult.counts.homerooms_copied],
+										['Guru mapel', rolloverApplyResult.counts.assignments_copied],
+										['Slot jadwal', rolloverApplyResult.counts.timetable_slots_copied]
+									] as item}
+										<div class="rounded-md border border-primary/20 bg-background/80 p-2">
+											<p class="text-xs text-muted-foreground">{item[0]}</p>
+											<p class="text-lg font-semibold text-foreground">{item[1]}</p>
+										</div>
+									{/each}
+								</div>
+								{#if rolloverApplyResult.warnings.length}
+									<div class="mt-3 space-y-1 text-sm text-muted-foreground">
+										{#each rolloverApplyResult.warnings as warning}
+											<p>{warning}</p>
+										{/each}
+									</div>
+								{/if}
+							</div>
+						{/if}
 						<div class="grid gap-3 md:grid-cols-3">
 							<div class="rounded-lg border border-border bg-muted/40 p-3">
 								<p class="text-xs text-muted-foreground">Rombel perlu dibuat</p>

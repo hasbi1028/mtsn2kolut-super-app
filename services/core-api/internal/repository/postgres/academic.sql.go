@@ -47,6 +47,20 @@ func (q *Queries) CountAcademicYearNameConflicts(ctx context.Context, name strin
 	return column_1, err
 }
 
+const countActiveHomeroomAssignmentByClass = `-- name: CountActiveHomeroomAssignmentByClass :one
+SELECT COUNT(*)::int
+FROM class_homeroom_assignments
+WHERE class_id = $1
+  AND is_active = TRUE
+`
+
+func (q *Queries) CountActiveHomeroomAssignmentByClass(ctx context.Context, classID pgtype.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countActiveHomeroomAssignmentByClass, classID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countSubjectCodeConflicts = `-- name: CountSubjectCodeConflicts :one
 SELECT COUNT(*)::int
 FROM subjects
@@ -1165,6 +1179,64 @@ func (q *Queries) ListSubjects(ctx context.Context) ([]ListSubjectsRow, error) {
 	return items, nil
 }
 
+const listYearRolloverHomeroomAssignmentDetails = `-- name: ListYearRolloverHomeroomAssignmentDetails :many
+SELECT
+    cha.id,
+    cha.class_id,
+    cha.employee_id,
+    cha.academic_year_id,
+    cha.start_date,
+    cha.end_date,
+    cha.is_active,
+    cha.notes
+FROM class_homeroom_assignments cha
+JOIN school_classes c ON c.id = cha.class_id
+WHERE c.academic_year_id = $1
+  AND c.is_active = TRUE
+  AND cha.is_active = TRUE
+ORDER BY c.level ASC, c.name ASC, cha.start_date DESC
+`
+
+type ListYearRolloverHomeroomAssignmentDetailsRow struct {
+	ID             pgtype.UUID `json:"id"`
+	ClassID        pgtype.UUID `json:"class_id"`
+	EmployeeID     pgtype.UUID `json:"employee_id"`
+	AcademicYearID pgtype.UUID `json:"academic_year_id"`
+	StartDate      pgtype.Date `json:"start_date"`
+	EndDate        pgtype.Date `json:"end_date"`
+	IsActive       bool        `json:"is_active"`
+	Notes          string      `json:"notes"`
+}
+
+func (q *Queries) ListYearRolloverHomeroomAssignmentDetails(ctx context.Context, academicYearID pgtype.UUID) ([]ListYearRolloverHomeroomAssignmentDetailsRow, error) {
+	rows, err := q.db.Query(ctx, listYearRolloverHomeroomAssignmentDetails, academicYearID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListYearRolloverHomeroomAssignmentDetailsRow{}
+	for rows.Next() {
+		var i ListYearRolloverHomeroomAssignmentDetailsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClassID,
+			&i.EmployeeID,
+			&i.AcademicYearID,
+			&i.StartDate,
+			&i.EndDate,
+			&i.IsActive,
+			&i.Notes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listYearRolloverHomeroomAssignments = `-- name: ListYearRolloverHomeroomAssignments :many
 SELECT
     cha.class_id,
@@ -1258,6 +1330,30 @@ func (q *Queries) ListYearRolloverStudents(ctx context.Context, academicYearID p
 		return nil, err
 	}
 	return items, nil
+}
+
+const promoteYearRolloverStudent = `-- name: PromoteYearRolloverStudent :execrows
+UPDATE students
+SET class_id = $1,
+    updated_at = NOW()
+WHERE id = $2
+  AND class_id = $3
+  AND is_active = TRUE
+  AND status = 'active'
+`
+
+type PromoteYearRolloverStudentParams struct {
+	TargetClassID pgtype.UUID `json:"target_class_id"`
+	StudentID     pgtype.UUID `json:"student_id"`
+	SourceClassID pgtype.UUID `json:"source_class_id"`
+}
+
+func (q *Queries) PromoteYearRolloverStudent(ctx context.Context, arg PromoteYearRolloverStudentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, promoteYearRolloverStudent, arg.TargetClassID, arg.StudentID, arg.SourceClassID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateSubject = `-- name: UpdateSubject :one

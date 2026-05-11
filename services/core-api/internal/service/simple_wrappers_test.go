@@ -457,6 +457,8 @@ type fakeAcademicStore struct {
 	timetableSlots    []db.ListTimetableSlotsRow
 	rolloverStudents  []db.ListYearRolloverStudentsRow
 	rolloverHomerooms []db.ListYearRolloverHomeroomAssignmentsRow
+	homeroomDetails   []db.ListYearRolloverHomeroomAssignmentDetailsRow
+	homeroomCounts    map[string]int32
 	importStudents    []db.ListAcademicImportStudentsRow
 	importTeachers    []db.ListAcademicImportTeachersRow
 	yearByID          map[string]db.AcademicYear
@@ -475,9 +477,15 @@ type fakeAcademicStore struct {
 	dashboardSummary  db.GetAcademicDashboardSummaryRow
 	createYearArg     db.CreateAcademicYearParams
 	createClassArg    db.CreateSchoolClassParams
+	createClassResult db.SchoolClass
+	createHomerooms   []db.CreateHomeroomAssignmentParams
 	createSubjectArg  db.CreateSubjectParams
 	createAssignArg   db.CreateClassSubjectAssignmentParams
+	createAssignResult db.ClassSubjectAssignment
 	createSlotArg     db.CreateTimetableSlotParams
+	createSlotArgs    []db.CreateTimetableSlotParams
+	promoteArgs       []db.PromoteYearRolloverStudentParams
+	promoteAffected   map[string]int64
 	getSlotID         pgtype.UUID
 	getSlotErr        error
 	updateSlotArg     db.UpdateTimetableSlotParams
@@ -560,6 +568,17 @@ func (f *fakeAcademicStore) ListYearRolloverHomeroomAssignments(ctx context.Cont
 	return f.rolloverHomerooms, nil
 }
 
+func (f *fakeAcademicStore) ListYearRolloverHomeroomAssignmentDetails(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListYearRolloverHomeroomAssignmentDetailsRow, error) {
+	return f.homeroomDetails, nil
+}
+
+func (f *fakeAcademicStore) CountActiveHomeroomAssignmentByClass(ctx context.Context, classID pgtype.UUID) (int32, error) {
+	if f.homeroomCounts != nil {
+		return f.homeroomCounts[pgUUIDString(classID)], nil
+	}
+	return 0, nil
+}
+
 func (f *fakeAcademicStore) ListAcademicImportStudents(ctx context.Context) ([]db.ListAcademicImportStudentsRow, error) {
 	return f.importStudents, nil
 }
@@ -614,7 +633,15 @@ func (f *fakeAcademicStore) CreateAcademicYear(ctx context.Context, arg db.Creat
 
 func (f *fakeAcademicStore) CreateSchoolClass(ctx context.Context, arg db.CreateSchoolClassParams) (db.SchoolClass, error) {
 	f.createClassArg = arg
+	if f.createClassResult.ID.Valid {
+		return f.createClassResult, nil
+	}
 	return db.SchoolClass{AcademicYearID: arg.AcademicYearID, Code: arg.Code, Name: arg.Name, Level: arg.Level, IsActive: arg.IsActive}, nil
+}
+
+func (f *fakeAcademicStore) CreateHomeroomAssignment(ctx context.Context, arg db.CreateHomeroomAssignmentParams) (db.CreateHomeroomAssignmentRow, error) {
+	f.createHomerooms = append(f.createHomerooms, arg)
+	return db.CreateHomeroomAssignmentRow{ClassID: arg.ClassID, EmployeeID: arg.EmployeeID, IsActive: arg.HomeroomIsActive, Notes: arg.Notes}, nil
 }
 
 func (f *fakeAcademicStore) CreateSubject(ctx context.Context, arg db.CreateSubjectParams) (db.Subject, error) {
@@ -636,12 +663,26 @@ func (f *fakeAcademicStore) UpdateSubject(ctx context.Context, arg db.UpdateSubj
 
 func (f *fakeAcademicStore) CreateClassSubjectAssignment(ctx context.Context, arg db.CreateClassSubjectAssignmentParams) (db.ClassSubjectAssignment, error) {
 	f.createAssignArg = arg
+	if f.createAssignResult.ID.Valid {
+		return f.createAssignResult, nil
+	}
 	return db.ClassSubjectAssignment{ClassID: arg.ClassID, SubjectID: arg.SubjectID, TeacherEmployeeID: arg.TeacherEmployeeID}, nil
 }
 
 func (f *fakeAcademicStore) CreateTimetableSlot(ctx context.Context, arg db.CreateTimetableSlotParams) (db.TimetableSlot, error) {
 	f.createSlotArg = arg
+	f.createSlotArgs = append(f.createSlotArgs, arg)
 	return db.TimetableSlot{AssignmentID: arg.AssignmentID, DayOfWeek: arg.DayOfWeek, StartTime: arg.StartTime, EndTime: arg.EndTime, RoomLabel: arg.RoomLabel}, nil
+}
+
+func (f *fakeAcademicStore) PromoteYearRolloverStudent(ctx context.Context, arg db.PromoteYearRolloverStudentParams) (int64, error) {
+	f.promoteArgs = append(f.promoteArgs, arg)
+	if f.promoteAffected != nil {
+		if affected, ok := f.promoteAffected[pgUUIDString(arg.StudentID)]; ok {
+			return affected, nil
+		}
+	}
+	return 1, nil
 }
 
 func (f *fakeAcademicStore) GetTimetableSlot(ctx context.Context, id pgtype.UUID) (db.TimetableSlot, error) {

@@ -301,6 +301,7 @@ func main() {
 		r.Get("/api/academic/timetable/conflicts", academicH.GetTimetableConflicts)
 		r.With(requireAcademicManage).Post("/api/academic/years/{id}/activate", academicH.ActivateYear)
 		r.With(requireAcademicManage).Post("/api/academic/year-rollover/preview", academicH.PreviewYearRollover)
+		r.With(requireAcademicManage).Post("/api/academic/year-rollover/apply", academicH.ApplyYearRollover)
 		r.With(requireAcademicManage).Post("/api/academic/import-export/dry-run", academicH.DryRunAcademicImport)
 		r.Get("/api/academic/subject-assignment-matrix", rombelH.GetSubjectAssignmentMatrix)
 		r.With(requireAcademicManage).Put("/api/academic/subject-assignment-matrix", rombelH.UpdateSubjectAssignmentMatrixCell)
