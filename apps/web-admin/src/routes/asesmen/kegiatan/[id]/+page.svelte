@@ -27,6 +27,23 @@
 		missing_seat_count?: number; rooms_without_proctor?: number; unassigned_participant_count?: number;
 	};
 	type EventPackage = { id: string; title: string; question_count?: number; is_active?: boolean };
+	type QuestionCompletenessRow = {
+		level: string; class_id: string; class_code: string; class_name: string;
+		subject_id: string; subject_name: string; subject_code: string;
+		teacher_employee_id: string; teacher_name: string; teacher_username: string;
+		target_pg: number; available_pg: number; missing_pg: number;
+		target_essay: number; available_essay: number; missing_essay: number;
+		complete: boolean;
+	};
+	type QuestionCompleteness = {
+		summary: {
+			total_rows: number; complete_rows: number; incomplete_rows: number;
+			target_pg: number; available_pg: number; missing_pg: number;
+			target_essay: number; available_essay: number; missing_essay: number;
+		};
+		rows: QuestionCompletenessRow[];
+		excluded_levels?: string[];
+	};
 	type EventOverview = {
 		member_count?: number; target_count?: number; review_count?: number; question_count?: number; published_question_count?: number;
 		package_count?: number; session_count?: number; room_count?: number; token_count?: number; card_count?: number; result_count?: number;
@@ -37,6 +54,7 @@
 		overview: EventOverview | null;
 		sessions: EventSession[];
 		packages: EventPackage[];
+		questionCompleteness: QuestionCompleteness | null;
 	};
 	type ChecklistHref =
 		| `/asesmen/kegiatan/${string}/members`
@@ -53,7 +71,7 @@
 	type ChecklistItem = {
 		label: string; helper: string; count: number | null; href: ChecklistHref; tone: 'success' | 'warning' | 'info'; action: string;
 	};
-	type EventSection = 'ringkasan' | 'persiapan' | 'operasional' | 'hasil';
+	type EventSection = 'ringkasan' | 'persiapan' | 'kelengkapan-soal' | 'operasional' | 'hasil';
 	type ReadinessGroup = {
 		id: EventSection;
 		title: string;
@@ -74,9 +92,13 @@
 	const sectionTabs: Array<{ id: EventSection; label: string }> = [
 		{ id: 'ringkasan', label: 'Ringkasan' },
 		{ id: 'persiapan', label: 'Persiapan' },
+		{ id: 'kelengkapan-soal', label: 'Kelengkapan Soal' },
 		{ id: 'operasional', label: 'Operasional' },
 		{ id: 'hasil', label: 'Hasil' },
 	];
+	let completenessLevel = $state('');
+	let completenessStatus = $state('');
+	let completenessSearch = $state('');
 
 	const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Aktif', finished: 'Selesai' };
 	const scopeLabel: Record<string, string> = { class: 'Per Kelas', grade: 'Per Tingkat', school: 'Seluruh Sekolah' };
@@ -100,12 +122,13 @@
 	}
 
 	async function fetchDetail(): Promise<EventCommandDetail> {
-		const [nextInfo, nextResults, overviewPayload, sessionPayload, packagePayload] = await Promise.all([
+		const [nextInfo, nextResults, overviewPayload, sessionPayload, packagePayload, completenessPayload] = await Promise.all([
 			fetch(clientApiPath`/api/asesmen/events/${eventId}`).then((response) => readClientApiData<EventInfo>(response, 'Gagal memuat kegiatan ujian')),
 			fetch(clientApiPath`/api/asesmen/events/${eventId}/results`).then((response) => readClientApiData<ResultRow[]>(response, 'Gagal memuat rekap nilai kegiatan')),
 			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/overview`, null),
 			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/sessions`, []),
 			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/packages`, []),
+			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/question-completeness`, null),
 		]);
 		return {
 			info: nextInfo,
@@ -113,6 +136,7 @@
 			overview: isRecord(overviewPayload) ? overviewPayload as EventOverview : null,
 			sessions: parseArrayPayload<EventSession>(sessionPayload, 'sessions'),
 			packages: parseArrayPayload<EventPackage>(packagePayload, 'packages'),
+			questionCompleteness: isRecord(completenessPayload) ? completenessPayload as QuestionCompleteness : null,
 		};
 	}
 
@@ -128,13 +152,13 @@
 		detailPromise = fetchDetail().then((detail) => {
 			if (requestId !== detailRequestId) {
 				if (!info) throw new Error('Permintaan dashboard kegiatan dibatalkan');
-				return { info, results, overview: null, sessions: [], packages: [] };
+				return { info, results, overview: null, sessions: [], packages: [], questionCompleteness: null };
 			}
 			applyDetail(detail);
 			return detail;
 		}).catch((error: unknown) => {
 			if (requestId === detailRequestId || !info) throw error;
-			return { info, results, overview: null, sessions: [], packages: [] };
+			return { info, results, overview: null, sessions: [], packages: [], questionCompleteness: null };
 		});
 	}
 
@@ -266,6 +290,51 @@
 		const a = document.createElement('a');
 		a.href = url;
 		a.download = `rekap_${info.title.replace(/\s+/g, '_')}.csv`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	function filteredCompletenessRows(detail: EventCommandDetail) {
+		const rows = detail.questionCompleteness?.rows ?? [];
+		const search = completenessSearch.trim().toLowerCase();
+		return rows.filter((row) => {
+			if (completenessLevel && row.level !== completenessLevel) return false;
+			if (completenessStatus === 'complete' && !row.complete) return false;
+			if (completenessStatus === 'incomplete' && row.complete) return false;
+			if (!search) return true;
+			return [row.class_name, row.class_code, row.subject_name, row.subject_code, row.teacher_name, row.teacher_username]
+				.some((value) => value.toLowerCase().includes(search));
+		});
+	}
+
+	function completenessLevels(detail: EventCommandDetail) {
+		return Array.from(new Set((detail.questionCompleteness?.rows ?? []).map((row) => row.level).filter(Boolean))).sort();
+	}
+
+	function exportCompletenessCSV(detail: EventCommandDetail) {
+		if (!info) return;
+		const rows = filteredCompletenessRows(detail);
+		const header = csvRow(['Tingkat', 'Rombel', 'Mapel', 'Guru', 'Username', 'Target PG', 'PG Ada', 'PG Kurang', 'Target Esai', 'Esai Ada', 'Esai Kurang', 'Status']);
+		const body = rows.map((row) => csvRow([
+			row.level,
+			row.class_name || row.class_code,
+			row.subject_name,
+			row.teacher_name,
+			row.teacher_username,
+			row.target_pg,
+			row.available_pg,
+			row.missing_pg,
+			row.target_essay,
+			row.available_essay,
+			row.missing_essay,
+			row.complete ? 'Lengkap' : 'Belum lengkap',
+		]));
+		const csv = [header, ...body].join('\n');
+		const blob = new Blob([csv], { type: 'text/csv' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `kelengkapan_soal_${info.title.replace(/\s+/g, '_')}.csv`;
 		a.click();
 		URL.revokeObjectURL(url);
 	}
@@ -422,6 +491,74 @@
 							<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Sesi</p><p class="text-lg font-semibold text-foreground">{detail.sessions.length}</p></div>
 							<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Baris hasil</p><p class="text-lg font-semibold text-foreground">{currentResults.length}</p></div>
 							<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Ringkasan kesiapan</p><p class="text-sm font-semibold text-foreground">{detail.overview ? 'Lengkap dari sistem' : 'Sebagian data tersedia'}</p></div>
+						</Card.Content>
+					</Card.Root>
+				</section>
+			{/if}
+
+			{#if activeSection === 'kelengkapan-soal'}
+				{@const completeness = detail.questionCompleteness}
+				{@const filteredRows = filteredCompletenessRows(detail)}
+				<section class="space-y-4">
+					<Card.Root>
+						<Card.Header class="pb-2">
+							<div class="flex flex-wrap items-start justify-between gap-3">
+								<div>
+									<Card.Title class="text-base">Kelengkapan Soal per Guru/Mapel/Rombel</Card.Title>
+									<Card.Description>Target Fase 1: 20 soal PG dan 5 esai untuk setiap penugasan mengajar dalam tingkat target event.</Card.Description>
+								</div>
+								<LoadingButton variant="outline" onclick={() => exportCompletenessCSV(detail)} disabled={filteredRows.length === 0} label="Ekspor CSV" />
+							</div>
+						</Card.Header>
+						<Card.Content class="space-y-4">
+							{#if completeness}
+								<div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+									<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Penugasan</p><p class="text-lg font-semibold text-foreground">{completeness.summary.total_rows}</p></div>
+									<div class="rounded-xl bg-success/10 p-3"><p class="text-xs text-muted-foreground">Lengkap</p><p class="text-lg font-semibold text-success">{completeness.summary.complete_rows}</p></div>
+									<div class="rounded-xl bg-warning/10 p-3"><p class="text-xs text-muted-foreground">Belum lengkap</p><p class="text-lg font-semibold text-warning">{completeness.summary.incomplete_rows}</p></div>
+									<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Kekurangan total</p><p class="text-lg font-semibold text-foreground">PG {completeness.summary.missing_pg} · Esai {completeness.summary.missing_essay}</p></div>
+								</div>
+								{#if completeness.excluded_levels?.length}
+									<p class="rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-muted-foreground">Tingkat tidak dihitung karena di luar target event: {completeness.excluded_levels.join(', ')}.</p>
+								{/if}
+								<div class="grid gap-2 md:grid-cols-3">
+									<select bind:value={completenessLevel} class="rounded-lg border border-border bg-background px-3 py-2 text-sm">
+										<option value="">Semua tingkat</option>
+										{#each completenessLevels(detail) as level (level)}<option value={level}>Tingkat {level}</option>{/each}
+									</select>
+									<select bind:value={completenessStatus} class="rounded-lg border border-border bg-background px-3 py-2 text-sm">
+										<option value="">Semua status</option>
+										<option value="incomplete">Belum lengkap</option>
+										<option value="complete">Lengkap</option>
+									</select>
+									<input bind:value={completenessSearch} class="rounded-lg border border-border bg-background px-3 py-2 text-sm" placeholder="Cari rombel, mapel, atau guru" />
+								</div>
+							{:else}
+								<p class="rounded-xl bg-muted/50 p-4 text-sm text-muted-foreground">Data kelengkapan soal belum tersedia dari API.</p>
+							{/if}
+						</Card.Content>
+					</Card.Root>
+
+					<Card.Root>
+						<Card.Content class="p-0 overflow-x-auto">
+							<Table.Root>
+								<Table.Header><Table.Row class="bg-muted/50"><Table.Head>Tingkat</Table.Head><Table.Head>Rombel</Table.Head><Table.Head>Mapel</Table.Head><Table.Head>Guru</Table.Head><Table.Head class="text-center">PG</Table.Head><Table.Head class="text-center">Esai</Table.Head><Table.Head>Status</Table.Head></Table.Row></Table.Header>
+								<Table.Body>
+									{#each filteredRows as row (`${row.class_id}-${row.subject_id}-${row.teacher_employee_id}`)}
+										<Table.Row>
+											<Table.Cell><Badge variant="outline" class="bg-card">{row.level}</Badge></Table.Cell>
+											<Table.Cell class="font-medium">{row.class_name || row.class_code}</Table.Cell>
+											<Table.Cell>{row.subject_name}</Table.Cell>
+											<Table.Cell><div class="font-medium">{row.teacher_name}</div><div class="text-xs text-muted-foreground">{row.teacher_username || 'username belum tertaut'}</div></Table.Cell>
+											<Table.Cell class="text-center"><span class={row.missing_pg > 0 ? 'font-semibold text-warning' : 'font-semibold text-success'}>{row.available_pg}/{row.target_pg}</span>{#if row.missing_pg > 0}<div class="text-xs text-muted-foreground">kurang {row.missing_pg}</div>{/if}</Table.Cell>
+											<Table.Cell class="text-center"><span class={row.missing_essay > 0 ? 'font-semibold text-warning' : 'font-semibold text-success'}>{row.available_essay}/{row.target_essay}</span>{#if row.missing_essay > 0}<div class="text-xs text-muted-foreground">kurang {row.missing_essay}</div>{/if}</Table.Cell>
+											<Table.Cell>{#if row.complete}<Badge variant="outline" class="bg-success/10 text-success border-success/20">Lengkap</Badge>{:else}<Badge variant="secondary" class="bg-warning/10 text-warning border-warning/30">Belum</Badge>{/if}</Table.Cell>
+										</Table.Row>
+									{:else}
+										<Table.Row><Table.Cell colspan={7} class="py-12 text-center text-muted-foreground">Tidak ada baris sesuai filter.</Table.Cell></Table.Row>
+									{/each}
+								</Table.Body>
+							</Table.Root>
 						</Card.Content>
 					</Card.Root>
 				</section>
