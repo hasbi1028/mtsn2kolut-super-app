@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
+	"mtsn2kolut-super-app/backend/internal/service"
 )
 
 type fakeAcademicService struct {
@@ -31,6 +32,11 @@ type fakeAcademicService struct {
 
 	dashboardCalled bool
 	dashboardErr    error
+
+	weeklyCalled    bool
+	weeklyErr       error
+	conflictsCalled bool
+	conflictsErr    error
 
 	createYearArg      db.CreateAcademicYearParams
 	createClassArg     db.CreateSchoolClassParams
@@ -127,6 +133,29 @@ func (f *fakeAcademicService) GetDashboardSummary(context.Context) (db.GetAcadem
 		StudentsWithoutClass:   3,
 		ClassesWithoutHomeroom: 1,
 	}, nil
+}
+
+func (f *fakeAcademicService) GetWeeklyTimetable(context.Context) (service.WeeklyTimetable, error) {
+	f.weeklyCalled = true
+	if f.weeklyErr != nil {
+		return service.WeeklyTimetable{}, f.weeklyErr
+	}
+	return service.WeeklyTimetable{
+		ActiveAcademicYearName: "2026/2027",
+		Slots: []service.WeeklyTimetableSlot{{
+			ListWeeklyTimetableSlotsRow: db.ListWeeklyTimetableSlotsRow{SubjectName: "Matematika"},
+			ConflictStatus:              "ok",
+			ConflictLabel:               "Aman",
+		}},
+	}, nil
+}
+
+func (f *fakeAcademicService) GetTimetableConflicts(context.Context) ([]db.ListTimetableConflictsRow, error) {
+	f.conflictsCalled = true
+	if f.conflictsErr != nil {
+		return nil, f.conflictsErr
+	}
+	return []db.ListTimetableConflictsRow{{ConflictType: "same_teacher", Message: "Guru bentrok"}}, nil
 }
 
 func (f *fakeAcademicService) CreateYear(_ context.Context, p db.CreateAcademicYearParams) (db.AcademicYear, error) {
@@ -237,6 +266,18 @@ func TestAcademicOverviewAndStatsSuccess(t *testing.T) {
 	if rec.Code != http.StatusOK || !fake.dashboardCalled || !strings.Contains(rec.Body.String(), "active_academic_year") {
 		t.Fatalf("GetDashboard() status/called/body = %d/%v/%s, want 200/true/summary", rec.Code, fake.dashboardCalled, rec.Body.String())
 	}
+
+	rec = httptest.NewRecorder()
+	h.GetWeeklyTimetable(rec, adminRequest(http.MethodGet, "/api/academic/timetable/weekly", ""))
+	if rec.Code != http.StatusOK || !fake.weeklyCalled || !strings.Contains(rec.Body.String(), "conflict_status") {
+		t.Fatalf("GetWeeklyTimetable() status/called/body = %d/%v/%s, want 200/true/weekly", rec.Code, fake.weeklyCalled, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.GetTimetableConflicts(rec, adminRequest(http.MethodGet, "/api/academic/timetable/conflicts", ""))
+	if rec.Code != http.StatusOK || !fake.conflictsCalled || !strings.Contains(rec.Body.String(), "same_teacher") {
+		t.Fatalf("GetTimetableConflicts() status/called/body = %d/%v/%s, want 200/true/conflict list", rec.Code, fake.conflictsCalled, rec.Body.String())
+	}
 }
 
 func TestAcademicAdditionalValidationBranches(t *testing.T) {
@@ -263,6 +304,8 @@ func TestAcademicAdditionalValidationBranches(t *testing.T) {
 		{name: "overview subject error", fn: (*Academic).Overview, svc: &fakeAcademicService{listSubjectsErr: errDB}, req: adminRequest(http.MethodGet, "/api/academic", ""), wantStatus: http.StatusInternalServerError},
 		{name: "overview assignment error", fn: (*Academic).Overview, svc: &fakeAcademicService{listAssignsErr: errDB}, req: adminRequest(http.MethodGet, "/api/academic", ""), wantStatus: http.StatusInternalServerError},
 		{name: "overview timetable error", fn: (*Academic).Overview, svc: &fakeAcademicService{listTimetableErr: errDB}, req: adminRequest(http.MethodGet, "/api/academic", ""), wantStatus: http.StatusInternalServerError},
+		{name: "weekly timetable error", fn: (*Academic).GetWeeklyTimetable, svc: &fakeAcademicService{weeklyErr: errDB}, req: adminRequest(http.MethodGet, "/api/academic/timetable/weekly", ""), wantStatus: http.StatusInternalServerError},
+		{name: "timetable conflicts error", fn: (*Academic).GetTimetableConflicts, svc: &fakeAcademicService{conflictsErr: errDB}, req: adminRequest(http.MethodGet, "/api/academic/timetable/conflicts", ""), wantStatus: http.StatusInternalServerError},
 		{name: "create forbidden", fn: (*Academic).Create, req: withRouteParam(plainRequest(http.MethodPost, "/api/academic/subjects", `{}`), "entity", "subjects"), wantStatus: http.StatusForbidden},
 		{name: "create year invalid end", fn: (*Academic).Create, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/years", `{"name":"2026","start_date":"2026-07-01","end_date":"bad"}`), "entity", "years"), wantStatus: http.StatusBadRequest},
 		{name: "create class invalid json", fn: (*Academic).Create, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/classes", `{`), "entity", "classes"), wantStatus: http.StatusBadRequest},

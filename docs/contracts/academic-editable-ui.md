@@ -169,6 +169,74 @@ Validation awal:
 - Mengosongkan guru akan menghapus assignment melalui guard service existing, sehingga assignment yang sudah punya dependent tetap ditolak oleh backend.
 - Perubahan matrix disimpan per changed cell dari UI dengan dirty-change bar; bulk preview lebih besar tetap ditunda.
 
+## Weekly Timetable
+
+Dipakai mulai Sprint 4.
+
+Endpoint backend:
+
+```http
+GET /api/academic/timetable/weekly
+GET /api/academic/timetable/conflicts
+```
+
+Endpoint SvelteKit BFF:
+
+```http
+GET /api/academic/timetable/weekly
+GET /api/academic/timetable/conflicts
+```
+
+Mutasi slot tetap memakai endpoint rombel yang sudah ada:
+
+```http
+POST /api/academic/rombel/{class_id}/timetable-slots
+PUT /api/academic/rombel/{class_id}/timetable-slots/{slot_id}
+DELETE /api/academic/rombel/{class_id}/timetable-slots/{slot_id}
+```
+
+Response ringkas:
+
+```ts
+export type WeeklyTimetable = {
+  active_academic_year_id: string;
+  active_academic_year_name: string;
+  classes: Array<{ id: string; code: string; name: string; level: string }>;
+  teachers: Array<{ id: string; nip: string; nama: string; unit_kerja: string }>;
+  subjects: Array<Pick<AcademicSubject, 'id' | 'code' | 'name' | 'category' | 'is_schedule_activity' | 'default_weekly_hours' | 'display_order'>>;
+  assignments: Array<{
+    id: string;
+    class_id: string;
+    subject_id: string;
+    teacher_employee_id: string;
+    class_code: string;
+    subject_name: string;
+    teacher_name: string;
+  }>;
+  slots: Array<{
+    id: string;
+    assignment_id: string;
+    class_id: string;
+    teacher_employee_id: string;
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+    room_label: string;
+    conflict_status: 'ok' | 'conflict' | 'invalid_time_range';
+    conflict_label: string;
+    conflict_count: number;
+  }>;
+  conflicts: TimetableConflict[];
+};
+```
+
+Conflict detection awal:
+
+- `same_class`: slot rombel yang waktunya tumpang tindih.
+- `same_teacher`: guru mengajar pada slot yang waktunya tumpang tindih.
+- `same_room`: `room_label` sama dan tidak kosong pada slot yang waktunya tumpang tindih.
+- `invalid_time_range`: `start_time >= end_time`, untuk menjaga data lama bila pernah melewati constraint.
+
 ## Shared Editable Component Types
 
 Komponen foundation Sprint 1 menggunakan tipe berikut:

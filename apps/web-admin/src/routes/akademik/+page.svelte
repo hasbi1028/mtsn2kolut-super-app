@@ -325,7 +325,7 @@
 							<span class="block text-xs text-muted-foreground">Atur guru mapel dari detail rombel</span>
 						</span>
 					</Button>
-					<Button variant="outline" class="h-auto justify-start gap-3 py-3" href={resolve('/jadwal')}>
+					<Button variant="outline" class="h-auto justify-start gap-3 py-3" href={resolve('/akademik/jadwal')}>
 						<CalendarClock class="size-4 text-primary" />
 						<span class="text-left">
 							<span class="block font-medium">Jadwal Pelajaran</span>
@@ -354,4 +354,3 @@
 		</div>
 	</AsyncContent>
 </div>
-

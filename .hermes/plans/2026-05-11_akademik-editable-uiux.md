@@ -858,3 +858,20 @@ cd services/core-api && go test ./...
 - Added `/akademik/guru-mapel` matrix page with mapel rows, rombel columns, teacher dropdown cells, dirty-change save/cancel bar, level filter, and mapel search.
 - Updated sidebar links for `Mapel` and `Guru Mapel`.
 - Deployment gap: production DB must run migration 088 before the new backend binary is deployed/restarted, otherwise subject metadata queries will reference columns that do not exist.
+
+## Sprint Akademik 4 Jadwal Basic — 2026-05-11
+
+- Existing rombel-scoped timetable slot mutators were reused: `POST/PUT/DELETE /api/academic/rombel/{id}/timetable-slots[/slotID]`. No duplicate global timetable mutation endpoint was added.
+- Added sqlc read queries in `services/core-api/db/queries/timetable.sql` for active-year weekly timetable support: classes, teachers, subjects, assignments, slots, and conflict pairs.
+- Added Go service/handler read endpoints:
+  - `GET /api/academic/timetable/weekly`
+  - `GET /api/academic/timetable/conflicts`
+- Conflict awareness covers same rombel overlap, same teacher overlap, same non-empty `room_label` overlap, and invalid time range; weekly slot rows include `conflict_status`, `conflict_label`, and `conflict_count`.
+- Added BFF proxy routes:
+  - `apps/web-admin/src/routes/api/academic/timetable/weekly/+server.ts`
+  - `apps/web-admin/src/routes/api/academic/timetable/conflicts/+server.ts`
+- Added `/akademik/jadwal` with Per Rombel and Per Guru modes, hari/search filters, conflict badges/list, empty state, skeleton/error recovery, and basic add/edit/delete form using existing rombel timetable slot BFF routes.
+- Updated Akademik dashboard quick link and sidebar Jadwal link to `/akademik/jadwal` after the route was created.
+- Updated `docs/contracts/academic-editable-ui.md` with the Sprint 4 weekly timetable contract.
+- Gap intentionally left: no drag-and-drop or cross-rombel slot move. Editing a slot keeps the original rombel scope because existing safe mutators validate assignment within the routed rombel.
+- Deployment gap remains: production DB must already have migration 088 before this backend is deployed, because timetable weekly reads include subject metadata columns from Sprint 3.
