@@ -454,6 +454,7 @@ type fakeAcademicStore struct {
 	assignments      []db.ListClassSubjectAssignmentsRow
 	timetableSlots   []db.ListTimetableSlotsRow
 	stats            db.GetAcademicStatsRow
+	dashboardSummary db.GetAcademicDashboardSummaryRow
 	createYearArg    db.CreateAcademicYearParams
 	createClassArg   db.CreateSchoolClassParams
 	createSubjectArg db.CreateSubjectParams
@@ -502,6 +503,10 @@ func (f *fakeAcademicStore) ListTimetableSlots(ctx context.Context) ([]db.ListTi
 
 func (f *fakeAcademicStore) GetAcademicStats(ctx context.Context) (db.GetAcademicStatsRow, error) {
 	return f.stats, nil
+}
+
+func (f *fakeAcademicStore) GetAcademicDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error) {
+	return f.dashboardSummary, nil
 }
 
 func (f *fakeAcademicStore) CreateAcademicYear(ctx context.Context, arg db.CreateAcademicYearParams) (db.AcademicYear, error) {
@@ -609,13 +614,14 @@ func TestAcademicServiceForwardsStoreCallsAndChecksTimetableAvailability(t *test
 		t.Fatalf("ParseAcademicTimeInput(end) error = %v", err)
 	}
 	store := &fakeAcademicStore{
-		years:          []db.AcademicYear{{ID: yearID, Name: "2026/2027"}},
-		classes:        []db.ListSchoolClassesRow{{ID: classID, Name: "VII A"}},
-		subjects:       []db.Subject{{ID: subjectID, Name: "Matematika"}},
-		assignments:    []db.ListClassSubjectAssignmentsRow{{ID: assignmentID, ClassID: classID, SubjectID: subjectID, TeacherEmployeeID: teacherID}},
-		timetableSlots: []db.ListTimetableSlotsRow{{ID: slotID, AssignmentID: assignmentID, RoomLabel: "R1"}},
-		stats:          db.GetAcademicStatsRow{TotalStudents: 10, TotalClasses: 2, TotalSubjects: 3, TotalYears: 1},
-		getAssignRow:   db.GetClassSubjectAssignmentRow{ID: assignmentID, ClassID: classID, TeacherEmployeeID: teacherID},
+		years:            []db.AcademicYear{{ID: yearID, Name: "2026/2027"}},
+		classes:          []db.ListSchoolClassesRow{{ID: classID, Name: "VII A"}},
+		subjects:         []db.Subject{{ID: subjectID, Name: "Matematika"}},
+		assignments:      []db.ListClassSubjectAssignmentsRow{{ID: assignmentID, ClassID: classID, SubjectID: subjectID, TeacherEmployeeID: teacherID}},
+		timetableSlots:   []db.ListTimetableSlotsRow{{ID: slotID, AssignmentID: assignmentID, RoomLabel: "R1"}},
+		stats:            db.GetAcademicStatsRow{TotalStudents: 10, TotalClasses: 2, TotalSubjects: 3, TotalYears: 1},
+		dashboardSummary: db.GetAcademicDashboardSummaryRow{ActiveAcademicYear: "2026/2027", ActiveSemester: "Ganjil", TotalClasses: 2},
+		getAssignRow:     db.GetClassSubjectAssignmentRow{ID: assignmentID, ClassID: classID, TeacherEmployeeID: teacherID},
 	}
 	svc := &Academic{q: store}
 	if NewAcademic(nil) == nil {
@@ -639,6 +645,9 @@ func TestAcademicServiceForwardsStoreCallsAndChecksTimetableAvailability(t *test
 	}
 	if stats, err := svc.GetStats(context.Background()); err != nil || stats.TotalStudents != 10 {
 		t.Fatalf("GetStats() = %+v, %v; want total students 10", stats, err)
+	}
+	if dashboard, err := svc.GetDashboardSummary(context.Background()); err != nil || dashboard.ActiveAcademicYear != "2026/2027" {
+		t.Fatalf("GetDashboardSummary() = %+v, %v; want active year 2026/2027", dashboard, err)
 	}
 
 	if _, err := svc.CreateYear(context.Background(), db.CreateAcademicYearParams{Name: "2026/2027", IsActive: true}); err != nil {

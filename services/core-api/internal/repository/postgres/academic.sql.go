@@ -168,6 +168,145 @@ func (q *Queries) DeleteSubject(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const getAcademicDashboardSummary = `-- name: GetAcademicDashboardSummary :one
+WITH active_year AS (
+    SELECT id, name
+    FROM academic_years
+    WHERE is_active = TRUE
+    ORDER BY start_date DESC, name DESC
+    LIMIT 1
+),
+active_classes AS (
+    SELECT c.id, c.academic_year_id, c.code, c.name, c.level, c.is_active, c.created_at, c.updated_at
+    FROM school_classes c
+    WHERE c.is_active = TRUE
+      AND (
+          NOT EXISTS (SELECT 1 FROM active_year)
+          OR c.academic_year_id = (SELECT id FROM active_year)
+      )
+),
+active_students AS (
+    SELECT s.id, s.nis, s.nisn, s.nama, s.gender, s.parent_name, s.parent_phone, s.class_id, s.is_active, s.created_at, s.updated_at, s.status, s.nik, s.tempat_lahir, s.tanggal_lahir, s.alamat, s.agama, s.anak_ke, s.phone, s.photo_url, s.total_violation_points
+    FROM students s
+    WHERE s.is_active = TRUE
+),
+active_assignments AS (
+    SELECT csa.id, csa.class_id, csa.subject_id, csa.teacher_employee_id, csa.created_at, csa.updated_at
+    FROM class_subject_assignments csa
+    JOIN active_classes c ON c.id = csa.class_id
+),
+dashboard_slots AS (
+    SELECT
+        ts.id,
+        ts.day_of_week,
+        ts.start_time,
+        ts.end_time,
+        csa.class_id,
+        csa.teacher_employee_id,
+        LOWER(TRIM(ts.room_label)) AS room_key
+    FROM timetable_slots ts
+    JOIN active_assignments csa ON csa.id = ts.assignment_id
+)
+SELECT
+    COALESCE((SELECT name FROM active_year), '')::text AS active_academic_year,
+    CASE
+        WHEN EXTRACT(MONTH FROM CURRENT_DATE)::int BETWEEN 7 AND 12 THEN 'Ganjil'
+        ELSE 'Genap'
+    END::text AS active_semester,
+    (SELECT COUNT(*) FROM active_classes)::int AS total_classes,
+    (SELECT COUNT(*) FROM active_students)::int AS total_active_students,
+    (
+        SELECT COUNT(*)
+        FROM active_students s
+        WHERE s.class_id IS NULL
+           OR NOT EXISTS (SELECT 1 FROM active_classes c WHERE c.id = s.class_id)
+    )::int AS students_without_class,
+    (
+        SELECT COUNT(*)
+        FROM active_classes c
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM class_homeroom_assignments cha
+            WHERE cha.class_id = c.id
+              AND cha.is_active = TRUE
+        )
+    )::int AS classes_without_homeroom,
+    (
+        SELECT COUNT(*)
+        FROM active_assignments csa
+        LEFT JOIN employees e ON e.id = csa.teacher_employee_id
+        WHERE e.id IS NULL OR e.is_active = FALSE
+    )::int AS subject_assignments_missing_teacher,
+    (
+        SELECT COUNT(DISTINCT a.id)
+        FROM dashboard_slots a
+        JOIN dashboard_slots b ON a.id < b.id
+         AND a.day_of_week = b.day_of_week
+         AND a.start_time < b.end_time
+         AND a.end_time > b.start_time
+         AND (
+            a.class_id = b.class_id
+            OR a.teacher_employee_id = b.teacher_employee_id
+            OR (a.room_key <> '' AND a.room_key = b.room_key)
+         )
+    )::int AS timetable_conflicts,
+    (
+        SELECT COUNT(*)
+        FROM active_students s
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM users u
+            WHERE u.student_id = s.id
+              AND u.deleted_at IS NULL
+              AND u.is_active = TRUE
+        )
+    )::int AS student_accounts_missing,
+    (
+        SELECT COUNT(DISTINCT p.id)
+        FROM parent_students ps
+        JOIN active_students s ON s.id = ps.student_id
+        JOIN parents p ON p.id = ps.parent_id
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM users u
+            WHERE u.parent_id = p.id
+              AND u.deleted_at IS NULL
+              AND u.is_active = TRUE
+        )
+    )::int AS parent_accounts_missing
+`
+
+type GetAcademicDashboardSummaryRow struct {
+	ActiveAcademicYear               string `json:"active_academic_year"`
+	ActiveSemester                   string `json:"active_semester"`
+	TotalClasses                     int32  `json:"total_classes"`
+	TotalActiveStudents              int32  `json:"total_active_students"`
+	StudentsWithoutClass             int32  `json:"students_without_class"`
+	ClassesWithoutHomeroom           int32  `json:"classes_without_homeroom"`
+	SubjectAssignmentsMissingTeacher int32  `json:"subject_assignments_missing_teacher"`
+	TimetableConflicts               int32  `json:"timetable_conflicts"`
+	StudentAccountsMissing           int32  `json:"student_accounts_missing"`
+	ParentAccountsMissing            int32  `json:"parent_accounts_missing"`
+}
+
+func (q *Queries) GetAcademicDashboardSummary(ctx context.Context) (GetAcademicDashboardSummaryRow, error) {
+	row := q.db.QueryRow(ctx, getAcademicDashboardSummary)
+	var i GetAcademicDashboardSummaryRow
+	err := row.Scan(
+		&i.ActiveAcademicYear,
+		&i.ActiveSemester,
+		&i.TotalClasses,
+		&i.TotalActiveStudents,
+		&i.StudentsWithoutClass,
+		&i.ClassesWithoutHomeroom,
+		&i.SubjectAssignmentsMissingTeacher,
+		&i.TimetableConflicts,
+		&i.StudentAccountsMissing,
+		&i.ParentAccountsMissing,
+	)
+	return i, err
+}
+
 const getAcademicStats = `-- name: GetAcademicStats :one
 SELECT 
     (SELECT COUNT(*) FROM students WHERE is_active = TRUE)::int AS total_students,
