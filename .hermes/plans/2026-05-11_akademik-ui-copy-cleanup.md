@@ -288,6 +288,8 @@ go test ./internal/handler ./internal/service ./internal/repository/postgres
 go build -o /tmp/core-api-akademik-copy-cleanup ./cmd/api
 ```
 
+**Implementation note:** Selesai pada Tahap 7. Pesan yang berpotensi tampil dari `services/core-api/internal/handler/academic.go`, `services/core-api/internal/service/academic.go`, dan `services/core-api/internal/service/academic_year_rollover.go` dibersihkan dari istilah teknis seperti `invalid json`, nama field internal, `Preview`, `Apply`, `Dry-run`, `challenge`, `assignment`, `slot`, `CSV`, `database`, dan `existing`. Padanan operator yang dipakai antara lain `Data yang dikirim tidak dapat dibaca`, `Pratinjau kenaikan kelas`, `Penerapan kenaikan kelas`, `Cek data sebelum impor`, `kalimat konfirmasi`, `penugasan guru mapel`, `jam pelajaran`, `data impor`, dan `sudah ada`.
+
 ---
 
 ## Task 8: Tambah guard pencarian istilah developer

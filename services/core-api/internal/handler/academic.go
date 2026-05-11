@@ -146,14 +146,14 @@ func (h *Academic) ActivateYear(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
 		Confirmation string `json:"confirmation"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
 		return
 	}
 	row, err := h.svc.ActivateYear(r.Context(), id, body.Confirmation)
@@ -174,17 +174,17 @@ func (h *Academic) PreviewYearRollover(w http.ResponseWriter, r *http.Request) {
 		TargetAcademicYearID string `json:"target_academic_year_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
 		return
 	}
 	sourceID, err := parseOptionalUUID(body.SourceAcademicYearID)
 	if err != nil {
-		api.BadRequest(w, "source_academic_year_id invalid")
+		api.BadRequest(w, "Tahun ajaran sumber tidak valid")
 		return
 	}
 	targetID, err := parseUUID(body.TargetAcademicYearID)
 	if err != nil {
-		api.BadRequest(w, "target_academic_year_id invalid")
+		api.BadRequest(w, "Tahun ajaran tujuan tidak valid")
 		return
 	}
 	preview, err := h.svc.PreviewYearRollover(r.Context(), service.YearRolloverPreviewInput{
@@ -192,7 +192,7 @@ func (h *Academic) PreviewYearRollover(w http.ResponseWriter, r *http.Request) {
 		TargetAcademicYearID: targetID,
 	})
 	if err != nil {
-		writeDomainOrInternal(w, err, "Preview kenaikan tahun ajaran tidak valid")
+		writeDomainOrInternal(w, err, "Pratinjau kenaikan kelas tidak valid")
 		return
 	}
 	api.OK(w, preview)
@@ -210,17 +210,17 @@ func (h *Academic) ApplyYearRollover(w http.ResponseWriter, r *http.Request) {
 		SafetyToken          string `json:"safety_token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
 		return
 	}
 	sourceID, err := parseOptionalUUID(body.SourceAcademicYearID)
 	if err != nil {
-		api.BadRequest(w, "source_academic_year_id invalid")
+		api.BadRequest(w, "Tahun ajaran sumber tidak valid")
 		return
 	}
 	targetID, err := parseUUID(body.TargetAcademicYearID)
 	if err != nil {
-		api.BadRequest(w, "target_academic_year_id invalid")
+		api.BadRequest(w, "Tahun ajaran tujuan tidak valid")
 		return
 	}
 	result, err := h.svc.ApplyYearRollover(r.Context(), service.YearRolloverApplyInput{
@@ -230,7 +230,7 @@ func (h *Academic) ApplyYearRollover(w http.ResponseWriter, r *http.Request) {
 		SafetyToken:          body.SafetyToken,
 	})
 	if err != nil {
-		writeDomainOrInternal(w, err, "Apply kenaikan tahun ajaran tidak valid")
+		writeDomainOrInternal(w, err, "Penerapan kenaikan kelas tidak valid")
 		return
 	}
 	api.OK(w, result)
@@ -243,12 +243,12 @@ func (h *Academic) DryRunAcademicImport(w http.ResponseWriter, r *http.Request) 
 	}
 	var body service.AcademicImportDryRunInput
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
 		return
 	}
 	result, err := h.svc.DryRunAcademicImport(r.Context(), body)
 	if err != nil {
-		writeDomainOrInternal(w, err, "Dry-run import akademik tidak valid")
+		writeDomainOrInternal(w, err, "Cek data sebelum impor tidak valid")
 		return
 	}
 	api.OK(w, result)
@@ -269,16 +269,16 @@ func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 			IsActive  bool   `json:"is_active"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			api.BadRequest(w, "invalid json")
+			api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
 			return
 		}
 		var startDate, endDate pgtype.Date
 		if err := startDate.Scan(body.StartDate); err != nil {
-			api.BadRequest(w, "start_date invalid")
+			api.BadRequest(w, "Tanggal mulai tidak valid")
 			return
 		}
 		if err := endDate.Scan(body.EndDate); err != nil {
-			api.BadRequest(w, "end_date invalid")
+			api.BadRequest(w, "Tanggal selesai tidak valid")
 			return
 		}
 		row, err := h.svc.CreateYear(r.Context(), db.CreateAcademicYearParams{
@@ -301,12 +301,12 @@ func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 			IsActive       bool   `json:"is_active"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			api.BadRequest(w, "invalid json")
+			api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
 			return
 		}
 		yearID, err := parseUUID(body.AcademicYearID)
 		if err != nil {
-			api.BadRequest(w, "academic_year_id invalid")
+			api.BadRequest(w, "Tahun ajaran tidak valid")
 			return
 		}
 		row, err := h.svc.CreateClass(r.Context(), db.CreateSchoolClassParams{
@@ -324,7 +324,7 @@ func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 	case "subjects":
 		var body subjectRequest
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			api.BadRequest(w, "invalid json")
+			api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
 			return
 		}
 		row, err := h.svc.CreateSubject(r.Context(), createSubjectParams(body))
@@ -340,22 +340,22 @@ func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 			TeacherEmployeeID string `json:"teacher_employee_id"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			api.BadRequest(w, "invalid json")
+			api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
 			return
 		}
 		classID, err := parseUUID(body.ClassID)
 		if err != nil {
-			api.BadRequest(w, "class_id invalid")
+			api.BadRequest(w, "Rombel tidak valid")
 			return
 		}
 		subjectID, err := parseUUID(body.SubjectID)
 		if err != nil {
-			api.BadRequest(w, "subject_id invalid")
+			api.BadRequest(w, "Mata pelajaran tidak valid")
 			return
 		}
 		teacherID, err := parseUUID(body.TeacherEmployeeID)
 		if err != nil {
-			api.BadRequest(w, "teacher_employee_id invalid")
+			api.BadRequest(w, "Guru tidak valid")
 			return
 		}
 		row, err := h.svc.CreateAssignment(r.Context(), db.CreateClassSubjectAssignmentParams{
@@ -378,26 +378,26 @@ func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 			Notes        string `json:"notes"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			api.BadRequest(w, "invalid json")
+			api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
 			return
 		}
 		assignmentID, err := parseUUID(body.AssignmentID)
 		if err != nil {
-			api.BadRequest(w, "assignment_id invalid")
+			api.BadRequest(w, "Penugasan guru mapel tidak valid")
 			return
 		}
 		if body.DayOfWeek < 1 || body.DayOfWeek > 6 {
-			api.BadRequest(w, "day_of_week harus 1-6")
+			api.BadRequest(w, "Hari jadwal harus Senin sampai Sabtu")
 			return
 		}
 		startTime, err := service.ParseAcademicTimeInput(body.StartTime)
 		if err != nil {
-			api.BadRequest(w, "start_time invalid")
+			api.BadRequest(w, "Jam mulai tidak valid")
 			return
 		}
 		endTime, err := service.ParseAcademicTimeInput(body.EndTime)
 		if err != nil {
-			api.BadRequest(w, "end_time invalid")
+			api.BadRequest(w, "Jam selesai tidak valid")
 			return
 		}
 		if startTime.Microseconds >= endTime.Microseconds {
@@ -430,13 +430,13 @@ func (h *Academic) Update(w http.ResponseWriter, r *http.Request) {
 	entity := chi.URLParam(r, "entity")
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if entity == "subjects" {
 		var body subjectRequest
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			api.BadRequest(w, "invalid json")
+			api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
 			return
 		}
 		row, err := h.svc.UpdateSubject(r.Context(), updateSubjectParams(id, body))
@@ -460,26 +460,26 @@ func (h *Academic) Update(w http.ResponseWriter, r *http.Request) {
 		Notes        string `json:"notes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
 		return
 	}
 	assignmentID, err := parseUUID(body.AssignmentID)
 	if err != nil {
-		api.BadRequest(w, "assignment_id invalid")
+		api.BadRequest(w, "Penugasan guru mapel tidak valid")
 		return
 	}
 	if body.DayOfWeek < 1 || body.DayOfWeek > 6 {
-		api.BadRequest(w, "day_of_week harus 1-6")
+		api.BadRequest(w, "Hari jadwal harus Senin sampai Sabtu")
 		return
 	}
 	startTime, err := service.ParseAcademicTimeInput(body.StartTime)
 	if err != nil {
-		api.BadRequest(w, "start_time invalid")
+		api.BadRequest(w, "Jam mulai tidak valid")
 		return
 	}
 	endTime, err := service.ParseAcademicTimeInput(body.EndTime)
 	if err != nil {
-		api.BadRequest(w, "end_time invalid")
+		api.BadRequest(w, "Jam selesai tidak valid")
 		return
 	}
 	if startTime.Microseconds >= endTime.Microseconds {
@@ -516,7 +516,7 @@ func (h *Academic) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	switch entity {
