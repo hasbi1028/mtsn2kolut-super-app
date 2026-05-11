@@ -20,9 +20,17 @@
 		status: string; created_at: string; session_count: number;
 	};
 	type AcademicYear = { id: string; name: string; is_active: boolean; };
+	type EventQuestionReadiness = {
+		complete_rows: number;
+		total_rows: number;
+		incomplete_rows: number;
+		missing_pg: number;
+		missing_essay: number;
+	};
 	type EventsOverview = {
 		events: CbtEvent[];
 		years: AcademicYear[];
+		questionReadiness: Record<string, EventQuestionReadiness>;
 	};
 	type StatusFilter = 'all' | 'draft' | 'active' | 'finished';
 
@@ -64,10 +72,26 @@
 		return 'bg-warning/15 text-warning border-warning/30';
 	}
 
-	function eventProgressLabel(event: CbtEvent) {
+	function eventProgressLabel(event: CbtEvent, readiness?: EventQuestionReadiness) {
+		if (readiness && readiness.total_rows > 0) {
+			const pct = Math.round((readiness.complete_rows / readiness.total_rows) * 100);
+			return readiness.incomplete_rows > 0 ? `Soal ${pct}% lengkap · ${readiness.incomplete_rows} belum lengkap` : 'Soal 100% lengkap';
+		}
 		if (event.session_count > 0) return `${event.session_count} sesi tersusun`;
 		if (event.status === 'draft') return 'Siapkan paket dan sesi';
 		return 'Belum ada sesi';
+	}
+
+	function questionReadinessClass(readiness?: EventQuestionReadiness) {
+		if (!readiness || readiness.total_rows === 0) return 'bg-muted text-muted-foreground border-border';
+		if (readiness.incomplete_rows === 0) return 'bg-success/10 text-success border-success/20';
+		return 'bg-warning/10 text-warning border-warning/30';
+	}
+
+	function questionReadinessLabel(readiness?: EventQuestionReadiness) {
+		if (!readiness || readiness.total_rows === 0) return 'Soal belum dihitung';
+		const pct = Math.round((readiness.complete_rows / readiness.total_rows) * 100);
+		return readiness.incomplete_rows > 0 ? `Soal ${pct}%` : 'Soal lengkap';
 	}
 
 	function statusCount(items: CbtEvent[], status: StatusFilter) {
@@ -90,14 +114,34 @@
 		return [];
 	}
 
+	async function fetchEventQuestionReadiness(event: CbtEvent): Promise<[string, EventQuestionReadiness] | null> {
+		try {
+			const payload = await fetch(clientApiPath`/api/asesmen/events/${event.id}/question-completeness`).then((response) => readClientApiData<unknown>(response));
+			const summary = isRecord(payload) && isRecord(payload.summary) ? payload.summary : null;
+			if (!summary) return null;
+			return [event.id, {
+				complete_rows: Number(summary.complete_rows) || 0,
+				total_rows: Number(summary.total_rows) || 0,
+				incomplete_rows: Number(summary.incomplete_rows) || 0,
+				missing_pg: Number(summary.missing_pg) || 0,
+				missing_essay: Number(summary.missing_essay) || 0,
+			}];
+		} catch {
+			return null;
+		}
+	}
+
 	async function fetchOverview(): Promise<EventsOverview> {
 		const [eventsData, academicData] = await Promise.all([
 			fetch('/api/asesmen/events').then((response) => readClientApiData<CbtEvent[]>(response, 'Gagal memuat data kegiatan ujian')),
 			fetch('/api/academic').then((response) => readClientApiData<unknown>(response, 'Gagal memuat data akademik')),
 		]);
+		const parsedEvents = Array.isArray(eventsData) ? eventsData : [];
+		const readinessEntries = (await Promise.all(parsedEvents.slice(0, 12).map((event) => fetchEventQuestionReadiness(event)))).filter((entry): entry is [string, EventQuestionReadiness] => Boolean(entry));
 		return {
-			events: Array.isArray(eventsData) ? eventsData : [],
+			events: parsedEvents,
 			years: parseAcademicYears(academicData),
+			questionReadiness: Object.fromEntries(readinessEntries),
 		};
 	}
 
@@ -114,12 +158,12 @@
 		events = [];
 		years = [];
 		eventsPromise = fetchOverview().then((overview) => {
-			if (requestId !== eventsRequestId) return { events, years };
+			if (requestId !== eventsRequestId) return { events, years, questionReadiness: {} };
 			applyOverview(overview);
 			return overview;
 		}).catch((error: unknown) => {
 			if (requestId === eventsRequestId) throw error;
-			return { events, years };
+			return { events, years, questionReadiness: {} };
 		});
 	}
 
@@ -136,7 +180,7 @@
 			eventsPromise = Promise.resolve(overview);
 		} catch (error) {
 			if (requestId === eventsRequestId) {
-				eventsPromise = Promise.resolve({ events, years });
+				eventsPromise = Promise.resolve({ events, years, questionReadiness: {} });
 				toast.error(overviewErrorMessage(error));
 			}
 		}
@@ -434,13 +478,16 @@
 									</Table.Cell>
 									<Table.Cell class="text-sm text-muted-foreground">{scopeLabel[e.scope] ?? e.scope}</Table.Cell>
 									<Table.Cell class="text-center">
-										<Badge variant="secondary">{e.session_count} Sesi</Badge>
+										<div class="flex flex-col items-center gap-1">
+											<Badge variant="secondary">{e.session_count} Sesi</Badge>
+											<Badge class={questionReadinessClass(overview.questionReadiness[e.id])}>{questionReadinessLabel(overview.questionReadiness[e.id])}</Badge>
+										</div>
 									</Table.Cell>
 									<Table.Cell>
 										<Badge class={statusClass(e.status)}>
 											{statusLabel[e.status] ?? e.status}
 										</Badge>
-										<div class="mt-1 text-xs text-muted-foreground">{eventProgressLabel(e)}</div>
+										<div class="mt-1 text-xs text-muted-foreground">{eventProgressLabel(e, overview.questionReadiness[e.id])}</div>
 									</Table.Cell>
 									<Table.Cell class="text-right">
 										<div class="flex flex-wrap justify-end gap-1.5">
@@ -488,8 +535,9 @@
 									<Badge variant="outline" class="text-xs">{e.target_levels.join(', ')}</Badge>
 								{/if}
 								<Badge variant="secondary">{e.session_count} sesi</Badge>
+								<Badge class={questionReadinessClass(overview.questionReadiness[e.id])}>{questionReadinessLabel(overview.questionReadiness[e.id])}</Badge>
 							</div>
-							<p class="mt-3 text-xs text-muted-foreground">{eventProgressLabel(e)}</p>
+							<p class="mt-3 text-xs text-muted-foreground">{eventProgressLabel(e, overview.questionReadiness[e.id])}</p>
 							<div class="mt-4 grid grid-cols-2 gap-2">
 								<a href={resolve(`/asesmen/kegiatan/${e.id}`)} class="col-span-2 inline-flex items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Kelola</a>
 								<LoadingButton variant="ghost" size="sm" onclick={() => openEdit(e)}>Edit</LoadingButton>
