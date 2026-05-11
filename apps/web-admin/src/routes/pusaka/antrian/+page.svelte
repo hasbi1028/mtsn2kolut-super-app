@@ -138,7 +138,7 @@
 	}
 
 	function jobErrorMessage(error: unknown) {
-		return error instanceof Error ? error.message : 'Gagal memuat antrian job';
+		return error instanceof Error ? error.message : 'Gagal memuat antrian pekerjaan';
 	}
 
 	function handleJobRenderError(error: unknown) {

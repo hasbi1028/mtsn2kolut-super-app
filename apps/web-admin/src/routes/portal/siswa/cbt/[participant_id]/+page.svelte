@@ -46,7 +46,7 @@
 			const payload = await revealStudentPortalCbtToken(item.participant_id, roomToken);
 			revealedToken = payload.token;
 		} catch (error) {
-			revealError = error instanceof Error ? error.message : 'Token ujian belum dapat dibuka.';
+			revealError = error instanceof Error ? error.message : 'Kode ujian belum dapat dibuka.';
 		} finally {
 			revealing = false;
 		}
@@ -64,7 +64,7 @@
 	function statusLabel(status: string) {
 		return {
 			upcoming: 'Belum dibuka',
-			token_window: 'Token dapat dibuka',
+			token_window: 'Kode dapat dibuka',
 			active: 'Sedang berlangsung',
 			submitted: 'Selesai/submit',
 			closed: 'Ditutup',
@@ -112,7 +112,7 @@
 					<div class="space-y-3 rounded-xl border border-border p-4 print:hidden">
 						<label class="text-sm font-semibold" for="room-token">Masukkan Token Ruang</label>
 						<input id="room-token" class="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm" bind:value={roomToken} placeholder="Token dari pengawas" />
-						<Button onclick={revealToken} disabled={revealing || roomToken.trim().length < 4}>{revealing ? 'Membuka...' : 'Buka Token Ujian'}</Button>
+						<Button onclick={revealToken} disabled={revealing || roomToken.trim().length < 4}>{revealing ? 'Membuka...' : 'Buka Kode Ujian'}</Button>
 						{#if revealError}<p class="text-sm text-destructive">{revealError}</p>{/if}
 						{#if revealedToken}
 							<div class="rounded-lg border border-primary/30 bg-primary/10 p-3">

@@ -553,7 +553,7 @@
 
 	async function exportTeacherReadinessReport() {
 		if (filteredTeacherSummaries.length === 0) {
-			showError('Tidak ada data dashboard guru yang bisa diekspor.');
+			showError('Tidak ada data ringkasan guru yang bisa diunduh.');
 			return;
 		}
 		teacherExportBusy = true;

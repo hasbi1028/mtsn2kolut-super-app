@@ -140,7 +140,7 @@
 		if (!revealTarget || revealLoading) return;
 		const roomToken = roomTokenInput.trim();
 		if (roomToken.length < 4) {
-			revealError = 'Token ruang minimal 4 karakter.';
+			revealError = 'Kode ruang minimal 4 karakter.';
 			return;
 		}
 		revealLoading = true;
@@ -150,7 +150,7 @@
 		} catch (error) {
 			revealError = error instanceof Error && error.message.trim()
 				? error.message
-				: 'Token ruang tidak sesuai. Pastikan Anda berada di ruang yang benar.';
+				: 'Kode ruang tidak sesuai. Pastikan Anda berada di ruang yang benar.';
 		} finally {
 			revealLoading = false;
 		}
@@ -296,7 +296,7 @@
 										<div class="flex justify-end gap-2">
 											<Button size="sm" variant="outline" href={resolve(`/portal/siswa/cbt/${item.participant_id}`)}>Kartu</Button>
 											<Button size="sm" disabled={!item.can_reveal_token} onclick={() => openReveal(item)}>
-												{item.can_reveal_token ? 'Buka Token' : 'Belum Dibuka'}
+												{item.can_reveal_token ? 'Buka Kode' : 'Belum Dibuka'}
 											</Button>
 										</div>
 									</Table.Cell>
@@ -355,7 +355,7 @@
 <Dialog.Root bind:open={revealOpen}>
 	<Dialog.Content>
 		<Dialog.Header>
-			<Dialog.Title>Buka Token Ujian</Dialog.Title>
+			<Dialog.Title>Buka Kode Ujian</Dialog.Title>
 			<Dialog.Description>Masukkan token ruang yang diberikan pengawas setelah peserta siap di ruang ujian.</Dialog.Description>
 		</Dialog.Header>
 		<div class="mt-4 space-y-4">
@@ -386,7 +386,7 @@
 			<Button variant="outline" onclick={() => (revealOpen = false)}>Tutup</Button>
 			{#if !revealedToken}
 				<Button onclick={() => void submitReveal()} disabled={revealLoading}>
-					{revealLoading ? 'Memeriksa...' : 'Buka Token'}
+					{revealLoading ? 'Memeriksa...' : 'Buka Kode'}
 				</Button>
 			{/if}
 		</Dialog.Footer>
