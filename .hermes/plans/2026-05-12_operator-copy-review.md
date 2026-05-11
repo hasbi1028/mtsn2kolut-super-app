@@ -160,9 +160,27 @@ Fokus pada surat masuk/keluar, disposisi, arsip, surat keterangan, siklus dokume
 
 Fokus pada pegawai, kehadiran, ringkasan, antrian proses, sinkron data, dan coba ulang.
 
+**Implementation Notes (2026-05-12):**
+
+- Membersihkan copy operator pada modul PUSAKA/Kehadiran: ringkasan PUSAKA, antrian pekerjaan, pegawai PUSAKA, data kehadiran, dan ringkasan kehadiran.
+- Istilah teknis user-facing yang diganti mencakup job, worker, scheduler, queue phrase, dashboard, eligible, dan backend pada pesan operasional PUSAKA.
+- Padanan utama: pekerjaan, petugas sistem, jadwal otomatis, antrian, halaman ringkasan, pegawai yang memenuhi syarat, dan layanan sistem.
+- Tidak mengubah route, endpoint, worker queue, format data PUSAKA, atau alur rekap.
+- Audit residual Tahap 6–7: `visible 0`, `code_only 114` (termasuk MIME `text/csv` code-only pada ekspor nilai).
+- Verifikasi: `npm --prefix apps/web-admin run check` PASS (`0 errors and 0 warnings`).
+
 ## Tahap 7 — Portal, Kesiswaan, Nilai/Rapor
 
 Fokus pada portal siswa/orang tua, akun, nilai, rapor, dan status siswa.
+
+**Implementation Notes (2026-05-12):**
+
+- Membersihkan copy operator/siswa pada Portal Siswa dan halaman ujian siswa, serta meninjau Kesiswaan, Nilai/Rapor, dan Orang Tua.
+- Istilah teknis user-facing yang diganti mencakup token ujian/ruang dan dashboard guru.
+- Padanan utama: kode ujian, kode ruang, kode akses, dan ringkasan guru.
+- Tidak mengubah route portal, endpoint ujian, validasi kode ruang, format ekspor nilai, atau logika rapor.
+- Audit residual Tahap 6–7: `visible 0`, `code_only 114` (termasuk MIME `text/csv` code-only pada ekspor nilai).
+- Verifikasi: `npm --prefix apps/web-admin run check` PASS (`0 errors and 0 warnings`).
 
 ## Tahap 8 — Website/Publikasi
 

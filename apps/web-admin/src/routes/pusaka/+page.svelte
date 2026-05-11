@@ -99,8 +99,8 @@
 	async function fetchOverview(): Promise<PusakaOverview> {
 		const [queueData, jobsData, workerData] = await Promise.all([
 			fetch('/api/pusaka/jobs/stats').then((response) => readClientApiData<Partial<QueueStats>>(response, 'Gagal memuat ringkasan antrian PUSAKA')),
-			fetch('/api/pusaka/jobs?limit=5').then((response) => readClientApiData<JobListPayload | RecentJob[]>(response, 'Gagal memuat job terbaru PUSAKA')),
-			fetch('/api/pusaka/worker/status').then((response) => readClientApiData<WorkerStatus | null>(response, 'Gagal memuat status worker PUSAKA')),
+			fetch('/api/pusaka/jobs?limit=5').then((response) => readClientApiData<JobListPayload | RecentJob[]>(response, 'Gagal memuat pekerjaan terbaru PUSAKA')),
+			fetch('/api/pusaka/worker/status').then((response) => readClientApiData<WorkerStatus | null>(response, 'Gagal memuat status petugas sistem PUSAKA')),
 		]);
 
 		return {
@@ -154,11 +154,11 @@
 	function overviewErrorMessage(error: unknown) {
 		if (error instanceof Error && error.message.trim()) return error.message;
 		if (typeof error === 'string' && error.trim()) return error;
-		return 'Gagal memuat status worker, ringkasan antrian, atau job terbaru. Periksa backend dan worker PUSAKA, lalu coba lagi.';
+		return 'Gagal memuat status petugas sistem, ringkasan antrian, atau pekerjaan terbaru. Periksa layanan sistem PUSAKA, lalu coba lagi.';
 	}
 
 	function handleOverviewRenderError(error: unknown, reset: () => void) {
-		console.error('PUSAKA overview render failed', error);
+		console.error('Ringkasan PUSAKA gagal ditampilkan', error);
 		reset();
 	}
 
@@ -166,17 +166,17 @@
 		busy = { ...busy, [key]: true };
 		try {
 			const res  = await fn();
-			const data = await readClientApiData<PusakaActionResponse>(res, 'Gagal menjalankan operasi PUSAKA');
+			const data = await readClientApiData<PusakaActionResponse>(res, 'Gagal menjalankan pekerjaan PUSAKA');
 			operationState = {
 				tone: key === 'cancel_all' ? 'warning' : 'success',
-				title: key === 'cancel_all' ? 'Antrian Dibatalkan' : 'Operasi PUSAKA Berhasil',
-				message: successMsg + (data.cancelled != null ? ` (${data.cancelled} job)` : ''),
+				title: key === 'cancel_all' ? 'Antrian Dibatalkan' : 'Pekerjaan PUSAKA Berhasil',
+				message: successMsg + (data.cancelled != null ? ` (${data.cancelled} pekerjaan)` : ''),
 			};
-			showToast(successMsg + (data.cancelled != null ? ` (${data.cancelled} job)` : ''), 'ok');
+			showToast(successMsg + (data.cancelled != null ? ` (${data.cancelled} pekerjaan)` : ''), 'ok');
 		} catch (error) {
 			operationState = {
 				tone: 'error',
-				title: 'Operasi PUSAKA Gagal',
+				title: 'Pekerjaan PUSAKA Gagal',
 				message: overviewErrorMessage(error),
 			};
 			showToast(overviewErrorMessage(error), 'err');
@@ -190,7 +190,7 @@
 	async function runRekap() {
 		if (!(await confirmChallenge({
 			title: 'Mulai Rekap Massal PUSAKA',
-			message: 'Rekap massal akan membuat job untuk seluruh akun PUSAKA yang aktif. Gunakan hanya saat operator siap memantau antrian.',
+			message: 'Rekap massal akan membuat pekerjaan untuk seluruh akun PUSAKA yang aktif. Gunakan hanya saat operator siap memantau antrian.',
 			challenge: 'REKAP',
 			confirmLabel: 'Mulai Rekap',
 			tone: 'warning'
@@ -202,9 +202,9 @@
 			operationState = {
 				tone: 'warning',
 				title: 'Rekap Massal Diantrekan',
-				message: `Sistem menambahkan ${data.inserted ?? 0} job baru. Pantau hasilnya di antrian dan worker status sebelum mengulangi operasi ini.`,
+				message: `Sistem menambahkan ${data.inserted ?? 0} pekerjaan baru. Pantau hasilnya di antrian dan worker status sebelum mengulangi operasi ini.`,
 			};
-			showToast(`Rekap di-queue: ${data.inserted ?? 0} job baru`, 'ok');
+			showToast(`Rekap di-queue: ${data.inserted ?? 0} pekerjaan baru`, 'ok');
 		} catch (error) {
 			operationState = {
 				tone: 'error',
@@ -218,7 +218,7 @@
 		}
 	}
 
-	const triggerSched  = ()          => act('sched',      () => fetch('/api/pusaka/scheduler/tick', { method: 'POST' }), 'Scheduler tick dijalankan');
+	const triggerSched  = ()          => act('sched',      () => fetch('/api/pusaka/scheduler/tick', { method: 'POST' }), 'Jadwal otomatis dijalankan');
 	const cancelAll     = ()          => act('cancel_all', () => fetch('/api/pusaka/jobs/cancel-all',{ method: 'POST' }), 'Semua antrian dibatalkan');
 
 	function showToast(msg: string, type: 'ok' | 'err' = 'ok') {
@@ -268,10 +268,10 @@
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
 			<h1 class="text-2xl font-semibold text-foreground">Kontrol PUSAKA Kemenag</h1>
-			<p class="text-sm text-muted-foreground mt-1">Monitor dan kontrol sinkronisasi data kehadiran dari PUSAKA Kemenag</p>
+			<p class="text-sm text-muted-foreground mt-1">Pantau dan kelola penarikan data kehadiran dari PUSAKA Kemenag</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
-			<LoadingButton variant="outline" size="sm" onclick={() => void triggerSched()} loading={busy.sched} loadingLabel="Memproses..." label="⚡ Jalankan Scheduler" />
+			<LoadingButton variant="outline" size="sm" onclick={() => void triggerSched()} loading={busy.sched} loadingLabel="Memproses..." label="⚡ Jalankan Jadwal Otomatis" />
 			<LoadingButton size="sm" onclick={() => void runRekap()} loading={busy.rekap} loadingLabel="Memproses..." label="▶ Mulai Rekap" />
 			{#if confirmKey === 'cancel_all'}
 				<span class="self-center text-xs text-warning">Batalkan semua antrian?</span>
@@ -323,7 +323,7 @@
 	<div class="grid gap-4 sm:grid-cols-3">
 		<Card.Root>
 			<Card.Header class="pb-2">
-				<Card.Description>Worker Aktif</Card.Description>
+				<Card.Description>Petugas Sistem Aktif</Card.Description>
 			</Card.Header>
 			<Card.Content class="pt-0">
 				<div class="flex items-center gap-2">
@@ -339,7 +339,7 @@
 
 		<Card.Root>
 			<Card.Header class="pb-2">
-				<Card.Description>Consumers</Card.Description>
+				<Card.Description>Proses Aktif</Card.Description>
 			</Card.Header>
 			<Card.Content class="pt-0">
 				<span class="text-2xl font-bold">
@@ -386,7 +386,7 @@
 	<Card.Root class="overflow-hidden border-border shadow-sm">
 		<Card.Header class="pb-3">
 			<div class="flex items-center justify-between">
-				<Card.Title class="text-base">Job Terbaru</Card.Title>
+				<Card.Title class="text-base">Pekerjaan Terbaru</Card.Title>
 			<Button variant="ghost" size="sm" href={resolve('/pusaka/antrian')}>Lihat semua →</Button>
 			</div>
 		</Card.Header>
@@ -399,7 +399,7 @@
 						<Table.Head>Nama</Table.Head>
 						<Table.Head>Tipe</Table.Head>
 						<Table.Head>Status</Table.Head>
-						<Table.Head class="hidden sm:table-cell">Worker</Table.Head>
+						<Table.Head class="hidden sm:table-cell">Petugas Sistem</Table.Head>
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
@@ -416,8 +416,8 @@
 							<Table.Cell colspan={5} class="p-4">
 								<EmptyStatePanel
 									compact
-									title="Belum ada job"
-									description="Jalankan rekap atau trigger scheduler untuk mulai membentuk antrean kerja PUSAKA di dashboard ini."
+									title="Belum ada pekerjaan"
+									description="Jalankan rekap atau jalankan jadwal otomatis untuk mulai membentuk antrean kerja PUSAKA di halaman ini."
 								/>
 							</Table.Cell>
 						</Table.Row>
@@ -433,7 +433,7 @@
 							<div class="min-w-0">
 								<p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">{fmtDt(j.created_at)}</p>
 								<p class="mt-1 text-sm font-semibold text-foreground">{j.nama || j.employee_nama || '—'}</p>
-								<p class="mt-1 text-xs text-muted-foreground">{j.claimed_by || 'Belum diklaim worker'}</p>
+								<p class="mt-1 text-xs text-muted-foreground">{j.claimed_by || 'Belum diambil petugas sistem'}</p>
 							</div>
 							<Badge variant={statusVariant(j.status)}>{statusLabel(j.status)}</Badge>
 						</div>
@@ -443,8 +443,8 @@
 					</div>
 				{:else}
 					<EmptyStatePanel
-						title="Belum ada job"
-						description="Jalankan rekap atau trigger scheduler untuk mulai membentuk antrean kerja PUSAKA di dashboard ini."
+						title="Belum ada pekerjaan"
+						description="Jalankan rekap atau jalankan jadwal otomatis untuk mulai membentuk antrean kerja PUSAKA di halaman ini."
 					/>
 				{/each}
 			</div>
@@ -455,7 +455,7 @@
 	<div class="grid gap-3 sm:grid-cols-2">
 		<Button variant="outline" href={resolve('/pusaka/employees')} class="h-auto py-4 flex-col items-start text-left gap-1">
 			<span class="font-semibold">Pegawai PUSAKA</span>
-			<span class="text-xs text-muted-foreground font-normal">Setup akun, jadwal, dan job untuk pegawai eligible</span>
+			<span class="text-xs text-muted-foreground font-normal">Atur akun, jadwal, dan pekerjaan untuk pegawai yang memenuhi syarat</span>
 		</Button>
 		<Button variant="outline" href={resolve('/pusaka/kehadiran')} class="h-auto py-4 flex-col items-start text-left gap-1">
 			<span class="font-semibold">Data Kehadiran</span>

@@ -110,7 +110,7 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ employee_id, run_type }),
       });
-      await readClientApiData<unknown>(res, 'Gagal mengantrekan job PUSAKA.');
+      await readClientApiData<unknown>(res, 'Gagal mengantrekan pekerjaan PUSAKA.');
     } catch (error) {
       toast.error(employeeErrorMessage(error));
       return;
@@ -121,7 +121,7 @@
   }
 
   function handleStop(_id: string, cancelled: number) {
-    toast.success(cancelled > 0 ? `${cancelled} job dibatalkan.` : 'Tidak ada job aktif untuk pegawai ini.');
+    toast.success(cancelled > 0 ? `${cancelled} job dibatalkan.` : 'Tidak ada pekerjaan aktif untuk pegawai ini.');
     void refreshEmployees(true);
   }
 
