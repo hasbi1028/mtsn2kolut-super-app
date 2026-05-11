@@ -547,7 +547,7 @@
 				<p class="text-sm font-medium text-foreground">Buat Disposisi Baru</p>
 				<div class="space-y-1">
 					<label for="disp-assignee" class="text-xs text-muted-foreground">ID Pegawai Penerima <span class="text-destructive">*</span></label>
-					<Input id="disp-assignee" bind:value={newDisposisiAssignee} placeholder="UUID pegawai" />
+					<Input id="disp-assignee" bind:value={newDisposisiAssignee} placeholder="ID pegawai" />
 				</div>
 				<div class="space-y-1">
 					<label for="disp-instruksi" class="text-xs text-muted-foreground">Instruksi</label>

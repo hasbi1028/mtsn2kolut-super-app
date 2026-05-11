@@ -117,7 +117,7 @@
 
 	async function fetchLogs(pageNumber: number): Promise<AuditLog[]> {
 		const res = await fetch(`/api/users/audit-logs?page=${pageNumber}&per_page=${perPage}`);
-		return readClientApiData<AuditLog[]>(res, 'Gagal memuat audit logs');
+		return readClientApiData<AuditLog[]>(res, 'Gagal memuat riwayat aktivitas');
 	}
 
 	function load(pageNumber = page, action: 'previous' | 'next' | null = null) {
@@ -152,7 +152,7 @@
 
 	function auditErrorMessage(error: unknown) {
 		if (error instanceof Error && error.message.trim()) return error.message;
-		return 'Gagal memuat audit logs';
+		return 'Gagal memuat riwayat aktivitas';
 	}
 
 	function handleLogsRenderError(error: unknown) {
@@ -164,12 +164,12 @@
 	});
 </script>
 
-<svelte:head><title>Audit Trail — MTSN 2 Kolut</title></svelte:head>
+<svelte:head><title>Riwayat Aktivitas — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6 p-6">
 	<div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
 		<div>
-			<h1 class="text-2xl font-bold text-primary">Audit Trail</h1>
+			<h1 class="text-2xl font-bold text-primary">Riwayat Aktivitas</h1>
 			<p class="text-sm text-muted-foreground mt-1">
 				Riwayat semua perubahan data oleh pengguna sistem
 			</p>
@@ -218,7 +218,7 @@
 					<div class="p-4">
 						<RecoveryPanel
 							compact
-							title="Audit Trail Belum Tersaji"
+							title="Riwayat Aktivitas Belum Tersaji"
 							message={auditErrorMessage(error)}
 							onRetry={() => retryLogs(reset)}
 						/>
@@ -228,7 +228,7 @@
 				{#snippet children(value)}
 					{@const currentLogs = filterAuditLogs(value as AuditLog[])}
 					{#if currentLogs.length === 0}
-						<div class="p-8 text-center text-muted-foreground text-sm">Belum ada audit log.</div>
+						<div class="p-8 text-center text-muted-foreground text-sm">Belum ada riwayat aktivitas.</div>
 					{:else}
 					<div class="hidden overflow-x-auto lg:block">
 					<Table.Root>

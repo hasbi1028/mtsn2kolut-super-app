@@ -708,10 +708,10 @@
 									<p class={valueClass}>{account.username}</p>
 								</div>
 								<div class={infoPanelClass}>
-									<p class={labelClass}>Role</p>
+									<p class={labelClass}>Peran</p>
 									<div class="mt-2 flex flex-wrap gap-2">
 										{#if account.roles.length === 0}
-											<Badge variant="outline">Belum ada role</Badge>
+											<Badge variant="outline">Belum ada peran</Badge>
 										{:else}
 											{#each account.roles as role (role)}
 												<Badge variant="secondary">{roleLabel(role)}</Badge>
