@@ -15,6 +15,8 @@ import (
 type rombelStore interface {
 	ListRombels(ctx context.Context) ([]db.ListRombelsRow, error)
 	GetRombelDetail(ctx context.Context, id pgtype.UUID) (db.GetRombelDetailRow, error)
+	CountRombelCodeConflicts(ctx context.Context, arg db.CountRombelCodeConflictsParams) (int32, error)
+	UpdateRombelIdentity(ctx context.Context, arg db.UpdateRombelIdentityParams) (db.UpdateRombelIdentityRow, error)
 	ListStudentsByClassWithParents(ctx context.Context, classID pgtype.UUID) ([]db.ListStudentsByClassWithParentsRow, error)
 	ListRombelSubjectAssignments(ctx context.Context, classID pgtype.UUID) ([]db.ListRombelSubjectAssignmentsRow, error)
 	GetRombelSubjectAssignment(ctx context.Context, arg db.GetRombelSubjectAssignmentParams) (db.GetRombelSubjectAssignmentRow, error)
@@ -56,6 +58,46 @@ func (s *Rombel) List(ctx context.Context) ([]db.ListRombelsRow, error) {
 
 func (s *Rombel) Get(ctx context.Context, id pgtype.UUID) (db.GetRombelDetailRow, error) {
 	return s.q.GetRombelDetail(ctx, id)
+}
+
+func (s *Rombel) UpdateIdentity(ctx context.Context, arg db.UpdateRombelIdentityParams) (db.UpdateRombelIdentityRow, error) {
+	code := strings.TrimSpace(arg.Code)
+	name := strings.TrimSpace(arg.Name)
+	level := strings.ToUpper(strings.TrimSpace(arg.Level))
+	if code == "" {
+		return db.UpdateRombelIdentityRow{}, fmt.Errorf("%w: kode rombel wajib diisi", domain.ErrBadRequest)
+	}
+	if name == "" {
+		return db.UpdateRombelIdentityRow{}, fmt.Errorf("%w: nama rombel wajib diisi", domain.ErrBadRequest)
+	}
+	switch level {
+	case "VII", "VIII", "IX":
+	default:
+		return db.UpdateRombelIdentityRow{}, fmt.Errorf("%w: tingkat rombel harus VII, VIII, atau IX", domain.ErrBadRequest)
+	}
+
+	current, err := s.q.GetRombelDetail(ctx, arg.ID)
+	if err != nil {
+		return db.UpdateRombelIdentityRow{}, err
+	}
+	if current.IsActive && !arg.IsActive && current.TotalStudents > 0 {
+		return db.UpdateRombelIdentityRow{}, fmt.Errorf("%w: rombel masih memiliki %d siswa aktif, pindahkan siswa sebelum menonaktifkan rombel", domain.ErrConflict, current.TotalStudents)
+	}
+	conflicts, err := s.q.CountRombelCodeConflicts(ctx, db.CountRombelCodeConflictsParams{
+		ID:   arg.ID,
+		Code: code,
+	})
+	if err != nil {
+		return db.UpdateRombelIdentityRow{}, err
+	}
+	if conflicts > 0 {
+		return db.UpdateRombelIdentityRow{}, fmt.Errorf("%w: kode rombel sudah dipakai pada tahun ajaran yang sama", domain.ErrConflict)
+	}
+
+	arg.Code = code
+	arg.Name = name
+	arg.Level = level
+	return s.q.UpdateRombelIdentity(ctx, arg)
 }
 
 func (s *Rombel) ListStudentsWithParents(ctx context.Context, classID pgtype.UUID) ([]db.ListStudentsByClassWithParentsRow, error) {

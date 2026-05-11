@@ -2,16 +2,19 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
 type fakeRombelService struct {
+	updateIdentityArg    db.UpdateRombelIdentityParams
 	listSubjectClassID   pgtype.UUID
 	getSubjectArg        db.GetRombelSubjectAssignmentParams
 	createSubjectArg     db.CreateRombelSubjectAssignmentParams
@@ -31,6 +34,20 @@ func (f *fakeRombelService) List(context.Context) ([]db.ListRombelsRow, error) {
 
 func (f *fakeRombelService) Get(context.Context, pgtype.UUID) (db.GetRombelDetailRow, error) {
 	return db.GetRombelDetailRow{}, f.err
+}
+
+func (f *fakeRombelService) UpdateIdentity(_ context.Context, arg db.UpdateRombelIdentityParams) (db.UpdateRombelIdentityRow, error) {
+	f.updateIdentityArg = arg
+	if f.err != nil {
+		return db.UpdateRombelIdentityRow{}, f.err
+	}
+	return db.UpdateRombelIdentityRow{
+		ID:       arg.ID,
+		Code:     arg.Code,
+		Name:     arg.Name,
+		Level:    arg.Level,
+		IsActive: arg.IsActive,
+	}, nil
 }
 
 func (f *fakeRombelService) ListStudentsWithParents(context.Context, pgtype.UUID) ([]db.ListStudentsByClassWithParentsRow, error) {
@@ -157,6 +174,68 @@ func (f *fakeRombelService) UpdateHomeroomAssignment(context.Context, db.UpdateH
 
 func (f *fakeRombelService) DeleteHomeroomAssignment(context.Context, pgtype.UUID) error {
 	return f.err
+}
+
+func TestRombelUpdateIdentitySuccess(t *testing.T) {
+	classID := handlerTestUUID(200)
+	fake := &fakeRombelService{}
+	h := &Rombel{svc: fake}
+
+	rec := httptest.NewRecorder()
+	body := `{"code":"VII.A","name":"VII A","level":"VII","is_active":true}`
+	h.UpdateIdentity(rec, withRouteParam(adminRequest(http.MethodPut, "/api/academic/rombel/"+classID.String(), body), "id", classID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("UpdateIdentity() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.updateIdentityArg.ID != classID || fake.updateIdentityArg.Code != "VII.A" || fake.updateIdentityArg.Name != "VII A" || fake.updateIdentityArg.Level != "VII" || !fake.updateIdentityArg.IsActive {
+		t.Fatalf("UpdateIdentity() arg = %+v, want forwarded rombel identity", fake.updateIdentityArg)
+	}
+}
+
+func TestRombelUpdateIdentityValidationAndConflict(t *testing.T) {
+	classID := handlerTestUUID(201)
+	h := &Rombel{svc: &fakeRombelService{}}
+
+	tests := []struct {
+		name       string
+		req        *http.Request
+		svc        rombelService
+		wantStatus int
+	}{
+		{
+			name:       "unauthenticated",
+			req:        withRouteParam(httptest.NewRequest(http.MethodPut, "/api/academic/rombel/"+classID.String(), nil), "id", classID.String()),
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "invalid id",
+			req:        withRouteParam(adminRequest(http.MethodPut, "/api/academic/rombel/bad", `{}`), "id", "bad"),
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "missing is active",
+			req:        withRouteParam(adminRequest(http.MethodPut, "/api/academic/rombel/"+classID.String(), `{"code":"VII.A","name":"VII A","level":"VII"}`), "id", classID.String()),
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "service conflict",
+			req:        withRouteParam(adminRequest(http.MethodPut, "/api/academic/rombel/"+classID.String(), `{"code":"VII.A","name":"VII A","level":"VII","is_active":true}`), "id", classID.String()),
+			svc:        &fakeRombelService{err: errors.Join(domain.ErrConflict, errors.New("kode rombel sudah dipakai"))},
+			wantStatus: http.StatusConflict,
+		},
+	}
+	for _, tt := range tests {
+		if tt.svc != nil {
+			h = &Rombel{svc: tt.svc}
+		} else {
+			h = &Rombel{svc: &fakeRombelService{}}
+		}
+		rec := httptest.NewRecorder()
+		h.UpdateIdentity(rec, tt.req)
+		if rec.Code != tt.wantStatus {
+			t.Fatalf("%s: status = %d, want %d; body=%s", tt.name, rec.Code, tt.wantStatus, rec.Body.String())
+		}
+	}
 }
 
 func TestRombelSubjectAssignmentsSuccess(t *testing.T) {

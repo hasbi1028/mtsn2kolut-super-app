@@ -836,3 +836,16 @@ cd services/core-api && go test ./...
   - Subject metadata flags and subject-specific CRUD route are missing beyond generic legacy subject create/delete.
   - Guru mapel matrix endpoint/page is missing.
   - Timetable conflict counting exists for mutation validation, but no dedicated dashboard/global conflict summary endpoint exists before Sprint 1.
+
+## Sprint Akademik 2 Phase 3 Rombel — 2026-05-11
+
+- Added `PUT /api/academic/rombel/{id}` in Go core-api and SvelteKit BFF for editing rombel identity: `code`, `name`, `level`, and `is_active`.
+- Backend validation trims code/name, normalizes level to `VII`/`VIII`/`IX`, rejects duplicate codes within the same academic year, and rejects deactivating a rombel that still has active students.
+- `/akademik/rombel` now has `Edit Cepat` mode using `EditableTextCell`, `EditableSelectCell`, `DirtyChangeBar`, unsaved-change guard, sequential row saves, and row-level error messages.
+- `/akademik/rombel/[id]` header was improved with stronger quick stats/actions while preserving existing wali kelas, guru mapel, siswa, and jadwal flows.
+
+## Sprint Akademik 2 Phase 4 Siswa — 2026-05-11
+
+- `/students` add/edit form now uses shared `EntityDrawer` from Sprint 1 while preserving existing add, edit, delete, lifecycle update, preview account, and generate account flows.
+- Student selection is implemented with row/card checkboxes, a filtered-table select-all checkbox, selected count, and clear-selection toolbar.
+- Bulk mutation is intentionally deferred because there is no safe selected-student bulk endpoint in the current contract; the toolbar only reports selection count and clears selection.

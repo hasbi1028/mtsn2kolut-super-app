@@ -191,6 +191,7 @@
 	let journalDate = $state(todayWita());
 	let openJournalBusySlotId = $state('');
 	let journalOpenError = $state('');
+	let activeTab = $state('students');
 
 	const rombel = $derived(detail?.rombel ?? null);
 	const activeHomeroom = $derived(detail?.homeroom_assignments.find((item) => item.is_active) ?? null);
@@ -612,6 +613,10 @@
 		homeroomEmployeeId = option.id;
 	}
 
+	function focusTab(tab: string) {
+		activeTab = tab;
+	}
+
 	function handleRenderError(error: unknown) {
 		console.error('Rombel detail render failed', error);
 	}
@@ -707,8 +712,37 @@
 				</Card.Root>
 			</div>
 
-			<Tabs.Root value="students">
-				<div class="overflow-x-auto pb-1">
+			<div class="sticky top-2 z-20 rounded-md border border-border bg-background/95 p-3 shadow-sm backdrop-blur">
+				<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+					<div class="min-w-0">
+						<p class="text-sm font-medium text-foreground">{rombel.code} · Tingkat {rombel.level}</p>
+						<p class="text-xs text-muted-foreground">
+							{rombel.is_active ? 'Rombel aktif' : 'Rombel nonaktif'} · Wali kelas {rombel.homeroom_teacher_name || 'belum ditetapkan'}
+						</p>
+					</div>
+					<div class="flex flex-wrap gap-2">
+						<Button variant="outline" size="sm" href={resolve('/akademik/rombel' as '/')}>
+							<Pencil class="mr-2 size-4" />
+							Edit Identitas Rombel
+						</Button>
+						<Button variant="outline" size="sm" onclick={() => focusTab('homeroom')}>
+							<UserCheck class="mr-2 size-4" />
+							Atur Wali Kelas
+						</Button>
+						<Button variant="outline" size="sm" onclick={() => focusTab('teachers')}>
+							<BookOpen class="mr-2 size-4" />
+							Tambah Guru Mapel
+						</Button>
+						<Button variant="outline" size="sm" onclick={() => focusTab('schedule')}>
+							<Clock class="mr-2 size-4" />
+							Tambah Jadwal
+						</Button>
+					</div>
+				</div>
+			</div>
+
+			<Tabs.Root bind:value={activeTab}>
+				<div class="sticky top-24 z-10 overflow-x-auto bg-background/95 pb-2 pt-1 backdrop-blur">
 					<Tabs.List class="mb-4 min-w-max">
 						<Tabs.Trigger value="students">Siswa ({detail.students.length})</Tabs.Trigger>
 						<Tabs.Trigger value="parents">Orang Tua ({parentRows.length})</Tabs.Trigger>

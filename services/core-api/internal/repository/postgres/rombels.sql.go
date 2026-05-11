@@ -11,6 +11,27 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countRombelCodeConflicts = `-- name: CountRombelCodeConflicts :one
+SELECT COUNT(*)::int
+FROM school_classes candidate
+JOIN school_classes target ON target.id = $1
+WHERE candidate.academic_year_id = target.academic_year_id
+  AND candidate.id <> target.id
+  AND LOWER(candidate.code) = LOWER($2)
+`
+
+type CountRombelCodeConflictsParams struct {
+	ID   pgtype.UUID `json:"id"`
+	Code string      `json:"code"`
+}
+
+func (q *Queries) CountRombelCodeConflicts(ctx context.Context, arg CountRombelCodeConflictsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countRombelCodeConflicts, arg.ID, arg.Code)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countRombelSubjectAssignmentDependents = `-- name: CountRombelSubjectAssignmentDependents :one
 SELECT
     (SELECT COUNT(*) FROM timetable_slots WHERE assignment_id = csa.id)::int AS total_timetable_slots,
@@ -1101,6 +1122,120 @@ func (q *Queries) UpdateHomeroomAssignment(ctx context.Context, arg UpdateHomero
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateRombelIdentity = `-- name: UpdateRombelIdentity :one
+WITH updated AS (
+    UPDATE school_classes
+    SET code = $1,
+        name = $2,
+        level = $3,
+        is_active = $4,
+        updated_at = NOW()
+    WHERE school_classes.id = $5
+    RETURNING id, academic_year_id, code, name, level, is_active, created_at, updated_at
+)
+SELECT
+    c.id,
+    c.code,
+    c.name,
+    c.level,
+    c.is_active,
+    c.created_at,
+    c.updated_at,
+    c.academic_year_id,
+    ay.name AS academic_year_name,
+    ay.start_date AS academic_year_start_date,
+    ay.end_date AS academic_year_end_date,
+    cha.id AS homeroom_assignment_id,
+    cha.employee_id AS homeroom_employee_id,
+    COALESCE(e.nama, '') AS homeroom_teacher_name,
+    cha.start_date AS homeroom_start_date,
+    cha.end_date AS homeroom_end_date,
+    COALESCE(cha.notes, '') AS homeroom_notes,
+    COUNT(DISTINCT s.id)::int AS total_students,
+    COUNT(DISTINCT ps.parent_id)::int AS total_linked_parents,
+    COUNT(DISTINCT csa.teacher_employee_id)::int AS total_subject_teachers,
+    COUNT(DISTINCT csa.id)::int AS total_subject_assignments,
+    COUNT(DISTINCT ts.id)::int AS total_timetable_slots
+FROM updated c
+JOIN academic_years ay ON ay.id = c.academic_year_id
+LEFT JOIN class_homeroom_assignments cha ON cha.class_id = c.id AND cha.is_active = TRUE
+LEFT JOIN employees e ON e.id = cha.employee_id
+LEFT JOIN students s ON s.class_id = c.id AND s.is_active = TRUE
+LEFT JOIN parent_students ps ON ps.student_id = s.id
+LEFT JOIN class_subject_assignments csa ON csa.class_id = c.id
+LEFT JOIN timetable_slots ts ON ts.assignment_id = csa.id
+GROUP BY c.id, c.code, c.name, c.level, c.is_active, c.created_at, c.updated_at, c.academic_year_id, ay.name, ay.start_date, ay.end_date, cha.id, cha.employee_id, e.nama, cha.start_date, cha.end_date, cha.notes
+`
+
+type UpdateRombelIdentityParams struct {
+	Code     string      `json:"code"`
+	Name     string      `json:"name"`
+	Level    string      `json:"level"`
+	IsActive bool        `json:"is_active"`
+	ID       pgtype.UUID `json:"id"`
+}
+
+type UpdateRombelIdentityRow struct {
+	ID                      pgtype.UUID        `json:"id"`
+	Code                    string             `json:"code"`
+	Name                    string             `json:"name"`
+	Level                   string             `json:"level"`
+	IsActive                bool               `json:"is_active"`
+	CreatedAt               pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
+	AcademicYearID          pgtype.UUID        `json:"academic_year_id"`
+	AcademicYearName        string             `json:"academic_year_name"`
+	AcademicYearStartDate   pgtype.Date        `json:"academic_year_start_date"`
+	AcademicYearEndDate     pgtype.Date        `json:"academic_year_end_date"`
+	HomeroomAssignmentID    pgtype.UUID        `json:"homeroom_assignment_id"`
+	HomeroomEmployeeID      pgtype.UUID        `json:"homeroom_employee_id"`
+	HomeroomTeacherName     string             `json:"homeroom_teacher_name"`
+	HomeroomStartDate       pgtype.Date        `json:"homeroom_start_date"`
+	HomeroomEndDate         pgtype.Date        `json:"homeroom_end_date"`
+	HomeroomNotes           string             `json:"homeroom_notes"`
+	TotalStudents           int32              `json:"total_students"`
+	TotalLinkedParents      int32              `json:"total_linked_parents"`
+	TotalSubjectTeachers    int32              `json:"total_subject_teachers"`
+	TotalSubjectAssignments int32              `json:"total_subject_assignments"`
+	TotalTimetableSlots     int32              `json:"total_timetable_slots"`
+}
+
+func (q *Queries) UpdateRombelIdentity(ctx context.Context, arg UpdateRombelIdentityParams) (UpdateRombelIdentityRow, error) {
+	row := q.db.QueryRow(ctx, updateRombelIdentity,
+		arg.Code,
+		arg.Name,
+		arg.Level,
+		arg.IsActive,
+		arg.ID,
+	)
+	var i UpdateRombelIdentityRow
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.Level,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AcademicYearID,
+		&i.AcademicYearName,
+		&i.AcademicYearStartDate,
+		&i.AcademicYearEndDate,
+		&i.HomeroomAssignmentID,
+		&i.HomeroomEmployeeID,
+		&i.HomeroomTeacherName,
+		&i.HomeroomStartDate,
+		&i.HomeroomEndDate,
+		&i.HomeroomNotes,
+		&i.TotalStudents,
+		&i.TotalLinkedParents,
+		&i.TotalSubjectTeachers,
+		&i.TotalSubjectAssignments,
+		&i.TotalTimetableSlots,
 	)
 	return i, err
 }

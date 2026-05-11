@@ -61,6 +61,58 @@ LEFT JOIN timetable_slots ts ON ts.assignment_id = csa.id
 WHERE c.id = $1
 GROUP BY c.id, ay.name, ay.start_date, ay.end_date, cha.id, cha.employee_id, e.nama, cha.start_date, cha.end_date, cha.notes;
 
+-- name: CountRombelCodeConflicts :one
+SELECT COUNT(*)::int
+FROM school_classes candidate
+JOIN school_classes target ON target.id = sqlc.arg(id)
+WHERE candidate.academic_year_id = target.academic_year_id
+  AND candidate.id <> target.id
+  AND LOWER(candidate.code) = LOWER(sqlc.arg(code));
+
+-- name: UpdateRombelIdentity :one
+WITH updated AS (
+    UPDATE school_classes
+    SET code = sqlc.arg(code),
+        name = sqlc.arg(name),
+        level = sqlc.arg(level),
+        is_active = sqlc.arg(is_active),
+        updated_at = NOW()
+    WHERE school_classes.id = sqlc.arg(id)
+    RETURNING *
+)
+SELECT
+    c.id,
+    c.code,
+    c.name,
+    c.level,
+    c.is_active,
+    c.created_at,
+    c.updated_at,
+    c.academic_year_id,
+    ay.name AS academic_year_name,
+    ay.start_date AS academic_year_start_date,
+    ay.end_date AS academic_year_end_date,
+    cha.id AS homeroom_assignment_id,
+    cha.employee_id AS homeroom_employee_id,
+    COALESCE(e.nama, '') AS homeroom_teacher_name,
+    cha.start_date AS homeroom_start_date,
+    cha.end_date AS homeroom_end_date,
+    COALESCE(cha.notes, '') AS homeroom_notes,
+    COUNT(DISTINCT s.id)::int AS total_students,
+    COUNT(DISTINCT ps.parent_id)::int AS total_linked_parents,
+    COUNT(DISTINCT csa.teacher_employee_id)::int AS total_subject_teachers,
+    COUNT(DISTINCT csa.id)::int AS total_subject_assignments,
+    COUNT(DISTINCT ts.id)::int AS total_timetable_slots
+FROM updated c
+JOIN academic_years ay ON ay.id = c.academic_year_id
+LEFT JOIN class_homeroom_assignments cha ON cha.class_id = c.id AND cha.is_active = TRUE
+LEFT JOIN employees e ON e.id = cha.employee_id
+LEFT JOIN students s ON s.class_id = c.id AND s.is_active = TRUE
+LEFT JOIN parent_students ps ON ps.student_id = s.id
+LEFT JOIN class_subject_assignments csa ON csa.class_id = c.id
+LEFT JOIN timetable_slots ts ON ts.assignment_id = csa.id
+GROUP BY c.id, c.code, c.name, c.level, c.is_active, c.created_at, c.updated_at, c.academic_year_id, ay.name, ay.start_date, ay.end_date, cha.id, cha.employee_id, e.nama, cha.start_date, cha.end_date, cha.notes;
+
 -- name: ListStudentsByClassWithParents :many
 SELECT
     s.id AS student_id,
