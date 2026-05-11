@@ -3,9 +3,32 @@ SELECT id, name, start_date, end_date, is_active, created_at, updated_at
 FROM academic_years
 ORDER BY start_date DESC, name DESC;
 
+-- name: GetAcademicYearByID :one
+SELECT id, name, start_date, end_date, is_active, created_at, updated_at
+FROM academic_years
+WHERE id = $1;
+
+-- name: CountAcademicYearNameConflicts :one
+SELECT COUNT(*)::int
+FROM academic_years
+WHERE LOWER(name) = LOWER(sqlc.arg(name));
+
 -- name: CreateAcademicYear :one
 INSERT INTO academic_years (id, name, start_date, end_date, is_active)
 VALUES (gen_random_uuid(), $1, $2, $3, $4)
+RETURNING *;
+
+-- name: DeactivateAcademicYears :exec
+UPDATE academic_years
+SET is_active = FALSE,
+    updated_at = NOW()
+WHERE is_active = TRUE;
+
+-- name: ActivateAcademicYear :one
+UPDATE academic_years
+SET is_active = TRUE,
+    updated_at = NOW()
+WHERE id = $1
 RETURNING *;
 
 -- name: DeleteAcademicYear :exec
@@ -235,6 +258,56 @@ JOIN school_classes c ON c.id = a.class_id
 JOIN subjects s ON s.id = a.subject_id
 JOIN employees e ON e.id = a.teacher_employee_id
 ORDER BY c.name ASC, s.name ASC;
+
+-- name: ListYearRolloverStudents :many
+SELECT
+    s.id,
+    s.nis,
+    s.nisn,
+    s.nama,
+    s.class_id,
+    c.code AS class_code,
+    c.name AS class_name,
+    c.level AS class_level
+FROM students s
+JOIN school_classes c ON c.id = s.class_id
+WHERE c.academic_year_id = $1
+  AND s.is_active = TRUE
+  AND s.status = 'active'
+ORDER BY c.level ASC, c.name ASC, s.nama ASC;
+
+-- name: ListYearRolloverHomeroomAssignments :many
+SELECT
+    cha.class_id,
+    COUNT(*)::int AS total
+FROM class_homeroom_assignments cha
+JOIN school_classes c ON c.id = cha.class_id
+WHERE c.academic_year_id = $1
+  AND c.is_active = TRUE
+  AND cha.is_active = TRUE
+GROUP BY cha.class_id;
+
+-- name: ListAcademicImportStudents :many
+SELECT
+    id,
+    nis,
+    nisn,
+    nama,
+    class_id,
+    is_active,
+    status
+FROM students
+ORDER BY nama ASC;
+
+-- name: ListAcademicImportTeachers :many
+SELECT
+    id,
+    COALESCE(nip, '')::text AS nip,
+    nama,
+    is_active
+FROM employees
+WHERE is_active = TRUE
+ORDER BY nama ASC;
 
 -- name: CreateClassSubjectAssignment :one
 INSERT INTO class_subject_assignments (id, class_id, subject_id, teacher_employee_id)

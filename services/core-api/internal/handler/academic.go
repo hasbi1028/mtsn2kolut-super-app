@@ -29,6 +29,9 @@ type academicService interface {
 	GetStats(ctx context.Context) (db.GetAcademicStatsRow, error)
 	GetDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error)
 	CreateYear(ctx context.Context, p db.CreateAcademicYearParams) (db.AcademicYear, error)
+	ActivateYear(ctx context.Context, id pgtype.UUID, confirmation string) (db.AcademicYear, error)
+	PreviewYearRollover(ctx context.Context, input service.YearRolloverPreviewInput) (service.YearRolloverPreview, error)
+	DryRunAcademicImport(ctx context.Context, input service.AcademicImportDryRunInput) (service.AcademicImportDryRunResult, error)
 	CreateClass(ctx context.Context, p db.CreateSchoolClassParams) (db.SchoolClass, error)
 	CreateSubject(ctx context.Context, p db.CreateSubjectParams) (db.Subject, error)
 	UpdateSubject(ctx context.Context, p db.UpdateSubjectParams) (db.Subject, error)
@@ -135,6 +138,83 @@ func (h *Academic) GetTimetableConflicts(w http.ResponseWriter, r *http.Request)
 	api.OK(w, rows)
 }
 
+func (h *Academic) ActivateYear(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body struct {
+		Confirmation string `json:"confirmation"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	row, err := h.svc.ActivateYear(r.Context(), id, body.Confirmation)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Aktivasi tahun ajaran tidak valid")
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *Academic) PreviewYearRollover(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	var body struct {
+		SourceAcademicYearID string `json:"source_academic_year_id"`
+		TargetAcademicYearID string `json:"target_academic_year_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	sourceID, err := parseOptionalUUID(body.SourceAcademicYearID)
+	if err != nil {
+		api.BadRequest(w, "source_academic_year_id invalid")
+		return
+	}
+	targetID, err := parseUUID(body.TargetAcademicYearID)
+	if err != nil {
+		api.BadRequest(w, "target_academic_year_id invalid")
+		return
+	}
+	preview, err := h.svc.PreviewYearRollover(r.Context(), service.YearRolloverPreviewInput{
+		SourceAcademicYearID: sourceID,
+		TargetAcademicYearID: targetID,
+	})
+	if err != nil {
+		writeDomainOrInternal(w, err, "Preview kenaikan tahun ajaran tidak valid")
+		return
+	}
+	api.OK(w, preview)
+}
+
+func (h *Academic) DryRunAcademicImport(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	var body service.AcademicImportDryRunInput
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	result, err := h.svc.DryRunAcademicImport(r.Context(), body)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Dry-run import akademik tidak valid")
+		return
+	}
+	api.OK(w, result)
+}
+
 func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 	if !adminAccessAllowed(r) {
 		api.Forbidden(w)
@@ -169,7 +249,7 @@ func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 			IsActive:  body.IsActive,
 		})
 		if err != nil {
-			api.Internal(w, err)
+			writeDomainOrInternal(w, err, "Tahun ajaran tidak valid")
 			return
 		}
 		api.Created(w, row)

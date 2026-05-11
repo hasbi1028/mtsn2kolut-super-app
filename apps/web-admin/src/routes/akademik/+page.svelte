@@ -133,13 +133,13 @@
 			label: 'Periksa guru mapel',
 			count: summary.subject_assignments_missing_teacher,
 			description: 'Penugasan mapel harus memiliki guru aktif.',
-			href: resolve('/akademik/rombel')
+			href: resolve('/akademik/guru-mapel')
 		},
 		{
 			label: 'Selesaikan jadwal bentrok',
 			count: summary.timetable_conflicts,
 			description: 'Bentrok jadwal perlu dibenahi sebelum dipakai harian.',
-			href: resolve('/academic')
+			href: resolve('/akademik/jadwal')
 		}
 	]);
 
@@ -318,11 +318,11 @@
 							<span class="block text-xs text-muted-foreground">Data siswa, rombel, status, dan akun</span>
 						</span>
 					</Button>
-					<Button variant="outline" class="h-auto justify-start gap-3 py-3" href={resolve('/akademik/rombel')}>
+					<Button variant="outline" class="h-auto justify-start gap-3 py-3" href={resolve('/akademik/guru-mapel')}>
 						<UserCheck class="size-4 text-primary" />
 						<span class="text-left">
 							<span class="block font-medium">Guru Mapel</span>
-							<span class="block text-xs text-muted-foreground">Atur guru mapel dari detail rombel</span>
+							<span class="block text-xs text-muted-foreground">Atur matrix guru per mapel dan rombel</span>
 						</span>
 					</Button>
 					<Button variant="outline" class="h-auto justify-start gap-3 py-3" href={resolve('/akademik/jadwal')}>
@@ -332,11 +332,11 @@
 							<span class="block text-xs text-muted-foreground">Lihat jadwal kelas, guru, dan hari aktif</span>
 						</span>
 					</Button>
-					<Button variant="outline" class="h-auto justify-start gap-3 py-3" href={resolve('/academic')}>
+					<Button variant="outline" class="h-auto justify-start gap-3 py-3" href={resolve('/akademik/tahun-ajaran')}>
 						<BookOpenCheck class="size-4 text-primary" />
 						<span class="text-left">
-							<span class="block font-medium">Data Akademik Lama</span>
-							<span class="block text-xs text-muted-foreground">Tahun ajaran, mapel, dan data dasar</span>
+							<span class="block font-medium">Tahun Ajaran</span>
+							<span class="block text-xs text-muted-foreground">Aktivasi, preview rollover, dan import-export</span>
 						</span>
 					</Button>
 				</Card.Content>
