@@ -503,7 +503,7 @@ func (s *CbtEvent) Delete(ctx context.Context, id pgtype.UUID) error {
 		return err
 	}
 	if rows == 0 {
-		return fmt.Errorf("%w: event tidak ditemukan atau bukan draft", domain.ErrConflict)
+		return fmt.Errorf("%w: event tidak ditemukan atau masih memiliki sesi", domain.ErrConflict)
 	}
 	return nil
 }
