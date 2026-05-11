@@ -376,6 +376,10 @@
 		}
 	}
 
+	function incompleteCompletenessRows(detail: EventCommandDetail) {
+		return filteredCompletenessRows(detail).filter((row) => !row.complete);
+	}
+
 	function exportCompletenessCSV(detail: EventCommandDetail) {
 		if (!info) return;
 		const rows = filteredCompletenessRows(detail);
@@ -402,6 +406,62 @@
 		a.download = `kelengkapan_soal_${info.title.replace(/\s+/g, '_')}.csv`;
 		a.click();
 		URL.revokeObjectURL(url);
+	}
+
+	function exportIncompleteByTeacherCSV(detail: EventCommandDetail) {
+		if (!info) return;
+		const rows = incompleteCompletenessRows(detail).sort((a, b) => `${a.teacher_name}-${a.subject_name}-${a.level}`.localeCompare(`${b.teacher_name}-${b.subject_name}-${b.level}`));
+		const header = csvRow(['Guru', 'Username', 'Mapel', 'Tingkat', 'Rombel/Scope', 'PG Ada', 'PG Kurang', 'Esai Ada', 'Esai Kurang', 'Catatan']);
+		const body = rows.map((row) => csvRow([
+			row.teacher_name,
+			row.teacher_username,
+			row.subject_name,
+			row.level,
+			row.class_name || row.class_code || questionRequirementScopeLabel[row.scope_mode ?? ''] || '-',
+			row.available_pg,
+			row.missing_pg,
+			row.available_essay,
+			row.missing_essay,
+			`Kurang PG ${row.missing_pg}, esai ${row.missing_essay}`,
+		]));
+		const csv = [header, ...body].join('\n');
+		const blob = new Blob([csv], { type: 'text/csv' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `kekurangan_soal_per_guru_${info.title.replace(/\s+/g, '_')}.csv`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	function buildReminderDraft(detail: EventCommandDetail) {
+		const rows = incompleteCompletenessRows(detail);
+		if (!info || rows.length === 0) return '';
+		const eventTitle = info.title;
+		const grouped = new Map<string, QuestionCompletenessRow[]>();
+		for (const row of rows) {
+			const key = `${row.teacher_name || row.teacher_username || 'Guru'}|${row.teacher_username || ''}`;
+			grouped.set(key, [...(grouped.get(key) ?? []), row]);
+		}
+		return Array.from(grouped.entries()).map(([key, teacherRows]) => {
+			const [teacherName, username] = key.split('|');
+			const lines = teacherRows.map((row, index) => `${index + 1}. ${row.subject_name} ${row.level}${row.class_name || row.class_code ? ` (${row.class_name || row.class_code})` : ''}: PG ${row.available_pg}/${row.target_pg} kurang ${row.missing_pg}, Esai ${row.available_essay}/${row.target_essay} kurang ${row.missing_essay}`);
+			return `Assalamu'alaikum Bapak/Ibu ${teacherName}.\nMohon melengkapi soal untuk kegiatan ${eventTitle}${username ? ` (akun: ${username})` : ''}:\n${lines.join('\n')}\nSilakan buka Bank Soal/tautan Kelengkapan Soal pada dashboard. Terima kasih.`;
+		}).join('\n\n---\n\n');
+	}
+
+	async function copyReminderDraft(detail: EventCommandDetail) {
+		const text = buildReminderDraft(detail);
+		if (!text) {
+			toast.info('Tidak ada kekurangan soal pada filter saat ini');
+			return;
+		}
+		try {
+			await navigator.clipboard.writeText(text);
+			toast.success('Draft reminder per guru disalin');
+		} catch {
+			toast.error('Gagal menyalin draft reminder');
+		}
 	}
 
 	function activateHasilHash() {
@@ -572,7 +632,11 @@
 									<Card.Title class="text-base">Kelengkapan Soal per Guru/Mapel/Rombel</Card.Title>
 									<Card.Description>Target aktif: {questionRequirementScopeLabel[completeness?.requirements?.scope_mode ?? 'per_rombel'] ?? 'Per rombel + mapel + guru'} · PG {completeness?.requirements?.target_pg ?? 20} · Esai {completeness?.requirements?.target_essay ?? 5} · {questionRequirementStatusLabel[completeness?.requirements?.status_filter ?? 'published_only'] ?? 'Hanya soal terbit'}.</Card.Description>
 								</div>
-								<LoadingButton variant="outline" onclick={() => exportCompletenessCSV(detail)} disabled={filteredRows.length === 0} label="Ekspor CSV" />
+								<div class="flex flex-wrap gap-2">
+						<LoadingButton variant="outline" onclick={() => exportIncompleteByTeacherCSV(detail)} disabled={incompleteCompletenessRows(detail).length === 0} label="Ekspor Kurang per Guru" />
+						<LoadingButton variant="outline" onclick={() => copyReminderDraft(detail)} disabled={incompleteCompletenessRows(detail).length === 0} label="Salin Reminder" />
+						<LoadingButton variant="outline" onclick={() => exportCompletenessCSV(detail)} disabled={filteredRows.length === 0} label="Ekspor CSV" />
+					</div>
 							</div>
 						</Card.Header>
 						<Card.Content class="space-y-4">
