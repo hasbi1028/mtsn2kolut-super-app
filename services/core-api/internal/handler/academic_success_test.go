@@ -39,6 +39,7 @@ type fakeAcademicService struct {
 	createTimetableArg db.CreateTimetableSlotParams
 	createErr          error
 
+	updateSubjectArg   db.UpdateSubjectParams
 	updateTimetableArg db.UpdateTimetableSlotParams
 	updateErr          error
 
@@ -72,7 +73,7 @@ func (f *fakeAcademicService) ListClasses(context.Context) ([]db.ListSchoolClass
 	return []db.ListSchoolClassesRow{{Name: "VII A"}}, nil
 }
 
-func (f *fakeAcademicService) ListSubjects(context.Context) ([]db.Subject, error) {
+func (f *fakeAcademicService) ListSubjects(context.Context) ([]db.ListSubjectsRow, error) {
 	f.listSubjectsCalled = true
 	if f.listSubjectsErr != nil {
 		return nil, f.listSubjectsErr
@@ -80,7 +81,7 @@ func (f *fakeAcademicService) ListSubjects(context.Context) ([]db.Subject, error
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
-	return []db.Subject{{Name: "IPA"}}, nil
+	return []db.ListSubjectsRow{{Name: "IPA"}}, nil
 }
 
 func (f *fakeAcademicService) ListAssignments(context.Context) ([]db.ListClassSubjectAssignmentsRow, error) {
@@ -150,6 +151,14 @@ func (f *fakeAcademicService) CreateSubject(_ context.Context, p db.CreateSubjec
 		return db.Subject{}, f.createErr
 	}
 	return db.Subject{ID: handlerTestUUID(122), Name: p.Name}, nil
+}
+
+func (f *fakeAcademicService) UpdateSubject(_ context.Context, p db.UpdateSubjectParams) (db.Subject, error) {
+	f.updateSubjectArg = p
+	if f.updateErr != nil {
+		return db.Subject{}, f.updateErr
+	}
+	return db.Subject{ID: p.ID, Code: p.Code, Name: p.Name, IsActive: p.IsActive}, nil
 }
 
 func (f *fakeAcademicService) CreateAssignment(_ context.Context, p db.CreateClassSubjectAssignmentParams) (db.ClassSubjectAssignment, error) {
@@ -331,10 +340,10 @@ func TestAcademicCreateUpdateAndDeleteSuccess(t *testing.T) {
 		},
 		{
 			entity: "subjects",
-			body:   `{"code":"IPA","name":"Ilmu Pengetahuan Alam","is_active":true}`,
+			body:   `{"code":"IPA","name":"Ilmu Pengetahuan Alam","category":"intrakurikuler","is_assessment_subject":true,"is_report_subject":true,"is_schedule_activity":false,"default_weekly_hours":5,"display_order":20,"is_active":true}`,
 			check: func(t *testing.T) {
 				t.Helper()
-				if fake.createSubjectArg.Code != "IPA" || fake.createSubjectArg.Name != "Ilmu Pengetahuan Alam" || !fake.createSubjectArg.IsActive {
+				if fake.createSubjectArg.Code != "IPA" || fake.createSubjectArg.Name != "Ilmu Pengetahuan Alam" || fake.createSubjectArg.Category != "intrakurikuler" || fake.createSubjectArg.DefaultWeeklyHours != 5 || fake.createSubjectArg.DisplayOrder != 20 || !fake.createSubjectArg.IsAssessmentSubject || !fake.createSubjectArg.IsReportSubject || fake.createSubjectArg.IsScheduleActivity || !fake.createSubjectArg.IsActive {
 					t.Fatalf("CreateSubject arg = %+v, want mapped subject", fake.createSubjectArg)
 				}
 			},
@@ -376,7 +385,17 @@ func TestAcademicCreateUpdateAndDeleteSuccess(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	updateReq := withRouteParams(adminRequest(http.MethodPatch, "/api/academic/timetables/"+slotID.String(), `{"assignment_id":"`+assignmentID.String()+`","day_of_week":3,"start_time":"09:00","end_time":"10:20","room_label":"Ruang 2","notes":"Ulangan"}`), "entity", "timetables", "id", slotID.String())
+	updateReq := withRouteParams(adminRequest(http.MethodPut, "/api/academic/subjects/"+subjectID.String(), `{"code":"MTK","name":"Matematika","category":"intrakurikuler","is_assessment_subject":true,"is_report_subject":true,"is_schedule_activity":false,"default_weekly_hours":6,"display_order":10,"is_active":true}`), "entity", "subjects", "id", subjectID.String())
+	h.Update(rec, updateReq)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Update(subjects) status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.updateSubjectArg.ID != subjectID || fake.updateSubjectArg.Code != "MTK" || fake.updateSubjectArg.DefaultWeeklyHours != 6 || fake.updateSubjectArg.DisplayOrder != 10 || !fake.updateSubjectArg.IsActive {
+		t.Fatalf("UpdateSubject arg = %+v, want mapped subject", fake.updateSubjectArg)
+	}
+
+	rec = httptest.NewRecorder()
+	updateReq = withRouteParams(adminRequest(http.MethodPatch, "/api/academic/timetables/"+slotID.String(), `{"assignment_id":"`+assignmentID.String()+`","day_of_week":3,"start_time":"09:00","end_time":"10:20","room_label":"Ruang 2","notes":"Ulangan"}`), "entity", "timetables", "id", slotID.String())
 	h.Update(rec, updateReq)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("Update(timetables) status = %d, want 200; body=%s", rec.Code, rec.Body.String())

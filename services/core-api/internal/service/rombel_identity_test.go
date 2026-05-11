@@ -34,6 +34,30 @@ func (noopRombelStore) ListRombelSubjectAssignments(context.Context, pgtype.UUID
 func (noopRombelStore) GetRombelSubjectAssignment(context.Context, db.GetRombelSubjectAssignmentParams) (db.GetRombelSubjectAssignmentRow, error) {
 	return db.GetRombelSubjectAssignmentRow{}, nil
 }
+func (noopRombelStore) GetActiveAcademicYear(context.Context) (db.AcademicYear, error) {
+	return db.AcademicYear{}, nil
+}
+func (noopRombelStore) ListSubjectAssignmentMatrixClasses(context.Context, pgtype.UUID) ([]db.ListSubjectAssignmentMatrixClassesRow, error) {
+	return nil, nil
+}
+func (noopRombelStore) ListSubjectAssignmentMatrixSubjects(context.Context) ([]db.ListSubjectAssignmentMatrixSubjectsRow, error) {
+	return nil, nil
+}
+func (noopRombelStore) ListSubjectAssignmentMatrixTeachers(context.Context) ([]db.ListSubjectAssignmentMatrixTeachersRow, error) {
+	return nil, nil
+}
+func (noopRombelStore) ListSubjectAssignmentMatrixCells(context.Context, pgtype.UUID) ([]db.ListSubjectAssignmentMatrixCellsRow, error) {
+	return nil, nil
+}
+func (noopRombelStore) GetSubjectAssignmentMatrixCell(context.Context, db.GetSubjectAssignmentMatrixCellParams) (db.GetSubjectAssignmentMatrixCellRow, error) {
+	return db.GetSubjectAssignmentMatrixCellRow{}, nil
+}
+func (noopRombelStore) GetSubjectAssignmentByClassSubject(context.Context, db.GetSubjectAssignmentByClassSubjectParams) (db.ClassSubjectAssignment, error) {
+	return db.ClassSubjectAssignment{}, nil
+}
+func (noopRombelStore) UpsertSubjectAssignmentMatrixCell(context.Context, db.UpsertSubjectAssignmentMatrixCellParams) (db.ClassSubjectAssignment, error) {
+	return db.ClassSubjectAssignment{}, nil
+}
 func (noopRombelStore) CreateRombelSubjectAssignment(context.Context, db.CreateRombelSubjectAssignmentParams) (db.CreateRombelSubjectAssignmentRow, error) {
 	return db.CreateRombelSubjectAssignmentRow{}, nil
 }

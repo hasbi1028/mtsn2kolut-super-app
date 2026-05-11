@@ -80,9 +80,61 @@ Validation awal:
 - `level` harus sesuai level yang didukung sekolah.
 - Deaktivasi rombel dengan siswa aktif harus dikonfirmasi atau ditolak oleh backend.
 
+## Editable Subject / Mapel
+
+Dipakai mulai Sprint 3.
+
+Endpoint backend:
+
+```http
+GET /api/academic
+POST /api/academic/subjects
+PUT /api/academic/subjects/{id}
+```
+
+Endpoint SvelteKit BFF:
+
+```http
+GET /api/academic/subjects
+POST /api/academic/subjects
+PUT /api/academic/subjects?id={id}
+```
+
+```ts
+export type AcademicSubject = {
+  id: string;
+  code: string;
+  name: string;
+  category: 'intrakurikuler' | 'muatan_lokal' | 'kokurikuler' | 'kegiatan' | 'lainnya' | string;
+  is_assessment_subject: boolean;
+  is_report_subject: boolean;
+  is_schedule_activity: boolean;
+  default_weekly_hours: number;
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+```
+
+Validation awal:
+
+- `code` dan `name` wajib.
+- `category` harus salah satu kategori UI yang didukung.
+- `default_weekly_hours` harus 0–60.
+- `display_order` tidak boleh negatif.
+- `code` unik global antar mapel.
+
 ## Subject Assignment Matrix
 
-Dipakai untuk Sprint 3.
+Dipakai mulai Sprint 3.
+
+Endpoint backend dan BFF:
+
+```http
+GET /api/academic/subject-assignment-matrix
+PUT /api/academic/subject-assignment-matrix
+```
 
 ```ts
 export type SubjectMatrixCell = {
@@ -96,16 +148,26 @@ export type SubjectMatrixCell = {
 
 export type SubjectAssignmentMatrix = {
   academic_year_id: string;
+  academic_year_name: string;
   classes: Array<{ id: string; code: string; name: string; level: string }>;
-  subjects: Array<{ id: string; code: string; name: string }>;
+  subjects: Array<Pick<AcademicSubject, 'id' | 'code' | 'name' | 'category' | 'is_assessment_subject' | 'is_report_subject' | 'is_schedule_activity' | 'default_weekly_hours' | 'display_order'>>;
+  teachers: Array<{ id: string; nip: string; nama: string; unit_kerja: string }>;
   cells: SubjectMatrixCell[];
+};
+
+export type UpdateSubjectMatrixCellRequest = {
+  class_id: string;
+  subject_id: string;
+  teacher_employee_id: string; // empty string clears assignment
 };
 ```
 
 Validation awal:
 
-- Cell boleh kosong tetapi harus diberi status `missing_assignment` atau `missing_teacher` agar dashboard/checklist dapat menyorot data belum lengkap.
-- Perubahan massal matrix harus punya preview perubahan sebelum apply.
+- Cell kosong diberi status `missing_assignment`; assignment dengan guru hilang/tidak aktif diberi status `missing_teacher`.
+- Update hanya menerima rombel aktif tahun ajaran aktif, mapel aktif, dan guru aktif.
+- Mengosongkan guru akan menghapus assignment melalui guard service existing, sehingga assignment yang sudah punya dependent tetap ditolak oleh backend.
+- Perubahan matrix disimpan per changed cell dari UI dengan dirty-change bar; bulk preview lebih besar tetap ditunda.
 
 ## Shared Editable Component Types
 

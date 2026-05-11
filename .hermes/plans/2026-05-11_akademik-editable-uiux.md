@@ -849,3 +849,12 @@ cd services/core-api && go test ./...
 - `/students` add/edit form now uses shared `EntityDrawer` from Sprint 1 while preserving existing add, edit, delete, lifecycle update, preview account, and generate account flows.
 - Student selection is implemented with row/card checkboxes, a filtered-table select-all checkbox, selected count, and clear-selection toolbar.
 - Bulk mutation is intentionally deferred because there is no safe selected-student bulk endpoint in the current contract; the toolbar only reports selection count and clears selection.
+
+## Sprint Akademik 3 Mapel & Guru Mapel Matrix — 2026-05-11
+
+- Added safe migration `services/core-api/db/migrations/088_academic_subject_metadata.sql` for subject metadata columns: category, assessment/report/schedule flags, default weekly hours, and display order.
+- Extended academic subject APIs with metadata-aware list/create/update validation, plus `/api/academic/subjects` BFF and `/akademik/mapel` editable table using Sprint 1 inline-edit components.
+- Added subject-assignment matrix read/update endpoints and BFF at `/api/academic/subject-assignment-matrix`.
+- Added `/akademik/guru-mapel` matrix page with mapel rows, rombel columns, teacher dropdown cells, dirty-change save/cancel bar, level filter, and mapel search.
+- Updated sidebar links for `Mapel` and `Guru Mapel`.
+- Deployment gap: production DB must run migration 088 before the new backend binary is deployed/restarted, otherwise subject metadata queries will reference columns that do not exist.

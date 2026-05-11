@@ -450,7 +450,7 @@ func TestPortalServiceStopsOverviewOnStoreErrors(t *testing.T) {
 type fakeAcademicStore struct {
 	years            []db.AcademicYear
 	classes          []db.ListSchoolClassesRow
-	subjects         []db.Subject
+	subjects         []db.ListSubjectsRow
 	assignments      []db.ListClassSubjectAssignmentsRow
 	timetableSlots   []db.ListTimetableSlotsRow
 	stats            db.GetAcademicStatsRow
@@ -489,7 +489,7 @@ func (f *fakeAcademicStore) ListSchoolClasses(ctx context.Context) ([]db.ListSch
 	return f.classes, nil
 }
 
-func (f *fakeAcademicStore) ListSubjects(ctx context.Context) ([]db.Subject, error) {
+func (f *fakeAcademicStore) ListSubjects(ctx context.Context) ([]db.ListSubjectsRow, error) {
 	return f.subjects, nil
 }
 
@@ -522,6 +522,18 @@ func (f *fakeAcademicStore) CreateSchoolClass(ctx context.Context, arg db.Create
 func (f *fakeAcademicStore) CreateSubject(ctx context.Context, arg db.CreateSubjectParams) (db.Subject, error) {
 	f.createSubjectArg = arg
 	return db.Subject{Code: arg.Code, Name: arg.Name, IsActive: arg.IsActive}, nil
+}
+
+func (f *fakeAcademicStore) GetSubject(ctx context.Context, id pgtype.UUID) (db.GetSubjectRow, error) {
+	return db.GetSubjectRow{ID: id, Code: "MAT", Name: "Matematika", IsActive: true}, nil
+}
+
+func (f *fakeAcademicStore) CountSubjectCodeConflicts(ctx context.Context, arg db.CountSubjectCodeConflictsParams) (int32, error) {
+	return 0, nil
+}
+
+func (f *fakeAcademicStore) UpdateSubject(ctx context.Context, arg db.UpdateSubjectParams) (db.Subject, error) {
+	return db.Subject{ID: arg.ID, Code: arg.Code, Name: arg.Name, IsActive: arg.IsActive}, nil
 }
 
 func (f *fakeAcademicStore) CreateClassSubjectAssignment(ctx context.Context, arg db.CreateClassSubjectAssignmentParams) (db.ClassSubjectAssignment, error) {
@@ -616,7 +628,7 @@ func TestAcademicServiceForwardsStoreCallsAndChecksTimetableAvailability(t *test
 	store := &fakeAcademicStore{
 		years:            []db.AcademicYear{{ID: yearID, Name: "2026/2027"}},
 		classes:          []db.ListSchoolClassesRow{{ID: classID, Name: "VII A"}},
-		subjects:         []db.Subject{{ID: subjectID, Name: "Matematika"}},
+		subjects:         []db.ListSubjectsRow{{ID: subjectID, Name: "Matematika"}},
 		assignments:      []db.ListClassSubjectAssignmentsRow{{ID: assignmentID, ClassID: classID, SubjectID: subjectID, TeacherEmployeeID: teacherID}},
 		timetableSlots:   []db.ListTimetableSlotsRow{{ID: slotID, AssignmentID: assignmentID, RoomLabel: "R1"}},
 		stats:            db.GetAcademicStatsRow{TotalStudents: 10, TotalClasses: 2, TotalSubjects: 3, TotalYears: 1},

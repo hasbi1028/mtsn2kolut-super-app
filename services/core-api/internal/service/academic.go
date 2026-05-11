@@ -7,20 +7,24 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
 type academicStore interface {
 	ListAcademicYears(ctx context.Context) ([]db.AcademicYear, error)
 	ListSchoolClasses(ctx context.Context) ([]db.ListSchoolClassesRow, error)
-	ListSubjects(ctx context.Context) ([]db.Subject, error)
+	ListSubjects(ctx context.Context) ([]db.ListSubjectsRow, error)
 	ListClassSubjectAssignments(ctx context.Context) ([]db.ListClassSubjectAssignmentsRow, error)
 	ListTimetableSlots(ctx context.Context) ([]db.ListTimetableSlotsRow, error)
 	GetAcademicStats(ctx context.Context) (db.GetAcademicStatsRow, error)
 	GetAcademicDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error)
+	GetSubject(ctx context.Context, id pgtype.UUID) (db.GetSubjectRow, error)
+	CountSubjectCodeConflicts(ctx context.Context, arg db.CountSubjectCodeConflictsParams) (int32, error)
 	CreateAcademicYear(ctx context.Context, arg db.CreateAcademicYearParams) (db.AcademicYear, error)
 	CreateSchoolClass(ctx context.Context, arg db.CreateSchoolClassParams) (db.SchoolClass, error)
 	CreateSubject(ctx context.Context, arg db.CreateSubjectParams) (db.Subject, error)
+	UpdateSubject(ctx context.Context, arg db.UpdateSubjectParams) (db.Subject, error)
 	CreateClassSubjectAssignment(ctx context.Context, arg db.CreateClassSubjectAssignmentParams) (db.ClassSubjectAssignment, error)
 	CreateTimetableSlot(ctx context.Context, arg db.CreateTimetableSlotParams) (db.TimetableSlot, error)
 	GetTimetableSlot(ctx context.Context, id pgtype.UUID) (db.TimetableSlot, error)
@@ -58,7 +62,7 @@ func (s *Academic) ListClasses(ctx context.Context) ([]db.ListSchoolClassesRow, 
 	return s.q.ListSchoolClasses(ctx)
 }
 
-func (s *Academic) ListSubjects(ctx context.Context) ([]db.Subject, error) {
+func (s *Academic) ListSubjects(ctx context.Context) ([]db.ListSubjectsRow, error) {
 	return s.q.ListSubjects(ctx)
 }
 
@@ -87,7 +91,34 @@ func (s *Academic) CreateClass(ctx context.Context, p db.CreateSchoolClassParams
 }
 
 func (s *Academic) CreateSubject(ctx context.Context, p db.CreateSubjectParams) (db.Subject, error) {
+	normalized, err := normalizeCreateSubjectParams(p)
+	if err != nil {
+		return db.Subject{}, err
+	}
+	p = normalized
 	return s.q.CreateSubject(ctx, p)
+}
+
+func (s *Academic) UpdateSubject(ctx context.Context, p db.UpdateSubjectParams) (db.Subject, error) {
+	normalized, err := normalizeUpdateSubjectParams(p)
+	if err != nil {
+		return db.Subject{}, err
+	}
+	p = normalized
+	if _, err := s.q.GetSubject(ctx, p.ID); err != nil {
+		return db.Subject{}, err
+	}
+	conflicts, err := s.q.CountSubjectCodeConflicts(ctx, db.CountSubjectCodeConflictsParams{
+		ID:   p.ID,
+		Code: p.Code,
+	})
+	if err != nil {
+		return db.Subject{}, err
+	}
+	if conflicts > 0 {
+		return db.Subject{}, fmt.Errorf("%w: kode mapel sudah dipakai", domain.ErrConflict)
+	}
+	return s.q.UpdateSubject(ctx, p)
 }
 
 func (s *Academic) CreateAssignment(ctx context.Context, p db.CreateClassSubjectAssignmentParams) (db.ClassSubjectAssignment, error) {
@@ -133,6 +164,60 @@ func (s *Academic) DeleteClass(ctx context.Context, id pgtype.UUID) error {
 
 func (s *Academic) DeleteSubject(ctx context.Context, id pgtype.UUID) error {
 	return s.q.DeleteSubject(ctx, id)
+}
+
+func normalizeCreateSubjectParams(p db.CreateSubjectParams) (db.CreateSubjectParams, error) {
+	code, name, category, err := normalizeSubjectIdentity(p.Code, p.Name, p.Category)
+	if err != nil {
+		return db.CreateSubjectParams{}, err
+	}
+	if err := validateSubjectNumbers(p.DefaultWeeklyHours, p.DisplayOrder); err != nil {
+		return db.CreateSubjectParams{}, err
+	}
+	p.Code = code
+	p.Name = name
+	p.Category = category
+	return p, nil
+}
+
+func normalizeUpdateSubjectParams(p db.UpdateSubjectParams) (db.UpdateSubjectParams, error) {
+	code, name, category, err := normalizeSubjectIdentity(p.Code, p.Name, p.Category)
+	if err != nil {
+		return db.UpdateSubjectParams{}, err
+	}
+	if err := validateSubjectNumbers(p.DefaultWeeklyHours, p.DisplayOrder); err != nil {
+		return db.UpdateSubjectParams{}, err
+	}
+	p.Code = code
+	p.Name = name
+	p.Category = category
+	return p, nil
+}
+
+func normalizeSubjectIdentity(code, name, category string) (string, string, string, error) {
+	code = strings.TrimSpace(code)
+	name = strings.TrimSpace(name)
+	category = strings.TrimSpace(category)
+	if category == "" {
+		category = "intrakurikuler"
+	}
+	if code == "" {
+		return "", "", "", fmt.Errorf("%w: kode mapel wajib diisi", domain.ErrBadRequest)
+	}
+	if name == "" {
+		return "", "", "", fmt.Errorf("%w: nama mapel wajib diisi", domain.ErrBadRequest)
+	}
+	return code, name, category, nil
+}
+
+func validateSubjectNumbers(defaultWeeklyHours, displayOrder int32) error {
+	if defaultWeeklyHours < 0 || defaultWeeklyHours > 60 {
+		return fmt.Errorf("%w: jam pelajaran per pekan harus 0-60", domain.ErrBadRequest)
+	}
+	if displayOrder < 0 {
+		return fmt.Errorf("%w: urutan tampil tidak boleh negatif", domain.ErrBadRequest)
+	}
+	return nil
 }
 
 func (s *Academic) DeleteAssignment(ctx context.Context, id pgtype.UUID) error {

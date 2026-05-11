@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"mtsn2kolut-super-app/backend/internal/domain"
@@ -20,6 +22,14 @@ type rombelStore interface {
 	ListStudentsByClassWithParents(ctx context.Context, classID pgtype.UUID) ([]db.ListStudentsByClassWithParentsRow, error)
 	ListRombelSubjectAssignments(ctx context.Context, classID pgtype.UUID) ([]db.ListRombelSubjectAssignmentsRow, error)
 	GetRombelSubjectAssignment(ctx context.Context, arg db.GetRombelSubjectAssignmentParams) (db.GetRombelSubjectAssignmentRow, error)
+	GetActiveAcademicYear(ctx context.Context) (db.AcademicYear, error)
+	ListSubjectAssignmentMatrixClasses(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListSubjectAssignmentMatrixClassesRow, error)
+	ListSubjectAssignmentMatrixSubjects(ctx context.Context) ([]db.ListSubjectAssignmentMatrixSubjectsRow, error)
+	ListSubjectAssignmentMatrixTeachers(ctx context.Context) ([]db.ListSubjectAssignmentMatrixTeachersRow, error)
+	ListSubjectAssignmentMatrixCells(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListSubjectAssignmentMatrixCellsRow, error)
+	GetSubjectAssignmentMatrixCell(ctx context.Context, arg db.GetSubjectAssignmentMatrixCellParams) (db.GetSubjectAssignmentMatrixCellRow, error)
+	GetSubjectAssignmentByClassSubject(ctx context.Context, arg db.GetSubjectAssignmentByClassSubjectParams) (db.ClassSubjectAssignment, error)
+	UpsertSubjectAssignmentMatrixCell(ctx context.Context, arg db.UpsertSubjectAssignmentMatrixCellParams) (db.ClassSubjectAssignment, error)
 	CreateRombelSubjectAssignment(ctx context.Context, arg db.CreateRombelSubjectAssignmentParams) (db.CreateRombelSubjectAssignmentRow, error)
 	UpdateRombelSubjectAssignment(ctx context.Context, arg db.UpdateRombelSubjectAssignmentParams) (db.UpdateRombelSubjectAssignmentRow, error)
 	CountRombelSubjectAssignmentDependents(ctx context.Context, arg db.CountRombelSubjectAssignmentDependentsParams) (db.CountRombelSubjectAssignmentDependentsRow, error)
@@ -41,6 +51,21 @@ type rombelStore interface {
 type Rombel struct {
 	q  rombelStore
 	tx classJournalTxStarter
+}
+
+type SubjectAssignmentMatrix struct {
+	AcademicYearID   pgtype.UUID                                  `json:"academic_year_id"`
+	AcademicYearName string                                       `json:"academic_year_name"`
+	Classes          []db.ListSubjectAssignmentMatrixClassesRow   `json:"classes"`
+	Subjects         []db.ListSubjectAssignmentMatrixSubjectsRow  `json:"subjects"`
+	Teachers         []db.ListSubjectAssignmentMatrixTeachersRow  `json:"teachers"`
+	Cells            []db.ListSubjectAssignmentMatrixCellsRow     `json:"cells"`
+}
+
+type SubjectAssignmentMatrixCellInput struct {
+	ClassID           pgtype.UUID
+	SubjectID         pgtype.UUID
+	TeacherEmployeeID pgtype.UUID
 }
 
 func NewRombel(q *db.Queries) *Rombel { return &Rombel{q: q} }
@@ -110,6 +135,91 @@ func (s *Rombel) ListSubjectAssignments(ctx context.Context, classID pgtype.UUID
 
 func (s *Rombel) GetSubjectAssignment(ctx context.Context, arg db.GetRombelSubjectAssignmentParams) (db.GetRombelSubjectAssignmentRow, error) {
 	return s.q.GetRombelSubjectAssignment(ctx, arg)
+}
+
+func (s *Rombel) GetSubjectAssignmentMatrix(ctx context.Context) (SubjectAssignmentMatrix, error) {
+	year, err := s.q.GetActiveAcademicYear(ctx)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return SubjectAssignmentMatrix{
+				Classes:  []db.ListSubjectAssignmentMatrixClassesRow{},
+				Subjects: []db.ListSubjectAssignmentMatrixSubjectsRow{},
+				Teachers: []db.ListSubjectAssignmentMatrixTeachersRow{},
+				Cells:    []db.ListSubjectAssignmentMatrixCellsRow{},
+			}, nil
+		}
+		return SubjectAssignmentMatrix{}, err
+	}
+	classes, err := s.q.ListSubjectAssignmentMatrixClasses(ctx, year.ID)
+	if err != nil {
+		return SubjectAssignmentMatrix{}, err
+	}
+	subjects, err := s.q.ListSubjectAssignmentMatrixSubjects(ctx)
+	if err != nil {
+		return SubjectAssignmentMatrix{}, err
+	}
+	teachers, err := s.q.ListSubjectAssignmentMatrixTeachers(ctx)
+	if err != nil {
+		return SubjectAssignmentMatrix{}, err
+	}
+	cells, err := s.q.ListSubjectAssignmentMatrixCells(ctx, year.ID)
+	if err != nil {
+		return SubjectAssignmentMatrix{}, err
+	}
+	return SubjectAssignmentMatrix{
+		AcademicYearID:   year.ID,
+		AcademicYearName: year.Name,
+		Classes:          classes,
+		Subjects:         subjects,
+		Teachers:         teachers,
+		Cells:            cells,
+	}, nil
+}
+
+func (s *Rombel) UpdateSubjectAssignmentMatrixCell(ctx context.Context, in SubjectAssignmentMatrixCellInput) (db.GetSubjectAssignmentMatrixCellRow, error) {
+	if !in.ClassID.Valid || !in.SubjectID.Valid {
+		return db.GetSubjectAssignmentMatrixCellRow{}, fmt.Errorf("%w: class_id dan subject_id wajib diisi", domain.ErrBadRequest)
+	}
+	if in.TeacherEmployeeID.Valid {
+		if _, err := s.q.UpsertSubjectAssignmentMatrixCell(ctx, db.UpsertSubjectAssignmentMatrixCellParams{
+			ClassID:           in.ClassID,
+			SubjectID:         in.SubjectID,
+			TeacherEmployeeID: in.TeacherEmployeeID,
+		}); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return db.GetSubjectAssignmentMatrixCellRow{}, fmt.Errorf("%w: rombel, mapel, atau guru tidak aktif", domain.ErrBadRequest)
+			}
+			return db.GetSubjectAssignmentMatrixCellRow{}, err
+		}
+		return s.q.GetSubjectAssignmentMatrixCell(ctx, db.GetSubjectAssignmentMatrixCellParams{
+			ClassID:   in.ClassID,
+			SubjectID: in.SubjectID,
+		})
+	}
+
+	current, err := s.q.GetSubjectAssignmentByClassSubject(ctx, db.GetSubjectAssignmentByClassSubjectParams{
+		ClassID:   in.ClassID,
+		SubjectID: in.SubjectID,
+	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return db.GetSubjectAssignmentMatrixCellRow{}, err
+	}
+	if err == nil {
+		if deleteErr := s.DeleteSubjectAssignment(ctx, db.DeleteRombelSubjectAssignmentParams{
+			ClassID: current.ClassID,
+			ID:      current.ID,
+		}); deleteErr != nil {
+			return db.GetSubjectAssignmentMatrixCellRow{}, deleteErr
+		}
+	}
+	cell, err := s.q.GetSubjectAssignmentMatrixCell(ctx, db.GetSubjectAssignmentMatrixCellParams{
+		ClassID:   in.ClassID,
+		SubjectID: in.SubjectID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.GetSubjectAssignmentMatrixCellRow{}, fmt.Errorf("%w: rombel atau mapel tidak aktif", domain.ErrBadRequest)
+	}
+	return cell, err
 }
 
 func (s *Rombel) CreateSubjectAssignment(ctx context.Context, arg db.CreateRombelSubjectAssignmentParams) (db.CreateRombelSubjectAssignmentRow, error) {
