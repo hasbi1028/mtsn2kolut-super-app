@@ -39,11 +39,18 @@ type fakeAcademicService struct {
 	conflictsErr    error
 
 	createYearArg      db.CreateAcademicYearParams
+	activateYearID     pgtype.UUID
+	activateConfirm    string
+	previewInput       service.YearRolloverPreviewInput
+	dryRunInput        service.AcademicImportDryRunInput
 	createClassArg     db.CreateSchoolClassParams
 	createSubjectArg   db.CreateSubjectParams
 	createAssignArg    db.CreateClassSubjectAssignmentParams
 	createTimetableArg db.CreateTimetableSlotParams
 	createErr          error
+	activateErr        error
+	previewErr         error
+	dryRunErr          error
 
 	updateSubjectArg   db.UpdateSubjectParams
 	updateTimetableArg db.UpdateTimetableSlotParams
@@ -164,6 +171,38 @@ func (f *fakeAcademicService) CreateYear(_ context.Context, p db.CreateAcademicY
 		return db.AcademicYear{}, f.createErr
 	}
 	return db.AcademicYear{ID: handlerTestUUID(120), Name: p.Name}, nil
+}
+
+func (f *fakeAcademicService) ActivateYear(_ context.Context, id pgtype.UUID, confirmation string) (db.AcademicYear, error) {
+	f.activateYearID = id
+	f.activateConfirm = confirmation
+	if f.activateErr != nil {
+		return db.AcademicYear{}, f.activateErr
+	}
+	return db.AcademicYear{ID: id, Name: "2026/2027", IsActive: true}, nil
+}
+
+func (f *fakeAcademicService) PreviewYearRollover(_ context.Context, input service.YearRolloverPreviewInput) (service.YearRolloverPreview, error) {
+	f.previewInput = input
+	if f.previewErr != nil {
+		return service.YearRolloverPreview{}, f.previewErr
+	}
+	return service.YearRolloverPreview{
+		SourceAcademicYearName: "2025/2026",
+		TargetAcademicYearName: "2026/2027",
+		Counts: service.YearRolloverPreviewCounts{
+			StudentsToPromote: 12,
+		},
+		Warnings: []string{"Preview ini tidak mengubah database."},
+	}, nil
+}
+
+func (f *fakeAcademicService) DryRunAcademicImport(_ context.Context, input service.AcademicImportDryRunInput) (service.AcademicImportDryRunResult, error) {
+	f.dryRunInput = input
+	if f.dryRunErr != nil {
+		return service.AcademicImportDryRunResult{}, f.dryRunErr
+	}
+	return service.AcademicImportDryRunResult{Kind: input.Kind, TotalRows: 1, AddCount: 1}, nil
 }
 
 func (f *fakeAcademicService) CreateClass(_ context.Context, p db.CreateSchoolClassParams) (db.SchoolClass, error) {

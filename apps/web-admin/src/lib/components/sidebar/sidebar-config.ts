@@ -34,8 +34,10 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	{
 		group: 'Akademik & Pembelajaran',
 		items: [
-			{ href: '/academic', label: 'Data Akademik', icon: 'book-open', roles: ['admin'], permissions: ['academic.read'] },
+			{ href: '/akademik', label: 'Dashboard Akademik', icon: 'grid', roles: ['admin', 'guru', 'kesiswaan'], permissions: ['academic.read'] },
+			{ href: '/akademik/tahun-ajaran', label: 'Tahun Ajaran', icon: 'calendar', roles: ['admin'], permissions: ['academic.read'] },
 			{ href: '/akademik/rombel', label: 'Rombel', icon: 'layers', roles: ['admin', 'guru', 'kesiswaan'], permissions: ['academic.read'] },
+			{ href: '/students', label: 'Siswa', icon: 'users', roles: ['admin', 'kesiswaan', 'guru'], permissions: ['students.read'] },
 			{ href: '/akademik/mapel', label: 'Mapel', icon: 'book-open', roles: ['admin', 'guru'], permissions: ['academic.read'] },
 			{ href: '/akademik/guru-mapel', label: 'Guru Mapel', icon: 'user-check', roles: ['admin', 'guru'], permissions: ['academic.read'] },
 			{ href: '/akademik/jadwal', label: 'Jadwal', icon: 'calendar', roles: ['admin', 'guru'], permissions: ['academic.read'] },
@@ -47,7 +49,6 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	{
 		group: 'Siswa & Wali',
 		items: [
-			{ href: '/students', label: 'Siswa', icon: 'users', roles: ['admin', 'kesiswaan', 'guru'], permissions: ['students.read'] },
 			{ href: '/parents', label: 'Orang Tua', icon: 'user-group', roles: ['admin'], permissions: ['parents.read'] },
 			{ href: '/kesiswaan', label: 'Kesiswaan', icon: 'user-check', roles: ['admin', 'kesiswaan', 'guru'], permissions: ['kesiswaan.read', 'students.read'] }
 		]

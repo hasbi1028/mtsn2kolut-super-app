@@ -15,10 +15,18 @@ import (
 
 type academicStore interface {
 	ListAcademicYears(ctx context.Context) ([]db.AcademicYear, error)
+	GetAcademicYearByID(ctx context.Context, id pgtype.UUID) (db.AcademicYear, error)
+	CountAcademicYearNameConflicts(ctx context.Context, name string) (int32, error)
+	DeactivateAcademicYears(ctx context.Context) error
+	ActivateAcademicYear(ctx context.Context, id pgtype.UUID) (db.AcademicYear, error)
 	ListSchoolClasses(ctx context.Context) ([]db.ListSchoolClassesRow, error)
 	ListSubjects(ctx context.Context) ([]db.ListSubjectsRow, error)
 	ListClassSubjectAssignments(ctx context.Context) ([]db.ListClassSubjectAssignmentsRow, error)
 	ListTimetableSlots(ctx context.Context) ([]db.ListTimetableSlotsRow, error)
+	ListYearRolloverStudents(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListYearRolloverStudentsRow, error)
+	ListYearRolloverHomeroomAssignments(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListYearRolloverHomeroomAssignmentsRow, error)
+	ListAcademicImportStudents(ctx context.Context) ([]db.ListAcademicImportStudentsRow, error)
+	ListAcademicImportTeachers(ctx context.Context) ([]db.ListAcademicImportTeachersRow, error)
 	GetActiveAcademicYear(ctx context.Context) (db.AcademicYear, error)
 	ListWeeklyTimetableClasses(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListWeeklyTimetableClassesRow, error)
 	ListWeeklyTimetableTeachers(ctx context.Context) ([]db.ListWeeklyTimetableTeachersRow, error)
@@ -214,6 +222,18 @@ func annotateWeeklyTimetableSlots(slots []db.ListWeeklyTimetableSlotsRow, confli
 }
 
 func (s *Academic) CreateYear(ctx context.Context, p db.CreateAcademicYearParams) (db.AcademicYear, error) {
+	normalized, err := normalizeAcademicYearParams(p)
+	if err != nil {
+		return db.AcademicYear{}, err
+	}
+	p = normalized
+	conflicts, err := s.q.CountAcademicYearNameConflicts(ctx, p.Name)
+	if err != nil {
+		return db.AcademicYear{}, err
+	}
+	if conflicts > 0 {
+		return db.AcademicYear{}, fmt.Errorf("%w: tahun ajaran sudah ada", domain.ErrConflict)
+	}
 	return s.q.CreateAcademicYear(ctx, p)
 }
 

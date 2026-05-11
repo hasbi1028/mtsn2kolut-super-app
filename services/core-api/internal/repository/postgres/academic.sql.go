@@ -11,6 +11,42 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const activateAcademicYear = `-- name: ActivateAcademicYear :one
+UPDATE academic_years
+SET is_active = TRUE,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, name, start_date, end_date, is_active, created_at, updated_at
+`
+
+func (q *Queries) ActivateAcademicYear(ctx context.Context, id pgtype.UUID) (AcademicYear, error) {
+	row := q.db.QueryRow(ctx, activateAcademicYear, id)
+	var i AcademicYear
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.StartDate,
+		&i.EndDate,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const countAcademicYearNameConflicts = `-- name: CountAcademicYearNameConflicts :one
+SELECT COUNT(*)::int
+FROM academic_years
+WHERE LOWER(name) = LOWER($1)
+`
+
+func (q *Queries) CountAcademicYearNameConflicts(ctx context.Context, name string) (int32, error) {
+	row := q.db.QueryRow(ctx, countAcademicYearNameConflicts, name)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countSubjectCodeConflicts = `-- name: CountSubjectCodeConflicts :one
 SELECT COUNT(*)::int
 FROM subjects
@@ -193,6 +229,18 @@ func (q *Queries) CreateSubject(ctx context.Context, arg CreateSubjectParams) (S
 		&i.DisplayOrder,
 	)
 	return i, err
+}
+
+const deactivateAcademicYears = `-- name: DeactivateAcademicYears :exec
+UPDATE academic_years
+SET is_active = FALSE,
+    updated_at = NOW()
+WHERE is_active = TRUE
+`
+
+func (q *Queries) DeactivateAcademicYears(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deactivateAcademicYears)
+	return err
 }
 
 const deleteAcademicYear = `-- name: DeleteAcademicYear :exec
@@ -397,6 +445,27 @@ func (q *Queries) GetAcademicStats(ctx context.Context) (GetAcademicStatsRow, er
 	return i, err
 }
 
+const getAcademicYearByID = `-- name: GetAcademicYearByID :one
+SELECT id, name, start_date, end_date, is_active, created_at, updated_at
+FROM academic_years
+WHERE id = $1
+`
+
+func (q *Queries) GetAcademicYearByID(ctx context.Context, id pgtype.UUID) (AcademicYear, error) {
+	row := q.db.QueryRow(ctx, getAcademicYearByID, id)
+	var i AcademicYear
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.StartDate,
+		&i.EndDate,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getActiveAcademicYear = `-- name: GetActiveAcademicYear :one
 SELECT id, name, start_date, end_date, is_active, created_at, updated_at
 FROM academic_years
@@ -593,6 +662,100 @@ func (q *Queries) GetSubjectAssignmentMatrixCell(ctx context.Context, arg GetSub
 		&i.Status,
 	)
 	return i, err
+}
+
+const listAcademicImportStudents = `-- name: ListAcademicImportStudents :many
+SELECT
+    id,
+    nis,
+    nisn,
+    nama,
+    class_id,
+    is_active,
+    status
+FROM students
+ORDER BY nama ASC
+`
+
+type ListAcademicImportStudentsRow struct {
+	ID       pgtype.UUID       `json:"id"`
+	Nis      string            `json:"nis"`
+	Nisn     string            `json:"nisn"`
+	Nama     string            `json:"nama"`
+	ClassID  pgtype.UUID       `json:"class_id"`
+	IsActive bool              `json:"is_active"`
+	Status   StudentStatusEnum `json:"status"`
+}
+
+func (q *Queries) ListAcademicImportStudents(ctx context.Context) ([]ListAcademicImportStudentsRow, error) {
+	rows, err := q.db.Query(ctx, listAcademicImportStudents)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAcademicImportStudentsRow{}
+	for rows.Next() {
+		var i ListAcademicImportStudentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nis,
+			&i.Nisn,
+			&i.Nama,
+			&i.ClassID,
+			&i.IsActive,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAcademicImportTeachers = `-- name: ListAcademicImportTeachers :many
+SELECT
+    id,
+    COALESCE(nip, '')::text AS nip,
+    nama,
+    is_active
+FROM employees
+WHERE is_active = TRUE
+ORDER BY nama ASC
+`
+
+type ListAcademicImportTeachersRow struct {
+	ID       pgtype.UUID `json:"id"`
+	Nip      string      `json:"nip"`
+	Nama     string      `json:"nama"`
+	IsActive bool        `json:"is_active"`
+}
+
+func (q *Queries) ListAcademicImportTeachers(ctx context.Context) ([]ListAcademicImportTeachersRow, error) {
+	rows, err := q.db.Query(ctx, listAcademicImportTeachers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAcademicImportTeachersRow{}
+	for rows.Next() {
+		var i ListAcademicImportTeachersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nip,
+			&i.Nama,
+			&i.IsActive,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listAcademicYears = `-- name: ListAcademicYears :many
@@ -991,6 +1154,101 @@ func (q *Queries) ListSubjects(ctx context.Context) ([]ListSubjectsRow, error) {
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listYearRolloverHomeroomAssignments = `-- name: ListYearRolloverHomeroomAssignments :many
+SELECT
+    cha.class_id,
+    COUNT(*)::int AS total
+FROM class_homeroom_assignments cha
+JOIN school_classes c ON c.id = cha.class_id
+WHERE c.academic_year_id = $1
+  AND c.is_active = TRUE
+  AND cha.is_active = TRUE
+GROUP BY cha.class_id
+`
+
+type ListYearRolloverHomeroomAssignmentsRow struct {
+	ClassID pgtype.UUID `json:"class_id"`
+	Total   int32       `json:"total"`
+}
+
+func (q *Queries) ListYearRolloverHomeroomAssignments(ctx context.Context, academicYearID pgtype.UUID) ([]ListYearRolloverHomeroomAssignmentsRow, error) {
+	rows, err := q.db.Query(ctx, listYearRolloverHomeroomAssignments, academicYearID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListYearRolloverHomeroomAssignmentsRow{}
+	for rows.Next() {
+		var i ListYearRolloverHomeroomAssignmentsRow
+		if err := rows.Scan(&i.ClassID, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listYearRolloverStudents = `-- name: ListYearRolloverStudents :many
+SELECT
+    s.id,
+    s.nis,
+    s.nisn,
+    s.nama,
+    s.class_id,
+    c.code AS class_code,
+    c.name AS class_name,
+    c.level AS class_level
+FROM students s
+JOIN school_classes c ON c.id = s.class_id
+WHERE c.academic_year_id = $1
+  AND s.is_active = TRUE
+  AND s.status = 'active'
+ORDER BY c.level ASC, c.name ASC, s.nama ASC
+`
+
+type ListYearRolloverStudentsRow struct {
+	ID         pgtype.UUID `json:"id"`
+	Nis        string      `json:"nis"`
+	Nisn       string      `json:"nisn"`
+	Nama       string      `json:"nama"`
+	ClassID    pgtype.UUID `json:"class_id"`
+	ClassCode  string      `json:"class_code"`
+	ClassName  string      `json:"class_name"`
+	ClassLevel string      `json:"class_level"`
+}
+
+func (q *Queries) ListYearRolloverStudents(ctx context.Context, academicYearID pgtype.UUID) ([]ListYearRolloverStudentsRow, error) {
+	rows, err := q.db.Query(ctx, listYearRolloverStudents, academicYearID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListYearRolloverStudentsRow{}
+	for rows.Next() {
+		var i ListYearRolloverStudentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nis,
+			&i.Nisn,
+			&i.Nama,
+			&i.ClassID,
+			&i.ClassCode,
+			&i.ClassName,
+			&i.ClassLevel,
 		); err != nil {
 			return nil, err
 		}

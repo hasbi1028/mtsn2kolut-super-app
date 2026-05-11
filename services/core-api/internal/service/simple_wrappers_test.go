@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -454,6 +455,14 @@ type fakeAcademicStore struct {
 	subjects          []db.ListSubjectsRow
 	assignments       []db.ListClassSubjectAssignmentsRow
 	timetableSlots    []db.ListTimetableSlotsRow
+	rolloverStudents  []db.ListYearRolloverStudentsRow
+	rolloverHomerooms []db.ListYearRolloverHomeroomAssignmentsRow
+	importStudents    []db.ListAcademicImportStudentsRow
+	importTeachers    []db.ListAcademicImportTeachersRow
+	yearByID          map[string]db.AcademicYear
+	yearNameConflicts int32
+	deactivateCalled  bool
+	activateYearID    pgtype.UUID
 	activeYear        db.AcademicYear
 	activeYearErr     error
 	weeklyClasses     []db.ListWeeklyTimetableClassesRow
@@ -494,6 +503,39 @@ func (f *fakeAcademicStore) ListAcademicYears(ctx context.Context) ([]db.Academi
 	return f.years, nil
 }
 
+func (f *fakeAcademicStore) GetAcademicYearByID(ctx context.Context, id pgtype.UUID) (db.AcademicYear, error) {
+	if f.yearByID != nil {
+		if year, ok := f.yearByID[pgUUIDString(id)]; ok {
+			return year, nil
+		}
+	}
+	for _, year := range f.years {
+		if year.ID == id {
+			return year, nil
+		}
+	}
+	return db.AcademicYear{}, pgx.ErrNoRows
+}
+
+func (f *fakeAcademicStore) CountAcademicYearNameConflicts(ctx context.Context, name string) (int32, error) {
+	return f.yearNameConflicts, nil
+}
+
+func (f *fakeAcademicStore) DeactivateAcademicYears(ctx context.Context) error {
+	f.deactivateCalled = true
+	return nil
+}
+
+func (f *fakeAcademicStore) ActivateAcademicYear(ctx context.Context, id pgtype.UUID) (db.AcademicYear, error) {
+	f.activateYearID = id
+	year, err := f.GetAcademicYearByID(ctx, id)
+	if err != nil {
+		return db.AcademicYear{}, err
+	}
+	year.IsActive = true
+	return year, nil
+}
+
 func (f *fakeAcademicStore) ListSchoolClasses(ctx context.Context) ([]db.ListSchoolClassesRow, error) {
 	return f.classes, nil
 }
@@ -508,6 +550,22 @@ func (f *fakeAcademicStore) ListClassSubjectAssignments(ctx context.Context) ([]
 
 func (f *fakeAcademicStore) ListTimetableSlots(ctx context.Context) ([]db.ListTimetableSlotsRow, error) {
 	return f.timetableSlots, nil
+}
+
+func (f *fakeAcademicStore) ListYearRolloverStudents(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListYearRolloverStudentsRow, error) {
+	return f.rolloverStudents, nil
+}
+
+func (f *fakeAcademicStore) ListYearRolloverHomeroomAssignments(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListYearRolloverHomeroomAssignmentsRow, error) {
+	return f.rolloverHomerooms, nil
+}
+
+func (f *fakeAcademicStore) ListAcademicImportStudents(ctx context.Context) ([]db.ListAcademicImportStudentsRow, error) {
+	return f.importStudents, nil
+}
+
+func (f *fakeAcademicStore) ListAcademicImportTeachers(ctx context.Context) ([]db.ListAcademicImportTeachersRow, error) {
+	return f.importTeachers, nil
 }
 
 func (f *fakeAcademicStore) GetActiveAcademicYear(ctx context.Context) (db.AcademicYear, error) {
@@ -731,11 +789,13 @@ func TestAcademicServiceForwardsStoreCallsAndChecksTimetableAvailability(t *test
 		t.Fatalf("GetTimetableConflicts() = %+v, %v; want one same_teacher conflict", conflicts, err)
 	}
 
-	if _, err := svc.CreateYear(context.Background(), db.CreateAcademicYearParams{Name: "2026/2027", IsActive: true}); err != nil {
+	startDate := pgtype.Date{Time: time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), Valid: true}
+	endDate := pgtype.Date{Time: time.Date(2027, 6, 30, 0, 0, 0, 0, time.UTC), Valid: true}
+	if _, err := svc.CreateYear(context.Background(), db.CreateAcademicYearParams{Name: "2026/2027", StartDate: startDate, EndDate: endDate, IsActive: false}); err != nil {
 		t.Fatalf("CreateYear() error = %v", err)
 	}
-	if store.createYearArg.Name != "2026/2027" || !store.createYearArg.IsActive {
-		t.Fatalf("CreateYear() arg = %+v, want forwarded year", store.createYearArg)
+	if store.createYearArg.Name != "2026/2027" || store.createYearArg.IsActive {
+		t.Fatalf("CreateYear() arg = %+v, want non-active validated year", store.createYearArg)
 	}
 	if _, err := svc.CreateClass(context.Background(), db.CreateSchoolClassParams{AcademicYearID: yearID, Code: "7A", Name: "VII A", Level: "7", IsActive: true}); err != nil {
 		t.Fatalf("CreateClass() error = %v", err)

@@ -875,3 +875,14 @@ cd services/core-api && go test ./...
 - Updated `docs/contracts/academic-editable-ui.md` with the Sprint 4 weekly timetable contract.
 - Gap intentionally left: no drag-and-drop or cross-rombel slot move. Editing a slot keeps the original rombel scope because existing safe mutators validate assignment within the routed rombel.
 - Deployment gap remains: production DB must already have migration 088 before this backend is deployed, because timetable weekly reads include subject metadata columns from Sprint 3.
+
+## Sprint Akademik 5 Year Rollover + Import/Export — 2026-05-11
+
+- Added `/akademik/tahun-ajaran` for academic-year operations, semester status display, rollover preview, and import/export dry-run tools.
+- Strengthened `CreateYear` validation so new years must use `YYYY/YYYY`, sequential year ranges, valid date bounds, unique name, and non-active creation.
+- Added explicit activation endpoint `POST /api/academic/years/{id}/activate` with confirmation challenge `AKTIFKAN`; activation flips active flags only and never deletes previous-year data.
+- Added preview-only rollover endpoint `POST /api/academic/year-rollover/preview`; it reports classes to create, promotable students, students without next class, and copy counts for wali kelas, guru mapel, and jadwal without mutating DB.
+- Added CSV template downloads for `siswa`, `rombel`, `guru_mapel`, and `jadwal`, plus `POST /api/academic/import-export/dry-run` for row validation and add/update/skip/error counts. Dry-run intentionally does not mutate DB.
+- Updated dashboard/sidebar navigation with Tahun Ajaran entry and CTA links.
+- Documented Sprint 5 contracts and guardrails in `docs/contracts/academic-editable-ui.md`.
+- Audit write integration is intentionally deferred because the current audit service does not expose a safe generic write pattern; avoid adding ad-hoc audit writes until the audit contract is extended.

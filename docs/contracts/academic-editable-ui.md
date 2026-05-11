@@ -237,6 +237,111 @@ Conflict detection awal:
 - `same_room`: `room_label` sama dan tidak kosong pada slot yang waktunya tumpang tindih.
 - `invalid_time_range`: `start_time >= end_time`, untuk menjaga data lama bila pernah melewati constraint.
 
+## Academic Year, Rollover Preview, and Import Dry-Run
+
+Dipakai mulai Sprint 5.
+
+Endpoint backend:
+
+```http
+POST /api/academic/years/{id}/activate
+POST /api/academic/year-rollover/preview
+POST /api/academic/import-export/dry-run
+```
+
+Endpoint SvelteKit BFF:
+
+```http
+POST /api/academic/years/{id}/activate
+POST /api/academic/year-rollover/preview
+GET /api/academic/import-export/templates/{kind}
+POST /api/academic/import-export/dry-run
+```
+
+Tahun ajaran masih dibaca/dibuat lewat kontrak akademik existing:
+
+```http
+GET /api/academic
+POST /api/academic?entity=years
+```
+
+```ts
+export type AcademicYear = {
+  id: string;
+  name: string; // format YYYY/YYYY
+  start_date: string;
+  end_date: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type YearRolloverPreview = {
+  source_academic_year_id: string;
+  source_academic_year_name: string;
+  target_academic_year_id: string;
+  target_academic_year_name: string;
+  counts: {
+    classes_to_create: number;
+    students_to_promote: number;
+    students_without_next_class: number;
+    homeroom_assignments_to_copy: number;
+    subject_assignments_to_copy: number;
+    timetable_slots_to_copy: number;
+  };
+  classes_to_create: Array<{
+    source_class_id: string;
+    source_code: string;
+    source_name: string;
+    source_level: string;
+    target_code: string;
+    target_name: string;
+    target_level: string;
+  }>;
+  students_to_promote: Array<{
+    student_id: string;
+    nis: string;
+    nisn: string;
+    nama: string;
+    from_class_id: string;
+    from_class_code: string;
+    to_class_id: string;
+    to_class_code: string;
+    to_class_name: string;
+  }>;
+  students_without_next_class: Array<{
+    student_id: string;
+    nis: string;
+    nisn: string;
+    nama: string;
+    from_class_id: string;
+    from_class_code: string;
+    reason: string;
+  }>;
+  warnings: string[];
+};
+
+export type AcademicImportDryRunResult = {
+  kind: 'siswa' | 'rombel' | 'guru_mapel' | 'jadwal' | string;
+  total_rows: number;
+  add_count: number;
+  update_count: number;
+  skip_count: number;
+  error_count: number;
+  rows: Array<{ row: number; action: 'add' | 'update' | 'skip' | 'error' | string; summary: string }>;
+  row_errors: Array<{ row: number; field: string; message: string }>;
+};
+```
+
+Validation dan guardrails Sprint 5:
+
+- Tahun ajaran baru wajib format `YYYY/YYYY`, rentang tahun berurutan, tanggal mulai < tanggal selesai, dan selalu dibuat nonaktif.
+- Aktivasi tahun ajaran wajib challenge `AKTIFKAN`; aktivasi hanya mengubah flag aktif/nonaktif, tidak menghapus data lama.
+- Rollover baru **preview-only**: tidak ada endpoint apply yang menjalankan mutasi massal sampai safety token/backup/QA disiapkan.
+- Template CSV tersedia untuk `siswa`, `rombel`, `guru_mapel`, dan `jadwal` dengan header Bahasa Indonesia.
+- Import dry-run hanya membaca CSV, memvalidasi baris, dan mengembalikan rencana tambah/ubah/skip/error; dry-run tidak mutate DB.
+- Audit write-event akademik belum diaktifkan karena service audit existing hanya mendukung cleanup/read lifecycle; Sprint 5 mendokumentasikan deferred audit integration agar tidak membuat pola audit ad-hoc.
+
 ## Shared Editable Component Types
 
 Komponen foundation Sprint 1 menggunakan tipe berikut:
