@@ -2,9 +2,11 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"mtsn2kolut-super-app/backend/internal/domain"
@@ -17,6 +19,13 @@ type academicStore interface {
 	ListSubjects(ctx context.Context) ([]db.ListSubjectsRow, error)
 	ListClassSubjectAssignments(ctx context.Context) ([]db.ListClassSubjectAssignmentsRow, error)
 	ListTimetableSlots(ctx context.Context) ([]db.ListTimetableSlotsRow, error)
+	GetActiveAcademicYear(ctx context.Context) (db.AcademicYear, error)
+	ListWeeklyTimetableClasses(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListWeeklyTimetableClassesRow, error)
+	ListWeeklyTimetableTeachers(ctx context.Context) ([]db.ListWeeklyTimetableTeachersRow, error)
+	ListWeeklyTimetableSubjects(ctx context.Context) ([]db.ListWeeklyTimetableSubjectsRow, error)
+	ListWeeklyTimetableAssignments(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListWeeklyTimetableAssignmentsRow, error)
+	ListWeeklyTimetableSlots(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListWeeklyTimetableSlotsRow, error)
+	ListTimetableConflicts(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListTimetableConflictsRow, error)
 	GetAcademicStats(ctx context.Context) (db.GetAcademicStatsRow, error)
 	GetAcademicDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error)
 	GetSubject(ctx context.Context, id pgtype.UUID) (db.GetSubjectRow, error)
@@ -43,6 +52,24 @@ type academicStore interface {
 type Academic struct {
 	q  academicStore
 	tx classJournalTxStarter
+}
+
+type WeeklyTimetable struct {
+	ActiveAcademicYearID   pgtype.UUID                            `json:"active_academic_year_id"`
+	ActiveAcademicYearName string                                 `json:"active_academic_year_name"`
+	Classes                []db.ListWeeklyTimetableClassesRow     `json:"classes"`
+	Teachers               []db.ListWeeklyTimetableTeachersRow    `json:"teachers"`
+	Subjects               []db.ListWeeklyTimetableSubjectsRow    `json:"subjects"`
+	Assignments            []db.ListWeeklyTimetableAssignmentsRow `json:"assignments"`
+	Slots                  []WeeklyTimetableSlot                  `json:"slots"`
+	Conflicts              []db.ListTimetableConflictsRow         `json:"conflicts"`
+}
+
+type WeeklyTimetableSlot struct {
+	db.ListWeeklyTimetableSlotsRow
+	ConflictStatus string `json:"conflict_status"`
+	ConflictLabel  string `json:"conflict_label"`
+	ConflictCount  int    `json:"conflict_count"`
 }
 
 func NewAcademic(q *db.Queries) *Academic { return &Academic{q: q} }
@@ -74,12 +101,116 @@ func (s *Academic) ListTimetableSlots(ctx context.Context) ([]db.ListTimetableSl
 	return s.q.ListTimetableSlots(ctx)
 }
 
+func (s *Academic) GetWeeklyTimetable(ctx context.Context) (WeeklyTimetable, error) {
+	year, err := s.q.GetActiveAcademicYear(ctx)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return emptyWeeklyTimetable(), nil
+		}
+		return WeeklyTimetable{}, err
+	}
+	classes, err := s.q.ListWeeklyTimetableClasses(ctx, year.ID)
+	if err != nil {
+		return WeeklyTimetable{}, err
+	}
+	teachers, err := s.q.ListWeeklyTimetableTeachers(ctx)
+	if err != nil {
+		return WeeklyTimetable{}, err
+	}
+	subjects, err := s.q.ListWeeklyTimetableSubjects(ctx)
+	if err != nil {
+		return WeeklyTimetable{}, err
+	}
+	assignments, err := s.q.ListWeeklyTimetableAssignments(ctx, year.ID)
+	if err != nil {
+		return WeeklyTimetable{}, err
+	}
+	slots, err := s.q.ListWeeklyTimetableSlots(ctx, year.ID)
+	if err != nil {
+		return WeeklyTimetable{}, err
+	}
+	conflicts, err := s.q.ListTimetableConflicts(ctx, year.ID)
+	if err != nil {
+		return WeeklyTimetable{}, err
+	}
+	return WeeklyTimetable{
+		ActiveAcademicYearID:   year.ID,
+		ActiveAcademicYearName: year.Name,
+		Classes:                classes,
+		Teachers:               teachers,
+		Subjects:               subjects,
+		Assignments:            assignments,
+		Slots:                  annotateWeeklyTimetableSlots(slots, conflicts),
+		Conflicts:              conflicts,
+	}, nil
+}
+
+func (s *Academic) GetTimetableConflicts(ctx context.Context) ([]db.ListTimetableConflictsRow, error) {
+	year, err := s.q.GetActiveAcademicYear(ctx)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return []db.ListTimetableConflictsRow{}, nil
+		}
+		return nil, err
+	}
+	return s.q.ListTimetableConflicts(ctx, year.ID)
+}
+
 func (s *Academic) GetStats(ctx context.Context) (db.GetAcademicStatsRow, error) {
 	return s.q.GetAcademicStats(ctx)
 }
 
 func (s *Academic) GetDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error) {
 	return s.q.GetAcademicDashboardSummary(ctx)
+}
+
+func emptyWeeklyTimetable() WeeklyTimetable {
+	return WeeklyTimetable{
+		Classes:     []db.ListWeeklyTimetableClassesRow{},
+		Teachers:    []db.ListWeeklyTimetableTeachersRow{},
+		Subjects:    []db.ListWeeklyTimetableSubjectsRow{},
+		Assignments: []db.ListWeeklyTimetableAssignmentsRow{},
+		Slots:       []WeeklyTimetableSlot{},
+		Conflicts:   []db.ListTimetableConflictsRow{},
+	}
+}
+
+func annotateWeeklyTimetableSlots(slots []db.ListWeeklyTimetableSlotsRow, conflicts []db.ListTimetableConflictsRow) []WeeklyTimetableSlot {
+	countBySlot := make(map[string]int, len(slots))
+	invalidBySlot := make(map[string]bool, len(slots))
+	for _, conflict := range conflicts {
+		slotKey := conflict.SlotID.String()
+		if slotKey != "" {
+			countBySlot[slotKey]++
+			if conflict.ConflictType == "invalid_time_range" {
+				invalidBySlot[slotKey] = true
+			}
+		}
+		if conflict.RelatedSlotID.Valid {
+			relatedKey := conflict.RelatedSlotID.String()
+			countBySlot[relatedKey]++
+		}
+	}
+	out := make([]WeeklyTimetableSlot, 0, len(slots))
+	for _, slot := range slots {
+		key := slot.ID.String()
+		status := "ok"
+		label := "Aman"
+		if invalidBySlot[key] {
+			status = "invalid_time_range"
+			label = "Rentang waktu tidak valid"
+		} else if countBySlot[key] > 0 {
+			status = "conflict"
+			label = "Bentrok"
+		}
+		out = append(out, WeeklyTimetableSlot{
+			ListWeeklyTimetableSlotsRow: slot,
+			ConflictStatus:              status,
+			ConflictLabel:               label,
+			ConflictCount:               countBySlot[key],
+		})
+	}
+	return out
 }
 
 func (s *Academic) CreateYear(ctx context.Context, p db.CreateAcademicYearParams) (db.AcademicYear, error) {

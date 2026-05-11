@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
@@ -448,37 +449,45 @@ func TestPortalServiceStopsOverviewOnStoreErrors(t *testing.T) {
 }
 
 type fakeAcademicStore struct {
-	years            []db.AcademicYear
-	classes          []db.ListSchoolClassesRow
-	subjects         []db.ListSubjectsRow
-	assignments      []db.ListClassSubjectAssignmentsRow
-	timetableSlots   []db.ListTimetableSlotsRow
-	stats            db.GetAcademicStatsRow
-	dashboardSummary db.GetAcademicDashboardSummaryRow
-	createYearArg    db.CreateAcademicYearParams
-	createClassArg   db.CreateSchoolClassParams
-	createSubjectArg db.CreateSubjectParams
-	createAssignArg  db.CreateClassSubjectAssignmentParams
-	createSlotArg    db.CreateTimetableSlotParams
-	getSlotID        pgtype.UUID
-	getSlotErr       error
-	updateSlotArg    db.UpdateTimetableSlotParams
-	deleteYearID     pgtype.UUID
-	deleteClassID    pgtype.UUID
-	deleteSubjectID  pgtype.UUID
-	deleteAssignID   pgtype.UUID
-	deleteSlotID     pgtype.UUID
-	getAssignID      pgtype.UUID
-	getAssignRow     db.GetClassSubjectAssignmentRow
-	getAssignErr     error
-	lockKeys         []string
-	lockErr          error
-	conflictArgs     []db.CountTimetableConflictsParams
-	conflictCount    int32
-	conflictErr      error
-	roomArgs         []db.CountTimetableRoomConflictsParams
-	roomCount        int32
-	roomErr          error
+	years             []db.AcademicYear
+	classes           []db.ListSchoolClassesRow
+	subjects          []db.ListSubjectsRow
+	assignments       []db.ListClassSubjectAssignmentsRow
+	timetableSlots    []db.ListTimetableSlotsRow
+	activeYear        db.AcademicYear
+	activeYearErr     error
+	weeklyClasses     []db.ListWeeklyTimetableClassesRow
+	weeklyTeachers    []db.ListWeeklyTimetableTeachersRow
+	weeklySubjects    []db.ListWeeklyTimetableSubjectsRow
+	weeklyAssignments []db.ListWeeklyTimetableAssignmentsRow
+	weeklySlots       []db.ListWeeklyTimetableSlotsRow
+	weeklyConflicts   []db.ListTimetableConflictsRow
+	stats             db.GetAcademicStatsRow
+	dashboardSummary  db.GetAcademicDashboardSummaryRow
+	createYearArg     db.CreateAcademicYearParams
+	createClassArg    db.CreateSchoolClassParams
+	createSubjectArg  db.CreateSubjectParams
+	createAssignArg   db.CreateClassSubjectAssignmentParams
+	createSlotArg     db.CreateTimetableSlotParams
+	getSlotID         pgtype.UUID
+	getSlotErr        error
+	updateSlotArg     db.UpdateTimetableSlotParams
+	deleteYearID      pgtype.UUID
+	deleteClassID     pgtype.UUID
+	deleteSubjectID   pgtype.UUID
+	deleteAssignID    pgtype.UUID
+	deleteSlotID      pgtype.UUID
+	getAssignID       pgtype.UUID
+	getAssignRow      db.GetClassSubjectAssignmentRow
+	getAssignErr      error
+	lockKeys          []string
+	lockErr           error
+	conflictArgs      []db.CountTimetableConflictsParams
+	conflictCount     int32
+	conflictErr       error
+	roomArgs          []db.CountTimetableRoomConflictsParams
+	roomCount         int32
+	roomErr           error
 }
 
 func (f *fakeAcademicStore) ListAcademicYears(ctx context.Context) ([]db.AcademicYear, error) {
@@ -499,6 +508,37 @@ func (f *fakeAcademicStore) ListClassSubjectAssignments(ctx context.Context) ([]
 
 func (f *fakeAcademicStore) ListTimetableSlots(ctx context.Context) ([]db.ListTimetableSlotsRow, error) {
 	return f.timetableSlots, nil
+}
+
+func (f *fakeAcademicStore) GetActiveAcademicYear(ctx context.Context) (db.AcademicYear, error) {
+	if f.activeYearErr != nil {
+		return db.AcademicYear{}, f.activeYearErr
+	}
+	return f.activeYear, nil
+}
+
+func (f *fakeAcademicStore) ListWeeklyTimetableClasses(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListWeeklyTimetableClassesRow, error) {
+	return f.weeklyClasses, nil
+}
+
+func (f *fakeAcademicStore) ListWeeklyTimetableTeachers(ctx context.Context) ([]db.ListWeeklyTimetableTeachersRow, error) {
+	return f.weeklyTeachers, nil
+}
+
+func (f *fakeAcademicStore) ListWeeklyTimetableSubjects(ctx context.Context) ([]db.ListWeeklyTimetableSubjectsRow, error) {
+	return f.weeklySubjects, nil
+}
+
+func (f *fakeAcademicStore) ListWeeklyTimetableAssignments(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListWeeklyTimetableAssignmentsRow, error) {
+	return f.weeklyAssignments, nil
+}
+
+func (f *fakeAcademicStore) ListWeeklyTimetableSlots(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListWeeklyTimetableSlotsRow, error) {
+	return f.weeklySlots, nil
+}
+
+func (f *fakeAcademicStore) ListTimetableConflicts(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListTimetableConflictsRow, error) {
+	return f.weeklyConflicts, nil
 }
 
 func (f *fakeAcademicStore) GetAcademicStats(ctx context.Context) (db.GetAcademicStatsRow, error) {
@@ -617,6 +657,7 @@ func TestAcademicServiceForwardsStoreCallsAndChecksTimetableAvailability(t *test
 	teacherID := documentCycleTestUUID(164)
 	assignmentID := documentCycleTestUUID(165)
 	slotID := documentCycleTestUUID(166)
+	relatedSlotID := documentCycleTestUUID(167)
 	start, err := ParseAcademicTimeInput("07:30")
 	if err != nil {
 		t.Fatalf("ParseAcademicTimeInput(start) error = %v", err)
@@ -626,11 +667,33 @@ func TestAcademicServiceForwardsStoreCallsAndChecksTimetableAvailability(t *test
 		t.Fatalf("ParseAcademicTimeInput(end) error = %v", err)
 	}
 	store := &fakeAcademicStore{
-		years:            []db.AcademicYear{{ID: yearID, Name: "2026/2027"}},
-		classes:          []db.ListSchoolClassesRow{{ID: classID, Name: "VII A"}},
-		subjects:         []db.ListSubjectsRow{{ID: subjectID, Name: "Matematika"}},
-		assignments:      []db.ListClassSubjectAssignmentsRow{{ID: assignmentID, ClassID: classID, SubjectID: subjectID, TeacherEmployeeID: teacherID}},
-		timetableSlots:   []db.ListTimetableSlotsRow{{ID: slotID, AssignmentID: assignmentID, RoomLabel: "R1"}},
+		years:          []db.AcademicYear{{ID: yearID, Name: "2026/2027"}},
+		classes:        []db.ListSchoolClassesRow{{ID: classID, Name: "VII A"}},
+		subjects:       []db.ListSubjectsRow{{ID: subjectID, Name: "Matematika"}},
+		assignments:    []db.ListClassSubjectAssignmentsRow{{ID: assignmentID, ClassID: classID, SubjectID: subjectID, TeacherEmployeeID: teacherID}},
+		timetableSlots: []db.ListTimetableSlotsRow{{ID: slotID, AssignmentID: assignmentID, RoomLabel: "R1"}},
+		activeYear:     db.AcademicYear{ID: yearID, Name: "2026/2027"},
+		weeklyClasses:  []db.ListWeeklyTimetableClassesRow{{ID: classID, Code: "VII-A", Name: "VII A", Level: "VII"}},
+		weeklyTeachers: []db.ListWeeklyTimetableTeachersRow{{ID: teacherID, Nama: "Guru IPA"}},
+		weeklySubjects: []db.ListWeeklyTimetableSubjectsRow{{ID: subjectID, Code: "MTK", Name: "Matematika"}},
+		weeklyAssignments: []db.ListWeeklyTimetableAssignmentsRow{{
+			ID:                assignmentID,
+			ClassID:           classID,
+			SubjectID:         subjectID,
+			TeacherEmployeeID: teacherID,
+			SubjectName:       "Matematika",
+			TeacherName:       "Guru IPA",
+		}},
+		weeklySlots: []db.ListWeeklyTimetableSlotsRow{
+			{ID: slotID, AssignmentID: assignmentID, ClassID: classID, SubjectID: subjectID, TeacherEmployeeID: teacherID, SubjectName: "Matematika", StartTime: start, EndTime: end},
+			{ID: relatedSlotID, AssignmentID: assignmentID, ClassID: classID, SubjectID: subjectID, TeacherEmployeeID: teacherID, SubjectName: "IPA", StartTime: start, EndTime: end},
+		},
+		weeklyConflicts: []db.ListTimetableConflictsRow{{
+			ConflictType:  "same_teacher",
+			Message:       "Guru bentrok",
+			SlotID:        slotID,
+			RelatedSlotID: relatedSlotID,
+		}},
 		stats:            db.GetAcademicStatsRow{TotalStudents: 10, TotalClasses: 2, TotalSubjects: 3, TotalYears: 1},
 		dashboardSummary: db.GetAcademicDashboardSummaryRow{ActiveAcademicYear: "2026/2027", ActiveSemester: "Ganjil", TotalClasses: 2},
 		getAssignRow:     db.GetClassSubjectAssignmentRow{ID: assignmentID, ClassID: classID, TeacherEmployeeID: teacherID},
@@ -660,6 +723,12 @@ func TestAcademicServiceForwardsStoreCallsAndChecksTimetableAvailability(t *test
 	}
 	if dashboard, err := svc.GetDashboardSummary(context.Background()); err != nil || dashboard.ActiveAcademicYear != "2026/2027" {
 		t.Fatalf("GetDashboardSummary() = %+v, %v; want active year 2026/2027", dashboard, err)
+	}
+	if weekly, err := svc.GetWeeklyTimetable(context.Background()); err != nil || weekly.ActiveAcademicYearName != "2026/2027" || len(weekly.Slots) != 2 || weekly.Slots[0].ConflictStatus != "conflict" || weekly.Slots[1].ConflictCount != 1 {
+		t.Fatalf("GetWeeklyTimetable() = %+v, %v; want active weekly timetable with slot conflict statuses", weekly, err)
+	}
+	if conflicts, err := svc.GetTimetableConflicts(context.Background()); err != nil || len(conflicts) != 1 || conflicts[0].ConflictType != "same_teacher" {
+		t.Fatalf("GetTimetableConflicts() = %+v, %v; want one same_teacher conflict", conflicts, err)
 	}
 
 	if _, err := svc.CreateYear(context.Background(), db.CreateAcademicYearParams{Name: "2026/2027", IsActive: true}); err != nil {
@@ -727,6 +796,21 @@ func TestAcademicServiceForwardsStoreCallsAndChecksTimetableAvailability(t *test
 	}
 	if err := svc.DeleteTimetableSlot(context.Background(), slotID); err != nil || store.deleteSlotID != slotID {
 		t.Fatalf("DeleteTimetableSlot() = %v, id=%v; want nil/%v", err, store.deleteSlotID, slotID)
+	}
+}
+
+func TestAcademicWeeklyTimetableWithoutActiveYear(t *testing.T) {
+	svc := &Academic{q: &fakeAcademicStore{activeYearErr: pgx.ErrNoRows}}
+	weekly, err := svc.GetWeeklyTimetable(context.Background())
+	if err != nil {
+		t.Fatalf("GetWeeklyTimetable(no active year) error = %v", err)
+	}
+	if weekly.ActiveAcademicYearName != "" || len(weekly.Classes) != 0 || len(weekly.Slots) != 0 || len(weekly.Conflicts) != 0 {
+		t.Fatalf("GetWeeklyTimetable(no active year) = %+v, want empty payload", weekly)
+	}
+	conflicts, err := svc.GetTimetableConflicts(context.Background())
+	if err != nil || len(conflicts) != 0 {
+		t.Fatalf("GetTimetableConflicts(no active year) = %+v/%v, want empty nil", conflicts, err)
 	}
 }
 

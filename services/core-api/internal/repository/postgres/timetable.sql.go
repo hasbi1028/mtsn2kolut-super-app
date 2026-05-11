@@ -372,6 +372,212 @@ func (q *Queries) ListTeacherTimetable(ctx context.Context, teacherEmployeeID pg
 	return items, nil
 }
 
+const listTimetableConflicts = `-- name: ListTimetableConflicts :many
+WITH scoped_slots AS (
+    SELECT
+        ts.id,
+        ts.assignment_id,
+        ts.day_of_week,
+        ts.start_time,
+        ts.end_time,
+        ts.room_label,
+        a.class_id,
+        c.name AS class_name,
+        c.code AS class_code,
+        c.level AS class_level,
+        a.subject_id,
+        s.name AS subject_name,
+        s.code AS subject_code,
+        a.teacher_employee_id,
+        e.nama AS teacher_name,
+        LOWER(TRIM(ts.room_label)) AS room_key
+    FROM timetable_slots ts
+    JOIN class_subject_assignments a ON a.id = ts.assignment_id
+    JOIN school_classes c ON c.id = a.class_id
+    JOIN subjects s ON s.id = a.subject_id
+    JOIN employees e ON e.id = a.teacher_employee_id
+    WHERE c.academic_year_id = $1
+      AND c.is_active = TRUE
+),
+conflicts AS (
+    SELECT
+        s.id AS slot_id,
+        NULL::uuid AS related_slot_id,
+        'invalid_time_range'::text AS conflict_type,
+        'Rentang waktu slot tidak valid'::text AS message
+    FROM scoped_slots s
+    WHERE s.start_time >= s.end_time
+
+    UNION ALL
+
+    SELECT
+        a.id AS slot_id,
+        b.id AS related_slot_id,
+        'same_class'::text AS conflict_type,
+        ('Rombel ' || a.class_code || ' memiliki slot tumpang tindih')::text AS message
+    FROM scoped_slots a
+    JOIN scoped_slots b ON a.id::text < b.id::text
+     AND a.day_of_week = b.day_of_week
+     AND a.start_time < b.end_time
+     AND a.end_time > b.start_time
+     AND a.class_id = b.class_id
+
+    UNION ALL
+
+    SELECT
+        a.id AS slot_id,
+        b.id AS related_slot_id,
+        'same_teacher'::text AS conflict_type,
+        ('Guru ' || a.teacher_name || ' mengajar pada slot yang tumpang tindih')::text AS message
+    FROM scoped_slots a
+    JOIN scoped_slots b ON a.id::text < b.id::text
+     AND a.day_of_week = b.day_of_week
+     AND a.start_time < b.end_time
+     AND a.end_time > b.start_time
+     AND a.teacher_employee_id = b.teacher_employee_id
+
+    UNION ALL
+
+    SELECT
+        a.id AS slot_id,
+        b.id AS related_slot_id,
+        'same_room'::text AS conflict_type,
+        ('Ruang ' || a.room_label || ' dipakai pada slot yang tumpang tindih')::text AS message
+    FROM scoped_slots a
+    JOIN scoped_slots b ON a.id::text < b.id::text
+     AND a.day_of_week = b.day_of_week
+     AND a.start_time < b.end_time
+     AND a.end_time > b.start_time
+     AND a.room_key <> ''
+     AND a.room_key = b.room_key
+)
+SELECT
+    c.conflict_type,
+    c.message,
+    s.id AS slot_id,
+    s.assignment_id,
+    s.day_of_week,
+    s.start_time,
+    s.end_time,
+    s.room_label,
+    s.class_id,
+    s.class_code,
+    s.class_name,
+    s.class_level,
+    s.subject_id,
+    s.subject_code,
+    s.subject_name,
+    s.teacher_employee_id,
+    s.teacher_name,
+    c.related_slot_id,
+    COALESCE(r.assignment_id, '00000000-0000-0000-0000-000000000000'::uuid) AS related_assignment_id,
+    COALESCE(r.day_of_week, 0)::smallint AS related_day_of_week,
+    COALESCE(r.start_time, '00:00'::time) AS related_start_time,
+    COALESCE(r.end_time, '00:00'::time) AS related_end_time,
+    COALESCE(r.room_label, '')::text AS related_room_label,
+    COALESCE(r.class_id, '00000000-0000-0000-0000-000000000000'::uuid) AS related_class_id,
+    COALESCE(r.class_code, '')::text AS related_class_code,
+    COALESCE(r.class_name, '')::text AS related_class_name,
+    COALESCE(r.class_level, '')::text AS related_class_level,
+    COALESCE(r.subject_id, '00000000-0000-0000-0000-000000000000'::uuid) AS related_subject_id,
+    COALESCE(r.subject_code, '')::text AS related_subject_code,
+    COALESCE(r.subject_name, '')::text AS related_subject_name,
+    COALESCE(r.teacher_employee_id, '00000000-0000-0000-0000-000000000000'::uuid) AS related_teacher_employee_id,
+    COALESCE(r.teacher_name, '')::text AS related_teacher_name
+FROM conflicts c
+JOIN scoped_slots s ON s.id = c.slot_id
+LEFT JOIN scoped_slots r ON r.id = c.related_slot_id
+ORDER BY s.day_of_week ASC, s.start_time ASC, c.conflict_type ASC, s.class_name ASC, s.subject_name ASC
+`
+
+type ListTimetableConflictsRow struct {
+	ConflictType             string      `json:"conflict_type"`
+	Message                  string      `json:"message"`
+	SlotID                   pgtype.UUID `json:"slot_id"`
+	AssignmentID             pgtype.UUID `json:"assignment_id"`
+	DayOfWeek                int16       `json:"day_of_week"`
+	StartTime                pgtype.Time `json:"start_time"`
+	EndTime                  pgtype.Time `json:"end_time"`
+	RoomLabel                string      `json:"room_label"`
+	ClassID                  pgtype.UUID `json:"class_id"`
+	ClassCode                string      `json:"class_code"`
+	ClassName                string      `json:"class_name"`
+	ClassLevel               string      `json:"class_level"`
+	SubjectID                pgtype.UUID `json:"subject_id"`
+	SubjectCode              string      `json:"subject_code"`
+	SubjectName              string      `json:"subject_name"`
+	TeacherEmployeeID        pgtype.UUID `json:"teacher_employee_id"`
+	TeacherName              string      `json:"teacher_name"`
+	RelatedSlotID            pgtype.UUID `json:"related_slot_id"`
+	RelatedAssignmentID      pgtype.UUID `json:"related_assignment_id"`
+	RelatedDayOfWeek         int16       `json:"related_day_of_week"`
+	RelatedStartTime         pgtype.Time `json:"related_start_time"`
+	RelatedEndTime           pgtype.Time `json:"related_end_time"`
+	RelatedRoomLabel         string      `json:"related_room_label"`
+	RelatedClassID           pgtype.UUID `json:"related_class_id"`
+	RelatedClassCode         string      `json:"related_class_code"`
+	RelatedClassName         string      `json:"related_class_name"`
+	RelatedClassLevel        string      `json:"related_class_level"`
+	RelatedSubjectID         pgtype.UUID `json:"related_subject_id"`
+	RelatedSubjectCode       string      `json:"related_subject_code"`
+	RelatedSubjectName       string      `json:"related_subject_name"`
+	RelatedTeacherEmployeeID pgtype.UUID `json:"related_teacher_employee_id"`
+	RelatedTeacherName       string      `json:"related_teacher_name"`
+}
+
+func (q *Queries) ListTimetableConflicts(ctx context.Context, academicYearID pgtype.UUID) ([]ListTimetableConflictsRow, error) {
+	rows, err := q.db.Query(ctx, listTimetableConflicts, academicYearID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTimetableConflictsRow{}
+	for rows.Next() {
+		var i ListTimetableConflictsRow
+		if err := rows.Scan(
+			&i.ConflictType,
+			&i.Message,
+			&i.SlotID,
+			&i.AssignmentID,
+			&i.DayOfWeek,
+			&i.StartTime,
+			&i.EndTime,
+			&i.RoomLabel,
+			&i.ClassID,
+			&i.ClassCode,
+			&i.ClassName,
+			&i.ClassLevel,
+			&i.SubjectID,
+			&i.SubjectCode,
+			&i.SubjectName,
+			&i.TeacherEmployeeID,
+			&i.TeacherName,
+			&i.RelatedSlotID,
+			&i.RelatedAssignmentID,
+			&i.RelatedDayOfWeek,
+			&i.RelatedStartTime,
+			&i.RelatedEndTime,
+			&i.RelatedRoomLabel,
+			&i.RelatedClassID,
+			&i.RelatedClassCode,
+			&i.RelatedClassName,
+			&i.RelatedClassLevel,
+			&i.RelatedSubjectID,
+			&i.RelatedSubjectCode,
+			&i.RelatedSubjectName,
+			&i.RelatedTeacherEmployeeID,
+			&i.RelatedTeacherName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTimetableSlots = `-- name: ListTimetableSlots :many
 SELECT ts.id, ts.assignment_id, ts.day_of_week, ts.start_time, ts.end_time, ts.room_label, ts.notes,
        ts.created_at, ts.updated_at,
@@ -433,6 +639,322 @@ func (q *Queries) ListTimetableSlots(ctx context.Context) ([]ListTimetableSlotsR
 			&i.SubjectCode,
 			&i.TeacherEmployeeID,
 			&i.TeacherName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWeeklyTimetableAssignments = `-- name: ListWeeklyTimetableAssignments :many
+SELECT
+    a.id,
+    a.class_id,
+    c.code AS class_code,
+    c.name AS class_name,
+    c.level AS class_level,
+    a.subject_id,
+    s.code AS subject_code,
+    s.name AS subject_name,
+    s.category AS subject_category,
+    s.is_schedule_activity,
+    s.default_weekly_hours,
+    a.teacher_employee_id,
+    e.nama AS teacher_name,
+    COALESCE(e.nip, '')::text AS teacher_nip
+FROM class_subject_assignments a
+JOIN school_classes c ON c.id = a.class_id
+JOIN subjects s ON s.id = a.subject_id
+JOIN employees e ON e.id = a.teacher_employee_id
+WHERE c.academic_year_id = $1
+  AND c.is_active = TRUE
+  AND s.is_active = TRUE
+  AND e.is_active = TRUE
+ORDER BY c.level ASC, c.name ASC, s.display_order ASC, s.name ASC, e.nama ASC
+`
+
+type ListWeeklyTimetableAssignmentsRow struct {
+	ID                 pgtype.UUID `json:"id"`
+	ClassID            pgtype.UUID `json:"class_id"`
+	ClassCode          string      `json:"class_code"`
+	ClassName          string      `json:"class_name"`
+	ClassLevel         string      `json:"class_level"`
+	SubjectID          pgtype.UUID `json:"subject_id"`
+	SubjectCode        string      `json:"subject_code"`
+	SubjectName        string      `json:"subject_name"`
+	SubjectCategory    string      `json:"subject_category"`
+	IsScheduleActivity bool        `json:"is_schedule_activity"`
+	DefaultWeeklyHours int32       `json:"default_weekly_hours"`
+	TeacherEmployeeID  pgtype.UUID `json:"teacher_employee_id"`
+	TeacherName        string      `json:"teacher_name"`
+	TeacherNip         string      `json:"teacher_nip"`
+}
+
+func (q *Queries) ListWeeklyTimetableAssignments(ctx context.Context, academicYearID pgtype.UUID) ([]ListWeeklyTimetableAssignmentsRow, error) {
+	rows, err := q.db.Query(ctx, listWeeklyTimetableAssignments, academicYearID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWeeklyTimetableAssignmentsRow{}
+	for rows.Next() {
+		var i ListWeeklyTimetableAssignmentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClassID,
+			&i.ClassCode,
+			&i.ClassName,
+			&i.ClassLevel,
+			&i.SubjectID,
+			&i.SubjectCode,
+			&i.SubjectName,
+			&i.SubjectCategory,
+			&i.IsScheduleActivity,
+			&i.DefaultWeeklyHours,
+			&i.TeacherEmployeeID,
+			&i.TeacherName,
+			&i.TeacherNip,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWeeklyTimetableClasses = `-- name: ListWeeklyTimetableClasses :many
+SELECT id, code, name, level
+FROM school_classes
+WHERE academic_year_id = $1
+  AND is_active = TRUE
+ORDER BY level ASC, name ASC
+`
+
+type ListWeeklyTimetableClassesRow struct {
+	ID    pgtype.UUID `json:"id"`
+	Code  string      `json:"code"`
+	Name  string      `json:"name"`
+	Level string      `json:"level"`
+}
+
+func (q *Queries) ListWeeklyTimetableClasses(ctx context.Context, academicYearID pgtype.UUID) ([]ListWeeklyTimetableClassesRow, error) {
+	rows, err := q.db.Query(ctx, listWeeklyTimetableClasses, academicYearID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWeeklyTimetableClassesRow{}
+	for rows.Next() {
+		var i ListWeeklyTimetableClassesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.Level,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWeeklyTimetableSlots = `-- name: ListWeeklyTimetableSlots :many
+SELECT
+    ts.id,
+    ts.assignment_id,
+    ts.day_of_week,
+    ts.start_time,
+    ts.end_time,
+    ts.room_label,
+    ts.notes,
+    ts.created_at,
+    ts.updated_at,
+    a.class_id,
+    c.name AS class_name,
+    c.code AS class_code,
+    c.level AS class_level,
+    a.subject_id,
+    s.name AS subject_name,
+    s.code AS subject_code,
+    s.category AS subject_category,
+    s.is_schedule_activity,
+    a.teacher_employee_id,
+    e.nama AS teacher_name
+FROM timetable_slots ts
+JOIN class_subject_assignments a ON a.id = ts.assignment_id
+JOIN school_classes c ON c.id = a.class_id
+JOIN subjects s ON s.id = a.subject_id
+JOIN employees e ON e.id = a.teacher_employee_id
+WHERE c.academic_year_id = $1
+  AND c.is_active = TRUE
+ORDER BY ts.day_of_week ASC, ts.start_time ASC, c.level ASC, c.name ASC, s.name ASC
+`
+
+type ListWeeklyTimetableSlotsRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	AssignmentID       pgtype.UUID        `json:"assignment_id"`
+	DayOfWeek          int16              `json:"day_of_week"`
+	StartTime          pgtype.Time        `json:"start_time"`
+	EndTime            pgtype.Time        `json:"end_time"`
+	RoomLabel          string             `json:"room_label"`
+	Notes              string             `json:"notes"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	ClassID            pgtype.UUID        `json:"class_id"`
+	ClassName          string             `json:"class_name"`
+	ClassCode          string             `json:"class_code"`
+	ClassLevel         string             `json:"class_level"`
+	SubjectID          pgtype.UUID        `json:"subject_id"`
+	SubjectName        string             `json:"subject_name"`
+	SubjectCode        string             `json:"subject_code"`
+	SubjectCategory    string             `json:"subject_category"`
+	IsScheduleActivity bool               `json:"is_schedule_activity"`
+	TeacherEmployeeID  pgtype.UUID        `json:"teacher_employee_id"`
+	TeacherName        string             `json:"teacher_name"`
+}
+
+func (q *Queries) ListWeeklyTimetableSlots(ctx context.Context, academicYearID pgtype.UUID) ([]ListWeeklyTimetableSlotsRow, error) {
+	rows, err := q.db.Query(ctx, listWeeklyTimetableSlots, academicYearID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWeeklyTimetableSlotsRow{}
+	for rows.Next() {
+		var i ListWeeklyTimetableSlotsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AssignmentID,
+			&i.DayOfWeek,
+			&i.StartTime,
+			&i.EndTime,
+			&i.RoomLabel,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ClassID,
+			&i.ClassName,
+			&i.ClassCode,
+			&i.ClassLevel,
+			&i.SubjectID,
+			&i.SubjectName,
+			&i.SubjectCode,
+			&i.SubjectCategory,
+			&i.IsScheduleActivity,
+			&i.TeacherEmployeeID,
+			&i.TeacherName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWeeklyTimetableSubjects = `-- name: ListWeeklyTimetableSubjects :many
+SELECT
+    id,
+    code,
+    name,
+    category,
+    is_assessment_subject,
+    is_report_subject,
+    is_schedule_activity,
+    default_weekly_hours,
+    display_order
+FROM subjects
+WHERE is_active = TRUE
+ORDER BY display_order ASC, name ASC
+`
+
+type ListWeeklyTimetableSubjectsRow struct {
+	ID                  pgtype.UUID `json:"id"`
+	Code                string      `json:"code"`
+	Name                string      `json:"name"`
+	Category            string      `json:"category"`
+	IsAssessmentSubject bool        `json:"is_assessment_subject"`
+	IsReportSubject     bool        `json:"is_report_subject"`
+	IsScheduleActivity  bool        `json:"is_schedule_activity"`
+	DefaultWeeklyHours  int32       `json:"default_weekly_hours"`
+	DisplayOrder        int32       `json:"display_order"`
+}
+
+func (q *Queries) ListWeeklyTimetableSubjects(ctx context.Context) ([]ListWeeklyTimetableSubjectsRow, error) {
+	rows, err := q.db.Query(ctx, listWeeklyTimetableSubjects)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWeeklyTimetableSubjectsRow{}
+	for rows.Next() {
+		var i ListWeeklyTimetableSubjectsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.Category,
+			&i.IsAssessmentSubject,
+			&i.IsReportSubject,
+			&i.IsScheduleActivity,
+			&i.DefaultWeeklyHours,
+			&i.DisplayOrder,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWeeklyTimetableTeachers = `-- name: ListWeeklyTimetableTeachers :many
+SELECT
+    id,
+    COALESCE(nip, '')::text AS nip,
+    nama,
+    unit_kerja
+FROM employees
+WHERE is_active = TRUE
+ORDER BY nama ASC
+`
+
+type ListWeeklyTimetableTeachersRow struct {
+	ID        pgtype.UUID `json:"id"`
+	Nip       string      `json:"nip"`
+	Nama      string      `json:"nama"`
+	UnitKerja string      `json:"unit_kerja"`
+}
+
+func (q *Queries) ListWeeklyTimetableTeachers(ctx context.Context) ([]ListWeeklyTimetableTeachersRow, error) {
+	rows, err := q.db.Query(ctx, listWeeklyTimetableTeachers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWeeklyTimetableTeachersRow{}
+	for rows.Next() {
+		var i ListWeeklyTimetableTeachersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nip,
+			&i.Nama,
+			&i.UnitKerja,
 		); err != nil {
 			return nil, err
 		}

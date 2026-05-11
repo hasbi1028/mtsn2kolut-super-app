@@ -38,7 +38,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 			{ href: '/akademik/rombel', label: 'Rombel', icon: 'layers', roles: ['admin', 'guru', 'kesiswaan'], permissions: ['academic.read'] },
 			{ href: '/akademik/mapel', label: 'Mapel', icon: 'book-open', roles: ['admin', 'guru'], permissions: ['academic.read'] },
 			{ href: '/akademik/guru-mapel', label: 'Guru Mapel', icon: 'user-check', roles: ['admin', 'guru'], permissions: ['academic.read'] },
-			{ href: '/jadwal', label: 'Jadwal', icon: 'calendar', roles: ['guru', 'siswa', 'ortu'], permissions: ['academic.read', 'student_portal.schedule_read', 'parent_portal.child_schedule_read'] },
+			{ href: '/akademik/jadwal', label: 'Jadwal', icon: 'calendar', roles: ['admin', 'guru'], permissions: ['academic.read'] },
 			{ href: '/grades', label: 'Nilai', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['grades.read', 'grades.manage'] },
 			{ href: '/grades/rapor', label: 'Cetak Rapor', icon: 'printer', roles: ['admin', 'guru'], permissions: ['grades.read', 'grades.manage'] },
 			{ href: '/journal', label: 'Jurnal Kelas', icon: 'journal', roles: ['admin', 'guru'], permissions: ['journal.read', 'journal.manage', 'journal.read_all', 'journal.manage_all'] }

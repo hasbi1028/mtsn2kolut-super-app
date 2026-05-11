@@ -24,6 +24,8 @@ type academicService interface {
 	ListSubjects(ctx context.Context) ([]db.ListSubjectsRow, error)
 	ListAssignments(ctx context.Context) ([]db.ListClassSubjectAssignmentsRow, error)
 	ListTimetableSlots(ctx context.Context) ([]db.ListTimetableSlotsRow, error)
+	GetWeeklyTimetable(ctx context.Context) (service.WeeklyTimetable, error)
+	GetTimetableConflicts(ctx context.Context) ([]db.ListTimetableConflictsRow, error)
 	GetStats(ctx context.Context) (db.GetAcademicStatsRow, error)
 	GetDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error)
 	CreateYear(ctx context.Context, p db.CreateAcademicYearParams) (db.AcademicYear, error)
@@ -105,6 +107,32 @@ func (h *Academic) GetDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, row)
+}
+
+func (h *Academic) GetWeeklyTimetable(w http.ResponseWriter, r *http.Request) {
+	if !academicReadAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	row, err := h.svc.GetWeeklyTimetable(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *Academic) GetTimetableConflicts(w http.ResponseWriter, r *http.Request) {
+	if !academicReadAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	rows, err := h.svc.GetTimetableConflicts(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
 }
 
 func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
