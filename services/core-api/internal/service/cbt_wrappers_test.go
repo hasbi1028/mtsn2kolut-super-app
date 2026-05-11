@@ -132,6 +132,8 @@ type fakeCbtEventStore struct {
 	sessionsRows     []db.ListCbtEventSessionsReadinessRow
 	matrixRows       []db.ListCbtEventSubjectMatrixRow
 	completenessRows []db.ListCbtEventQuestionCompletenessRowsRow
+	requirementsRow  db.GetCbtEventQuestionRequirementsRow
+	upsertReqArg     db.UpsertCbtEventQuestionRequirementsParams
 	excludedLevels   []string
 	membersByUser    []db.CbtEventMember
 }
@@ -209,6 +211,18 @@ func (f *fakeCbtEventStore) ListCbtEventQuestionCompletenessRows(ctx context.Con
 
 func (f *fakeCbtEventStore) ListCbtEventQuestionCompletenessExcludedLevels(ctx context.Context, id pgtype.UUID) ([]string, error) {
 	return f.excludedLevels, nil
+}
+
+func (f *fakeCbtEventStore) GetCbtEventQuestionRequirements(ctx context.Context, id pgtype.UUID) (db.GetCbtEventQuestionRequirementsRow, error) {
+	if f.requirementsRow.EventID.Valid {
+		return f.requirementsRow, nil
+	}
+	return db.GetCbtEventQuestionRequirementsRow{EventID: id, ScopeMode: "per_rombel", TargetPg: 20, TargetEssay: 5, StatusFilter: "published_only"}, nil
+}
+
+func (f *fakeCbtEventStore) UpsertCbtEventQuestionRequirements(ctx context.Context, arg db.UpsertCbtEventQuestionRequirementsParams) (db.UpsertCbtEventQuestionRequirementsRow, error) {
+	f.upsertReqArg = arg
+	return db.UpsertCbtEventQuestionRequirementsRow{EventID: arg.EventID, ScopeMode: arg.ScopeMode, TargetPg: arg.TargetPg, TargetEssay: arg.TargetEssay, StatusFilter: arg.StatusFilter}, nil
 }
 
 func (f *fakeCbtEventStore) GetCbtEventMember(ctx context.Context, arg db.GetCbtEventMemberParams) (db.GetCbtEventMemberRow, error) {

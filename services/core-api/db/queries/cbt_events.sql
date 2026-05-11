@@ -231,11 +231,55 @@ LEFT JOIN LATERAL (
 ) sessions ON TRUE
 ORDER BY subjects.subject_name ASC, subjects.subject_code ASC;
 
+-- name: GetCbtEventQuestionRequirements :one
+SELECT
+  COALESCE(r.id, '00000000-0000-0000-0000-000000000000'::uuid) AS id,
+  e.id AS event_id,
+  COALESCE(r.scope_mode, 'per_rombel')::text AS scope_mode,
+  COALESCE(r.target_pg, 20)::int AS target_pg,
+  COALESCE(r.target_essay, 5)::int AS target_essay,
+  COALESCE(r.status_filter, 'published_only')::text AS status_filter,
+  COALESCE(r.created_at, e.created_at) AS created_at,
+  COALESCE(r.updated_at, e.updated_at) AS updated_at
+FROM cbt_exam_events e
+LEFT JOIN cbt_event_question_requirements r ON r.event_id = e.id
+  AND r.level IS NULL
+  AND r.class_id IS NULL
+  AND r.subject_id IS NULL
+WHERE e.id = $1
+ORDER BY r.updated_at DESC NULLS LAST
+LIMIT 1;
+
+-- name: UpsertCbtEventQuestionRequirements :one
+INSERT INTO cbt_event_question_requirements (event_id, scope_mode, target_pg, target_essay, status_filter)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (event_id) WHERE level IS NULL AND class_id IS NULL AND subject_id IS NULL
+DO UPDATE SET
+  scope_mode = EXCLUDED.scope_mode,
+  target_pg = EXCLUDED.target_pg,
+  target_essay = EXCLUDED.target_essay,
+  status_filter = EXCLUDED.status_filter,
+  updated_at = NOW()
+RETURNING id, event_id, scope_mode, target_pg, target_essay, status_filter, created_at, updated_at;
+
 -- name: ListCbtEventQuestionCompletenessRows :many
 WITH event_scope AS (
   SELECT id, academic_year_id, target_levels
   FROM cbt_exam_events
   WHERE id = $1
+), req AS (
+  SELECT
+    COALESCE(r.scope_mode, 'per_rombel')::text AS scope_mode,
+    COALESCE(r.target_pg, 20)::int AS target_pg,
+    COALESCE(r.target_essay, 5)::int AS target_essay,
+    COALESCE(r.status_filter, 'published_only')::text AS status_filter
+  FROM event_scope ev
+  LEFT JOIN cbt_event_question_requirements r ON r.event_id = ev.id
+    AND r.level IS NULL
+    AND r.class_id IS NULL
+    AND r.subject_id IS NULL
+  ORDER BY r.updated_at DESC NULLS LAST
+  LIMIT 1
 ), target_assignments AS (
   SELECT
     c.level,
@@ -271,44 +315,85 @@ WITH event_scope AS (
     ORDER BY ux.created_at DESC
     LIMIT 1
   ) u ON TRUE
+), scoped_assignments AS (
+  SELECT
+    ta.level,
+    (CASE WHEN req.scope_mode = 'per_rombel' THEN ta.class_id ELSE NULL::uuid END)::uuid AS class_id,
+    (CASE WHEN req.scope_mode = 'per_rombel' THEN ta.class_code ELSE '' END)::text AS class_code,
+    (CASE WHEN req.scope_mode = 'per_rombel' THEN ta.class_name ELSE CONCAT('Tingkat ', ta.level) END)::text AS class_name,
+    ta.subject_id,
+    ta.subject_name,
+    ta.subject_code,
+    (CASE WHEN req.scope_mode = 'pool_level_subject' THEN NULL::uuid ELSE ta.teacher_employee_id END)::uuid AS teacher_employee_id,
+    (CASE WHEN req.scope_mode = 'pool_level_subject' THEN 'Pool guru mapel' ELSE ta.teacher_name END)::text AS teacher_name,
+    (CASE WHEN req.scope_mode = 'pool_level_subject' THEN '' ELSE ta.teacher_username END)::text AS teacher_username,
+    MAX(ta.numeric_grade_level)::smallint AS numeric_grade_level,
+    req.scope_mode,
+    req.status_filter,
+    req.target_pg,
+    req.target_essay
+  FROM target_assignments ta
+  CROSS JOIN req
+  GROUP BY
+    ta.level,
+    CASE WHEN req.scope_mode = 'per_rombel' THEN ta.class_id ELSE NULL::uuid END,
+    CASE WHEN req.scope_mode = 'per_rombel' THEN ta.class_code ELSE '' END,
+    CASE WHEN req.scope_mode = 'per_rombel' THEN ta.class_name ELSE CONCAT('Tingkat ', ta.level) END,
+    ta.subject_id,
+    ta.subject_name,
+    ta.subject_code,
+    CASE WHEN req.scope_mode = 'pool_level_subject' THEN NULL::uuid ELSE ta.teacher_employee_id END,
+    CASE WHEN req.scope_mode = 'pool_level_subject' THEN 'Pool guru mapel' ELSE ta.teacher_name END,
+    CASE WHEN req.scope_mode = 'pool_level_subject' THEN '' ELSE ta.teacher_username END,
+    req.scope_mode,
+    req.status_filter,
+    req.target_pg,
+    req.target_essay
 )
 SELECT
-  ta.level,
-  ta.class_id,
-  ta.class_code,
-  ta.class_name,
-  ta.subject_id,
-  ta.subject_name,
-  ta.subject_code,
-  ta.teacher_employee_id,
-  ta.teacher_name,
-  ta.teacher_username,
-  20::int AS target_pg,
-  COALESCE(COUNT(q.id) FILTER (WHERE q.question_type = 'multiple_choice'), 0)::int AS available_pg,
-  5::int AS target_essay,
-  COALESCE(COUNT(q.id) FILTER (WHERE q.question_type = 'essay'), 0)::int AS available_essay
-FROM target_assignments ta
-LEFT JOIN cbt_questions q ON q.subject_id = ta.subject_id
-  AND q.author_username = ta.teacher_username
+  sa.level,
+  sa.class_id,
+  sa.class_code,
+  sa.class_name,
+  sa.subject_id,
+  sa.subject_name,
+  sa.subject_code,
+  sa.teacher_employee_id,
+  sa.teacher_name,
+  sa.teacher_username,
+  sa.scope_mode,
+  sa.status_filter,
+  sa.target_pg,
+  COALESCE(COUNT(DISTINCT q.id) FILTER (WHERE q.question_type = 'multiple_choice'), 0)::int AS available_pg,
+  sa.target_essay,
+  COALESCE(COUNT(DISTINCT q.id) FILTER (WHERE q.question_type = 'essay'), 0)::int AS available_essay
+FROM scoped_assignments sa
+LEFT JOIN cbt_questions q ON q.subject_id = sa.subject_id
+  AND (sa.teacher_username = '' OR q.author_username = sa.teacher_username)
   AND (
     q.event_id = $1
     OR (q.event_id IS NULL AND q.status = 'published')
   )
-  AND (ta.numeric_grade_level IS NULL OR q.grade_level = ta.numeric_grade_level)
+  AND (sa.numeric_grade_level IS NULL OR q.grade_level = sa.numeric_grade_level)
   AND q.status <> 'archived'
   AND q.workflow_status <> 'rejected'
+  AND (sa.status_filter <> 'published_only' OR q.status = 'published')
 GROUP BY
-  ta.level,
-  ta.class_id,
-  ta.class_code,
-  ta.class_name,
-  ta.subject_id,
-  ta.subject_name,
-  ta.subject_code,
-  ta.teacher_employee_id,
-  ta.teacher_name,
-  ta.teacher_username
-ORDER BY ta.level ASC, ta.class_name ASC, ta.subject_name ASC, ta.teacher_name ASC;
+  sa.level,
+  sa.class_id,
+  sa.class_code,
+  sa.class_name,
+  sa.subject_id,
+  sa.subject_name,
+  sa.subject_code,
+  sa.teacher_employee_id,
+  sa.teacher_name,
+  sa.teacher_username,
+  sa.scope_mode,
+  sa.status_filter,
+  sa.target_pg,
+  sa.target_essay
+ORDER BY sa.level ASC, sa.class_name ASC, sa.subject_name ASC, sa.teacher_name ASC;
 
 -- name: ListCbtEventQuestionCompletenessExcludedLevels :many
 SELECT DISTINCT c.level

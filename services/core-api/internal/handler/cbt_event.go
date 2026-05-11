@@ -28,6 +28,8 @@ type cbtEventService interface {
 	ListPackages(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventPackagesRow, error)
 	ListSessions(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventSessionsReadinessRow, error)
 	QuestionCompleteness(ctx context.Context, eventID pgtype.UUID) (service.CbtQuestionCompleteness, error)
+	GetQuestionRequirements(ctx context.Context, eventID pgtype.UUID) (db.GetCbtEventQuestionRequirementsRow, error)
+	UpsertQuestionRequirements(ctx context.Context, eventID pgtype.UUID, in service.SaveCbtEventQuestionRequirementsInput) (db.UpsertCbtEventQuestionRequirementsRow, error)
 	GetResults(ctx context.Context, id pgtype.UUID) ([]db.GetEventResultsRow, error)
 	GetExamCards(ctx context.Context, id pgtype.UUID) ([]db.GetEventExamCardsRow, error)
 	Create(ctx context.Context, in service.CreateCbtEventInput) (db.CbtExamEvent, error)
@@ -180,6 +182,50 @@ func (h *CbtEvent) QuestionCompleteness(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	api.OK(w, rows)
+}
+
+func (h *CbtEvent) GetQuestionRequirements(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	if !h.requireEventReadAccess(w, r, id) {
+		return
+	}
+	row, err := h.svc.GetQuestionRequirements(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *CbtEvent) UpsertQuestionRequirements(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var input service.SaveCbtEventQuestionRequirementsInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	row, err := h.svc.UpsertQuestionRequirements(r.Context(), id, input)
+	if err != nil {
+		writeClientError(w, err, "Pengaturan target kelengkapan soal tidak valid")
+		return
+	}
+	api.OK(w, row)
 }
 
 func (h *CbtEvent) GetResults(w http.ResponseWriter, r *http.Request) {
