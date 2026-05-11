@@ -11,6 +11,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
 	import { csvRow } from '$lib/csv';
+	import { toast } from '$lib/components/ui/sonner';
 
 	type EventInfo = {
 		id: string; title: string; exam_type: string; scope: string;
@@ -31,11 +32,19 @@
 		level: string; class_id: string; class_code: string; class_name: string;
 		subject_id: string; subject_name: string; subject_code: string;
 		teacher_employee_id: string; teacher_name: string; teacher_username: string;
+		scope_mode?: string; status_filter?: string;
 		target_pg: number; available_pg: number; missing_pg: number;
 		target_essay: number; available_essay: number; missing_essay: number;
 		complete: boolean;
 	};
+	type QuestionRequirement = {
+		scope_mode: 'per_rombel' | 'per_level' | 'pool_level_subject' | string;
+		target_pg: number;
+		target_essay: number;
+		status_filter: 'published_only' | 'all_progress' | string;
+	};
 	type QuestionCompleteness = {
+		requirements?: QuestionRequirement;
 		summary: {
 			total_rows: number; complete_rows: number; incomplete_rows: number;
 			target_pg: number; available_pg: number; missing_pg: number;
@@ -58,7 +67,7 @@
 	};
 	type ChecklistHref =
 		| `/asesmen/kegiatan/${string}/members`
-		| `/bank-soal/tambah?event_id=${string}`
+		| `/bank-soal/tambah?${string}`
 		| '/bank-soal/tambah'
 		| '/bank-soal/verifikasi'
 		| `/asesmen/paket?event_id=${string}`
@@ -99,9 +108,23 @@
 	let completenessLevel = $state('');
 	let completenessStatus = $state('');
 	let completenessSearch = $state('');
+	let targetScopeMode = $state<'per_rombel' | 'per_level' | 'pool_level_subject'>('per_rombel');
+	let targetStatusFilter = $state<'published_only' | 'all_progress'>('published_only');
+	let targetPg = $state(20);
+	let targetEssay = $state(5);
+	let targetSettingsBusy = $state(false);
 
 	const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Aktif', finished: 'Selesai' };
 	const scopeLabel: Record<string, string> = { class: 'Per Kelas', grade: 'Per Tingkat', school: 'Seluruh Sekolah' };
+	const questionRequirementScopeLabel: Record<string, string> = {
+		per_rombel: 'Per rombel + mapel + guru',
+		per_level: 'Per tingkat + mapel + guru',
+		pool_level_subject: 'Pool tingkat + mapel',
+	};
+	const questionRequirementStatusLabel: Record<string, string> = {
+		published_only: 'Hanya soal terbit',
+		all_progress: 'Draft/review/terbit dihitung',
+	};
 
 	function isRecord(value: unknown): value is Record<string, unknown> {
 		return typeof value === 'object' && value !== null;
@@ -111,6 +134,16 @@
 		if (Array.isArray(payload)) return payload as T[];
 		if (isRecord(payload) && Array.isArray(payload[key])) return payload[key] as T[];
 		return [];
+	}
+
+	function syncQuestionRequirementForm(completeness: QuestionCompleteness | null) {
+		const requirements = completeness?.requirements;
+		if (!requirements) return;
+		if (requirements.scope_mode === 'per_level' || requirements.scope_mode === 'pool_level_subject') targetScopeMode = requirements.scope_mode;
+		else targetScopeMode = 'per_rombel';
+		targetStatusFilter = requirements.status_filter === 'all_progress' ? 'all_progress' : 'published_only';
+		targetPg = Number.isFinite(Number(requirements.target_pg)) ? Number(requirements.target_pg) : 20;
+		targetEssay = Number.isFinite(Number(requirements.target_essay)) ? Number(requirements.target_essay) : 5;
 	}
 
 	async function optionalApiData<T>(path: string, fallback: T): Promise<T> {
@@ -130,13 +163,15 @@
 			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/packages`, []),
 			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/question-completeness`, null),
 		]);
+		const questionCompleteness = isRecord(completenessPayload) ? completenessPayload as QuestionCompleteness : null;
+		syncQuestionRequirementForm(questionCompleteness);
 		return {
 			info: nextInfo,
 			results: Array.isArray(nextResults) ? nextResults : [],
 			overview: isRecord(overviewPayload) ? overviewPayload as EventOverview : null,
 			sessions: parseArrayPayload<EventSession>(sessionPayload, 'sessions'),
 			packages: parseArrayPayload<EventPackage>(packagePayload, 'packages'),
-			questionCompleteness: isRecord(completenessPayload) ? completenessPayload as QuestionCompleteness : null,
+			questionCompleteness,
 		};
 	}
 
@@ -309,6 +344,35 @@
 
 	function completenessLevels(detail: EventCommandDetail) {
 		return Array.from(new Set((detail.questionCompleteness?.rows ?? []).map((row) => row.level).filter(Boolean))).sort();
+	}
+
+	function bankSoalComposerHref(row: QuestionCompletenessRow, questionType: 'multiple_choice' | 'essay' = 'multiple_choice'): `/bank-soal/tambah?${string}` {
+		const params = new URLSearchParams();
+		params.set('event_id', eventId);
+		params.set('subject_id', row.subject_id);
+		if (row.level) params.set('grade_level', row.level);
+		if (row.teacher_username) params.set('teacher_username', row.teacher_username);
+		params.set('question_type', questionType);
+		return `/bank-soal/tambah?${params.toString()}`;
+	}
+
+	async function saveQuestionRequirements() {
+		targetSettingsBusy = true;
+		try {
+			const target_pg = Math.max(0, Number(targetPg) || 0);
+			const target_essay = Math.max(0, Number(targetEssay) || 0);
+			await fetch(clientApiPath`/api/asesmen/events/${eventId}/question-requirements`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ scope_mode: targetScopeMode, target_pg, target_essay, status_filter: targetStatusFilter }),
+			}).then((response) => readClientApiData<QuestionRequirement>(response, 'Gagal menyimpan pengaturan target soal'));
+			toast.success('Pengaturan target kelengkapan soal disimpan');
+			loadInitial();
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Gagal menyimpan pengaturan target soal');
+		} finally {
+			targetSettingsBusy = false;
+		}
 	}
 
 	function exportCompletenessCSV(detail: EventCommandDetail) {
@@ -505,12 +569,42 @@
 							<div class="flex flex-wrap items-start justify-between gap-3">
 								<div>
 									<Card.Title class="text-base">Kelengkapan Soal per Guru/Mapel/Rombel</Card.Title>
-									<Card.Description>Target Fase 1: 20 soal PG dan 5 esai untuk setiap penugasan mengajar dalam tingkat target event.</Card.Description>
+									<Card.Description>Target aktif: {questionRequirementScopeLabel[completeness?.requirements?.scope_mode ?? 'per_rombel'] ?? 'Per rombel + mapel + guru'} · PG {completeness?.requirements?.target_pg ?? 20} · Esai {completeness?.requirements?.target_essay ?? 5} · {questionRequirementStatusLabel[completeness?.requirements?.status_filter ?? 'published_only'] ?? 'Hanya soal terbit'}.</Card.Description>
 								</div>
 								<LoadingButton variant="outline" onclick={() => exportCompletenessCSV(detail)} disabled={filteredRows.length === 0} label="Ekspor CSV" />
 							</div>
 						</Card.Header>
 						<Card.Content class="space-y-4">
+							<div class="rounded-2xl border border-border bg-muted/30 p-4">
+								<div class="flex flex-wrap items-start justify-between gap-3">
+									<div>
+										<p class="text-sm font-semibold text-foreground">Pengaturan Target</p>
+										<p class="text-xs text-muted-foreground">Atur cara monitoring dan target minimal soal yang dihitung untuk event ini.</p>
+									</div>
+									<LoadingButton onclick={saveQuestionRequirements} loading={targetSettingsBusy} loadingLabel="Menyimpan..." label="Simpan Target" />
+								</div>
+								<div class="mt-3 grid gap-2 md:grid-cols-4">
+									<label class="space-y-1 text-xs font-medium text-muted-foreground">Mode monitoring
+										<select bind:value={targetScopeMode} class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground">
+											<option value="per_rombel">Per rombel + mapel + guru</option>
+											<option value="per_level">Per tingkat + mapel + guru</option>
+											<option value="pool_level_subject">Pool tingkat + mapel</option>
+										</select>
+									</label>
+									<label class="space-y-1 text-xs font-medium text-muted-foreground">Filter soal
+										<select bind:value={targetStatusFilter} class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground">
+											<option value="published_only">Hanya soal terbit</option>
+											<option value="all_progress">Draft/review/terbit dihitung</option>
+										</select>
+									</label>
+									<label class="space-y-1 text-xs font-medium text-muted-foreground">Target PG
+										<input bind:value={targetPg} type="number" min="0" class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground" />
+									</label>
+									<label class="space-y-1 text-xs font-medium text-muted-foreground">Target esai
+										<input bind:value={targetEssay} type="number" min="0" class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground" />
+									</label>
+								</div>
+							</div>
 							{#if completeness}
 								<div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
 									<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Penugasan</p><p class="text-lg font-semibold text-foreground">{completeness.summary.total_rows}</p></div>
@@ -552,7 +646,7 @@
 											<Table.Cell><div class="font-medium">{row.teacher_name}</div><div class="text-xs text-muted-foreground">{row.teacher_username || 'username belum tertaut'}</div></Table.Cell>
 											<Table.Cell class="text-center"><span class={row.missing_pg > 0 ? 'font-semibold text-warning' : 'font-semibold text-success'}>{row.available_pg}/{row.target_pg}</span>{#if row.missing_pg > 0}<div class="text-xs text-muted-foreground">kurang {row.missing_pg}</div>{/if}</Table.Cell>
 											<Table.Cell class="text-center"><span class={row.missing_essay > 0 ? 'font-semibold text-warning' : 'font-semibold text-success'}>{row.available_essay}/{row.target_essay}</span>{#if row.missing_essay > 0}<div class="text-xs text-muted-foreground">kurang {row.missing_essay}</div>{/if}</Table.Cell>
-											<Table.Cell>{#if row.complete}<Badge variant="outline" class="bg-success/10 text-success border-success/20">Lengkap</Badge>{:else}<Badge variant="secondary" class="bg-warning/10 text-warning border-warning/30">Belum</Badge>{/if}</Table.Cell>
+											<Table.Cell>{#if row.complete}<Badge variant="outline" class="bg-success/10 text-success border-success/20">Lengkap</Badge>{:else}<div class="flex flex-col gap-1"><Badge variant="secondary" class="bg-warning/10 text-warning border-warning/30">Belum</Badge><div class="flex flex-wrap gap-1"><a class="text-xs font-semibold text-primary hover:underline" href={resolve(bankSoalComposerHref(row, 'multiple_choice'))}>Tambah PG</a><a class="text-xs font-semibold text-primary hover:underline" href={resolve(bankSoalComposerHref(row, 'essay'))}>Tambah esai</a></div></div>{/if}</Table.Cell>
 										</Table.Row>
 									{:else}
 										<Table.Row><Table.Cell colspan={7} class="py-12 text-center text-muted-foreground">Tidak ada baris sesuai filter.</Table.Cell></Table.Row>

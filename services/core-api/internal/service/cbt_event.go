@@ -27,6 +27,8 @@ type cbtEventStore interface {
 	ListCbtEventSubjectMatrix(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventSubjectMatrixRow, error)
 	ListCbtEventQuestionCompletenessRows(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventQuestionCompletenessRowsRow, error)
 	ListCbtEventQuestionCompletenessExcludedLevels(ctx context.Context, id pgtype.UUID) ([]string, error)
+	GetCbtEventQuestionRequirements(ctx context.Context, id pgtype.UUID) (db.GetCbtEventQuestionRequirementsRow, error)
+	UpsertCbtEventQuestionRequirements(ctx context.Context, arg db.UpsertCbtEventQuestionRequirementsParams) (db.UpsertCbtEventQuestionRequirementsRow, error)
 	CreateCbtExamEvent(ctx context.Context, arg db.CreateCbtExamEventParams) (db.CbtExamEvent, error)
 	UpdateCbtExamEventStatus(ctx context.Context, arg db.UpdateCbtExamEventStatusParams) (db.CbtExamEvent, error)
 	UpdateCbtExamEvent(ctx context.Context, arg db.UpdateCbtExamEventParams) (db.CbtExamEvent, error)
@@ -180,9 +182,10 @@ func (s *CbtEvent) ListSubjectMatrix(ctx context.Context, eventID pgtype.UUID) (
 }
 
 type CbtQuestionCompleteness struct {
-	Summary        CbtQuestionCompletenessSummary `json:"summary"`
-	Rows           []CbtQuestionCompletenessRow   `json:"rows"`
-	ExcludedLevels []string                       `json:"excluded_levels"`
+	Requirements   db.GetCbtEventQuestionRequirementsRow `json:"requirements"`
+	Summary        CbtQuestionCompletenessSummary        `json:"summary"`
+	Rows           []CbtQuestionCompletenessRow          `json:"rows"`
+	ExcludedLevels []string                              `json:"excluded_levels"`
 }
 
 type CbtQuestionCompletenessSummary struct {
@@ -208,6 +211,8 @@ type CbtQuestionCompletenessRow struct {
 	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
 	TeacherName       string      `json:"teacher_name"`
 	TeacherUsername   string      `json:"teacher_username"`
+	ScopeMode         string      `json:"scope_mode"`
+	StatusFilter      string      `json:"status_filter"`
 	TargetPg          int32       `json:"target_pg"`
 	AvailablePg       int32       `json:"available_pg"`
 	MissingPg         int32       `json:"missing_pg"`
@@ -218,6 +223,10 @@ type CbtQuestionCompletenessRow struct {
 }
 
 func (s *CbtEvent) QuestionCompleteness(ctx context.Context, eventID pgtype.UUID) (CbtQuestionCompleteness, error) {
+	requirements, err := s.q.GetCbtEventQuestionRequirements(ctx, eventID)
+	if err != nil {
+		return CbtQuestionCompleteness{}, err
+	}
 	rows, err := s.q.ListCbtEventQuestionCompletenessRows(ctx, eventID)
 	if err != nil {
 		return CbtQuestionCompleteness{}, err
@@ -226,7 +235,7 @@ func (s *CbtEvent) QuestionCompleteness(ctx context.Context, eventID pgtype.UUID
 	if err != nil {
 		return CbtQuestionCompleteness{}, err
 	}
-	out := CbtQuestionCompleteness{Rows: []CbtQuestionCompletenessRow{}, ExcludedLevels: excluded}
+	out := CbtQuestionCompleteness{Requirements: requirements, Rows: []CbtQuestionCompletenessRow{}, ExcludedLevels: excluded}
 	for _, row := range rows {
 		missingPg := maxInt32(row.TargetPg-row.AvailablePg, 0)
 		missingEssay := maxInt32(row.TargetEssay-row.AvailableEssay, 0)
@@ -242,6 +251,8 @@ func (s *CbtEvent) QuestionCompleteness(ctx context.Context, eventID pgtype.UUID
 			TeacherEmployeeID: row.TeacherEmployeeID,
 			TeacherName:       row.TeacherName,
 			TeacherUsername:   row.TeacherUsername,
+			ScopeMode:         row.ScopeMode,
+			StatusFilter:      row.StatusFilter,
 			TargetPg:          row.TargetPg,
 			AvailablePg:       row.AvailablePg,
 			MissingPg:         missingPg,
@@ -271,6 +282,62 @@ func maxInt32(v, floor int32) int32 {
 		return floor
 	}
 	return v
+}
+
+type SaveCbtEventQuestionRequirementsInput struct {
+	ScopeMode    string `json:"scope_mode"`
+	TargetPg     int32  `json:"target_pg"`
+	TargetEssay  int32  `json:"target_essay"`
+	StatusFilter string `json:"status_filter"`
+}
+
+func (s *CbtEvent) GetQuestionRequirements(ctx context.Context, eventID pgtype.UUID) (db.GetCbtEventQuestionRequirementsRow, error) {
+	return s.q.GetCbtEventQuestionRequirements(ctx, eventID)
+}
+
+func (s *CbtEvent) UpsertQuestionRequirements(ctx context.Context, eventID pgtype.UUID, in SaveCbtEventQuestionRequirementsInput) (db.UpsertCbtEventQuestionRequirementsRow, error) {
+	scopeMode := in.ScopeMode
+	if scopeMode == "" {
+		scopeMode = "per_rombel"
+	}
+	if !validCbtQuestionRequirementScopeMode(scopeMode) {
+		return db.UpsertCbtEventQuestionRequirementsRow{}, fmt.Errorf("%w: mode monitoring tidak valid", domain.ErrBadRequest)
+	}
+	statusFilter := in.StatusFilter
+	if statusFilter == "" {
+		statusFilter = "published_only"
+	}
+	if !validCbtQuestionRequirementStatusFilter(statusFilter) {
+		return db.UpsertCbtEventQuestionRequirementsRow{}, fmt.Errorf("%w: filter status soal tidak valid", domain.ErrBadRequest)
+	}
+	if in.TargetPg < 0 || in.TargetEssay < 0 {
+		return db.UpsertCbtEventQuestionRequirementsRow{}, fmt.Errorf("%w: target soal tidak boleh negatif", domain.ErrBadRequest)
+	}
+	return s.q.UpsertCbtEventQuestionRequirements(ctx, db.UpsertCbtEventQuestionRequirementsParams{
+		EventID:      eventID,
+		ScopeMode:    scopeMode,
+		TargetPg:     in.TargetPg,
+		TargetEssay:  in.TargetEssay,
+		StatusFilter: statusFilter,
+	})
+}
+
+func validCbtQuestionRequirementScopeMode(value string) bool {
+	switch value {
+	case "per_rombel", "per_level", "pool_level_subject":
+		return true
+	default:
+		return false
+	}
+}
+
+func validCbtQuestionRequirementStatusFilter(value string) bool {
+	switch value {
+	case "published_only", "all_progress":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *CbtEvent) GetResults(ctx context.Context, id pgtype.UUID) ([]db.GetEventResultsRow, error) {

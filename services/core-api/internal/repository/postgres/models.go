@@ -954,6 +954,20 @@ type CbtEventMember struct {
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
+type CbtEventQuestionRequirement struct {
+	ID           pgtype.UUID        `json:"id"`
+	EventID      pgtype.UUID        `json:"event_id"`
+	ScopeMode    string             `json:"scope_mode"`
+	Level        pgtype.Text        `json:"level"`
+	ClassID      pgtype.UUID        `json:"class_id"`
+	SubjectID    pgtype.UUID        `json:"subject_id"`
+	TargetPg     int32              `json:"target_pg"`
+	TargetEssay  int32              `json:"target_essay"`
+	StatusFilter string             `json:"status_filter"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CbtEventSubjectTarget struct {
 	ID              pgtype.UUID        `json:"id"`
 	EventID         pgtype.UUID        `json:"event_id"`

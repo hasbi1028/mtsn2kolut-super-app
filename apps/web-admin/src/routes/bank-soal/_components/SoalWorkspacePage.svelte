@@ -2786,10 +2786,40 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 	}
 
+	function applyComposerQueryPrefill(params: URLSearchParams): boolean {
+		if (routeMode !== 'composer') return false;
+		let applied = false;
+		const subjectId = params.get('subject_id') ?? '';
+		const gradeLevel = Number(params.get('grade_level') ?? '');
+		const questionType = params.get('question_type') ?? '';
+		if (subjectId) {
+			fSubjectId = subjectId;
+			filterSubject = subjectId;
+			applied = true;
+		}
+		if (Number.isFinite(gradeLevel) && gradeLevel > 0) {
+			fGradeLevel = gradeLevel;
+			applied = true;
+		}
+		if (questionType) {
+			fQuestionType = normalizeQuestionType(questionType);
+			fOptions = normalizeOptionCount(fOptions, fQuestionType);
+			fAnswerKey = normalizeAnswerKey(fAnswerKey, fQuestionType, answerItemCountForType(fQuestionType));
+			applied = true;
+		}
+		if (selectedEventId) {
+			specialEventQuestionMode = true;
+			applied = true;
+		}
+		if (applied) draftStatus = 'Konteks event/mapel diterapkan dari Kelengkapan Soal';
+		return applied;
+	}
+
 	onMount(() => {
 		const params = new URLSearchParams(window.location.search);
 		const questionId = params.get('question_id');
 		selectedEventId = params.get('event_id') ?? '';
+		const hasComposerPrefill = applyComposerQueryPrefill(params);
 		if (questionId) {
 			params.delete('question_id');
 			const query = params.toString();
@@ -2805,7 +2835,8 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		else if (routeMode === 'composer') {
 			setTimeout(() => {
 				void restoreDraft().then((restored) => {
-					if (!restored) draftStatus = '';
+					if (hasComposerPrefill) applyComposerQueryPrefill(params);
+					else if (!restored) draftStatus = '';
 				});
 			}, 50);
 		}
