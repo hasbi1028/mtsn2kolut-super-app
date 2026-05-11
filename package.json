@@ -18,6 +18,7 @@
     "test:backend": "cd services/core-api && go test ./...",
     "db:migrate": "npm --prefix services/core-api/db/scripts run migrate:pg",
     "db:seed:bank-soal-e2e-roles": "npm --prefix services/core-api/db/scripts run seed:bank-soal-e2e-roles",
-    "db:seed:mobile-cbt": "npm --prefix services/core-api/db/scripts run seed:mobile-cbt"
+    "db:seed:mobile-cbt": "npm --prefix services/core-api/db/scripts run seed:mobile-cbt",
+    "db:test:cbt": "scripts/setup-cbt-test-db.sh"
   }
 }
