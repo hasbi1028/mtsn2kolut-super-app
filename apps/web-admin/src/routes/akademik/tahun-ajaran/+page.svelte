@@ -14,6 +14,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
+	import { academicCopy } from '$lib/academic/copy';
 
 	type AcademicYear = {
 		id: string;
@@ -140,10 +141,10 @@
 	};
 
 	const importKinds: Array<{ value: ImportKind; label: string; description: string }> = [
-		{ value: 'siswa', label: 'Siswa', description: 'NIS, identitas, gender, rombel, dan lifecycle.' },
+		{ value: 'siswa', label: 'Siswa', description: 'NIS, identitas, jenis kelamin, rombel, dan status siswa.' },
 		{ value: 'rombel', label: 'Rombel', description: 'Kode rombel, tingkat, tahun ajaran, dan status aktif.' },
 		{ value: 'guru_mapel', label: 'Guru Mapel', description: 'Pasangan rombel, mapel, dan guru pengampu.' },
-		{ value: 'jadwal', label: 'Jadwal Pelajaran', description: 'Slot hari, jam, ruang, dan catatan.' }
+		{ value: 'jadwal', label: 'Jadwal Pelajaran', description: 'Hari, jam pelajaran, ruang, dan catatan.' }
 	];
 
 	let years = $state<AcademicYear[]>([]);
@@ -351,12 +352,12 @@
 					target_academic_year_id: targetYearId
 				})
 			});
-			rolloverPreview = await readClientApiData<RolloverPreview>(response, 'Preview kenaikan tidak tersedia.');
-			toast.success('Preview kenaikan tahun ajaran selesai.');
+			rolloverPreview = await readClientApiData<RolloverPreview>(response, 'Pratinjau kenaikan kelas belum tersedia.');
+			toast.success('Pratinjau kenaikan kelas selesai.');
 		} catch (error) {
 			rolloverPreview = null;
 			resetRolloverApplyState();
-			toast.error(errorMessage(error, 'Gagal membuat preview kenaikan.'));
+			toast.error(errorMessage(error, 'Gagal membuat pratinjau kenaikan kelas.'));
 		} finally {
 			previewBusy = false;
 		}
@@ -375,12 +376,12 @@
 					confirmation: applyChallengeInput.trim()
 				})
 			});
-			rolloverApplyResult = await readClientApiData<RolloverApplyResult>(response, 'Apply rollover tidak tersedia.');
+			rolloverApplyResult = await readClientApiData<RolloverApplyResult>(response, 'Penerapan kenaikan kelas belum tersedia.');
 			applyChallengeInput = '';
-			toast.success('Apply rollover tahun ajaran selesai.');
+			toast.success('Kenaikan kelas berhasil diterapkan.');
 			await refreshOverview();
 		} catch (error) {
-			toast.error(errorMessage(error, 'Gagal apply rollover tahun ajaran.'));
+			toast.error(errorMessage(error, 'Gagal menerapkan kenaikan kelas.'));
 		} finally {
 			applyBusy = false;
 		}
@@ -402,11 +403,11 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ kind: importKind, csv })
 			});
-			dryRunResult = await readClientApiData<ImportDryRunResult>(response, 'Dry-run import tidak tersedia.');
-			toast.success('Dry-run import selesai. Belum ada data yang diubah.');
+			dryRunResult = await readClientApiData<ImportDryRunResult>(response, 'Cek data sebelum impor belum tersedia.');
+			toast.success('Cek data selesai. Belum ada data yang diubah.');
 		} catch (error) {
 			dryRunResult = null;
-			toast.error(errorMessage(error, 'Gagal melakukan dry-run import.'));
+			toast.error(errorMessage(error, 'Gagal memeriksa data sebelum impor.'));
 		} finally {
 			importBusy = false;
 		}
@@ -434,7 +435,7 @@
 			case 'skip':
 				return 'Lewati';
 			case 'error':
-				return 'Error';
+				return 'Bermasalah';
 			default:
 				return action;
 		}
@@ -454,7 +455,7 @@
 		<div>
 			<p class="text-sm font-medium text-primary">Akademik</p>
 			<h1 class="text-2xl font-semibold tracking-normal text-foreground">Tahun Ajaran & Semester</h1>
-			<p class="mt-1 text-sm leading-6 text-muted-foreground">Kelola periode akademik, preview rollover, dan import-export data dasar secara aman.</p>
+			<p class="mt-1 text-sm leading-6 text-muted-foreground">Kelola periode akademik, pratinjau kenaikan kelas, dan impor/unduh data dasar secara aman.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button variant="outline" href={resolve('/akademik')}>
@@ -487,7 +488,7 @@
 			<div class="rounded-lg border border-border bg-card p-6">
 				<EmptyStatePanel
 					title="Tahun ajaran belum dapat dimuat"
-					description={errorMessage(error, 'Periksa koneksi backend lalu coba lagi.')}
+					description={errorMessage(error, 'Periksa koneksi layanan sistem lalu coba lagi.')}
 					compact
 				/>
 				<Button class="mt-4" variant="outline" onclick={() => retryOverview(reset)}>Coba Lagi</Button>
@@ -496,14 +497,14 @@
 
 		<div class="grid gap-3 md:grid-cols-4">
 			<div class="rounded-lg border border-primary/20 bg-primary/10 px-4 py-4">
-				<p class="text-xs font-semibold uppercase text-primary">Tahun Aktif</p>
+				<p class="text-xs font-semibold uppercase text-primary">{academicCopy.labels.activeAcademicYear}</p>
 				<p class="mt-2 text-xl font-semibold text-foreground">{activeYear?.name ?? 'Belum ada'}</p>
 				<p class="text-sm text-muted-foreground">Periode berjalan untuk rombel dan jadwal.</p>
 			</div>
 			<div class="rounded-lg border border-border bg-card px-4 py-4">
 				<p class="text-xs font-semibold uppercase text-muted-foreground">Semester Operasional</p>
 				<p class="mt-2 text-xl font-semibold text-foreground">{currentSemesterLabel()}</p>
-				<p class="text-sm text-muted-foreground">Model semester eksplisit belum tersedia.</p>
+				<p class="text-sm text-muted-foreground">Semester mengikuti periode berjalan saat ini.</p>
 			</div>
 			<div class="rounded-lg border border-border bg-card px-4 py-4">
 				<p class="text-xs font-semibold uppercase text-muted-foreground">Total Tahun</p>
@@ -511,9 +512,9 @@
 				<p class="text-sm text-muted-foreground">Termasuk periode lama dan persiapan.</p>
 			</div>
 			<div class="rounded-lg border border-warning/30 bg-warning/10 px-4 py-4">
-				<p class="text-xs font-semibold uppercase text-warning">Rollover Aman</p>
-				<p class="mt-2 text-xl font-semibold text-foreground">Preview + Challenge</p>
-				<p class="text-sm text-muted-foreground">Apply berjalan lewat Go API dan transaksi.</p>
+				<p class="text-xs font-semibold uppercase text-warning">Kenaikan Kelas Aman</p>
+				<p class="mt-2 text-xl font-semibold text-foreground">Pratinjau + konfirmasi</p>
+				<p class="text-sm text-muted-foreground">Penerapan dilakukan aman lewat layanan sistem.</p>
 			</div>
 		</div>
 
@@ -523,7 +524,7 @@
 					<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 						<div>
 							<Card.Title id="year-list-title" class="text-base">Daftar Tahun Ajaran</Card.Title>
-							<Card.Description>Aktivasi wajib lewat konfirmasi eksplisit. Data tahun lama tidak dihapus.</Card.Description>
+							<Card.Description>Aktivasi wajib memakai kalimat konfirmasi. Data tahun lama tidak dihapus.</Card.Description>
 						</div>
 						<Badge class="w-fit border-primary/20 bg-primary/10 text-primary" variant="outline">{inactiveYears.length} nonaktif</Badge>
 					</div>
@@ -615,12 +616,12 @@
 		<section class="grid gap-4 xl:grid-cols-[24rem_1fr]" aria-labelledby="rollover-title">
 			<Card.Root>
 				<Card.Header class="pb-3">
-					<Card.Title id="rollover-title" class="text-base">Preview Kenaikan</Card.Title>
-					<Card.Description>Jalankan preview sebelum apply. Data tahun lama tidak dihapus.</Card.Description>
+					<Card.Title id="rollover-title" class="text-base">{academicCopy.actions.previewPromotion}</Card.Title>
+					<Card.Description>{academicCopy.helper.promotionPreview} Data tahun lama tidak dihapus.</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-3">
 					<div>
-						<label for="source-year" class="mb-1 block text-sm font-medium">Tahun Sumber</label>
+						<label for="source-year" class="mb-1 block text-sm font-medium">Tahun ajaran asal</label>
 						<select id="source-year" bind:value={sourceYearId} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 							<option value="">Tahun aktif saat ini</option>
 							{#each years as year (year.id)}
@@ -629,7 +630,7 @@
 						</select>
 					</div>
 					<div>
-						<label for="target-year" class="mb-1 block text-sm font-medium">Tahun Tujuan</label>
+						<label for="target-year" class="mb-1 block text-sm font-medium">Tahun ajaran tujuan</label>
 						<select id="target-year" bind:value={targetYearId} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 							<option value="">Pilih tahun tujuan</option>
 							{#each targetYearOptions as year (year.id)}
@@ -637,30 +638,30 @@
 							{/each}
 						</select>
 					</div>
-					<LoadingButton class="w-full" loading={previewBusy} loadingLabel="Membuat preview..." disabled={!canPreview} onclick={() => void previewRollover()}>
+					<LoadingButton class="w-full" loading={previewBusy} loadingLabel="Membuat pratinjau..." disabled={!canPreview} onclick={() => void previewRollover()}>
 						<Eye class="mr-2 size-4" />
-						Lihat Preview
+						Lihat Pratinjau
 					</LoadingButton>
 					<div class="rounded-md border border-border bg-muted/40 p-3 text-sm">
-						<p class="font-medium text-foreground">Apply Rollover</p>
-						<p class="mt-1 text-muted-foreground">Challenge dibuat dari hasil preview dan wajib diketik persis.</p>
+						<p class="font-medium text-foreground">{academicCopy.actions.applyPromotion}</p>
+						<p class="mt-1 text-muted-foreground">Kalimat konfirmasi dibuat dari hasil pratinjau dan wajib diketik persis.</p>
 						<div class="mt-3 rounded-md border border-dashed border-border bg-background px-3 py-2 font-mono text-xs text-foreground">
-							{rolloverPreview?.apply_challenge ?? 'Jalankan preview dulu'}
+							{rolloverPreview?.apply_challenge ?? 'Jalankan pratinjau dulu'}
 						</div>
 						<div class="mt-3">
-							<label for="rollover-apply-challenge" class="mb-1 block text-sm font-medium">Challenge Apply</label>
+							<label for="rollover-apply-challenge" class="mb-1 block text-sm font-medium">{academicCopy.labels.confirmationSentence}</label>
 							<Input
 								id="rollover-apply-challenge"
 								bind:value={applyChallengeInput}
-								placeholder="Ketik challenge dari preview"
+								placeholder="Ketik kalimat konfirmasi dari pratinjau"
 								disabled={!rolloverPreview || !previewMatchesSelection || applyBusy}
 							/>
 							{#if rolloverPreview && !previewMatchesSelection}
-								<p class="mt-1 text-xs text-warning">Preview tidak sesuai pilihan tahun saat ini. Jalankan preview ulang.</p>
+								<p class="mt-1 text-xs text-warning">Pratinjau tidak sesuai pilihan tahun saat ini. Jalankan pratinjau ulang.</p>
 							{/if}
 						</div>
-						<LoadingButton class="mt-3 w-full" loading={applyBusy} loadingLabel="Apply berjalan..." disabled={!canApplyRollover} onclick={() => void applyRollover()}>
-							Terapkan Rollover
+						<LoadingButton class="mt-3 w-full" loading={applyBusy} loadingLabel="Menerapkan..." disabled={!canApplyRollover} onclick={() => void applyRollover()}>
+							{academicCopy.actions.applyPromotion}
 						</LoadingButton>
 					</div>
 				</Card.Content>
@@ -668,8 +669,8 @@
 
 			<Card.Root>
 				<Card.Header class="pb-3">
-					<Card.Title class="text-base">Hasil Preview</Card.Title>
-					<Card.Description>Gunakan angka ini untuk meninjau dampak sebelum apply.</Card.Description>
+					<Card.Title class="text-base">Hasil Pratinjau</Card.Title>
+					<Card.Description>Gunakan ringkasan ini untuk meninjau dampak sebelum diterapkan.</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-4">
 					{#if rolloverPreview}
@@ -677,23 +678,23 @@
 							<div class="rounded-lg border border-primary/20 bg-primary/10 p-4">
 								<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 									<div>
-										<p class="text-sm font-semibold text-primary">Apply Selesai</p>
+										<p class="text-sm font-semibold text-primary">Kenaikan kelas selesai diterapkan</p>
 										<p class="text-sm text-muted-foreground">{rolloverApplyResult.source_academic_year_name} ke {rolloverApplyResult.target_academic_year_name}</p>
 									</div>
 									<Badge class="w-fit border-primary/20 bg-background text-primary" variant="outline">
 										<CheckCircle2 class="mr-1 size-3" />
-										Transaksional
+										Aman tersimpan
 									</Badge>
 								</div>
 								<div class="mt-3 grid gap-2 md:grid-cols-4">
 									{#each [
 										['Rombel baru', rolloverApplyResult.counts.classes_created],
-										['Rombel reuse', rolloverApplyResult.counts.classes_reused],
+										[academicCopy.terms.classesReused, rolloverApplyResult.counts.classes_reused],
 										['Siswa naik', rolloverApplyResult.counts.students_promoted],
-										['Siswa dilewati', rolloverApplyResult.counts.students_skipped],
-										['Wali kelas', rolloverApplyResult.counts.homerooms_copied],
-										['Guru mapel', rolloverApplyResult.counts.assignments_copied],
-										['Slot jadwal', rolloverApplyResult.counts.timetable_slots_copied]
+										[academicCopy.terms.studentsSkipped, rolloverApplyResult.counts.students_skipped],
+										[academicCopy.terms.homeroomsCopied, rolloverApplyResult.counts.homerooms_copied],
+										[academicCopy.terms.assignmentsCopied, rolloverApplyResult.counts.assignments_copied],
+										[academicCopy.terms.timetableSlotsCopied, rolloverApplyResult.counts.timetable_slots_copied]
 									] as item}
 										<div class="rounded-md border border-primary/20 bg-background/80 p-2">
 											<p class="text-xs text-muted-foreground">{item[0]}</p>
@@ -726,15 +727,15 @@
 						</div>
 						<div class="grid gap-3 md:grid-cols-3">
 							<div class="rounded-md border border-border p-3 text-sm">
-								<p class="text-muted-foreground">Wali kelas kandidat</p>
+								<p class="text-muted-foreground">Wali kelas yang akan disalin</p>
 								<p class="mt-1 text-lg font-semibold">{rolloverPreview.counts.homeroom_assignments_to_copy}</p>
 							</div>
 							<div class="rounded-md border border-border p-3 text-sm">
-								<p class="text-muted-foreground">Guru mapel kandidat</p>
+								<p class="text-muted-foreground">Guru mapel yang akan disalin</p>
 								<p class="mt-1 text-lg font-semibold">{rolloverPreview.counts.subject_assignments_to_copy}</p>
 							</div>
 							<div class="rounded-md border border-border p-3 text-sm">
-								<p class="text-muted-foreground">Slot jadwal kandidat</p>
+								<p class="text-muted-foreground">Jadwal yang akan disalin</p>
 								<p class="mt-1 text-lg font-semibold">{rolloverPreview.counts.timetable_slots_to_copy}</p>
 							</div>
 						</div>
@@ -754,7 +755,7 @@
 									<Table.Header>
 										<Table.Row>
 											<Table.Head>Dari</Table.Head>
-											<Table.Head>Target</Table.Head>
+											<Table.Head>Tujuan</Table.Head>
 											<Table.Head>Tingkat</Table.Head>
 										</Table.Row>
 									</Table.Header>
@@ -796,7 +797,7 @@
 							</div>
 						{/if}
 					{:else}
-						<EmptyStatePanel compact title="Belum ada preview" description="Pilih tahun tujuan lalu jalankan preview kenaikan." />
+						<EmptyStatePanel compact title="Belum ada pratinjau" description="Pilih tahun tujuan lalu jalankan pratinjau kenaikan kelas." />
 					{/if}
 				</Card.Content>
 			</Card.Root>
@@ -805,8 +806,8 @@
 		<section class="grid gap-4 xl:grid-cols-[24rem_1fr]" aria-labelledby="import-title">
 			<Card.Root>
 				<Card.Header class="pb-3">
-					<Card.Title id="import-title" class="text-base">Import / Export CSV</Card.Title>
-					<Card.Description>Template berbahasa Indonesia. Dry-run tidak mengubah data.</Card.Description>
+					<Card.Title id="import-title" class="text-base">Impor / Unduh CSV</Card.Title>
+					<Card.Description>Template berbahasa Indonesia. Cek data tidak mengubah data sebelum disimpan.</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-3">
 					<div>
@@ -820,23 +821,23 @@
 					</div>
 					<Button variant="outline" class="w-full justify-start" href={templateHref(importKind)}>
 						<Download class="mr-2 size-4" />
-						Unduh Template CSV
+						Unduh template CSV
 					</Button>
 					<div>
 						<label for="import-file" class="mb-1 block text-sm font-medium">File CSV</label>
 						<Input id="import-file" type="file" accept=".csv,text/csv" onchange={onImportFileChange} />
 					</div>
-					<LoadingButton class="w-full" loading={importBusy} loadingLabel="Validasi..." disabled={!importFile || importBusy} onclick={() => void dryRunImport()}>
+					<LoadingButton class="w-full" loading={importBusy} loadingLabel="Memeriksa..." disabled={!importFile || importBusy} onclick={() => void dryRunImport()}>
 						<Upload class="mr-2 size-4" />
-						Dry-run Import
+						{academicCopy.actions.checkImport}
 					</LoadingButton>
 				</Card.Content>
 			</Card.Root>
 
 			<Card.Root>
 				<Card.Header class="pb-3">
-					<Card.Title class="text-base">Hasil Dry-run</Card.Title>
-					<Card.Description>Baris valid hanya dihitung sebagai rencana tambah/ubah/lewati.</Card.Description>
+					<Card.Title class="text-base">Hasil cek data</Card.Title>
+					<Card.Description>Baris valid hanya dihitung sebagai rencana tambah, ubah, atau lewati. Belum ada data yang disimpan.</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-4">
 					{#if dryRunResult}
@@ -846,7 +847,7 @@
 								['Tambah', dryRunResult.add_count],
 								['Ubah', dryRunResult.update_count],
 								['Lewati', dryRunResult.skip_count],
-								['Error', dryRunResult.error_count]
+								['Bermasalah', dryRunResult.error_count]
 							] as item}
 								<div class="rounded-md border border-border p-3">
 									<p class="text-xs text-muted-foreground">{item[0]}</p>
@@ -856,7 +857,7 @@
 						</div>
 						{#if dryRunResult.row_errors.length}
 							<div class="rounded-md border border-destructive/30 bg-destructive/10 p-3">
-								<p class="text-sm font-medium text-destructive">Error baris</p>
+								<p class="text-sm font-medium text-destructive">Baris perlu diperbaiki</p>
 								<div class="mt-2 space-y-1 text-sm">
 									{#each dryRunResult.row_errors.slice(0, 10) as item}
 										<p>Baris {item.row} · {item.field || 'Data'}: {item.message}</p>
@@ -887,7 +888,7 @@
 							</Table.Root>
 						</div>
 					{:else}
-						<EmptyStatePanel compact title="Belum ada dry-run" description="Unggah CSV dari template lalu jalankan dry-run untuk melihat tambah, ubah, skip, dan error." />
+						<EmptyStatePanel compact title="Belum ada hasil cek data" description="Unggah CSV dari template lalu cek data untuk melihat rencana tambah, ubah, lewati, dan baris yang perlu diperbaiki." />
 					{/if}
 				</Card.Content>
 			</Card.Root>
