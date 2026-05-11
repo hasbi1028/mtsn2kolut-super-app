@@ -203,6 +203,8 @@ npm --prefix apps/web-admin run check
 npm --prefix apps/web-admin run check
 ```
 
+**Implementation note:** Selesai pada Tahap 4. Dashboard `apps/web-admin/src/routes/akademik/+page.svelte` diganti menjadi `Ringkasan Akademik`, memakai istilah `Kelengkapan data akademik`, `Rombel belum memiliki wali kelas`, `Penugasan guru mapel belum lengkap`, `Jadwal perlu diperiksa`, dan quick action bebas istilah `matrix`, `preview rollover`, serta `import-export`.
+
 ---
 
 ## Task 5: Bersihkan Mapel dan Guru Mapel
