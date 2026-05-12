@@ -110,6 +110,22 @@
 		parentPortal: ParentPortalData | null;
 	}
 
+	interface RoleHomeAction {
+		label: string;
+		href: string;
+		description: string;
+		variant?: 'default' | 'outline';
+	}
+
+	interface RoleHomeSection {
+		eyebrow: string;
+		title: string;
+		description: string;
+		primary: RoleHomeAction[];
+		secondary: RoleHomeAction[];
+		watchlist: string[];
+	}
+
 	interface BankSoalDashboard {
 		canRead: boolean;
 		canCreate: boolean;
@@ -141,13 +157,13 @@
 		return 'Pusat Operasi Madrasah';
 	});
 	const dashboardTitle = $derived.by(() => {
-		if (isGuru && !hasTeacherDashboard && hasBankSoalDashboard) return 'Dasbor Bank Soal';
-		if (isGuru) return 'Dasbor Guru';
-		if (isSiswa) return 'Dasbor Siswa';
-		if (isParent) return 'Dasbor Orang Tua';
-		if (isStaff) return 'Dasbor Staf';
-		if (hasBankSoalDashboard && !dashboardAccess.academicStats) return 'Dasbor Bank Soal';
-		return 'Dasbor Utama';
+		if (isGuru && !hasTeacherDashboard && hasBankSoalDashboard) return 'Beranda Bank Soal';
+		if (isGuru) return 'Beranda Guru';
+		if (isSiswa) return 'Beranda Siswa';
+		if (isParent) return 'Beranda Orang Tua';
+		if (isStaff) return 'Beranda Staf';
+		if (hasBankSoalDashboard && !dashboardAccess.academicStats) return 'Beranda Bank Soal';
+		return 'Beranda Utama';
 	});
 	const dashboardDescription = $derived.by(() => {
 		if (isGuru && !hasTeacherDashboard && hasBankSoalDashboard) return 'Pintasan penyusunan dan pengelolaan Bank Soal sesuai hak akses yang aktif pada akun ini.';
@@ -159,6 +175,90 @@
 		return 'Ringkasan akademik dan operasional MTs Negeri 2 Kolaka Utara untuk pengambilan keputusan harian.';
 	});
 	const dashboardRoleLabel = $derived(roles.length > 0 ? roles.join(' / ') : 'pengguna');
+
+	const roleHome = $derived.by<RoleHomeSection>(() => {
+		if (isSiswa) {
+			return {
+				eyebrow: 'Beranda Siswa',
+				title: 'Mulai dari jadwal, ujian, dan data akademik pribadi.',
+				description: 'Ruang ini memprioritaskan informasi yang langsung dibutuhkan siswa setelah login.',
+				primary: [
+					{ label: 'Portal Siswa', href: '/portal/siswa', description: 'Buka data profil, kelas, dan informasi akademik siswa.' },
+					{ label: 'Download Aplikasi CBT', href: '/releases/mobile/latest-arm64.apk', description: 'Unduh aplikasi resmi untuk mengikuti asesmen CBT.', variant: 'outline' }
+				],
+				secondary: [
+					{ label: 'QR Aplikasi CBT', href: '/releases/mobile/latest-qr.svg', description: 'Buka QR code unduhan aplikasi siswa.' }
+				],
+				watchlist: ['Cek jadwal belajar terbaru.', 'Pastikan sesi ujian dan ruang CBT sudah benar.', 'Hubungi wali kelas jika data profil belum sesuai.']
+			};
+		}
+		if (isParent) {
+			return {
+				eyebrow: 'Beranda Orang Tua',
+				title: 'Pantau informasi anak dari satu tempat.',
+				description: 'Dirancang agar orang tua cepat melihat anak terhubung, jadwal, dan informasi penting madrasah.',
+				primary: [
+					{ label: 'Portal Orang Tua', href: '/portal/orang-tua', description: 'Pantau data anak dan jadwal yang terhubung.' },
+					{ label: 'Download Aplikasi CBT', href: '/releases/mobile/latest-arm64.apk', description: 'Siapkan aplikasi CBT untuk perangkat siswa.', variant: 'outline' }
+				],
+				secondary: [
+					{ label: 'Pengumuman', href: '/pengumuman', description: 'Lihat pengumuman resmi madrasah.' }
+				],
+				watchlist: ['Pastikan semua anak sudah terhubung ke akun orang tua.', 'Cek jadwal anak secara berkala.', 'Simpan link aplikasi CBT jika madrasah membuka asesmen.']
+			};
+		}
+		if (isGuru) {
+			return {
+				eyebrow: 'Beranda Guru',
+				title: 'Fokus ke jurnal, nilai, bank soal, dan asesmen.',
+				description: 'Pintasan ini mengikuti pekerjaan harian guru agar tidak perlu mencari menu di sidebar panjang.',
+				primary: [
+					{ label: 'Jurnal Kelas', href: '/journal', description: 'Isi atau cek jurnal pembelajaran hari ini.' },
+					{ label: 'Input Nilai', href: '/grades', description: 'Kelola nilai siswa sesuai mapel dan kelas.' },
+					{ label: 'Bank Soal', href: '/bank-soal', description: 'Susun, cek, dan gunakan soal pembelajaran.' }
+				],
+				secondary: [
+					{ label: 'Jadwal Mengajar', href: '/akademik/jadwal', description: 'Lihat slot jadwal kelas dan mapel.' },
+					{ label: 'Rapor Siswa', href: '/grades/rapor', description: 'Cek nilai akhir dan deskripsi capaian.' },
+					{ label: 'Persiapan Asesmen', href: '/asesmen/persiapan', description: 'Cek kesiapan paket dan sesi asesmen.' }
+				],
+				watchlist: ['Jurnal kelas yang belum diisi.', 'Nilai atau esai yang belum lengkap.', 'Jadwal mengajar dan asesmen aktif.']
+			};
+		}
+		if (isStaff) {
+			return {
+				eyebrow: 'Beranda Staf',
+				title: 'Prioritas layanan Tata Usaha, dokumen, arsip, dan aset.',
+				description: 'Staf langsung diarahkan ke pekerjaan operasional yang paling sering digunakan.',
+				primary: [
+					{ label: 'Ringkasan Tata Usaha', href: '/tu', description: 'Ringkasan layanan surat dan administrasi.' },
+					{ label: 'Monitoring Dokumen', href: '/document-cycles', description: 'Pantau siklus dan status dokumen.' },
+					{ label: 'Inventaris', href: '/inventory', description: 'Cek aset dan daftar barang madrasah.' }
+				],
+				secondary: [
+					{ label: 'Perpustakaan', href: '/library', description: 'Kelola layanan perpustakaan.' },
+					{ label: 'Verifikasi Dokumen', href: '/document-cycles/verifikasi', description: 'Tindak lanjuti dokumen yang perlu verifikasi.' }
+				],
+				watchlist: ['Surat atau dokumen yang perlu ditindaklanjuti.', 'Barang inventaris yang perlu perhatian.', 'Arsip yang perlu dilengkapi.']
+			};
+		}
+		return {
+			eyebrow: 'Beranda Admin',
+			title: 'Pantau kesiapan akademik, rapor, CBT, dan layanan madrasah.',
+			description: 'Admin mendapat ringkasan prioritas untuk mengawasi operasional utama MTsN 2 Kolaka Utara.',
+			primary: [
+				{ label: 'Kesiapan Akademik & Rapor', href: '/akademik/kesiapan', description: 'Cek masalah wali kelas, jadwal, nilai, dan rapor.' },
+				{ label: 'Rombel', href: '/akademik/rombel', description: 'Kelola kelas, wali kelas, dan siswa per rombel.' },
+				{ label: 'Persiapan Asesmen', href: '/asesmen/persiapan', description: 'Pantau kesiapan kegiatan CBT.' }
+			],
+			secondary: [
+				{ label: 'Jadwal', href: '/akademik/jadwal', description: 'Cek jadwal dan potensi bentrok.' },
+				{ label: 'Rapor Siswa', href: '/grades/rapor', description: 'Kelola pengaturan dan cetak rapor.' },
+				{ label: 'Monitor PUSAKA', href: '/pusaka', description: 'Pantau integrasi kehadiran pegawai.' }
+			],
+			watchlist: ['Kesiapan akademik dan rapor yang belum lengkap.', 'Kegiatan CBT mendekati pelaksanaan.', 'Sinkronisasi PUSAKA dan tindak lanjut Tata Usaha.']
+		};
+	});
 
 	async function fetchJSON<T>(path: string): Promise<T> {
 		const res = await fetch(path);
@@ -282,11 +382,11 @@
 	}
 
 	function dashboardErrorMessage(error: unknown) {
-		return error instanceof Error ? error.message : 'Terjadi gangguan saat memuat dashboard.';
+		return error instanceof Error ? error.message : 'Terjadi gangguan saat memuat beranda.';
 	}
 
 	function handleDashboardRenderError(error: unknown) {
-		console.error('Dashboard boundary error', error);
+		console.error('Beranda boundary error', error);
 	}
 
 	onMount(() => {
@@ -301,7 +401,7 @@
 	});
 </script>
 
-<svelte:head><title>{data.user ? 'Dashboard — MTSN 2 Kolut' : 'MTs Negeri 2 Kolaka Utara — Website Resmi'}</title></svelte:head>
+<svelte:head><title>{data.user ? 'Beranda — MTSN 2 Kolut' : 'MTs Negeri 2 Kolaka Utara — Website Resmi'}</title></svelte:head>
 
 {#if !data.user}
 	<PublicHome home={data.publicHome} />
@@ -325,17 +425,50 @@
 						loading={dashboardRefreshBusy}
 						loadingLabel="Memuat..."
 						onclick={() => void retryDashboard()}
-						label="Refresh Dashboard"
+						label="Refresh Beranda"
 					/>
 				</div>
 			</div>
 		</div>
 
 		<Card.Root class="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card shadow-sm">
+			<Card.Content class="grid gap-5 p-5 lg:grid-cols-[1.15fr,0.85fr] lg:items-start md:p-6">
+				<div class="space-y-4">
+					<div>
+						<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">{roleHome.eyebrow}</p>
+						<h2 class="mt-2 text-xl font-semibold tracking-tight text-foreground">{roleHome.title}</h2>
+						<p class="mt-2 text-sm leading-6 text-muted-foreground">{roleHome.description}</p>
+					</div>
+					<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+						{#each roleHome.primary as action (`primary-${action.href}`)}
+							<a href={action.href} class="rounded-2xl border border-primary/20 bg-background/80 p-4 text-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm">
+								<span class="font-semibold text-foreground">{action.label}</span>
+								<span class="mt-1 block text-xs leading-5 text-muted-foreground">{action.description}</span>
+							</a>
+						{/each}
+					</div>
+					<div class="flex flex-wrap gap-2">
+						{#each roleHome.secondary as action (`secondary-${action.href}`)}
+							<Button size="sm" variant={action.variant ?? 'outline'} href={action.href}>{action.label}</Button>
+						{/each}
+					</div>
+				</div>
+				<div class="rounded-2xl border border-border bg-background/80 p-4">
+					<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Perhatian hari ini</p>
+					<ul class="mt-3 space-y-3 text-sm text-muted-foreground">
+						{#each roleHome.watchlist as item (`watch-${item}`)}
+							<li class="flex gap-2"><span class="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary"></span><span>{item}</span></li>
+						{/each}
+					</ul>
+				</div>
+			</Card.Content>
+		</Card.Root>
+
+		<Card.Root class="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card shadow-sm">
 			<Card.Content class="grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center md:p-6">
 				<div class="space-y-3">
 					<div class="flex flex-wrap items-center gap-2">
-						<Badge class="border-primary/20 bg-primary/10 text-primary">APK CBT Mobile</Badge>
+						<Badge class="border-primary/20 bg-primary/10 text-primary">Aplikasi Siswa CBT</Badge>
 						<Badge variant="outline">Terlihat untuk semua role</Badge>
 					</div>
 					<div>
@@ -422,7 +555,7 @@
 		{#snippet failed(error, reset)}
 			<Card.Root class="border-warning/30 bg-warning/10">
 				<Card.Header>
-					<Card.Title class="text-base text-warning">Dashboard belum berhasil dimuat</Card.Title>
+					<Card.Title class="text-base text-warning">Beranda belum berhasil dimuat</Card.Title>
 					<Card.Description class="text-warning">
 						{dashboardErrorMessage(error)}
 					</Card.Description>
@@ -690,12 +823,12 @@
 					<Card.Content>
 						<div class="flex flex-wrap gap-2">
 							{#if bankSoal.canRead}
-								<Button variant="default" size="sm" href="/bank-soal">Dashboard Bank Soal</Button>
+								<Button variant="default" size="sm" href="/bank-soal">Ringkasan Bank Soal</Button>
 								<Button variant="outline" size="sm" href="/bank-soal/daftar">Daftar Soal</Button>
 								<Button variant="outline" size="sm" href="/bank-soal/mapel-kd">Mapel & KD</Button>
 							{/if}
 							{#if bankSoal.canCreate}<Button variant="outline" size="sm" href="/bank-soal/tambah">Tambah Soal</Button>{/if}
-							{#if bankSoal.canReview}<Button variant="outline" size="sm" href="/bank-soal/verifikasi">Review Soal</Button>{/if}
+							{#if bankSoal.canReview}<Button variant="outline" size="sm" href="/bank-soal/verifikasi">Verifikasi Soal</Button>{/if}
 							{#if bankSoal.canImport}<Button variant="outline" size="sm" href="/bank-soal/impor">Impor Soal</Button>{/if}
 							{#if bankSoal.canAnalytics}<Button variant="outline" size="sm" href="/bank-soal/analisis-butir">Analisis Butir</Button>{/if}
 							{#if bankSoal.canSettings}<Button variant="outline" size="sm" href="/bank-soal/pengaturan">Pengaturan</Button>{/if}
@@ -742,10 +875,10 @@
 			</Card.Header>
 			<Card.Content>
 				<div class="flex flex-wrap gap-2">
-					<Button variant="default" size="sm" href="/pusaka">Kontrol & Monitor</Button>
+					<Button variant="default" size="sm" href="/pusaka">Monitor PUSAKA</Button>
 					<Button variant="outline" size="sm" href="/pusaka/kehadiran">Data Kehadiran</Button>
 					<Button variant="outline" size="sm" href="/pusaka/summary">Ringkasan</Button>
-					<Button variant="outline" size="sm" href="/pusaka/antrian">Antrian Job</Button>
+					<Button variant="outline" size="sm" href="/pusaka/antrian">Antrian Sinkronisasi</Button>
 				</div>
 			</Card.Content>
 				</Card.Root>
