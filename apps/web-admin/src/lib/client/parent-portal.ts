@@ -71,7 +71,7 @@ export type ParentPortalChildResultsPayload = {
 };
 
 export async function fetchParentPortalPreviewParents(fetcher: FetchLike = fetch) {
-	const res = await fetcher('/api/parents');
+	const res = await fetcher('/api/portal/preview/parents');
 	const payload = await readClientApiData<ParentPortalPreviewParent[] | { parents?: ParentPortalPreviewParent[]; data?: ParentPortalPreviewParent[] }>(res, 'Gagal memuat daftar orang tua untuk preview portal.');
 	return { parents: Array.isArray(payload) ? payload : (payload.parents ?? payload.data ?? []) } satisfies ParentPortalPreviewParentsPayload;
 }

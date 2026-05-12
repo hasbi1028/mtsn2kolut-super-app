@@ -13,6 +13,7 @@ import (
 
 type parentPortalStore interface {
 	GetPortalParentIDByUserID(ctx context.Context, userID pgtype.UUID) (pgtype.UUID, error)
+	ListParentPortalPreviewParents(ctx context.Context) ([]db.ListParentPortalPreviewParentsRow, error)
 	ListParentChildren(ctx context.Context, parentID pgtype.UUID) ([]db.ListParentChildrenRow, error)
 	GetParentPortalChildAccess(ctx context.Context, arg db.GetParentPortalChildAccessParams) (pgtype.UUID, error)
 	GetParentPortalChildProfile(ctx context.Context, arg db.GetParentPortalChildProfileParams) (db.GetParentPortalChildProfileRow, error)
@@ -26,6 +27,10 @@ type ParentPortal struct {
 
 func NewParentPortal(q *db.Queries) *ParentPortal {
 	return &ParentPortal{q: q}
+}
+
+func (s *ParentPortal) ListParentPortalPreviewParents(ctx context.Context) ([]db.ListParentPortalPreviewParentsRow, error) {
+	return s.q.ListParentPortalPreviewParents(ctx)
 }
 
 func (s *ParentPortal) Children(ctx context.Context, userID pgtype.UUID) ([]db.ListParentChildrenRow, error) {

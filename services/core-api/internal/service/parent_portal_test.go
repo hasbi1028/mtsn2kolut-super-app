@@ -114,6 +114,10 @@ func (f *fakeParentPortalStore) GetPortalParentIDByUserID(ctx context.Context, u
 	return f.parentID, nil
 }
 
+func (f *fakeParentPortalStore) ListParentPortalPreviewParents(ctx context.Context) ([]db.ListParentPortalPreviewParentsRow, error) {
+	return []db.ListParentPortalPreviewParentsRow{{ID: testGenerationUUID(49), Nama: "Wali A", LinkedStudentCount: 1}}, nil
+}
+
 func (f *fakeParentPortalStore) ListParentChildren(ctx context.Context, parentID pgtype.UUID) ([]db.ListParentChildrenRow, error) {
 	f.childrenParentID = parentID
 	return []db.ListParentChildrenRow{{ID: testGenerationUUID(48), Nama: "Siswa A"}}, nil
