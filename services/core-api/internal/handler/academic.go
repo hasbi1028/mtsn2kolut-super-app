@@ -26,6 +26,11 @@ type academicService interface {
 	ListTimetableSlots(ctx context.Context) ([]db.ListTimetableSlotsRow, error)
 	GetWeeklyTimetable(ctx context.Context) (service.WeeklyTimetable, error)
 	GetTimetableConflicts(ctx context.Context) ([]db.ListTimetableConflictsRow, error)
+	GetLessonPeriodOverview(ctx context.Context) (service.LessonPeriodOverview, error)
+	CreateLessonPeriodTemplate(ctx context.Context, p db.CreateLessonPeriodTemplateParams) (db.LessonPeriodTemplate, error)
+	UpdateLessonPeriodTemplate(ctx context.Context, p db.UpdateLessonPeriodTemplateParams) (db.LessonPeriodTemplate, error)
+	DeleteLessonPeriodTemplate(ctx context.Context, id pgtype.UUID) error
+	GetTeacherWorkload(ctx context.Context) (service.TeacherWorkloadOverview, error)
 	GetStats(ctx context.Context) (db.GetAcademicStatsRow, error)
 	GetDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error)
 	GetCurriculumOverview(ctx context.Context, profileID pgtype.UUID, level string) (service.CurriculumOverview, error)
@@ -218,6 +223,98 @@ func (h *Academic) GetTimetableConflicts(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	api.OK(w, rows)
+}
+
+func (h *Academic) GetLessonPeriods(w http.ResponseWriter, r *http.Request) {
+	if !academicReadAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	row, err := h.svc.GetLessonPeriodOverview(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *Academic) CreateLessonPeriod(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	var body lessonPeriodRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
+		return
+	}
+	params, ok := parseCreateLessonPeriod(w, body)
+	if !ok {
+		return
+	}
+	row, err := h.svc.CreateLessonPeriodTemplate(r.Context(), params)
+	if err != nil {
+		writeClientError(w, err, "Jam pelajaran tidak valid")
+		return
+	}
+	api.Created(w, row)
+}
+
+func (h *Academic) UpdateLessonPeriod(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID data tidak valid")
+		return
+	}
+	var body lessonPeriodRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
+		return
+	}
+	params, ok := parseUpdateLessonPeriod(w, id, body)
+	if !ok {
+		return
+	}
+	row, err := h.svc.UpdateLessonPeriodTemplate(r.Context(), params)
+	if err != nil {
+		writeClientError(w, err, "Jam pelajaran tidak valid")
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *Academic) DeleteLessonPeriod(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID data tidak valid")
+		return
+	}
+	if err := h.svc.DeleteLessonPeriodTemplate(r.Context(), id); err != nil {
+		writeClientError(w, err, "Jam pelajaran tidak dapat dihapus")
+		return
+	}
+	api.NoContent(w)
+}
+
+func (h *Academic) GetTeacherWorkload(w http.ResponseWriter, r *http.Request) {
+	if !academicReadAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	row, err := h.svc.GetTeacherWorkload(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, row)
 }
 
 func (h *Academic) ActivateYear(w http.ResponseWriter, r *http.Request) {
@@ -674,4 +771,68 @@ func subjectBoolDefault(value *bool, fallback bool) bool {
 		return fallback
 	}
 	return *value
+}
+
+type lessonPeriodRequest struct {
+	AcademicYearID    string `json:"academic_year_id"`
+	DayOfWeek         int16  `json:"day_of_week"`
+	PeriodNumber      int32  `json:"period_number"`
+	StartTime         string `json:"start_time"`
+	EndTime           string `json:"end_time"`
+	ActivityType      string `json:"activity_type"`
+	Label             string `json:"label"`
+	IsCountedAsLesson *bool  `json:"is_counted_as_lesson"`
+}
+
+func parseCreateLessonPeriod(w http.ResponseWriter, body lessonPeriodRequest) (db.CreateLessonPeriodTemplateParams, bool) {
+	yearID, err := parseUUID(body.AcademicYearID)
+	if err != nil {
+		api.BadRequest(w, "Tahun ajaran tidak valid")
+		return db.CreateLessonPeriodTemplateParams{}, false
+	}
+	start, end, ok := parseLessonPeriodTimes(w, body)
+	if !ok {
+		return db.CreateLessonPeriodTemplateParams{}, false
+	}
+	return db.CreateLessonPeriodTemplateParams{
+		AcademicYearID:    yearID,
+		DayOfWeek:         body.DayOfWeek,
+		PeriodNumber:      body.PeriodNumber,
+		StartTime:         start,
+		EndTime:           end,
+		ActivityType:      strings.TrimSpace(body.ActivityType),
+		Label:             strings.TrimSpace(body.Label),
+		IsCountedAsLesson: subjectBoolDefault(body.IsCountedAsLesson, true),
+	}, true
+}
+
+func parseUpdateLessonPeriod(w http.ResponseWriter, id pgtype.UUID, body lessonPeriodRequest) (db.UpdateLessonPeriodTemplateParams, bool) {
+	start, end, ok := parseLessonPeriodTimes(w, body)
+	if !ok {
+		return db.UpdateLessonPeriodTemplateParams{}, false
+	}
+	return db.UpdateLessonPeriodTemplateParams{
+		ID:                id,
+		DayOfWeek:         body.DayOfWeek,
+		PeriodNumber:      body.PeriodNumber,
+		StartTime:         start,
+		EndTime:           end,
+		ActivityType:      strings.TrimSpace(body.ActivityType),
+		Label:             strings.TrimSpace(body.Label),
+		IsCountedAsLesson: subjectBoolDefault(body.IsCountedAsLesson, true),
+	}, true
+}
+
+func parseLessonPeriodTimes(w http.ResponseWriter, body lessonPeriodRequest) (pgtype.Time, pgtype.Time, bool) {
+	start, err := service.ParseAcademicTimeInput(body.StartTime)
+	if err != nil {
+		api.BadRequest(w, "Jam mulai tidak valid")
+		return pgtype.Time{}, pgtype.Time{}, false
+	}
+	end, err := service.ParseAcademicTimeInput(body.EndTime)
+	if err != nil {
+		api.BadRequest(w, "Jam selesai tidak valid")
+		return pgtype.Time{}, pgtype.Time{}, false
+	}
+	return start, end, true
 }

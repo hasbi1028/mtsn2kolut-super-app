@@ -239,26 +239,50 @@ func (q *Queries) CreateRombelSubjectAssignment(ctx context.Context, arg CreateR
 
 const createRombelTimetableSlot = `-- name: CreateRombelTimetableSlot :one
 WITH inserted AS (
-    INSERT INTO timetable_slots (assignment_id, day_of_week, start_time, end_time, room_label, notes)
+    INSERT INTO timetable_slots (
+        assignment_id, day_of_week, start_time, end_time, room_label, notes,
+        lesson_period_id, slot_type, lesson_hours
+    )
     SELECT
         $1,
         $2,
         $3,
         $4,
         $5,
-        $6
+        $6,
+        $7,
+        $8,
+        $9
     WHERE EXISTS (
         SELECT 1
         FROM class_subject_assignments csa
         WHERE csa.id = $1
-          AND csa.class_id = $7
+          AND csa.class_id = $10
     )
-    RETURNING id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at
+      AND (
+        $7::uuid IS NULL
+        OR EXISTS (
+          SELECT 1
+          FROM lesson_period_templates lpt
+          JOIN school_classes c ON c.academic_year_id = lpt.academic_year_id
+          WHERE lpt.id = $7::uuid
+            AND c.id = $10
+            AND lpt.day_of_week = $2
+        )
+      )
+    RETURNING id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at, lesson_period_id, slot_type, lesson_hours
 )
 SELECT
     inserted.id,
     inserted.assignment_id,
     inserted.day_of_week,
+    inserted.lesson_period_id,
+    COALESCE(lpt.period_number, 0)::int AS period_number,
+    inserted.slot_type,
+    inserted.lesson_hours::float8 AS lesson_hours,
+    COALESCE(lpt.label, '')::text AS lesson_period_label,
+    COALESCE(lpt.activity_type, inserted.slot_type)::text AS lesson_period_activity_type,
+    COALESCE(lpt.is_counted_as_lesson, inserted.lesson_hours > 0)::boolean AS is_counted_as_lesson,
     inserted.start_time,
     inserted.end_time,
     inserted.room_label,
@@ -278,36 +302,47 @@ JOIN class_subject_assignments csa ON csa.id = inserted.assignment_id
 JOIN school_classes c ON c.id = csa.class_id
 JOIN subjects sub ON sub.id = csa.subject_id
 JOIN employees e ON e.id = csa.teacher_employee_id
+LEFT JOIN lesson_period_templates lpt ON lpt.id = inserted.lesson_period_id
 `
 
 type CreateRombelTimetableSlotParams struct {
-	AssignmentID pgtype.UUID `json:"assignment_id"`
-	DayOfWeek    int16       `json:"day_of_week"`
-	StartTime    pgtype.Time `json:"start_time"`
-	EndTime      pgtype.Time `json:"end_time"`
-	RoomLabel    string      `json:"room_label"`
-	Notes        string      `json:"notes"`
-	ClassID      pgtype.UUID `json:"class_id"`
+	AssignmentID   pgtype.UUID    `json:"assignment_id"`
+	DayOfWeek      int16          `json:"day_of_week"`
+	StartTime      pgtype.Time    `json:"start_time"`
+	EndTime        pgtype.Time    `json:"end_time"`
+	RoomLabel      string         `json:"room_label"`
+	Notes          string         `json:"notes"`
+	LessonPeriodID pgtype.UUID    `json:"lesson_period_id"`
+	SlotType       string         `json:"slot_type"`
+	LessonHours    pgtype.Numeric `json:"lesson_hours"`
+	ClassID        pgtype.UUID    `json:"class_id"`
 }
 
 type CreateRombelTimetableSlotRow struct {
-	ID                pgtype.UUID        `json:"id"`
-	AssignmentID      pgtype.UUID        `json:"assignment_id"`
-	DayOfWeek         int16              `json:"day_of_week"`
-	StartTime         pgtype.Time        `json:"start_time"`
-	EndTime           pgtype.Time        `json:"end_time"`
-	RoomLabel         string             `json:"room_label"`
-	Notes             string             `json:"notes"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	ClassID           pgtype.UUID        `json:"class_id"`
-	ClassName         string             `json:"class_name"`
-	ClassCode         string             `json:"class_code"`
-	SubjectID         pgtype.UUID        `json:"subject_id"`
-	SubjectName       string             `json:"subject_name"`
-	SubjectCode       string             `json:"subject_code"`
-	TeacherEmployeeID pgtype.UUID        `json:"teacher_employee_id"`
-	TeacherName       string             `json:"teacher_name"`
+	ID                       pgtype.UUID        `json:"id"`
+	AssignmentID             pgtype.UUID        `json:"assignment_id"`
+	DayOfWeek                int16              `json:"day_of_week"`
+	LessonPeriodID           pgtype.UUID        `json:"lesson_period_id"`
+	PeriodNumber             int32              `json:"period_number"`
+	SlotType                 string             `json:"slot_type"`
+	LessonHours              float64            `json:"lesson_hours"`
+	LessonPeriodLabel        string             `json:"lesson_period_label"`
+	LessonPeriodActivityType string             `json:"lesson_period_activity_type"`
+	IsCountedAsLesson        bool               `json:"is_counted_as_lesson"`
+	StartTime                pgtype.Time        `json:"start_time"`
+	EndTime                  pgtype.Time        `json:"end_time"`
+	RoomLabel                string             `json:"room_label"`
+	Notes                    string             `json:"notes"`
+	CreatedAt                pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                pgtype.Timestamptz `json:"updated_at"`
+	ClassID                  pgtype.UUID        `json:"class_id"`
+	ClassName                string             `json:"class_name"`
+	ClassCode                string             `json:"class_code"`
+	SubjectID                pgtype.UUID        `json:"subject_id"`
+	SubjectName              string             `json:"subject_name"`
+	SubjectCode              string             `json:"subject_code"`
+	TeacherEmployeeID        pgtype.UUID        `json:"teacher_employee_id"`
+	TeacherName              string             `json:"teacher_name"`
 }
 
 func (q *Queries) CreateRombelTimetableSlot(ctx context.Context, arg CreateRombelTimetableSlotParams) (CreateRombelTimetableSlotRow, error) {
@@ -318,6 +353,9 @@ func (q *Queries) CreateRombelTimetableSlot(ctx context.Context, arg CreateRombe
 		arg.EndTime,
 		arg.RoomLabel,
 		arg.Notes,
+		arg.LessonPeriodID,
+		arg.SlotType,
+		arg.LessonHours,
 		arg.ClassID,
 	)
 	var i CreateRombelTimetableSlotRow
@@ -325,6 +363,13 @@ func (q *Queries) CreateRombelTimetableSlot(ctx context.Context, arg CreateRombe
 		&i.ID,
 		&i.AssignmentID,
 		&i.DayOfWeek,
+		&i.LessonPeriodID,
+		&i.PeriodNumber,
+		&i.SlotType,
+		&i.LessonHours,
+		&i.LessonPeriodLabel,
+		&i.LessonPeriodActivityType,
+		&i.IsCountedAsLesson,
 		&i.StartTime,
 		&i.EndTime,
 		&i.RoomLabel,
@@ -548,6 +593,13 @@ SELECT
     ts.id,
     ts.assignment_id,
     ts.day_of_week,
+    ts.lesson_period_id,
+    COALESCE(lpt.period_number, 0)::int AS period_number,
+    ts.slot_type,
+    ts.lesson_hours::float8 AS lesson_hours,
+    COALESCE(lpt.label, '')::text AS lesson_period_label,
+    COALESCE(lpt.activity_type, ts.slot_type)::text AS lesson_period_activity_type,
+    COALESCE(lpt.is_counted_as_lesson, ts.lesson_hours > 0)::boolean AS is_counted_as_lesson,
     ts.start_time,
     ts.end_time,
     ts.room_label,
@@ -567,6 +619,7 @@ JOIN class_subject_assignments csa ON csa.id = ts.assignment_id
 JOIN school_classes c ON c.id = csa.class_id
 JOIN subjects sub ON sub.id = csa.subject_id
 JOIN employees e ON e.id = csa.teacher_employee_id
+LEFT JOIN lesson_period_templates lpt ON lpt.id = ts.lesson_period_id
 WHERE csa.class_id = $1
   AND ts.id = $2
 `
@@ -577,23 +630,30 @@ type GetRombelTimetableSlotParams struct {
 }
 
 type GetRombelTimetableSlotRow struct {
-	ID                pgtype.UUID        `json:"id"`
-	AssignmentID      pgtype.UUID        `json:"assignment_id"`
-	DayOfWeek         int16              `json:"day_of_week"`
-	StartTime         pgtype.Time        `json:"start_time"`
-	EndTime           pgtype.Time        `json:"end_time"`
-	RoomLabel         string             `json:"room_label"`
-	Notes             string             `json:"notes"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	ClassID           pgtype.UUID        `json:"class_id"`
-	ClassName         string             `json:"class_name"`
-	ClassCode         string             `json:"class_code"`
-	SubjectID         pgtype.UUID        `json:"subject_id"`
-	SubjectName       string             `json:"subject_name"`
-	SubjectCode       string             `json:"subject_code"`
-	TeacherEmployeeID pgtype.UUID        `json:"teacher_employee_id"`
-	TeacherName       string             `json:"teacher_name"`
+	ID                       pgtype.UUID        `json:"id"`
+	AssignmentID             pgtype.UUID        `json:"assignment_id"`
+	DayOfWeek                int16              `json:"day_of_week"`
+	LessonPeriodID           pgtype.UUID        `json:"lesson_period_id"`
+	PeriodNumber             int32              `json:"period_number"`
+	SlotType                 string             `json:"slot_type"`
+	LessonHours              float64            `json:"lesson_hours"`
+	LessonPeriodLabel        string             `json:"lesson_period_label"`
+	LessonPeriodActivityType string             `json:"lesson_period_activity_type"`
+	IsCountedAsLesson        bool               `json:"is_counted_as_lesson"`
+	StartTime                pgtype.Time        `json:"start_time"`
+	EndTime                  pgtype.Time        `json:"end_time"`
+	RoomLabel                string             `json:"room_label"`
+	Notes                    string             `json:"notes"`
+	CreatedAt                pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                pgtype.Timestamptz `json:"updated_at"`
+	ClassID                  pgtype.UUID        `json:"class_id"`
+	ClassName                string             `json:"class_name"`
+	ClassCode                string             `json:"class_code"`
+	SubjectID                pgtype.UUID        `json:"subject_id"`
+	SubjectName              string             `json:"subject_name"`
+	SubjectCode              string             `json:"subject_code"`
+	TeacherEmployeeID        pgtype.UUID        `json:"teacher_employee_id"`
+	TeacherName              string             `json:"teacher_name"`
 }
 
 func (q *Queries) GetRombelTimetableSlot(ctx context.Context, arg GetRombelTimetableSlotParams) (GetRombelTimetableSlotRow, error) {
@@ -603,6 +663,13 @@ func (q *Queries) GetRombelTimetableSlot(ctx context.Context, arg GetRombelTimet
 		&i.ID,
 		&i.AssignmentID,
 		&i.DayOfWeek,
+		&i.LessonPeriodID,
+		&i.PeriodNumber,
+		&i.SlotType,
+		&i.LessonHours,
+		&i.LessonPeriodLabel,
+		&i.LessonPeriodActivityType,
+		&i.IsCountedAsLesson,
 		&i.StartTime,
 		&i.EndTime,
 		&i.RoomLabel,
@@ -769,6 +836,13 @@ SELECT
     ts.id,
     ts.assignment_id,
     ts.day_of_week,
+    ts.lesson_period_id,
+    COALESCE(lpt.period_number, 0)::int AS period_number,
+    ts.slot_type,
+    ts.lesson_hours::float8 AS lesson_hours,
+    COALESCE(lpt.label, '')::text AS lesson_period_label,
+    COALESCE(lpt.activity_type, ts.slot_type)::text AS lesson_period_activity_type,
+    COALESCE(lpt.is_counted_as_lesson, ts.lesson_hours > 0)::boolean AS is_counted_as_lesson,
     ts.start_time,
     ts.end_time,
     ts.room_label,
@@ -788,28 +862,36 @@ JOIN class_subject_assignments csa ON csa.id = ts.assignment_id
 JOIN school_classes c ON c.id = csa.class_id
 JOIN subjects sub ON sub.id = csa.subject_id
 JOIN employees e ON e.id = csa.teacher_employee_id
+LEFT JOIN lesson_period_templates lpt ON lpt.id = ts.lesson_period_id
 WHERE csa.class_id = $1
 ORDER BY ts.day_of_week ASC, ts.start_time ASC, sub.name ASC
 `
 
 type ListRombelTimetableSlotsRow struct {
-	ID                pgtype.UUID        `json:"id"`
-	AssignmentID      pgtype.UUID        `json:"assignment_id"`
-	DayOfWeek         int16              `json:"day_of_week"`
-	StartTime         pgtype.Time        `json:"start_time"`
-	EndTime           pgtype.Time        `json:"end_time"`
-	RoomLabel         string             `json:"room_label"`
-	Notes             string             `json:"notes"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	ClassID           pgtype.UUID        `json:"class_id"`
-	ClassName         string             `json:"class_name"`
-	ClassCode         string             `json:"class_code"`
-	SubjectID         pgtype.UUID        `json:"subject_id"`
-	SubjectName       string             `json:"subject_name"`
-	SubjectCode       string             `json:"subject_code"`
-	TeacherEmployeeID pgtype.UUID        `json:"teacher_employee_id"`
-	TeacherName       string             `json:"teacher_name"`
+	ID                       pgtype.UUID        `json:"id"`
+	AssignmentID             pgtype.UUID        `json:"assignment_id"`
+	DayOfWeek                int16              `json:"day_of_week"`
+	LessonPeriodID           pgtype.UUID        `json:"lesson_period_id"`
+	PeriodNumber             int32              `json:"period_number"`
+	SlotType                 string             `json:"slot_type"`
+	LessonHours              float64            `json:"lesson_hours"`
+	LessonPeriodLabel        string             `json:"lesson_period_label"`
+	LessonPeriodActivityType string             `json:"lesson_period_activity_type"`
+	IsCountedAsLesson        bool               `json:"is_counted_as_lesson"`
+	StartTime                pgtype.Time        `json:"start_time"`
+	EndTime                  pgtype.Time        `json:"end_time"`
+	RoomLabel                string             `json:"room_label"`
+	Notes                    string             `json:"notes"`
+	CreatedAt                pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                pgtype.Timestamptz `json:"updated_at"`
+	ClassID                  pgtype.UUID        `json:"class_id"`
+	ClassName                string             `json:"class_name"`
+	ClassCode                string             `json:"class_code"`
+	SubjectID                pgtype.UUID        `json:"subject_id"`
+	SubjectName              string             `json:"subject_name"`
+	SubjectCode              string             `json:"subject_code"`
+	TeacherEmployeeID        pgtype.UUID        `json:"teacher_employee_id"`
+	TeacherName              string             `json:"teacher_name"`
 }
 
 func (q *Queries) ListRombelTimetableSlots(ctx context.Context, classID pgtype.UUID) ([]ListRombelTimetableSlotsRow, error) {
@@ -825,6 +907,13 @@ func (q *Queries) ListRombelTimetableSlots(ctx context.Context, classID pgtype.U
 			&i.ID,
 			&i.AssignmentID,
 			&i.DayOfWeek,
+			&i.LessonPeriodID,
+			&i.PeriodNumber,
+			&i.SlotType,
+			&i.LessonHours,
+			&i.LessonPeriodLabel,
+			&i.LessonPeriodActivityType,
+			&i.IsCountedAsLesson,
 			&i.StartTime,
 			&i.EndTime,
 			&i.RoomLabel,
@@ -1322,23 +1411,44 @@ WITH updated AS (
         end_time = $4,
         room_label = $5,
         notes = $6,
+        lesson_period_id = $7,
+        slot_type = $8,
+        lesson_hours = $9,
         updated_at = NOW()
     FROM class_subject_assignments current_assignment
-    WHERE timetable_slots.id = $7
+    WHERE timetable_slots.id = $10
       AND current_assignment.id = timetable_slots.assignment_id
-      AND current_assignment.class_id = $8
+      AND current_assignment.class_id = $11
       AND EXISTS (
           SELECT 1
           FROM class_subject_assignments next_assignment
           WHERE next_assignment.id = $1
-            AND next_assignment.class_id = $8
+            AND next_assignment.class_id = $11
       )
-    RETURNING timetable_slots.id, timetable_slots.assignment_id, timetable_slots.day_of_week, timetable_slots.start_time, timetable_slots.end_time, timetable_slots.room_label, timetable_slots.notes, timetable_slots.created_at, timetable_slots.updated_at
+      AND (
+        $7::uuid IS NULL
+        OR EXISTS (
+          SELECT 1
+          FROM lesson_period_templates lpt
+          JOIN school_classes c ON c.academic_year_id = lpt.academic_year_id
+          WHERE lpt.id = $7::uuid
+            AND c.id = $11
+            AND lpt.day_of_week = $2
+        )
+      )
+    RETURNING timetable_slots.id, timetable_slots.assignment_id, timetable_slots.day_of_week, timetable_slots.start_time, timetable_slots.end_time, timetable_slots.room_label, timetable_slots.notes, timetable_slots.created_at, timetable_slots.updated_at, timetable_slots.lesson_period_id, timetable_slots.slot_type, timetable_slots.lesson_hours
 )
 SELECT
     updated.id,
     updated.assignment_id,
     updated.day_of_week,
+    updated.lesson_period_id,
+    COALESCE(lpt.period_number, 0)::int AS period_number,
+    updated.slot_type,
+    updated.lesson_hours::float8 AS lesson_hours,
+    COALESCE(lpt.label, '')::text AS lesson_period_label,
+    COALESCE(lpt.activity_type, updated.slot_type)::text AS lesson_period_activity_type,
+    COALESCE(lpt.is_counted_as_lesson, updated.lesson_hours > 0)::boolean AS is_counted_as_lesson,
     updated.start_time,
     updated.end_time,
     updated.room_label,
@@ -1358,37 +1468,48 @@ JOIN class_subject_assignments csa ON csa.id = updated.assignment_id
 JOIN school_classes c ON c.id = csa.class_id
 JOIN subjects sub ON sub.id = csa.subject_id
 JOIN employees e ON e.id = csa.teacher_employee_id
+LEFT JOIN lesson_period_templates lpt ON lpt.id = updated.lesson_period_id
 `
 
 type UpdateRombelTimetableSlotParams struct {
-	AssignmentID pgtype.UUID `json:"assignment_id"`
-	DayOfWeek    int16       `json:"day_of_week"`
-	StartTime    pgtype.Time `json:"start_time"`
-	EndTime      pgtype.Time `json:"end_time"`
-	RoomLabel    string      `json:"room_label"`
-	Notes        string      `json:"notes"`
-	ID           pgtype.UUID `json:"id"`
-	ClassID      pgtype.UUID `json:"class_id"`
+	AssignmentID   pgtype.UUID    `json:"assignment_id"`
+	DayOfWeek      int16          `json:"day_of_week"`
+	StartTime      pgtype.Time    `json:"start_time"`
+	EndTime        pgtype.Time    `json:"end_time"`
+	RoomLabel      string         `json:"room_label"`
+	Notes          string         `json:"notes"`
+	LessonPeriodID pgtype.UUID    `json:"lesson_period_id"`
+	SlotType       string         `json:"slot_type"`
+	LessonHours    pgtype.Numeric `json:"lesson_hours"`
+	ID             pgtype.UUID    `json:"id"`
+	ClassID        pgtype.UUID    `json:"class_id"`
 }
 
 type UpdateRombelTimetableSlotRow struct {
-	ID                pgtype.UUID        `json:"id"`
-	AssignmentID      pgtype.UUID        `json:"assignment_id"`
-	DayOfWeek         int16              `json:"day_of_week"`
-	StartTime         pgtype.Time        `json:"start_time"`
-	EndTime           pgtype.Time        `json:"end_time"`
-	RoomLabel         string             `json:"room_label"`
-	Notes             string             `json:"notes"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	ClassID           pgtype.UUID        `json:"class_id"`
-	ClassName         string             `json:"class_name"`
-	ClassCode         string             `json:"class_code"`
-	SubjectID         pgtype.UUID        `json:"subject_id"`
-	SubjectName       string             `json:"subject_name"`
-	SubjectCode       string             `json:"subject_code"`
-	TeacherEmployeeID pgtype.UUID        `json:"teacher_employee_id"`
-	TeacherName       string             `json:"teacher_name"`
+	ID                       pgtype.UUID        `json:"id"`
+	AssignmentID             pgtype.UUID        `json:"assignment_id"`
+	DayOfWeek                int16              `json:"day_of_week"`
+	LessonPeriodID           pgtype.UUID        `json:"lesson_period_id"`
+	PeriodNumber             int32              `json:"period_number"`
+	SlotType                 string             `json:"slot_type"`
+	LessonHours              float64            `json:"lesson_hours"`
+	LessonPeriodLabel        string             `json:"lesson_period_label"`
+	LessonPeriodActivityType string             `json:"lesson_period_activity_type"`
+	IsCountedAsLesson        bool               `json:"is_counted_as_lesson"`
+	StartTime                pgtype.Time        `json:"start_time"`
+	EndTime                  pgtype.Time        `json:"end_time"`
+	RoomLabel                string             `json:"room_label"`
+	Notes                    string             `json:"notes"`
+	CreatedAt                pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                pgtype.Timestamptz `json:"updated_at"`
+	ClassID                  pgtype.UUID        `json:"class_id"`
+	ClassName                string             `json:"class_name"`
+	ClassCode                string             `json:"class_code"`
+	SubjectID                pgtype.UUID        `json:"subject_id"`
+	SubjectName              string             `json:"subject_name"`
+	SubjectCode              string             `json:"subject_code"`
+	TeacherEmployeeID        pgtype.UUID        `json:"teacher_employee_id"`
+	TeacherName              string             `json:"teacher_name"`
 }
 
 func (q *Queries) UpdateRombelTimetableSlot(ctx context.Context, arg UpdateRombelTimetableSlotParams) (UpdateRombelTimetableSlotRow, error) {
@@ -1399,6 +1520,9 @@ func (q *Queries) UpdateRombelTimetableSlot(ctx context.Context, arg UpdateRombe
 		arg.EndTime,
 		arg.RoomLabel,
 		arg.Notes,
+		arg.LessonPeriodID,
+		arg.SlotType,
+		arg.LessonHours,
 		arg.ID,
 		arg.ClassID,
 	)
@@ -1407,6 +1531,13 @@ func (q *Queries) UpdateRombelTimetableSlot(ctx context.Context, arg UpdateRombe
 		&i.ID,
 		&i.AssignmentID,
 		&i.DayOfWeek,
+		&i.LessonPeriodID,
+		&i.PeriodNumber,
+		&i.SlotType,
+		&i.LessonHours,
+		&i.LessonPeriodLabel,
+		&i.LessonPeriodActivityType,
+		&i.IsCountedAsLesson,
 		&i.StartTime,
 		&i.EndTime,
 		&i.RoomLabel,

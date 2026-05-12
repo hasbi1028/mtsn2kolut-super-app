@@ -1,5 +1,6 @@
 -- name: ListTimetableSlots :many
-SELECT ts.id, ts.assignment_id, ts.day_of_week, ts.start_time, ts.end_time, ts.room_label, ts.notes,
+SELECT ts.id, ts.assignment_id, ts.day_of_week, ts.lesson_period_id, ts.slot_type, ts.lesson_hours::float8 AS lesson_hours,
+       ts.start_time, ts.end_time, ts.room_label, ts.notes,
        ts.created_at, ts.updated_at,
        a.class_id, c.name AS class_name, c.code AS class_code,
        a.subject_id, s.name AS subject_name, s.code AS subject_code,
@@ -44,6 +45,21 @@ WHERE is_active = TRUE
 ORDER BY display_order ASC, name ASC;
 
 -- name: ListWeeklyTimetableAssignments :many
+WITH active_classes AS (
+    SELECT id, code, name, level
+    FROM school_classes
+    WHERE academic_year_id = $1
+      AND is_active = TRUE
+),
+active_class_curriculum AS (
+    SELECT DISTINCT ON (cca.class_id)
+        cca.class_id,
+        cca.curriculum_profile_id
+    FROM class_curriculum_assignments cca
+    JOIN active_classes c ON c.id = cca.class_id
+    WHERE cca.is_active = TRUE
+    ORDER BY cca.class_id, cca.updated_at DESC, cca.created_at DESC
+)
 SELECT
     a.id,
     a.class_id,
@@ -58,14 +74,22 @@ SELECT
     s.default_weekly_hours,
     a.teacher_employee_id,
     e.nama AS teacher_name,
-    COALESCE(e.nip, '')::text AS teacher_nip
+    COALESCE(e.nip, '')::text AS teacher_nip,
+    COALESCE(ov.intra_weekly_hours, alloc.intra_weekly_hours, CASE WHEN s.is_schedule_activity THEN 0 ELSE s.default_weekly_hours::numeric END, 0)::float8 AS expected_intra_weekly_hours,
+    COALESCE(ov.koku_weekly_hours, alloc.koku_weekly_hours, CASE WHEN s.is_schedule_activity THEN s.default_weekly_hours::numeric ELSE 0 END, 0)::float8 AS expected_koku_weekly_hours,
+    COALESCE(ov.additional_weekly_hours, 0)::float8 AS expected_additional_weekly_hours,
+    COALESCE(ov.total_weekly_hours, alloc.total_weekly_hours, s.default_weekly_hours::numeric, 0)::float8 AS expected_weekly_hours
 FROM class_subject_assignments a
-JOIN school_classes c ON c.id = a.class_id
+JOIN active_classes c ON c.id = a.class_id
 JOIN subjects s ON s.id = a.subject_id
 JOIN employees e ON e.id = a.teacher_employee_id
-WHERE c.academic_year_id = $1
-  AND c.is_active = TRUE
-  AND s.is_active = TRUE
+LEFT JOIN active_class_curriculum acc ON acc.class_id = c.id
+LEFT JOIN curriculum_subject_allocations alloc
+  ON alloc.curriculum_profile_id = acc.curriculum_profile_id
+ AND alloc.level = c.level
+ AND alloc.subject_id = a.subject_id
+LEFT JOIN class_subject_allocation_overrides ov ON ov.assignment_id = a.id
+WHERE s.is_active = TRUE
   AND e.is_active = TRUE
 ORDER BY c.level ASC, c.name ASC, s.display_order ASC, s.name ASC, e.nama ASC;
 
@@ -74,6 +98,13 @@ SELECT
     ts.id,
     ts.assignment_id,
     ts.day_of_week,
+    ts.lesson_period_id,
+    COALESCE(lpt.period_number, 0)::int AS period_number,
+    ts.slot_type,
+    ts.lesson_hours::float8 AS lesson_hours,
+    COALESCE(lpt.label, '')::text AS lesson_period_label,
+    COALESCE(lpt.activity_type, ts.slot_type)::text AS lesson_period_activity_type,
+    COALESCE(lpt.is_counted_as_lesson, ts.lesson_hours > 0)::boolean AS is_counted_as_lesson,
     ts.start_time,
     ts.end_time,
     ts.room_label,
@@ -96,9 +127,69 @@ JOIN class_subject_assignments a ON a.id = ts.assignment_id
 JOIN school_classes c ON c.id = a.class_id
 JOIN subjects s ON s.id = a.subject_id
 JOIN employees e ON e.id = a.teacher_employee_id
+LEFT JOIN lesson_period_templates lpt ON lpt.id = ts.lesson_period_id
 WHERE c.academic_year_id = $1
   AND c.is_active = TRUE
 ORDER BY ts.day_of_week ASC, ts.start_time ASC, c.level ASC, c.name ASC, s.name ASC;
+
+-- name: ListLessonPeriodTemplates :many
+SELECT lpt.id, lpt.academic_year_id, ay.name AS academic_year_name,
+       lpt.day_of_week, lpt.period_number, lpt.start_time, lpt.end_time,
+       lpt.activity_type, lpt.label, lpt.is_counted_as_lesson,
+       lpt.created_at, lpt.updated_at
+FROM lesson_period_templates lpt
+JOIN academic_years ay ON ay.id = lpt.academic_year_id
+WHERE lpt.academic_year_id = $1
+ORDER BY lpt.day_of_week ASC, lpt.period_number ASC, lpt.start_time ASC;
+
+-- name: ListLessonPeriodTemplatesForDay :many
+SELECT id, academic_year_id, day_of_week, period_number, start_time, end_time,
+       activity_type, label, is_counted_as_lesson, created_at, updated_at
+FROM lesson_period_templates
+WHERE academic_year_id = sqlc.arg(academic_year_id)
+  AND day_of_week = sqlc.arg(day_of_week)
+ORDER BY period_number ASC, start_time ASC;
+
+-- name: GetLessonPeriodTemplate :one
+SELECT id, academic_year_id, day_of_week, period_number, start_time, end_time,
+       activity_type, label, is_counted_as_lesson, created_at, updated_at
+FROM lesson_period_templates
+WHERE id = $1;
+
+-- name: CountLessonPeriodTemplatesForDay :one
+SELECT COUNT(*)::int
+FROM lesson_period_templates
+WHERE academic_year_id = sqlc.arg(academic_year_id)
+  AND day_of_week = sqlc.arg(day_of_week);
+
+-- name: CreateLessonPeriodTemplate :one
+INSERT INTO lesson_period_templates (
+    academic_year_id, day_of_week, period_number, start_time, end_time,
+    activity_type, label, is_counted_as_lesson
+)
+VALUES (
+    sqlc.arg(academic_year_id), sqlc.arg(day_of_week), sqlc.arg(period_number),
+    sqlc.arg(start_time), sqlc.arg(end_time), sqlc.arg(activity_type),
+    sqlc.arg(label), sqlc.arg(is_counted_as_lesson)
+)
+RETURNING *;
+
+-- name: UpdateLessonPeriodTemplate :one
+UPDATE lesson_period_templates
+SET day_of_week = sqlc.arg(day_of_week),
+    period_number = sqlc.arg(period_number),
+    start_time = sqlc.arg(start_time),
+    end_time = sqlc.arg(end_time),
+    activity_type = sqlc.arg(activity_type),
+    label = sqlc.arg(label),
+    is_counted_as_lesson = sqlc.arg(is_counted_as_lesson),
+    updated_at = NOW()
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
+-- name: DeleteLessonPeriodTemplate :exec
+DELETE FROM lesson_period_templates
+WHERE id = $1;
 
 -- name: ListTimetableConflicts :many
 WITH scoped_slots AS (
@@ -261,27 +352,36 @@ WHERE ps.parent_id = $1
 ORDER BY st.nama ASC, ts.day_of_week ASC, ts.start_time ASC, s.name ASC;
 
 -- name: GetTimetableSlot :one
-SELECT id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at
+SELECT id, assignment_id, day_of_week, start_time, end_time, room_label, notes,
+       created_at, updated_at, lesson_period_id, slot_type, lesson_hours
 FROM timetable_slots
 WHERE id = $1;
 
 -- name: CreateTimetableSlot :one
 INSERT INTO timetable_slots (
-    assignment_id, day_of_week, start_time, end_time, room_label, notes
+    assignment_id, day_of_week, start_time, end_time, room_label, notes,
+    lesson_period_id, slot_type, lesson_hours
 )
-VALUES ($1, $2, $3, $4, $5, $6)
+VALUES (
+    sqlc.arg(assignment_id), sqlc.arg(day_of_week), sqlc.arg(start_time), sqlc.arg(end_time),
+    sqlc.arg(room_label), sqlc.arg(notes), sqlc.narg(lesson_period_id), sqlc.arg(slot_type),
+    sqlc.arg(lesson_hours)
+)
 RETURNING *;
 
 -- name: UpdateTimetableSlot :one
 UPDATE timetable_slots
-SET assignment_id = $2,
-    day_of_week = $3,
-    start_time = $4,
-    end_time = $5,
-    room_label = $6,
-    notes = $7,
+SET assignment_id = sqlc.arg(assignment_id),
+    day_of_week = sqlc.arg(day_of_week),
+    start_time = sqlc.arg(start_time),
+    end_time = sqlc.arg(end_time),
+    room_label = sqlc.arg(room_label),
+    notes = sqlc.arg(notes),
+    lesson_period_id = sqlc.narg(lesson_period_id),
+    slot_type = sqlc.arg(slot_type),
+    lesson_hours = sqlc.arg(lesson_hours),
     updated_at = NOW()
-WHERE id = $1
+WHERE id = sqlc.arg(id)
 RETURNING *;
 
 -- name: CountTimetableConflicts :one

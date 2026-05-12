@@ -38,6 +38,10 @@ type academicStore interface {
 	ListWeeklyTimetableAssignments(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListWeeklyTimetableAssignmentsRow, error)
 	ListWeeklyTimetableSlots(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListWeeklyTimetableSlotsRow, error)
 	ListTimetableConflicts(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListTimetableConflictsRow, error)
+	ListLessonPeriodTemplates(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListLessonPeriodTemplatesRow, error)
+	CreateLessonPeriodTemplate(ctx context.Context, arg db.CreateLessonPeriodTemplateParams) (db.LessonPeriodTemplate, error)
+	UpdateLessonPeriodTemplate(ctx context.Context, arg db.UpdateLessonPeriodTemplateParams) (db.LessonPeriodTemplate, error)
+	DeleteLessonPeriodTemplate(ctx context.Context, id pgtype.UUID) error
 	GetAcademicStats(ctx context.Context) (db.GetAcademicStatsRow, error)
 	GetAcademicDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error)
 	ListCurriculumProfiles(ctx context.Context) ([]db.CurriculumProfile, error)
@@ -86,9 +90,35 @@ type WeeklyTimetable struct {
 
 type WeeklyTimetableSlot struct {
 	db.ListWeeklyTimetableSlotsRow
-	ConflictStatus string `json:"conflict_status"`
-	ConflictLabel  string `json:"conflict_label"`
-	ConflictCount  int    `json:"conflict_count"`
+	ConflictStatus string  `json:"conflict_status"`
+	ConflictLabel  string  `json:"conflict_label"`
+	ConflictCount  int     `json:"conflict_count"`
+	PlannedHours   float64 `json:"planned_hours"`
+	ExpectedHours  float64 `json:"expected_hours"`
+	HoursStatus    string  `json:"hours_status"`
+}
+
+type LessonPeriodOverview struct {
+	ActiveAcademicYearID   pgtype.UUID                       `json:"active_academic_year_id"`
+	ActiveAcademicYearName string                            `json:"active_academic_year_name"`
+	Items                  []db.ListLessonPeriodTemplatesRow `json:"items"`
+}
+
+type TeacherWorkloadOverview struct {
+	ActiveAcademicYearID   pgtype.UUID          `json:"active_academic_year_id"`
+	ActiveAcademicYearName string               `json:"active_academic_year_name"`
+	Items                  []TeacherWorkloadRow `json:"items"`
+}
+
+type TeacherWorkloadRow struct {
+	TeacherEmployeeID pgtype.UUID                            `json:"teacher_employee_id"`
+	TeacherName       string                                 `json:"teacher_name"`
+	TeacherNip        string                                 `json:"teacher_nip"`
+	TotalWeeklyHours  float64                                `json:"total_weekly_hours"`
+	AssignmentCount   int                                    `json:"assignment_count"`
+	Status            string                                 `json:"status"`
+	StatusLabel       string                                 `json:"status_label"`
+	Assignments       []db.ListWeeklyTimetableAssignmentsRow `json:"assignments"`
 }
 
 type CurriculumOverview struct {
@@ -182,7 +212,7 @@ func (s *Academic) GetWeeklyTimetable(ctx context.Context) (WeeklyTimetable, err
 		Teachers:               teachers,
 		Subjects:               subjects,
 		Assignments:            assignments,
-		Slots:                  annotateWeeklyTimetableSlots(slots, conflicts),
+		Slots:                  annotateWeeklyTimetableSlots(slots, conflicts, assignments),
 		Conflicts:              conflicts,
 	}, nil
 }
@@ -196,6 +226,104 @@ func (s *Academic) GetTimetableConflicts(ctx context.Context) ([]db.ListTimetabl
 		return nil, err
 	}
 	return s.q.ListTimetableConflicts(ctx, year.ID)
+}
+
+func (s *Academic) GetLessonPeriodOverview(ctx context.Context) (LessonPeriodOverview, error) {
+	year, err := s.q.GetActiveAcademicYear(ctx)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return LessonPeriodOverview{Items: []db.ListLessonPeriodTemplatesRow{}}, nil
+		}
+		return LessonPeriodOverview{}, err
+	}
+	items, err := s.q.ListLessonPeriodTemplates(ctx, year.ID)
+	if err != nil {
+		return LessonPeriodOverview{}, err
+	}
+	return LessonPeriodOverview{ActiveAcademicYearID: year.ID, ActiveAcademicYearName: year.Name, Items: items}, nil
+}
+
+func (s *Academic) CreateLessonPeriodTemplate(ctx context.Context, arg db.CreateLessonPeriodTemplateParams) (db.LessonPeriodTemplate, error) {
+	if err := validateLessonPeriodTemplate(arg.DayOfWeek, arg.PeriodNumber, arg.StartTime, arg.EndTime, arg.ActivityType); err != nil {
+		return db.LessonPeriodTemplate{}, err
+	}
+	return s.q.CreateLessonPeriodTemplate(ctx, arg)
+}
+
+func (s *Academic) UpdateLessonPeriodTemplate(ctx context.Context, arg db.UpdateLessonPeriodTemplateParams) (db.LessonPeriodTemplate, error) {
+	if err := validateLessonPeriodTemplate(arg.DayOfWeek, arg.PeriodNumber, arg.StartTime, arg.EndTime, arg.ActivityType); err != nil {
+		return db.LessonPeriodTemplate{}, err
+	}
+	return s.q.UpdateLessonPeriodTemplate(ctx, arg)
+}
+
+func (s *Academic) DeleteLessonPeriodTemplate(ctx context.Context, id pgtype.UUID) error {
+	return s.q.DeleteLessonPeriodTemplate(ctx, id)
+}
+
+func (s *Academic) GetTeacherWorkload(ctx context.Context) (TeacherWorkloadOverview, error) {
+	year, err := s.q.GetActiveAcademicYear(ctx)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return TeacherWorkloadOverview{Items: []TeacherWorkloadRow{}}, nil
+		}
+		return TeacherWorkloadOverview{}, err
+	}
+	assignments, err := s.q.ListWeeklyTimetableAssignments(ctx, year.ID)
+	if err != nil {
+		return TeacherWorkloadOverview{}, err
+	}
+	byTeacher := map[string]*TeacherWorkloadRow{}
+	for _, assignment := range assignments {
+		key := assignment.TeacherEmployeeID.String()
+		row := byTeacher[key]
+		if row == nil {
+			row = &TeacherWorkloadRow{TeacherEmployeeID: assignment.TeacherEmployeeID, TeacherName: assignment.TeacherName, TeacherNip: assignment.TeacherNip, Assignments: []db.ListWeeklyTimetableAssignmentsRow{}}
+			byTeacher[key] = row
+		}
+		row.TotalWeeklyHours += assignment.ExpectedWeeklyHours
+		row.AssignmentCount++
+		row.Assignments = append(row.Assignments, assignment)
+	}
+	items := make([]TeacherWorkloadRow, 0, len(byTeacher))
+	for _, row := range byTeacher {
+		row.Status, row.StatusLabel = teacherWorkloadStatus(row.TotalWeeklyHours)
+		items = append(items, *row)
+	}
+	return TeacherWorkloadOverview{ActiveAcademicYearID: year.ID, ActiveAcademicYearName: year.Name, Items: items}, nil
+}
+
+func validateLessonPeriodTemplate(day int16, number int32, start, end pgtype.Time, activity string) error {
+	if day < 1 || day > 6 {
+		return lessonPeriodValidationError("Hari jadwal harus Senin sampai Sabtu")
+	}
+	if number < 1 {
+		return lessonPeriodValidationError("Nomor jam pelajaran harus diisi")
+	}
+	if start.Microseconds >= end.Microseconds {
+		return lessonPeriodValidationError("Rentang waktu jam pelajaran tidak valid")
+	}
+	switch strings.TrimSpace(activity) {
+	case "pelajaran", "istirahat", "upacara", "pembiasaan", "kokurikuler", "ekstrakurikuler", "lainnya":
+		return nil
+	default:
+		return lessonPeriodValidationError("Jenis kegiatan tidak valid")
+	}
+}
+
+func teacherWorkloadStatus(hours float64) (string, string) {
+	switch {
+	case hours < 24:
+		return "kurang", "Kurang dari 24 JP"
+	case hours > 40:
+		return "lebih", "Lebih dari 40 JP"
+	default:
+		return "cukup", "Cukup"
+	}
+}
+
+func lessonPeriodValidationError(message string) error {
+	return fmt.Errorf("%w: %s", domain.ErrBadRequest, message)
 }
 
 func (s *Academic) GetStats(ctx context.Context) (db.GetAcademicStatsRow, error) {
@@ -327,7 +455,7 @@ func emptyWeeklyTimetable() WeeklyTimetable {
 	}
 }
 
-func annotateWeeklyTimetableSlots(slots []db.ListWeeklyTimetableSlotsRow, conflicts []db.ListTimetableConflictsRow) []WeeklyTimetableSlot {
+func annotateWeeklyTimetableSlots(slots []db.ListWeeklyTimetableSlotsRow, conflicts []db.ListTimetableConflictsRow, assignments []db.ListWeeklyTimetableAssignmentsRow) []WeeklyTimetableSlot {
 	countBySlot := make(map[string]int, len(slots))
 	invalidBySlot := make(map[string]bool, len(slots))
 	for _, conflict := range conflicts {
@@ -343,6 +471,14 @@ func annotateWeeklyTimetableSlots(slots []db.ListWeeklyTimetableSlotsRow, confli
 			countBySlot[relatedKey]++
 		}
 	}
+	expectedByAssignment := map[string]float64{}
+	plannedByAssignment := map[string]float64{}
+	for _, assignment := range assignments {
+		expectedByAssignment[assignment.ID.String()] = assignment.ExpectedWeeklyHours
+	}
+	for _, slot := range slots {
+		plannedByAssignment[slot.AssignmentID.String()] += slot.LessonHours
+	}
 	out := make([]WeeklyTimetableSlot, 0, len(slots))
 	for _, slot := range slots {
 		key := slot.ID.String()
@@ -355,11 +491,22 @@ func annotateWeeklyTimetableSlots(slots []db.ListWeeklyTimetableSlotsRow, confli
 			status = "conflict"
 			label = "Bentrok"
 		}
+		planned := plannedByAssignment[slot.AssignmentID.String()]
+		expected := expectedByAssignment[slot.AssignmentID.String()]
+		hoursStatus := "sesuai"
+		if expected > 0 && planned+0.01 < expected {
+			hoursStatus = "kurang"
+		} else if expected > 0 && planned > expected+0.01 {
+			hoursStatus = "lebih"
+		}
 		out = append(out, WeeklyTimetableSlot{
 			ListWeeklyTimetableSlotsRow: slot,
 			ConflictStatus:              status,
 			ConflictLabel:               label,
 			ConflictCount:               countBySlot[key],
+			PlannedHours:                planned,
+			ExpectedHours:               expected,
+			HoursStatus:                 hoursStatus,
 		})
 	}
 	return out
