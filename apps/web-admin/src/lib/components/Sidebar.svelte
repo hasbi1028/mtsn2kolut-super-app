@@ -226,8 +226,8 @@
 
 	function groupBadge(group: string) {
 		if (group === 'Aset & Layanan') return inventoryAttention + libraryAttention;
-		if (group === 'Pegawai & PUSAKA') return pusakaAttention;
-		if (group === 'Sistem') return profileChangeAttention;
+		if (group === 'Pegawai & Kehadiran') return pusakaAttention;
+		if (group === 'Pengaturan') return profileChangeAttention;
 		return 0;
 	}
 
