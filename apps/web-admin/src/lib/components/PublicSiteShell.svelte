@@ -2,7 +2,6 @@
 	import { afterNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { trackPublicAnalyticsEvent, trackPublicPageView } from '$lib/analytics/public-analytics';
 
 	let { children, user } = $props<{
 		children: import('svelte').Snippet;
@@ -46,9 +45,37 @@
 		return page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
 	}
 
+	type PublicAnalyticsOptions = {
+		pathname?: string;
+		result?: string;
+		metadata?: Record<string, unknown>;
+	};
+
+	function runWhenIdle(task: () => void) {
+		if (typeof window === 'undefined') return;
+		const requestIdleCallback = window.requestIdleCallback ?? ((callback: IdleRequestCallback) => window.setTimeout(() => callback({ didTimeout: false, timeRemaining: () => 0 } as IdleDeadline), 1200));
+		requestIdleCallback(task, { timeout: 2500 });
+	}
+
+	function trackPublicAnalyticsEventDeferred(eventName: string, options: PublicAnalyticsOptions = {}) {
+		runWhenIdle(() => {
+			void import('$lib/analytics/public-analytics').then(({ trackPublicAnalyticsEvent }) =>
+				trackPublicAnalyticsEvent(eventName, options)
+			).catch(() => false);
+		});
+	}
+
+	function trackPublicPageViewDeferred(pathname: string, metadata: Record<string, unknown>) {
+		runWhenIdle(() => {
+			void import('$lib/analytics/public-analytics').then(({ trackPublicPageView }) =>
+				trackPublicPageView(pathname, metadata)
+			).catch(() => false);
+		});
+	}
+
 	afterNavigate(() => {
 		mobileOpen = false;
-		void trackPublicPageView(page.url.pathname, {
+		trackPublicPageViewDeferred(page.url.pathname, {
 			page_key: publicPageKey(page.url.pathname),
 			page_kind: publicPageKind(page.url.pathname),
 			device_class: publicDeviceClass()
@@ -94,7 +121,7 @@
 			source_component: sourceComponent
 		};
 		if (isDownloadHref(href) || (trigger instanceof HTMLAnchorElement && trigger.hasAttribute('download'))) {
-			void trackPublicAnalyticsEvent('public.download', {
+			trackPublicAnalyticsEventDeferred('public.download', {
 				pathname: page.url.pathname,
 				metadata: {
 					...metadata,
@@ -104,7 +131,7 @@
 			});
 			return;
 		}
-		void trackPublicAnalyticsEvent('public.cta_click', { pathname: page.url.pathname, metadata });
+		trackPublicAnalyticsEventDeferred('public.cta_click', { pathname: page.url.pathname, metadata });
 	}
 
 	function handlePublicFocusIn(event: FocusEvent) {
@@ -115,7 +142,7 @@
 		const formKey = safePublicToken(form.dataset.analyticsForm || form.getAttribute('name') || publicPageKey(page.url.pathname));
 		if (startedForms.has(formKey)) return;
 		startedForms.add(formKey);
-		void trackPublicAnalyticsEvent('public.form_start', {
+		trackPublicAnalyticsEventDeferred('public.form_start', {
 			pathname: page.url.pathname,
 			metadata: { form_key: formKey, page_key: publicPageKey(page.url.pathname), source_component: 'form' }
 		});
@@ -125,7 +152,7 @@
 		const target = event.target;
 		if (!(target instanceof HTMLFormElement)) return;
 		const formKey = safePublicToken(target.dataset.analyticsForm || target.getAttribute('name') || publicPageKey(page.url.pathname));
-		void trackPublicAnalyticsEvent('public.form_submit', {
+		trackPublicAnalyticsEventDeferred('public.form_submit', {
 			pathname: page.url.pathname,
 			metadata: { form_key: formKey, page_key: publicPageKey(page.url.pathname), result: 'started', source_component: 'form' }
 		});
@@ -135,7 +162,7 @@
 		const target = event.target;
 		if (!(target instanceof HTMLInputElement)) return;
 		if (target.type !== 'search' && !target.dataset.publicSearch) return;
-		void trackPublicAnalyticsEvent('public.search', {
+		trackPublicAnalyticsEventDeferred('public.search', {
 			pathname: page.url.pathname,
 			metadata: {
 				page_key: publicPageKey(page.url.pathname),
