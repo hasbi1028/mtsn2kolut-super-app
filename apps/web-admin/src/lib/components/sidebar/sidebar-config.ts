@@ -35,6 +35,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		group: 'Akademik & Pembelajaran',
 		items: [
 			{ href: '/akademik', label: 'Dashboard Akademik', icon: 'grid', roles: ['admin', 'guru', 'kesiswaan'], permissions: ['academic.read'] },
+			{ href: '/akademik/kesiapan', label: 'Kesiapan Akademik', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['academic.read'] },
 			{ href: '/akademik/tahun-ajaran', label: 'Tahun Ajaran', icon: 'calendar', roles: ['admin'], permissions: ['academic.read'] },
 			{ href: '/akademik/kurikulum', label: 'Struktur Kurikulum', icon: 'book-open', roles: ['admin', 'guru'], permissions: ['academic.read'] },
 			{ href: '/akademik/rombel', label: 'Rombel', icon: 'layers', roles: ['admin', 'guru', 'kesiswaan'], permissions: ['academic.read'] },

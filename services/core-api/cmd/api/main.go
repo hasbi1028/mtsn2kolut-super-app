@@ -296,6 +296,7 @@ func main() {
 
 		r.Get("/api/academic", academicH.Overview)
 		r.Get("/api/academic/dashboard", academicH.GetDashboard)
+		r.Get("/api/academic/readiness", academicH.GetReadiness)
 		r.Get("/api/academic/stats", academicH.GetStats)
 		r.Get("/api/academic/curriculum", academicH.GetCurriculumOverview)
 		r.Get("/api/academic/curriculum/profiles", academicH.ListCurriculumProfiles)

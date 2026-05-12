@@ -33,6 +33,7 @@ type academicService interface {
 	GetTeacherWorkload(ctx context.Context) (service.TeacherWorkloadOverview, error)
 	GetStats(ctx context.Context) (db.GetAcademicStatsRow, error)
 	GetDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error)
+	GetReadinessSummary(ctx context.Context) (db.GetAcademicReadinessSummaryRow, error)
 	GetCurriculumOverview(ctx context.Context, profileID pgtype.UUID, level string) (service.CurriculumOverview, error)
 	ListCurriculumProfiles(ctx context.Context) ([]db.CurriculumProfile, error)
 	ListCurriculumAllocations(ctx context.Context, profileID pgtype.UUID, level string) ([]service.CurriculumAllocation, error)
@@ -115,6 +116,19 @@ func (h *Academic) GetDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	row, err := h.svc.GetDashboardSummary(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *Academic) GetReadiness(w http.ResponseWriter, r *http.Request) {
+	if !academicReadAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	row, err := h.svc.GetReadinessSummary(r.Context())
 	if err != nil {
 		api.Internal(w, err)
 		return
