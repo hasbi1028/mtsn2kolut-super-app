@@ -234,3 +234,13 @@ Buat `scripts/check-operator-ui-copy.sh` agar istilah teknis tidak muncul kembal
 ## Tahap 12 — Final validation dan deploy
 
 Jalankan guard global, frontend check/build, backend sqlc/test/build, lalu deploy dan restart PM2 hanya setelah diminta.
+
+**Implementation Notes (2026-05-12):**
+
+- Menjalankan final validation: `bash scripts/check-operator-ui-copy.sh`, `npm --prefix apps/web-admin run check`, `npm --prefix apps/web-admin run build`, `sqlc generate`, `go test ./internal/handler ./internal/service ./internal/repository/postgres`, dan `go build -o /tmp/core-api-stage12 ./cmd/api` PASS.
+- Memverifikasi migration `088_academic_subject_metadata` sudah tercatat di `schema_migrations` dan 6 kolom metadata `subjects` sudah tersedia.
+- Membuat backup DB sebelum deploy: `/home/servermtsn2kolut/backups/mtsn2kolut-super-app/postgresql/pre-operator-copy-stage12-20260512-081538.dump` dengan SHA256 `30e912e8633ad8889bc7a21af0f56160e21802082db549fbb6847e7710568c18`.
+- Deploy backend: backup binary lama `services/core-api/bin/api.backup-stage12-*`, build binary baru ke `services/core-api/bin/api`, restart `mtsn2kolut-core-api`.
+- Deploy frontend: build ulang `apps/web-admin`, restart `mtsn2kolut-web-admin`.
+- Menjalankan `pm2 save`; kedua proses production online.
+- Smoke test PASS: core health `status=ok`, `db=connected`, web root HTTP 200, web login HTTP 200 dan konten login terdeteksi.
