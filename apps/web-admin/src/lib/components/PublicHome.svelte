@@ -131,7 +131,7 @@
 					<a href={resolve(`/berita/${post.slug}`)} class="group overflow-hidden rounded-[1.75rem] border border-emerald-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300">
 						{#if post.cover_image_url}
 							<div class="aspect-[16/9] overflow-hidden bg-emerald-50">
-								<img src={post.cover_image_url} alt={post.title} class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" />
+								<img src={post.cover_image_url} alt={post.title} loading="lazy" decoding="async" class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" />
 							</div>
 						{/if}
 						<div class="space-y-3 p-5">

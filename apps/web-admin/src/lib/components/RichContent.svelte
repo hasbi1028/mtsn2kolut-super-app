@@ -1,4 +1,5 @@
 <script lang="ts">
+	import 'katex/dist/katex.min.css';
 	import { renderRichMathHtml } from '$lib/utils/render-rich-math';
 
 	type Props = {
