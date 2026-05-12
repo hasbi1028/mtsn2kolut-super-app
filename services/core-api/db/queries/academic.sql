@@ -380,6 +380,131 @@ SELECT
           AND s.is_report_subject = TRUE
     )::int AS non_ranking_subjects_in_ranking;
 
+
+-- name: GetAcademicReadinessSummary :one
+WITH active_year AS (
+    SELECT id, name
+    FROM academic_years
+    WHERE is_active = TRUE
+    ORDER BY start_date DESC, name DESC
+    LIMIT 1
+),
+active_classes AS (
+    SELECT c.*
+    FROM school_classes c
+    JOIN active_year ay ON ay.id = c.academic_year_id
+    WHERE c.is_active = TRUE
+),
+active_students AS (
+    SELECT s.*
+    FROM students s
+    WHERE s.is_active = TRUE
+),
+active_assignments AS (
+    SELECT csa.*
+    FROM class_subject_assignments csa
+    JOIN active_classes c ON c.id = csa.class_id
+),
+report_assignments AS (
+    SELECT csa.*
+    FROM active_assignments csa
+    JOIN subjects s ON s.id = csa.subject_id
+    WHERE s.is_active = TRUE
+      AND s.is_report_subject = TRUE
+),
+active_class_curriculum AS (
+    SELECT DISTINCT ON (cca.class_id)
+        cca.class_id,
+        cca.curriculum_profile_id
+    FROM class_curriculum_assignments cca
+    JOIN active_classes c ON c.id = cca.class_id
+    WHERE cca.is_active = TRUE
+    ORDER BY cca.class_id, cca.updated_at DESC, cca.created_at DESC
+),
+required_report_allocations AS (
+    SELECT c.id AS class_id, alloc.subject_id
+    FROM active_classes c
+    JOIN active_class_curriculum acc ON acc.class_id = c.id
+    JOIN curriculum_subject_allocations alloc
+      ON alloc.curriculum_profile_id = acc.curriculum_profile_id
+     AND alloc.level = c.level
+    WHERE alloc.is_required = TRUE
+      AND alloc.counts_for_report = TRUE
+),
+slots AS (
+    SELECT
+        ts.id,
+        ts.assignment_id,
+        ts.day_of_week,
+        ts.start_time,
+        ts.end_time,
+        csa.class_id,
+        csa.teacher_employee_id,
+        LOWER(TRIM(ts.room_label)) AS room_key
+    FROM timetable_slots ts
+    JOIN active_assignments csa ON csa.id = ts.assignment_id
+),
+teacher_hours AS (
+    SELECT
+        e.id AS teacher_employee_id,
+        COALESCE(SUM(COALESCE(ov.total_weekly_hours, alloc.total_weekly_hours, s.default_weekly_hours::numeric, 0)), 0)::numeric(6,2) AS total_weekly_hours
+    FROM employees e
+    JOIN active_assignments csa ON csa.teacher_employee_id = e.id
+    JOIN active_classes c ON c.id = csa.class_id
+    JOIN subjects s ON s.id = csa.subject_id
+    LEFT JOIN active_class_curriculum acc ON acc.class_id = c.id
+    LEFT JOIN curriculum_subject_allocations alloc
+      ON alloc.curriculum_profile_id = acc.curriculum_profile_id
+     AND alloc.level = c.level
+     AND alloc.subject_id = csa.subject_id
+    LEFT JOIN class_subject_allocation_overrides ov ON ov.assignment_id = csa.id
+    WHERE e.is_active = TRUE
+      AND s.is_active = TRUE
+    GROUP BY e.id
+),
+component_rollup AS (
+    SELECT csa.id AS assignment_id,
+           COUNT(gc.id)::int AS component_count,
+           COUNT(gc.id) FILTER (WHERE gc.is_published = TRUE)::int AS published_component_count
+    FROM report_assignments csa
+    LEFT JOIN grade_components gc ON gc.assignment_id = csa.id
+    GROUP BY csa.id
+),
+student_component_rollup AS (
+    SELECT csa.id AS assignment_id,
+           st.id AS student_id,
+           COALESCE(cr.component_count, 0)::int AS component_count,
+           COUNT(ge.score)::int AS filled_count
+    FROM report_assignments csa
+    JOIN active_students st ON st.class_id = csa.class_id
+    LEFT JOIN component_rollup cr ON cr.assignment_id = csa.id
+    LEFT JOIN grade_components gc ON gc.assignment_id = csa.id
+    LEFT JOIN grade_entries ge ON ge.component_id = gc.id AND ge.student_id = st.id
+    GROUP BY csa.id, st.id, cr.component_count
+),
+report_description_scope AS (
+    SELECT csa.id AS assignment_id, st.id AS student_id
+    FROM report_assignments csa
+    JOIN active_students st ON st.class_id = csa.class_id
+)
+SELECT
+    COALESCE((SELECT name FROM active_year), '')::text AS active_academic_year,
+    CASE WHEN EXTRACT(MONTH FROM CURRENT_DATE)::int BETWEEN 7 AND 12 THEN 'Ganjil' ELSE 'Genap' END::text AS active_semester,
+    (SELECT COUNT(*) FROM active_classes)::int AS total_classes,
+    (SELECT COUNT(*) FROM active_students)::int AS total_active_students,
+    (SELECT COUNT(*) FROM active_classes c WHERE NOT EXISTS (SELECT 1 FROM active_students s WHERE s.class_id = c.id))::int AS classes_without_students,
+    (SELECT COUNT(*) FROM active_classes c WHERE NOT EXISTS (SELECT 1 FROM class_homeroom_assignments cha WHERE cha.class_id = c.id AND cha.is_active = TRUE))::int AS classes_without_homeroom,
+    (SELECT COUNT(*) FROM active_classes c WHERE NOT EXISTS (SELECT 1 FROM active_class_curriculum acc WHERE acc.class_id = c.id))::int AS classes_without_curriculum_profile,
+    (SELECT COUNT(*) FROM required_report_allocations alloc LEFT JOIN report_assignments csa ON csa.class_id = alloc.class_id AND csa.subject_id = alloc.subject_id LEFT JOIN employees e ON e.id = csa.teacher_employee_id AND e.is_active = TRUE WHERE e.id IS NULL)::int AS report_subjects_missing_teacher,
+    (SELECT COUNT(DISTINCT a.id) FROM slots a JOIN slots b ON a.id < b.id AND a.day_of_week = b.day_of_week AND a.start_time < b.end_time AND a.end_time > b.start_time AND (a.class_id = b.class_id OR a.teacher_employee_id = b.teacher_employee_id OR (a.room_key <> '' AND a.room_key = b.room_key)))::int AS timetable_conflicts,
+    (SELECT COUNT(*) FROM teacher_hours WHERE total_weekly_hours < 24)::int AS teachers_under_24_hours,
+    (SELECT COUNT(*) FROM teacher_hours WHERE total_weekly_hours > 40)::int AS teachers_over_40_hours,
+    (SELECT COUNT(*) FROM report_assignments csa WHERE NOT EXISTS (SELECT 1 FROM component_rollup cr WHERE cr.assignment_id = csa.id AND cr.component_count > 0))::int AS report_assignments_without_components,
+    (SELECT COUNT(*) FROM student_component_rollup WHERE component_count = 0 OR filled_count < component_count)::int AS students_with_incomplete_grades,
+    (SELECT COUNT(*) FROM report_assignments csa WHERE NOT EXISTS (SELECT 1 FROM grade_assignment_finalizations gaf WHERE gaf.assignment_id = csa.id))::int AS report_assignments_not_finalized,
+    (SELECT COUNT(*) FROM report_description_scope rds LEFT JOIN grade_student_subject_descriptions gd ON gd.assignment_id = rds.assignment_id AND gd.student_id = rds.student_id WHERE gd.id IS NULL OR NULLIF(BTRIM(gd.description), '') IS NULL)::int AS report_descriptions_missing,
+    (SELECT COUNT(*) FROM report_settings rs JOIN active_year ay ON ay.id = rs.academic_year_id)::int AS report_settings_count;
+
 -- name: ListTeacherWorkload :many
 WITH active_classes AS (
     SELECT id, code, name, level

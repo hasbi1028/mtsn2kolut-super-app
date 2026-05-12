@@ -44,6 +44,7 @@ type academicStore interface {
 	DeleteLessonPeriodTemplate(ctx context.Context, id pgtype.UUID) error
 	GetAcademicStats(ctx context.Context) (db.GetAcademicStatsRow, error)
 	GetAcademicDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error)
+	GetAcademicReadinessSummary(ctx context.Context) (db.GetAcademicReadinessSummaryRow, error)
 	ListCurriculumProfiles(ctx context.Context) ([]db.CurriculumProfile, error)
 	GetActiveCurriculumProfile(ctx context.Context) (db.CurriculumProfile, error)
 	ListCurriculumSubjectAllocations(ctx context.Context, arg db.ListCurriculumSubjectAllocationsParams) ([]db.ListCurriculumSubjectAllocationsRow, error)
@@ -332,6 +333,10 @@ func (s *Academic) GetStats(ctx context.Context) (db.GetAcademicStatsRow, error)
 
 func (s *Academic) GetDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error) {
 	return s.q.GetAcademicDashboardSummary(ctx)
+}
+
+func (s *Academic) GetReadinessSummary(ctx context.Context) (db.GetAcademicReadinessSummaryRow, error) {
+	return s.q.GetAcademicReadinessSummary(ctx)
 }
 
 func (s *Academic) ListCurriculumProfiles(ctx context.Context) ([]db.CurriculumProfile, error) {

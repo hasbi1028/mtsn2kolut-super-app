@@ -32,6 +32,8 @@ type fakeAcademicService struct {
 
 	dashboardCalled bool
 	dashboardErr    error
+	readinessCalled bool
+	readinessErr    error
 
 	weeklyCalled    bool
 	weeklyErr       error
@@ -184,6 +186,19 @@ func (f *fakeAcademicService) GetDashboardSummary(context.Context) (db.GetAcadem
 		TotalActiveStudents:    210,
 		StudentsWithoutClass:   3,
 		ClassesWithoutHomeroom: 1,
+	}, nil
+}
+
+func (f *fakeAcademicService) GetReadinessSummary(context.Context) (db.GetAcademicReadinessSummaryRow, error) {
+	f.readinessCalled = true
+	if f.readinessErr != nil {
+		return db.GetAcademicReadinessSummaryRow{}, f.readinessErr
+	}
+	return db.GetAcademicReadinessSummaryRow{
+		ActiveAcademicYear:  "2026/2027",
+		ActiveSemester:      "Ganjil",
+		TotalClasses:        7,
+		TotalActiveStudents: 210,
 	}, nil
 }
 
@@ -384,6 +399,12 @@ func TestAcademicOverviewAndStatsSuccess(t *testing.T) {
 	h.GetDashboard(rec, adminRequest(http.MethodGet, "/api/academic/dashboard", ""))
 	if rec.Code != http.StatusOK || !fake.dashboardCalled || !strings.Contains(rec.Body.String(), "active_academic_year") {
 		t.Fatalf("GetDashboard() status/called/body = %d/%v/%s, want 200/true/summary", rec.Code, fake.dashboardCalled, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.GetReadiness(rec, adminRequest(http.MethodGet, "/api/academic/readiness", ""))
+	if rec.Code != http.StatusOK || !fake.readinessCalled || !strings.Contains(rec.Body.String(), "active_academic_year") {
+		t.Fatalf("GetReadiness() status/called/body = %d/%v/%s, want 200/true/summary", rec.Code, fake.readinessCalled, rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()

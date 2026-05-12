@@ -479,6 +479,7 @@ type fakeAcademicStore struct {
 	deleteLessonID     pgtype.UUID
 	stats              db.GetAcademicStatsRow
 	dashboardSummary   db.GetAcademicDashboardSummaryRow
+	readinessSummary   db.GetAcademicReadinessSummaryRow
 	curriculumProfiles []db.CurriculumProfile
 	activeCurriculum   db.CurriculumProfile
 	curriculumAllocs   []db.ListCurriculumSubjectAllocationsRow
@@ -652,6 +653,10 @@ func (f *fakeAcademicStore) GetAcademicStats(ctx context.Context) (db.GetAcademi
 
 func (f *fakeAcademicStore) GetAcademicDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error) {
 	return f.dashboardSummary, nil
+}
+
+func (f *fakeAcademicStore) GetAcademicReadinessSummary(ctx context.Context) (db.GetAcademicReadinessSummaryRow, error) {
+	return f.readinessSummary, nil
 }
 
 func (f *fakeAcademicStore) ListCurriculumProfiles(ctx context.Context) ([]db.CurriculumProfile, error) {
@@ -849,6 +854,7 @@ func TestAcademicServiceForwardsStoreCallsAndChecksTimetableAvailability(t *test
 		}},
 		stats:            db.GetAcademicStatsRow{TotalStudents: 10, TotalClasses: 2, TotalSubjects: 3, TotalYears: 1},
 		dashboardSummary: db.GetAcademicDashboardSummaryRow{ActiveAcademicYear: "2026/2027", ActiveSemester: "Ganjil", TotalClasses: 2},
+		readinessSummary: db.GetAcademicReadinessSummaryRow{ActiveAcademicYear: "2026/2027", ActiveSemester: "Ganjil", TotalClasses: 2},
 		getAssignRow:     db.GetClassSubjectAssignmentRow{ID: assignmentID, ClassID: classID, TeacherEmployeeID: teacherID},
 	}
 	svc := &Academic{q: store}
