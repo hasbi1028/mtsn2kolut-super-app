@@ -6,7 +6,6 @@
 	import RouteProgress from '$lib/components/RouteProgress.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import { Sonner } from '$lib/components/ui/sonner';
-	import { registerWebAdminPwa } from '$lib/client/pwa';
 	import '../app.css';
 	import { navigating, page } from '$app/state';
 
@@ -42,13 +41,13 @@
 		if (typeof window === 'undefined' || pwaRegistrationStarted) return;
 		if (!data.user || isLogin || isPublicSite) return;
 		pwaRegistrationStarted = true;
-		void registerWebAdminPwa({
+		void import('$lib/client/pwa').then(({ registerWebAdminPwa }) => registerWebAdminPwa({
 			isAuthenticated: Boolean(data.user),
 			isLogin,
 			isPublicSite,
 			location: window.location,
 			serviceWorker: navigator.serviceWorker
-		});
+		})).catch(() => undefined);
 	});
 </script>
 
