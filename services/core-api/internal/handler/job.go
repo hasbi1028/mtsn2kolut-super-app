@@ -63,7 +63,7 @@ func (h *PusakaJob) Create(w http.ResponseWriter, r *http.Request) {
 		MaxAttempts int32  `json:"max_attempts"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if body.MaxAttempts == 0 {
@@ -109,7 +109,7 @@ func (h *PusakaJob) RunAll(w http.ResponseWriter, r *http.Request) {
 		MaxAttempts int32  `json:"max_attempts"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if body.RunType == "" {
@@ -135,7 +135,7 @@ func (h *PusakaJob) CancelEmployee(w http.ResponseWriter, r *http.Request) {
 		EmployeeID string `json:"employee_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	id, err := parseUUID(body.EmployeeID)

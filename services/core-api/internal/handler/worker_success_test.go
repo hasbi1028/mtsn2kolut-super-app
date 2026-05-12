@@ -346,10 +346,10 @@ func TestPusakaWorkerValidationAndServiceErrors(t *testing.T) {
 		h := &PusakaWorker{att: attendance}
 
 		for name, body := range map[string]string{
-			"invalid json":      `{bad`,
-			"invalid employee":  `{"employee_id":"bad","tanggal":"2026-05-01"}`,
-			"invalid date":      `{"employee_id":"` + employeeID.String() + `","tanggal":"bad"}`,
-			"invalid source id": `{"employee_id":"` + employeeID.String() + `","tanggal":"2026-05-01","source_job_id":"bad"}`,
+			"Data yang dikirim tidak valid": `{bad`,
+			"invalid employee":              `{"employee_id":"bad","tanggal":"2026-05-01"}`,
+			"invalid date":                  `{"employee_id":"` + employeeID.String() + `","tanggal":"bad"}`,
+			"invalid source id":             `{"employee_id":"` + employeeID.String() + `","tanggal":"2026-05-01","source_job_id":"bad"}`,
 		} {
 			rec := httptest.NewRecorder()
 			h.UpsertAttendance(rec, httptest.NewRequest(http.MethodPost, "/attendance", strings.NewReader(body)))

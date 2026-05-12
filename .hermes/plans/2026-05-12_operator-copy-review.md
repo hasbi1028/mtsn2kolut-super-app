@@ -211,9 +211,25 @@ Fokus pada inventaris, perpustakaan, PPDB, tata kelola, notifikasi, dan dashboar
 
 Bersihkan pesan validasi dan masalah di `services/core-api/internal/handler` dan `services/core-api/internal/service`.
 
+**Implementation Notes (2026-05-12):**
+
+- Membersihkan pesan layanan sistem yang bisa diteruskan ke UI dari istilah teknis seperti `invalid json`, `invalid id`, `event CBT`, `bulk workflow`, `token`, `session id`, `participant id`, dan `backend/database` style message.
+- Padanan utama: `Data yang dikirim tidak valid`, `ID data tidak valid`, `kegiatan asesmen`, `aksi massal alur verifikasi soal`, `kode ujian/kode ruang`, `sesi ujian`, `peserta ujian`, dan `layanan sistem`.
+- Scope file: handler/service Go pada `services/core-api/internal/handler` dan `services/core-api/internal/service`; test expectation diperbarui mengikuti copy operator baru.
+- Tidak mengubah route API, struktur response, query sqlc, kontrak data, atau flow bisnis.
+- Verifikasi backend: `sqlc generate`, `go test ./internal/handler ./internal/service ./internal/repository/postgres`, dan `go build -o /tmp/core-api-operator-copy ./cmd/api` PASS.
+
 ## Tahap 11 — Guard global
 
 Buat `scripts/check-operator-ui-copy.sh` agar istilah teknis tidak muncul kembali pada UI.
+
+**Implementation Notes (2026-05-12):**
+
+- Membuat guard global executable `scripts/check-operator-ui-copy.sh` untuk memindai `apps/web-admin/src/routes/**/*.svelte`.
+- Guard mendeteksi istilah teknis user-facing lintas modul dan mengabaikan code-only seperti import path, route, MIME type, atribut HTML, endpoint internal, dan template literal dinamis.
+- Guard memicu cleanup tambahan pada copy UI yang masih lolos dari tahap sebelumnya: shortcut permission, backend, metadata audit, legacy editor, export CSV, dan workflow draft/publish.
+- Hasil guard: `PASS: tidak ada istilah teknis user-facing pada UI operator. Code-only diabaikan: 1144.`
+- Verifikasi frontend: `npm --prefix apps/web-admin run check` PASS (`0 errors and 0 warnings`).
 
 ## Tahap 12 — Final validation dan deploy
 

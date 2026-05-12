@@ -65,7 +65,7 @@ func (h *PusakaWorker) Claim(w http.ResponseWriter, r *http.Request) {
 func (h *PusakaWorker) Complete(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 
@@ -112,7 +112,7 @@ func (h *PusakaWorker) Complete(w http.ResponseWriter, r *http.Request) {
 func (h *PusakaWorker) Fail(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
@@ -122,7 +122,7 @@ func (h *PusakaWorker) Fail(w http.ResponseWriter, r *http.Request) {
 		RetryAfterSecs json.RawMessage `json:"retry_after_secs"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	retryAfterSecs, err := parseWorkerRetryAfterSecs(body.RetryAfterSecs)
@@ -194,7 +194,7 @@ func (h *PusakaWorker) UpsertAttendance(w http.ResponseWriter, r *http.Request) 
 		SourceJobID string `json:"source_job_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	empID, err := parseUUID(body.EmployeeID)

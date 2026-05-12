@@ -150,12 +150,12 @@
 		return 'Dasbor Utama';
 	});
 	const dashboardDescription = $derived.by(() => {
-		if (isGuru && !hasTeacherDashboard && hasBankSoalDashboard) return 'Shortcut penyusunan dan pengelolaan Bank Soal sesuai permission yang aktif pada akun ini.';
+		if (isGuru && !hasTeacherDashboard && hasBankSoalDashboard) return 'Pintasan penyusunan dan pengelolaan Bank Soal sesuai hak akses yang aktif pada akun ini.';
 		if (isGuru) return 'Ringkasan kelas, aktivitas CBT, jadwal mengajar, dan pekerjaan koreksi yang perlu diperhatikan hari ini.';
 		if (isSiswa) return 'Lihat identitas akademik, sesi ujian yang terdaftar, jadwal belajar, dan informasi wali yang terhubung.';
 		if (isParent) return 'Pantau data putra-putri yang terhubung, jadwal anak, dan informasi dasar wali dari satu tempat.';
 		if (isStaff) return 'Akses cepat ke layanan operasional sekolah, dokumen, arsip, perpustakaan, dan data akademik pendukung.';
-		if (hasBankSoalDashboard && !dashboardAccess.academicStats) return 'Shortcut penyusunan dan pengelolaan Bank Soal sesuai permission yang aktif pada akun ini.';
+		if (hasBankSoalDashboard && !dashboardAccess.academicStats) return 'Pintasan penyusunan dan pengelolaan Bank Soal sesuai hak akses yang aktif pada akun ini.';
 		return 'Ringkasan akademik dan operasional MTs Negeri 2 Kolaka Utara untuk pengambilan keputusan harian.';
 	});
 	const dashboardRoleLabel = $derived(roles.length > 0 ? roles.join(' / ') : 'pengguna');

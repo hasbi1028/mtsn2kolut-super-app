@@ -199,7 +199,7 @@
   function settingsErrorMessage(error: unknown) {
     if (error instanceof Error && error.message.trim()) return error.message;
     if (typeof error === 'string' && error.trim()) return error;
-    return 'Data pengaturan belum dapat dimuat. Periksa koneksi backend lalu coba lagi.';
+    return 'Data pengaturan belum dapat dimuat. Periksa koneksi layanan sistem lalu coba lagi.';
   }
 
   function mutationErrorMessage(error: unknown, fallbackMessage: string) {

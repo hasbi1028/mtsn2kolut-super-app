@@ -888,7 +888,7 @@
 							</Table.Root>
 						</div>
 					{:else}
-						<EmptyStatePanel compact title="Belum ada hasil cek data" description="Unggah CSV dari template lalu cek data untuk melihat rencana tambah, ubah, lewati, dan baris yang perlu diperbaiki." />
+						<EmptyStatePanel compact title="Belum ada hasil cek data" description="Unggah berkas data dari format isian lalu cek data untuk melihat rencana tambah, ubah, lewati, dan baris yang perlu diperbaiki." />
 					{/if}
 				</Card.Content>
 			</Card.Root>

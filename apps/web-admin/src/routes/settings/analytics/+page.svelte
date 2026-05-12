@@ -191,7 +191,7 @@
 			anchor.click();
 			anchor.remove();
 			URL.revokeObjectURL(url);
-			toast.success('Export CSV agregat disiapkan.');
+			toast.success('Unduhan rekap penggunaan disiapkan.');
 		} catch (error) {
 			toast.error(analyticsErrorMessage(error));
 		} finally {

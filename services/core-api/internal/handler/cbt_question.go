@@ -146,7 +146,7 @@ func questionListInputFromRequest(r *http.Request, defaultLimit int32, maxLimit 
 	if raw := strings.TrimSpace(r.URL.Query().Get("event_id")); raw != "" {
 		parsed, err := parseUUID(raw)
 		if err != nil {
-			return service.ListCbtQuestionsInput{}, fmt.Errorf("event_id invalid")
+			return service.ListCbtQuestionsInput{}, fmt.Errorf("Kegiatan asesmen tidak valid")
 		}
 		eventID = parsed
 	}
@@ -154,7 +154,7 @@ func questionListInputFromRequest(r *http.Request, defaultLimit int32, maxLimit 
 	if raw := strings.TrimSpace(r.URL.Query().Get("subject_id")); raw != "" {
 		parsed, err := parseUUID(raw)
 		if err != nil {
-			return service.ListCbtQuestionsInput{}, fmt.Errorf("subject_id invalid")
+			return service.ListCbtQuestionsInput{}, fmt.Errorf("Mata pelajaran tidak valid")
 		}
 		subjectID = parsed
 	}

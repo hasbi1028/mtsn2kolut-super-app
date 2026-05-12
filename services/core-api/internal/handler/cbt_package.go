@@ -51,7 +51,7 @@ func (h *CbtPackage) List(w http.ResponseWriter, r *http.Request) {
 	}
 	eventID, err := optionalUUIDQuery(r, "event_id")
 	if err != nil {
-		api.BadRequest(w, "event_id invalid")
+		api.BadRequest(w, "Kegiatan asesmen tidak valid")
 		return
 	}
 	packages, questions, err := h.svc.List(r.Context(), eventID)
@@ -87,7 +87,7 @@ func (h *CbtPackage) Create(w http.ResponseWriter, r *http.Request) {
 		QuestionWeights    map[string]int32 `json:"question_weights"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if body.DurationMinutes < 1 || body.DurationMinutes > 360 {
@@ -96,19 +96,19 @@ func (h *CbtPackage) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	eventID, err := parseOptionalUUID(body.EventID)
 	if err != nil {
-		api.BadRequest(w, "event_id invalid")
+		api.BadRequest(w, "Kegiatan asesmen tidak valid")
 		return
 	}
 	subjectID, err := parseUUID(body.SubjectID)
 	if err != nil {
-		api.BadRequest(w, "subject_id invalid")
+		api.BadRequest(w, "Mata pelajaran tidak valid")
 		return
 	}
 	questionIDs := make([]pgtype.UUID, 0, len(body.QuestionIDs))
 	for _, rawID := range body.QuestionIDs {
 		id, err := parseUUID(rawID)
 		if err != nil {
-			api.BadRequest(w, "question_id invalid")
+			api.BadRequest(w, "Soal tidak valid")
 			return
 		}
 		questionIDs = append(questionIDs, id)
@@ -154,7 +154,7 @@ func (h *CbtPackage) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {

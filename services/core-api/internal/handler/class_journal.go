@@ -70,7 +70,7 @@ func (h *ClassJournal) CreateSession(w http.ResponseWriter, r *http.Request) {
 		GuruHadir    bool   `json:"guru_hadir"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	assignmentID, err := parseUUID(body.AssignmentID)
@@ -120,7 +120,7 @@ func (h *ClassJournal) OpenSessionFromTimetableSlot(w http.ResponseWriter, r *ht
 		GuruHadir *bool  `json:"guru_hadir"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	dateValue := strings.TrimSpace(body.Date)
@@ -204,7 +204,7 @@ func (h *ClassJournal) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		GuruHadir bool   `json:"guru_hadir"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.UpdateSession(r.Context(), id, body.Materi, body.Kegiatan, body.Catatan, body.GuruHadir, employeeID)
@@ -253,7 +253,7 @@ func (h *ClassJournal) BulkUpsertAttendances(w http.ResponseWriter, r *http.Requ
 		Entries []service.JournalAttendanceEntry `json:"entries"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if err := h.svc.BulkUpsertAttendances(r.Context(), id, body.Entries, employeeID); err != nil {

@@ -276,7 +276,7 @@ func (h *User) Create(w http.ResponseWriter, r *http.Request) {
 		ParentID    string   `json:"parent_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if body.Username == "" || body.Password == "" {
@@ -429,7 +429,7 @@ func (h *User) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	actorID, err := currentActorUUID(r)
@@ -451,14 +451,14 @@ func (h *User) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
 		IsActive bool `json:"is_active"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	actorID, err := currentActorUUID(r)
@@ -483,14 +483,14 @@ func (h *User) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	actorID, err := currentActorUUID(r)
@@ -511,7 +511,7 @@ func (h *User) ForcePasswordChange(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	actorID, err := currentActorUUID(r)
@@ -533,7 +533,7 @@ func (h *User) UpdateProfileLink(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
@@ -542,7 +542,7 @@ func (h *User) UpdateProfileLink(w http.ResponseWriter, r *http.Request) {
 		ParentID   string `json:"parent_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	link, err := profileLinkFromRequest(body.EmployeeID, body.StudentID, body.ParentID)

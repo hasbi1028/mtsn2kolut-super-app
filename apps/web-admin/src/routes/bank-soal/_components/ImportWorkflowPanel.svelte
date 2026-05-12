@@ -53,8 +53,8 @@
 
 	let importIntroCopy = $derived(
 		specialEventQuestionMode
-			? 'CSV disimpan sebagai soal khusus kegiatan terpilih. Pakai mode ini hanya untuk stok kegiatan yang tidak boleh masuk bank soal pakai ulang.'
-			: 'CSV disimpan sebagai konsep Bank Soal pakai ulang tanpa kegiatan khusus, sehingga bisa dipakai ulang lintas paket.'
+			? 'Berkas data disimpan sebagai soal khusus kegiatan terpilih. Pakai mode ini hanya untuk stok kegiatan yang tidak boleh masuk bank soal pakai ulang.'
+			: 'Berkas data disimpan sebagai konsep Bank Soal pakai ulang tanpa kegiatan khusus, sehingga bisa dipakai ulang lintas paket.'
 	);
 	let importScopeCopy = $derived(
 		specialEventQuestionMode
@@ -68,8 +68,8 @@
 	let importFileStateLabel = $derived(importDryRunDone ? (hasImportErrors ? 'Perlu perbaikan' : 'Pratinjau bersih') : 'Belum pratinjau');
 
 	let importSteps = $derived([
-		{ label: '1. Format Isian', desc: 'Pakai struktur CSV resmi agar kolom tipe, kunci, dan opsi konsisten.', ready: true },
-		{ label: '2. Mapel & File', desc: importSubjectId && hasImportFile ? `${importFileName || 'CSV dipilih'} · ${importFileSizeLabel}` : 'Pilih mata pelajaran dan unggah CSV.', ready: Boolean(importSubjectId && hasImportFile) },
+		{ label: '1. Format Isian', desc: 'Pakai struktur berkas resmi agar kolom tipe, kunci, dan opsi konsisten.', ready: true },
+		{ label: '2. Mapel & File', desc: importSubjectId && hasImportFile ? `${importFileName || 'CSV dipilih'} · ${importFileSizeLabel}` : 'Pilih mata pelajaran dan unggah berkas data.', ready: Boolean(importSubjectId && hasImportFile) },
 		{ label: '3. Cek Data', desc: importDryRunDone ? (hasImportErrors ? 'Ada masalah yang perlu diperbaiki.' : `${readyImportCount} soal siap diimpor.`) : 'Wajib sebelum impor final.', ready: importDryRunDone && !hasImportErrors },
 		{ label: '4. Konfirmasi', desc: canConfirmImport ? 'Impor final sudah aman dijalankan.' : 'Menunggu pratinjau bersih.', ready: canConfirmImport },
 	]);

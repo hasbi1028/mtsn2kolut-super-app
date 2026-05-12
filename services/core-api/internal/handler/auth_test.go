@@ -924,13 +924,13 @@ func TestAuthUpdateSessionLabelMapsValidationAndServiceErrors(t *testing.T) {
 			want: http.StatusUnauthorized,
 		},
 		{
-			name: "invalid id",
+			name: "ID data tidak valid",
 			svc:  &fakeAuthService{},
 			req:  withRoute(httptest.NewRequest(http.MethodPatch, "http://internal/api/auth/sessions/bad", bytes.NewBufferString(`{}`)).WithContext(withAuthClaims(context.Background(), userID)), "bad"),
 			want: http.StatusBadRequest,
 		},
 		{
-			name: "invalid json",
+			name: "Data yang dikirim tidak valid",
 			svc:  &fakeAuthService{},
 			req:  withRoute(httptest.NewRequest(http.MethodPatch, "http://internal/api/auth/sessions/"+sessionID, bytes.NewBufferString(`{`)).WithContext(withAuthClaims(context.Background(), userID)), sessionID),
 			want: http.StatusBadRequest,
@@ -1159,8 +1159,8 @@ func TestAuthUpdateSidebarPreferencesRejectsInvalidJSON(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("json unmarshal failed: %v", err)
 	}
-	if payload.Error != "invalid json" {
-		t.Fatalf("error = %q, want %q", payload.Error, "invalid json")
+	if payload.Error != "Data yang dikirim tidak valid" {
+		t.Fatalf("error = %q, want %q", payload.Error, "Data yang dikirim tidak valid")
 	}
 }
 
@@ -1187,8 +1187,8 @@ func TestAuthUpdateSidebarPreferencesMapsBadRequest(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("json unmarshal failed: %v", err)
 	}
-	if payload.Error != "invalid sidebar preferences" {
-		t.Fatalf("error = %q, want %q", payload.Error, "invalid sidebar preferences")
+	if payload.Error != "Pengaturan menu samping tidak valid" {
+		t.Fatalf("error = %q, want %q", payload.Error, "Pengaturan menu samping tidak valid")
 	}
 }
 
@@ -1223,7 +1223,7 @@ func TestAuthLoginMapsValidationAndServiceErrors(t *testing.T) {
 		body string
 		want int
 	}{
-		{name: "invalid json", svc: &fakeAuthService{}, body: `{`, want: http.StatusBadRequest},
+		{name: "Data yang dikirim tidak valid", svc: &fakeAuthService{}, body: `{`, want: http.StatusBadRequest},
 		{name: "unauthorized", svc: &fakeAuthService{loginErr: domain.ErrUnauthorized}, body: `{"username":"admin","password":"bad"}`, want: http.StatusUnauthorized},
 		{name: "suspended", svc: &fakeAuthService{loginErr: domain.ErrSuspended}, body: `{"username":"admin","password":"secret"}`, want: http.StatusForbidden},
 		{name: "internal", svc: &fakeAuthService{loginErr: context.Canceled}, body: `{"username":"admin","password":"secret"}`, want: http.StatusInternalServerError},
@@ -1246,7 +1246,7 @@ func TestAuthRefreshMapsValidationUnauthorizedAndInternal(t *testing.T) {
 		body string
 		want int
 	}{
-		{name: "invalid json", svc: &fakeAuthService{}, body: `{`, want: http.StatusBadRequest},
+		{name: "Data yang dikirim tidak valid", svc: &fakeAuthService{}, body: `{`, want: http.StatusBadRequest},
 		{name: "missing token", svc: &fakeAuthService{}, body: `{}`, want: http.StatusBadRequest},
 		{name: "unauthorized", svc: &fakeAuthService{refreshErr: domain.ErrUnauthorized}, body: `{"refresh_token":"r1"}`, want: http.StatusUnauthorized},
 		{name: "internal", svc: &fakeAuthService{refreshErr: context.Canceled}, body: `{"refresh_token":"r1"}`, want: http.StatusInternalServerError},
@@ -1384,7 +1384,7 @@ func TestAuthPreferencesAndChangePasswordMapRemainingErrors(t *testing.T) {
 		err  error
 		want int
 	}{
-		{name: "invalid json", body: `{`, want: http.StatusBadRequest},
+		{name: "Data yang dikirim tidak valid", body: `{`, want: http.StatusBadRequest},
 		{name: "missing username", body: `{"old_password":"old","new_password":"newpass123"}`, want: http.StatusBadRequest},
 		{name: "missing new password", body: `{"username":"admin","old_password":"old"}`, want: http.StatusBadRequest},
 		{name: "unauthorized", body: `{"username":"admin","old_password":"bad","new_password":"newpass123"}`, err: domain.ErrUnauthorized, want: http.StatusUnauthorized},

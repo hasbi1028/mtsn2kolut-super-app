@@ -119,7 +119,7 @@ func (h *Letter) CreateIncoming(w http.ResponseWriter, r *http.Request) {
 		ReceivedByEmployeeID string `json:"received_by_employee_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	letter, err := h.svc.CreateIncoming(r.Context(), service.CreateIncomingParams{
@@ -180,7 +180,7 @@ func (h *Letter) UpdateIncoming(w http.ResponseWriter, r *http.Request) {
 		Catatan       string `json:"catatan"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.UpdateIncoming(r.Context(), service.UpdateIncomingParams{
@@ -220,7 +220,7 @@ func (h *Letter) UpdateIncomingStatus(w http.ResponseWriter, r *http.Request) {
 		Status string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.UpdateIncomingStatus(r.Context(), id, body.Status)
@@ -289,7 +289,7 @@ func (h *Letter) CreateOutgoing(w http.ResponseWriter, r *http.Request) {
 		ManualNomor        string `json:"manual_nomor"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	eid := tuEmployeeID(r)
@@ -353,7 +353,7 @@ func (h *Letter) UpdateOutgoing(w http.ResponseWriter, r *http.Request) {
 		Catatan      string `json:"catatan"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.UpdateOutgoing(r.Context(), service.UpdateOutgoingParams{
@@ -441,7 +441,7 @@ func (h *Letter) CreateDisposition(w http.ResponseWriter, r *http.Request) {
 		Instruksi          string `json:"instruksi"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	eid := tuEmployeeID(r)
@@ -498,7 +498,7 @@ func (h *Letter) UpdateDisposition(w http.ResponseWriter, r *http.Request) {
 		Status              string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.UpdateDisposition(r.Context(), service.UpdateDispositionParams{

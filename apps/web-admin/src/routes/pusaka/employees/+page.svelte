@@ -95,7 +95,7 @@
   function employeeErrorMessage(error: unknown) {
     if (error instanceof Error && error.message.trim()) return error.message;
     if (typeof error === 'string' && error.trim()) return error;
-    return 'Pegawai PUSAKA belum dapat dimuat. Periksa koneksi backend lalu coba lagi.';
+    return 'Pegawai PUSAKA belum dapat dimuat. Periksa koneksi layanan sistem lalu coba lagi.';
   }
 
   function handleEmployeeRenderError(error: unknown, reset: () => void) {

@@ -873,7 +873,7 @@
 		const answerId = auditValue(log, 'answer_id');
 		return [participantId && `Peserta ${participantId}`, roomId && `Ruang ${roomId}`, answerId && `Jawaban ${answerId}`]
 			.filter(Boolean)
-			.join(' · ') || 'Detail tersedia di metadata audit.';
+			.join(' · ') || 'Detail tersedia di riwayat pemeriksaan.';
 	}
 
 	async function loadParticipants() {

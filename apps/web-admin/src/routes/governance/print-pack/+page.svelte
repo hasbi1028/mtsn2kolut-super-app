@@ -95,7 +95,7 @@
 
 	function errorMessage(error: unknown) {
 		if (error instanceof Error && error.message.trim()) return error.message;
-		return 'Paket tata kelola belum dapat dimuat. Coba lagi setelah koneksi backend tersedia.';
+		return 'Paket tata kelola belum dapat dimuat. Coba lagi setelah koneksi layanan sistem tersedia.';
 	}
 
 	function statusVariant(value: string): BadgeVariant {

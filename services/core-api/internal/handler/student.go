@@ -87,14 +87,14 @@ func (h *Student) Create(w http.ResponseWriter, r *http.Request) {
 		Status      string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	var classID pgtype.UUID
 	if body.ClassID != "" {
 		id, err := parseUUID(body.ClassID)
 		if err != nil {
-			api.BadRequest(w, "class_id invalid")
+			api.BadRequest(w, "Rombel tidak valid")
 			return
 		}
 		classID = id
@@ -130,7 +130,7 @@ func (h *Student) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
@@ -145,14 +145,14 @@ func (h *Student) Update(w http.ResponseWriter, r *http.Request) {
 		Status      string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	var classID pgtype.UUID
 	if body.ClassID != "" {
 		cid, err := parseUUID(body.ClassID)
 		if err != nil {
-			api.BadRequest(w, "class_id invalid")
+			api.BadRequest(w, "Rombel tidak valid")
 			return
 		}
 		classID = cid
@@ -191,7 +191,7 @@ func (h *Student) PublicRegister(w http.ResponseWriter, r *http.Request) {
 		ParentPhone string `json:"parent_phone"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if body.Nama == "" || body.Nis == "" {
@@ -222,7 +222,7 @@ func (h *Student) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
@@ -239,14 +239,14 @@ func (h *Student) UpdateLifecycle(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
 		Status string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	status := db.StudentStatusEnum(body.Status)

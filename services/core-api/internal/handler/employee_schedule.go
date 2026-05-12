@@ -34,7 +34,7 @@ func (h *EmployeeSchedule) List(w http.ResponseWriter, r *http.Request) {
 	}
 	empID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid employee id")
+		api.BadRequest(w, "ID pegawai tidak valid")
 		return
 	}
 	rows, err := h.svc.List(r.Context(), empID)
@@ -52,7 +52,7 @@ func (h *EmployeeSchedule) Upsert(w http.ResponseWriter, r *http.Request) {
 	}
 	empID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid employee id")
+		api.BadRequest(w, "ID pegawai tidak valid")
 		return
 	}
 	var body struct {
@@ -63,7 +63,7 @@ func (h *EmployeeSchedule) Upsert(w http.ResponseWriter, r *http.Request) {
 		DayOfWeek           int16  `json:"day_of_week"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if body.RunType != "checkin" && body.RunType != "checkout" {
@@ -103,7 +103,7 @@ func (h *EmployeeSchedule) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	empID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid employee id")
+		api.BadRequest(w, "ID pegawai tidak valid")
 		return
 	}
 	schedID, err := parseUUID(chi.URLParam(r, "scheduleId"))

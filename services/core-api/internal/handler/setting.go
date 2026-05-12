@@ -52,7 +52,7 @@ func (h *Setting) Upsert(w http.ResponseWriter, r *http.Request) {
 		Value string `json:"value"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if err := h.svc.Upsert(r.Context(), key, body.Value); err != nil {
@@ -78,7 +78,7 @@ func (h *Setting) UpdateSchoolProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	var body service.SchoolProfile
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	profile, err := h.svc.UpdateSchoolProfile(r.Context(), body)

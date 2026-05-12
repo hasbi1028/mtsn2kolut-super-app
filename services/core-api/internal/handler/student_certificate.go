@@ -95,7 +95,7 @@ func (h *StudentCertificate) Create(w http.ResponseWriter, r *http.Request) {
 		Remarks      string `json:"remarks"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	data, err := h.svc.Create(r.Context(), service.CreateStudentCertificateInput{
@@ -161,7 +161,7 @@ func (h *StudentCertificate) Cancel(w http.ResponseWriter, r *http.Request) {
 		Remarks string `json:"remarks"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	data, err := h.svc.Cancel(r.Context(), id, body.Remarks)

@@ -110,7 +110,7 @@
 		a.download = `rekap_insiden_${room?.room_name ?? roomId}.csv`;
 		a.click();
 		URL.revokeObjectURL(url);
-		toast.success('CSV ruang dibuat');
+		toast.success('Berkas ruang dibuat');
 	}
 </script>
 

@@ -51,7 +51,7 @@ func (h *Parent) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	row, err := h.svc.Get(r.Context(), id)
@@ -73,7 +73,7 @@ func (h *Parent) Create(w http.ResponseWriter, r *http.Request) {
 		Address string `json:"address"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.Create(r.Context(), body.Nama, body.Phone, body.Address)
@@ -91,7 +91,7 @@ func (h *Parent) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
@@ -100,7 +100,7 @@ func (h *Parent) Update(w http.ResponseWriter, r *http.Request) {
 		Address string `json:"address"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.Update(r.Context(), id, body.Nama, body.Phone, body.Address)
@@ -118,7 +118,7 @@ func (h *Parent) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
@@ -135,14 +135,14 @@ func (h *Parent) LinkStudent(w http.ResponseWriter, r *http.Request) {
 	}
 	parentID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
 		StudentID string `json:"student_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	studentID, err := parseUUID(body.StudentID)
@@ -164,14 +164,14 @@ func (h *Parent) UnlinkStudent(w http.ResponseWriter, r *http.Request) {
 	}
 	parentID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
 		StudentID string `json:"student_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	studentID, err := parseUUID(body.StudentID)
@@ -201,7 +201,7 @@ func (h *Parent) ListChildren(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	rows, err := h.svc.ListChildren(r.Context(), id)

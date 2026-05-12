@@ -334,7 +334,7 @@ func (h *CbtSession) List(w http.ResponseWriter, r *http.Request) {
 func (h *CbtSession) Get(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, id) {
@@ -369,13 +369,13 @@ func (h *CbtSession) Create(w http.ResponseWriter, r *http.Request) {
 		Status          string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 
 	packageID, err := parseUUID(body.PackageID)
 	if err != nil {
-		api.BadRequest(w, "package_id invalid")
+		api.BadRequest(w, "Paket soal tidak valid")
 		return
 	}
 
@@ -388,7 +388,7 @@ func (h *CbtSession) Create(w http.ResponseWriter, r *http.Request) {
 	if body.ClassID != "" {
 		classID, err = parseUUID(body.ClassID)
 		if err != nil {
-			api.BadRequest(w, "class_id invalid")
+			api.BadRequest(w, "Rombel tidak valid")
 			return
 		}
 	}
@@ -397,7 +397,7 @@ func (h *CbtSession) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.AllowCrossGrade && !body.IsSpecialEvent {
-		api.BadRequest(w, "allow_cross_grade hanya boleh untuk special event")
+		api.BadRequest(w, "Lintas tingkat hanya boleh untuk kegiatan khusus")
 		return
 	}
 
@@ -414,19 +414,19 @@ func (h *CbtSession) Create(w http.ResponseWriter, r *http.Request) {
 	if body.EventID != "" {
 		eventID, err = parseUUID(body.EventID)
 		if err != nil {
-			api.BadRequest(w, "event_id invalid")
+			api.BadRequest(w, "Kegiatan asesmen tidak valid")
 			return
 		}
 	}
 
 	start, err := time.Parse(time.RFC3339, body.ScheduledStart)
 	if err != nil {
-		api.BadRequest(w, "scheduled_start invalid - use RFC3339")
+		api.BadRequest(w, "Waktu mulai tidak valid")
 		return
 	}
 	end, err := time.Parse(time.RFC3339, body.ScheduledEnd)
 	if err != nil {
-		api.BadRequest(w, "scheduled_end invalid - use RFC3339")
+		api.BadRequest(w, "Waktu selesai tidak valid")
 		return
 	}
 	if !end.After(start) {
@@ -483,14 +483,14 @@ func (h *CbtSession) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
 		Status string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.UpdateStatus(r.Context(), id, db.CbtSessionStatusEnum(body.Status))
@@ -508,7 +508,7 @@ func (h *CbtSession) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
@@ -516,17 +516,17 @@ func (h *CbtSession) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 		ScheduledEnd   string `json:"scheduled_end"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	start, err := time.Parse(time.RFC3339, body.ScheduledStart)
 	if err != nil {
-		api.BadRequest(w, "scheduled_start invalid - use RFC3339")
+		api.BadRequest(w, "Waktu mulai tidak valid")
 		return
 	}
 	end, err := time.Parse(time.RFC3339, body.ScheduledEnd)
 	if err != nil {
-		api.BadRequest(w, "scheduled_end invalid - use RFC3339")
+		api.BadRequest(w, "Waktu selesai tidak valid")
 		return
 	}
 	if !end.After(start) {
@@ -573,7 +573,7 @@ func (h *CbtSession) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 func (h *CbtSession) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, id) {
@@ -638,7 +638,7 @@ func (h *CbtSession) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
@@ -653,7 +653,7 @@ func (h *CbtSession) Delete(w http.ResponseWriter, r *http.Request) {
 func (h *CbtSession) ListParticipants(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, id) {
@@ -679,7 +679,7 @@ func (h *CbtSession) Enroll(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
@@ -691,14 +691,14 @@ func (h *CbtSession) Enroll(w http.ResponseWriter, r *http.Request) {
 		Level     string `json:"level"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	switch body.ScopeType {
 	case "", "class":
 		classID, err := parseUUID(body.ClassID)
 		if err != nil {
-			api.BadRequest(w, "class_id invalid")
+			api.BadRequest(w, "Rombel tidak valid")
 			return
 		}
 		if err := h.svc.EnrollClass(r.Context(), sessionID, classID); err != nil {
@@ -737,7 +737,7 @@ func (h *CbtSession) EnrollGrade(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
@@ -747,7 +747,7 @@ func (h *CbtSession) EnrollGrade(w http.ResponseWriter, r *http.Request) {
 		Level string `json:"level"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if body.Level == "" {
@@ -768,7 +768,7 @@ func (h *CbtSession) EnrollSchool(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
@@ -788,7 +788,7 @@ func (h *CbtSession) GenerateTokens(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
@@ -796,7 +796,7 @@ func (h *CbtSession) GenerateTokens(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.svc.GenerateTokens(r.Context(), sessionID); err != nil {
 		if errors.Is(err, domain.ErrConflict) {
-			message := strings.TrimPrefix(safeClientMessage(err, "Token sesi tidak dapat diperbarui"), "conflict: ")
+			message := strings.TrimPrefix(safeClientMessage(err, "Kode ruang tidak dapat diperbarui"), "conflict: ")
 			api.Conflict(w, message)
 			return
 		}
@@ -813,7 +813,7 @@ func (h *CbtSession) RegenerateToken(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
@@ -821,7 +821,7 @@ func (h *CbtSession) RegenerateToken(w http.ResponseWriter, r *http.Request) {
 	}
 	pid, err := parseUUID(chi.URLParam(r, "pid"))
 	if err != nil {
-		api.BadRequest(w, "invalid participant id")
+		api.BadRequest(w, "ID peserta ujian tidak valid")
 		return
 	}
 	if !h.requireSessionParticipantForTeacherOrAdmin(w, r, sessionID, pid) {
@@ -830,7 +830,7 @@ func (h *CbtSession) RegenerateToken(w http.ResponseWriter, r *http.Request) {
 	row, err := h.svc.RegenerateToken(r.Context(), pid)
 	if err != nil {
 		if errors.Is(err, domain.ErrConflict) {
-			message := strings.TrimPrefix(safeClientMessage(err, "Token peserta tidak dapat diperbarui"), "conflict: ")
+			message := strings.TrimPrefix(safeClientMessage(err, "Kode ujian peserta tidak dapat diperbarui"), "conflict: ")
 			api.Conflict(w, message)
 			return
 		}
@@ -843,7 +843,7 @@ func (h *CbtSession) RegenerateToken(w http.ResponseWriter, r *http.Request) {
 func (h *CbtSession) ResetParticipantAccess(w http.ResponseWriter, r *http.Request) {
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
@@ -851,7 +851,7 @@ func (h *CbtSession) ResetParticipantAccess(w http.ResponseWriter, r *http.Reque
 	}
 	pid, err := parseUUID(chi.URLParam(r, "pid"))
 	if err != nil {
-		api.BadRequest(w, "invalid participant id")
+		api.BadRequest(w, "ID peserta ujian tidak valid")
 		return
 	}
 	if !h.requireSessionParticipantForTeacherOrAdmin(w, r, sessionID, pid) {
@@ -882,7 +882,7 @@ func (h *CbtSession) AssignSeat(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
@@ -890,7 +890,7 @@ func (h *CbtSession) AssignSeat(w http.ResponseWriter, r *http.Request) {
 	}
 	pid, err := parseUUID(chi.URLParam(r, "pid"))
 	if err != nil {
-		api.BadRequest(w, "invalid participant id")
+		api.BadRequest(w, "ID peserta ujian tidak valid")
 		return
 	}
 	if !h.requireSessionParticipant(w, r, sessionID, pid) {
@@ -901,12 +901,12 @@ func (h *CbtSession) AssignSeat(w http.ResponseWriter, r *http.Request) {
 		SeatNo int32  `json:"seat_no"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	roomID, err := parseUUID(body.RoomID)
 	if err != nil {
-		api.BadRequest(w, "room_id invalid")
+		api.BadRequest(w, "Ruang tidak valid")
 		return
 	}
 	if !h.requireSessionRoom(w, r, sessionID, roomID) {
@@ -930,7 +930,7 @@ func (h *CbtSession) AutoAssignSeats(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
@@ -948,7 +948,7 @@ func (h *CbtSession) AutoAssignSeats(w http.ResponseWriter, r *http.Request) {
 func (h *CbtSession) ListRooms(w http.ResponseWriter, r *http.Request) {
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
@@ -969,7 +969,7 @@ func (h *CbtSession) CreateRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
@@ -981,14 +981,14 @@ func (h *CbtSession) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		Capacity     int32  `json:"capacity"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	body.RoomName = strings.TrimSpace(body.RoomName)
 	if strings.TrimSpace(body.SchoolRoomID) != "" {
 		schoolRoomID, err := parseUUID(body.SchoolRoomID)
 		if err != nil {
-			api.BadRequest(w, "school_room_id invalid")
+			api.BadRequest(w, "Ruang madrasah tidak valid")
 			return
 		}
 		physicalRoomSvc, ok := h.svc.(cbtSessionPhysicalRoomService)
@@ -1028,7 +1028,7 @@ func (h *CbtSession) CreateRoom(w http.ResponseWriter, r *http.Request) {
 func (h *CbtSession) GetRoomReadiness(w http.ResponseWriter, r *http.Request) {
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
@@ -1036,7 +1036,7 @@ func (h *CbtSession) GetRoomReadiness(w http.ResponseWriter, r *http.Request) {
 	}
 	roomSvc, ok := h.svc.(cbtSessionRoomProctorService)
 	if !ok {
-		api.Internal(w, fmt.Errorf("cbt room readiness service unavailable"))
+		api.Internal(w, fmt.Errorf("Layanan kesiapan ruang ujian belum tersedia"))
 		return
 	}
 	readiness, err := roomSvc.RoomReadiness(r.Context(), sessionID)
@@ -1091,14 +1091,14 @@ func (h *CbtSession) ReplaceRoomProctors(w http.ResponseWriter, r *http.Request)
 		EmployeeIDs       []string `json:"employee_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	var primaryEmployeeID pgtype.UUID
 	if strings.TrimSpace(body.PrimaryEmployeeID) != "" {
 		parsed, err := parseUUID(body.PrimaryEmployeeID)
 		if err != nil {
-			api.BadRequest(w, "primary_employee_id invalid")
+			api.BadRequest(w, "Pengawas utama tidak valid")
 			return
 		}
 		primaryEmployeeID = parsed
@@ -1110,7 +1110,7 @@ func (h *CbtSession) ReplaceRoomProctors(w http.ResponseWriter, r *http.Request)
 		}
 		parsed, err := parseUUID(raw)
 		if err != nil {
-			api.BadRequest(w, "employee_ids invalid")
+			api.BadRequest(w, "Daftar pegawai tidak valid")
 			return
 		}
 		employeeIDs = append(employeeIDs, parsed)
@@ -1137,12 +1137,12 @@ func (h *CbtSession) ReplaceRoomProctors(w http.ResponseWriter, r *http.Request)
 func (h *CbtSession) requireSessionRoomParams(w http.ResponseWriter, r *http.Request) (pgtype.UUID, pgtype.UUID, bool) {
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return pgtype.UUID{}, pgtype.UUID{}, false
 	}
 	roomID, err := parseUUID(chi.URLParam(r, "rid"))
 	if err != nil {
-		api.BadRequest(w, "invalid room id")
+		api.BadRequest(w, "ID ruang tidak valid")
 		return pgtype.UUID{}, pgtype.UUID{}, false
 	}
 	return sessionID, roomID, true
@@ -1155,7 +1155,7 @@ func (h *CbtSession) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
@@ -1163,7 +1163,7 @@ func (h *CbtSession) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	roomID, err := parseUUID(chi.URLParam(r, "rid"))
 	if err != nil {
-		api.BadRequest(w, "invalid room id")
+		api.BadRequest(w, "ID ruang tidak valid")
 		return
 	}
 	if !h.requireSessionRoom(w, r, sessionID, roomID) {
@@ -1183,7 +1183,7 @@ func (h *CbtSession) ShuffleRooms(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
@@ -1201,7 +1201,7 @@ func (h *CbtSession) ShuffleRooms(w http.ResponseWriter, r *http.Request) {
 func (h *CbtSession) GetProctoringStatus(w http.ResponseWriter, r *http.Request) {
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !adminAccessAllowed(r) {
@@ -1219,7 +1219,7 @@ func (h *CbtSession) GetProctoringStatus(w http.ResponseWriter, r *http.Request)
 func (h *CbtSession) ListParticipantEvents(w http.ResponseWriter, r *http.Request) {
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !adminAccessAllowed(r) {
@@ -1230,7 +1230,7 @@ func (h *CbtSession) ListParticipantEvents(w http.ResponseWriter, r *http.Reques
 	if raw := r.URL.Query().Get("participant_id"); raw != "" {
 		participantID, err = parseUUID(raw)
 		if err != nil {
-			api.BadRequest(w, "participant_id invalid")
+			api.BadRequest(w, "Peserta ujian tidak valid")
 			return
 		}
 		if !h.requireSessionParticipant(w, r, sessionID, participantID) {
@@ -1260,7 +1260,7 @@ func (h *CbtSession) ListParticipantEvents(w http.ResponseWriter, r *http.Reques
 func (h *CbtSession) FlagParticipant(w http.ResponseWriter, r *http.Request) {
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !adminAccessAllowed(r) {
@@ -1269,7 +1269,7 @@ func (h *CbtSession) FlagParticipant(w http.ResponseWriter, r *http.Request) {
 	}
 	pid, err := parseUUID(chi.URLParam(r, "pid"))
 	if err != nil {
-		api.BadRequest(w, "invalid participant id")
+		api.BadRequest(w, "ID peserta ujian tidak valid")
 		return
 	}
 	if !h.requireSessionParticipant(w, r, sessionID, pid) {
@@ -1279,7 +1279,7 @@ func (h *CbtSession) FlagParticipant(w http.ResponseWriter, r *http.Request) {
 		Flag bool `json:"flag"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if err := h.svc.SetSuspiciousFlag(r.Context(), pid, body.Flag); err != nil {
@@ -1299,7 +1299,7 @@ func (h *CbtSession) FlagParticipant(w http.ResponseWriter, r *http.Request) {
 func (h *CbtSession) ForceSubmitParticipant(w http.ResponseWriter, r *http.Request) {
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !adminAccessAllowed(r) {
@@ -1308,7 +1308,7 @@ func (h *CbtSession) ForceSubmitParticipant(w http.ResponseWriter, r *http.Reque
 	}
 	pid, err := parseUUID(chi.URLParam(r, "pid"))
 	if err != nil {
-		api.BadRequest(w, "invalid participant id")
+		api.BadRequest(w, "ID peserta ujian tidak valid")
 		return
 	}
 	if !h.requireSessionParticipant(w, r, sessionID, pid) {
@@ -1482,7 +1482,7 @@ func (h *CbtSession) GetRoomHandover(w http.ResponseWriter, r *http.Request) {
 func (h *CbtSession) GetSessionOperationalRecap(w http.ResponseWriter, r *http.Request) {
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
@@ -1490,7 +1490,7 @@ func (h *CbtSession) GetSessionOperationalRecap(w http.ResponseWriter, r *http.R
 	}
 	handoverSvc, ok := h.svc.(cbtSessionRoomHandoverService)
 	if !ok {
-		api.Internal(w, fmt.Errorf("cbt session operational recap service unavailable"))
+		api.Internal(w, fmt.Errorf("Layanan rekap operasional sesi ujian belum tersedia"))
 		return
 	}
 	recap, rooms, err := handoverSvc.GetSessionOperationalRecap(r.Context(), sessionID)
@@ -1527,7 +1527,7 @@ func (h *CbtSession) SaveRoomHandover(w http.ResponseWriter, r *http.Request) {
 		HandoverNotes         string `json:"handover_notes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	handoverSvc, ok := h.svc.(cbtSessionRoomHandoverService)
@@ -1613,7 +1613,7 @@ func (h *CbtSession) FlagRoomParticipant(w http.ResponseWriter, r *http.Request)
 		Flag bool `json:"flag"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if err := h.svc.SetSuspiciousFlag(r.Context(), pid, body.Flag); err != nil {
@@ -1724,7 +1724,7 @@ func (h *CbtSession) AcknowledgeRoomParticipantEvent(w http.ResponseWriter, r *h
 		Notes   string `json:"notes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
@@ -1768,7 +1768,7 @@ func (h *CbtSession) RecordRoomParticipantIncidentAction(w http.ResponseWriter, 
 		Notes   string `json:"notes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
@@ -1812,7 +1812,7 @@ func (h *CbtSession) SendRoomParticipantCommand(w http.ResponseWriter, r *http.R
 		Message     string `json:"message"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
@@ -1901,7 +1901,7 @@ func (h *CbtSession) requireRoomParticipantControlParams(w http.ResponseWriter, 
 	}
 	pid, err := parseUUID(chi.URLParam(r, "pid"))
 	if err != nil {
-		api.BadRequest(w, "invalid participant id")
+		api.BadRequest(w, "ID peserta ujian tidak valid")
 		return pgtype.UUID{}, pgtype.UUID{}, pgtype.UUID{}, false
 	}
 	return sessionID, roomID, pid, true
@@ -1912,7 +1912,7 @@ func (h *CbtSession) requireRoomParticipantControlParams(w http.ResponseWriter, 
 func (h *CbtSession) ListUngradedEssays(w http.ResponseWriter, r *http.Request) {
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	var rows []db.ListUngradedEssaysRow
@@ -1945,12 +1945,12 @@ func (h *CbtSession) ListUngradedEssays(w http.ResponseWriter, r *http.Request) 
 func (h *CbtSession) GradeEssay(w http.ResponseWriter, r *http.Request) {
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	answerID, err := parseUUID(chi.URLParam(r, "aid"))
 	if err != nil {
-		api.BadRequest(w, "invalid answer id")
+		api.BadRequest(w, "ID jawaban tidak valid")
 		return
 	}
 	if !h.requireSessionAnswerForTeacherOrAdmin(w, r, sessionID, answerID) {
@@ -1960,7 +1960,7 @@ func (h *CbtSession) GradeEssay(w http.ResponseWriter, r *http.Request) {
 		ManualScore float64 `json:"manual_score"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if body.ManualScore < 0 || body.ManualScore > 100 {
@@ -1990,7 +1990,7 @@ func (h *CbtSession) RecordAnswer(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
@@ -1998,7 +1998,7 @@ func (h *CbtSession) RecordAnswer(w http.ResponseWriter, r *http.Request) {
 	}
 	participantID, err := parseUUID(chi.URLParam(r, "pid"))
 	if err != nil {
-		api.BadRequest(w, "invalid participant id")
+		api.BadRequest(w, "ID peserta ujian tidak valid")
 		return
 	}
 	if !h.requireSessionParticipant(w, r, sessionID, participantID) {
@@ -2009,12 +2009,12 @@ func (h *CbtSession) RecordAnswer(w http.ResponseWriter, r *http.Request) {
 		Answer     string `json:"answer"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	questionID, err := parseUUID(body.QuestionID)
 	if err != nil {
-		api.BadRequest(w, "question_id invalid")
+		api.BadRequest(w, "Soal tidak valid")
 		return
 	}
 	if err := h.svc.RecordAnswer(r.Context(), participantID, questionID, body.Answer); err != nil {
@@ -2035,7 +2035,7 @@ func (h *CbtSession) ScoreSession(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if err := h.svc.ScoreSession(r.Context(), id); err != nil {
@@ -2124,7 +2124,7 @@ func (h *CbtSession) GuruAwareList(w http.ResponseWriter, r *http.Request) {
 func (h *CbtSession) GuruAwareResults(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	claims, ok := api.ClaimsFromContext(r.Context())
@@ -2174,7 +2174,7 @@ func (h *CbtSession) GuruAwareResults(w http.ResponseWriter, r *http.Request) {
 func (h *CbtSession) GuruAwareParticipants(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	claims, ok := api.ClaimsFromContext(r.Context())
@@ -2224,7 +2224,7 @@ func (h *CbtSession) GetResults(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	session, err := h.svc.Get(r.Context(), id)
@@ -2246,7 +2246,7 @@ func (h *CbtSession) GetResults(w http.ResponseWriter, r *http.Request) {
 func (h *CbtSession) GetItemAnalysis(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !adminAccessAllowed(r) {
@@ -2349,7 +2349,7 @@ func sessionItemAnalysisTone(row db.GetSessionItemAnalysisRow) string {
 func (h *CbtSession) GetMinutes(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, id) {
@@ -2390,7 +2390,7 @@ func (h *CbtSession) GetMinutes(w http.ResponseWriter, r *http.Request) {
 func (h *CbtSession) GetParticipantAnswers(w http.ResponseWriter, r *http.Request) {
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
@@ -2398,7 +2398,7 @@ func (h *CbtSession) GetParticipantAnswers(w http.ResponseWriter, r *http.Reques
 	}
 	pid, err := parseUUID(chi.URLParam(r, "pid"))
 	if err != nil {
-		api.BadRequest(w, "invalid participant id")
+		api.BadRequest(w, "ID peserta ujian tidak valid")
 		return
 	}
 	if !h.requireSessionParticipantForTeacherOrAdmin(w, r, sessionID, pid) {

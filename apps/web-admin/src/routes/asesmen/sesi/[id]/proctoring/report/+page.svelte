@@ -151,7 +151,7 @@
 		a.download = `rekap_insiden_cbt_${sessionId}.csv`;
 		a.click();
 		URL.revokeObjectURL(url);
-		toast.success('CSV rekap insiden dibuat');
+		toast.success('Berkas rekap insiden dibuat');
 	}
 </script>
 

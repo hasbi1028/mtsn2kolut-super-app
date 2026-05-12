@@ -54,12 +54,12 @@ type Rombel struct {
 }
 
 type SubjectAssignmentMatrix struct {
-	AcademicYearID   pgtype.UUID                                  `json:"academic_year_id"`
-	AcademicYearName string                                       `json:"academic_year_name"`
-	Classes          []db.ListSubjectAssignmentMatrixClassesRow   `json:"classes"`
-	Subjects         []db.ListSubjectAssignmentMatrixSubjectsRow  `json:"subjects"`
-	Teachers         []db.ListSubjectAssignmentMatrixTeachersRow  `json:"teachers"`
-	Cells            []db.ListSubjectAssignmentMatrixCellsRow     `json:"cells"`
+	AcademicYearID   pgtype.UUID                                 `json:"academic_year_id"`
+	AcademicYearName string                                      `json:"academic_year_name"`
+	Classes          []db.ListSubjectAssignmentMatrixClassesRow  `json:"classes"`
+	Subjects         []db.ListSubjectAssignmentMatrixSubjectsRow `json:"subjects"`
+	Teachers         []db.ListSubjectAssignmentMatrixTeachersRow `json:"teachers"`
+	Cells            []db.ListSubjectAssignmentMatrixCellsRow    `json:"cells"`
 }
 
 type SubjectAssignmentMatrixCellInput struct {

@@ -87,7 +87,7 @@ func (h *Library) CreateBook(w http.ResponseWriter, r *http.Request) {
 		LokasiRak      string `json:"lokasi_rak"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	tahun := pgtype.Int4{}
@@ -124,7 +124,7 @@ func (h *Library) UpdateBook(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
@@ -139,7 +139,7 @@ func (h *Library) UpdateBook(w http.ResponseWriter, r *http.Request) {
 		LokasiRak      string `json:"lokasi_rak"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	tahun := pgtype.Int4{}
@@ -177,7 +177,7 @@ func (h *Library) DeleteBook(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if err := h.svc.DeleteBook(r.Context(), id); err != nil {
@@ -218,7 +218,7 @@ func (h *Library) LoanBook(w http.ResponseWriter, r *http.Request) {
 		DueDays    int    `json:"due_days"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if body.DueDays == 0 {

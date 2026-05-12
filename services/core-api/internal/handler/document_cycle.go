@@ -294,7 +294,7 @@ func (h *DocumentCycle) GenerateYear(w http.ResponseWriter, r *http.Request) {
 	}
 	var body documentCycleGenerateRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	data, err := h.svc.GenerateYear(r.Context(), inventoryActorUserID(r), body.PeriodYear)
@@ -368,7 +368,7 @@ func (h *DocumentCycle) UpdateObligationStatus(w http.ResponseWriter, r *http.Re
 	}
 	var body documentCycleStatusRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.UpdateObligationStatus(r.Context(), inventoryActorUserID(r), id, body.Status, body.Notes)
@@ -407,7 +407,7 @@ func (h *DocumentCycle) DeleteObligation(w http.ResponseWriter, r *http.Request)
 func (h *DocumentCycle) parseCatalogRequest(w http.ResponseWriter, r *http.Request, update bool) (documentCycleCatalogParsedRequest, bool) {
 	var body documentCycleCatalogRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return documentCycleCatalogParsedRequest{}, false
 	}
 	defaultOwnerUnitID, err := service.ParseGovernanceOptionalUUID(body.DefaultOwnerUnitID)
@@ -457,7 +457,7 @@ func (h *DocumentCycle) parseCatalogRequest(w http.ResponseWriter, r *http.Reque
 func (h *DocumentCycle) parseObligationRequest(w http.ResponseWriter, r *http.Request, id pgtype.UUID) (db.UpdateDocumentCycleObligationParams, bool) {
 	var body documentCycleObligationRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return db.UpdateDocumentCycleObligationParams{}, false
 	}
 	dueDate, err := service.ParseGovernanceDate(body.DueDate)

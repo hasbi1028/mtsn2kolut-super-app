@@ -84,7 +84,7 @@ func (h *ProfileChangeRequest) CreateOwn(w http.ResponseWriter, r *http.Request)
 		Reason          string `json:"reason"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	var targetStudentID pgtype.UUID
@@ -143,7 +143,7 @@ func (h *ProfileChangeRequest) CancelOwn(w http.ResponseWriter, r *http.Request)
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	row, err := h.svc.CancelOwn(r.Context(), userID, id)
@@ -237,7 +237,7 @@ func (h *ProfileChangeRequest) Review(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
@@ -245,7 +245,7 @@ func (h *ProfileChangeRequest) Review(w http.ResponseWriter, r *http.Request) {
 		ReviewNote string `json:"review_note"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.Review(r.Context(), reviewerID, id, service.ReviewProfileChangeRequestInput{

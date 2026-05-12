@@ -65,9 +65,9 @@ func employeeClientMessage(err error, fallback string) string {
 	switch err.Error() {
 	case "only pns or pppk employees can have pusaka accounts":
 		return "akun PUSAKA hanya untuk pegawai PNS atau PPPK"
-	case "invalid employment type":
+	case "Jenis kepegawaian tidak valid":
 		return "jenis kepegawaian tidak valid"
-	case "invalid gender":
+	case "Jenis kelamin tidak valid":
 		return "jenis kelamin tidak valid"
 	case "disable or remove the pusaka account before changing employee type":
 		return "nonaktifkan atau hapus akun PUSAKA sebelum mengubah jenis kepegawaian"
@@ -160,7 +160,7 @@ func (h *Employee) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	emp, err := h.svc.Get(r.Context(), id)
@@ -193,7 +193,7 @@ func (h *Employee) Create(w http.ResponseWriter, r *http.Request) {
 		IsActive       bool   `json:"is_active"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	tanggalLahir, err := parseEmployeeDate(body.TanggalLahir)
@@ -216,7 +216,7 @@ func (h *Employee) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
@@ -230,7 +230,7 @@ func (h *Employee) Update(w http.ResponseWriter, r *http.Request) {
 		IsActive       bool   `json:"is_active"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	tanggalLahir, err := parseEmployeeDate(body.TanggalLahir)
@@ -268,7 +268,7 @@ func (h *Employee) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
@@ -285,14 +285,14 @@ func (h *Employee) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
 		IsActive bool `json:"is_active"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if err := h.svc.SetActive(r.Context(), id, body.IsActive); err != nil {
@@ -312,7 +312,7 @@ func (h *Employee) GetPusakaStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	emp, err := h.svc.Get(r.Context(), id)
@@ -335,7 +335,7 @@ func (h *Employee) UpdatePusakaCredentials(w http.ResponseWriter, r *http.Reques
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
@@ -343,7 +343,7 @@ func (h *Employee) UpdatePusakaCredentials(w http.ResponseWriter, r *http.Reques
 		PusakaPassword string `json:"pusaka_password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	emp, err := h.svc.Get(r.Context(), id)
@@ -394,14 +394,14 @@ func (h *Employee) UpdatePusakaAccountStatus(w http.ResponseWriter, r *http.Requ
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
 		IsEnabled bool `json:"is_enabled"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if err := h.svc.SetPusakaAccountEnabled(r.Context(), id, body.IsEnabled); err != nil {
@@ -426,7 +426,7 @@ func (h *Employee) DeletePusakaAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if err := h.svc.DeletePusakaAccount(r.Context(), id); err != nil {
@@ -451,7 +451,7 @@ func (h *Employee) ListPusakaAuditLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	q := r.URL.Query()

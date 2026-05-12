@@ -862,7 +862,7 @@
 	function governanceErrorMessage(error: unknown) {
 		if (error instanceof Error && error.message.trim()) return error.message;
 		if (typeof error === 'string' && error.trim()) return error;
-		return 'Data tata kelola belum dapat dimuat. Periksa koneksi backend lalu coba lagi.';
+		return 'Data tata kelola belum dapat dimuat. Periksa koneksi layanan sistem lalu coba lagi.';
 	}
 
 	function mutationErrorMessage(error: unknown, fallback: string) {

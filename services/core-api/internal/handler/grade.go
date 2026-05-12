@@ -78,7 +78,7 @@ func (h *Grade) CreateComponent(w http.ResponseWriter, r *http.Request) {
 		IsPublished  bool    `json:"is_published"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	assignmentID, err := parseUUID(body.AssignmentID)
@@ -113,7 +113,7 @@ func (h *Grade) UpdateComponent(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
@@ -123,7 +123,7 @@ func (h *Grade) UpdateComponent(w http.ResponseWriter, r *http.Request) {
 		MaxScore float64 `json:"max_score"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.UpdateComponent(r.Context(), db.UpdateGradeComponentParams{
@@ -152,14 +152,14 @@ func (h *Grade) SetComponentPublished(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
 		IsPublished bool `json:"is_published"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.SetComponentPublished(r.Context(), id, body.IsPublished, gradeTeacherEmployeeID(r))
@@ -181,14 +181,14 @@ func (h *Grade) FinalizeAssignment(w http.ResponseWriter, r *http.Request) {
 	}
 	assignmentID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
 		Notes string `json:"notes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.FinalizeAssignment(r.Context(), assignmentID, currentGradeUsername(r), body.Notes, gradeTeacherEmployeeID(r))
@@ -210,7 +210,7 @@ func (h *Grade) ReopenAssignment(w http.ResponseWriter, r *http.Request) {
 	}
 	assignmentID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if err := h.svc.ReopenAssignment(r.Context(), assignmentID, gradeTeacherEmployeeID(r)); err != nil {
@@ -230,7 +230,7 @@ func (h *Grade) DeleteComponent(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if err := h.svc.DeleteComponent(r.Context(), id, gradeTeacherEmployeeID(r)); err != nil {
@@ -259,7 +259,7 @@ func (h *Grade) UpsertEntry(w http.ResponseWriter, r *http.Request) {
 		Notes     string  `json:"notes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	studentID, err := parseUUID(body.StudentID)

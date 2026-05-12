@@ -431,7 +431,7 @@ func TestEmployeeHandlersMapServiceErrors(t *testing.T) {
 			svc:        &fakeEmployeeService{Employee: &service.Employee{}},
 			req:        withRouteParam(adminRequest(http.MethodGet, "/api/employees/bad", ""), "id", "bad"),
 			wantStatus: http.StatusBadRequest,
-			wantBody:   "invalid id",
+			wantBody:   "ID data tidak valid",
 		},
 		{
 			name:       "get not found",
@@ -455,12 +455,12 @@ func TestEmployeeHandlersMapServiceErrors(t *testing.T) {
 			svc:        &fakeEmployeeService{Employee: &service.Employee{}},
 			req:        adminRequest(http.MethodPost, "/api/employees", `{`),
 			wantStatus: http.StatusBadRequest,
-			wantBody:   "invalid json",
+			wantBody:   "Data yang dikirim tidak valid",
 		},
 		{
 			name:       "create validation message",
 			handler:    (*Employee).Create,
-			svc:        &fakeEmployeeService{Employee: &service.Employee{}, createErr: errors.New("invalid employment type")},
+			svc:        &fakeEmployeeService{Employee: &service.Employee{}, createErr: errors.New("jenis kepegawaian tidak valid")},
 			req:        adminRequest(http.MethodPost, "/api/employees", `{"nip":"1","nama":"Guru","employment_type":"bad"}`),
 			wantStatus: http.StatusBadRequest,
 			wantBody:   "jenis kepegawaian tidak valid",
@@ -471,7 +471,7 @@ func TestEmployeeHandlersMapServiceErrors(t *testing.T) {
 			svc:        &fakeEmployeeService{Employee: &service.Employee{}},
 			req:        withRouteParam(adminRequest(http.MethodPatch, "/api/employees/bad", `{}`), "id", "bad"),
 			wantStatus: http.StatusBadRequest,
-			wantBody:   "invalid id",
+			wantBody:   "ID data tidak valid",
 		},
 		{
 			name:       "update invalid json",
@@ -479,7 +479,7 @@ func TestEmployeeHandlersMapServiceErrors(t *testing.T) {
 			svc:        &fakeEmployeeService{Employee: &service.Employee{}},
 			req:        withRouteParam(adminRequest(http.MethodPatch, "/api/employees/"+id.String(), `{`), "id", id.String()),
 			wantStatus: http.StatusBadRequest,
-			wantBody:   "invalid json",
+			wantBody:   "Data yang dikirim tidak valid",
 		},
 		{
 			name:       "update not found",
@@ -503,7 +503,7 @@ func TestEmployeeHandlersMapServiceErrors(t *testing.T) {
 			svc:        &fakeEmployeeService{Employee: &service.Employee{}},
 			req:        withRouteParam(adminRequest(http.MethodDelete, "/api/employees/bad", ""), "id", "bad"),
 			wantStatus: http.StatusBadRequest,
-			wantBody:   "invalid id",
+			wantBody:   "ID data tidak valid",
 		},
 		{
 			name:       "delete internal",
@@ -519,7 +519,7 @@ func TestEmployeeHandlersMapServiceErrors(t *testing.T) {
 			svc:        &fakeEmployeeService{Employee: &service.Employee{}},
 			req:        withRouteParam(adminRequest(http.MethodPatch, "/api/employees/bad/status", `{}`), "id", "bad"),
 			wantStatus: http.StatusBadRequest,
-			wantBody:   "invalid id",
+			wantBody:   "ID data tidak valid",
 		},
 		{
 			name:       "status invalid json",
@@ -527,7 +527,7 @@ func TestEmployeeHandlersMapServiceErrors(t *testing.T) {
 			svc:        &fakeEmployeeService{Employee: &service.Employee{}},
 			req:        withRouteParam(adminRequest(http.MethodPatch, "/api/employees/"+id.String()+"/status", `{`), "id", id.String()),
 			wantStatus: http.StatusBadRequest,
-			wantBody:   "invalid json",
+			wantBody:   "Data yang dikirim tidak valid",
 		},
 		{
 			name:       "status internal",
@@ -543,7 +543,7 @@ func TestEmployeeHandlersMapServiceErrors(t *testing.T) {
 			svc:        &fakeEmployeeService{Employee: &service.Employee{}},
 			req:        withRouteParam(adminRequest(http.MethodGet, "/api/employees/bad/pusaka-status", ""), "id", "bad"),
 			wantStatus: http.StatusBadRequest,
-			wantBody:   "invalid id",
+			wantBody:   "ID data tidak valid",
 		},
 		{
 			name:       "pusaka status internal",
@@ -559,7 +559,7 @@ func TestEmployeeHandlersMapServiceErrors(t *testing.T) {
 			svc:        &fakeEmployeeService{Employee: &service.Employee{}},
 			req:        withRouteParam(adminRequest(http.MethodPut, "/api/employees/bad/pusaka-credentials", `{}`), "id", "bad"),
 			wantStatus: http.StatusBadRequest,
-			wantBody:   "invalid id",
+			wantBody:   "ID data tidak valid",
 		},
 		{
 			name:       "pusaka credentials invalid json",
@@ -567,7 +567,7 @@ func TestEmployeeHandlersMapServiceErrors(t *testing.T) {
 			svc:        &fakeEmployeeService{Employee: &service.Employee{}},
 			req:        withRouteParam(adminRequest(http.MethodPut, "/api/employees/"+id.String()+"/pusaka-credentials", `{`), "id", id.String()),
 			wantStatus: http.StatusBadRequest,
-			wantBody:   "invalid json",
+			wantBody:   "Data yang dikirim tidak valid",
 		},
 		{
 			name:       "pusaka credentials get internal",
@@ -599,7 +599,7 @@ func TestEmployeeHandlersMapServiceErrors(t *testing.T) {
 			svc:        &fakeEmployeeService{Employee: &service.Employee{}},
 			req:        withRouteParam(adminRequest(http.MethodPatch, "/api/employees/bad/pusaka-account/status", `{}`), "id", "bad"),
 			wantStatus: http.StatusBadRequest,
-			wantBody:   "invalid id",
+			wantBody:   "ID data tidak valid",
 		},
 		{
 			name:       "pusaka account status invalid json",
@@ -607,7 +607,7 @@ func TestEmployeeHandlersMapServiceErrors(t *testing.T) {
 			svc:        &fakeEmployeeService{Employee: &service.Employee{}},
 			req:        withRouteParam(adminRequest(http.MethodPatch, "/api/employees/"+id.String()+"/pusaka-account/status", `{`), "id", id.String()),
 			wantStatus: http.StatusBadRequest,
-			wantBody:   "invalid json",
+			wantBody:   "Data yang dikirim tidak valid",
 		},
 		{
 			name:       "pusaka account missing",
@@ -623,7 +623,7 @@ func TestEmployeeHandlersMapServiceErrors(t *testing.T) {
 			svc:        &fakeEmployeeService{Employee: &service.Employee{}},
 			req:        withRouteParam(adminRequest(http.MethodDelete, "/api/employees/bad/pusaka-account", ""), "id", "bad"),
 			wantStatus: http.StatusBadRequest,
-			wantBody:   "invalid id",
+			wantBody:   "ID data tidak valid",
 		},
 		{
 			name:       "delete pusaka account service error",
@@ -639,7 +639,7 @@ func TestEmployeeHandlersMapServiceErrors(t *testing.T) {
 			svc:        &fakeEmployeeService{Employee: &service.Employee{}},
 			req:        withRouteParam(adminRequest(http.MethodGet, "/api/employees/bad/pusaka-audit-logs", ""), "id", "bad"),
 			wantStatus: http.StatusBadRequest,
-			wantBody:   "invalid id",
+			wantBody:   "ID data tidak valid",
 		},
 		{
 			name:       "pusaka audit internal",
