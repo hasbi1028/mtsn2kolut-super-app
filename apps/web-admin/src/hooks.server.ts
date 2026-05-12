@@ -89,6 +89,13 @@ async function refreshAuthSession(
 	return event.locals.authRefreshPromise;
 }
 
+function staticCacheControlForPath(pathname: string): string | null {
+	if (pathname.startsWith('/_app/immutable/')) return 'public, max-age=31536000, immutable';
+	if (pathname === '/favicon.svg' || pathname === '/manifest.webmanifest') return 'public, max-age=86400, stale-while-revalidate=604800';
+	if (pathname.startsWith('/releases/mobile/') && !pathname.endsWith('.apk')) return 'public, max-age=300, stale-while-revalidate=3600';
+	return null;
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	const isPublic = isPublicPath(event.url.pathname);
 	let access = event.cookies.get('access_token');
@@ -176,7 +183,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 		throw redirect(302, '/');
 	}
 
-	return await resolve(event);
+	const cacheControl = staticCacheControlForPath(event.url.pathname);
+	const response = await resolve(event);
+	if (cacheControl && !response.headers.has('cache-control')) {
+		response.headers.set('cache-control', cacheControl);
+	}
+	return response;
 };
 
 export const handleFetch: HandleFetch = async ({ event, request, fetch }) => {

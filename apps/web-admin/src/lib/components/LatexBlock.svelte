@@ -1,4 +1,5 @@
 <script lang="ts">
+	import 'katex/dist/katex.min.css';
 	import katex from 'katex';
 
 	let { src = '', display = true, class: cls = '' }: { src: string; display?: boolean; class?: string } = $props();
