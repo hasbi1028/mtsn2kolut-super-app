@@ -20,7 +20,7 @@ func (h *CbtQuestion) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	row, err := h.svc.GetDetail(r.Context(), id, cbtQuestionActorFromRequest(r))
@@ -38,7 +38,7 @@ func (h *CbtQuestion) Timeline(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	rows, err := h.svc.Timeline(r.Context(), id, cbtQuestionActorFromRequest(r))
@@ -85,7 +85,7 @@ func (h *CbtQuestion) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !h.requireQuestionAuthorOrAdmin(w, r, id) {
@@ -130,7 +130,7 @@ func (h *CbtQuestion) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !h.requireQuestionAuthorOrAdmin(w, r, id) {

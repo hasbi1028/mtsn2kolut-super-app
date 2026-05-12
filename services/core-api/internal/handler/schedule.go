@@ -51,7 +51,7 @@ func (h *PusakaSchedule) Create(w http.ResponseWriter, r *http.Request) {
 		IsEnabled bool   `json:"is_enabled"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if body.RunType != "morning" {
@@ -82,7 +82,7 @@ func (h *PusakaSchedule) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
@@ -91,7 +91,7 @@ func (h *PusakaSchedule) Update(w http.ResponseWriter, r *http.Request) {
 		IsEnabled bool   `json:"is_enabled"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	sched, err := h.svc.UpdateByID(r.Context(), db.UpdateScheduleByIDParams{
@@ -114,7 +114,7 @@ func (h *PusakaSchedule) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if err := h.svc.DeleteByID(r.Context(), id); err != nil {

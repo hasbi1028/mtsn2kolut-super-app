@@ -24,14 +24,14 @@ func (h *CbtQuestion) ImportLegacyCSV(w http.ResponseWriter, r *http.Request) {
 	}
 	subjectID, err := parseUUID(r.FormValue("subject_id"))
 	if err != nil {
-		api.BadRequest(w, "subject_id invalid")
+		api.BadRequest(w, "Mata pelajaran tidak valid")
 		return
 	}
 	eventID := pgtype.UUID{}
 	if raw := strings.TrimSpace(r.FormValue("event_id")); raw != "" {
 		parsed, err := parseUUID(raw)
 		if err != nil {
-			api.BadRequest(w, "event_id invalid")
+			api.BadRequest(w, "Kegiatan asesmen tidak valid")
 			return
 		}
 		eventID = parsed

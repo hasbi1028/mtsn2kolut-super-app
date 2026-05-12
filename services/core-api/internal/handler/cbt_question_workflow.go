@@ -24,7 +24,7 @@ func (h *CbtQuestion) BulkWorkflowAction(w http.ResponseWriter, r *http.Request)
 		QuestionIDs []string `json:"question_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	ids := make([]pgtype.UUID, 0, len(body.QuestionIDs))
@@ -56,7 +56,7 @@ func (h *CbtQuestion) BulkWorkflowAction(w http.ResponseWriter, r *http.Request)
 		Actor:       cbtQuestionActorFromRequest(r),
 	})
 	if err != nil {
-		writeClientError(w, err, "Aksi bulk workflow soal CBT tidak valid")
+		writeClientError(w, err, "Aksi massal alur verifikasi soal tidak valid")
 		return
 	}
 	api.OK(w, result)
@@ -69,7 +69,7 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
@@ -77,7 +77,7 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		Notes  string `json:"notes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	actor := cbtQuestionActorFromRequest(r)
@@ -178,7 +178,7 @@ func (h *CbtQuestion) Duplicate(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	row, err := h.svc.DuplicateAsDraft(r.Context(), id, cbtQuestionActorFromRequest(r))
@@ -201,7 +201,7 @@ func (h *CbtQuestion) MarkRevision(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
@@ -209,7 +209,7 @@ func (h *CbtQuestion) MarkRevision(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Body != nil {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
-			api.BadRequest(w, "invalid json")
+			api.BadRequest(w, "Data yang dikirim tidak valid")
 			return
 		}
 	}

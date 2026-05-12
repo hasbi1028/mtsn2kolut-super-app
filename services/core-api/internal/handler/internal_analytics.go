@@ -334,7 +334,7 @@ func writeInternalAnalyticsDecodeError(w http.ResponseWriter, err error) {
 		api.Err(w, http.StatusRequestEntityTooLarge, "request body too large")
 		return
 	}
-	api.BadRequest(w, "invalid json")
+	api.BadRequest(w, "Data yang dikirim tidak valid")
 }
 
 func jsonRawObject(raw json.RawMessage) bool {

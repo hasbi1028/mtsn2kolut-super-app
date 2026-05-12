@@ -377,7 +377,7 @@ func TestEmployeeClientMessage(t *testing.T) {
 	}{
 		{name: "nil", err: nil, want: "fallback"},
 		{name: "pns only", err: errors.New("only pns or pppk employees can have pusaka accounts"), want: "akun PUSAKA hanya untuk pegawai PNS atau PPPK"},
-		{name: "invalid employment", err: errors.New("invalid employment type"), want: "jenis kepegawaian tidak valid"},
+		{name: "invalid employment", err: errors.New("jenis kepegawaian tidak valid"), want: "jenis kepegawaian tidak valid"},
 		{name: "disable before change", err: errors.New("disable or remove the pusaka account before changing employee type"), want: "nonaktifkan atau hapus akun PUSAKA sebelum mengubah jenis kepegawaian"},
 		{name: "not configured", err: errors.New("pusaka account is not configured"), want: "akun PUSAKA belum dikonfigurasi"},
 		{name: "fallback safe", err: errors.New("nama wajib diisi"), want: "nama wajib diisi"},

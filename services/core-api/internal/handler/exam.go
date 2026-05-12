@@ -233,7 +233,7 @@ func (h *Exam) SubmitAnswer(w http.ResponseWriter, r *http.Request) {
 	}
 	questionID, err := parseUUID(body.QuestionID)
 	if err != nil {
-		api.BadRequest(w, "question_id invalid")
+		api.BadRequest(w, "Soal tidak valid")
 		return
 	}
 	if err := h.svc.SubmitAnswer(r.Context(), p, questionID, body.Answer); err != nil {
@@ -351,7 +351,7 @@ func writeExamDecodeError(w http.ResponseWriter, err error) {
 		api.Err(w, http.StatusRequestEntityTooLarge, "request body too large")
 		return
 	}
-	api.BadRequest(w, "invalid json")
+	api.BadRequest(w, "Data yang dikirim tidak valid")
 }
 
 func absolutizeExamLoginResult(r *http.Request, result *service.LoginResult) {

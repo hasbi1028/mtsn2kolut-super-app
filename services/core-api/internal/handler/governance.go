@@ -137,7 +137,7 @@ func (h *Governance) CreateUnit(w http.ResponseWriter, r *http.Request) {
 	}
 	var body governanceUnitRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	parentID, err := service.ParseGovernanceOptionalUUID(body.ParentID)
@@ -178,7 +178,7 @@ func (h *Governance) UpdateUnit(w http.ResponseWriter, r *http.Request) {
 	}
 	var body governanceUnitRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	parentID, err := service.ParseGovernanceOptionalUUID(body.ParentID)
@@ -248,7 +248,7 @@ func (h *Governance) CreatePosition(w http.ResponseWriter, r *http.Request) {
 	}
 	var body governancePositionRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	unitID, parentPositionID, ok := parsePositionIDs(w, body)
@@ -284,7 +284,7 @@ func (h *Governance) UpdatePosition(w http.ResponseWriter, r *http.Request) {
 	}
 	var body governancePositionRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	unitID, parentPositionID, ok := parsePositionIDs(w, body)
@@ -336,7 +336,7 @@ func (h *Governance) CreateAssignment(w http.ResponseWriter, r *http.Request) {
 	}
 	var body governanceAssignmentRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parseAssignmentRequest(w, body)
@@ -363,7 +363,7 @@ func (h *Governance) UpdateAssignment(w http.ResponseWriter, r *http.Request) {
 	}
 	var body governanceAssignmentRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	createArg, ok := parseAssignmentRequest(w, body)
@@ -419,7 +419,7 @@ func (h *Governance) CreateDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	var body governanceDocumentRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parseDocumentRequest(w, body)
@@ -452,7 +452,7 @@ func (h *Governance) UpdateDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	var body governanceDocumentRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	createArg, ok := parseDocumentRequest(w, body)
@@ -512,7 +512,7 @@ func (h *Governance) CreateProgram(w http.ResponseWriter, r *http.Request) {
 	}
 	var body governanceProgramRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parseProgramRequest(w, body)
@@ -545,7 +545,7 @@ func (h *Governance) UpdateProgram(w http.ResponseWriter, r *http.Request) {
 	}
 	var body governanceProgramRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	createArg, ok := parseProgramRequest(w, body)
@@ -632,7 +632,7 @@ func (h *Governance) CreateWorkPlanItem(w http.ResponseWriter, r *http.Request) 
 	}
 	var body governanceWorkPlanItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parseWorkPlanItemRequest(w, body)
@@ -664,7 +664,7 @@ func (h *Governance) UpdateWorkPlanItem(w http.ResponseWriter, r *http.Request) 
 	}
 	var body governanceWorkPlanItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	createArg, ok := parseWorkPlanItemRequest(w, body)
@@ -753,7 +753,7 @@ func (h *Governance) CreatePerformanceTarget(w http.ResponseWriter, r *http.Requ
 	}
 	var body governancePerformanceTargetRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parsePerformanceTargetRequest(w, body)
@@ -786,7 +786,7 @@ func (h *Governance) UpdatePerformanceTarget(w http.ResponseWriter, r *http.Requ
 	}
 	var body governancePerformanceTargetRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	createArg, ok := parsePerformanceTargetRequest(w, body)
@@ -870,7 +870,7 @@ func (h *Governance) CreateEvidenceItem(w http.ResponseWriter, r *http.Request) 
 	}
 	var body governanceEvidenceItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parseEvidenceItemRequest(w, body)
@@ -898,7 +898,7 @@ func (h *Governance) UpdateEvidenceItem(w http.ResponseWriter, r *http.Request) 
 	}
 	var body governanceEvidenceItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	createArg, ok := parseEvidenceItemRequest(w, body)
@@ -963,7 +963,7 @@ func (h *Governance) CreateComplianceAction(w http.ResponseWriter, r *http.Reque
 	}
 	var body governanceComplianceActionRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parseComplianceActionRequest(w, body)
@@ -991,7 +991,7 @@ func (h *Governance) UpdateComplianceAction(w http.ResponseWriter, r *http.Reque
 	}
 	var body governanceComplianceActionRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	createArg, ok := parseComplianceActionRequest(w, body)

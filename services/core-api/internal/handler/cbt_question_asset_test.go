@@ -514,7 +514,7 @@ func TestCbtQuestionAssetFileRejectsInvalidAndMissingAssets(t *testing.T) {
 		svc  *fakeCbtQuestionAssetService
 		want int
 	}{
-		{name: "invalid id", id: "bad", svc: &fakeCbtQuestionAssetService{}, want: http.StatusBadRequest},
+		{name: "ID data tidak valid", id: "bad", svc: &fakeCbtQuestionAssetService{}, want: http.StatusBadRequest},
 		{name: "missing row", id: assetID.String(), svc: &fakeCbtQuestionAssetService{getErr: errors.New("not found")}, want: http.StatusNotFound},
 		{name: "missing file", id: assetID.String(), svc: &fakeCbtQuestionAssetService{getRow: db.CbtQuestionAsset{ID: assetID, StoragePath: "/path/does/not/exist"}}, want: http.StatusNotFound},
 		{name: "access error", id: assetID.String(), svc: &fakeCbtQuestionAssetService{getRow: db.CbtQuestionAsset{ID: assetID, QuestionID: handlerTestUUID(9)}, accessErr: errors.New("db down")}, want: http.StatusInternalServerError},

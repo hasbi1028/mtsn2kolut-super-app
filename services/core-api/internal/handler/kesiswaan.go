@@ -171,7 +171,7 @@ func (h *Kesiswaan) UpdateStudentProfile(w http.ResponseWriter, r *http.Request)
 	}
 	var body kesiswaanStudentProfileRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	tanggalLahir, err := service.ParseKesiswaanOptionalDate(body.TanggalLahir)
@@ -295,7 +295,7 @@ func (h *Kesiswaan) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	var body kesiswaanCategoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.CreateCategory(r.Context(), db.CreateViolationCategoryParams{
@@ -326,7 +326,7 @@ func (h *Kesiswaan) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	var body kesiswaanCategoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.UpdateCategory(r.Context(), db.UpdateViolationCategoryParams{
@@ -372,7 +372,7 @@ func (h *Kesiswaan) CreateViolation(w http.ResponseWriter, r *http.Request) {
 	}
 	var body kesiswaanViolationRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parseViolationRequest(w, body)
@@ -407,7 +407,7 @@ func (h *Kesiswaan) UpdateViolation(w http.ResponseWriter, r *http.Request) {
 	}
 	var body kesiswaanViolationRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	createArg, ok := parseViolationRequest(w, body)
@@ -470,7 +470,7 @@ func (h *Kesiswaan) CreateAchievement(w http.ResponseWriter, r *http.Request) {
 	}
 	var body kesiswaanAchievementRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parseAchievementRequest(w, body)
@@ -499,7 +499,7 @@ func (h *Kesiswaan) UpdateAchievement(w http.ResponseWriter, r *http.Request) {
 	}
 	var body kesiswaanAchievementRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	createArg, ok := parseAchievementRequest(w, body)
@@ -551,7 +551,7 @@ func (h *Kesiswaan) CreateExtracurricular(w http.ResponseWriter, r *http.Request
 	}
 	var body kesiswaanExtracurricularRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	supervisorID, err := service.ParseKesiswaanOptionalUUID(body.SupervisorEmployeeID)
@@ -588,7 +588,7 @@ func (h *Kesiswaan) UpdateExtracurricular(w http.ResponseWriter, r *http.Request
 	}
 	var body kesiswaanExtracurricularRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	supervisorID, err := service.ParseKesiswaanOptionalUUID(body.SupervisorEmployeeID)
@@ -647,7 +647,7 @@ func (h *Kesiswaan) CreateExtracurricularMember(w http.ResponseWriter, r *http.R
 	}
 	var body kesiswaanExtracurricularMemberRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parseExtracurricularMemberRequest(w, body)
@@ -676,7 +676,7 @@ func (h *Kesiswaan) UpdateExtracurricularMember(w http.ResponseWriter, r *http.R
 	}
 	var body kesiswaanExtracurricularMemberRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	createArg, ok := parseExtracurricularMemberRequest(w, body)
@@ -733,7 +733,7 @@ func (h *Kesiswaan) CreateCounselingSession(w http.ResponseWriter, r *http.Reque
 	}
 	var body kesiswaanCounselingRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parseCounselingRequest(w, body)
@@ -768,7 +768,7 @@ func (h *Kesiswaan) UpdateCounselingSession(w http.ResponseWriter, r *http.Reque
 	}
 	var body kesiswaanCounselingRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	createArg, ok := parseCounselingRequest(w, body)
@@ -831,7 +831,7 @@ func (h *Kesiswaan) CreateStudentTransfer(w http.ResponseWriter, r *http.Request
 	}
 	var body kesiswaanTransferRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parseStudentTransferRequest(w, body)

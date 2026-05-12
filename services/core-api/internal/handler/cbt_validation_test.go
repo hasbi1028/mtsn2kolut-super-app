@@ -80,7 +80,7 @@ func TestCbtSessionCreateRejectsMalformedInput(t *testing.T) {
 		name string
 		body string
 	}{
-		{name: "invalid json", body: `{`},
+		{name: "Data yang dikirim tidak valid", body: `{`},
 		{name: "invalid package", body: `{"package_id":"bad"}`},
 		{name: "class scope requires class", body: `{"package_id":"01000000-0000-0000-0000-000000000000","scope_type":"class"}`},
 		{name: "cross grade requires special event", body: `{"package_id":"01000000-0000-0000-0000-000000000000","class_id":"02000000-0000-0000-0000-000000000000","allow_cross_grade":true}`},

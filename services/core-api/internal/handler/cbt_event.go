@@ -86,7 +86,7 @@ func (h *CbtEvent) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !h.requireEventReadAccess(w, r, id) {
@@ -107,7 +107,7 @@ func (h *CbtEvent) Overview(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !h.requireEventReadAccess(w, r, id) {
@@ -128,7 +128,7 @@ func (h *CbtEvent) ListPackages(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !h.requireEventReadAccess(w, r, id) {
@@ -149,7 +149,7 @@ func (h *CbtEvent) ListSessions(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !h.requireEventReadAccess(w, r, id) {
@@ -170,7 +170,7 @@ func (h *CbtEvent) QuestionCompleteness(w http.ResponseWriter, r *http.Request) 
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !h.requireEventReadAccess(w, r, id) {
@@ -191,7 +191,7 @@ func (h *CbtEvent) GetQuestionRequirements(w http.ResponseWriter, r *http.Reques
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !h.requireEventReadAccess(w, r, id) {
@@ -212,12 +212,12 @@ func (h *CbtEvent) UpsertQuestionRequirements(w http.ResponseWriter, r *http.Req
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var input service.SaveCbtEventQuestionRequirementsInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.UpsertQuestionRequirements(r.Context(), id, input)
@@ -235,7 +235,7 @@ func (h *CbtEvent) GetResults(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	rows, err := h.svc.GetResults(r.Context(), id)
@@ -253,7 +253,7 @@ func (h *CbtEvent) GetExamCards(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	rows, err := h.svc.GetExamCards(r.Context(), id)
@@ -278,7 +278,7 @@ func (h *CbtEvent) Create(w http.ResponseWriter, r *http.Request) {
 		Status         string   `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if body.Title == "" {
@@ -295,7 +295,7 @@ func (h *CbtEvent) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	targetLevels := normalizeTargetLevels(body.TargetLevels)
 	if err := validateTargetLevels(targetLevels); err != nil {
-		writeClientError(w, err, "Data event CBT tidak valid")
+		writeClientError(w, err, "Data kegiatan asesmen tidak valid")
 		return
 	}
 
@@ -304,7 +304,7 @@ func (h *CbtEvent) Create(w http.ResponseWriter, r *http.Request) {
 		var err error
 		ayID, err = parseUUID(body.AcademicYearID)
 		if err != nil {
-			api.BadRequest(w, "academic_year_id invalid")
+			api.BadRequest(w, "Tahun ajaran tidak valid")
 			return
 		}
 	}
@@ -318,7 +318,7 @@ func (h *CbtEvent) Create(w http.ResponseWriter, r *http.Request) {
 		Status:         body.Status,
 	})
 	if err != nil {
-		writeDomainOrInternal(w, err, "Data event CBT tidak valid")
+		writeDomainOrInternal(w, err, "Data kegiatan asesmen tidak valid")
 		return
 	}
 	api.Created(w, row)
@@ -331,7 +331,7 @@ func (h *CbtEvent) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
@@ -342,19 +342,19 @@ func (h *CbtEvent) Update(w http.ResponseWriter, r *http.Request) {
 		AcademicYearID string   `json:"academic_year_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	targetLevels := normalizeTargetLevels(body.TargetLevels)
 	if err := validateTargetLevels(targetLevels); err != nil {
-		writeClientError(w, err, "Data event CBT tidak valid")
+		writeClientError(w, err, "Data kegiatan asesmen tidak valid")
 		return
 	}
 	var ayID pgtype.UUID
 	if body.AcademicYearID != "" {
 		ayID, err = parseUUID(body.AcademicYearID)
 		if err != nil {
-			api.BadRequest(w, "academic_year_id invalid")
+			api.BadRequest(w, "Tahun ajaran tidak valid")
 			return
 		}
 	}
@@ -379,19 +379,19 @@ func (h *CbtEvent) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
 		Status string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.UpdateStatus(r.Context(), id, body.Status)
 	if err != nil {
-		writeDomainOrInternal(w, err, "Status event CBT tidak valid")
+		writeDomainOrInternal(w, err, "Status kegiatan asesmen tidak valid")
 		return
 	}
 	api.OK(w, row)
@@ -404,11 +404,11 @@ func (h *CbtEvent) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
-		writeDomainOrInternal(w, err, "Hapus event CBT tidak valid")
+		writeDomainOrInternal(w, err, "Hapus kegiatan asesmen tidak valid")
 		return
 	}
 	api.NoContent(w)
@@ -421,7 +421,7 @@ func (h *CbtEvent) ListMembers(w http.ResponseWriter, r *http.Request) {
 	}
 	eventID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid event_id")
+		api.BadRequest(w, "ID kegiatan asesmen tidak valid")
 		return
 	}
 	if !h.requireEventReadAccess(w, r, eventID) {
@@ -429,7 +429,7 @@ func (h *CbtEvent) ListMembers(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := h.svc.ListMembers(r.Context(), eventID)
 	if err != nil {
-		writeClientError(w, err, "Data anggota event CBT tidak valid")
+		writeClientError(w, err, "Data anggota kegiatan asesmen tidak valid")
 		return
 	}
 	api.OK(w, rows)
@@ -442,7 +442,7 @@ func (h *CbtEvent) CreateMember(w http.ResponseWriter, r *http.Request) {
 	}
 	eventID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid event_id")
+		api.BadRequest(w, "ID kegiatan asesmen tidak valid")
 		return
 	}
 	input, err := cbtEventMemberInputFromRequest(r)
@@ -452,7 +452,7 @@ func (h *CbtEvent) CreateMember(w http.ResponseWriter, r *http.Request) {
 	}
 	row, err := h.svc.CreateMember(r.Context(), eventID, input)
 	if err != nil {
-		writeClientError(w, err, "Data anggota event CBT tidak valid")
+		writeClientError(w, err, "Data anggota kegiatan asesmen tidak valid")
 		return
 	}
 	api.Created(w, row)
@@ -474,7 +474,7 @@ func (h *CbtEvent) UpdateMember(w http.ResponseWriter, r *http.Request) {
 	}
 	row, err := h.svc.UpdateMember(r.Context(), eventID, memberID, input)
 	if err != nil {
-		writeClientError(w, err, "Data anggota event CBT tidak valid")
+		writeClientError(w, err, "Data anggota kegiatan asesmen tidak valid")
 		return
 	}
 	api.OK(w, row)
@@ -490,7 +490,7 @@ func (h *CbtEvent) DeleteMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.DeleteMember(r.Context(), eventID, memberID); err != nil {
-		writeClientError(w, err, "Data anggota event CBT tidak valid")
+		writeClientError(w, err, "Data anggota kegiatan asesmen tidak valid")
 		return
 	}
 	api.NoContent(w)
@@ -503,7 +503,7 @@ func (h *CbtEvent) ListQuestionTargets(w http.ResponseWriter, r *http.Request) {
 	}
 	eventID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid event_id")
+		api.BadRequest(w, "ID kegiatan asesmen tidak valid")
 		return
 	}
 	if !h.requireEventReadAccess(w, r, eventID) {
@@ -511,7 +511,7 @@ func (h *CbtEvent) ListQuestionTargets(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := h.svc.ListQuestionTargets(r.Context(), eventID)
 	if err != nil {
-		writeClientError(w, err, "Target soal event CBT tidak valid")
+		writeClientError(w, err, "Target soal kegiatan asesmen tidak valid")
 		return
 	}
 	api.OK(w, rows)
@@ -524,7 +524,7 @@ func (h *CbtEvent) UpsertQuestionTarget(w http.ResponseWriter, r *http.Request) 
 	}
 	eventID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid event_id")
+		api.BadRequest(w, "ID kegiatan asesmen tidak valid")
 		return
 	}
 	var body struct {
@@ -532,17 +532,17 @@ func (h *CbtEvent) UpsertQuestionTarget(w http.ResponseWriter, r *http.Request) 
 		TargetQuestions int32  `json:"target_questions"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	subjectID, err := parseUUID(body.SubjectID)
 	if err != nil {
-		api.BadRequest(w, "subject_id invalid")
+		api.BadRequest(w, "Mata pelajaran tidak valid")
 		return
 	}
 	row, err := h.svc.UpsertQuestionTarget(r.Context(), eventID, service.SaveCbtEventSubjectTargetInput{SubjectID: subjectID, TargetQuestions: body.TargetQuestions})
 	if err != nil {
-		writeClientError(w, err, "Target soal event CBT tidak valid")
+		writeClientError(w, err, "Target soal kegiatan asesmen tidak valid")
 		return
 	}
 	api.OK(w, row)
@@ -555,16 +555,16 @@ func (h *CbtEvent) DeleteQuestionTarget(w http.ResponseWriter, r *http.Request) 
 	}
 	eventID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid event_id")
+		api.BadRequest(w, "ID kegiatan asesmen tidak valid")
 		return
 	}
 	subjectID, err := parseUUID(chi.URLParam(r, "subject_id"))
 	if err != nil {
-		api.BadRequest(w, "invalid subject_id")
+		api.BadRequest(w, "ID mata pelajaran tidak valid")
 		return
 	}
 	if err := h.svc.DeleteQuestionTarget(r.Context(), eventID, subjectID); err != nil {
-		writeClientError(w, err, "Target soal event CBT tidak valid")
+		writeClientError(w, err, "Target soal kegiatan asesmen tidak valid")
 		return
 	}
 	api.NoContent(w)
@@ -578,29 +578,29 @@ func cbtEventMemberInputFromRequest(r *http.Request) (service.SaveCbtEventMember
 		Role       string `json:"role"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		return service.SaveCbtEventMemberInput{}, errors.New("invalid json")
+		return service.SaveCbtEventMemberInput{}, errors.New("Data yang dikirim tidak valid")
 	}
 	userID, err := parseUUID(body.UserID)
 	if err != nil {
-		return service.SaveCbtEventMemberInput{}, errors.New("user_id invalid")
+		return service.SaveCbtEventMemberInput{}, errors.New("Pengguna tidak valid")
 	}
 	var employeeID pgtype.UUID
 	if strings.TrimSpace(body.EmployeeID) != "" {
 		employeeID, err = parseUUID(body.EmployeeID)
 		if err != nil {
-			return service.SaveCbtEventMemberInput{}, errors.New("employee_id invalid")
+			return service.SaveCbtEventMemberInput{}, errors.New("Pegawai tidak valid")
 		}
 	}
 	var subjectID pgtype.UUID
 	if strings.TrimSpace(body.SubjectID) != "" {
 		subjectID, err = parseUUID(body.SubjectID)
 		if err != nil {
-			return service.SaveCbtEventMemberInput{}, errors.New("subject_id invalid")
+			return service.SaveCbtEventMemberInput{}, errors.New("Mata pelajaran tidak valid")
 		}
 	}
 	role := db.CbtEventMemberRole(strings.TrimSpace(body.Role))
 	if !validCbtEventMemberRole(role) {
-		return service.SaveCbtEventMemberInput{}, errors.New("role invalid")
+		return service.SaveCbtEventMemberInput{}, errors.New("Peran pengguna tidak valid")
 	}
 	return service.SaveCbtEventMemberInput{UserID: userID, EmployeeID: employeeID, SubjectID: subjectID, Role: role}, nil
 }
@@ -643,12 +643,12 @@ func (h *CbtEvent) requireEventReadAccess(w http.ResponseWriter, r *http.Request
 func cbtEventMemberRouteIDs(w http.ResponseWriter, r *http.Request) (pgtype.UUID, pgtype.UUID, bool) {
 	eventID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid event_id")
+		api.BadRequest(w, "ID kegiatan asesmen tidak valid")
 		return pgtype.UUID{}, pgtype.UUID{}, false
 	}
 	memberID, err := parseUUID(chi.URLParam(r, "member_id"))
 	if err != nil {
-		api.BadRequest(w, "invalid member_id")
+		api.BadRequest(w, "ID anggota kegiatan tidak valid")
 		return pgtype.UUID{}, pgtype.UUID{}, false
 	}
 	return eventID, memberID, true

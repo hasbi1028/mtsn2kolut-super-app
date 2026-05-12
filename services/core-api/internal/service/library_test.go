@@ -485,7 +485,7 @@ func TestLibraryReturnBookValidatesAndCalculatesFine(t *testing.T) {
 }
 
 func TestLibraryReturnBookRejectsInvalidOrNonActiveLoans(t *testing.T) {
-	t.Run("invalid id", func(t *testing.T) {
+	t.Run("ID data tidak valid", func(t *testing.T) {
 		store := &fakeLibraryStore{}
 		svc := &Library{q: store}
 

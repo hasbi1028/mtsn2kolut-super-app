@@ -114,11 +114,11 @@ func (s *Employee) Get(ctx context.Context, id pgtype.UUID) (db.GetEmployeeRow, 
 func (s *Employee) Create(ctx context.Context, nip, nama, unitKerja, employmentType string, tanggalLahir pgtype.Date, jenisKelamin, tempatLahir, pusakaUsername, pusakaPassword string, isActive bool) (db.GetEmployeeRow, error) {
 	normalizedType := normalizeEmploymentType(employmentType)
 	if normalizedType == "" {
-		return db.GetEmployeeRow{}, errors.New("invalid employment type")
+		return db.GetEmployeeRow{}, errors.New("Jenis kepegawaian tidak valid")
 	}
 	normalizedGender, ok := normalizeEmployeeGender(jenisKelamin)
 	if !ok {
-		return db.GetEmployeeRow{}, errors.New("invalid gender")
+		return db.GetEmployeeRow{}, errors.New("Jenis kelamin tidak valid")
 	}
 	if (pusakaUsername != "" || pusakaPassword != "") && !pusakaEligible(normalizedType) {
 		return db.GetEmployeeRow{}, errors.New("only pns or pppk employees can have pusaka accounts")
@@ -165,11 +165,11 @@ func (s *Employee) Create(ctx context.Context, nip, nama, unitKerja, employmentT
 func (s *Employee) Update(ctx context.Context, p db.UpdateEmployeeParams) (db.GetEmployeeRow, error) {
 	p.EmploymentType = normalizeEmploymentType(p.EmploymentType)
 	if p.EmploymentType == "" {
-		return db.GetEmployeeRow{}, errors.New("invalid employment type")
+		return db.GetEmployeeRow{}, errors.New("Jenis kepegawaian tidak valid")
 	}
 	normalizedGender, ok := normalizeEmployeeGender(p.JenisKelamin)
 	if !ok {
-		return db.GetEmployeeRow{}, errors.New("invalid gender")
+		return db.GetEmployeeRow{}, errors.New("Jenis kelamin tidak valid")
 	}
 	p.Nip = strings.TrimSpace(p.Nip)
 	p.Nama = strings.TrimSpace(p.Nama)

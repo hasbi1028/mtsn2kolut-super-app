@@ -2212,7 +2212,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				: saved.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 			return `${draftStatus || 'Draft tersimpan'}${clock ? ` ${clock}` : ''}`;
 		}
-		return draftStatus || 'Editor legacy siap untuk buat/edit soal.';
+		return draftStatus || 'Penyunting lama siap untuk buat/edit soal.';
 	}
 
 	function offlineLastSyncLabel(): string {
@@ -2513,7 +2513,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	async function exportQuestionsCSV() {
-		if (!requireOnlineAction('Export Bank Soal')) return;
+		if (!requireOnlineAction('Unduh Bank Soal')) return;
 		exportBusy = true;
 		try {
 			const params = buildQuestionParams(1);
@@ -2523,7 +2523,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			await downloadCSVResponse(response, `bank-soal-cbt-${new Date().toISOString().slice(0, 10)}.csv`);
 			toast.success(exportSuccessMessage);
 		} catch (error) {
-			toast.error(mutationErrorMessage(error, 'Export CSV gagal'));
+			toast.error(mutationErrorMessage(error, 'Unduh berkas data gagal'));
 		} finally {
 			exportBusy = false;
 		}

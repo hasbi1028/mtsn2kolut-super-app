@@ -79,7 +79,7 @@ func (h *Website) Create(w http.ResponseWriter, r *http.Request) {
 		PublishedAt     string `json:"published_at"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.Create(r.Context(), service.SaveWebsiteContentInput{
@@ -110,7 +110,7 @@ func (h *Website) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 256<<10)
@@ -128,7 +128,7 @@ func (h *Website) Update(w http.ResponseWriter, r *http.Request) {
 		PublishedAt     string `json:"published_at"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	row, err := h.svc.Update(r.Context(), service.SaveWebsiteContentInput{
@@ -164,7 +164,7 @@ func (h *Website) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {

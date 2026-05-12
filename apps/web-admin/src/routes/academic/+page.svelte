@@ -234,7 +234,7 @@
 
 	function academicErrorMessage(error: unknown) {
 		if (error instanceof Error && error.message.trim()) return error.message;
-		return 'Data tata akademik belum dapat dimuat. Periksa koneksi backend lalu coba lagi.';
+		return 'Data tata akademik belum dapat dimuat. Periksa koneksi layanan sistem lalu coba lagi.';
 	}
 
 	function handleAcademicRenderError(error: unknown) {

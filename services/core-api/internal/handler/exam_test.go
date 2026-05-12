@@ -541,8 +541,8 @@ func TestExamLoginRejectsInvalidJSON(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("json unmarshal failed: %v", err)
 	}
-	if payload.Error != "invalid json" {
-		t.Fatalf("error = %q, want %q", payload.Error, "invalid json")
+	if payload.Error != "Data yang dikirim tidak valid" {
+		t.Fatalf("error = %q, want %q", payload.Error, "Data yang dikirim tidak valid")
 	}
 }
 
@@ -605,7 +605,7 @@ func TestExamLoginHardensJSONBody(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 			t.Fatalf("json unmarshal failed: %v", err)
 		}
-		if payload.Error != "invalid json" {
+		if payload.Error != "Data yang dikirim tidak valid" {
 			t.Fatalf("error = %q, want invalid json", payload.Error)
 		}
 	})
@@ -764,8 +764,8 @@ func TestExamSubmitAnswerRejectsInvalidJSON(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("json unmarshal failed: %v", err)
 	}
-	if payload.Error != "invalid json" {
-		t.Fatalf("error = %q, want %q", payload.Error, "invalid json")
+	if payload.Error != "Data yang dikirim tidak valid" {
+		t.Fatalf("error = %q, want %q", payload.Error, "Data yang dikirim tidak valid")
 	}
 }
 
@@ -789,8 +789,8 @@ func TestExamSubmitAnswerRejectsInvalidQuestionID(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("json unmarshal failed: %v", err)
 	}
-	if payload.Error != "question_id invalid" {
-		t.Fatalf("error = %q, want %q", payload.Error, "question_id invalid")
+	if payload.Error != "Soal tidak valid" {
+		t.Fatalf("error = %q, want %q", payload.Error, "Soal tidak valid")
 	}
 }
 
@@ -1299,8 +1299,8 @@ func TestExamRecordEventRejectsInvalidJSON(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("json unmarshal failed: %v", err)
 	}
-	if payload.Error != "invalid json" {
-		t.Fatalf("error = %q, want %q", payload.Error, "invalid json")
+	if payload.Error != "Data yang dikirim tidak valid" {
+		t.Fatalf("error = %q, want %q", payload.Error, "Data yang dikirim tidak valid")
 	}
 }
 

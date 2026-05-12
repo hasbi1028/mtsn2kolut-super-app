@@ -239,7 +239,7 @@ func TestRombelUpdateIdentityValidationAndConflict(t *testing.T) {
 			wantStatus: http.StatusUnauthorized,
 		},
 		{
-			name:       "invalid id",
+			name:       "ID data tidak valid",
 			req:        withRouteParam(adminRequest(http.MethodPut, "/api/academic/rombel/bad", `{}`), "id", "bad"),
 			wantStatus: http.StatusBadRequest,
 		},

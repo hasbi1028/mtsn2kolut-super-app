@@ -82,7 +82,7 @@ func (h *Archive) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	var body archiveCategoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	active := true
@@ -120,7 +120,7 @@ func (h *Archive) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	var body archiveCategoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	active := true
@@ -198,7 +198,7 @@ func (h *Archive) UploadDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 28<<20)
 	if err := r.ParseMultipartForm(28 << 20); err != nil {
-		api.BadRequest(w, "multipart form invalid")
+		api.BadRequest(w, "Berkas/formulir yang dikirim tidak valid")
 		return
 	}
 	file, header, err := r.FormFile("file")
@@ -297,7 +297,7 @@ func (h *Archive) UpdateDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	var body archiveDocumentRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	categoryID, err := service.ParseArchiveOptionalUUID(body.CategoryID)

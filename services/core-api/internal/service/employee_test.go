@@ -204,11 +204,11 @@ func TestEmployeeServiceForwardsStoreCallsAndPusakaRules(t *testing.T) {
 	if store.createArg.Nip != "" {
 		t.Fatalf("Create(honorer) NIP = %q, want optional empty NIP", store.createArg.Nip)
 	}
-	if _, err := svc.Create(context.Background(), "1982", "Kontrak", "TU", "kontrak", pgtype.Date{}, "", "", "", "", true); err == nil || err.Error() != "invalid employment type" {
-		t.Fatalf("Create(invalid type) = %v, want invalid employment type", err)
+	if _, err := svc.Create(context.Background(), "1982", "Kontrak", "TU", "kontrak", pgtype.Date{}, "", "", "", "", true); err == nil || err.Error() != "Jenis kepegawaian tidak valid" {
+		t.Fatalf("Create(invalid type) = %v, want jenis kepegawaian tidak valid", err)
 	}
-	if _, err := svc.Create(context.Background(), "1983", "Honorer", "TU", "honorer", pgtype.Date{}, "X", "", "", "", true); err == nil || err.Error() != "invalid gender" {
-		t.Fatalf("Create(invalid gender) = %v, want invalid gender", err)
+	if _, err := svc.Create(context.Background(), "1983", "Honorer", "TU", "honorer", pgtype.Date{}, "X", "", "", "", true); err == nil || err.Error() != "Jenis kelamin tidak valid" {
+		t.Fatalf("Create(invalid gender) = %v, want jenis kelamin tidak valid", err)
 	}
 	if _, err := svc.Create(context.Background(), "1983", "Honorer", "TU", "honorer", pgtype.Date{}, "", "", "akun", "", true); err == nil || err.Error() != "only pns or pppk employees can have pusaka accounts" {
 		t.Fatalf("Create(noneligible pusaka) = %v, want eligibility error", err)
@@ -220,11 +220,11 @@ func TestEmployeeServiceForwardsStoreCallsAndPusakaRules(t *testing.T) {
 	if store.updateArg.EmploymentType != "pns" || store.updateArg.Nama != "Guru Baru" {
 		t.Fatalf("Update() arg = %+v, want normalized update", store.updateArg)
 	}
-	if _, err := svc.Update(context.Background(), db.UpdateEmployeeParams{ID: employeeID, EmploymentType: "pns", JenisKelamin: "X"}); err == nil || err.Error() != "invalid gender" {
-		t.Fatalf("Update(invalid gender) = %v, want invalid gender", err)
+	if _, err := svc.Update(context.Background(), db.UpdateEmployeeParams{ID: employeeID, EmploymentType: "pns", JenisKelamin: "X"}); err == nil || err.Error() != "Jenis kelamin tidak valid" {
+		t.Fatalf("Update(invalid gender) = %v, want jenis kelamin tidak valid", err)
 	}
-	if _, err := svc.Update(context.Background(), db.UpdateEmployeeParams{ID: employeeID, EmploymentType: "kontrak"}); err == nil || err.Error() != "invalid employment type" {
-		t.Fatalf("Update(invalid type) = %v, want invalid employment type", err)
+	if _, err := svc.Update(context.Background(), db.UpdateEmployeeParams{ID: employeeID, EmploymentType: "kontrak"}); err == nil || err.Error() != "Jenis kepegawaian tidak valid" {
+		t.Fatalf("Update(invalid type) = %v, want jenis kepegawaian tidak valid", err)
 	}
 	if _, err := svc.Update(context.Background(), db.UpdateEmployeeParams{ID: employeeID, EmploymentType: "honorer"}); err == nil || err.Error() != "disable or remove the pusaka account before changing employee type" {
 		t.Fatalf("Update(remove eligibility with pusaka) = %v, want account removal error", err)

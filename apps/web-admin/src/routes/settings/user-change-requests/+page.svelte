@@ -212,7 +212,7 @@
 			const res = await fetch(clientApiPathWithQuery('/api/users/change-requests/export', buildFilterParams(false)));
 			if (!res.ok) {
 				const payload = await res.json().catch(() => null) as { error?: string; message?: string } | null;
-				throw new Error(payload?.error || payload?.message || 'Export permintaan perubahan data gagal');
+				throw new Error(payload?.error || payload?.message || 'Unduh permintaan perubahan data gagal');
 			}
 			const blob = await res.blob();
 			const url = URL.createObjectURL(blob);
@@ -223,9 +223,9 @@
 			anchor.click();
 			anchor.remove();
 			URL.revokeObjectURL(url);
-			toast.success('Export CSV disiapkan');
+			toast.success('Unduhan berkas data disiapkan');
 		} catch (error) {
-			toast.error(accountErrorMessage(error, 'Export permintaan perubahan data gagal'));
+			toast.error(accountErrorMessage(error, 'Unduh permintaan perubahan data gagal'));
 		} finally {
 			exportBusy = false;
 		}

@@ -42,7 +42,7 @@ func (h *CbtQuestionAsset) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 12<<20)
 	if err := r.ParseMultipartForm(12 << 20); err != nil {
-		api.BadRequest(w, "multipart form invalid")
+		api.BadRequest(w, "Berkas/formulir yang dikirim tidak valid")
 		return
 	}
 	file, header, err := r.FormFile("file")
@@ -56,7 +56,7 @@ func (h *CbtQuestionAsset) Upload(w http.ResponseWriter, r *http.Request) {
 	if rawID := r.FormValue("question_id"); rawID != "" {
 		parsed, err := parseUUID(rawID)
 		if err != nil {
-			api.BadRequest(w, "question_id invalid")
+			api.BadRequest(w, "Soal tidak valid")
 			return
 		}
 		questionID = parsed
@@ -108,7 +108,7 @@ func (h *CbtQuestionAsset) List(w http.ResponseWriter, r *http.Request) {
 	}
 	questionID, err := parseUUID(rawID)
 	if err != nil {
-		api.BadRequest(w, "question_id invalid")
+		api.BadRequest(w, "Soal tidak valid")
 		return
 	}
 	if !h.requireQuestionAssetScope(w, r, questionID, "bank_soal.read", "bank_soal.create", "bank_soal.update", "bank_soal.review", "bank_soal.publish") {
@@ -169,7 +169,7 @@ func (h *CbtQuestionAsset) requireQuestionAssetScope(w http.ResponseWriter, r *h
 func (h *CbtQuestionAsset) File(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	asset, err := h.svc.Get(r.Context(), id)

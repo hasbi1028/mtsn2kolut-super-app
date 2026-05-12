@@ -64,7 +64,7 @@ func (h *Rombel) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	classID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	detail, err := h.svc.Get(r.Context(), classID)
@@ -111,12 +111,12 @@ func (h *Rombel) UpdateIdentity(w http.ResponseWriter, r *http.Request) {
 	}
 	classID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body rombelIdentityRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	if body.IsActive == nil {
@@ -143,7 +143,7 @@ func (h *Rombel) ListStudents(w http.ResponseWriter, r *http.Request) {
 	}
 	classID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	rows, err := h.svc.ListStudentsWithParents(r.Context(), classID)
@@ -160,7 +160,7 @@ func (h *Rombel) ListHomeroomAssignments(w http.ResponseWriter, r *http.Request)
 	}
 	classID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	rows, err := h.svc.ListHomeroomAssignments(r.Context(), classID)
@@ -177,7 +177,7 @@ func (h *Rombel) ListSubjectAssignments(w http.ResponseWriter, r *http.Request) 
 	}
 	classID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	rows, err := h.svc.ListSubjectAssignments(r.Context(), classID)
@@ -194,7 +194,7 @@ func (h *Rombel) ListTimetableSlots(w http.ResponseWriter, r *http.Request) {
 	}
 	classID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	rows, err := h.svc.ListTimetableSlots(r.Context(), classID)
@@ -261,17 +261,17 @@ func (h *Rombel) UpdateSubjectAssignmentMatrixCell(w http.ResponseWriter, r *htt
 	}
 	var body subjectAssignmentMatrixCellRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	classID, err := parseUUID(body.ClassID)
 	if err != nil {
-		api.BadRequest(w, "class_id invalid")
+		api.BadRequest(w, "Rombel tidak valid")
 		return
 	}
 	subjectID, err := parseUUID(body.SubjectID)
 	if err != nil {
-		api.BadRequest(w, "subject_id invalid")
+		api.BadRequest(w, "Mata pelajaran tidak valid")
 		return
 	}
 	teacherID, ok := parseOptionalUUIDParam(w, body.TeacherEmployeeID, "teacher_employee_id")
@@ -296,12 +296,12 @@ func (h *Rombel) CreateSubjectAssignment(w http.ResponseWriter, r *http.Request)
 	}
 	classID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body subjectAssignmentRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parseCreateSubjectAssignment(w, classID, body)
@@ -326,7 +326,7 @@ func (h *Rombel) UpdateSubjectAssignment(w http.ResponseWriter, r *http.Request)
 	}
 	var body subjectAssignmentRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parseUpdateSubjectAssignment(w, classID, assignmentID, body)
@@ -365,12 +365,12 @@ func (h *Rombel) CreateTimetableSlot(w http.ResponseWriter, r *http.Request) {
 	}
 	classID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body timetableSlotRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parseCreateTimetableSlot(w, classID, body)
@@ -395,7 +395,7 @@ func (h *Rombel) UpdateTimetableSlot(w http.ResponseWriter, r *http.Request) {
 	}
 	var body timetableSlotRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parseUpdateTimetableSlot(w, classID, slotID, body)
@@ -434,12 +434,12 @@ func (h *Rombel) CreateHomeroomAssignment(w http.ResponseWriter, r *http.Request
 	}
 	classID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body homeroomAssignmentRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parseCreateHomeroomAssignment(w, classID, body)
@@ -465,7 +465,7 @@ func (h *Rombel) UpdateHomeroomAssignment(w http.ResponseWriter, r *http.Request
 	}
 	var body homeroomAssignmentRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	arg, ok := parseUpdateHomeroomAssignment(w, assignmentID, body)
@@ -607,7 +607,7 @@ func groupRombelStudents(rows []db.ListStudentsByClassWithParentsRow) []rombelSt
 func parseCreateHomeroomAssignment(w http.ResponseWriter, classID pgtype.UUID, body homeroomAssignmentRequest) (db.CreateHomeroomAssignmentParams, bool) {
 	employeeID, err := parseUUID(body.EmployeeID)
 	if err != nil {
-		api.BadRequest(w, "employee_id invalid")
+		api.BadRequest(w, "Pegawai tidak valid")
 		return db.CreateHomeroomAssignmentParams{}, false
 	}
 	active := true
@@ -640,7 +640,7 @@ func parseCreateHomeroomAssignment(w http.ResponseWriter, classID pgtype.UUID, b
 func parseUpdateHomeroomAssignment(w http.ResponseWriter, assignmentID pgtype.UUID, body homeroomAssignmentRequest) (db.UpdateHomeroomAssignmentParams, bool) {
 	employeeID, err := parseUUID(body.EmployeeID)
 	if err != nil {
-		api.BadRequest(w, "employee_id invalid")
+		api.BadRequest(w, "Pegawai tidak valid")
 		return db.UpdateHomeroomAssignmentParams{}, false
 	}
 	active := true
@@ -683,7 +683,7 @@ func parseUpdateSubjectAssignment(w http.ResponseWriter, classID pgtype.UUID, as
 func parseSubjectAssignmentBody(w http.ResponseWriter, body subjectAssignmentRequest) (pgtype.UUID, pgtype.UUID, bool) {
 	subjectID, err := parseUUID(body.SubjectID)
 	if err != nil {
-		api.BadRequest(w, "subject_id invalid")
+		api.BadRequest(w, "Mata pelajaran tidak valid")
 		return pgtype.UUID{}, pgtype.UUID{}, false
 	}
 	teacherID, err := parseUUID(body.TeacherEmployeeID)
@@ -764,7 +764,7 @@ func timetableRoomLabel(body timetableSlotRequest) string {
 func parseRombelAssignmentRoute(w http.ResponseWriter, r *http.Request) (pgtype.UUID, pgtype.UUID, bool) {
 	classID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return pgtype.UUID{}, pgtype.UUID{}, false
 	}
 	assignmentID, err := parseUUID(chi.URLParam(r, "assignmentID"))
@@ -778,7 +778,7 @@ func parseRombelAssignmentRoute(w http.ResponseWriter, r *http.Request) (pgtype.
 func parseRombelTimetableSlotRoute(w http.ResponseWriter, r *http.Request) (pgtype.UUID, pgtype.UUID, bool) {
 	classID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return pgtype.UUID{}, pgtype.UUID{}, false
 	}
 	slotID, err := parseUUID(chi.URLParam(r, "slotID"))

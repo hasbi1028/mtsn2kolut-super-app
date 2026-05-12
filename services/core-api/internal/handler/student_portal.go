@@ -92,7 +92,7 @@ func (h *StudentPortal) RevealCbtToken(w http.ResponseWriter, r *http.Request) {
 	}
 	participantID, err := parseUUID(strings.TrimSpace(chi.URLParam(r, "participantID")))
 	if err != nil {
-		api.BadRequest(w, "participant_id invalid")
+		api.BadRequest(w, "Peserta ujian tidak valid")
 		return
 	}
 	var body struct {
@@ -102,7 +102,7 @@ func (h *StudentPortal) RevealCbtToken(w http.ResponseWriter, r *http.Request) {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	result, err := h.svc.RevealCbtToken(r.Context(), userID, participantID, body.RoomToken, trustedClientIP(r))

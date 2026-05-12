@@ -111,7 +111,7 @@ func (h *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	pair, err := h.svc.Login(r.Context(), body.Username, body.Password, sessionMetaFromRequest(r))
@@ -444,7 +444,7 @@ func (h *Auth) RevokeSession(w http.ResponseWriter, r *http.Request) {
 
 	var sessionID pgtype.UUID
 	if err := sessionID.Scan(chi.URLParam(r, "id")); err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 
@@ -460,7 +460,7 @@ func (h *Auth) RevokeSession(w http.ResponseWriter, r *http.Request) {
 	h.auditClaimsEvent(r.Context(), "AUTH_SESSION_REVOKE", map[string]any{
 		"revoked_session_id": chi.URLParam(r, "id"),
 	})
-	api.OK(w, map[string]string{"message": "session revoked"})
+	api.OK(w, map[string]string{"message": "Sesi masuk dicabut"})
 }
 
 func (h *Auth) UpdateSessionLabel(w http.ResponseWriter, r *http.Request) {
@@ -477,7 +477,7 @@ func (h *Auth) UpdateSessionLabel(w http.ResponseWriter, r *http.Request) {
 
 	var sessionID pgtype.UUID
 	if err := sessionID.Scan(chi.URLParam(r, "id")); err != nil {
-		api.BadRequest(w, "invalid session id")
+		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
 
@@ -485,7 +485,7 @@ func (h *Auth) UpdateSessionLabel(w http.ResponseWriter, r *http.Request) {
 		DeviceLabel string `json:"device_label"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 
@@ -507,7 +507,7 @@ func (h *Auth) UpdateSessionLabel(w http.ResponseWriter, r *http.Request) {
 		"renamed_session_id": chi.URLParam(r, "id"),
 		"device_label":       strings.TrimSpace(body.DeviceLabel),
 	})
-	api.OK(w, map[string]string{"message": "session label updated"})
+	api.OK(w, map[string]string{"message": "Label sesi masuk diperbarui"})
 }
 
 func (h *Auth) GetSidebarPreferences(w http.ResponseWriter, r *http.Request) {
@@ -544,13 +544,13 @@ func (h *Auth) UpdateSidebarPreferences(w http.ResponseWriter, r *http.Request) 
 
 	var body service.SidebarPreferences
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 
 	prefs, err := h.svc.UpdateSidebarPreferences(r.Context(), userID, body)
 	if errors.Is(err, domain.ErrBadRequest) {
-		api.BadRequest(w, "invalid sidebar preferences")
+		api.BadRequest(w, "Pengaturan menu samping tidak valid")
 		return
 	}
 	if err != nil {
@@ -573,7 +573,7 @@ func (h *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		NewPassword string `json:"new_password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 
@@ -730,7 +730,7 @@ func contactEditableFields(profileType string) []string {
 func decodeAccountContactPatch(w http.ResponseWriter, r *http.Request) (service.AccountContactPatch, bool) {
 	var raw map[string]json.RawMessage
 	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return service.AccountContactPatch{}, false
 	}
 

@@ -40,11 +40,11 @@ func (h *PusakaAttendance) List(w http.ResponseWriter, r *http.Request) {
 	if startStr != "" && endStr != "" {
 		var start, end pgtype.Date
 		if err := start.Scan(startStr); err != nil {
-			api.BadRequest(w, "invalid start_date")
+			api.BadRequest(w, "Tanggal awal tidak valid")
 			return
 		}
 		if err := end.Scan(endStr); err != nil {
-			api.BadRequest(w, "invalid end_date")
+			api.BadRequest(w, "Tanggal akhir tidak valid")
 			return
 		}
 		rows, err := h.svc.ListInRange(r.Context(), start, end)
@@ -79,7 +79,7 @@ func (h *PusakaAttendance) ByDate(w http.ResponseWriter, r *http.Request) {
 	dateStr := chi.URLParam(r, "date")
 	var d pgtype.Date
 	if err := d.Scan(dateStr); err != nil {
-		api.BadRequest(w, "invalid date, use YYYY-MM-DD")
+		api.BadRequest(w, "Tanggal tidak valid, gunakan format YYYY-MM-DD")
 		return
 	}
 	rows, err := h.svc.ByDate(r.Context(), d)
@@ -106,11 +106,11 @@ func (h *PusakaAttendance) GetSummary(w http.ResponseWriter, r *http.Request) {
 
 	var start, end pgtype.Date
 	if err := start.Scan(startStr); err != nil {
-		api.BadRequest(w, "invalid start_date")
+		api.BadRequest(w, "Tanggal awal tidak valid")
 		return
 	}
 	if err := end.Scan(endStr); err != nil {
-		api.BadRequest(w, "invalid end_date")
+		api.BadRequest(w, "Tanggal akhir tidak valid")
 		return
 	}
 
@@ -129,7 +129,7 @@ func (h *PusakaAttendance) ByEmployee(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	q := r.URL.Query()

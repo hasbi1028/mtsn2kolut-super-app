@@ -488,7 +488,7 @@ func TestCbtQuestionModeAndJSONHelpers(t *testing.T) {
 	if got := decodeJSONBytes(nil); len(requireAnySlice(t, got, "empty json")) != 0 {
 		t.Fatalf("decodeJSONBytes(empty) = %#v, want empty slice", got)
 	}
-	if got := decodeJSONBytes([]byte(`not-json`)); len(requireAnySlice(t, got, "invalid json")) != 0 {
+	if got := decodeJSONBytes([]byte(`not-json`)); len(requireAnySlice(t, got, "Data yang dikirim tidak valid")) != 0 {
 		t.Fatalf("decodeJSONBytes(invalid) = %#v, want empty slice", got)
 	}
 	if got := decodeJSONBytes([]byte(`{"ok":true}`)); got.(map[string]any)["ok"] != true {

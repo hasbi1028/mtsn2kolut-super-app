@@ -121,7 +121,7 @@ func (h *NonTestAssessment) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	row, err := h.svc.Get(r.Context(), id)
@@ -168,7 +168,7 @@ func (h *NonTestAssessment) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	input, err := h.inputFromRequest(r, id)
@@ -199,7 +199,7 @@ func (h *NonTestAssessment) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !h.requireAssessmentTeacherOrAdmin(w, r, id) {
@@ -220,7 +220,7 @@ func (h *NonTestAssessment) ListSubmissions(w http.ResponseWriter, r *http.Reque
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !h.requireAssessmentTeacherOrAdmin(w, r, id) {
@@ -245,7 +245,7 @@ func (h *NonTestAssessment) GenerateSubmissions(w http.ResponseWriter, r *http.R
 	}
 	assessmentID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !h.requireAssessmentTeacherOrAdmin(w, r, assessmentID) {
@@ -254,7 +254,7 @@ func (h *NonTestAssessment) GenerateSubmissions(w http.ResponseWriter, r *http.R
 	var body nonTestGenerateSubmissionsBody
 	if r.Body != nil {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
-			api.BadRequest(w, "invalid json")
+			api.BadRequest(w, "Data yang dikirim tidak valid")
 			return
 		}
 	}
@@ -262,7 +262,7 @@ func (h *NonTestAssessment) GenerateSubmissions(w http.ResponseWriter, r *http.R
 	if strings.TrimSpace(body.ClassID) != "" {
 		classID, err = parseUUID(body.ClassID)
 		if err != nil {
-			api.BadRequest(w, "class_id invalid")
+			api.BadRequest(w, "Rombel tidak valid")
 			return
 		}
 	}
@@ -288,7 +288,7 @@ func (h *NonTestAssessment) SyncGrade(w http.ResponseWriter, r *http.Request) {
 	}
 	assessmentID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !h.requireAssessmentTeacherOrAdmin(w, r, assessmentID) {
@@ -298,7 +298,7 @@ func (h *NonTestAssessment) SyncGrade(w http.ResponseWriter, r *http.Request) {
 	var body nonTestSyncGradeBody
 	if r.Body != nil {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
-			api.BadRequest(w, "invalid json")
+			api.BadRequest(w, "Data yang dikirim tidak valid")
 			return
 		}
 	}
@@ -326,7 +326,7 @@ func (h *NonTestAssessment) UpsertSubmission(w http.ResponseWriter, r *http.Requ
 	}
 	assessmentID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if !h.requireAssessmentTeacherOrAdmin(w, r, assessmentID) {
@@ -334,7 +334,7 @@ func (h *NonTestAssessment) UpsertSubmission(w http.ResponseWriter, r *http.Requ
 	}
 	var body nonTestSubmissionBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	studentID, err := parseUUID(body.StudentID)
@@ -427,16 +427,16 @@ func (h *NonTestAssessment) requireClassSubjectTeacherOrAdmin(w http.ResponseWri
 func (h *NonTestAssessment) inputFromRequest(r *http.Request, id pgtype.UUID) (service.SaveNonTestAssessmentInput, error) {
 	var body nonTestAssessmentBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		return service.SaveNonTestAssessmentInput{}, fmt.Errorf("invalid json")
+		return service.SaveNonTestAssessmentInput{}, fmt.Errorf("Data yang dikirim tidak valid")
 	}
 	subjectID, err := parseUUID(body.SubjectID)
 	if err != nil {
-		return service.SaveNonTestAssessmentInput{}, fmt.Errorf("subject_id invalid")
+		return service.SaveNonTestAssessmentInput{}, fmt.Errorf("Mata pelajaran tidak valid")
 	}
 	classID := pgtype.UUID{}
 	if strings.TrimSpace(body.ClassID) != "" {
 		if classID, err = parseUUID(body.ClassID); err != nil {
-			return service.SaveNonTestAssessmentInput{}, fmt.Errorf("class_id invalid")
+			return service.SaveNonTestAssessmentInput{}, fmt.Errorf("Rombel tidak valid")
 		}
 	}
 	dueAt, err := parseOptionalTime(body.DueAt)
@@ -474,7 +474,7 @@ func nonTestAssessmentListInputFromRequest(r *http.Request) (service.ListNonTest
 	if raw := strings.TrimSpace(r.URL.Query().Get("subject_id")); raw != "" {
 		parsed, err := parseUUID(raw)
 		if err != nil {
-			return service.ListNonTestAssessmentsInput{}, fmt.Errorf("subject_id invalid")
+			return service.ListNonTestAssessmentsInput{}, fmt.Errorf("Mata pelajaran tidak valid")
 		}
 		subjectID = parsed
 	}
@@ -482,7 +482,7 @@ func nonTestAssessmentListInputFromRequest(r *http.Request) (service.ListNonTest
 	if raw := strings.TrimSpace(r.URL.Query().Get("class_id")); raw != "" {
 		parsed, err := parseUUID(raw)
 		if err != nil {
-			return service.ListNonTestAssessmentsInput{}, fmt.Errorf("class_id invalid")
+			return service.ListNonTestAssessmentsInput{}, fmt.Errorf("Rombel tidak valid")
 		}
 		classID = parsed
 	}

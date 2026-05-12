@@ -111,7 +111,7 @@ func (h *Inventory) GetSchoolRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	room, err := h.svc.GetSchoolRoom(r.Context(), id)
@@ -153,7 +153,7 @@ func (h *Inventory) UpdateSchoolRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	body, ok := decodeSchoolRoomPayload(w, r)
@@ -184,7 +184,7 @@ func (h *Inventory) DeleteSchoolRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if err := h.svc.DeleteSchoolRoom(r.Context(), id); err != nil {
@@ -204,7 +204,7 @@ func (h *Inventory) ListItemEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	events, err := h.svc.ListItemEvents(r.Context(), id)
@@ -234,7 +234,7 @@ type schoolRoomPayload struct {
 func decodeSchoolRoomPayload(w http.ResponseWriter, r *http.Request) (schoolRoomPayload, bool) {
 	var body schoolRoomPayload
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return schoolRoomPayload{}, false
 	}
 	return body, true
@@ -301,7 +301,7 @@ func (h *Inventory) CreateItem(w http.ResponseWriter, r *http.Request) {
 		Catatan     string `json:"catatan"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	item, err := h.svc.CreateItem(r.Context(), inventoryActorUserID(r), db.CreateInventoryItemParams{
@@ -341,7 +341,7 @@ func (h *Inventory) BatchUpdateItems(w http.ResponseWriter, r *http.Request) {
 		Kondisi *string  `json:"kondisi"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	ids := make([]pgtype.UUID, 0, len(body.ItemIDs))
@@ -379,7 +379,7 @@ func (h *Inventory) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	var body struct {
@@ -395,7 +395,7 @@ func (h *Inventory) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		Catatan     string `json:"catatan"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	item, err := h.svc.UpdateItem(r.Context(), inventoryActorUserID(r), db.UpdateInventoryItemParams{
@@ -432,7 +432,7 @@ func (h *Inventory) DeleteItem(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
-		api.BadRequest(w, "invalid id")
+		api.BadRequest(w, "ID data tidak valid")
 		return
 	}
 	if err := h.svc.DeleteItem(r.Context(), inventoryActorUserID(r), id); err != nil {
