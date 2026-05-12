@@ -18,10 +18,15 @@ import (
 )
 
 type studentPortalService interface {
+	PreviewStudents(ctx context.Context) ([]db.ListStudentPortalPreviewStudentsRow, error)
 	Profile(ctx context.Context, userID pgtype.UUID) (db.GetStudentByIDRow, error)
+	ProfileByStudentID(ctx context.Context, studentID pgtype.UUID) (db.GetStudentByIDRow, error)
 	Schedule(ctx context.Context, userID pgtype.UUID) ([]db.ListStudentTimetableRow, error)
+	ScheduleByStudentID(ctx context.Context, studentID pgtype.UUID) ([]db.ListStudentTimetableRow, error)
 	Results(ctx context.Context, userID pgtype.UUID) ([]db.ListStudentExamSessionsRow, error)
+	ResultsByStudentID(ctx context.Context, studentID pgtype.UUID) ([]db.ListStudentExamSessionsRow, error)
 	CbtSchedule(ctx context.Context, userID pgtype.UUID) ([]service.StudentPortalCbtScheduleItem, error)
+	CbtScheduleByStudentID(ctx context.Context, studentID pgtype.UUID) ([]service.StudentPortalCbtScheduleItem, error)
 	RevealCbtToken(ctx context.Context, userID, participantID pgtype.UUID, roomToken, clientIP string) (service.StudentPortalTokenReveal, error)
 }
 
@@ -31,6 +36,67 @@ type StudentPortal struct {
 
 func NewStudentPortal(svc *service.StudentPortal) *StudentPortal {
 	return &StudentPortal{svc: svc}
+}
+
+func (h *StudentPortal) PreviewStudents(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.svc.PreviewStudents(r.Context())
+	if err != nil {
+		writeDomainOrInternal(w, err, "Daftar siswa preview tidak tersedia")
+		return
+	}
+	api.OK(w, map[string]any{"students": studentPortalPreviewStudents(rows)})
+}
+
+func (h *StudentPortal) PreviewProfile(w http.ResponseWriter, r *http.Request) {
+	studentID, ok := h.previewStudentID(w, r)
+	if !ok {
+		return
+	}
+	student, err := h.svc.ProfileByStudentID(r.Context(), studentID)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Data profil siswa tidak tersedia")
+		return
+	}
+	api.OK(w, map[string]any{"student": studentPortalProfile(student), "preview": true})
+}
+
+func (h *StudentPortal) PreviewSchedule(w http.ResponseWriter, r *http.Request) {
+	studentID, ok := h.previewStudentID(w, r)
+	if !ok {
+		return
+	}
+	schedule, err := h.svc.ScheduleByStudentID(r.Context(), studentID)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Jadwal siswa tidak tersedia")
+		return
+	}
+	api.OK(w, map[string]any{"schedule": schedule, "preview": true})
+}
+
+func (h *StudentPortal) PreviewResults(w http.ResponseWriter, r *http.Request) {
+	studentID, ok := h.previewStudentID(w, r)
+	if !ok {
+		return
+	}
+	results, err := h.svc.ResultsByStudentID(r.Context(), studentID)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Hasil siswa tidak tersedia")
+		return
+	}
+	api.OK(w, map[string]any{"results": studentPortalResults(results), "preview": true})
+}
+
+func (h *StudentPortal) PreviewCbtSchedule(w http.ResponseWriter, r *http.Request) {
+	studentID, ok := h.previewStudentID(w, r)
+	if !ok {
+		return
+	}
+	schedule, err := h.svc.CbtScheduleByStudentID(r.Context(), studentID)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Jadwal CBT siswa tidak tersedia")
+		return
+	}
+	api.OK(w, map[string]any{"schedule": schedule, "preview": true, "token_reveal_disabled": true})
 }
 
 func (h *StudentPortal) Profile(w http.ResponseWriter, r *http.Request) {
@@ -136,6 +202,45 @@ func (h *StudentPortal) authorizedUserID(w http.ResponseWriter, r *http.Request)
 
 func studentPortalAccessAllowed(claims jwt.MapClaims) bool {
 	return mw.HasAnyRole(claims, "siswa") || mw.HasAnyPermission(claims, "student_portal.read")
+}
+
+type studentPortalPreviewStudentDTO struct {
+	ID        string `json:"id"`
+	NIS       string `json:"nis"`
+	NISN      string `json:"nisn"`
+	Nama      string `json:"nama"`
+	ClassID   string `json:"class_id"`
+	ClassName string `json:"class_name"`
+	ClassCode string `json:"class_code"`
+	Status    string `json:"status"`
+	IsActive  bool   `json:"is_active"`
+}
+
+func studentPortalPreviewStudents(rows []db.ListStudentPortalPreviewStudentsRow) []studentPortalPreviewStudentDTO {
+	out := make([]studentPortalPreviewStudentDTO, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, studentPortalPreviewStudentDTO{
+			ID:        portalUUIDString(row.ID),
+			NIS:       row.Nis,
+			NISN:      row.Nisn,
+			Nama:      row.Nama,
+			ClassID:   portalUUIDString(row.ClassID),
+			ClassName: portalTextString(row.ClassName),
+			ClassCode: portalTextString(row.ClassCode),
+			Status:    string(row.Status),
+			IsActive:  row.IsActive,
+		})
+	}
+	return out
+}
+
+func (h *StudentPortal) previewStudentID(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool) {
+	studentID, err := parseUUID(strings.TrimSpace(chi.URLParam(r, "studentID")))
+	if err != nil {
+		api.BadRequest(w, "ID siswa tidak valid")
+		return pgtype.UUID{}, false
+	}
+	return studentID, true
 }
 
 type studentPortalProfileDTO struct {

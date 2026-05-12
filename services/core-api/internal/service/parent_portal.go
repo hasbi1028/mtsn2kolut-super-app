@@ -33,6 +33,13 @@ func (s *ParentPortal) Children(ctx context.Context, userID pgtype.UUID) ([]db.L
 	if err != nil {
 		return nil, err
 	}
+	return s.ChildrenByParentID(ctx, parentID)
+}
+
+func (s *ParentPortal) ChildrenByParentID(ctx context.Context, parentID pgtype.UUID) ([]db.ListParentChildrenRow, error) {
+	if !parentID.Valid {
+		return nil, domain.ErrBadRequest
+	}
 	return s.q.ListParentChildren(ctx, parentID)
 }
 
@@ -41,6 +48,10 @@ func (s *ParentPortal) ChildProfile(ctx context.Context, userID, studentID pgtyp
 	if err != nil {
 		return db.GetParentPortalChildProfileRow{}, err
 	}
+	return s.ChildProfileByParentID(ctx, parentID, studentID)
+}
+
+func (s *ParentPortal) ChildProfileByParentID(ctx context.Context, parentID, studentID pgtype.UUID) (db.GetParentPortalChildProfileRow, error) {
 	row, err := s.q.GetParentPortalChildProfile(ctx, db.GetParentPortalChildProfileParams{
 		ParentID:  parentID,
 		StudentID: studentID,
@@ -56,6 +67,10 @@ func (s *ParentPortal) ChildSchedule(ctx context.Context, userID, studentID pgty
 	if err != nil {
 		return nil, err
 	}
+	return s.ChildScheduleByParentID(ctx, parentID, studentID)
+}
+
+func (s *ParentPortal) ChildScheduleByParentID(ctx context.Context, parentID, studentID pgtype.UUID) ([]db.ListParentPortalChildTimetableRow, error) {
 	if err := s.ensureChildAccess(ctx, parentID, studentID); err != nil {
 		return nil, err
 	}
@@ -70,6 +85,10 @@ func (s *ParentPortal) ChildResults(ctx context.Context, userID, studentID pgtyp
 	if err != nil {
 		return nil, err
 	}
+	return s.ChildResultsByParentID(ctx, parentID, studentID)
+}
+
+func (s *ParentPortal) ChildResultsByParentID(ctx context.Context, parentID, studentID pgtype.UUID) ([]db.ListParentPortalChildExamSessionsRow, error) {
 	if err := s.ensureChildAccess(ctx, parentID, studentID); err != nil {
 		return nil, err
 	}

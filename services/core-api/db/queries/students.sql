@@ -40,6 +40,15 @@ WHERE u.id = $1
   AND u.is_active = TRUE
   AND u.student_id IS NOT NULL;
 
+-- name: ListStudentPortalPreviewStudents :many
+SELECT s.id, s.nis, s.nisn, s.nama,
+       s.class_id, c.name AS class_name, c.code AS class_code,
+       s.status, s.is_active
+FROM students s
+LEFT JOIN school_classes c ON c.id = s.class_id
+WHERE s.is_active = TRUE
+ORDER BY c.code ASC NULLS LAST, s.nama ASC;
+
 -- name: CreateStudent :one
 INSERT INTO students (nis, nisn, nama, gender, parent_name, parent_phone, class_id, is_active, status)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)

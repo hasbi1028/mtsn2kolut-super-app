@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Card from '$lib/components/ui/card';
@@ -13,6 +14,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import {
 		fetchStudentPortalCbtSchedule,
+		fetchStudentPortalPreviewStudents,
 		fetchStudentPortalProfile,
 		fetchStudentPortalResults,
 		fetchStudentPortalSchedule,
@@ -20,6 +22,7 @@
 		type StudentPortalCbtRevealPayload,
 		type StudentPortalCbtScheduleItem,
 		type StudentPortalCbtSchedulePayload,
+		type StudentPortalPreviewStudent,
 		type StudentPortalProfilePayload,
 		type StudentPortalResultsPayload,
 		type StudentPortalSchedulePayload
@@ -34,6 +37,10 @@
 
 	let portalPromise = $state<Promise<PortalOverview> | null>(null);
 	let portalData = $state<PortalOverview | null>(null);
+	let previewStudents = $state<StudentPortalPreviewStudent[]>([]);
+	let selectedPreviewStudentID = $state('');
+	let previewLoading = $state(false);
+	let previewError = $state('');
 	let selectedDay = $state('all');
 	let revealOpen = $state(false);
 	let revealTarget = $state<StudentPortalCbtScheduleItem | null>(null);
@@ -57,24 +64,49 @@
 		return schedule.filter((item) => item.day_of_week === Number(selectedDay));
 	});
 	const cbtSchedule = $derived(portalData?.cbt.schedule ?? []);
+	const currentUser = $derived(page.data.user);
+	const isStudentPortalUser = $derived(Boolean(currentUser?.roles?.includes('siswa') || currentUser?.role === 'siswa'));
+	const canPreviewStudentPortal = $derived(Boolean(
+		currentUser?.roles?.includes('admin') ||
+		currentUser?.roles?.includes('kesiswaan') ||
+		currentUser?.permissions?.includes('students.manage')
+	));
+	const isPreviewMode = $derived(canPreviewStudentPortal && !isStudentPortalUser);
 
 	function applyPortalData(data: PortalOverview) {
 		portalData = data;
 		return data;
 	}
 
-	async function fetchPortalData(): Promise<PortalOverview> {
+	async function fetchPortalData(studentID = ''): Promise<PortalOverview> {
 		const [profile, schedule, results, cbt] = await Promise.all([
-			fetchStudentPortalProfile(),
-			fetchStudentPortalSchedule(),
-			fetchStudentPortalResults(),
-			fetchStudentPortalCbtSchedule()
+			fetchStudentPortalProfile(fetch, studentID),
+			fetchStudentPortalSchedule(fetch, studentID),
+			fetchStudentPortalResults(fetch, studentID),
+			fetchStudentPortalCbtSchedule(fetch, studentID)
 		]);
 		return { profile, schedule, results, cbt };
 	}
 
-	function loadPortal() {
-		portalPromise = fetchPortalData().then(applyPortalData);
+	async function loadPreviewStudents() {
+		previewLoading = true;
+		previewError = '';
+		try {
+			const payload = await fetchStudentPortalPreviewStudents();
+			previewStudents = payload.students;
+			if (!selectedPreviewStudentID && payload.students.length > 0) {
+				selectedPreviewStudentID = payload.students[0].id;
+			}
+			if (selectedPreviewStudentID) loadPortal(selectedPreviewStudentID);
+		} catch (error) {
+			previewError = portalErrorMessage(error);
+		} finally {
+			previewLoading = false;
+		}
+	}
+
+	function loadPortal(studentID = selectedPreviewStudentID) {
+		portalPromise = fetchPortalData(isPreviewMode ? studentID : '').then(applyPortalData);
 	}
 
 	function retryPortal(reset?: () => void) {
@@ -156,8 +188,18 @@
 		}
 	}
 
+	function selectPreviewStudent() {
+		portalData = null;
+		selectedDay = 'all';
+		if (selectedPreviewStudentID) loadPortal(selectedPreviewStudentID);
+	}
+
 	onMount(() => {
-		loadPortal();
+		if (isPreviewMode) {
+			void loadPreviewStudents();
+		} else {
+			loadPortal('');
+		}
 	});
 </script>
 
@@ -169,8 +211,42 @@
 			<h1 class="text-2xl font-semibold text-foreground">Portal Siswa</h1>
 			<p class="mt-1 text-sm text-muted-foreground">Profil, jadwal, dan hasil asesmen siswa</p>
 		</div>
-		<Button variant="outline" onclick={loadPortal}>Refresh</Button>
+		<Button variant="outline" onclick={() => loadPortal()}>Refresh</Button>
 	</div>
+
+	{#if isPreviewMode}
+		<Card.Root class="border-primary/20 bg-primary/5 shadow-sm">
+			<Card.Header class="pb-3">
+				<Card.Title class="text-base">Preview Portal Siswa</Card.Title>
+				<Card.Description>Pilih siswa untuk melihat portal seperti yang tampil pada akun siswa. Token ujian tidak bisa dibuka dari mode preview admin.</Card.Description>
+			</Card.Header>
+			<Card.Content class="space-y-3">
+				<div class="flex flex-col gap-3 md:flex-row md:items-end">
+					<div class="flex-1 space-y-2">
+						<label for="preview-student" class="text-sm font-medium">Siswa</label>
+						<select
+							id="preview-student"
+							class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+							bind:value={selectedPreviewStudentID}
+							disabled={previewLoading || previewStudents.length === 0}
+						>
+							{#each previewStudents as student (student.id)}
+								<option value={student.id}>{student.nama} · {student.class_code || 'Tanpa Rombel'} · NIS {student.nis || '—'}</option>
+							{/each}
+						</select>
+					</div>
+					<Button onclick={selectPreviewStudent} disabled={!selectedPreviewStudentID || previewLoading}>Lihat Preview</Button>
+				</div>
+				{#if previewError}
+					<p class="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">{previewError}</p>
+				{:else if previewLoading}
+					<p class="text-sm text-muted-foreground">Memuat daftar siswa...</p>
+				{:else if previewStudents.length === 0}
+					<p class="text-sm text-muted-foreground">Belum ada siswa aktif untuk dipreview.</p>
+				{/if}
+			</Card.Content>
+		</Card.Root>
+	{/if}
 
 	<AsyncContent promise={portalPromise} onerror={handleRenderError}>
 		{#snippet pending()}
@@ -294,9 +370,11 @@
 									<Table.Cell class="font-mono text-xs">{item.token_masked || 'Belum tersedia'}</Table.Cell>
 									<Table.Cell>
 										<div class="flex justify-end gap-2">
-											<Button size="sm" variant="outline" href={resolve(`/portal/siswa/cbt/${item.participant_id}`)}>Kartu</Button>
-											<Button size="sm" disabled={!item.can_reveal_token} onclick={() => openReveal(item)}>
-												{item.can_reveal_token ? 'Buka Kode' : 'Belum Dibuka'}
+											{#if !isPreviewMode}
+												<Button size="sm" variant="outline" href={resolve(`/portal/siswa/cbt/${item.participant_id}`)}>Kartu</Button>
+											{/if}
+											<Button size="sm" disabled={isPreviewMode || !item.can_reveal_token} onclick={() => openReveal(item)}>
+												{isPreviewMode ? 'Preview Saja' : item.can_reveal_token ? 'Buka Kode' : 'Belum Dibuka'}
 											</Button>
 										</div>
 									</Table.Cell>

@@ -114,6 +114,10 @@ func (f *fakeParentPortalSelfService) Children(ctx context.Context, userID pgtyp
 	return f.childrenRows, f.childrenErr
 }
 
+func (f *fakeParentPortalSelfService) ChildrenByParentID(ctx context.Context, parentID pgtype.UUID) ([]db.ListParentChildrenRow, error) {
+	return f.Children(ctx, parentID)
+}
+
 func (f *fakeParentPortalSelfService) ChildProfile(ctx context.Context, userID, studentID pgtype.UUID) (db.GetParentPortalChildProfileRow, error) {
 	f.profileUserID = userID
 	f.profileStudentID = studentID
@@ -126,14 +130,26 @@ func (f *fakeParentPortalSelfService) ChildProfile(ctx context.Context, userID, 
 	return db.GetParentPortalChildProfileRow{ID: studentID, Nama: "Siswa A"}, nil
 }
 
+func (f *fakeParentPortalSelfService) ChildProfileByParentID(ctx context.Context, parentID, studentID pgtype.UUID) (db.GetParentPortalChildProfileRow, error) {
+	return f.ChildProfile(ctx, parentID, studentID)
+}
+
 func (f *fakeParentPortalSelfService) ChildSchedule(ctx context.Context, userID, studentID pgtype.UUID) ([]db.ListParentPortalChildTimetableRow, error) {
 	f.scheduleUserID = userID
 	f.scheduleStudentID = studentID
 	return f.scheduleRows, f.scheduleErr
 }
 
+func (f *fakeParentPortalSelfService) ChildScheduleByParentID(ctx context.Context, parentID, studentID pgtype.UUID) ([]db.ListParentPortalChildTimetableRow, error) {
+	return f.ChildSchedule(ctx, parentID, studentID)
+}
+
 func (f *fakeParentPortalSelfService) ChildResults(ctx context.Context, userID, studentID pgtype.UUID) ([]db.ListParentPortalChildExamSessionsRow, error) {
 	f.resultsUserID = userID
 	f.resultsStudentID = studentID
 	return f.resultsRows, f.resultsErr
+}
+
+func (f *fakeParentPortalSelfService) ChildResultsByParentID(ctx context.Context, parentID, studentID pgtype.UUID) ([]db.ListParentPortalChildExamSessionsRow, error) {
+	return f.ChildResults(ctx, parentID, studentID)
 }

@@ -214,6 +214,10 @@ type fakeStudentPortalSelfService struct {
 	revealErr           error
 }
 
+func (f *fakeStudentPortalSelfService) PreviewStudents(ctx context.Context) ([]db.ListStudentPortalPreviewStudentsRow, error) {
+	return []db.ListStudentPortalPreviewStudentsRow{}, nil
+}
+
 func (f *fakeStudentPortalSelfService) Profile(ctx context.Context, userID pgtype.UUID) (db.GetStudentByIDRow, error) {
 	f.profileUserID = userID
 	if f.profileErr != nil {
@@ -225,9 +229,17 @@ func (f *fakeStudentPortalSelfService) Profile(ctx context.Context, userID pgtyp
 	return db.GetStudentByIDRow{ID: handlerTestUUID(214), Nama: "Siswa A"}, nil
 }
 
+func (f *fakeStudentPortalSelfService) ProfileByStudentID(ctx context.Context, studentID pgtype.UUID) (db.GetStudentByIDRow, error) {
+	return f.Profile(ctx, studentID)
+}
+
 func (f *fakeStudentPortalSelfService) Schedule(ctx context.Context, userID pgtype.UUID) ([]db.ListStudentTimetableRow, error) {
 	f.scheduleUserID = userID
 	return f.scheduleRows, f.scheduleErr
+}
+
+func (f *fakeStudentPortalSelfService) ScheduleByStudentID(ctx context.Context, studentID pgtype.UUID) ([]db.ListStudentTimetableRow, error) {
+	return f.Schedule(ctx, studentID)
 }
 
 func (f *fakeStudentPortalSelfService) Results(ctx context.Context, userID pgtype.UUID) ([]db.ListStudentExamSessionsRow, error) {
@@ -235,9 +247,17 @@ func (f *fakeStudentPortalSelfService) Results(ctx context.Context, userID pgtyp
 	return f.resultsRows, f.resultsErr
 }
 
+func (f *fakeStudentPortalSelfService) ResultsByStudentID(ctx context.Context, studentID pgtype.UUID) ([]db.ListStudentExamSessionsRow, error) {
+	return f.Results(ctx, studentID)
+}
+
 func (f *fakeStudentPortalSelfService) CbtSchedule(ctx context.Context, userID pgtype.UUID) ([]service.StudentPortalCbtScheduleItem, error) {
 	f.cbtUserID = userID
 	return f.cbtScheduleRows, f.cbtScheduleErr
+}
+
+func (f *fakeStudentPortalSelfService) CbtScheduleByStudentID(ctx context.Context, studentID pgtype.UUID) ([]service.StudentPortalCbtScheduleItem, error) {
+	return f.CbtSchedule(ctx, studentID)
 }
 
 func (f *fakeStudentPortalSelfService) RevealCbtToken(ctx context.Context, userID, participantID pgtype.UUID, roomToken, clientIP string) (service.StudentPortalTokenReveal, error) {

@@ -195,6 +195,58 @@ func (q *Queries) ListActiveStudentsByClassID(ctx context.Context, classID pgtyp
 	return items, nil
 }
 
+const listStudentPortalPreviewStudents = `-- name: ListStudentPortalPreviewStudents :many
+SELECT s.id, s.nis, s.nisn, s.nama,
+       s.class_id, c.name AS class_name, c.code AS class_code,
+       s.status, s.is_active
+FROM students s
+LEFT JOIN school_classes c ON c.id = s.class_id
+WHERE s.is_active = TRUE
+ORDER BY c.code ASC NULLS LAST, s.nama ASC
+`
+
+type ListStudentPortalPreviewStudentsRow struct {
+	ID        pgtype.UUID       `json:"id"`
+	Nis       string            `json:"nis"`
+	Nisn      string            `json:"nisn"`
+	Nama      string            `json:"nama"`
+	ClassID   pgtype.UUID       `json:"class_id"`
+	ClassName pgtype.Text       `json:"class_name"`
+	ClassCode pgtype.Text       `json:"class_code"`
+	Status    StudentStatusEnum `json:"status"`
+	IsActive  bool              `json:"is_active"`
+}
+
+func (q *Queries) ListStudentPortalPreviewStudents(ctx context.Context) ([]ListStudentPortalPreviewStudentsRow, error) {
+	rows, err := q.db.Query(ctx, listStudentPortalPreviewStudents)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStudentPortalPreviewStudentsRow{}
+	for rows.Next() {
+		var i ListStudentPortalPreviewStudentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nis,
+			&i.Nisn,
+			&i.Nama,
+			&i.ClassID,
+			&i.ClassName,
+			&i.ClassCode,
+			&i.Status,
+			&i.IsActive,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStudents = `-- name: ListStudents :many
 SELECT s.id, s.nis, s.nisn, s.nama, s.gender, s.parent_name, s.parent_phone,
        s.class_id, c.name AS class_name, c.code AS class_code,
