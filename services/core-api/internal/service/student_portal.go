@@ -17,6 +17,7 @@ import (
 
 type studentPortalStore interface {
 	GetPortalStudentIDByUserID(ctx context.Context, userID pgtype.UUID) (pgtype.UUID, error)
+	ListStudentPortalPreviewStudents(ctx context.Context) ([]db.ListStudentPortalPreviewStudentsRow, error)
 	GetStudentByID(ctx context.Context, id pgtype.UUID) (db.GetStudentByIDRow, error)
 	ListStudentTimetable(ctx context.Context, studentID pgtype.UUID) ([]db.ListStudentTimetableRow, error)
 	ListStudentExamSessions(ctx context.Context, studentID pgtype.UUID) ([]db.ListStudentExamSessionsRow, error)
@@ -68,10 +69,21 @@ func NewStudentPortal(q *db.Queries) *StudentPortal {
 	return &StudentPortal{q: q}
 }
 
+func (s *StudentPortal) PreviewStudents(ctx context.Context) ([]db.ListStudentPortalPreviewStudentsRow, error) {
+	return s.q.ListStudentPortalPreviewStudents(ctx)
+}
+
 func (s *StudentPortal) Profile(ctx context.Context, userID pgtype.UUID) (db.GetStudentByIDRow, error) {
 	studentID, err := s.studentIDForUser(ctx, userID)
 	if err != nil {
 		return db.GetStudentByIDRow{}, err
+	}
+	return s.ProfileByStudentID(ctx, studentID)
+}
+
+func (s *StudentPortal) ProfileByStudentID(ctx context.Context, studentID pgtype.UUID) (db.GetStudentByIDRow, error) {
+	if !studentID.Valid {
+		return db.GetStudentByIDRow{}, domain.ErrBadRequest
 	}
 	return s.q.GetStudentByID(ctx, studentID)
 }
@@ -81,6 +93,13 @@ func (s *StudentPortal) Schedule(ctx context.Context, userID pgtype.UUID) ([]db.
 	if err != nil {
 		return nil, err
 	}
+	return s.ScheduleByStudentID(ctx, studentID)
+}
+
+func (s *StudentPortal) ScheduleByStudentID(ctx context.Context, studentID pgtype.UUID) ([]db.ListStudentTimetableRow, error) {
+	if !studentID.Valid {
+		return nil, domain.ErrBadRequest
+	}
 	return s.q.ListStudentTimetable(ctx, studentID)
 }
 
@@ -89,6 +108,13 @@ func (s *StudentPortal) Results(ctx context.Context, userID pgtype.UUID) ([]db.L
 	if err != nil {
 		return nil, err
 	}
+	return s.ResultsByStudentID(ctx, studentID)
+}
+
+func (s *StudentPortal) ResultsByStudentID(ctx context.Context, studentID pgtype.UUID) ([]db.ListStudentExamSessionsRow, error) {
+	if !studentID.Valid {
+		return nil, domain.ErrBadRequest
+	}
 	return s.q.ListStudentExamSessions(ctx, studentID)
 }
 
@@ -96,6 +122,13 @@ func (s *StudentPortal) CbtSchedule(ctx context.Context, userID pgtype.UUID) ([]
 	studentID, err := s.studentIDForUser(ctx, userID)
 	if err != nil {
 		return nil, err
+	}
+	return s.CbtScheduleByStudentID(ctx, studentID)
+}
+
+func (s *StudentPortal) CbtScheduleByStudentID(ctx context.Context, studentID pgtype.UUID) ([]StudentPortalCbtScheduleItem, error) {
+	if !studentID.Valid {
+		return nil, domain.ErrBadRequest
 	}
 	rows, err := s.q.ListStudentPortalCbtSchedule(ctx, studentID)
 	if err != nil {

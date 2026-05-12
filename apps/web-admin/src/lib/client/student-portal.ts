@@ -2,6 +2,22 @@ import { clientApiPath, readClientApiData } from '$lib/client/api';
 
 export type FetchLike = typeof fetch;
 
+export type StudentPortalPreviewStudent = {
+	id: string;
+	nis: string;
+	nisn: string;
+	nama: string;
+	class_id: string;
+	class_name: string;
+	class_code: string;
+	status: string;
+	is_active: boolean;
+};
+
+export type StudentPortalPreviewStudentsPayload = {
+	students: StudentPortalPreviewStudent[];
+};
+
 export type StudentPortalProfile = {
 	id: string;
 	nis: string;
@@ -90,23 +106,32 @@ export type StudentPortalCbtRevealPayload = {
 	expires_at: string;
 };
 
-export async function fetchStudentPortalProfile(fetcher: FetchLike = fetch) {
-	const res = await fetcher('/api/portal/siswa/profile');
+export async function fetchStudentPortalPreviewStudents(fetcher: FetchLike = fetch) {
+	const res = await fetcher('/api/portal/preview/students');
+	return readClientApiData<StudentPortalPreviewStudentsPayload>(res, 'Gagal memuat daftar siswa untuk preview portal.');
+}
+
+export async function fetchStudentPortalProfile(fetcher: FetchLike = fetch, studentID = '') {
+	const url = studentID ? clientApiPath`/api/portal/preview/students/${studentID}/profile` : '/api/portal/siswa/profile';
+	const res = await fetcher(url);
 	return readClientApiData<StudentPortalProfilePayload>(res, 'Gagal memuat profil portal siswa.');
 }
 
-export async function fetchStudentPortalSchedule(fetcher: FetchLike = fetch) {
-	const res = await fetcher('/api/portal/siswa/schedule');
+export async function fetchStudentPortalSchedule(fetcher: FetchLike = fetch, studentID = '') {
+	const url = studentID ? clientApiPath`/api/portal/preview/students/${studentID}/schedule` : '/api/portal/siswa/schedule';
+	const res = await fetcher(url);
 	return readClientApiData<StudentPortalSchedulePayload>(res, 'Gagal memuat jadwal portal siswa.');
 }
 
-export async function fetchStudentPortalResults(fetcher: FetchLike = fetch) {
-	const res = await fetcher('/api/portal/siswa/results');
+export async function fetchStudentPortalResults(fetcher: FetchLike = fetch, studentID = '') {
+	const url = studentID ? clientApiPath`/api/portal/preview/students/${studentID}/results` : '/api/portal/siswa/results';
+	const res = await fetcher(url);
 	return readClientApiData<StudentPortalResultsPayload>(res, 'Gagal memuat hasil portal siswa.');
 }
 
-export async function fetchStudentPortalCbtSchedule(fetcher: FetchLike = fetch) {
-	const res = await fetcher('/api/portal/siswa/cbt');
+export async function fetchStudentPortalCbtSchedule(fetcher: FetchLike = fetch, studentID = '') {
+	const url = studentID ? clientApiPath`/api/portal/preview/students/${studentID}/cbt` : '/api/portal/siswa/cbt';
+	const res = await fetcher(url);
 	return readClientApiData<StudentPortalCbtSchedulePayload>(res, 'Gagal memuat jadwal CBT portal siswa.');
 }
 

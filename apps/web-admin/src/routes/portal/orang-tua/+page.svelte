@@ -14,10 +14,12 @@
 		fetchParentPortalChildResults,
 		fetchParentPortalChildSchedule,
 		fetchParentPortalChildren,
+		fetchParentPortalPreviewParents,
 		type ParentPortalChild,
 		type ParentPortalChildProfilePayload,
 		type ParentPortalChildResultsPayload,
-		type ParentPortalChildSchedulePayload
+		type ParentPortalChildSchedulePayload,
+		type ParentPortalPreviewParent
 	} from '$lib/client/parent-portal';
 
 	type ChildOverview = {
@@ -34,6 +36,10 @@
 
 	let portalPromise = $state<Promise<ParentPortalOverview> | null>(null);
 	let portalData = $state<ParentPortalOverview | null>(null);
+	let previewParents = $state<ParentPortalPreviewParent[]>([]);
+	let selectedPreviewParentID = $state('');
+	let previewLoading = $state(false);
+	let previewError = $state('');
 	let selectedChildID = $state('');
 
 	const dayLabels: Record<number, string> = {
@@ -45,8 +51,20 @@
 		6: 'Sabtu'
 	};
 
-	const parentDisplayName = $derived(page.data.account?.profile_nama || page.data.user?.username || 'Orang tua/wali');
-	const parentPhone = $derived(page.data.account?.contact?.phone ?? '');
+	const currentUser = $derived(page.data.user);
+	const isParentPortalUser = $derived(Boolean(currentUser?.roles?.includes('orang_tua') || currentUser?.roles?.includes('parent') || currentUser?.role === 'orang_tua' || currentUser?.role === 'parent'));
+	const canPreviewParentPortal = $derived(Boolean(
+		currentUser?.roles?.includes('admin') ||
+		currentUser?.roles?.includes('kesiswaan') ||
+		currentUser?.permissions?.includes('parents.manage')
+	));
+	const isPreviewMode = $derived(canPreviewParentPortal && !isParentPortalUser);
+	const parentDisplayName = $derived(isPreviewMode
+		? (previewParents.find((parent) => parent.id === selectedPreviewParentID)?.nama || 'Pilih orang tua/wali')
+		: (page.data.account?.profile_nama || page.data.user?.username || 'Orang tua/wali'));
+	const parentPhone = $derived(isPreviewMode
+		? (previewParents.find((parent) => parent.id === selectedPreviewParentID)?.phone || '')
+		: (page.data.account?.contact?.phone ?? ''));
 	const selectedChild = $derived.by(() => {
 		const details = portalData?.details ?? [];
 		return details.find((item) => item.child.id === selectedChildID) ?? details[0] ?? null;
@@ -62,21 +80,38 @@
 		return data;
 	}
 
-	async function fetchPortalData(): Promise<ParentPortalOverview> {
-		const childrenPayload = await fetchParentPortalChildren();
+	async function fetchPortalData(parentID = ''): Promise<ParentPortalOverview> {
+		const childrenPayload = await fetchParentPortalChildren(fetch, parentID);
 		const details = await Promise.all(childrenPayload.children.map(async (child) => {
 			const [profile, schedule, results] = await Promise.all([
-				fetchParentPortalChildProfile(child.id),
-				fetchParentPortalChildSchedule(child.id),
-				fetchParentPortalChildResults(child.id)
+				fetchParentPortalChildProfile(child.id, fetch, parentID),
+				fetchParentPortalChildSchedule(child.id, fetch, parentID),
+				fetchParentPortalChildResults(child.id, fetch, parentID)
 			]);
 			return { child, profile, schedule, results };
 		}));
 		return { children: childrenPayload.children, details };
 	}
 
-	function loadPortal() {
-		portalPromise = fetchPortalData().then(applyPortalData);
+	async function loadPreviewParents() {
+		previewLoading = true;
+		previewError = '';
+		try {
+			const payload = await fetchParentPortalPreviewParents();
+			previewParents = payload.parents;
+			if (!selectedPreviewParentID && payload.parents.length > 0) {
+				selectedPreviewParentID = payload.parents[0].id;
+			}
+			if (selectedPreviewParentID) loadPortal(selectedPreviewParentID);
+		} catch (error) {
+			previewError = portalErrorMessage(error);
+		} finally {
+			previewLoading = false;
+		}
+	}
+
+	function loadPortal(parentID = selectedPreviewParentID) {
+		portalPromise = fetchPortalData(isPreviewMode ? parentID : '').then(applyPortalData);
 	}
 
 	function retryPortal(reset?: () => void) {
@@ -107,8 +142,18 @@
 		return '-';
 	}
 
+	function selectPreviewParent() {
+		portalData = null;
+		selectedChildID = '';
+		if (selectedPreviewParentID) loadPortal(selectedPreviewParentID);
+	}
+
 	onMount(() => {
-		loadPortal();
+		if (isPreviewMode) {
+			void loadPreviewParents();
+		} else {
+			loadPortal('');
+		}
 	});
 </script>
 
@@ -120,8 +165,42 @@
 			<h1 class="text-2xl font-semibold text-foreground">Portal Orang Tua</h1>
 			<p class="mt-1 text-sm text-muted-foreground">Data anak, jadwal, dan hasil asesmen yang tertaut ke akun wali.</p>
 		</div>
-		<Button variant="outline" onclick={loadPortal}>Refresh</Button>
+		<Button variant="outline" onclick={() => loadPortal()}>Refresh</Button>
 	</div>
+
+	{#if isPreviewMode}
+		<Card.Root class="border-primary/20 bg-primary/5 shadow-sm">
+			<Card.Header class="pb-3">
+				<Card.Title class="text-base">Preview Portal Orang Tua</Card.Title>
+				<Card.Description>Pilih orang tua/wali untuk melihat data anak seperti yang tampil pada akun wali.</Card.Description>
+			</Card.Header>
+			<Card.Content class="space-y-3">
+				<div class="flex flex-col gap-3 md:flex-row md:items-end">
+					<div class="flex-1 space-y-2">
+						<label for="preview-parent" class="text-sm font-medium">Orang tua/wali</label>
+						<select
+							id="preview-parent"
+							class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+							bind:value={selectedPreviewParentID}
+							disabled={previewLoading || previewParents.length === 0}
+						>
+							{#each previewParents as parent (parent.id)}
+								<option value={parent.id}>{parent.nama} · {parent.phone || 'No HP belum ada'} · {parent.linked_student_count ?? 0} anak</option>
+							{/each}
+						</select>
+					</div>
+					<Button onclick={selectPreviewParent} disabled={!selectedPreviewParentID || previewLoading}>Lihat Preview</Button>
+				</div>
+				{#if previewError}
+					<p class="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">{previewError}</p>
+				{:else if previewLoading}
+					<p class="text-sm text-muted-foreground">Memuat daftar orang tua...</p>
+				{:else if previewParents.length === 0}
+					<p class="text-sm text-muted-foreground">Belum ada data orang tua/wali untuk dipreview.</p>
+				{/if}
+			</Card.Content>
+		</Card.Root>
+	{/if}
 
 	<AsyncContent promise={portalPromise} onerror={handleRenderError}>
 		{#snippet pending()}

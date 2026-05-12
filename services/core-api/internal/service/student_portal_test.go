@@ -204,6 +204,10 @@ func (f *fakeStudentPortalStore) GetPortalStudentIDByUserID(ctx context.Context,
 	return f.studentID, nil
 }
 
+func (f *fakeStudentPortalStore) ListStudentPortalPreviewStudents(ctx context.Context) ([]db.ListStudentPortalPreviewStudentsRow, error) {
+	return []db.ListStudentPortalPreviewStudentsRow{}, nil
+}
+
 func (f *fakeStudentPortalStore) GetStudentByID(ctx context.Context, id pgtype.UUID) (db.GetStudentByIDRow, error) {
 	f.profileStudentID = id
 	return db.GetStudentByIDRow{ID: id, Nama: "Siswa A"}, nil

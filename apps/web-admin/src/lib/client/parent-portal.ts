@@ -3,6 +3,17 @@ import type { StudentPortalResultItem } from '$lib/client/student-portal';
 
 export type FetchLike = typeof fetch;
 
+export type ParentPortalPreviewParent = {
+	id: string;
+	nama: string;
+	phone: string;
+	linked_student_count?: number;
+};
+
+export type ParentPortalPreviewParentsPayload = {
+	parents: ParentPortalPreviewParent[];
+};
+
 export type ParentPortalChild = {
 	id: string;
 	nis: string;
@@ -59,22 +70,38 @@ export type ParentPortalChildResultsPayload = {
 	results: StudentPortalResultItem[];
 };
 
-export async function fetchParentPortalChildren(fetcher: FetchLike = fetch) {
-	const res = await fetcher('/api/portal/orang-tua/children');
+export async function fetchParentPortalPreviewParents(fetcher: FetchLike = fetch) {
+	const res = await fetcher('/api/parents');
+	const payload = await readClientApiData<ParentPortalPreviewParent[] | { parents?: ParentPortalPreviewParent[]; data?: ParentPortalPreviewParent[] }>(res, 'Gagal memuat daftar orang tua untuk preview portal.');
+	return { parents: Array.isArray(payload) ? payload : (payload.parents ?? payload.data ?? []) } satisfies ParentPortalPreviewParentsPayload;
+}
+
+export async function fetchParentPortalChildren(fetcher: FetchLike = fetch, parentID = '') {
+	const url = parentID ? clientApiPath`/api/portal/preview/parents/${parentID}/children` : '/api/portal/orang-tua/children';
+	const res = await fetcher(url);
 	return readClientApiData<ParentPortalChildrenPayload>(res, 'Gagal memuat daftar anak portal orang tua.');
 }
 
-export async function fetchParentPortalChildProfile(studentID: string, fetcher: FetchLike = fetch) {
-	const res = await fetcher(clientApiPath`/api/portal/orang-tua/children/${studentID}/profile`);
+export async function fetchParentPortalChildProfile(studentID: string, fetcher: FetchLike = fetch, parentID = '') {
+	const url = parentID
+		? clientApiPath`/api/portal/preview/parents/${parentID}/children/${studentID}/profile`
+		: clientApiPath`/api/portal/orang-tua/children/${studentID}/profile`;
+	const res = await fetcher(url);
 	return readClientApiData<ParentPortalChildProfilePayload>(res, 'Gagal memuat profil anak.');
 }
 
-export async function fetchParentPortalChildSchedule(studentID: string, fetcher: FetchLike = fetch) {
-	const res = await fetcher(clientApiPath`/api/portal/orang-tua/children/${studentID}/schedule`);
+export async function fetchParentPortalChildSchedule(studentID: string, fetcher: FetchLike = fetch, parentID = '') {
+	const url = parentID
+		? clientApiPath`/api/portal/preview/parents/${parentID}/children/${studentID}/schedule`
+		: clientApiPath`/api/portal/orang-tua/children/${studentID}/schedule`;
+	const res = await fetcher(url);
 	return readClientApiData<ParentPortalChildSchedulePayload>(res, 'Gagal memuat jadwal anak.');
 }
 
-export async function fetchParentPortalChildResults(studentID: string, fetcher: FetchLike = fetch) {
-	const res = await fetcher(clientApiPath`/api/portal/orang-tua/children/${studentID}/results`);
+export async function fetchParentPortalChildResults(studentID: string, fetcher: FetchLike = fetch, parentID = '') {
+	const url = parentID
+		? clientApiPath`/api/portal/preview/parents/${parentID}/children/${studentID}/results`
+		: clientApiPath`/api/portal/orang-tua/children/${studentID}/results`;
+	const res = await fetcher(url);
 	return readClientApiData<ParentPortalChildResultsPayload>(res, 'Gagal memuat hasil anak.');
 }
