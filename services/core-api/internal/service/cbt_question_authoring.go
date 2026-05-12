@@ -128,8 +128,14 @@ func (s *CbtQuestion) DeleteWithActor(ctx context.Context, id pgtype.UUID, actor
 	if err := s.requireModifyQuestion(ctx, actor, current); err != nil {
 		return err
 	}
+	if current.WorkflowStatus != "" && current.WorkflowStatus != "draft" {
+		return fmt.Errorf("%w: soal hanya dapat dihapus saat masih berstatus draft", domain.ErrConflict)
+	}
+	if current.Status != "" && current.Status != db.CbtQuestionStatusEnumDraft {
+		return fmt.Errorf("%w: soal hanya dapat dihapus saat belum terbit", domain.ErrConflict)
+	}
 	if questionUsageLocked(current.PackageCount, current.AnswerCount) {
-		return fmt.Errorf("%w: soal sudah masuk paket ujian atau memiliki jawaban siswa. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
+		return fmt.Errorf("%w: soal sudah masuk paket ujian atau memiliki jawaban siswa. Soal ini tidak dapat dihapus permanen", domain.ErrConflict)
 	}
 	return s.withMutationStoreExec(ctx, func(store cbtQuestionStore) error {
 		if err := logQuestionAudit(ctx, store, id, actor.Username, "delete", "", nil); err != nil {
