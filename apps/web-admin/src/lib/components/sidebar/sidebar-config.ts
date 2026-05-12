@@ -25,6 +25,13 @@ export const dashboardNavItem: SidebarNavItem = {
 
 export const sidebarNavGroups: SidebarNavGroup[] = [
 	{
+		group: 'Beranda',
+		items: [
+			{ href: '/notifications', label: 'Notifikasi', icon: 'activity', permissions: ['notifications.read'] },
+			{ href: '/akademik/kesiapan', label: 'Kesiapan Akademik & Rapor', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['academic.read'] }
+		]
+	},
+	{
 		group: 'Portal',
 		items: [
 			{ href: '/portal/siswa', label: 'Portal Siswa', icon: 'book-open', roles: ['siswa'], roleFallbacks: ['siswa'], permissions: ['student_portal.read'] },
@@ -32,29 +39,33 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		]
 	},
 	{
-		group: 'Akademik & Pembelajaran',
+		group: 'Akademik',
 		items: [
-			{ href: '/akademik', label: 'Dashboard Akademik', icon: 'grid', roles: ['admin', 'guru', 'kesiswaan'], permissions: ['academic.read'] },
-			{ href: '/akademik/kesiapan', label: 'Kesiapan Akademik', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['academic.read'] },
+			{ href: '/akademik', label: 'Ringkasan Akademik', icon: 'grid', roles: ['admin', 'guru', 'kesiswaan'], permissions: ['academic.read'] },
 			{ href: '/akademik/tahun-ajaran', label: 'Tahun Ajaran', icon: 'calendar', roles: ['admin'], permissions: ['academic.read'] },
 			{ href: '/akademik/kurikulum', label: 'Struktur Kurikulum', icon: 'book-open', roles: ['admin', 'guru'], permissions: ['academic.read'] },
 			{ href: '/akademik/rombel', label: 'Rombel', icon: 'layers', roles: ['admin', 'guru', 'kesiswaan'], permissions: ['academic.read'] },
-			{ href: '/students', label: 'Siswa', icon: 'users', roles: ['admin', 'kesiswaan', 'guru'], permissions: ['students.read'] },
 			{ href: '/akademik/mapel', label: 'Mapel', icon: 'book-open', roles: ['admin', 'guru'], permissions: ['academic.read'] },
 			{ href: '/akademik/guru-mapel', label: 'Guru Mapel', icon: 'user-check', roles: ['admin', 'guru'], permissions: ['academic.read'] },
 			{ href: '/akademik/jam-pelajaran', label: 'Jam Pelajaran', icon: 'calendar', roles: ['admin', 'guru'], permissions: ['academic.read'] },
 			{ href: '/akademik/jadwal', label: 'Jadwal', icon: 'calendar', roles: ['admin', 'guru'], permissions: ['academic.read'] },
 			{ href: '/akademik/beban-guru', label: 'Beban Guru', icon: 'activity', roles: ['admin', 'guru'], permissions: ['academic.read'] },
-			{ href: '/grades', label: 'Nilai', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['grades.read', 'grades.manage'] },
-			{ href: '/grades/rapor', label: 'Cetak Rapor', icon: 'printer', roles: ['admin', 'guru'], permissions: ['grades.read', 'grades.manage'] },
 			{ href: '/journal', label: 'Jurnal Kelas', icon: 'journal', roles: ['admin', 'guru'], permissions: ['journal.read', 'journal.manage', 'journal.read_all', 'journal.manage_all'] }
 		]
 	},
 	{
-		group: 'Siswa & Wali',
+		group: 'Siswa & Orang Tua',
 		items: [
+			{ href: '/students', label: 'Siswa', icon: 'users', roles: ['admin', 'kesiswaan', 'guru'], permissions: ['students.read'] },
 			{ href: '/parents', label: 'Orang Tua', icon: 'user-group', roles: ['admin'], permissions: ['parents.read'] },
 			{ href: '/kesiswaan', label: 'Kesiswaan', icon: 'user-check', roles: ['admin', 'kesiswaan', 'guru'], permissions: ['kesiswaan.read', 'students.read'] }
+		]
+	},
+	{
+		group: 'Nilai & Rapor',
+		items: [
+			{ href: '/grades', label: 'Input Nilai', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['grades.read', 'grades.manage'] },
+			{ href: '/grades/rapor', label: 'Rapor Siswa', icon: 'printer', roles: ['admin', 'guru'], permissions: ['grades.read', 'grades.manage'] }
 		]
 	},
 	{
@@ -63,7 +74,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 			{ href: '/bank-soal', label: 'Dashboard Bank Soal', icon: 'grid', roles: ['admin', 'guru'], permissions: ['bank_soal.read'] },
 			{ href: '/bank-soal/daftar', label: 'Daftar Soal', icon: 'book-open', roles: ['admin', 'guru'], permissions: ['bank_soal.read'] },
 			{ href: '/bank-soal/tambah', label: 'Tambah Soal', icon: 'pen-tool', roles: ['admin', 'guru'], permissions: ['bank_soal.create'] },
-			{ href: '/bank-soal/verifikasi', label: 'Review Soal', icon: 'clipboard', roles: ['admin'], permissions: ['bank_soal.review'] },
+			{ href: '/bank-soal/verifikasi', label: 'Verifikasi Soal', icon: 'clipboard', roles: ['admin'], permissions: ['bank_soal.review'] },
 			{ href: '/bank-soal/impor', label: 'Impor Soal', icon: 'file-text', roles: ['admin'], permissions: ['bank_soal.import'] },
 			{ href: '/bank-soal/analisis-butir', label: 'Analisis Butir', icon: 'activity', roles: ['admin', 'guru'], permissions: ['bank_soal.analytics'] },
 			{ href: '/bank-soal/mapel-kd', label: 'Mapel & KD', icon: 'layers', roles: ['admin', 'guru'], permissions: ['bank_soal.read'] },
@@ -71,31 +82,31 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		]
 	},
 	{
-		group: 'Asesmen',
+		group: 'Asesmen / CBT',
 		items: [
 			{ href: '/asesmen', label: 'Dashboard Asesmen', icon: 'grid', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor', 'asesmen.result_read', 'asesmen.score'] },
 			{ href: '/asesmen/paket', label: 'Paket Soal', icon: 'book-open', roles: ['admin'], permissions: ['asesmen.package_manage'] },
 			{ href: '/asesmen/kegiatan', label: 'Kegiatan', icon: 'calendar', roles: ['admin'], permissions: ['asesmen.event_manage'] },
 			{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
-			{ href: '/asesmen/aplikasi-siswa/release', label: 'APK CBT Mobile', icon: 'package', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor'] },
+			{ href: '/asesmen/aplikasi-siswa/release', label: 'Aplikasi Siswa CBT', icon: 'package', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor'] },
 			{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
 			{ href: '/asesmen/hasil', label: 'Hasil', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.result_read'] }
 		]
 	},
 	{
-		group: 'Administrasi & TU',
+		group: 'Tata Usaha',
 		items: [
-			{ href: '/governance', label: 'Tata Kelola', icon: 'layers', roles: ['admin', 'staf'], permissions: ['governance.read'] },
-			{ href: '/governance/actions', label: 'Tindak Lanjut', icon: 'clipboard', roles: ['admin', 'staf'], permissions: ['governance.manage'] },
-			{ href: '/document-cycles', label: 'Monitoring Dokumen', icon: 'calendar', roles: ['admin', 'staf'], permissions: ['document_cycles.read'] },
-			{ href: '/document-cycles/verifikasi', label: 'Verifikasi Dokumen', icon: 'user-check', roles: ['admin', 'staf'], permissions: ['document_cycles.manage'] },
 			{ href: '/tu', label: 'Dashboard TU', icon: 'clipboard', roles: ['admin', 'staf'], permissions: ['letters.read'] },
 			{ href: '/tu/surat-masuk', label: 'Surat Masuk', icon: 'inbox', roles: ['admin', 'staf'], permissions: ['letters.manage'] },
 			{ href: '/tu/surat-keluar', label: 'Surat Keluar', icon: 'mail', roles: ['admin', 'staf'], permissions: ['letters.manage'] },
 			{ href: '/tu/surat-keterangan', label: 'Surat Keterangan', icon: 'file-text', roles: ['admin', 'staf'], permissions: ['letters.manage'] },
-			{ href: '/tu/arsip', label: 'Arsip', icon: 'archive', roles: ['admin', 'staf'], permissions: ['archives.read'] },
 			{ href: '/tu/disposisi', label: 'Disposisi', icon: 'mail-forward', roles: ['admin', 'staf'], permissions: ['letters.manage'] },
-			{ href: '/tu/compliance-pack', label: 'Paket Kepatuhan', icon: 'printer', roles: ['admin', 'staf'], permissions: ['letters.read'] }
+			{ href: '/tu/arsip', label: 'Arsip', icon: 'archive', roles: ['admin', 'staf'], permissions: ['archives.read'] },
+			{ href: '/tu/compliance-pack', label: 'Paket Kepatuhan', icon: 'printer', roles: ['admin', 'staf'], permissions: ['letters.read'] },
+			{ href: '/document-cycles', label: 'Monitoring Dokumen', icon: 'calendar', roles: ['admin', 'staf'], permissions: ['document_cycles.read'] },
+			{ href: '/document-cycles/verifikasi', label: 'Verifikasi Dokumen', icon: 'user-check', roles: ['admin', 'staf'], permissions: ['document_cycles.manage'] },
+			{ href: '/governance/actions', label: 'Tindak Lanjut', icon: 'clipboard', roles: ['admin', 'staf'], permissions: ['governance.manage'] },
+			{ href: '/governance', label: 'Tata Kelola', icon: 'layers', roles: ['admin', 'staf'], permissions: ['governance.read'] }
 		]
 	},
 	{
@@ -118,37 +129,36 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		]
 	},
 	{
-		group: 'Pegawai & PUSAKA',
+		group: 'Pegawai & Kehadiran',
 		items: [
 			{ href: '/employees', label: 'Master Pegawai', icon: 'user-check', roles: ['admin'], permissions: ['employees.read', 'employees.manage'] },
-			{ href: '/pusaka', label: 'Kontrol & Monitor', icon: 'server', roles: ['admin'], permissions: ['pusaka.read'] },
+			{ href: '/pusaka', label: 'Monitor PUSAKA', icon: 'server', roles: ['admin'], permissions: ['pusaka.read'] },
 			{ href: '/pusaka/employees', label: 'Pegawai PUSAKA', icon: 'user-check', roles: ['admin'], permissions: ['pusaka.manage'] },
 			{ href: '/pusaka/kehadiran', label: 'Data Kehadiran', icon: 'clock', roles: ['admin'], permissions: ['pusaka.read'] },
 			{ href: '/pusaka/summary', label: 'Ringkasan Kehadiran', icon: 'layers', roles: ['admin'], permissions: ['pusaka.read'] },
-			{ href: '/pusaka/antrian', label: 'Antrian Job', icon: 'activity', roles: ['admin'], permissions: ['pusaka.manage'] }
+			{ href: '/pusaka/antrian', label: 'Antrian Sinkronisasi', icon: 'activity', roles: ['admin'], permissions: ['pusaka.manage'] }
 		]
 	},
-		{
-			group: 'Sistem',
-			items: [
-				{ href: '/notifications', label: 'Notifikasi', icon: 'activity', permissions: ['notifications.read'] },
-				{ href: '/settings/account', label: 'Akun Saya', icon: 'user-check', permissions: ['settings.account'], allowAuthenticatedFallback: true },
-				{ href: '/settings', label: 'Pengaturan Sistem', icon: 'settings', roles: ['admin'], permissions: ['settings.account'] },
-				{ href: '/settings/users', label: 'Manajemen User', icon: 'users', roles: ['admin'], permissions: ['users.read'] },
-				{ href: '/settings/rbac', label: 'Manajemen RBAC', icon: 'shield', roles: ['admin'], permissions: ['roles.read'] },
-				{ href: '/settings/user-change-requests', label: 'Perubahan Data', icon: 'file-text', roles: ['admin'], permissions: ['profile_changes.review'] },
-				{ href: '/settings/audit-logs', label: 'Audit Trail', icon: 'file-text', roles: ['admin'], permissions: ['audit.read'] },
-				{ href: '/settings/analytics', label: 'Analytics Internal', icon: 'activity', roles: ['admin'], permissions: ['analytics.read'] },
-				{ href: '/settings/school-profile', label: 'Profil Madrasah', icon: 'settings', roles: ['admin'], permissions: ['settings.school_profile'] }
-			]
-		}
-	];
+	{
+		group: 'Pengaturan',
+		items: [
+			{ href: '/settings/account', label: 'Akun Saya', icon: 'user-check', permissions: ['settings.account'], allowAuthenticatedFallback: true },
+			{ href: '/settings/school-profile', label: 'Profil Madrasah', icon: 'settings', roles: ['admin'], permissions: ['settings.school_profile'] },
+			{ href: '/settings/users', label: 'Pengguna & Hak Akses', icon: 'users', roles: ['admin'], permissions: ['users.read'] },
+			{ href: '/settings/rbac', label: 'Peran & Izin Akses', icon: 'shield', roles: ['admin'], permissions: ['roles.read'] },
+			{ href: '/settings/user-change-requests', label: 'Perubahan Data', icon: 'file-text', roles: ['admin'], permissions: ['profile_changes.review'] },
+			{ href: '/settings/audit-logs', label: 'Audit Aktivitas', icon: 'file-text', roles: ['admin'], permissions: ['audit.read'] },
+			{ href: '/settings/analytics', label: 'Statistik Penggunaan', icon: 'activity', roles: ['admin'], permissions: ['analytics.read'] },
+			{ href: '/settings', label: 'Pengaturan Sistem', icon: 'settings', roles: ['admin'], permissions: ['settings.account'] }
+		]
+	}
+];
 
 export const defaultPinnedByRole: Record<string, string[]> = {
-	admin: ['/asesmen/persiapan', '/grades', '/akademik/rombel', '/settings'],
-	guru: ['/settings/account'],
+	admin: ['/akademik/kesiapan', '/akademik/rombel', '/akademik/jadwal', '/grades/rapor', '/asesmen/persiapan'],
+	guru: ['/journal', '/grades', '/grades/rapor', '/bank-soal', '/akademik/jadwal'],
 	staf: ['/document-cycles', '/inventory', '/library'],
-	kesiswaan: ['/kesiswaan', '/students', '/akademik/rombel'],
+	kesiswaan: ['/students', '/akademik/rombel', '/parents', '/kesiswaan'],
 	siswa: ['/portal/siswa', '/jadwal'],
 	ortu: ['/portal/orang-tua', '/jadwal']
 };

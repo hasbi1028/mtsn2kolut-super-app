@@ -3,8 +3,8 @@ import { filterSidebarNavGroupsByAccess } from './sidebar-access';
 import { dashboardNavItem, sidebarNavGroups } from './sidebar-config';
 import sidebarIconSource from './SidebarIcon.svelte?raw';
 
-const academicItems = sidebarNavGroups.find((group) => group.group === 'Akademik & Pembelajaran')?.items ?? [];
-const assessmentItems = sidebarNavGroups.find((group) => group.group === 'Asesmen')?.items ?? [];
+const academicItems = sidebarNavGroups.find((group) => group.group === 'Akademik')?.items ?? [];
+const assessmentItems = sidebarNavGroups.find((group) => group.group === 'Asesmen / CBT')?.items ?? [];
 const bankSoalItems = sidebarNavGroups.find((group) => group.group === 'Bank Soal')?.items ?? [];
 const portalItems = sidebarNavGroups.find((group) => group.group === 'Portal')?.items ?? [];
 
@@ -13,6 +13,26 @@ describe('sidebar assessment configuration', () => {
 		expect(dashboardNavItem).toMatchObject({ href: '/', label: 'Dashboard', permissions: ['dashboard.read'], pinnable: false });
 		expect(sidebarNavGroups.some((group) => group.group === 'Utama')).toBe(false);
 		expect(sidebarNavGroups.flatMap((group) => group.items).some((item) => item.href === '/')).toBe(false);
+	});
+
+	it('organizes navigation into madrasah work areas without duplicate hrefs', () => {
+		expect(sidebarNavGroups.map((group) => group.group)).toEqual([
+			'Beranda',
+			'Portal',
+			'Akademik',
+			'Siswa & Orang Tua',
+			'Nilai & Rapor',
+			'Bank Soal',
+			'Asesmen / CBT',
+			'Tata Usaha',
+			'Aset & Layanan',
+			'Website',
+			'Pegawai & Kehadiran',
+			'Pengaturan'
+		]);
+		const hrefs = sidebarNavGroups.flatMap((group) => group.items.map((item) => item.href));
+		expect(new Set(hrefs).size).toBe(hrefs.length);
+		expect(sidebarNavGroups.find((group) => group.group === 'Nilai & Rapor')?.items.map((item) => item.label)).toEqual(['Input Nilai', 'Rapor Siswa']);
 	});
 
 	it('exposes Rombel under Akademik with RBAC fallback and permission metadata', () => {
@@ -32,7 +52,7 @@ describe('sidebar assessment configuration', () => {
 			'Paket Soal',
 			'Kegiatan',
 			'Persiapan',
-			'APK CBT Mobile',
+			'Aplikasi Siswa CBT',
 			'Pelaksanaan',
 			'Hasil'
 		]);
@@ -70,7 +90,7 @@ describe('sidebar assessment configuration', () => {
 
 	it('separates Bank Soal as a standalone module outside CBT routes', () => {
 		expect(sidebarNavGroups.findIndex((group) => group.group === 'Bank Soal')).toBeLessThan(
-			sidebarNavGroups.findIndex((group) => group.group === 'Asesmen')
+			sidebarNavGroups.findIndex((group) => group.group === 'Asesmen / CBT')
 		);
 		expect(sidebarNavGroups.some((group) => group.group === 'CBT')).toBe(false);
 		expect(sidebarNavGroups.some((group) => group.group === 'Bank Soal & Asesmen')).toBe(false);
@@ -78,7 +98,7 @@ describe('sidebar assessment configuration', () => {
 			'Dashboard Bank Soal',
 			'Daftar Soal',
 			'Tambah Soal',
-			'Review Soal',
+			'Verifikasi Soal',
 			'Impor Soal',
 			'Analisis Butir',
 			'Mapel & KD',
@@ -138,14 +158,14 @@ describe('sidebar assessment configuration', () => {
 		expect(byHref.get('/settings')?.permissions).toEqual(['settings.account']);
 		expect(byHref.get('/settings/users')?.permissions).toEqual(['users.read']);
 		expect(byHref.get('/settings/rbac')).toMatchObject({
-			label: 'Manajemen RBAC',
+			label: 'Peran & Izin Akses',
 			roles: ['admin'],
 			permissions: ['roles.read']
 		});
 		expect(byHref.get('/settings/user-change-requests')?.permissions).toEqual(['profile_changes.review']);
 		expect(byHref.get('/settings/audit-logs')?.permissions).toEqual(['audit.read']);
 		expect(byHref.get('/settings/analytics')).toMatchObject({
-			label: 'Analytics Internal',
+			label: 'Statistik Penggunaan',
 			roles: ['admin'],
 			permissions: ['analytics.read']
 		});
