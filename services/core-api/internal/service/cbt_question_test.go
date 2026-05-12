@@ -1351,17 +1351,6 @@ func TestNormalizeQuestionInputValidationMatrix(t *testing.T) {
 			wantErr: "answer_key harus sesuai label opsi yang tersedia",
 		},
 		{
-			name: "approved essay requires rubric",
-			input: SaveCbtQuestionInput{
-				SubjectID:      pgtype.UUID{Valid: true},
-				AuthoringMode:  "advance",
-				QuestionType:   "essay",
-				QuestionText:   "Uraikan",
-				WorkflowStatus: "approved",
-			},
-			wantErr: "rubric_html wajib diisi untuk essay yang diajukan review, di-approve, atau dipublish",
-		},
-		{
 			name: "matching requires complete pair content",
 			input: SaveCbtQuestionInput{
 				SubjectID:      pgtype.UUID{Valid: true},
@@ -1434,6 +1423,22 @@ func TestNormalizeQuestionInputValidationMatrix(t *testing.T) {
 				t.Fatalf("normalizeQuestionInput() error = %v, want %q", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestNormalizeQuestionInputAllowsEssayWithoutRubric(t *testing.T) {
+	input, err := normalizeQuestionInput(SaveCbtQuestionInput{
+		SubjectID:      pgtype.UUID{Valid: true},
+		AuthoringMode:  "advance",
+		QuestionType:   "essay",
+		QuestionText:   "Uraikan hikmah salat berjamaah",
+		WorkflowStatus: "approved",
+	})
+	if err != nil {
+		t.Fatalf("normalizeQuestionInput(approved essay without rubric) error = %v", err)
+	}
+	if input.QuestionType != "essay" || input.RubricHTML != "" {
+		t.Fatalf("normalizeQuestionInput() = type %q rubric %q, want essay with empty rubric", input.QuestionType, input.RubricHTML)
 	}
 }
 

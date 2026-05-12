@@ -681,7 +681,8 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		if (isOrdering) return selectedAnswerLabels.length === fOptions.length;
 		return selectedAnswerLabels.length === 1;
 	});
-	let rubricReady = $derived(!requiresRubric || rubricText.length >= 5 || fRubric.includes('<img'));
+	let rubricProvided = $derived(!requiresRubric || rubricText.length >= 5 || fRubric.includes('<img'));
+	let rubricReady = $derived(true);
 
 	let readinessChecks = $derived({
 		subject: !!fSubjectId,
@@ -713,8 +714,8 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				},
 				{
 					label: 'Pedoman penilaian tersedia',
-					status: rubricReady ? 'good' : 'warn',
-					desc: rubricReady ? 'Rubrik/pedoman terisi' : `${rubricText.length} / 5 karakter minimum`,
+					status: rubricProvided ? 'good' : 'warn',
+					desc: rubricProvided ? 'Rubrik/pedoman terisi' : 'Opsional, tetapi disarankan agar koreksi konsisten',
 				},
 				{
 					label: 'Stimulus pendukung',
@@ -854,7 +855,8 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			else if (isMultipleAnswer) issues.push('Pilih minimal dua kunci jawaban');
 			else issues.push('Pilih kunci jawaban');
 		}
-		if (requiresRubric && !readinessChecks.rubric) issues.push('Isi pedoman/rubrik penilaian essay');
+		// Rubrik essay bersifat opsional; sistem tetap memberi pengingat kualitas,
+		// tetapi tidak memblokir guru saat menyimpan atau mengajukan soal.
 		return issues;
 	});
 	let firstComposerIssue = $derived.by((): ComposerIssueHint | null => {
@@ -869,7 +871,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			if (isShortAnswer) return { message: 'isi kunci isian', targetId: 'composer-answer' };
 			return { message: 'pilih kunci jawaban', targetId: 'composer-options' };
 		}
-		if (requiresRubric && !readinessChecks.rubric) return { message: 'isi rubrik essay', targetId: 'composer-rubric' };
+		// Rubrik essay tidak menjadi syarat wajib untuk review.
 		return null;
 	});
 	let qualityWarningCount = $derived(qualitySignals.filter((signal) => signal.status !== 'good').length);
@@ -4309,8 +4311,8 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 								compact
 								onImageUpload={uploadImageInEditor}
 							/>
-							{#if !readinessChecks.rubric}
-								<p class="text-[10px] font-semibold text-destructive">Pedoman/rubrik essay wajib diisi.</p>
+							{#if !rubricProvided}
+								<p class="text-[10px] font-semibold text-amber-600">Pedoman/rubrik essay opsional, tetapi disarankan agar koreksi lebih konsisten.</p>
 							{/if}
 						</section>
 						{/if}

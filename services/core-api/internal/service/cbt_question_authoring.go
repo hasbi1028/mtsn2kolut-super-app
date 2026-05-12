@@ -635,11 +635,8 @@ func validateQuestion(input SaveCbtQuestionInput) error {
 			return err
 		}
 	case "essay":
-		if requiresCompleteContent {
-			if input.RubricHTML == "" {
-				return fmt.Errorf("rubric_html wajib diisi untuk essay yang diajukan review, di-approve, atau dipublish")
-			}
-		}
+		// Rubrik essay bersifat opsional. Guru pembuat soal dapat menilai sendiri
+		// tanpa rubrik; UI tetap memberi pengingat kualitas non-blocking.
 	default:
 		return fmt.Errorf("question_type tidak didukung")
 	}
