@@ -34,6 +34,13 @@
 		timetable_conflicts: number;
 		student_accounts_missing: number;
 		parent_accounts_missing: number;
+		classes_without_curriculum_profile: number;
+		classes_weekly_hours_under_42: number;
+		classes_weekly_hours_over_48: number;
+		required_subjects_missing_teacher: number;
+		teachers_under_24_hours: number;
+		timetable_hours_mismatch: number;
+		non_ranking_subjects_in_ranking: number;
 	};
 
 	type StatusCard = {
@@ -60,7 +67,14 @@
 		subject_assignments_missing_teacher: 0,
 		timetable_conflicts: 0,
 		student_accounts_missing: 0,
-		parent_accounts_missing: 0
+		parent_accounts_missing: 0,
+		classes_without_curriculum_profile: 0,
+		classes_weekly_hours_under_42: 0,
+		classes_weekly_hours_over_48: 0,
+		required_subjects_missing_teacher: 0,
+		teachers_under_24_hours: 0,
+		timetable_hours_mismatch: 0,
+		non_ranking_subjects_in_ranking: 0
 	};
 
 	let summary = $state<AcademicDashboardSummary>(emptySummary);
@@ -74,7 +88,12 @@
 		summary.students_without_class +
 			summary.classes_without_homeroom +
 			summary.subject_assignments_missing_teacher +
-			summary.timetable_conflicts
+			summary.timetable_conflicts +
+			summary.classes_without_curriculum_profile +
+			summary.classes_weekly_hours_under_42 +
+			summary.classes_weekly_hours_over_48 +
+			summary.required_subjects_missing_teacher +
+			summary.timetable_hours_mismatch
 	);
 	const readinessLabel = $derived(readinessIssues === 0 ? 'Data siap dipakai' : `${readinessIssues} data perlu diperiksa`);
 
@@ -114,6 +133,24 @@
 			value: summary.timetable_conflicts,
 			description: 'Ada jadwal kelas, guru, atau ruang yang bertabrakan.',
 			tone: summary.timetable_conflicts > 0 ? 'danger' : 'default'
+		},
+		{
+			label: 'Rombel tanpa profil kurikulum',
+			value: summary.classes_without_curriculum_profile,
+			description: 'Rombel perlu profil Kurikulum Merdeka/KMA 1503 aktif.',
+			tone: summary.classes_without_curriculum_profile > 0 ? 'warning' : 'default'
+		},
+		{
+			label: 'JP mingguan di luar 42–48',
+			value: summary.classes_weekly_hours_under_42 + summary.classes_weekly_hours_over_48,
+			description: 'Validasi batas JP KMA 1503 termasuk tambahan maksimal +6 JP.',
+			tone: summary.classes_weekly_hours_under_42 + summary.classes_weekly_hours_over_48 > 0 ? 'warning' : 'default'
+		},
+		{
+			label: 'Guru kurang 24 JP',
+			value: summary.teachers_under_24_hours,
+			description: 'Beban mengajar guru aktif perlu dipantau.',
+			tone: summary.teachers_under_24_hours > 0 ? 'warning' : 'default'
 		}
 	]);
 
@@ -141,6 +178,24 @@
 			count: summary.timetable_conflicts,
 			description: 'Jadwal yang bertabrakan perlu dibenahi sebelum dipakai harian.',
 			href: resolve('/akademik/jadwal')
+		},
+		{
+			label: 'Tetapkan profil kurikulum rombel',
+			count: summary.classes_without_curriculum_profile,
+			description: 'Profil kurikulum menjadi dasar alokasi JP KMA 1503.',
+			href: resolve('/akademik/kurikulum')
+		},
+		{
+			label: 'Lengkapi guru mapel wajib KMA',
+			count: summary.required_subjects_missing_teacher,
+			description: 'Mapel wajib yang masuk jadwal harus memiliki guru aktif.',
+			href: resolve('/akademik/guru-mapel')
+		},
+		{
+			label: 'Periksa JP mingguan rombel',
+			count: summary.classes_weekly_hours_under_42 + summary.classes_weekly_hours_over_48,
+			description: 'JP efektif sebaiknya berada pada rentang 42–48 sesuai batas tambahan.',
+			href: resolve('/akademik/guru-mapel')
 		}
 	]);
 

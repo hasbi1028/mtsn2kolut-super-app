@@ -28,6 +28,9 @@
 		is_assessment_subject: boolean;
 		is_report_subject: boolean;
 		is_schedule_activity: boolean;
+		counts_for_ranking: boolean;
+		is_local_content: boolean;
+		is_choice_subject: boolean;
 		default_weekly_hours: number;
 		display_order: number;
 		is_active: boolean;
@@ -40,6 +43,9 @@
 		is_assessment_subject: string;
 		is_report_subject: string;
 		is_schedule_activity: string;
+		counts_for_ranking: string;
+		is_local_content: string;
+		is_choice_subject: string;
 		default_weekly_hours: string;
 		display_order: string;
 		is_active: string;
@@ -50,7 +56,9 @@
 		{ value: 'intrakurikuler', label: 'Intrakurikuler' },
 		{ value: 'muatan_lokal', label: 'Muatan Lokal' },
 		{ value: 'kokurikuler', label: 'Kokurikuler' },
+		{ value: 'layanan', label: 'Layanan' },
 		{ value: 'kegiatan', label: 'Kegiatan' },
+		{ value: 'pilihan', label: 'Pilihan' },
 		{ value: 'lainnya', label: 'Lainnya' },
 	];
 	const booleanOptions: EditableOption[] = [
@@ -80,6 +88,8 @@
 	const summary = $derived.by(() => ({
 		active: subjects.filter((item) => item.is_active).length,
 		assessment: subjects.filter((item) => item.is_assessment_subject && item.is_active).length,
+		ranking: subjects.filter((item) => item.counts_for_ranking && item.is_active).length,
+		localContent: subjects.filter((item) => item.is_local_content && item.is_active).length,
 		schedule: subjects.filter((item) => item.is_schedule_activity && item.is_active).length,
 	}));
 	const dirtySubjects = $derived(subjects.filter((subject) => isSubjectDirty(subject)));
@@ -97,6 +107,9 @@
 			is_assessment_subject: String(subject.is_assessment_subject),
 			is_report_subject: String(subject.is_report_subject),
 			is_schedule_activity: String(subject.is_schedule_activity),
+			counts_for_ranking: String(subject.counts_for_ranking ?? true),
+			is_local_content: String(subject.is_local_content ?? false),
+			is_choice_subject: String(subject.is_choice_subject ?? false),
 			default_weekly_hours: String(subject.default_weekly_hours ?? 0),
 			display_order: String(subject.display_order ?? 0),
 			is_active: String(subject.is_active),
@@ -164,6 +177,9 @@
 			(draft.is_assessment_subject === 'true') !== subject.is_assessment_subject ||
 			(draft.is_report_subject === 'true') !== subject.is_report_subject ||
 			(draft.is_schedule_activity === 'true') !== subject.is_schedule_activity ||
+			(draft.counts_for_ranking === 'true') !== (subject.counts_for_ranking ?? true) ||
+			(draft.is_local_content === 'true') !== (subject.is_local_content ?? false) ||
+			(draft.is_choice_subject === 'true') !== (subject.is_choice_subject ?? false) ||
 			draftNumber(draft.default_weekly_hours) !== (subject.default_weekly_hours ?? 0) ||
 			draftNumber(draft.display_order) !== (subject.display_order ?? 0) ||
 			(draft.is_active === 'true') !== subject.is_active
@@ -189,6 +205,9 @@
 			is_assessment_subject: draft.is_assessment_subject === 'true',
 			is_report_subject: draft.is_report_subject === 'true',
 			is_schedule_activity: draft.is_schedule_activity === 'true',
+			counts_for_ranking: draft.counts_for_ranking === 'true',
+			is_local_content: draft.is_local_content === 'true',
+			is_choice_subject: draft.is_choice_subject === 'true',
 			default_weekly_hours: draftNumber(draft.default_weekly_hours),
 			display_order: draftNumber(draft.display_order),
 			is_active: draft.is_active === 'true',
@@ -240,6 +259,9 @@
 			is_assessment_subject: 'true',
 			is_report_subject: 'true',
 			is_schedule_activity: 'false',
+			counts_for_ranking: 'true',
+			is_local_content: String(newCategory === 'muatan_lokal'),
+			is_choice_subject: String(newCategory === 'pilihan'),
 			default_weekly_hours: newWeeklyHours,
 			display_order: newDisplayOrder,
 			is_active: 'true',
@@ -308,7 +330,7 @@
 	<AsyncContent promise={subjectPromise} onerror={handleRenderError}>
 		{#snippet pending()}
 			<div class="space-y-4">
-				<div class="grid gap-3 md:grid-cols-3">
+				<div class="grid gap-3 md:grid-cols-4">
 					<Skeleton class="h-24 w-full" />
 					<Skeleton class="h-24 w-full" />
 					<Skeleton class="h-24 w-full" />
@@ -328,7 +350,7 @@
 			/>
 		{/snippet}
 
-		<div class="grid gap-3 md:grid-cols-3">
+		<div class="grid gap-3 md:grid-cols-4">
 			<Card.Root>
 				<Card.Header class="pb-2">
 					<Card.Description>Mapel aktif</Card.Description>
@@ -343,8 +365,14 @@
 			</Card.Root>
 			<Card.Root>
 				<Card.Header class="pb-2">
-					<Card.Description>{academicCopy.labels.scheduleActivity}</Card.Description>
-					<Card.Title class="text-2xl">{summary.schedule}</Card.Title>
+					<Card.Description>Masuk peringkat</Card.Description>
+					<Card.Title class="text-2xl">{summary.ranking}</Card.Title>
+				</Card.Header>
+			</Card.Root>
+			<Card.Root>
+				<Card.Header class="pb-2">
+					<Card.Description>Muatan lokal</Card.Description>
+					<Card.Title class="text-2xl">{summary.localContent}</Card.Title>
 				</Card.Header>
 			</Card.Root>
 		</div>
@@ -411,6 +439,9 @@
 								<Table.Head>Dipakai untuk asesmen</Table.Head>
 								<Table.Head>Masuk rapor</Table.Head>
 								<Table.Head>Aktivitas jadwal</Table.Head>
+								<Table.Head>Masuk peringkat</Table.Head>
+								<Table.Head>Muatan lokal</Table.Head>
+								<Table.Head>Mapel pilihan</Table.Head>
 								<Table.Head>{academicCopy.labels.weeklyHours}</Table.Head>
 								<Table.Head>{academicCopy.labels.displayOrder}</Table.Head>
 								<Table.Head>Status</Table.Head>
@@ -545,7 +576,7 @@
 								</Table.Row>
 							{:else}
 								<Table.Row>
-									<Table.Cell colspan={9} class="p-4">
+									<Table.Cell colspan={12} class="p-4">
 										<EmptyStatePanel compact title="Belum ada mapel" description="Tambahkan mapel pertama untuk dipakai bank soal, rapor, guru mapel, dan jadwal." />
 									</Table.Cell>
 								</Table.Row>

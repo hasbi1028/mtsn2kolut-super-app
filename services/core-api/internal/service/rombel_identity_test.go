@@ -58,6 +58,15 @@ func (noopRombelStore) GetSubjectAssignmentByClassSubject(context.Context, db.Ge
 func (noopRombelStore) UpsertSubjectAssignmentMatrixCell(context.Context, db.UpsertSubjectAssignmentMatrixCellParams) (db.ClassSubjectAssignment, error) {
 	return db.ClassSubjectAssignment{}, nil
 }
+func (noopRombelStore) GetCurriculumAllocationForClassSubject(context.Context, db.GetCurriculumAllocationForClassSubjectParams) (db.GetCurriculumAllocationForClassSubjectRow, error) {
+	return db.GetCurriculumAllocationForClassSubjectRow{}, nil
+}
+func (noopRombelStore) SumClassAdditionalWeeklyHoursExceptAssignment(context.Context, db.SumClassAdditionalWeeklyHoursExceptAssignmentParams) (pgtype.Numeric, error) {
+	return pgtype.Numeric{Valid: true}, nil
+}
+func (noopRombelStore) UpsertClassSubjectAllocationOverride(context.Context, db.UpsertClassSubjectAllocationOverrideParams) (db.ClassSubjectAllocationOverride, error) {
+	return db.ClassSubjectAllocationOverride{}, nil
+}
 func (noopRombelStore) CreateRombelSubjectAssignment(context.Context, db.CreateRombelSubjectAssignmentParams) (db.CreateRombelSubjectAssignmentRow, error) {
 	return db.CreateRombelSubjectAssignmentRow{}, nil
 }

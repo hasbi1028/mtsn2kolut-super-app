@@ -58,6 +58,9 @@ SELECT
     is_assessment_subject,
     is_report_subject,
     is_schedule_activity,
+    counts_for_ranking,
+    is_local_content,
+    is_choice_subject,
     default_weekly_hours,
     display_order,
     is_active,
@@ -75,6 +78,9 @@ INSERT INTO subjects (
     is_assessment_subject,
     is_report_subject,
     is_schedule_activity,
+    counts_for_ranking,
+    is_local_content,
+    is_choice_subject,
     default_weekly_hours,
     display_order,
     is_active
@@ -87,6 +93,9 @@ VALUES (
     sqlc.arg(is_assessment_subject),
     sqlc.arg(is_report_subject),
     sqlc.arg(is_schedule_activity),
+    sqlc.arg(counts_for_ranking),
+    sqlc.arg(is_local_content),
+    sqlc.arg(is_choice_subject),
     sqlc.arg(default_weekly_hours),
     sqlc.arg(display_order),
     sqlc.arg(is_active)
@@ -102,6 +111,9 @@ SELECT
     is_assessment_subject,
     is_report_subject,
     is_schedule_activity,
+    counts_for_ranking,
+    is_local_content,
+    is_choice_subject,
     default_weekly_hours,
     display_order,
     is_active,
@@ -124,6 +136,9 @@ SET code = sqlc.arg(code),
     is_assessment_subject = sqlc.arg(is_assessment_subject),
     is_report_subject = sqlc.arg(is_report_subject),
     is_schedule_activity = sqlc.arg(is_schedule_activity),
+    counts_for_ranking = sqlc.arg(counts_for_ranking),
+    is_local_content = sqlc.arg(is_local_content),
+    is_choice_subject = sqlc.arg(is_choice_subject),
     default_weekly_hours = sqlc.arg(default_weekly_hours),
     display_order = sqlc.arg(display_order),
     is_active = sqlc.arg(is_active),
@@ -167,6 +182,69 @@ active_assignments AS (
     SELECT csa.*
     FROM class_subject_assignments csa
     JOIN active_classes c ON c.id = csa.class_id
+),
+active_class_curriculum AS (
+    SELECT DISTINCT ON (cca.class_id)
+        cca.class_id,
+        cca.curriculum_profile_id
+    FROM class_curriculum_assignments cca
+    JOIN active_classes c ON c.id = cca.class_id
+    WHERE cca.is_active = TRUE
+    ORDER BY cca.class_id, cca.updated_at DESC, cca.created_at DESC
+),
+required_allocations AS (
+    SELECT
+        c.id AS class_id,
+        c.level,
+        alloc.id AS allocation_id,
+        alloc.subject_id,
+        alloc.subject_group,
+        alloc.total_weekly_hours,
+        alloc.counts_for_schedule,
+        alloc.counts_for_report,
+        alloc.counts_for_ranking,
+        alloc.is_required
+    FROM active_classes c
+    JOIN active_class_curriculum acc ON acc.class_id = c.id
+    JOIN curriculum_subject_allocations alloc
+      ON alloc.curriculum_profile_id = acc.curriculum_profile_id
+     AND alloc.level = c.level
+     AND alloc.is_required = TRUE
+),
+assignment_effective_hours AS (
+    SELECT
+        csa.id AS assignment_id,
+        csa.class_id,
+        csa.subject_id,
+        csa.teacher_employee_id,
+        COALESCE(ov.total_weekly_hours, alloc.total_weekly_hours, 0)::numeric(6,2) AS total_weekly_hours,
+        COALESCE(ov.additional_weekly_hours, 0)::numeric(6,2) AS additional_weekly_hours
+    FROM active_assignments csa
+    JOIN active_classes c ON c.id = csa.class_id
+    LEFT JOIN active_class_curriculum acc ON acc.class_id = c.id
+    LEFT JOIN curriculum_subject_allocations alloc
+      ON alloc.curriculum_profile_id = acc.curriculum_profile_id
+     AND alloc.level = c.level
+     AND alloc.subject_id = csa.subject_id
+    LEFT JOIN class_subject_allocation_overrides ov ON ov.assignment_id = csa.id
+),
+class_curriculum_hours AS (
+    SELECT
+        c.id AS class_id,
+        COALESCE((
+            SELECT SUM(alloc.total_weekly_hours)
+            FROM curriculum_subject_allocations alloc
+            JOIN active_class_curriculum acc ON acc.curriculum_profile_id = alloc.curriculum_profile_id
+            WHERE acc.class_id = c.id
+              AND alloc.level = c.level
+              AND alloc.is_required = TRUE
+        ), 0)::numeric(6,2)
+        + COALESCE((
+            SELECT SUM(aeh.additional_weekly_hours)
+            FROM assignment_effective_hours aeh
+            WHERE aeh.class_id = c.id
+        ), 0)::numeric(6,2) AS effective_weekly_hours
+    FROM active_classes c
 ),
 dashboard_slots AS (
     SELECT
@@ -246,7 +324,50 @@ SELECT
               AND u.deleted_at IS NULL
               AND u.is_active = TRUE
         )
-    )::int AS parent_accounts_missing;
+    )::int AS parent_accounts_missing,
+    (
+        SELECT COUNT(*)
+        FROM active_classes c
+        WHERE NOT EXISTS (SELECT 1 FROM active_class_curriculum acc WHERE acc.class_id = c.id)
+    )::int AS classes_without_curriculum_profile,
+    (
+        SELECT COUNT(*)
+        FROM class_curriculum_hours cch
+        WHERE cch.effective_weekly_hours < 42
+    )::int AS classes_weekly_hours_under_42,
+    (
+        SELECT COUNT(*)
+        FROM class_curriculum_hours cch
+        WHERE cch.effective_weekly_hours > 48
+    )::int AS classes_weekly_hours_over_48,
+    (
+        SELECT COUNT(*)
+        FROM required_allocations alloc
+        LEFT JOIN active_assignments csa ON csa.class_id = alloc.class_id AND csa.subject_id = alloc.subject_id
+        LEFT JOIN employees e ON e.id = csa.teacher_employee_id AND e.is_active = TRUE
+        WHERE alloc.counts_for_schedule = TRUE
+          AND e.id IS NULL
+    )::int AS required_subjects_missing_teacher,
+    (
+        SELECT COUNT(*)
+        FROM (
+            SELECT e.id, COALESCE(SUM(aeh.total_weekly_hours), 0)::numeric(6,2) AS total_weekly_hours
+            FROM employees e
+            JOIN active_assignments csa ON csa.teacher_employee_id = e.id
+            LEFT JOIN assignment_effective_hours aeh ON aeh.assignment_id = csa.id
+            WHERE e.is_active = TRUE
+            GROUP BY e.id
+        ) teacher_load
+        WHERE teacher_load.total_weekly_hours < 24
+    )::int AS teachers_under_24_hours,
+    0::int AS timetable_hours_mismatch,
+    (
+        SELECT COUNT(*)
+        FROM subjects s
+        WHERE s.is_active = TRUE
+          AND s.counts_for_ranking = FALSE
+          AND s.is_report_subject = TRUE
+    )::int AS non_ranking_subjects_in_ranking;
 
 -- name: ListClassSubjectAssignments :many
 SELECT a.id, a.class_id, c.name AS class_name, c.code AS class_code,
@@ -383,6 +504,9 @@ SELECT
     is_assessment_subject,
     is_report_subject,
     is_schedule_activity,
+    counts_for_ranking,
+    is_local_content,
+    is_choice_subject,
     default_weekly_hours,
     display_order
 FROM subjects
@@ -400,6 +524,21 @@ WHERE is_active = TRUE
 ORDER BY nama ASC;
 
 -- name: ListSubjectAssignmentMatrixCells :many
+WITH active_classes AS (
+    SELECT id, code, name, level
+    FROM school_classes
+    WHERE academic_year_id = $1
+      AND is_active = TRUE
+),
+active_class_curriculum AS (
+    SELECT DISTINCT ON (cca.class_id)
+        cca.class_id,
+        cca.curriculum_profile_id
+    FROM class_curriculum_assignments cca
+    JOIN active_classes c ON c.id = cca.class_id
+    WHERE cca.is_active = TRUE
+    ORDER BY cca.class_id, cca.updated_at DESC, cca.created_at DESC
+)
 SELECT
     c.id AS class_id,
     s.id AS subject_id,
@@ -407,20 +546,53 @@ SELECT
     csa.teacher_employee_id,
     COALESCE(e.nama, '') AS teacher_name,
     CASE
+        WHEN alloc.id IS NULL THEN 'missing_curriculum'
         WHEN csa.id IS NULL THEN 'missing_assignment'
         WHEN e.id IS NULL OR e.is_active = FALSE THEN 'missing_teacher'
         ELSE 'complete'
-    END::text AS status
-FROM school_classes c
+    END::text AS status,
+    alloc.id AS curriculum_allocation_id,
+    COALESCE(ov.intra_weekly_hours, alloc.intra_weekly_hours, 0)::numeric(6,2) AS intra_weekly_hours,
+    COALESCE(ov.koku_weekly_hours, alloc.koku_weekly_hours, 0)::numeric(6,2) AS koku_weekly_hours,
+    COALESCE(ov.additional_weekly_hours, 0)::numeric(6,2) AS additional_weekly_hours,
+    COALESCE(ov.total_weekly_hours, alloc.total_weekly_hours, 0)::numeric(6,2) AS total_weekly_hours,
+    COALESCE(ov.is_customized, FALSE)::boolean AS is_customized,
+    CASE
+        WHEN alloc.id IS NULL THEN 'perlu_kurikulum'
+        WHEN COALESCE(ov.total_weekly_hours, alloc.total_weekly_hours, 0) = alloc.total_weekly_hours THEN 'sesuai'
+        WHEN COALESCE(ov.total_weekly_hours, alloc.total_weekly_hours, 0) < alloc.total_weekly_hours THEN 'kurang'
+        ELSE 'lebih'
+    END::text AS compliance_status
+FROM active_classes c
 CROSS JOIN subjects s
+LEFT JOIN active_class_curriculum acc ON acc.class_id = c.id
+LEFT JOIN curriculum_subject_allocations alloc
+  ON alloc.curriculum_profile_id = acc.curriculum_profile_id
+ AND alloc.level = c.level
+ AND alloc.subject_id = s.id
 LEFT JOIN class_subject_assignments csa ON csa.class_id = c.id AND csa.subject_id = s.id
 LEFT JOIN employees e ON e.id = csa.teacher_employee_id
-WHERE c.academic_year_id = $1
-  AND c.is_active = TRUE
-  AND s.is_active = TRUE
+LEFT JOIN class_subject_allocation_overrides ov ON ov.assignment_id = csa.id
+WHERE s.is_active = TRUE
 ORDER BY s.display_order ASC, s.name ASC, c.level ASC, c.name ASC;
 
 -- name: GetSubjectAssignmentMatrixCell :one
+WITH active_class AS (
+    SELECT c.id, c.code, c.name, c.level
+    FROM school_classes c
+    JOIN academic_years ay ON ay.id = c.academic_year_id AND ay.is_active = TRUE
+    WHERE c.id = sqlc.arg(class_id)
+      AND c.is_active = TRUE
+),
+active_class_curriculum AS (
+    SELECT DISTINCT ON (cca.class_id)
+        cca.class_id,
+        cca.curriculum_profile_id
+    FROM class_curriculum_assignments cca
+    JOIN active_class c ON c.id = cca.class_id
+    WHERE cca.is_active = TRUE
+    ORDER BY cca.class_id, cca.updated_at DESC, cca.created_at DESC
+)
 SELECT
     c.id AS class_id,
     s.id AS subject_id,
@@ -428,18 +600,34 @@ SELECT
     csa.teacher_employee_id,
     COALESCE(e.nama, '') AS teacher_name,
     CASE
+        WHEN alloc.id IS NULL THEN 'missing_curriculum'
         WHEN csa.id IS NULL THEN 'missing_assignment'
         WHEN e.id IS NULL OR e.is_active = FALSE THEN 'missing_teacher'
         ELSE 'complete'
-    END::text AS status
-FROM school_classes c
+    END::text AS status,
+    alloc.id AS curriculum_allocation_id,
+    COALESCE(ov.intra_weekly_hours, alloc.intra_weekly_hours, 0)::numeric(6,2) AS intra_weekly_hours,
+    COALESCE(ov.koku_weekly_hours, alloc.koku_weekly_hours, 0)::numeric(6,2) AS koku_weekly_hours,
+    COALESCE(ov.additional_weekly_hours, 0)::numeric(6,2) AS additional_weekly_hours,
+    COALESCE(ov.total_weekly_hours, alloc.total_weekly_hours, 0)::numeric(6,2) AS total_weekly_hours,
+    COALESCE(ov.is_customized, FALSE)::boolean AS is_customized,
+    CASE
+        WHEN alloc.id IS NULL THEN 'perlu_kurikulum'
+        WHEN COALESCE(ov.total_weekly_hours, alloc.total_weekly_hours, 0) = alloc.total_weekly_hours THEN 'sesuai'
+        WHEN COALESCE(ov.total_weekly_hours, alloc.total_weekly_hours, 0) < alloc.total_weekly_hours THEN 'kurang'
+        ELSE 'lebih'
+    END::text AS compliance_status
+FROM active_class c
 CROSS JOIN subjects s
+LEFT JOIN active_class_curriculum acc ON acc.class_id = c.id
+LEFT JOIN curriculum_subject_allocations alloc
+  ON alloc.curriculum_profile_id = acc.curriculum_profile_id
+ AND alloc.level = c.level
+ AND alloc.subject_id = s.id
 LEFT JOIN class_subject_assignments csa ON csa.class_id = c.id AND csa.subject_id = s.id
 LEFT JOIN employees e ON e.id = csa.teacher_employee_id
-JOIN academic_years ay ON ay.id = c.academic_year_id AND ay.is_active = TRUE
-WHERE c.id = sqlc.arg(class_id)
-  AND c.is_active = TRUE
-  AND s.id = sqlc.arg(subject_id)
+LEFT JOIN class_subject_allocation_overrides ov ON ov.assignment_id = csa.id
+WHERE s.id = sqlc.arg(subject_id)
   AND s.is_active = TRUE;
 
 -- name: GetSubjectAssignmentByClassSubject :one
@@ -588,3 +776,68 @@ JOIN school_classes sc ON sc.id = cca.class_id
 JOIN curriculum_profiles cp ON cp.id = cca.curriculum_profile_id
 WHERE (sqlc.narg(curriculum_profile_id)::uuid IS NULL OR cca.curriculum_profile_id = sqlc.narg(curriculum_profile_id)::uuid)
 ORDER BY sc.level ASC, sc.name ASC;
+
+-- name: GetCurriculumAllocationForClassSubject :one
+SELECT
+    alloc.id,
+    alloc.curriculum_profile_id,
+    alloc.subject_id,
+    alloc.level,
+    alloc.subject_group,
+    alloc.intra_weekly_hours,
+    alloc.koku_weekly_hours,
+    alloc.total_weekly_hours,
+    alloc.counts_for_schedule,
+    alloc.is_required
+FROM school_classes c
+JOIN class_curriculum_assignments cca ON cca.class_id = c.id AND cca.is_active = TRUE
+JOIN curriculum_subject_allocations alloc
+  ON alloc.curriculum_profile_id = cca.curriculum_profile_id
+ AND alloc.level = c.level
+ AND alloc.subject_id = sqlc.arg(subject_id)
+WHERE c.id = sqlc.arg(class_id)
+  AND c.is_active = TRUE
+ORDER BY cca.updated_at DESC, cca.created_at DESC
+LIMIT 1;
+
+-- name: SumClassAdditionalWeeklyHoursExceptAssignment :one
+SELECT COALESCE(SUM(ov.additional_weekly_hours), 0)::numeric(6,2)
+FROM class_subject_allocation_overrides ov
+JOIN class_subject_assignments csa ON csa.id = ov.assignment_id
+WHERE csa.class_id = sqlc.arg(class_id)
+  AND csa.id <> sqlc.arg(exclude_assignment_id);
+
+-- name: UpsertClassSubjectAllocationOverride :one
+INSERT INTO class_subject_allocation_overrides (
+    id,
+    assignment_id,
+    curriculum_allocation_id,
+    intra_weekly_hours,
+    koku_weekly_hours,
+    additional_weekly_hours,
+    total_weekly_hours,
+    is_customized,
+    notes
+)
+VALUES (
+    gen_random_uuid(),
+    sqlc.arg(assignment_id),
+    sqlc.narg(curriculum_allocation_id),
+    sqlc.arg(intra_weekly_hours),
+    sqlc.arg(koku_weekly_hours),
+    sqlc.arg(additional_weekly_hours),
+    sqlc.arg(total_weekly_hours),
+    sqlc.arg(is_customized),
+    sqlc.arg(notes)
+)
+ON CONFLICT (assignment_id)
+DO UPDATE SET curriculum_allocation_id = EXCLUDED.curriculum_allocation_id,
+              intra_weekly_hours = EXCLUDED.intra_weekly_hours,
+              koku_weekly_hours = EXCLUDED.koku_weekly_hours,
+              additional_weekly_hours = EXCLUDED.additional_weekly_hours,
+              total_weekly_hours = EXCLUDED.total_weekly_hours,
+              is_customized = EXCLUDED.is_customized,
+              notes = EXCLUDED.notes,
+              updated_at = NOW()
+RETURNING *;
+
