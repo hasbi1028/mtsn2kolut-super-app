@@ -15,6 +15,7 @@ import (
 )
 
 type parentPortalService interface {
+	ListParentPortalPreviewParents(ctx context.Context) ([]db.ListParentPortalPreviewParentsRow, error)
 	Children(ctx context.Context, userID pgtype.UUID) ([]db.ListParentChildrenRow, error)
 	ChildrenByParentID(ctx context.Context, parentID pgtype.UUID) ([]db.ListParentChildrenRow, error)
 	ChildProfile(ctx context.Context, userID, studentID pgtype.UUID) (db.GetParentPortalChildProfileRow, error)
@@ -31,6 +32,15 @@ type ParentPortal struct {
 
 func NewParentPortal(svc *service.ParentPortal) *ParentPortal {
 	return &ParentPortal{svc: svc}
+}
+
+func (h *ParentPortal) PreviewParents(w http.ResponseWriter, r *http.Request) {
+	parents, err := h.svc.ListParentPortalPreviewParents(r.Context())
+	if err != nil {
+		writeDomainOrInternal(w, err, "Data orang tua/wali tidak tersedia")
+		return
+	}
+	api.OK(w, map[string]any{"parents": parentPortalPreviewParents(parents), "preview": true})
 }
 
 func (h *ParentPortal) PreviewChildren(w http.ResponseWriter, r *http.Request) {
@@ -188,6 +198,26 @@ func (h *ParentPortal) previewChildRequest(w http.ResponseWriter, r *http.Reques
 
 func parentPortalAccessAllowed(claims jwt.MapClaims) bool {
 	return mw.HasAnyRole(claims, "ortu") || mw.HasAnyPermission(claims, "parent_portal.read")
+}
+
+type parentPortalPreviewParentDTO struct {
+	ID                 string `json:"id"`
+	Nama               string `json:"nama"`
+	Phone              string `json:"phone"`
+	LinkedStudentCount int64  `json:"linked_student_count"`
+}
+
+func parentPortalPreviewParents(rows []db.ListParentPortalPreviewParentsRow) []parentPortalPreviewParentDTO {
+	out := make([]parentPortalPreviewParentDTO, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, parentPortalPreviewParentDTO{
+			ID:                 portalUUIDString(row.ID),
+			Nama:               row.Nama,
+			Phone:              row.Phone,
+			LinkedStudentCount: row.LinkedStudentCount,
+		})
+	}
+	return out
 }
 
 type parentPortalChildDTO struct {

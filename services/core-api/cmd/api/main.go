@@ -388,6 +388,7 @@ func main() {
 		r.With(requireParentPortalRead).Get("/api/portal/parent/children/{studentID}/profile", parentPortalH.ChildProfile)
 		r.With(requireParentPortalRead).Get("/api/portal/parent/children/{studentID}/schedule", parentPortalH.ChildSchedule)
 		r.With(requireParentPortalRead).Get("/api/portal/parent/children/{studentID}/results", parentPortalH.ChildResults)
+		r.With(requireParentsManage).Get("/api/portal/preview/parents", parentPortalH.PreviewParents)
 		r.With(requireParentsManage).Get("/api/portal/preview/parents/{parentID}/children", parentPortalH.PreviewChildren)
 		r.With(requireParentsManage).Get("/api/portal/preview/parents/{parentID}/children/{studentID}/profile", parentPortalH.PreviewChildProfile)
 		r.With(requireParentsManage).Get("/api/portal/preview/parents/{parentID}/children/{studentID}/schedule", parentPortalH.PreviewChildSchedule)

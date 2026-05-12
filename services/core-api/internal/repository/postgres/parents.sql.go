@@ -477,6 +477,46 @@ func (q *Queries) ListParentPortalChildTimetable(ctx context.Context, arg ListPa
 	return items, nil
 }
 
+const listParentPortalPreviewParents = `-- name: ListParentPortalPreviewParents :many
+SELECT p.id, p.nama, p.phone, COUNT(ps.student_id)::bigint AS linked_student_count
+FROM parents p
+LEFT JOIN parent_students ps ON ps.parent_id = p.id
+GROUP BY p.id, p.nama, p.phone
+ORDER BY p.nama ASC
+`
+
+type ListParentPortalPreviewParentsRow struct {
+	ID                 pgtype.UUID `json:"id"`
+	Nama               string      `json:"nama"`
+	Phone              string      `json:"phone"`
+	LinkedStudentCount int64       `json:"linked_student_count"`
+}
+
+func (q *Queries) ListParentPortalPreviewParents(ctx context.Context) ([]ListParentPortalPreviewParentsRow, error) {
+	rows, err := q.db.Query(ctx, listParentPortalPreviewParents)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListParentPortalPreviewParentsRow{}
+	for rows.Next() {
+		var i ListParentPortalPreviewParentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nama,
+			&i.Phone,
+			&i.LinkedStudentCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listParents = `-- name: ListParents :many
 SELECT id, nama, phone, address, created_at, updated_at, photo_url, occupation, income_band, nik
 FROM parents

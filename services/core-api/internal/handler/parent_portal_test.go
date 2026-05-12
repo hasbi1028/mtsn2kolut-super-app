@@ -109,6 +109,10 @@ type fakeParentPortalSelfService struct {
 	resultsErr       error
 }
 
+func (f *fakeParentPortalSelfService) ListParentPortalPreviewParents(ctx context.Context) ([]db.ListParentPortalPreviewParentsRow, error) {
+	return []db.ListParentPortalPreviewParentsRow{{ID: handlerTestUUID(230), Nama: "Wali A", LinkedStudentCount: 1}}, nil
+}
+
 func (f *fakeParentPortalSelfService) Children(ctx context.Context, userID pgtype.UUID) ([]db.ListParentChildrenRow, error) {
 	f.childrenUserID = userID
 	return f.childrenRows, f.childrenErr

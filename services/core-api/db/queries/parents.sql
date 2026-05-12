@@ -16,6 +16,13 @@ WHERE u.id = $1
   AND u.is_active = TRUE
   AND u.parent_id IS NOT NULL;
 
+-- name: ListParentPortalPreviewParents :many
+SELECT p.id, p.nama, p.phone, COUNT(ps.student_id)::bigint AS linked_student_count
+FROM parents p
+LEFT JOIN parent_students ps ON ps.parent_id = p.id
+GROUP BY p.id, p.nama, p.phone
+ORDER BY p.nama ASC;
+
 -- name: CreateParent :one
 INSERT INTO parents (nama, phone, address)
 VALUES ($1, $2, $3)
