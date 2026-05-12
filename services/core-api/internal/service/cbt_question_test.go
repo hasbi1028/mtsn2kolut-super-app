@@ -414,6 +414,24 @@ func TestCbtQuestionMediaAssetIDsAreValidated(t *testing.T) {
 	})
 }
 
+func TestCbtQuestionDeleteWithActorAllowsDraftUnusedQuestion(t *testing.T) {
+	questionID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
+	store := &fakeQuestionStore{
+		current: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "draft"},
+	}
+	svc := &CbtQuestion{q: store}
+
+	if err := svc.DeleteWithActor(context.Background(), questionID, CbtQuestionActor{Username: "guru.a", Roles: []string{"guru"}}); err != nil {
+		t.Fatalf("DeleteWithActor(draft unused) error = %v", err)
+	}
+	if store.deleteCalls != 1 || store.deleteID != questionID {
+		t.Fatalf("DeleteWithActor(draft unused) delete = %d/%v, want once for question", store.deleteCalls, store.deleteID)
+	}
+	if store.auditCalls != 1 || len(store.auditLogs) != 1 || store.auditLogs[0].Action != "delete" {
+		t.Fatalf("DeleteWithActor(draft unused) audit = calls %d logs %+v, want delete audit", store.auditCalls, store.auditLogs)
+	}
+}
+
 func TestCbtQuestionDeleteWithActorRequiresModifyAccess(t *testing.T) {
 	questionID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
 	store := &fakeQuestionStore{
@@ -427,6 +445,44 @@ func TestCbtQuestionDeleteWithActorRequiresModifyAccess(t *testing.T) {
 	}
 	if store.deleteCalls != 0 {
 		t.Fatalf("DeleteWithActor(other author) delete calls = %d, want 0", store.deleteCalls)
+	}
+}
+
+func TestCbtQuestionDeleteWithActorRejectsNonDraftOrUsedQuestion(t *testing.T) {
+	questionID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
+	tests := []struct {
+		name    string
+		current db.GetCbtQuestionRow
+	}{
+		{
+			name:    "review workflow",
+			current: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "review"},
+		},
+		{
+			name:    "published status",
+			current: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumPublished, WorkflowStatus: "draft"},
+		},
+		{
+			name:    "package usage",
+			current: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "draft", PackageCount: 1},
+		},
+		{
+			name:    "student answer usage",
+			current: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "draft", AnswerCount: 1},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &fakeQuestionStore{current: tt.current}
+			svc := &CbtQuestion{q: store}
+			err := svc.DeleteWithActor(context.Background(), questionID, CbtQuestionActor{Username: "guru.a", Roles: []string{"guru"}})
+			if !errors.Is(err, domain.ErrConflict) {
+				t.Fatalf("DeleteWithActor(%s) error = %v, want conflict", tt.name, err)
+			}
+			if store.deleteCalls != 0 {
+				t.Fatalf("DeleteWithActor(%s) delete calls = %d, want 0", tt.name, store.deleteCalls)
+			}
+		})
 	}
 }
 

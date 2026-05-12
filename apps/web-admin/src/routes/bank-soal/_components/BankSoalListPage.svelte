@@ -18,6 +18,7 @@
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import SparklesIcon from '@lucide/svelte/icons/sparkles';
+	import Trash2Icon from '@lucide/svelte/icons/trash-2';
 	import UploadIcon from '@lucide/svelte/icons/upload';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
@@ -27,8 +28,8 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
-	import { clientApiPathWithQuery, readClientApiData } from '$lib/client/api';
-	import { canCreateBankSoal, canImportBankSoal, canManageBankSoalSettings, canReviewBankSoal } from '$lib/bank-soal/access';
+	import { clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
+	import { canCreateBankSoal, canDeleteBankSoal, canImportBankSoal, canManageBankSoalSettings, canReviewBankSoal } from '$lib/bank-soal/access';
 	import { htmlToPlainText } from '$lib/utils/html-text';
 
 	type PageData = {
@@ -287,12 +288,15 @@
 	let counts = $state<StatusCounts>({ ...emptyCounts });
 	let questionsPromise = $state<Promise<BankSoalOverview> | null>(null);
 	let refreshing = $state(false);
+	let deletingQuestionId = $state<string | null>(null);
+	let deleteError = $state('');
 	let requestId = 0;
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
 	let roles = $derived(data.user?.roles ?? (data.user?.role ? [data.user.role] : []));
 	let canCreate = $derived(canCreateBankSoal(data.user));
 	let canImport = $derived(canImportBankSoal(data.user));
+	let canDelete = $derived(canDeleteBankSoal(data.user));
 	let canReview = $derived(canReviewBankSoal(data.user));
 	let canSettings = $derived(canManageBankSoalSettings(data.user));
 	let roleLabel = $derived.by(() => {
@@ -802,6 +806,30 @@
 		);
 	}
 
+	function isSafeDeletable(question: Question): boolean {
+		return (question.workflow_status ?? 'draft') === 'draft' && (question.status ?? 'draft') === 'draft' && !questionUsageLocked(question);
+	}
+
+	async function deleteQuestion(question: Question) {
+		if (!canDelete || !isSafeDeletable(question) || deletingQuestionId) return;
+		const code = compactText(question.code, 'tanpa kode');
+		const ok = window.confirm(`Hapus permanen soal ${code}? Tindakan ini hanya untuk soal draft yang belum dipakai.`);
+		if (!ok) return;
+
+		deletingQuestionId = question.id;
+		deleteError = '';
+		try {
+			await fetch(`/api/bank-soal/questions/${encodeURIComponent(question.id)}`, { method: 'DELETE' }).then((response) =>
+				readClientJson<null>(response)
+			);
+			load(Math.min(currentPage, Math.max(1, Math.ceil(Math.max(0, totalItems - 1) / PAGE_SIZE))), true);
+		} catch (error) {
+			deleteError = error instanceof Error ? error.message : 'Soal belum dapat dihapus';
+		} finally {
+			deletingQuestionId = null;
+		}
+	}
+
 	function workflowBadgeClass(value: string | undefined): string {
 		switch (value) {
 			case 'review':
@@ -1222,6 +1250,11 @@
 			{@const overview = value as BankSoalOverview}
 			{@const currentQuestions = overview.questions}
 			<section class="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+				{#if deleteError}
+					<div class="border-b border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+						{deleteError}
+					</div>
+				{/if}
 				<div class="flex flex-col gap-2 border-b border-border p-4 md:flex-row md:items-center md:justify-between">
 					<div>
 						<h2 class="text-base font-semibold text-foreground">Soal Tersedia</h2>
@@ -1337,6 +1370,18 @@
 														Lihat
 													{/if}
 												</Button>
+												{#if canDelete && isSafeDeletable(question)}
+													<Button
+														variant="outline"
+														size="sm"
+														class="border-destructive/30 text-destructive hover:bg-destructive/10"
+														disabled={deletingQuestionId === question.id}
+														onclick={() => deleteQuestion(question)}
+													>
+														<Trash2Icon class="size-3.5" />
+														{deletingQuestionId === question.id ? 'Menghapus' : 'Hapus'}
+													</Button>
+												{/if}
 											</div>
 										</Table.Cell>
 									</Table.Row>
@@ -1382,15 +1427,28 @@
 										<dd class="mt-0.5">{formatDate(question.created_at)}</dd>
 									</div>
 								</dl>
-								<Button href={questionHref(question)} variant="outline" class="w-full">
-									{#if isQuickEditable(question)}
-										<PencilIcon class="size-4" />
-										Edit di Penyusun soal
-									{:else}
-										<EyeIcon class="size-4" />
-										Lihat Soal
+								<div class="grid gap-2 sm:grid-cols-2">
+									<Button href={questionHref(question)} variant="outline" class="w-full">
+										{#if isQuickEditable(question)}
+											<PencilIcon class="size-4" />
+											Edit di Penyusun soal
+										{:else}
+											<EyeIcon class="size-4" />
+											Lihat Soal
+										{/if}
+									</Button>
+									{#if canDelete && isSafeDeletable(question)}
+										<Button
+											variant="outline"
+											class="w-full border-destructive/30 text-destructive hover:bg-destructive/10"
+											disabled={deletingQuestionId === question.id}
+											onclick={() => deleteQuestion(question)}
+										>
+											<Trash2Icon class="size-4" />
+											{deletingQuestionId === question.id ? 'Menghapus' : 'Hapus'}
+										</Button>
 									{/if}
-								</Button>
+								</div>
 							</article>
 						{/each}
 					</div>
