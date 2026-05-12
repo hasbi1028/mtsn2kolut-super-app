@@ -1204,6 +1204,16 @@ type CertificateTemplate struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type ClassCurriculumAssignment struct {
+	ID                  pgtype.UUID        `json:"id"`
+	ClassID             pgtype.UUID        `json:"class_id"`
+	CurriculumProfileID pgtype.UUID        `json:"curriculum_profile_id"`
+	IsActive            bool               `json:"is_active"`
+	Notes               string             `json:"notes"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
 type ClassHomeroomAssignment struct {
 	ID             pgtype.UUID        `json:"id"`
 	ClassID        pgtype.UUID        `json:"class_id"`
@@ -1261,6 +1271,43 @@ type CounselingSession struct {
 	IsConfidential      bool               `json:"is_confidential"`
 	CounselorEmployeeID pgtype.UUID        `json:"counselor_employee_id"`
 	RecordedByUserID    pgtype.UUID        `json:"recorded_by_user_id"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CurriculumProfile struct {
+	ID                      pgtype.UUID        `json:"id"`
+	Code                    string             `json:"code"`
+	Name                    string             `json:"name"`
+	RegulationReference     string             `json:"regulation_reference"`
+	EducationLevel          string             `json:"education_level"`
+	EffectiveAcademicYearID pgtype.UUID        `json:"effective_academic_year_id"`
+	Status                  string             `json:"status"`
+	Notes                   string             `json:"notes"`
+	CreatedAt               pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CurriculumSubjectAllocation struct {
+	ID                  pgtype.UUID        `json:"id"`
+	CurriculumProfileID pgtype.UUID        `json:"curriculum_profile_id"`
+	SubjectID           pgtype.UUID        `json:"subject_id"`
+	Level               string             `json:"level"`
+	SubjectGroup        string             `json:"subject_group"`
+	IntraAnnualHours    int32              `json:"intra_annual_hours"`
+	KokuAnnualHours     int32              `json:"koku_annual_hours"`
+	TotalAnnualHours    int32              `json:"total_annual_hours"`
+	IntraWeeklyHours    pgtype.Numeric     `json:"intra_weekly_hours"`
+	KokuWeeklyHours     pgtype.Numeric     `json:"koku_weekly_hours"`
+	TotalWeeklyHours    pgtype.Numeric     `json:"total_weekly_hours"`
+	LessonMinutes       int32              `json:"lesson_minutes"`
+	DisplayOrder        int32              `json:"display_order"`
+	CountsForSchedule   bool               `json:"counts_for_schedule"`
+	CountsForReport     bool               `json:"counts_for_report"`
+	CountsForAssessment bool               `json:"counts_for_assessment"`
+	CountsForRanking    bool               `json:"counts_for_ranking"`
+	IsRequired          bool               `json:"is_required"`
+	Notes               string             `json:"notes"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 }
@@ -1885,6 +1932,18 @@ type RbacUserRole struct {
 	UserID    pgtype.UUID        `json:"user_id"`
 	RoleID    pgtype.UUID        `json:"role_id"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type ReportSetting struct {
+	ID                  pgtype.UUID        `json:"id"`
+	AcademicYearID      pgtype.UUID        `json:"academic_year_id"`
+	CurriculumProfileID pgtype.UUID        `json:"curriculum_profile_id"`
+	ShowRankingOnReport bool               `json:"show_ranking_on_report"`
+	RankingMethod       string             `json:"ranking_method"`
+	RankingTiePolicy    string             `json:"ranking_tie_policy"`
+	Notes               string             `json:"notes"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Schedule struct {

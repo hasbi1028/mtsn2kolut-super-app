@@ -6,6 +6,8 @@ Dokumen resmi yang disimpan untuk acuan pengembangan dan penyesuaian aplikasi MT
 
 - File PDF: `KMA_1503_Tahun_2025_Pedoman_Implementasi_Kurikulum_kamimadrasah.pdf`
 - File Markdown/OCR: `KMA_1503_Tahun_2025_Pedoman_Implementasi_Kurikulum_kamimadrasah.md`
+- File analisis aplikasi: `kma-1503-review-rekomendasi-aplikasi.md`
+- Tabel alokasi MTs: `kma1503-mts-allocation-table.md`
 - Judul: Pedoman Implementasi Kurikulum Kamimadrasah
 - Fungsi: Referensi untuk modul Akademik, Kurikulum, Jadwal, Rapor/Nilai, dan kebijakan pembelajaran madrasah.
 - SHA256 PDF: `878b3bd3cf5accfb0984a22089b84d6926dea1b074003b869e1cd50ecbd255be`

@@ -481,3 +481,110 @@ ON CONFLICT (class_id, subject_id)
 DO UPDATE SET teacher_employee_id = EXCLUDED.teacher_employee_id,
               updated_at = NOW()
 RETURNING *;
+
+-- name: ListCurriculumProfiles :many
+SELECT
+    id,
+    code,
+    name,
+    regulation_reference,
+    education_level,
+    effective_academic_year_id,
+    status,
+    notes,
+    created_at,
+    updated_at
+FROM curriculum_profiles
+ORDER BY status = 'active' DESC, created_at DESC, name ASC;
+
+-- name: GetActiveCurriculumProfile :one
+SELECT
+    id,
+    code,
+    name,
+    regulation_reference,
+    education_level,
+    effective_academic_year_id,
+    status,
+    notes,
+    created_at,
+    updated_at
+FROM curriculum_profiles
+WHERE status = 'active'
+ORDER BY created_at DESC, name ASC
+LIMIT 1;
+
+-- name: ListCurriculumSubjectAllocations :many
+SELECT
+    csa.id,
+    csa.curriculum_profile_id,
+    cp.code AS curriculum_profile_code,
+    cp.name AS curriculum_profile_name,
+    csa.subject_id,
+    s.code AS subject_code,
+    s.name AS subject_name,
+    csa.level,
+    csa.subject_group,
+    csa.intra_annual_hours,
+    csa.koku_annual_hours,
+    csa.total_annual_hours,
+    csa.intra_weekly_hours,
+    csa.koku_weekly_hours,
+    csa.total_weekly_hours,
+    csa.lesson_minutes,
+    csa.display_order,
+    csa.counts_for_schedule,
+    csa.counts_for_report,
+    csa.counts_for_assessment,
+    csa.counts_for_ranking,
+    csa.is_required,
+    csa.notes,
+    csa.created_at,
+    csa.updated_at
+FROM curriculum_subject_allocations csa
+JOIN curriculum_profiles cp ON cp.id = csa.curriculum_profile_id
+JOIN subjects s ON s.id = csa.subject_id
+WHERE csa.curriculum_profile_id = sqlc.arg(curriculum_profile_id)
+  AND (sqlc.narg(level)::text IS NULL OR csa.level = sqlc.narg(level)::text)
+ORDER BY csa.level ASC, csa.display_order ASC, s.name ASC;
+
+-- name: GetCurriculumSummaryByLevel :many
+SELECT
+    csa.curriculum_profile_id,
+    csa.level,
+    COUNT(*)::int AS subject_count,
+    COALESCE(SUM(csa.intra_annual_hours), 0)::int AS intra_annual_hours,
+    COALESCE(SUM(csa.koku_annual_hours), 0)::int AS koku_annual_hours,
+    COALESCE(SUM(csa.total_annual_hours), 0)::int AS total_annual_hours,
+    COALESCE(SUM(csa.intra_weekly_hours), 0)::numeric(6,2) AS intra_weekly_hours,
+    COALESCE(SUM(csa.koku_weekly_hours), 0)::numeric(6,2) AS koku_weekly_hours,
+    COALESCE(SUM(csa.total_weekly_hours), 0)::numeric(6,2) AS total_weekly_hours,
+    CASE
+        WHEN COALESCE(SUM(csa.total_weekly_hours), 0) = 42 THEN 'sesuai'
+        ELSE 'perlu_ditinjau'
+    END::text AS compliance_status
+FROM curriculum_subject_allocations csa
+WHERE csa.curriculum_profile_id = sqlc.arg(curriculum_profile_id)
+  AND csa.is_required = TRUE
+GROUP BY csa.curriculum_profile_id, csa.level
+ORDER BY csa.level ASC;
+
+-- name: ListClassCurriculumAssignments :many
+SELECT
+    cca.id,
+    cca.class_id,
+    sc.code AS class_code,
+    sc.name AS class_name,
+    sc.level AS class_level,
+    cca.curriculum_profile_id,
+    cp.code AS curriculum_profile_code,
+    cp.name AS curriculum_profile_name,
+    cca.is_active,
+    cca.notes,
+    cca.created_at,
+    cca.updated_at
+FROM class_curriculum_assignments cca
+JOIN school_classes sc ON sc.id = cca.class_id
+JOIN curriculum_profiles cp ON cp.id = cca.curriculum_profile_id
+WHERE (sqlc.narg(curriculum_profile_id)::uuid IS NULL OR cca.curriculum_profile_id = sqlc.narg(curriculum_profile_id)::uuid)
+ORDER BY sc.level ASC, sc.name ASC;

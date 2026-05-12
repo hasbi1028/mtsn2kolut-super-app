@@ -503,6 +503,42 @@ func (q *Queries) GetActiveAcademicYear(ctx context.Context) (AcademicYear, erro
 	return i, err
 }
 
+const getActiveCurriculumProfile = `-- name: GetActiveCurriculumProfile :one
+SELECT
+    id,
+    code,
+    name,
+    regulation_reference,
+    education_level,
+    effective_academic_year_id,
+    status,
+    notes,
+    created_at,
+    updated_at
+FROM curriculum_profiles
+WHERE status = 'active'
+ORDER BY created_at DESC, name ASC
+LIMIT 1
+`
+
+func (q *Queries) GetActiveCurriculumProfile(ctx context.Context) (CurriculumProfile, error) {
+	row := q.db.QueryRow(ctx, getActiveCurriculumProfile)
+	var i CurriculumProfile
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.RegulationReference,
+		&i.EducationLevel,
+		&i.EffectiveAcademicYearID,
+		&i.Status,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getClassSubjectAssignment = `-- name: GetClassSubjectAssignment :one
 SELECT a.id, a.class_id, c.name AS class_name, c.code AS class_code,
        a.subject_id, s.name AS subject_name, s.code AS subject_code,
@@ -546,6 +582,72 @@ func (q *Queries) GetClassSubjectAssignment(ctx context.Context, id pgtype.UUID)
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getCurriculumSummaryByLevel = `-- name: GetCurriculumSummaryByLevel :many
+SELECT
+    csa.curriculum_profile_id,
+    csa.level,
+    COUNT(*)::int AS subject_count,
+    COALESCE(SUM(csa.intra_annual_hours), 0)::int AS intra_annual_hours,
+    COALESCE(SUM(csa.koku_annual_hours), 0)::int AS koku_annual_hours,
+    COALESCE(SUM(csa.total_annual_hours), 0)::int AS total_annual_hours,
+    COALESCE(SUM(csa.intra_weekly_hours), 0)::numeric(6,2) AS intra_weekly_hours,
+    COALESCE(SUM(csa.koku_weekly_hours), 0)::numeric(6,2) AS koku_weekly_hours,
+    COALESCE(SUM(csa.total_weekly_hours), 0)::numeric(6,2) AS total_weekly_hours,
+    CASE
+        WHEN COALESCE(SUM(csa.total_weekly_hours), 0) = 42 THEN 'sesuai'
+        ELSE 'perlu_ditinjau'
+    END::text AS compliance_status
+FROM curriculum_subject_allocations csa
+WHERE csa.curriculum_profile_id = $1
+  AND csa.is_required = TRUE
+GROUP BY csa.curriculum_profile_id, csa.level
+ORDER BY csa.level ASC
+`
+
+type GetCurriculumSummaryByLevelRow struct {
+	CurriculumProfileID pgtype.UUID    `json:"curriculum_profile_id"`
+	Level               string         `json:"level"`
+	SubjectCount        int32          `json:"subject_count"`
+	IntraAnnualHours    int32          `json:"intra_annual_hours"`
+	KokuAnnualHours     int32          `json:"koku_annual_hours"`
+	TotalAnnualHours    int32          `json:"total_annual_hours"`
+	IntraWeeklyHours    pgtype.Numeric `json:"intra_weekly_hours"`
+	KokuWeeklyHours     pgtype.Numeric `json:"koku_weekly_hours"`
+	TotalWeeklyHours    pgtype.Numeric `json:"total_weekly_hours"`
+	ComplianceStatus    string         `json:"compliance_status"`
+}
+
+func (q *Queries) GetCurriculumSummaryByLevel(ctx context.Context, curriculumProfileID pgtype.UUID) ([]GetCurriculumSummaryByLevelRow, error) {
+	rows, err := q.db.Query(ctx, getCurriculumSummaryByLevel, curriculumProfileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCurriculumSummaryByLevelRow{}
+	for rows.Next() {
+		var i GetCurriculumSummaryByLevelRow
+		if err := rows.Scan(
+			&i.CurriculumProfileID,
+			&i.Level,
+			&i.SubjectCount,
+			&i.IntraAnnualHours,
+			&i.KokuAnnualHours,
+			&i.TotalAnnualHours,
+			&i.IntraWeeklyHours,
+			&i.KokuWeeklyHours,
+			&i.TotalWeeklyHours,
+			&i.ComplianceStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getSubject = `-- name: GetSubject :one
@@ -806,6 +908,75 @@ func (q *Queries) ListAcademicYears(ctx context.Context) ([]AcademicYear, error)
 	return items, nil
 }
 
+const listClassCurriculumAssignments = `-- name: ListClassCurriculumAssignments :many
+SELECT
+    cca.id,
+    cca.class_id,
+    sc.code AS class_code,
+    sc.name AS class_name,
+    sc.level AS class_level,
+    cca.curriculum_profile_id,
+    cp.code AS curriculum_profile_code,
+    cp.name AS curriculum_profile_name,
+    cca.is_active,
+    cca.notes,
+    cca.created_at,
+    cca.updated_at
+FROM class_curriculum_assignments cca
+JOIN school_classes sc ON sc.id = cca.class_id
+JOIN curriculum_profiles cp ON cp.id = cca.curriculum_profile_id
+WHERE ($1::uuid IS NULL OR cca.curriculum_profile_id = $1::uuid)
+ORDER BY sc.level ASC, sc.name ASC
+`
+
+type ListClassCurriculumAssignmentsRow struct {
+	ID                    pgtype.UUID        `json:"id"`
+	ClassID               pgtype.UUID        `json:"class_id"`
+	ClassCode             string             `json:"class_code"`
+	ClassName             string             `json:"class_name"`
+	ClassLevel            string             `json:"class_level"`
+	CurriculumProfileID   pgtype.UUID        `json:"curriculum_profile_id"`
+	CurriculumProfileCode string             `json:"curriculum_profile_code"`
+	CurriculumProfileName string             `json:"curriculum_profile_name"`
+	IsActive              bool               `json:"is_active"`
+	Notes                 string             `json:"notes"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListClassCurriculumAssignments(ctx context.Context, curriculumProfileID pgtype.UUID) ([]ListClassCurriculumAssignmentsRow, error) {
+	rows, err := q.db.Query(ctx, listClassCurriculumAssignments, curriculumProfileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListClassCurriculumAssignmentsRow{}
+	for rows.Next() {
+		var i ListClassCurriculumAssignmentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClassID,
+			&i.ClassCode,
+			&i.ClassName,
+			&i.ClassLevel,
+			&i.CurriculumProfileID,
+			&i.CurriculumProfileCode,
+			&i.CurriculumProfileName,
+			&i.IsActive,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listClassSubjectAssignments = `-- name: ListClassSubjectAssignments :many
 SELECT a.id, a.class_id, c.name AS class_name, c.code AS class_code,
        a.subject_id, s.name AS subject_name, s.code AS subject_code,
@@ -851,6 +1022,167 @@ func (q *Queries) ListClassSubjectAssignments(ctx context.Context) ([]ListClassS
 			&i.SubjectCode,
 			&i.TeacherEmployeeID,
 			&i.TeacherName,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCurriculumProfiles = `-- name: ListCurriculumProfiles :many
+SELECT
+    id,
+    code,
+    name,
+    regulation_reference,
+    education_level,
+    effective_academic_year_id,
+    status,
+    notes,
+    created_at,
+    updated_at
+FROM curriculum_profiles
+ORDER BY status = 'active' DESC, created_at DESC, name ASC
+`
+
+func (q *Queries) ListCurriculumProfiles(ctx context.Context) ([]CurriculumProfile, error) {
+	rows, err := q.db.Query(ctx, listCurriculumProfiles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CurriculumProfile{}
+	for rows.Next() {
+		var i CurriculumProfile
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.RegulationReference,
+			&i.EducationLevel,
+			&i.EffectiveAcademicYearID,
+			&i.Status,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCurriculumSubjectAllocations = `-- name: ListCurriculumSubjectAllocations :many
+SELECT
+    csa.id,
+    csa.curriculum_profile_id,
+    cp.code AS curriculum_profile_code,
+    cp.name AS curriculum_profile_name,
+    csa.subject_id,
+    s.code AS subject_code,
+    s.name AS subject_name,
+    csa.level,
+    csa.subject_group,
+    csa.intra_annual_hours,
+    csa.koku_annual_hours,
+    csa.total_annual_hours,
+    csa.intra_weekly_hours,
+    csa.koku_weekly_hours,
+    csa.total_weekly_hours,
+    csa.lesson_minutes,
+    csa.display_order,
+    csa.counts_for_schedule,
+    csa.counts_for_report,
+    csa.counts_for_assessment,
+    csa.counts_for_ranking,
+    csa.is_required,
+    csa.notes,
+    csa.created_at,
+    csa.updated_at
+FROM curriculum_subject_allocations csa
+JOIN curriculum_profiles cp ON cp.id = csa.curriculum_profile_id
+JOIN subjects s ON s.id = csa.subject_id
+WHERE csa.curriculum_profile_id = $1
+  AND ($2::text IS NULL OR csa.level = $2::text)
+ORDER BY csa.level ASC, csa.display_order ASC, s.name ASC
+`
+
+type ListCurriculumSubjectAllocationsParams struct {
+	CurriculumProfileID pgtype.UUID `json:"curriculum_profile_id"`
+	Level               pgtype.Text `json:"level"`
+}
+
+type ListCurriculumSubjectAllocationsRow struct {
+	ID                    pgtype.UUID        `json:"id"`
+	CurriculumProfileID   pgtype.UUID        `json:"curriculum_profile_id"`
+	CurriculumProfileCode string             `json:"curriculum_profile_code"`
+	CurriculumProfileName string             `json:"curriculum_profile_name"`
+	SubjectID             pgtype.UUID        `json:"subject_id"`
+	SubjectCode           string             `json:"subject_code"`
+	SubjectName           string             `json:"subject_name"`
+	Level                 string             `json:"level"`
+	SubjectGroup          string             `json:"subject_group"`
+	IntraAnnualHours      int32              `json:"intra_annual_hours"`
+	KokuAnnualHours       int32              `json:"koku_annual_hours"`
+	TotalAnnualHours      int32              `json:"total_annual_hours"`
+	IntraWeeklyHours      pgtype.Numeric     `json:"intra_weekly_hours"`
+	KokuWeeklyHours       pgtype.Numeric     `json:"koku_weekly_hours"`
+	TotalWeeklyHours      pgtype.Numeric     `json:"total_weekly_hours"`
+	LessonMinutes         int32              `json:"lesson_minutes"`
+	DisplayOrder          int32              `json:"display_order"`
+	CountsForSchedule     bool               `json:"counts_for_schedule"`
+	CountsForReport       bool               `json:"counts_for_report"`
+	CountsForAssessment   bool               `json:"counts_for_assessment"`
+	CountsForRanking      bool               `json:"counts_for_ranking"`
+	IsRequired            bool               `json:"is_required"`
+	Notes                 string             `json:"notes"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListCurriculumSubjectAllocations(ctx context.Context, arg ListCurriculumSubjectAllocationsParams) ([]ListCurriculumSubjectAllocationsRow, error) {
+	rows, err := q.db.Query(ctx, listCurriculumSubjectAllocations, arg.CurriculumProfileID, arg.Level)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCurriculumSubjectAllocationsRow{}
+	for rows.Next() {
+		var i ListCurriculumSubjectAllocationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CurriculumProfileID,
+			&i.CurriculumProfileCode,
+			&i.CurriculumProfileName,
+			&i.SubjectID,
+			&i.SubjectCode,
+			&i.SubjectName,
+			&i.Level,
+			&i.SubjectGroup,
+			&i.IntraAnnualHours,
+			&i.KokuAnnualHours,
+			&i.TotalAnnualHours,
+			&i.IntraWeeklyHours,
+			&i.KokuWeeklyHours,
+			&i.TotalWeeklyHours,
+			&i.LessonMinutes,
+			&i.DisplayOrder,
+			&i.CountsForSchedule,
+			&i.CountsForReport,
+			&i.CountsForAssessment,
+			&i.CountsForRanking,
+			&i.IsRequired,
+			&i.Notes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

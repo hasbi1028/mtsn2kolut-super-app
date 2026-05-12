@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"math/big"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -38,6 +40,11 @@ type academicStore interface {
 	ListTimetableConflicts(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListTimetableConflictsRow, error)
 	GetAcademicStats(ctx context.Context) (db.GetAcademicStatsRow, error)
 	GetAcademicDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error)
+	ListCurriculumProfiles(ctx context.Context) ([]db.CurriculumProfile, error)
+	GetActiveCurriculumProfile(ctx context.Context) (db.CurriculumProfile, error)
+	ListCurriculumSubjectAllocations(ctx context.Context, arg db.ListCurriculumSubjectAllocationsParams) ([]db.ListCurriculumSubjectAllocationsRow, error)
+	GetCurriculumSummaryByLevel(ctx context.Context, curriculumProfileID pgtype.UUID) ([]db.GetCurriculumSummaryByLevelRow, error)
+	ListClassCurriculumAssignments(ctx context.Context, curriculumProfileID pgtype.UUID) ([]db.ListClassCurriculumAssignmentsRow, error)
 	GetSubject(ctx context.Context, id pgtype.UUID) (db.GetSubjectRow, error)
 	CountSubjectCodeConflicts(ctx context.Context, arg db.CountSubjectCodeConflictsParams) (int32, error)
 	CreateAcademicYear(ctx context.Context, arg db.CreateAcademicYearParams) (db.AcademicYear, error)
@@ -82,6 +89,29 @@ type WeeklyTimetableSlot struct {
 	ConflictStatus string `json:"conflict_status"`
 	ConflictLabel  string `json:"conflict_label"`
 	ConflictCount  int    `json:"conflict_count"`
+}
+
+type CurriculumOverview struct {
+	Profiles         []db.CurriculumProfile                 `json:"profiles"`
+	ActiveProfile    *db.CurriculumProfile                  `json:"active_profile"`
+	Allocations      []CurriculumAllocation                 `json:"allocations"`
+	SummaryByLevel   []CurriculumLevelSummary               `json:"summary_by_level"`
+	ClassAssignments []db.ListClassCurriculumAssignmentsRow `json:"class_assignments"`
+}
+
+type CurriculumAllocation struct {
+	db.ListCurriculumSubjectAllocationsRow
+	IntraWeeklyHours float64 `json:"intra_weekly_hours"`
+	KokuWeeklyHours  float64 `json:"koku_weekly_hours"`
+	TotalWeeklyHours float64 `json:"total_weekly_hours"`
+}
+
+type CurriculumLevelSummary struct {
+	db.GetCurriculumSummaryByLevelRow
+	IntraWeeklyHours float64 `json:"intra_weekly_hours"`
+	KokuWeeklyHours  float64 `json:"koku_weekly_hours"`
+	TotalWeeklyHours float64 `json:"total_weekly_hours"`
+	StatusLabel      string  `json:"status_label"`
 }
 
 func NewAcademic(q *db.Queries) *Academic { return &Academic{q: q} }
@@ -174,6 +204,116 @@ func (s *Academic) GetStats(ctx context.Context) (db.GetAcademicStatsRow, error)
 
 func (s *Academic) GetDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error) {
 	return s.q.GetAcademicDashboardSummary(ctx)
+}
+
+func (s *Academic) ListCurriculumProfiles(ctx context.Context) ([]db.CurriculumProfile, error) {
+	return s.q.ListCurriculumProfiles(ctx)
+}
+
+func (s *Academic) GetActiveCurriculumProfile(ctx context.Context) (db.CurriculumProfile, error) {
+	return s.q.GetActiveCurriculumProfile(ctx)
+}
+
+func (s *Academic) ListCurriculumAllocations(ctx context.Context, profileID pgtype.UUID, level string) ([]CurriculumAllocation, error) {
+	levelArg := pgtype.Text{}
+	if strings.TrimSpace(level) != "" {
+		levelArg = pgtype.Text{String: strings.ToUpper(strings.TrimSpace(level)), Valid: true}
+	}
+	rows, err := s.q.ListCurriculumSubjectAllocations(ctx, db.ListCurriculumSubjectAllocationsParams{CurriculumProfileID: profileID, Level: levelArg})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]CurriculumAllocation, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, CurriculumAllocation{
+			ListCurriculumSubjectAllocationsRow: row,
+			IntraWeeklyHours:                    numericToFloat64(row.IntraWeeklyHours),
+			KokuWeeklyHours:                     numericToFloat64(row.KokuWeeklyHours),
+			TotalWeeklyHours:                    numericToFloat64(row.TotalWeeklyHours),
+		})
+	}
+	return out, nil
+}
+
+func (s *Academic) GetCurriculumSummary(ctx context.Context, profileID pgtype.UUID) ([]CurriculumLevelSummary, error) {
+	rows, err := s.q.GetCurriculumSummaryByLevel(ctx, profileID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]CurriculumLevelSummary, 0, len(rows))
+	for _, row := range rows {
+		label := "Perlu ditinjau"
+		if row.ComplianceStatus == "sesuai" {
+			label = "Sesuai KMA"
+		}
+		out = append(out, CurriculumLevelSummary{
+			GetCurriculumSummaryByLevelRow: row,
+			IntraWeeklyHours:               numericToFloat64(row.IntraWeeklyHours),
+			KokuWeeklyHours:                numericToFloat64(row.KokuWeeklyHours),
+			TotalWeeklyHours:               numericToFloat64(row.TotalWeeklyHours),
+			StatusLabel:                    label,
+		})
+	}
+	return out, nil
+}
+
+func (s *Academic) ListClassCurriculumAssignments(ctx context.Context, profileID pgtype.UUID) ([]db.ListClassCurriculumAssignmentsRow, error) {
+	return s.q.ListClassCurriculumAssignments(ctx, profileID)
+}
+
+func (s *Academic) GetCurriculumOverview(ctx context.Context, profileID pgtype.UUID, level string) (CurriculumOverview, error) {
+	profiles, err := s.q.ListCurriculumProfiles(ctx)
+	if err != nil {
+		return CurriculumOverview{}, err
+	}
+	selectedID := profileID
+	var active *db.CurriculumProfile
+	if !selectedID.Valid {
+		profile, err := s.q.GetActiveCurriculumProfile(ctx)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return CurriculumOverview{Profiles: profiles, Allocations: []CurriculumAllocation{}, SummaryByLevel: []CurriculumLevelSummary{}, ClassAssignments: []db.ListClassCurriculumAssignmentsRow{}}, nil
+			}
+			return CurriculumOverview{}, err
+		}
+		selectedID = profile.ID
+		active = &profile
+	} else {
+		for _, profile := range profiles {
+			if profile.ID == selectedID {
+				copyProfile := profile
+				active = &copyProfile
+				break
+			}
+		}
+	}
+	allocations, err := s.ListCurriculumAllocations(ctx, selectedID, level)
+	if err != nil {
+		return CurriculumOverview{}, err
+	}
+	summary, err := s.GetCurriculumSummary(ctx, selectedID)
+	if err != nil {
+		return CurriculumOverview{}, err
+	}
+	classes, err := s.q.ListClassCurriculumAssignments(ctx, selectedID)
+	if err != nil {
+		return CurriculumOverview{}, err
+	}
+	return CurriculumOverview{Profiles: profiles, ActiveProfile: active, Allocations: allocations, SummaryByLevel: summary, ClassAssignments: classes}, nil
+}
+
+func numericToFloat64(value pgtype.Numeric) float64 {
+	if !value.Valid || value.Int == nil {
+		return 0
+	}
+	rat := new(big.Rat).SetInt(value.Int)
+	if value.Exp > 0 {
+		rat.Mul(rat, new(big.Rat).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(value.Exp)), nil)))
+	} else if value.Exp < 0 {
+		rat.Quo(rat, new(big.Rat).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(-value.Exp)), nil)))
+	}
+	floatValue, _ := rat.Float64()
+	return math.Round(floatValue*100) / 100
 }
 
 func emptyWeeklyTimetable() WeeklyTimetable {
