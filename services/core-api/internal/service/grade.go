@@ -26,6 +26,9 @@ type gradeStore interface {
 	UpdateGradeComponentPublishState(ctx context.Context, arg db.UpdateGradeComponentPublishStateParams) (db.GradeComponent, error)
 	DeleteGradeComponent(ctx context.Context, id pgtype.UUID) error
 	ListGradebookSummary(ctx context.Context, arg db.ListGradebookSummaryParams) ([]db.ListGradebookSummaryRow, error)
+	GetActiveReportSettings(ctx context.Context) (db.GetActiveReportSettingsRow, error)
+	UpsertReportSettings(ctx context.Context, arg db.UpsertReportSettingsParams) (db.UpsertReportSettingsRow, error)
+	UpsertGradeStudentSubjectDescription(ctx context.Context, arg db.UpsertGradeStudentSubjectDescriptionParams) (db.GradeStudentSubjectDescription, error)
 	ListGradeEntriesByComponent(ctx context.Context, componentID pgtype.UUID) ([]db.ListGradeEntriesByComponentRow, error)
 	UpsertGradeEntry(ctx context.Context, arg db.UpsertGradeEntryParams) (db.GradeEntry, error)
 }
@@ -44,6 +47,37 @@ type GradeOverview struct {
 	Entries            []db.ListGradeEntriesByComponentRow `json:"entries"`
 	Readiness          GradeReadiness                      `json:"readiness"`
 	Finalization       *GradeFinalization                  `json:"finalization,omitempty"`
+	ReportSettings     *ReportSettings                     `json:"report_settings,omitempty"`
+}
+
+type ReportSettings struct {
+	AcademicYearID      string `json:"academic_year_id"`
+	AcademicYearName    string `json:"academic_year_name"`
+	ShowRankingOnReport bool   `json:"show_ranking_on_report"`
+	RankingMethod       string `json:"ranking_method"`
+	RankingTiePolicy    string `json:"ranking_tie_policy"`
+	Notes               string `json:"notes"`
+}
+
+func reportSettingsFromActive(row db.GetActiveReportSettingsRow) ReportSettings {
+	return ReportSettings{
+		AcademicYearID:      row.AcademicYearID.String(),
+		AcademicYearName:    row.AcademicYearName,
+		ShowRankingOnReport: row.ShowRankingOnReport,
+		RankingMethod:       row.RankingMethod,
+		RankingTiePolicy:    row.RankingTiePolicy,
+		Notes:               row.Notes,
+	}
+}
+
+func reportSettingsFromUpsert(row db.UpsertReportSettingsRow) ReportSettings {
+	return ReportSettings{
+		AcademicYearID:      row.AcademicYearID.String(),
+		ShowRankingOnReport: row.ShowRankingOnReport,
+		RankingMethod:       row.RankingMethod,
+		RankingTiePolicy:    row.RankingTiePolicy,
+		Notes:               row.Notes,
+	}
 }
 
 type GradeAssignmentStatus struct {
@@ -100,6 +134,13 @@ func (s *Grade) Overview(ctx context.Context, assignmentID, componentID pgtype.U
 		Assignments:        assignments,
 		AssignmentStatuses: buildAssignmentStatuses(statusRows),
 	}
+	settings, settingsErr := s.q.GetActiveReportSettings(ctx)
+	if settingsErr == nil {
+		rs := reportSettingsFromActive(settings)
+		out.ReportSettings = &rs
+	} else if settingsErr != pgx.ErrNoRows {
+		return GradeOverview{}, settingsErr
+	}
 	if assignmentID.Valid {
 		if err := s.ensureAssignmentAccess(ctx, assignmentID, teacherEmployeeID); err != nil {
 			return GradeOverview{}, err
@@ -141,6 +182,36 @@ func (s *Grade) Overview(ctx context.Context, assignmentID, componentID pgtype.U
 		}
 	}
 	return out, nil
+}
+
+func (s *Grade) GetReportSettings(ctx context.Context) (ReportSettings, error) {
+	row, err := s.q.GetActiveReportSettings(ctx)
+	if err != nil {
+		return ReportSettings{}, err
+	}
+	return reportSettingsFromActive(row), nil
+}
+
+func (s *Grade) UpdateReportSettings(ctx context.Context, arg db.UpsertReportSettingsParams) (ReportSettings, error) {
+	arg.RankingMethod = normalizeRankingMethod(arg.RankingMethod)
+	arg.RankingTiePolicy = normalizeRankingTiePolicy(arg.RankingTiePolicy)
+	arg.Notes = strings.TrimSpace(arg.Notes)
+	row, err := s.q.UpsertReportSettings(ctx, arg)
+	if err != nil {
+		return ReportSettings{}, err
+	}
+	return reportSettingsFromUpsert(row), nil
+}
+
+func (s *Grade) UpsertStudentSubjectDescription(ctx context.Context, arg db.UpsertGradeStudentSubjectDescriptionParams, teacherEmployeeID pgtype.UUID) (db.GradeStudentSubjectDescription, error) {
+	if err := s.ensureAssignmentAccess(ctx, arg.AssignmentID, teacherEmployeeID); err != nil {
+		return db.GradeStudentSubjectDescription{}, err
+	}
+	arg.Description = strings.TrimSpace(arg.Description)
+	if len(arg.Description) > 2000 {
+		return db.GradeStudentSubjectDescription{}, fmt.Errorf("deskripsi capaian terlalu panjang")
+	}
+	return s.q.UpsertGradeStudentSubjectDescription(ctx, arg)
 }
 
 func (s *Grade) CreateComponent(ctx context.Context, arg db.CreateGradeComponentParams, teacherEmployeeID pgtype.UUID) (db.GradeComponent, error) {
@@ -433,5 +504,23 @@ func normalizeGradeCategory(v string) string {
 		return strings.TrimSpace(strings.ToLower(v))
 	default:
 		return "other"
+	}
+}
+
+func normalizeRankingMethod(value string) string {
+	switch strings.TrimSpace(value) {
+	case "weighted_by_jp", "report_subject_average":
+		return strings.TrimSpace(value)
+	default:
+		return "intrakurikuler_average"
+	}
+}
+
+func normalizeRankingTiePolicy(value string) string {
+	switch strings.TrimSpace(value) {
+	case "dense_rank", "ordinal":
+		return strings.TrimSpace(value)
+	default:
+		return "same_rank"
 	}
 }

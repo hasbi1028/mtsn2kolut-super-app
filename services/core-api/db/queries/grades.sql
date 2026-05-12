@@ -149,14 +149,71 @@ RETURNING *;
 -- name: DeleteGradeComponent :exec
 DELETE FROM grade_components WHERE id = $1;
 
+-- name: GetActiveReportSettings :one
+WITH active_year AS (
+  SELECT id, name
+  FROM academic_years
+  WHERE is_active = TRUE
+  ORDER BY start_date DESC
+  LIMIT 1
+), ensured AS (
+  INSERT INTO report_settings (academic_year_id)
+  SELECT id FROM active_year
+  ON CONFLICT (academic_year_id) DO NOTHING
+  RETURNING academic_year_id
+)
+SELECT ay.id AS academic_year_id,
+       ay.name AS academic_year_name,
+       COALESCE(rs.show_ranking_on_report, FALSE)::boolean AS show_ranking_on_report,
+       COALESCE(rs.ranking_method, 'intrakurikuler_average') AS ranking_method,
+       COALESCE(rs.ranking_tie_policy, 'same_rank') AS ranking_tie_policy,
+       COALESCE(rs.notes, '') AS notes
+FROM active_year ay
+LEFT JOIN report_settings rs ON rs.academic_year_id = ay.id;
+
+-- name: UpsertReportSettings :one
+INSERT INTO report_settings (academic_year_id, show_ranking_on_report, ranking_method, ranking_tie_policy, notes, updated_at)
+VALUES (sqlc.arg(academic_year_id), sqlc.arg(show_ranking_on_report), sqlc.arg(ranking_method), sqlc.arg(ranking_tie_policy), sqlc.arg(notes), NOW())
+ON CONFLICT (academic_year_id) DO UPDATE
+SET show_ranking_on_report = EXCLUDED.show_ranking_on_report,
+    ranking_method = EXCLUDED.ranking_method,
+    ranking_tie_policy = EXCLUDED.ranking_tie_policy,
+    notes = EXCLUDED.notes,
+    updated_at = NOW()
+RETURNING academic_year_id, show_ranking_on_report, ranking_method, ranking_tie_policy, notes;
+
+-- name: UpsertGradeStudentSubjectDescription :one
+INSERT INTO grade_student_subject_descriptions (assignment_id, student_id, description, updated_at)
+VALUES (sqlc.arg(assignment_id), sqlc.arg(student_id), sqlc.arg(description), NOW())
+ON CONFLICT (assignment_id, student_id) DO UPDATE
+SET description = EXCLUDED.description,
+    updated_at = NOW()
+RETURNING *;
+
 -- name: ListGradebookSummary :many
-WITH component_set AS (
+WITH assignment_context AS (
+  SELECT csa.id AS assignment_id,
+         csa.class_id,
+         c.academic_year_id,
+         COALESCE(s.is_report_subject, TRUE)::boolean AS is_report_subject,
+         COALESCE(s.counts_for_ranking, TRUE)::boolean AS counts_for_ranking
+  FROM class_subject_assignments csa
+  JOIN school_classes c ON c.id = csa.class_id
+  JOIN subjects s ON s.id = csa.subject_id
+  WHERE csa.id = $1
+), report_setting AS (
+  SELECT COALESCE(rs.show_ranking_on_report, FALSE)::boolean AS show_ranking_on_report,
+         COALESCE(rs.ranking_tie_policy, 'same_rank') AS ranking_tie_policy
+  FROM assignment_context ac
+  LEFT JOIN report_settings rs ON rs.academic_year_id = ac.academic_year_id
+), component_set AS (
   SELECT gc.id, gc.weight, gc.max_score
   FROM grade_components gc
+  JOIN assignment_context ac ON ac.assignment_id = gc.assignment_id
   WHERE gc.assignment_id = $1
+    AND ac.is_report_subject = TRUE
     AND (NOT sqlc.arg(published_only)::boolean OR gc.is_published = TRUE)
-),
-score_rows AS (
+), score_rows AS (
   SELECT st.id AS student_id,
          st.nis,
          st.nisn,
@@ -165,31 +222,53 @@ score_rows AS (
          cs.weight,
          cs.max_score,
          ge.score
-  FROM class_subject_assignments csa
-  JOIN students st ON st.class_id = csa.class_id
+  FROM assignment_context ac
+  JOIN students st ON st.class_id = ac.class_id
   LEFT JOIN component_set cs ON TRUE
   LEFT JOIN grade_entries ge ON ge.component_id = cs.id AND ge.student_id = st.id
-  WHERE csa.id = $1
-    AND st.is_active = TRUE
+  WHERE st.is_active = TRUE
+), final_rows AS (
+  SELECT student_id,
+         nis,
+         nisn,
+         nama,
+         COUNT(component_id)::int AS component_count,
+         COUNT(score)::int AS filled_count,
+         COALESCE(
+           ROUND(
+             (
+               SUM(CASE WHEN score IS NOT NULL AND max_score > 0 THEN (score / max_score) * weight ELSE 0 END)
+               / NULLIF(SUM(CASE WHEN score IS NOT NULL THEN weight ELSE 0 END), 0)
+             ) * 100
+           )::numeric,
+           -1
+         )::double precision AS final_score
+  FROM score_rows
+  GROUP BY student_id, nis, nisn, nama
+), ranked_rows AS (
+  SELECT fr.*,
+         CASE
+           WHEN (SELECT show_ranking_on_report FROM report_setting) = TRUE
+             AND (SELECT counts_for_ranking FROM assignment_context) = TRUE
+             AND fr.final_score >= 0
+           THEN dense_rank() OVER (ORDER BY fr.final_score DESC)::int
+           ELSE 0
+         END AS report_rank
+  FROM final_rows fr
 )
-SELECT student_id,
-       nis,
-       nisn,
-       nama,
-       COUNT(component_id)::int AS component_count,
-       COUNT(score)::int AS filled_count,
-       COALESCE(
-         ROUND(
-           (
-             SUM(CASE WHEN score IS NOT NULL AND max_score > 0 THEN (score / max_score) * weight ELSE 0 END)
-             / NULLIF(SUM(CASE WHEN score IS NOT NULL THEN weight ELSE 0 END), 0)
-           ) * 100
-         )::numeric,
-         -1
-       )::double precision AS final_score
-FROM score_rows
-GROUP BY student_id, nis, nisn, nama
-ORDER BY nama ASC;
+SELECT rr.student_id,
+       rr.nis,
+       rr.nisn,
+       rr.nama,
+       rr.component_count,
+       rr.filled_count,
+       rr.final_score,
+       COALESCE(gssd.description, '') AS report_description,
+       rr.report_rank
+FROM ranked_rows rr
+LEFT JOIN grade_student_subject_descriptions gssd
+  ON gssd.assignment_id = $1 AND gssd.student_id = rr.student_id
+ORDER BY rr.nama ASC;
 
 -- name: ListGradeEntriesByComponent :many
 SELECT st.id AS student_id,
