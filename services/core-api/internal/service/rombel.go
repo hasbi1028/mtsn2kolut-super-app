@@ -30,6 +30,9 @@ type rombelStore interface {
 	GetSubjectAssignmentMatrixCell(ctx context.Context, arg db.GetSubjectAssignmentMatrixCellParams) (db.GetSubjectAssignmentMatrixCellRow, error)
 	GetSubjectAssignmentByClassSubject(ctx context.Context, arg db.GetSubjectAssignmentByClassSubjectParams) (db.ClassSubjectAssignment, error)
 	UpsertSubjectAssignmentMatrixCell(ctx context.Context, arg db.UpsertSubjectAssignmentMatrixCellParams) (db.ClassSubjectAssignment, error)
+	GetCurriculumAllocationForClassSubject(ctx context.Context, arg db.GetCurriculumAllocationForClassSubjectParams) (db.GetCurriculumAllocationForClassSubjectRow, error)
+	SumClassAdditionalWeeklyHoursExceptAssignment(ctx context.Context, arg db.SumClassAdditionalWeeklyHoursExceptAssignmentParams) (pgtype.Numeric, error)
+	UpsertClassSubjectAllocationOverride(ctx context.Context, arg db.UpsertClassSubjectAllocationOverrideParams) (db.ClassSubjectAllocationOverride, error)
 	CreateRombelSubjectAssignment(ctx context.Context, arg db.CreateRombelSubjectAssignmentParams) (db.CreateRombelSubjectAssignmentRow, error)
 	UpdateRombelSubjectAssignment(ctx context.Context, arg db.UpdateRombelSubjectAssignmentParams) (db.UpdateRombelSubjectAssignmentRow, error)
 	CountRombelSubjectAssignmentDependents(ctx context.Context, arg db.CountRombelSubjectAssignmentDependentsParams) (db.CountRombelSubjectAssignmentDependentsRow, error)
@@ -63,9 +66,11 @@ type SubjectAssignmentMatrix struct {
 }
 
 type SubjectAssignmentMatrixCellInput struct {
-	ClassID           pgtype.UUID
-	SubjectID         pgtype.UUID
-	TeacherEmployeeID pgtype.UUID
+	ClassID               pgtype.UUID
+	SubjectID             pgtype.UUID
+	TeacherEmployeeID     pgtype.UUID
+	AdditionalWeeklyHours *float64
+	CustomizationNotes    string
 }
 
 func NewRombel(q *db.Queries) *Rombel { return &Rombel{q: q} }
@@ -180,15 +185,22 @@ func (s *Rombel) UpdateSubjectAssignmentMatrixCell(ctx context.Context, in Subje
 	if !in.ClassID.Valid || !in.SubjectID.Valid {
 		return db.GetSubjectAssignmentMatrixCellRow{}, fmt.Errorf("%w: class_id dan subject_id wajib diisi", domain.ErrBadRequest)
 	}
+	if in.AdditionalWeeklyHours != nil && *in.AdditionalWeeklyHours < 0 {
+		return db.GetSubjectAssignmentMatrixCellRow{}, fmt.Errorf("%w: tambahan JP tidak boleh negatif", domain.ErrBadRequest)
+	}
 	if in.TeacherEmployeeID.Valid {
-		if _, err := s.q.UpsertSubjectAssignmentMatrixCell(ctx, db.UpsertSubjectAssignmentMatrixCellParams{
+		assignment, err := s.q.UpsertSubjectAssignmentMatrixCell(ctx, db.UpsertSubjectAssignmentMatrixCellParams{
 			ClassID:           in.ClassID,
 			SubjectID:         in.SubjectID,
 			TeacherEmployeeID: in.TeacherEmployeeID,
-		}); err != nil {
+		})
+		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return db.GetSubjectAssignmentMatrixCellRow{}, fmt.Errorf("%w: rombel, mapel, atau guru tidak aktif", domain.ErrBadRequest)
 			}
+			return db.GetSubjectAssignmentMatrixCellRow{}, err
+		}
+		if err := s.upsertSubjectAllocationOverride(ctx, assignment, in); err != nil {
 			return db.GetSubjectAssignmentMatrixCellRow{}, err
 		}
 		return s.q.GetSubjectAssignmentMatrixCell(ctx, db.GetSubjectAssignmentMatrixCellParams{
@@ -205,6 +217,9 @@ func (s *Rombel) UpdateSubjectAssignmentMatrixCell(ctx context.Context, in Subje
 		return db.GetSubjectAssignmentMatrixCellRow{}, err
 	}
 	if err == nil {
+		if in.AdditionalWeeklyHours != nil && *in.AdditionalWeeklyHours > 0 {
+			return db.GetSubjectAssignmentMatrixCellRow{}, fmt.Errorf("%w: guru wajib dipilih sebelum mengatur tambahan JP", domain.ErrBadRequest)
+		}
 		if deleteErr := s.DeleteSubjectAssignment(ctx, db.DeleteRombelSubjectAssignmentParams{
 			ClassID: current.ClassID,
 			ID:      current.ID,
@@ -220,6 +235,82 @@ func (s *Rombel) UpdateSubjectAssignmentMatrixCell(ctx context.Context, in Subje
 		return db.GetSubjectAssignmentMatrixCellRow{}, fmt.Errorf("%w: rombel atau mapel tidak aktif", domain.ErrBadRequest)
 	}
 	return cell, err
+}
+
+func (s *Rombel) upsertSubjectAllocationOverride(ctx context.Context, assignment db.ClassSubjectAssignment, in SubjectAssignmentMatrixCellInput) error {
+	if in.AdditionalWeeklyHours == nil && strings.TrimSpace(in.CustomizationNotes) == "" {
+		return nil
+	}
+	additional := 0.0
+	if in.AdditionalWeeklyHours != nil {
+		additional = *in.AdditionalWeeklyHours
+	}
+	if additional > 6 {
+		return fmt.Errorf("%w: tambahan JP maksimal 6 per rombel", domain.ErrBadRequest)
+	}
+	if choice, err := s.isChoiceSubject(ctx, in.SubjectID); err != nil {
+		return err
+	} else if choice && additional > 2 {
+		return fmt.Errorf("%w: mata pelajaran pilihan maksimal 2 JP tambahan", domain.ErrBadRequest)
+	}
+
+	existingAdditional, err := s.q.SumClassAdditionalWeeklyHoursExceptAssignment(ctx, db.SumClassAdditionalWeeklyHoursExceptAssignmentParams{
+		ClassID:             in.ClassID,
+		ExcludeAssignmentID: assignment.ID,
+	})
+	if err != nil {
+		return err
+	}
+	existingAdditionalFloat := numericToFloat64(existingAdditional)
+	if existingAdditionalFloat+additional > 6.0001 {
+		return fmt.Errorf("%w: total tambahan JP rombel melebihi batas +6 JP", domain.ErrBadRequest)
+	}
+
+	allocation, err := s.q.GetCurriculumAllocationForClassSubject(ctx, db.GetCurriculumAllocationForClassSubjectParams{
+		ClassID:   in.ClassID,
+		SubjectID: in.SubjectID,
+	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	intra, koku, baseTotal := 0.0, 0.0, 0.0
+	allocationID := pgtype.UUID{}
+	if err == nil {
+		allocationID = allocation.ID
+		intra = numericToFloat64(allocation.IntraWeeklyHours)
+		koku = numericToFloat64(allocation.KokuWeeklyHours)
+		baseTotal = numericToFloat64(allocation.TotalWeeklyHours)
+	}
+	_, err = s.q.UpsertClassSubjectAllocationOverride(ctx, db.UpsertClassSubjectAllocationOverrideParams{
+		AssignmentID:           assignment.ID,
+		CurriculumAllocationID: allocationID,
+		IntraWeeklyHours:       float64ToNumeric(intra),
+		KokuWeeklyHours:        float64ToNumeric(koku),
+		AdditionalWeeklyHours:  float64ToNumeric(additional),
+		TotalWeeklyHours:       float64ToNumeric(baseTotal + additional),
+		IsCustomized:           additional > 0 || strings.TrimSpace(in.CustomizationNotes) != "",
+		Notes:                  strings.TrimSpace(in.CustomizationNotes),
+	})
+	return err
+}
+
+func (s *Rombel) isChoiceSubject(ctx context.Context, subjectID pgtype.UUID) (bool, error) {
+	subjects, err := s.q.ListSubjectAssignmentMatrixSubjects(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, subject := range subjects {
+		if sameRombelUUID(subject.ID, subjectID) {
+			return subject.IsChoiceSubject, nil
+		}
+	}
+	return false, nil
+}
+
+func float64ToNumeric(value float64) pgtype.Numeric {
+	var numeric pgtype.Numeric
+	_ = numeric.ScanScientific(fmt.Sprintf("%.2f", value))
+	return numeric
 }
 
 func (s *Rombel) CreateSubjectAssignment(ctx context.Context, arg db.CreateRombelSubjectAssignmentParams) (db.CreateRombelSubjectAssignmentRow, error) {

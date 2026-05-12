@@ -279,9 +279,11 @@ func (h *Rombel) UpdateSubjectAssignmentMatrixCell(w http.ResponseWriter, r *htt
 		return
 	}
 	row, err := h.svc.UpdateSubjectAssignmentMatrixCell(r.Context(), service.SubjectAssignmentMatrixCellInput{
-		ClassID:           classID,
-		SubjectID:         subjectID,
-		TeacherEmployeeID: teacherID,
+		ClassID:               classID,
+		SubjectID:             subjectID,
+		TeacherEmployeeID:     teacherID,
+		AdditionalWeeklyHours: body.AdditionalWeeklyHours,
+		CustomizationNotes:    body.CustomizationNotes,
 	})
 	if err != nil {
 		writeClientError(w, err, "Data guru mapel tidak valid")
@@ -511,9 +513,11 @@ type subjectAssignmentRequest struct {
 }
 
 type subjectAssignmentMatrixCellRequest struct {
-	ClassID           string `json:"class_id"`
-	SubjectID         string `json:"subject_id"`
-	TeacherEmployeeID string `json:"teacher_employee_id"`
+	ClassID               string   `json:"class_id"`
+	SubjectID             string   `json:"subject_id"`
+	TeacherEmployeeID     string   `json:"teacher_employee_id"`
+	AdditionalWeeklyHours *float64 `json:"additional_weekly_hours"`
+	CustomizationNotes    string   `json:"customization_notes"`
 }
 
 type timetableSlotRequest struct {

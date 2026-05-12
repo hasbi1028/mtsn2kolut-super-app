@@ -1251,6 +1251,20 @@ type ClassJournalSession struct {
 	TimetableSlotID pgtype.UUID        `json:"timetable_slot_id"`
 }
 
+type ClassSubjectAllocationOverride struct {
+	ID                     pgtype.UUID        `json:"id"`
+	AssignmentID           pgtype.UUID        `json:"assignment_id"`
+	CurriculumAllocationID pgtype.UUID        `json:"curriculum_allocation_id"`
+	IntraWeeklyHours       pgtype.Numeric     `json:"intra_weekly_hours"`
+	KokuWeeklyHours        pgtype.Numeric     `json:"koku_weekly_hours"`
+	AdditionalWeeklyHours  pgtype.Numeric     `json:"additional_weekly_hours"`
+	TotalWeeklyHours       pgtype.Numeric     `json:"total_weekly_hours"`
+	IsCustomized           bool               `json:"is_customized"`
+	Notes                  string             `json:"notes"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+}
+
 type ClassSubjectAssignment struct {
 	ID                pgtype.UUID        `json:"id"`
 	ClassID           pgtype.UUID        `json:"class_id"`
@@ -2086,6 +2100,9 @@ type Subject struct {
 	IsScheduleActivity  bool               `json:"is_schedule_activity"`
 	DefaultWeeklyHours  int32              `json:"default_weekly_hours"`
 	DisplayOrder        int32              `json:"display_order"`
+	CountsForRanking    bool               `json:"counts_for_ranking"`
+	IsLocalContent      bool               `json:"is_local_content"`
+	IsChoiceSubject     bool               `json:"is_choice_subject"`
 }
 
 type TimetableSlot struct {

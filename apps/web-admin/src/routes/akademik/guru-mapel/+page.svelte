@@ -34,6 +34,9 @@
 		is_report_subject: boolean;
 		is_schedule_activity: boolean;
 		default_weekly_hours: number;
+		counts_for_ranking: boolean;
+		is_local_content: boolean;
+		is_choice_subject: boolean;
 		display_order: number;
 	};
 
@@ -50,7 +53,14 @@
 		assignment_id: string | null;
 		teacher_employee_id: string | null;
 		teacher_name: string;
-		status: 'complete' | 'missing_teacher' | 'missing_assignment';
+		status: 'complete' | 'missing_teacher' | 'missing_assignment' | 'missing_curriculum';
+		curriculum_allocation_id: string | null;
+		intra_weekly_hours: number | string;
+		koku_weekly_hours: number | string;
+		additional_weekly_hours: number | string;
+		total_weekly_hours: number | string;
+		is_customized: boolean;
+		compliance_status: 'sesuai' | 'kurang' | 'lebih' | 'perlu_kurikulum';
 	};
 
 	type SubjectAssignmentMatrix = {
@@ -67,6 +77,7 @@
 		class_id: string;
 		subject_id: string;
 		teacher_employee_id: string;
+		additional_weekly_hours: string;
 		subject_code: string;
 		class_code: string;
 	};
@@ -74,6 +85,7 @@
 	let matrix = $state<SubjectAssignmentMatrix | null>(null);
 	let matrixPromise = $state<Promise<SubjectAssignmentMatrix> | null>(null);
 	let cellDrafts = $state<Record<string, string>>({});
+	let hourDrafts = $state<Record<string, string>>({});
 	let cellErrors = $state<Record<string, string>>({});
 	let refreshBusy = $state(false);
 	let saveBusy = $state(false);
@@ -112,12 +124,14 @@
 			for (const klass of matrix.classes) {
 				const key = cellKey(klass.id, subject.id);
 				const draft = getCellDraft(klass.id, subject.id);
-				if (draft !== currentTeacherId(klass.id, subject.id)) {
+				const hourDraft = getHourDraft(klass.id, subject.id);
+				if (draft !== currentTeacherId(klass.id, subject.id) || hourDraft !== currentAdditionalHours(klass.id, subject.id)) {
 					rows.push({
 						key,
 						class_id: klass.id,
 						subject_id: subject.id,
 						teacher_employee_id: draft,
+						additional_weekly_hours: hourDraft,
 						subject_code: subject.code,
 						class_code: klass.code,
 					});
@@ -150,10 +164,42 @@
 		return cellByKey.get(cellKey(classId, subjectId))?.teacher_employee_id ?? '';
 	}
 
+	function numberString(value: unknown) {
+		const parsed = Number(value ?? 0);
+		return Number.isFinite(parsed) ? String(parsed) : '0';
+	}
+
+	function currentAdditionalHours(classId: string, subjectId: string) {
+		return numberString(cellByKey.get(cellKey(classId, subjectId))?.additional_weekly_hours ?? 0);
+	}
+
+	function currentTotalHours(classId: string, subjectId: string) {
+		return numberString(cellByKey.get(cellKey(classId, subjectId))?.total_weekly_hours ?? 0);
+	}
+
+	function complianceFor(classId: string, subjectId: string) {
+		return cellByKey.get(cellKey(classId, subjectId))?.compliance_status ?? 'perlu_kurikulum';
+	}
+
 	function getCellDraft(classId: string, subjectId: string) {
 		const key = cellKey(classId, subjectId);
 		if (key in cellDrafts) return cellDrafts[key];
 		return currentTeacherId(classId, subjectId);
+	}
+
+	function getHourDraft(classId: string, subjectId: string) {
+		const key = cellKey(classId, subjectId);
+		if (key in hourDrafts) return hourDrafts[key];
+		return currentAdditionalHours(classId, subjectId);
+	}
+
+	function updateHourDraft(classId: string, subjectId: string, value: string) {
+		const key = cellKey(classId, subjectId);
+		hourDrafts = { ...hourDrafts, [key]: value };
+		if (cellErrors[key]) {
+			const { [key]: _ignored, ...rest } = cellErrors;
+			cellErrors = rest;
+		}
 	}
 
 	function statusFor(classId: string, subjectId: string) {
@@ -166,6 +212,7 @@
 
 	function resetCellDrafts(source = matrix) {
 		cellDrafts = Object.fromEntries((source?.cells ?? []).map((cell) => [cellKey(cell.class_id, cell.subject_id), cell.teacher_employee_id ?? '']));
+		hourDrafts = Object.fromEntries((source?.cells ?? []).map((cell) => [cellKey(cell.class_id, cell.subject_id), numberString(cell.additional_weekly_hours ?? 0)]));
 		cellErrors = {};
 	}
 
@@ -216,6 +263,7 @@
 			: [...matrix.cells, updated];
 		matrix = { ...matrix, cells };
 		cellDrafts = { ...cellDrafts, [key]: updated.teacher_employee_id ?? '' };
+		hourDrafts = { ...hourDrafts, [key]: numberString(updated.additional_weekly_hours ?? 0) };
 		const { [key]: _ignored, ...rest } = cellErrors;
 		cellErrors = rest;
 	}
@@ -233,6 +281,7 @@
 						class_id: cell.class_id,
 						subject_id: cell.subject_id,
 						teacher_employee_id: cell.teacher_employee_id,
+					additional_weekly_hours: Number(cell.additional_weekly_hours || 0),
 					}),
 				});
 				try {
@@ -254,6 +303,7 @@
 
 	function statusBadge(status: MatrixCell['status']) {
 		if (status === 'complete') return 'Lengkap';
+		if (status === 'missing_curriculum') return 'Perlu kurikulum';
 		if (status === 'missing_teacher') return 'Guru perlu diperiksa';
 		return 'Belum ada';
 	}
@@ -409,9 +459,11 @@
 										{#each visibleClasses as klass (klass.id)}
 											{@const key = cellKey(klass.id, subject.id)}
 											{@const status = statusFor(klass.id, subject.id)}
-											{@const draft = getCellDraft(klass.id, subject.id)}
-											{@const current = currentTeacherId(klass.id, subject.id)}
-											<Table.Cell class={`align-top ${draft !== current ? 'bg-primary/5' : ''}`}>
+							{@const draft = getCellDraft(klass.id, subject.id)}
+							{@const current = currentTeacherId(klass.id, subject.id)}
+							{@const hourDraft = getHourDraft(klass.id, subject.id)}
+							{@const currentHours = currentAdditionalHours(klass.id, subject.id)}
+							<Table.Cell class={`align-top ${draft !== current || hourDraft !== currentHours ? 'bg-primary/5' : ''}`}>
 												<div class="space-y-1">
 													<EditableSelectCell
 														value={draft}
@@ -425,15 +477,22 @@
 														oninput={(value) => updateCellDraft(klass.id, subject.id, value)}
 														oncancel={(event) => updateCellDraft(klass.id, subject.id, event.originalValue)}
 													/>
-													<div class="flex flex-wrap items-center gap-1">
+													<div class="grid gap-1 sm:grid-cols-[1fr_5rem]">
+									<Input type="number" min="0" max="6" step="0.5" value={hourDraft} disabled={saveBusy && savingCellKey !== key} aria-label={`Tambahan JP ${subject.name} ${klass.code}`} oninput={(event) => updateHourDraft(klass.id, subject.id, event.currentTarget.value)} />
+									<div class="text-xs text-muted-foreground">Total {currentTotalHours(klass.id, subject.id)} JP</div>
+								</div>
+								<div class="flex flex-wrap items-center gap-1">
 														{#if status === 'complete'}
 															<Badge class="border-primary/20 bg-primary/15 text-primary">{statusBadge(status)}</Badge>
-														{:else if status === 'missing_teacher'}
+														{:else if status === 'missing_curriculum'}
+											<Badge variant="outline">{statusBadge(status)}</Badge>
+										{:else if status === 'missing_teacher'}
 															<Badge variant="destructive">{statusBadge(status)}</Badge>
 														{:else}
 															<Badge variant="secondary">{statusBadge(status)}</Badge>
 														{/if}
-														{#if teacherNameFor(klass.id, subject.id)}
+														<Badge variant={complianceFor(klass.id, subject.id) === 'sesuai' ? 'secondary' : 'outline'}>{complianceFor(klass.id, subject.id)}</Badge>
+								{#if teacherNameFor(klass.id, subject.id)}
 															<span class="text-xs text-muted-foreground">{teacherNameFor(klass.id, subject.id)}</span>
 														{/if}
 													</div>

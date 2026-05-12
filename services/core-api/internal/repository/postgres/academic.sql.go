@@ -184,6 +184,9 @@ INSERT INTO subjects (
     is_assessment_subject,
     is_report_subject,
     is_schedule_activity,
+    counts_for_ranking,
+    is_local_content,
+    is_choice_subject,
     default_weekly_hours,
     display_order,
     is_active
@@ -198,9 +201,12 @@ VALUES (
     $6,
     $7,
     $8,
-    $9
+    $9,
+    $10,
+    $11,
+    $12
 )
-RETURNING id, code, name, is_active, created_at, updated_at, category, is_assessment_subject, is_report_subject, is_schedule_activity, default_weekly_hours, display_order
+RETURNING id, code, name, is_active, created_at, updated_at, category, is_assessment_subject, is_report_subject, is_schedule_activity, default_weekly_hours, display_order, counts_for_ranking, is_local_content, is_choice_subject
 `
 
 type CreateSubjectParams struct {
@@ -210,6 +216,9 @@ type CreateSubjectParams struct {
 	IsAssessmentSubject bool   `json:"is_assessment_subject"`
 	IsReportSubject     bool   `json:"is_report_subject"`
 	IsScheduleActivity  bool   `json:"is_schedule_activity"`
+	CountsForRanking    bool   `json:"counts_for_ranking"`
+	IsLocalContent      bool   `json:"is_local_content"`
+	IsChoiceSubject     bool   `json:"is_choice_subject"`
 	DefaultWeeklyHours  int32  `json:"default_weekly_hours"`
 	DisplayOrder        int32  `json:"display_order"`
 	IsActive            bool   `json:"is_active"`
@@ -223,6 +232,9 @@ func (q *Queries) CreateSubject(ctx context.Context, arg CreateSubjectParams) (S
 		arg.IsAssessmentSubject,
 		arg.IsReportSubject,
 		arg.IsScheduleActivity,
+		arg.CountsForRanking,
+		arg.IsLocalContent,
+		arg.IsChoiceSubject,
 		arg.DefaultWeeklyHours,
 		arg.DisplayOrder,
 		arg.IsActive,
@@ -241,6 +253,9 @@ func (q *Queries) CreateSubject(ctx context.Context, arg CreateSubjectParams) (S
 		&i.IsScheduleActivity,
 		&i.DefaultWeeklyHours,
 		&i.DisplayOrder,
+		&i.CountsForRanking,
+		&i.IsLocalContent,
+		&i.IsChoiceSubject,
 	)
 	return i, err
 }
@@ -320,6 +335,69 @@ active_assignments AS (
     FROM class_subject_assignments csa
     JOIN active_classes c ON c.id = csa.class_id
 ),
+active_class_curriculum AS (
+    SELECT DISTINCT ON (cca.class_id)
+        cca.class_id,
+        cca.curriculum_profile_id
+    FROM class_curriculum_assignments cca
+    JOIN active_classes c ON c.id = cca.class_id
+    WHERE cca.is_active = TRUE
+    ORDER BY cca.class_id, cca.updated_at DESC, cca.created_at DESC
+),
+required_allocations AS (
+    SELECT
+        c.id AS class_id,
+        c.level,
+        alloc.id AS allocation_id,
+        alloc.subject_id,
+        alloc.subject_group,
+        alloc.total_weekly_hours,
+        alloc.counts_for_schedule,
+        alloc.counts_for_report,
+        alloc.counts_for_ranking,
+        alloc.is_required
+    FROM active_classes c
+    JOIN active_class_curriculum acc ON acc.class_id = c.id
+    JOIN curriculum_subject_allocations alloc
+      ON alloc.curriculum_profile_id = acc.curriculum_profile_id
+     AND alloc.level = c.level
+     AND alloc.is_required = TRUE
+),
+assignment_effective_hours AS (
+    SELECT
+        csa.id AS assignment_id,
+        csa.class_id,
+        csa.subject_id,
+        csa.teacher_employee_id,
+        COALESCE(ov.total_weekly_hours, alloc.total_weekly_hours, 0)::numeric(6,2) AS total_weekly_hours,
+        COALESCE(ov.additional_weekly_hours, 0)::numeric(6,2) AS additional_weekly_hours
+    FROM active_assignments csa
+    JOIN active_classes c ON c.id = csa.class_id
+    LEFT JOIN active_class_curriculum acc ON acc.class_id = c.id
+    LEFT JOIN curriculum_subject_allocations alloc
+      ON alloc.curriculum_profile_id = acc.curriculum_profile_id
+     AND alloc.level = c.level
+     AND alloc.subject_id = csa.subject_id
+    LEFT JOIN class_subject_allocation_overrides ov ON ov.assignment_id = csa.id
+),
+class_curriculum_hours AS (
+    SELECT
+        c.id AS class_id,
+        COALESCE((
+            SELECT SUM(alloc.total_weekly_hours)
+            FROM curriculum_subject_allocations alloc
+            JOIN active_class_curriculum acc ON acc.curriculum_profile_id = alloc.curriculum_profile_id
+            WHERE acc.class_id = c.id
+              AND alloc.level = c.level
+              AND alloc.is_required = TRUE
+        ), 0)::numeric(6,2)
+        + COALESCE((
+            SELECT SUM(aeh.additional_weekly_hours)
+            FROM assignment_effective_hours aeh
+            WHERE aeh.class_id = c.id
+        ), 0)::numeric(6,2) AS effective_weekly_hours
+    FROM active_classes c
+),
 dashboard_slots AS (
     SELECT
         ts.id,
@@ -398,7 +476,50 @@ SELECT
               AND u.deleted_at IS NULL
               AND u.is_active = TRUE
         )
-    )::int AS parent_accounts_missing
+    )::int AS parent_accounts_missing,
+    (
+        SELECT COUNT(*)
+        FROM active_classes c
+        WHERE NOT EXISTS (SELECT 1 FROM active_class_curriculum acc WHERE acc.class_id = c.id)
+    )::int AS classes_without_curriculum_profile,
+    (
+        SELECT COUNT(*)
+        FROM class_curriculum_hours cch
+        WHERE cch.effective_weekly_hours < 42
+    )::int AS classes_weekly_hours_under_42,
+    (
+        SELECT COUNT(*)
+        FROM class_curriculum_hours cch
+        WHERE cch.effective_weekly_hours > 48
+    )::int AS classes_weekly_hours_over_48,
+    (
+        SELECT COUNT(*)
+        FROM required_allocations alloc
+        LEFT JOIN active_assignments csa ON csa.class_id = alloc.class_id AND csa.subject_id = alloc.subject_id
+        LEFT JOIN employees e ON e.id = csa.teacher_employee_id AND e.is_active = TRUE
+        WHERE alloc.counts_for_schedule = TRUE
+          AND e.id IS NULL
+    )::int AS required_subjects_missing_teacher,
+    (
+        SELECT COUNT(*)
+        FROM (
+            SELECT e.id, COALESCE(SUM(aeh.total_weekly_hours), 0)::numeric(6,2) AS total_weekly_hours
+            FROM employees e
+            JOIN active_assignments csa ON csa.teacher_employee_id = e.id
+            LEFT JOIN assignment_effective_hours aeh ON aeh.assignment_id = csa.id
+            WHERE e.is_active = TRUE
+            GROUP BY e.id
+        ) teacher_load
+        WHERE teacher_load.total_weekly_hours < 24
+    )::int AS teachers_under_24_hours,
+    0::int AS timetable_hours_mismatch,
+    (
+        SELECT COUNT(*)
+        FROM subjects s
+        WHERE s.is_active = TRUE
+          AND s.counts_for_ranking = FALSE
+          AND s.is_report_subject = TRUE
+    )::int AS non_ranking_subjects_in_ranking
 `
 
 type GetAcademicDashboardSummaryRow struct {
@@ -412,6 +533,13 @@ type GetAcademicDashboardSummaryRow struct {
 	TimetableConflicts               int32  `json:"timetable_conflicts"`
 	StudentAccountsMissing           int32  `json:"student_accounts_missing"`
 	ParentAccountsMissing            int32  `json:"parent_accounts_missing"`
+	ClassesWithoutCurriculumProfile  int32  `json:"classes_without_curriculum_profile"`
+	ClassesWeeklyHoursUnder42        int32  `json:"classes_weekly_hours_under_42"`
+	ClassesWeeklyHoursOver48         int32  `json:"classes_weekly_hours_over_48"`
+	RequiredSubjectsMissingTeacher   int32  `json:"required_subjects_missing_teacher"`
+	TeachersUnder24Hours             int32  `json:"teachers_under_24_hours"`
+	TimetableHoursMismatch           int32  `json:"timetable_hours_mismatch"`
+	NonRankingSubjectsInRanking      int32  `json:"non_ranking_subjects_in_ranking"`
 }
 
 func (q *Queries) GetAcademicDashboardSummary(ctx context.Context) (GetAcademicDashboardSummaryRow, error) {
@@ -428,6 +556,13 @@ func (q *Queries) GetAcademicDashboardSummary(ctx context.Context) (GetAcademicD
 		&i.TimetableConflicts,
 		&i.StudentAccountsMissing,
 		&i.ParentAccountsMissing,
+		&i.ClassesWithoutCurriculumProfile,
+		&i.ClassesWeeklyHoursUnder42,
+		&i.ClassesWeeklyHoursOver48,
+		&i.RequiredSubjectsMissingTeacher,
+		&i.TeachersUnder24Hours,
+		&i.TimetableHoursMismatch,
+		&i.NonRankingSubjectsInRanking,
 	)
 	return i, err
 }
@@ -584,6 +719,66 @@ func (q *Queries) GetClassSubjectAssignment(ctx context.Context, id pgtype.UUID)
 	return i, err
 }
 
+const getCurriculumAllocationForClassSubject = `-- name: GetCurriculumAllocationForClassSubject :one
+SELECT
+    alloc.id,
+    alloc.curriculum_profile_id,
+    alloc.subject_id,
+    alloc.level,
+    alloc.subject_group,
+    alloc.intra_weekly_hours,
+    alloc.koku_weekly_hours,
+    alloc.total_weekly_hours,
+    alloc.counts_for_schedule,
+    alloc.is_required
+FROM school_classes c
+JOIN class_curriculum_assignments cca ON cca.class_id = c.id AND cca.is_active = TRUE
+JOIN curriculum_subject_allocations alloc
+  ON alloc.curriculum_profile_id = cca.curriculum_profile_id
+ AND alloc.level = c.level
+ AND alloc.subject_id = $1
+WHERE c.id = $2
+  AND c.is_active = TRUE
+ORDER BY cca.updated_at DESC, cca.created_at DESC
+LIMIT 1
+`
+
+type GetCurriculumAllocationForClassSubjectParams struct {
+	SubjectID pgtype.UUID `json:"subject_id"`
+	ClassID   pgtype.UUID `json:"class_id"`
+}
+
+type GetCurriculumAllocationForClassSubjectRow struct {
+	ID                  pgtype.UUID    `json:"id"`
+	CurriculumProfileID pgtype.UUID    `json:"curriculum_profile_id"`
+	SubjectID           pgtype.UUID    `json:"subject_id"`
+	Level               string         `json:"level"`
+	SubjectGroup        string         `json:"subject_group"`
+	IntraWeeklyHours    pgtype.Numeric `json:"intra_weekly_hours"`
+	KokuWeeklyHours     pgtype.Numeric `json:"koku_weekly_hours"`
+	TotalWeeklyHours    pgtype.Numeric `json:"total_weekly_hours"`
+	CountsForSchedule   bool           `json:"counts_for_schedule"`
+	IsRequired          bool           `json:"is_required"`
+}
+
+func (q *Queries) GetCurriculumAllocationForClassSubject(ctx context.Context, arg GetCurriculumAllocationForClassSubjectParams) (GetCurriculumAllocationForClassSubjectRow, error) {
+	row := q.db.QueryRow(ctx, getCurriculumAllocationForClassSubject, arg.SubjectID, arg.ClassID)
+	var i GetCurriculumAllocationForClassSubjectRow
+	err := row.Scan(
+		&i.ID,
+		&i.CurriculumProfileID,
+		&i.SubjectID,
+		&i.Level,
+		&i.SubjectGroup,
+		&i.IntraWeeklyHours,
+		&i.KokuWeeklyHours,
+		&i.TotalWeeklyHours,
+		&i.CountsForSchedule,
+		&i.IsRequired,
+	)
+	return i, err
+}
+
 const getCurriculumSummaryByLevel = `-- name: GetCurriculumSummaryByLevel :many
 SELECT
     csa.curriculum_profile_id,
@@ -659,6 +854,9 @@ SELECT
     is_assessment_subject,
     is_report_subject,
     is_schedule_activity,
+    counts_for_ranking,
+    is_local_content,
+    is_choice_subject,
     default_weekly_hours,
     display_order,
     is_active,
@@ -676,6 +874,9 @@ type GetSubjectRow struct {
 	IsAssessmentSubject bool               `json:"is_assessment_subject"`
 	IsReportSubject     bool               `json:"is_report_subject"`
 	IsScheduleActivity  bool               `json:"is_schedule_activity"`
+	CountsForRanking    bool               `json:"counts_for_ranking"`
+	IsLocalContent      bool               `json:"is_local_content"`
+	IsChoiceSubject     bool               `json:"is_choice_subject"`
 	DefaultWeeklyHours  int32              `json:"default_weekly_hours"`
 	DisplayOrder        int32              `json:"display_order"`
 	IsActive            bool               `json:"is_active"`
@@ -694,6 +895,9 @@ func (q *Queries) GetSubject(ctx context.Context, id pgtype.UUID) (GetSubjectRow
 		&i.IsAssessmentSubject,
 		&i.IsReportSubject,
 		&i.IsScheduleActivity,
+		&i.CountsForRanking,
+		&i.IsLocalContent,
+		&i.IsChoiceSubject,
 		&i.DefaultWeeklyHours,
 		&i.DisplayOrder,
 		&i.IsActive,
@@ -730,6 +934,22 @@ func (q *Queries) GetSubjectAssignmentByClassSubject(ctx context.Context, arg Ge
 }
 
 const getSubjectAssignmentMatrixCell = `-- name: GetSubjectAssignmentMatrixCell :one
+WITH active_class AS (
+    SELECT c.id, c.code, c.name, c.level
+    FROM school_classes c
+    JOIN academic_years ay ON ay.id = c.academic_year_id AND ay.is_active = TRUE
+    WHERE c.id = $2
+      AND c.is_active = TRUE
+),
+active_class_curriculum AS (
+    SELECT DISTINCT ON (cca.class_id)
+        cca.class_id,
+        cca.curriculum_profile_id
+    FROM class_curriculum_assignments cca
+    JOIN active_class c ON c.id = cca.class_id
+    WHERE cca.is_active = TRUE
+    ORDER BY cca.class_id, cca.updated_at DESC, cca.created_at DESC
+)
 SELECT
     c.id AS class_id,
     s.id AS subject_id,
@@ -737,37 +957,60 @@ SELECT
     csa.teacher_employee_id,
     COALESCE(e.nama, '') AS teacher_name,
     CASE
+        WHEN alloc.id IS NULL THEN 'missing_curriculum'
         WHEN csa.id IS NULL THEN 'missing_assignment'
         WHEN e.id IS NULL OR e.is_active = FALSE THEN 'missing_teacher'
         ELSE 'complete'
-    END::text AS status
-FROM school_classes c
+    END::text AS status,
+    alloc.id AS curriculum_allocation_id,
+    COALESCE(ov.intra_weekly_hours, alloc.intra_weekly_hours, 0)::numeric(6,2) AS intra_weekly_hours,
+    COALESCE(ov.koku_weekly_hours, alloc.koku_weekly_hours, 0)::numeric(6,2) AS koku_weekly_hours,
+    COALESCE(ov.additional_weekly_hours, 0)::numeric(6,2) AS additional_weekly_hours,
+    COALESCE(ov.total_weekly_hours, alloc.total_weekly_hours, 0)::numeric(6,2) AS total_weekly_hours,
+    COALESCE(ov.is_customized, FALSE)::boolean AS is_customized,
+    CASE
+        WHEN alloc.id IS NULL THEN 'perlu_kurikulum'
+        WHEN COALESCE(ov.total_weekly_hours, alloc.total_weekly_hours, 0) = alloc.total_weekly_hours THEN 'sesuai'
+        WHEN COALESCE(ov.total_weekly_hours, alloc.total_weekly_hours, 0) < alloc.total_weekly_hours THEN 'kurang'
+        ELSE 'lebih'
+    END::text AS compliance_status
+FROM active_class c
 CROSS JOIN subjects s
+LEFT JOIN active_class_curriculum acc ON acc.class_id = c.id
+LEFT JOIN curriculum_subject_allocations alloc
+  ON alloc.curriculum_profile_id = acc.curriculum_profile_id
+ AND alloc.level = c.level
+ AND alloc.subject_id = s.id
 LEFT JOIN class_subject_assignments csa ON csa.class_id = c.id AND csa.subject_id = s.id
 LEFT JOIN employees e ON e.id = csa.teacher_employee_id
-JOIN academic_years ay ON ay.id = c.academic_year_id AND ay.is_active = TRUE
-WHERE c.id = $1
-  AND c.is_active = TRUE
-  AND s.id = $2
+LEFT JOIN class_subject_allocation_overrides ov ON ov.assignment_id = csa.id
+WHERE s.id = $1
   AND s.is_active = TRUE
 `
 
 type GetSubjectAssignmentMatrixCellParams struct {
-	ClassID   pgtype.UUID `json:"class_id"`
 	SubjectID pgtype.UUID `json:"subject_id"`
+	ClassID   pgtype.UUID `json:"class_id"`
 }
 
 type GetSubjectAssignmentMatrixCellRow struct {
-	ClassID           pgtype.UUID `json:"class_id"`
-	SubjectID         pgtype.UUID `json:"subject_id"`
-	AssignmentID      pgtype.UUID `json:"assignment_id"`
-	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
-	TeacherName       string      `json:"teacher_name"`
-	Status            string      `json:"status"`
+	ClassID                pgtype.UUID    `json:"class_id"`
+	SubjectID              pgtype.UUID    `json:"subject_id"`
+	AssignmentID           pgtype.UUID    `json:"assignment_id"`
+	TeacherEmployeeID      pgtype.UUID    `json:"teacher_employee_id"`
+	TeacherName            string         `json:"teacher_name"`
+	Status                 string         `json:"status"`
+	CurriculumAllocationID pgtype.UUID    `json:"curriculum_allocation_id"`
+	IntraWeeklyHours       pgtype.Numeric `json:"intra_weekly_hours"`
+	KokuWeeklyHours        pgtype.Numeric `json:"koku_weekly_hours"`
+	AdditionalWeeklyHours  pgtype.Numeric `json:"additional_weekly_hours"`
+	TotalWeeklyHours       pgtype.Numeric `json:"total_weekly_hours"`
+	IsCustomized           bool           `json:"is_customized"`
+	ComplianceStatus       string         `json:"compliance_status"`
 }
 
 func (q *Queries) GetSubjectAssignmentMatrixCell(ctx context.Context, arg GetSubjectAssignmentMatrixCellParams) (GetSubjectAssignmentMatrixCellRow, error) {
-	row := q.db.QueryRow(ctx, getSubjectAssignmentMatrixCell, arg.ClassID, arg.SubjectID)
+	row := q.db.QueryRow(ctx, getSubjectAssignmentMatrixCell, arg.SubjectID, arg.ClassID)
 	var i GetSubjectAssignmentMatrixCellRow
 	err := row.Scan(
 		&i.ClassID,
@@ -776,6 +1019,13 @@ func (q *Queries) GetSubjectAssignmentMatrixCell(ctx context.Context, arg GetSub
 		&i.TeacherEmployeeID,
 		&i.TeacherName,
 		&i.Status,
+		&i.CurriculumAllocationID,
+		&i.IntraWeeklyHours,
+		&i.KokuWeeklyHours,
+		&i.AdditionalWeeklyHours,
+		&i.TotalWeeklyHours,
+		&i.IsCustomized,
+		&i.ComplianceStatus,
 	)
 	return i, err
 }
@@ -1247,6 +1497,21 @@ func (q *Queries) ListSchoolClasses(ctx context.Context) ([]ListSchoolClassesRow
 }
 
 const listSubjectAssignmentMatrixCells = `-- name: ListSubjectAssignmentMatrixCells :many
+WITH active_classes AS (
+    SELECT id, code, name, level
+    FROM school_classes
+    WHERE academic_year_id = $1
+      AND is_active = TRUE
+),
+active_class_curriculum AS (
+    SELECT DISTINCT ON (cca.class_id)
+        cca.class_id,
+        cca.curriculum_profile_id
+    FROM class_curriculum_assignments cca
+    JOIN active_classes c ON c.id = cca.class_id
+    WHERE cca.is_active = TRUE
+    ORDER BY cca.class_id, cca.updated_at DESC, cca.created_at DESC
+)
 SELECT
     c.id AS class_id,
     s.id AS subject_id,
@@ -1254,27 +1519,51 @@ SELECT
     csa.teacher_employee_id,
     COALESCE(e.nama, '') AS teacher_name,
     CASE
+        WHEN alloc.id IS NULL THEN 'missing_curriculum'
         WHEN csa.id IS NULL THEN 'missing_assignment'
         WHEN e.id IS NULL OR e.is_active = FALSE THEN 'missing_teacher'
         ELSE 'complete'
-    END::text AS status
-FROM school_classes c
+    END::text AS status,
+    alloc.id AS curriculum_allocation_id,
+    COALESCE(ov.intra_weekly_hours, alloc.intra_weekly_hours, 0)::numeric(6,2) AS intra_weekly_hours,
+    COALESCE(ov.koku_weekly_hours, alloc.koku_weekly_hours, 0)::numeric(6,2) AS koku_weekly_hours,
+    COALESCE(ov.additional_weekly_hours, 0)::numeric(6,2) AS additional_weekly_hours,
+    COALESCE(ov.total_weekly_hours, alloc.total_weekly_hours, 0)::numeric(6,2) AS total_weekly_hours,
+    COALESCE(ov.is_customized, FALSE)::boolean AS is_customized,
+    CASE
+        WHEN alloc.id IS NULL THEN 'perlu_kurikulum'
+        WHEN COALESCE(ov.total_weekly_hours, alloc.total_weekly_hours, 0) = alloc.total_weekly_hours THEN 'sesuai'
+        WHEN COALESCE(ov.total_weekly_hours, alloc.total_weekly_hours, 0) < alloc.total_weekly_hours THEN 'kurang'
+        ELSE 'lebih'
+    END::text AS compliance_status
+FROM active_classes c
 CROSS JOIN subjects s
+LEFT JOIN active_class_curriculum acc ON acc.class_id = c.id
+LEFT JOIN curriculum_subject_allocations alloc
+  ON alloc.curriculum_profile_id = acc.curriculum_profile_id
+ AND alloc.level = c.level
+ AND alloc.subject_id = s.id
 LEFT JOIN class_subject_assignments csa ON csa.class_id = c.id AND csa.subject_id = s.id
 LEFT JOIN employees e ON e.id = csa.teacher_employee_id
-WHERE c.academic_year_id = $1
-  AND c.is_active = TRUE
-  AND s.is_active = TRUE
+LEFT JOIN class_subject_allocation_overrides ov ON ov.assignment_id = csa.id
+WHERE s.is_active = TRUE
 ORDER BY s.display_order ASC, s.name ASC, c.level ASC, c.name ASC
 `
 
 type ListSubjectAssignmentMatrixCellsRow struct {
-	ClassID           pgtype.UUID `json:"class_id"`
-	SubjectID         pgtype.UUID `json:"subject_id"`
-	AssignmentID      pgtype.UUID `json:"assignment_id"`
-	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
-	TeacherName       string      `json:"teacher_name"`
-	Status            string      `json:"status"`
+	ClassID                pgtype.UUID    `json:"class_id"`
+	SubjectID              pgtype.UUID    `json:"subject_id"`
+	AssignmentID           pgtype.UUID    `json:"assignment_id"`
+	TeacherEmployeeID      pgtype.UUID    `json:"teacher_employee_id"`
+	TeacherName            string         `json:"teacher_name"`
+	Status                 string         `json:"status"`
+	CurriculumAllocationID pgtype.UUID    `json:"curriculum_allocation_id"`
+	IntraWeeklyHours       pgtype.Numeric `json:"intra_weekly_hours"`
+	KokuWeeklyHours        pgtype.Numeric `json:"koku_weekly_hours"`
+	AdditionalWeeklyHours  pgtype.Numeric `json:"additional_weekly_hours"`
+	TotalWeeklyHours       pgtype.Numeric `json:"total_weekly_hours"`
+	IsCustomized           bool           `json:"is_customized"`
+	ComplianceStatus       string         `json:"compliance_status"`
 }
 
 func (q *Queries) ListSubjectAssignmentMatrixCells(ctx context.Context, academicYearID pgtype.UUID) ([]ListSubjectAssignmentMatrixCellsRow, error) {
@@ -1293,6 +1582,13 @@ func (q *Queries) ListSubjectAssignmentMatrixCells(ctx context.Context, academic
 			&i.TeacherEmployeeID,
 			&i.TeacherName,
 			&i.Status,
+			&i.CurriculumAllocationID,
+			&i.IntraWeeklyHours,
+			&i.KokuWeeklyHours,
+			&i.AdditionalWeeklyHours,
+			&i.TotalWeeklyHours,
+			&i.IsCustomized,
+			&i.ComplianceStatus,
 		); err != nil {
 			return nil, err
 		}
@@ -1353,6 +1649,9 @@ SELECT
     is_assessment_subject,
     is_report_subject,
     is_schedule_activity,
+    counts_for_ranking,
+    is_local_content,
+    is_choice_subject,
     default_weekly_hours,
     display_order
 FROM subjects
@@ -1368,6 +1667,9 @@ type ListSubjectAssignmentMatrixSubjectsRow struct {
 	IsAssessmentSubject bool        `json:"is_assessment_subject"`
 	IsReportSubject     bool        `json:"is_report_subject"`
 	IsScheduleActivity  bool        `json:"is_schedule_activity"`
+	CountsForRanking    bool        `json:"counts_for_ranking"`
+	IsLocalContent      bool        `json:"is_local_content"`
+	IsChoiceSubject     bool        `json:"is_choice_subject"`
 	DefaultWeeklyHours  int32       `json:"default_weekly_hours"`
 	DisplayOrder        int32       `json:"display_order"`
 }
@@ -1389,6 +1691,9 @@ func (q *Queries) ListSubjectAssignmentMatrixSubjects(ctx context.Context) ([]Li
 			&i.IsAssessmentSubject,
 			&i.IsReportSubject,
 			&i.IsScheduleActivity,
+			&i.CountsForRanking,
+			&i.IsLocalContent,
+			&i.IsChoiceSubject,
 			&i.DefaultWeeklyHours,
 			&i.DisplayOrder,
 		); err != nil {
@@ -1454,6 +1759,9 @@ SELECT
     is_assessment_subject,
     is_report_subject,
     is_schedule_activity,
+    counts_for_ranking,
+    is_local_content,
+    is_choice_subject,
     default_weekly_hours,
     display_order,
     is_active,
@@ -1471,6 +1779,9 @@ type ListSubjectsRow struct {
 	IsAssessmentSubject bool               `json:"is_assessment_subject"`
 	IsReportSubject     bool               `json:"is_report_subject"`
 	IsScheduleActivity  bool               `json:"is_schedule_activity"`
+	CountsForRanking    bool               `json:"counts_for_ranking"`
+	IsLocalContent      bool               `json:"is_local_content"`
+	IsChoiceSubject     bool               `json:"is_choice_subject"`
 	DefaultWeeklyHours  int32              `json:"default_weekly_hours"`
 	DisplayOrder        int32              `json:"display_order"`
 	IsActive            bool               `json:"is_active"`
@@ -1495,6 +1806,9 @@ func (q *Queries) ListSubjects(ctx context.Context) ([]ListSubjectsRow, error) {
 			&i.IsAssessmentSubject,
 			&i.IsReportSubject,
 			&i.IsScheduleActivity,
+			&i.CountsForRanking,
+			&i.IsLocalContent,
+			&i.IsChoiceSubject,
 			&i.DefaultWeeklyHours,
 			&i.DisplayOrder,
 			&i.IsActive,
@@ -1688,6 +2002,26 @@ func (q *Queries) PromoteYearRolloverStudent(ctx context.Context, arg PromoteYea
 	return result.RowsAffected(), nil
 }
 
+const sumClassAdditionalWeeklyHoursExceptAssignment = `-- name: SumClassAdditionalWeeklyHoursExceptAssignment :one
+SELECT COALESCE(SUM(ov.additional_weekly_hours), 0)::numeric(6,2)
+FROM class_subject_allocation_overrides ov
+JOIN class_subject_assignments csa ON csa.id = ov.assignment_id
+WHERE csa.class_id = $1
+  AND csa.id <> $2
+`
+
+type SumClassAdditionalWeeklyHoursExceptAssignmentParams struct {
+	ClassID             pgtype.UUID `json:"class_id"`
+	ExcludeAssignmentID pgtype.UUID `json:"exclude_assignment_id"`
+}
+
+func (q *Queries) SumClassAdditionalWeeklyHoursExceptAssignment(ctx context.Context, arg SumClassAdditionalWeeklyHoursExceptAssignmentParams) (pgtype.Numeric, error) {
+	row := q.db.QueryRow(ctx, sumClassAdditionalWeeklyHoursExceptAssignment, arg.ClassID, arg.ExcludeAssignmentID)
+	var column_1 pgtype.Numeric
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const updateSubject = `-- name: UpdateSubject :one
 UPDATE subjects
 SET code = $1,
@@ -1696,12 +2030,15 @@ SET code = $1,
     is_assessment_subject = $4,
     is_report_subject = $5,
     is_schedule_activity = $6,
-    default_weekly_hours = $7,
-    display_order = $8,
-    is_active = $9,
+    counts_for_ranking = $7,
+    is_local_content = $8,
+    is_choice_subject = $9,
+    default_weekly_hours = $10,
+    display_order = $11,
+    is_active = $12,
     updated_at = NOW()
-WHERE id = $10
-RETURNING id, code, name, is_active, created_at, updated_at, category, is_assessment_subject, is_report_subject, is_schedule_activity, default_weekly_hours, display_order
+WHERE id = $13
+RETURNING id, code, name, is_active, created_at, updated_at, category, is_assessment_subject, is_report_subject, is_schedule_activity, default_weekly_hours, display_order, counts_for_ranking, is_local_content, is_choice_subject
 `
 
 type UpdateSubjectParams struct {
@@ -1711,6 +2048,9 @@ type UpdateSubjectParams struct {
 	IsAssessmentSubject bool        `json:"is_assessment_subject"`
 	IsReportSubject     bool        `json:"is_report_subject"`
 	IsScheduleActivity  bool        `json:"is_schedule_activity"`
+	CountsForRanking    bool        `json:"counts_for_ranking"`
+	IsLocalContent      bool        `json:"is_local_content"`
+	IsChoiceSubject     bool        `json:"is_choice_subject"`
 	DefaultWeeklyHours  int32       `json:"default_weekly_hours"`
 	DisplayOrder        int32       `json:"display_order"`
 	IsActive            bool        `json:"is_active"`
@@ -1725,6 +2065,9 @@ func (q *Queries) UpdateSubject(ctx context.Context, arg UpdateSubjectParams) (S
 		arg.IsAssessmentSubject,
 		arg.IsReportSubject,
 		arg.IsScheduleActivity,
+		arg.CountsForRanking,
+		arg.IsLocalContent,
+		arg.IsChoiceSubject,
 		arg.DefaultWeeklyHours,
 		arg.DisplayOrder,
 		arg.IsActive,
@@ -1744,6 +2087,83 @@ func (q *Queries) UpdateSubject(ctx context.Context, arg UpdateSubjectParams) (S
 		&i.IsScheduleActivity,
 		&i.DefaultWeeklyHours,
 		&i.DisplayOrder,
+		&i.CountsForRanking,
+		&i.IsLocalContent,
+		&i.IsChoiceSubject,
+	)
+	return i, err
+}
+
+const upsertClassSubjectAllocationOverride = `-- name: UpsertClassSubjectAllocationOverride :one
+INSERT INTO class_subject_allocation_overrides (
+    id,
+    assignment_id,
+    curriculum_allocation_id,
+    intra_weekly_hours,
+    koku_weekly_hours,
+    additional_weekly_hours,
+    total_weekly_hours,
+    is_customized,
+    notes
+)
+VALUES (
+    gen_random_uuid(),
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    $6,
+    $7,
+    $8
+)
+ON CONFLICT (assignment_id)
+DO UPDATE SET curriculum_allocation_id = EXCLUDED.curriculum_allocation_id,
+              intra_weekly_hours = EXCLUDED.intra_weekly_hours,
+              koku_weekly_hours = EXCLUDED.koku_weekly_hours,
+              additional_weekly_hours = EXCLUDED.additional_weekly_hours,
+              total_weekly_hours = EXCLUDED.total_weekly_hours,
+              is_customized = EXCLUDED.is_customized,
+              notes = EXCLUDED.notes,
+              updated_at = NOW()
+RETURNING id, assignment_id, curriculum_allocation_id, intra_weekly_hours, koku_weekly_hours, additional_weekly_hours, total_weekly_hours, is_customized, notes, created_at, updated_at
+`
+
+type UpsertClassSubjectAllocationOverrideParams struct {
+	AssignmentID           pgtype.UUID    `json:"assignment_id"`
+	CurriculumAllocationID pgtype.UUID    `json:"curriculum_allocation_id"`
+	IntraWeeklyHours       pgtype.Numeric `json:"intra_weekly_hours"`
+	KokuWeeklyHours        pgtype.Numeric `json:"koku_weekly_hours"`
+	AdditionalWeeklyHours  pgtype.Numeric `json:"additional_weekly_hours"`
+	TotalWeeklyHours       pgtype.Numeric `json:"total_weekly_hours"`
+	IsCustomized           bool           `json:"is_customized"`
+	Notes                  string         `json:"notes"`
+}
+
+func (q *Queries) UpsertClassSubjectAllocationOverride(ctx context.Context, arg UpsertClassSubjectAllocationOverrideParams) (ClassSubjectAllocationOverride, error) {
+	row := q.db.QueryRow(ctx, upsertClassSubjectAllocationOverride,
+		arg.AssignmentID,
+		arg.CurriculumAllocationID,
+		arg.IntraWeeklyHours,
+		arg.KokuWeeklyHours,
+		arg.AdditionalWeeklyHours,
+		arg.TotalWeeklyHours,
+		arg.IsCustomized,
+		arg.Notes,
+	)
+	var i ClassSubjectAllocationOverride
+	err := row.Scan(
+		&i.ID,
+		&i.AssignmentID,
+		&i.CurriculumAllocationID,
+		&i.IntraWeeklyHours,
+		&i.KokuWeeklyHours,
+		&i.AdditionalWeeklyHours,
+		&i.TotalWeeklyHours,
+		&i.IsCustomized,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

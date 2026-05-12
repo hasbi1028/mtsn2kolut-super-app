@@ -626,6 +626,9 @@ type subjectRequest struct {
 	IsAssessmentSubject *bool  `json:"is_assessment_subject"`
 	IsReportSubject     *bool  `json:"is_report_subject"`
 	IsScheduleActivity  *bool  `json:"is_schedule_activity"`
+	CountsForRanking    *bool  `json:"counts_for_ranking"`
+	IsLocalContent      *bool  `json:"is_local_content"`
+	IsChoiceSubject     *bool  `json:"is_choice_subject"`
 	DefaultWeeklyHours  int32  `json:"default_weekly_hours"`
 	DisplayOrder        int32  `json:"display_order"`
 	IsActive            *bool  `json:"is_active"`
@@ -639,6 +642,9 @@ func createSubjectParams(body subjectRequest) db.CreateSubjectParams {
 		IsAssessmentSubject: subjectBoolDefault(body.IsAssessmentSubject, true),
 		IsReportSubject:     subjectBoolDefault(body.IsReportSubject, true),
 		IsScheduleActivity:  subjectBoolDefault(body.IsScheduleActivity, false),
+		CountsForRanking:    subjectBoolDefault(body.CountsForRanking, true),
+		IsLocalContent:      subjectBoolDefault(body.IsLocalContent, false),
+		IsChoiceSubject:     subjectBoolDefault(body.IsChoiceSubject, false),
 		DefaultWeeklyHours:  body.DefaultWeeklyHours,
 		DisplayOrder:        body.DisplayOrder,
 		IsActive:            subjectBoolDefault(body.IsActive, true),
@@ -654,6 +660,9 @@ func updateSubjectParams(id pgtype.UUID, body subjectRequest) db.UpdateSubjectPa
 		IsAssessmentSubject: subjectBoolDefault(body.IsAssessmentSubject, true),
 		IsReportSubject:     subjectBoolDefault(body.IsReportSubject, true),
 		IsScheduleActivity:  subjectBoolDefault(body.IsScheduleActivity, false),
+		CountsForRanking:    subjectBoolDefault(body.CountsForRanking, true),
+		IsLocalContent:      subjectBoolDefault(body.IsLocalContent, false),
+		IsChoiceSubject:     subjectBoolDefault(body.IsChoiceSubject, false),
 		DefaultWeeklyHours:  body.DefaultWeeklyHours,
 		DisplayOrder:        body.DisplayOrder,
 		IsActive:            subjectBoolDefault(body.IsActive, true),
