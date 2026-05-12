@@ -475,6 +475,11 @@ type fakeAcademicStore struct {
 	weeklyConflicts    []db.ListTimetableConflictsRow
 	stats              db.GetAcademicStatsRow
 	dashboardSummary   db.GetAcademicDashboardSummaryRow
+	curriculumProfiles []db.CurriculumProfile
+	activeCurriculum   db.CurriculumProfile
+	curriculumAllocs   []db.ListCurriculumSubjectAllocationsRow
+	curriculumSummary  []db.GetCurriculumSummaryByLevelRow
+	classCurricula     []db.ListClassCurriculumAssignmentsRow
 	createYearArg      db.CreateAcademicYearParams
 	createClassArg     db.CreateSchoolClassParams
 	createClassResult  db.SchoolClass
@@ -624,6 +629,32 @@ func (f *fakeAcademicStore) GetAcademicStats(ctx context.Context) (db.GetAcademi
 
 func (f *fakeAcademicStore) GetAcademicDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error) {
 	return f.dashboardSummary, nil
+}
+
+func (f *fakeAcademicStore) ListCurriculumProfiles(ctx context.Context) ([]db.CurriculumProfile, error) {
+	return f.curriculumProfiles, nil
+}
+
+func (f *fakeAcademicStore) GetActiveCurriculumProfile(ctx context.Context) (db.CurriculumProfile, error) {
+	if f.activeCurriculum.ID.Valid {
+		return f.activeCurriculum, nil
+	}
+	if len(f.curriculumProfiles) > 0 {
+		return f.curriculumProfiles[0], nil
+	}
+	return db.CurriculumProfile{}, pgx.ErrNoRows
+}
+
+func (f *fakeAcademicStore) ListCurriculumSubjectAllocations(ctx context.Context, arg db.ListCurriculumSubjectAllocationsParams) ([]db.ListCurriculumSubjectAllocationsRow, error) {
+	return f.curriculumAllocs, nil
+}
+
+func (f *fakeAcademicStore) GetCurriculumSummaryByLevel(ctx context.Context, curriculumProfileID pgtype.UUID) ([]db.GetCurriculumSummaryByLevelRow, error) {
+	return f.curriculumSummary, nil
+}
+
+func (f *fakeAcademicStore) ListClassCurriculumAssignments(ctx context.Context, curriculumProfileID pgtype.UUID) ([]db.ListClassCurriculumAssignmentsRow, error) {
+	return f.classCurricula, nil
 }
 
 func (f *fakeAcademicStore) CreateAcademicYear(ctx context.Context, arg db.CreateAcademicYearParams) (db.AcademicYear, error) {

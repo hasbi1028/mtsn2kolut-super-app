@@ -28,6 +28,10 @@ type academicService interface {
 	GetTimetableConflicts(ctx context.Context) ([]db.ListTimetableConflictsRow, error)
 	GetStats(ctx context.Context) (db.GetAcademicStatsRow, error)
 	GetDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error)
+	GetCurriculumOverview(ctx context.Context, profileID pgtype.UUID, level string) (service.CurriculumOverview, error)
+	ListCurriculumProfiles(ctx context.Context) ([]db.CurriculumProfile, error)
+	ListCurriculumAllocations(ctx context.Context, profileID pgtype.UUID, level string) ([]service.CurriculumAllocation, error)
+	GetCurriculumSummary(ctx context.Context, profileID pgtype.UUID) ([]service.CurriculumLevelSummary, error)
 	CreateYear(ctx context.Context, p db.CreateAcademicYearParams) (db.AcademicYear, error)
 	ActivateYear(ctx context.Context, id pgtype.UUID, confirmation string) (db.AcademicYear, error)
 	PreviewYearRollover(ctx context.Context, input service.YearRolloverPreviewInput) (service.YearRolloverPreview, error)
@@ -111,6 +115,83 @@ func (h *Academic) GetDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, row)
+}
+
+func (h *Academic) GetCurriculumOverview(w http.ResponseWriter, r *http.Request) {
+	if !academicReadAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	profileID, err := parseOptionalUUID(r.URL.Query().Get("profile_id"))
+	if err != nil {
+		api.BadRequest(w, "Profil kurikulum tidak valid")
+		return
+	}
+	level := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("level")))
+	if level != "" && level != "VII" && level != "VIII" && level != "IX" {
+		api.BadRequest(w, "Tingkat kelas tidak valid")
+		return
+	}
+	row, err := h.svc.GetCurriculumOverview(r.Context(), profileID, level)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *Academic) ListCurriculumProfiles(w http.ResponseWriter, r *http.Request) {
+	if !academicReadAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	rows, err := h.svc.ListCurriculumProfiles(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
+}
+
+func (h *Academic) ListCurriculumAllocations(w http.ResponseWriter, r *http.Request) {
+	if !academicReadAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	profileID, err := parseUUID(r.URL.Query().Get("profile_id"))
+	if err != nil {
+		api.BadRequest(w, "Profil kurikulum tidak valid")
+		return
+	}
+	level := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("level")))
+	if level != "" && level != "VII" && level != "VIII" && level != "IX" {
+		api.BadRequest(w, "Tingkat kelas tidak valid")
+		return
+	}
+	rows, err := h.svc.ListCurriculumAllocations(r.Context(), profileID, level)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
+}
+
+func (h *Academic) GetCurriculumSummary(w http.ResponseWriter, r *http.Request) {
+	if !academicReadAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	profileID, err := parseUUID(r.URL.Query().Get("profile_id"))
+	if err != nil {
+		api.BadRequest(w, "Profil kurikulum tidak valid")
+		return
+	}
+	rows, err := h.svc.GetCurriculumSummary(r.Context(), profileID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
 }
 
 func (h *Academic) GetWeeklyTimetable(w http.ResponseWriter, r *http.Request) {

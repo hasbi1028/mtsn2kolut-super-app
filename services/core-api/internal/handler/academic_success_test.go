@@ -143,6 +143,26 @@ func (f *fakeAcademicService) GetDashboardSummary(context.Context) (db.GetAcadem
 	}, nil
 }
 
+func (f *fakeAcademicService) GetCurriculumOverview(context.Context, pgtype.UUID, string) (service.CurriculumOverview, error) {
+	return service.CurriculumOverview{
+		Profiles:       []db.CurriculumProfile{{ID: handlerTestUUID(201), Name: "Kurikulum Merdeka MTs KMA 1503 Tahun 2025", Status: "active"}},
+		SummaryByLevel: []service.CurriculumLevelSummary{{GetCurriculumSummaryByLevelRow: db.GetCurriculumSummaryByLevelRow{Level: "VII", TotalAnnualHours: 1512, ComplianceStatus: "sesuai"}, TotalWeeklyHours: 42, StatusLabel: "Sesuai KMA"}},
+		Allocations:    []service.CurriculumAllocation{{ListCurriculumSubjectAllocationsRow: db.ListCurriculumSubjectAllocationsRow{Level: "VII", SubjectName: "Al-Qur'an Hadis", TotalAnnualHours: 108}, TotalWeeklyHours: 3}},
+	}, nil
+}
+
+func (f *fakeAcademicService) ListCurriculumProfiles(context.Context) ([]db.CurriculumProfile, error) {
+	return []db.CurriculumProfile{{ID: handlerTestUUID(201), Name: "Kurikulum Merdeka MTs KMA 1503 Tahun 2025", Status: "active"}}, nil
+}
+
+func (f *fakeAcademicService) ListCurriculumAllocations(context.Context, pgtype.UUID, string) ([]service.CurriculumAllocation, error) {
+	return []service.CurriculumAllocation{{ListCurriculumSubjectAllocationsRow: db.ListCurriculumSubjectAllocationsRow{Level: "VII", SubjectName: "Al-Qur'an Hadis", TotalAnnualHours: 108}, TotalWeeklyHours: 3}}, nil
+}
+
+func (f *fakeAcademicService) GetCurriculumSummary(context.Context, pgtype.UUID) ([]service.CurriculumLevelSummary, error) {
+	return []service.CurriculumLevelSummary{{GetCurriculumSummaryByLevelRow: db.GetCurriculumSummaryByLevelRow{Level: "VII", TotalAnnualHours: 1512, ComplianceStatus: "sesuai"}, TotalWeeklyHours: 42, StatusLabel: "Sesuai KMA"}}, nil
+}
+
 func (f *fakeAcademicService) GetWeeklyTimetable(context.Context) (service.WeeklyTimetable, error) {
 	f.weeklyCalled = true
 	if f.weeklyErr != nil {
