@@ -7,6 +7,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { clientApiPathWithQuery, readClientApiData } from '$lib/client/api';
+	import { toast } from '$lib/components/ui/sonner';
 	import {
 		defaultSchoolProfile,
 		fetchSchoolProfile,
@@ -38,6 +39,8 @@
 		component_count: number;
 		filled_count: number;
 		final_score: number;
+		report_description?: string;
+		report_rank?: number;
 	};
 	type RaporDetail = {
 		assignmentId: string;
@@ -48,8 +51,17 @@
 		assignments?: Assignment[];
 		components?: GradeComponent[];
 		summary?: GradeSummary[];
+		report_settings?: ReportSettings;
 		error?: string;
 		message?: string;
+	};
+	type ReportSettings = {
+		academic_year_id: string;
+		academic_year_name?: string;
+		show_ranking_on_report: boolean;
+		ranking_method: string;
+		ranking_tie_policy: string;
+		notes: string;
 	};
 
 	const categoryLabel: Record<string, string> = {
@@ -65,6 +77,9 @@
 	let summary = $state<GradeSummary[]>([]);
 	let raporPromise = $state<Promise<RaporDetail> | null>(null);
 	let schoolProfile = $state<SchoolProfile | null>(null);
+	let reportSettings = $state<ReportSettings | null>(null);
+	let savingSettings = $state(false);
+	let savingDescription = $state<string | null>(null);
 	let assignmentsRequestId = 0;
 	let raporRequestId = 0;
 
@@ -87,6 +102,7 @@
 			published_only: 'true'
 		})))
 			.then((response) => readClientApiData<GradeOverview>(response, 'Gagal memuat data rapor'));
+		if (overview.report_settings) reportSettings = overview.report_settings;
 		return {
 			assignmentId,
 			components: overview.components ?? [],
@@ -151,6 +167,45 @@
 			return;
 		}
 		loadRapor(assignmentId);
+	}
+
+
+	async function saveReportSettings() {
+		if (!reportSettings) return;
+		savingSettings = true;
+		try {
+			const response = await fetch('/api/grades/report-settings', {
+				method: 'PUT',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(reportSettings),
+			});
+			reportSettings = await readClientApiData<ReportSettings>(response, 'Gagal menyimpan pengaturan rapor');
+			toast.success('Pengaturan rapor disimpan');
+			if (selectedId) loadRapor(selectedId);
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Gagal menyimpan pengaturan rapor');
+		} finally {
+			savingSettings = false;
+		}
+	}
+
+	async function saveDescription(studentId: string, description: string) {
+		if (!selectedId) return;
+		savingDescription = studentId;
+		try {
+			const response = await fetch(`/api/grades/assignments/${selectedId}/description`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ student_id: studentId, description }),
+			});
+			await readClientApiData(response, 'Gagal menyimpan deskripsi capaian');
+			summary = summary.map((item) => item.student_id === studentId ? { ...item, report_description: description } : item);
+			toast.success('Deskripsi capaian disimpan');
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Gagal menyimpan deskripsi capaian');
+		} finally {
+			savingDescription = null;
+		}
 	}
 
 	function retryAssignments(reset?: () => void) {
@@ -267,6 +322,28 @@
 		</Card.Root>
 	</div>
 
+
+	{#if reportSettings}
+		<Card.Root class="no-print border-border shadow-sm">
+			<Card.Header>
+				<Card.Title>Pengaturan Rapor</Card.Title>
+				<Card.Description>Atur apakah peringkat ditampilkan pada cetakan rapor. Sesuai kebijakan madrasah, peringkat dapat tetap disimpan sebagai bahan pantauan tanpa tampil di rapor.</Card.Description>
+			</Card.Header>
+			<Card.Content class="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+				<label class="flex items-center gap-2 text-sm text-foreground">
+					<input bind:checked={reportSettings.show_ranking_on_report} type="checkbox" class="h-4 w-4 rounded border-input" />
+					Tampilkan peringkat pada cetakan rapor
+				</label>
+				<LoadingButton onclick={saveReportSettings} loading={savingSettings} label="Simpan Pengaturan" />
+				<textarea
+					bind:value={reportSettings.notes}
+					class="md:col-span-2 min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+					placeholder="Catatan kebijakan rapor madrasah"
+				></textarea>
+			</Card.Content>
+		</Card.Root>
+	{/if}
+
 	{#if selectedAssignment}
 		<!-- Print content -->
 		<div class="print-page space-y-4">
@@ -356,7 +433,11 @@
 										<th class="border border-border px-3 py-2">Nama Siswa</th>
 										<th class="border border-border px-3 py-2 text-center">Komponen</th>
 										<th class="border border-border px-3 py-2 text-center">Nilai Akhir</th>
-										<th class="border border-border px-3 py-2 text-center">Keterangan</th>
+										{#if reportSettings?.show_ranking_on_report}
+						<th class="border border-border px-3 py-2 text-center">Peringkat</th>
+						{/if}
+						<th class="border border-border px-3 py-2 text-center">Keterangan</th>
+						<th class="no-print border border-border px-3 py-2">Deskripsi Capaian</th>
 									</tr>
 								</thead>
 								<tbody>
@@ -386,7 +467,7 @@
 								</tbody>
 								<tfoot>
 									<tr class="bg-muted font-medium text-foreground">
-										<td colspan="5" class="border border-border px-3 py-2 text-right text-xs">
+										<td colspan={reportSettings?.show_ranking_on_report ? 6 : 5} class="border border-border px-3 py-2 text-right text-xs">
 											Rata-rata kelas:
 										</td>
 										<td class="border border-border px-3 py-2 text-center">

@@ -13,38 +13,62 @@ import (
 )
 
 type fakeGradeStore struct {
-	highestScore          float64
-	highestScoreErr       error
-	createArg             db.CreateGradeComponentParams
-	createErr             error
-	updateArg             db.UpdateGradeComponentParams
-	updateErr             error
-	publishArg            db.UpdateGradeComponentPublishStateParams
-	publishErr            error
-	deleteComponentID     pgtype.UUID
-	deleteComponentErr    error
-	upsertEntryArg        db.UpsertGradeEntryParams
-	upsertEntryErr        error
-	updateComponent       db.GradeComponent
-	assignments           []db.ListClassSubjectAssignmentsRow
-	assignmentsErr        error
-	assignmentStatuses    []db.ListGradeAssignmentStatusesRow
-	assignmentStatusesErr error
-	component             db.GradeComponent
-	componentErr          error
-	nonTestSourceID       pgtype.UUID
-	nonTestSourceErr      error
-	listComponents        []db.ListGradeComponentsRow
-	listComponentsErr     error
-	listSummary           []db.ListGradebookSummaryRow
-	listSummaryErr        error
-	listEntries           []db.ListGradeEntriesByComponentRow
-	listEntriesErr        error
-	finalization          db.GradeAssignmentFinalization
-	finalizationErr       error
-	finalizationUpsertArg db.UpsertGradeAssignmentFinalizationParams
-	finalizationDeleteID  pgtype.UUID
-	finalizationDeleteErr error
+	highestScore            float64
+	highestScoreErr         error
+	createArg               db.CreateGradeComponentParams
+	createErr               error
+	updateArg               db.UpdateGradeComponentParams
+	updateErr               error
+	publishArg              db.UpdateGradeComponentPublishStateParams
+	publishErr              error
+	deleteComponentID       pgtype.UUID
+	deleteComponentErr      error
+	upsertEntryArg          db.UpsertGradeEntryParams
+	upsertEntryErr          error
+	updateComponent         db.GradeComponent
+	assignments             []db.ListClassSubjectAssignmentsRow
+	assignmentsErr          error
+	assignmentStatuses      []db.ListGradeAssignmentStatusesRow
+	assignmentStatusesErr   error
+	component               db.GradeComponent
+	componentErr            error
+	nonTestSourceID         pgtype.UUID
+	nonTestSourceErr        error
+	listComponents          []db.ListGradeComponentsRow
+	listComponentsErr       error
+	listSummary             []db.ListGradebookSummaryRow
+	listSummaryErr          error
+	listEntries             []db.ListGradeEntriesByComponentRow
+	listEntriesErr          error
+	finalization            db.GradeAssignmentFinalization
+	finalizationErr         error
+	finalizationUpsertArg   db.UpsertGradeAssignmentFinalizationParams
+	finalizationDeleteID    pgtype.UUID
+	finalizationDeleteErr   error
+	reportSettings          db.GetActiveReportSettingsRow
+	reportSettingsErr       error
+	reportSettingsUpsertArg db.UpsertReportSettingsParams
+	descriptionUpsertArg    db.UpsertGradeStudentSubjectDescriptionParams
+}
+
+func (f *fakeGradeStore) GetActiveReportSettings(ctx context.Context) (db.GetActiveReportSettingsRow, error) {
+	if f.reportSettingsErr != nil {
+		return db.GetActiveReportSettingsRow{}, f.reportSettingsErr
+	}
+	if !f.reportSettings.AcademicYearID.Valid {
+		return db.GetActiveReportSettingsRow{}, pgx.ErrNoRows
+	}
+	return f.reportSettings, nil
+}
+
+func (f *fakeGradeStore) UpsertReportSettings(ctx context.Context, arg db.UpsertReportSettingsParams) (db.UpsertReportSettingsRow, error) {
+	f.reportSettingsUpsertArg = arg
+	return db.UpsertReportSettingsRow{AcademicYearID: arg.AcademicYearID, ShowRankingOnReport: arg.ShowRankingOnReport, RankingMethod: arg.RankingMethod, RankingTiePolicy: arg.RankingTiePolicy, Notes: arg.Notes}, nil
+}
+
+func (f *fakeGradeStore) UpsertGradeStudentSubjectDescription(ctx context.Context, arg db.UpsertGradeStudentSubjectDescriptionParams) (db.GradeStudentSubjectDescription, error) {
+	f.descriptionUpsertArg = arg
+	return db.GradeStudentSubjectDescription{AssignmentID: arg.AssignmentID, StudentID: arg.StudentID, Description: arg.Description}, nil
 }
 
 func (f *fakeGradeStore) ListClassSubjectAssignments(ctx context.Context) ([]db.ListClassSubjectAssignmentsRow, error) {

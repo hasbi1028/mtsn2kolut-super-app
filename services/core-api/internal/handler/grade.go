@@ -23,6 +23,9 @@ type Grade struct {
 
 type gradeService interface {
 	Overview(ctx context.Context, assignmentID, componentID pgtype.UUID, publishedOnly bool, teacherEmployeeID pgtype.UUID) (service.GradeOverview, error)
+	GetReportSettings(ctx context.Context) (service.ReportSettings, error)
+	UpdateReportSettings(ctx context.Context, arg db.UpsertReportSettingsParams) (service.ReportSettings, error)
+	UpsertStudentSubjectDescription(ctx context.Context, arg db.UpsertGradeStudentSubjectDescriptionParams, teacherEmployeeID pgtype.UUID) (db.GradeStudentSubjectDescription, error)
 	CreateComponent(ctx context.Context, arg db.CreateGradeComponentParams, teacherEmployeeID pgtype.UUID) (db.GradeComponent, error)
 	UpdateComponent(ctx context.Context, arg db.UpdateGradeComponentParams, teacherEmployeeID pgtype.UUID) (db.GradeComponent, error)
 	SetComponentPublished(ctx context.Context, id pgtype.UUID, isPublished bool, teacherEmployeeID pgtype.UUID) (db.GradeComponent, error)
@@ -38,6 +41,89 @@ func NewGrade(svc *service.Grade, audit ...cbtAuthoringAuditWriter) *Grade {
 		writer = audit[0]
 	}
 	return &Grade{svc: svc, audit: writer}
+}
+
+func (h *Grade) GetReportSettings(w http.ResponseWriter, r *http.Request) {
+	if !gradeAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	data, err := h.svc.GetReportSettings(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, data)
+}
+
+func (h *Grade) UpdateReportSettings(w http.ResponseWriter, r *http.Request) {
+	if !gradeAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	var body struct {
+		AcademicYearID      string `json:"academic_year_id"`
+		ShowRankingOnReport bool   `json:"show_ranking_on_report"`
+		RankingMethod       string `json:"ranking_method"`
+		RankingTiePolicy    string `json:"ranking_tie_policy"`
+		Notes               string `json:"notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "Data yang dikirim tidak valid")
+		return
+	}
+	academicYearID, err := parseUUID(body.AcademicYearID)
+	if err != nil {
+		api.BadRequest(w, "Tahun ajaran tidak valid")
+		return
+	}
+	row, err := h.svc.UpdateReportSettings(r.Context(), db.UpsertReportSettingsParams{
+		AcademicYearID:      academicYearID,
+		ShowRankingOnReport: body.ShowRankingOnReport,
+		RankingMethod:       body.RankingMethod,
+		RankingTiePolicy:    body.RankingTiePolicy,
+		Notes:               body.Notes,
+	})
+	if err != nil {
+		writeClientError(w, err, "Pengaturan rapor tidak valid")
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *Grade) UpsertStudentSubjectDescription(w http.ResponseWriter, r *http.Request) {
+	if !gradeAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	assignmentID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID penugasan tidak valid")
+		return
+	}
+	var body struct {
+		StudentID   string `json:"student_id"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "Data yang dikirim tidak valid")
+		return
+	}
+	studentID, err := parseUUID(body.StudentID)
+	if err != nil {
+		api.BadRequest(w, "ID siswa tidak valid")
+		return
+	}
+	row, err := h.svc.UpsertStudentSubjectDescription(r.Context(), db.UpsertGradeStudentSubjectDescriptionParams{
+		AssignmentID: assignmentID,
+		StudentID:    studentID,
+		Description:  body.Description,
+	}, gradeTeacherEmployeeID(r))
+	if err != nil {
+		writeClientError(w, err, "Deskripsi capaian tidak valid")
+		return
+	}
+	api.OK(w, row)
 }
 
 func (h *Grade) Overview(w http.ResponseWriter, r *http.Request) {

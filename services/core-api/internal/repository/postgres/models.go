@@ -1650,6 +1650,15 @@ type GradeEntry struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type GradeStudentSubjectDescription struct {
+	ID           pgtype.UUID        `json:"id"`
+	AssignmentID pgtype.UUID        `json:"assignment_id"`
+	StudentID    pgtype.UUID        `json:"student_id"`
+	Description  string             `json:"description"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 type IncomingLetter struct {
 	ID                   pgtype.UUID        `json:"id"`
 	NomorSurat           string             `json:"nomor_surat"`
