@@ -11,6 +11,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countLessonPeriodTemplatesForDay = `-- name: CountLessonPeriodTemplatesForDay :one
+SELECT COUNT(*)::int
+FROM lesson_period_templates
+WHERE academic_year_id = $1
+  AND day_of_week = $2
+`
+
+type CountLessonPeriodTemplatesForDayParams struct {
+	AcademicYearID pgtype.UUID `json:"academic_year_id"`
+	DayOfWeek      int16       `json:"day_of_week"`
+}
+
+func (q *Queries) CountLessonPeriodTemplatesForDay(ctx context.Context, arg CountLessonPeriodTemplatesForDayParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countLessonPeriodTemplatesForDay, arg.AcademicYearID, arg.DayOfWeek)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countTimetableConflicts = `-- name: CountTimetableConflicts :one
 SELECT COUNT(*)::int
 FROM timetable_slots ts
@@ -86,21 +105,81 @@ func (q *Queries) CountTimetableRoomConflicts(ctx context.Context, arg CountTime
 	return column_1, err
 }
 
+const createLessonPeriodTemplate = `-- name: CreateLessonPeriodTemplate :one
+INSERT INTO lesson_period_templates (
+    academic_year_id, day_of_week, period_number, start_time, end_time,
+    activity_type, label, is_counted_as_lesson
+)
+VALUES (
+    $1, $2, $3,
+    $4, $5, $6,
+    $7, $8
+)
+RETURNING id, academic_year_id, day_of_week, period_number, start_time, end_time, activity_type, label, is_counted_as_lesson, created_at, updated_at
+`
+
+type CreateLessonPeriodTemplateParams struct {
+	AcademicYearID    pgtype.UUID `json:"academic_year_id"`
+	DayOfWeek         int16       `json:"day_of_week"`
+	PeriodNumber      int32       `json:"period_number"`
+	StartTime         pgtype.Time `json:"start_time"`
+	EndTime           pgtype.Time `json:"end_time"`
+	ActivityType      string      `json:"activity_type"`
+	Label             string      `json:"label"`
+	IsCountedAsLesson bool        `json:"is_counted_as_lesson"`
+}
+
+func (q *Queries) CreateLessonPeriodTemplate(ctx context.Context, arg CreateLessonPeriodTemplateParams) (LessonPeriodTemplate, error) {
+	row := q.db.QueryRow(ctx, createLessonPeriodTemplate,
+		arg.AcademicYearID,
+		arg.DayOfWeek,
+		arg.PeriodNumber,
+		arg.StartTime,
+		arg.EndTime,
+		arg.ActivityType,
+		arg.Label,
+		arg.IsCountedAsLesson,
+	)
+	var i LessonPeriodTemplate
+	err := row.Scan(
+		&i.ID,
+		&i.AcademicYearID,
+		&i.DayOfWeek,
+		&i.PeriodNumber,
+		&i.StartTime,
+		&i.EndTime,
+		&i.ActivityType,
+		&i.Label,
+		&i.IsCountedAsLesson,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createTimetableSlot = `-- name: CreateTimetableSlot :one
 INSERT INTO timetable_slots (
-    assignment_id, day_of_week, start_time, end_time, room_label, notes
+    assignment_id, day_of_week, start_time, end_time, room_label, notes,
+    lesson_period_id, slot_type, lesson_hours
 )
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at
+VALUES (
+    $1, $2, $3, $4,
+    $5, $6, $7, $8,
+    $9
+)
+RETURNING id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at, lesson_period_id, slot_type, lesson_hours
 `
 
 type CreateTimetableSlotParams struct {
-	AssignmentID pgtype.UUID `json:"assignment_id"`
-	DayOfWeek    int16       `json:"day_of_week"`
-	StartTime    pgtype.Time `json:"start_time"`
-	EndTime      pgtype.Time `json:"end_time"`
-	RoomLabel    string      `json:"room_label"`
-	Notes        string      `json:"notes"`
+	AssignmentID   pgtype.UUID    `json:"assignment_id"`
+	DayOfWeek      int16          `json:"day_of_week"`
+	StartTime      pgtype.Time    `json:"start_time"`
+	EndTime        pgtype.Time    `json:"end_time"`
+	RoomLabel      string         `json:"room_label"`
+	Notes          string         `json:"notes"`
+	LessonPeriodID pgtype.UUID    `json:"lesson_period_id"`
+	SlotType       string         `json:"slot_type"`
+	LessonHours    pgtype.Numeric `json:"lesson_hours"`
 }
 
 func (q *Queries) CreateTimetableSlot(ctx context.Context, arg CreateTimetableSlotParams) (TimetableSlot, error) {
@@ -111,6 +190,9 @@ func (q *Queries) CreateTimetableSlot(ctx context.Context, arg CreateTimetableSl
 		arg.EndTime,
 		arg.RoomLabel,
 		arg.Notes,
+		arg.LessonPeriodID,
+		arg.SlotType,
+		arg.LessonHours,
 	)
 	var i TimetableSlot
 	err := row.Scan(
@@ -123,8 +205,21 @@ func (q *Queries) CreateTimetableSlot(ctx context.Context, arg CreateTimetableSl
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LessonPeriodID,
+		&i.SlotType,
+		&i.LessonHours,
 	)
 	return i, err
+}
+
+const deleteLessonPeriodTemplate = `-- name: DeleteLessonPeriodTemplate :exec
+DELETE FROM lesson_period_templates
+WHERE id = $1
+`
+
+func (q *Queries) DeleteLessonPeriodTemplate(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteLessonPeriodTemplate, id)
+	return err
 }
 
 const deleteTimetableSlot = `-- name: DeleteTimetableSlot :exec
@@ -137,8 +232,35 @@ func (q *Queries) DeleteTimetableSlot(ctx context.Context, id pgtype.UUID) error
 	return err
 }
 
+const getLessonPeriodTemplate = `-- name: GetLessonPeriodTemplate :one
+SELECT id, academic_year_id, day_of_week, period_number, start_time, end_time,
+       activity_type, label, is_counted_as_lesson, created_at, updated_at
+FROM lesson_period_templates
+WHERE id = $1
+`
+
+func (q *Queries) GetLessonPeriodTemplate(ctx context.Context, id pgtype.UUID) (LessonPeriodTemplate, error) {
+	row := q.db.QueryRow(ctx, getLessonPeriodTemplate, id)
+	var i LessonPeriodTemplate
+	err := row.Scan(
+		&i.ID,
+		&i.AcademicYearID,
+		&i.DayOfWeek,
+		&i.PeriodNumber,
+		&i.StartTime,
+		&i.EndTime,
+		&i.ActivityType,
+		&i.Label,
+		&i.IsCountedAsLesson,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getTimetableSlot = `-- name: GetTimetableSlot :one
-SELECT id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at
+SELECT id, assignment_id, day_of_week, start_time, end_time, room_label, notes,
+       created_at, updated_at, lesson_period_id, slot_type, lesson_hours
 FROM timetable_slots
 WHERE id = $1
 `
@@ -156,8 +278,116 @@ func (q *Queries) GetTimetableSlot(ctx context.Context, id pgtype.UUID) (Timetab
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LessonPeriodID,
+		&i.SlotType,
+		&i.LessonHours,
 	)
 	return i, err
+}
+
+const listLessonPeriodTemplates = `-- name: ListLessonPeriodTemplates :many
+SELECT lpt.id, lpt.academic_year_id, ay.name AS academic_year_name,
+       lpt.day_of_week, lpt.period_number, lpt.start_time, lpt.end_time,
+       lpt.activity_type, lpt.label, lpt.is_counted_as_lesson,
+       lpt.created_at, lpt.updated_at
+FROM lesson_period_templates lpt
+JOIN academic_years ay ON ay.id = lpt.academic_year_id
+WHERE lpt.academic_year_id = $1
+ORDER BY lpt.day_of_week ASC, lpt.period_number ASC, lpt.start_time ASC
+`
+
+type ListLessonPeriodTemplatesRow struct {
+	ID                pgtype.UUID        `json:"id"`
+	AcademicYearID    pgtype.UUID        `json:"academic_year_id"`
+	AcademicYearName  string             `json:"academic_year_name"`
+	DayOfWeek         int16              `json:"day_of_week"`
+	PeriodNumber      int32              `json:"period_number"`
+	StartTime         pgtype.Time        `json:"start_time"`
+	EndTime           pgtype.Time        `json:"end_time"`
+	ActivityType      string             `json:"activity_type"`
+	Label             string             `json:"label"`
+	IsCountedAsLesson bool               `json:"is_counted_as_lesson"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListLessonPeriodTemplates(ctx context.Context, academicYearID pgtype.UUID) ([]ListLessonPeriodTemplatesRow, error) {
+	rows, err := q.db.Query(ctx, listLessonPeriodTemplates, academicYearID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLessonPeriodTemplatesRow{}
+	for rows.Next() {
+		var i ListLessonPeriodTemplatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AcademicYearID,
+			&i.AcademicYearName,
+			&i.DayOfWeek,
+			&i.PeriodNumber,
+			&i.StartTime,
+			&i.EndTime,
+			&i.ActivityType,
+			&i.Label,
+			&i.IsCountedAsLesson,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLessonPeriodTemplatesForDay = `-- name: ListLessonPeriodTemplatesForDay :many
+SELECT id, academic_year_id, day_of_week, period_number, start_time, end_time,
+       activity_type, label, is_counted_as_lesson, created_at, updated_at
+FROM lesson_period_templates
+WHERE academic_year_id = $1
+  AND day_of_week = $2
+ORDER BY period_number ASC, start_time ASC
+`
+
+type ListLessonPeriodTemplatesForDayParams struct {
+	AcademicYearID pgtype.UUID `json:"academic_year_id"`
+	DayOfWeek      int16       `json:"day_of_week"`
+}
+
+func (q *Queries) ListLessonPeriodTemplatesForDay(ctx context.Context, arg ListLessonPeriodTemplatesForDayParams) ([]LessonPeriodTemplate, error) {
+	rows, err := q.db.Query(ctx, listLessonPeriodTemplatesForDay, arg.AcademicYearID, arg.DayOfWeek)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LessonPeriodTemplate{}
+	for rows.Next() {
+		var i LessonPeriodTemplate
+		if err := rows.Scan(
+			&i.ID,
+			&i.AcademicYearID,
+			&i.DayOfWeek,
+			&i.PeriodNumber,
+			&i.StartTime,
+			&i.EndTime,
+			&i.ActivityType,
+			&i.Label,
+			&i.IsCountedAsLesson,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listParentChildrenTimetable = `-- name: ListParentChildrenTimetable :many
@@ -579,7 +809,8 @@ func (q *Queries) ListTimetableConflicts(ctx context.Context, academicYearID pgt
 }
 
 const listTimetableSlots = `-- name: ListTimetableSlots :many
-SELECT ts.id, ts.assignment_id, ts.day_of_week, ts.start_time, ts.end_time, ts.room_label, ts.notes,
+SELECT ts.id, ts.assignment_id, ts.day_of_week, ts.lesson_period_id, ts.slot_type, ts.lesson_hours::float8 AS lesson_hours,
+       ts.start_time, ts.end_time, ts.room_label, ts.notes,
        ts.created_at, ts.updated_at,
        a.class_id, c.name AS class_name, c.code AS class_code,
        a.subject_id, s.name AS subject_name, s.code AS subject_code,
@@ -596,6 +827,9 @@ type ListTimetableSlotsRow struct {
 	ID                pgtype.UUID        `json:"id"`
 	AssignmentID      pgtype.UUID        `json:"assignment_id"`
 	DayOfWeek         int16              `json:"day_of_week"`
+	LessonPeriodID    pgtype.UUID        `json:"lesson_period_id"`
+	SlotType          string             `json:"slot_type"`
+	LessonHours       float64            `json:"lesson_hours"`
 	StartTime         pgtype.Time        `json:"start_time"`
 	EndTime           pgtype.Time        `json:"end_time"`
 	RoomLabel         string             `json:"room_label"`
@@ -625,6 +859,9 @@ func (q *Queries) ListTimetableSlots(ctx context.Context) ([]ListTimetableSlotsR
 			&i.ID,
 			&i.AssignmentID,
 			&i.DayOfWeek,
+			&i.LessonPeriodID,
+			&i.SlotType,
+			&i.LessonHours,
 			&i.StartTime,
 			&i.EndTime,
 			&i.RoomLabel,
@@ -651,6 +888,21 @@ func (q *Queries) ListTimetableSlots(ctx context.Context) ([]ListTimetableSlotsR
 }
 
 const listWeeklyTimetableAssignments = `-- name: ListWeeklyTimetableAssignments :many
+WITH active_classes AS (
+    SELECT id, code, name, level
+    FROM school_classes
+    WHERE academic_year_id = $1
+      AND is_active = TRUE
+),
+active_class_curriculum AS (
+    SELECT DISTINCT ON (cca.class_id)
+        cca.class_id,
+        cca.curriculum_profile_id
+    FROM class_curriculum_assignments cca
+    JOIN active_classes c ON c.id = cca.class_id
+    WHERE cca.is_active = TRUE
+    ORDER BY cca.class_id, cca.updated_at DESC, cca.created_at DESC
+)
 SELECT
     a.id,
     a.class_id,
@@ -665,33 +917,45 @@ SELECT
     s.default_weekly_hours,
     a.teacher_employee_id,
     e.nama AS teacher_name,
-    COALESCE(e.nip, '')::text AS teacher_nip
+    COALESCE(e.nip, '')::text AS teacher_nip,
+    COALESCE(ov.intra_weekly_hours, alloc.intra_weekly_hours, CASE WHEN s.is_schedule_activity THEN 0 ELSE s.default_weekly_hours::numeric END, 0)::float8 AS expected_intra_weekly_hours,
+    COALESCE(ov.koku_weekly_hours, alloc.koku_weekly_hours, CASE WHEN s.is_schedule_activity THEN s.default_weekly_hours::numeric ELSE 0 END, 0)::float8 AS expected_koku_weekly_hours,
+    COALESCE(ov.additional_weekly_hours, 0)::float8 AS expected_additional_weekly_hours,
+    COALESCE(ov.total_weekly_hours, alloc.total_weekly_hours, s.default_weekly_hours::numeric, 0)::float8 AS expected_weekly_hours
 FROM class_subject_assignments a
-JOIN school_classes c ON c.id = a.class_id
+JOIN active_classes c ON c.id = a.class_id
 JOIN subjects s ON s.id = a.subject_id
 JOIN employees e ON e.id = a.teacher_employee_id
-WHERE c.academic_year_id = $1
-  AND c.is_active = TRUE
-  AND s.is_active = TRUE
+LEFT JOIN active_class_curriculum acc ON acc.class_id = c.id
+LEFT JOIN curriculum_subject_allocations alloc
+  ON alloc.curriculum_profile_id = acc.curriculum_profile_id
+ AND alloc.level = c.level
+ AND alloc.subject_id = a.subject_id
+LEFT JOIN class_subject_allocation_overrides ov ON ov.assignment_id = a.id
+WHERE s.is_active = TRUE
   AND e.is_active = TRUE
 ORDER BY c.level ASC, c.name ASC, s.display_order ASC, s.name ASC, e.nama ASC
 `
 
 type ListWeeklyTimetableAssignmentsRow struct {
-	ID                 pgtype.UUID `json:"id"`
-	ClassID            pgtype.UUID `json:"class_id"`
-	ClassCode          string      `json:"class_code"`
-	ClassName          string      `json:"class_name"`
-	ClassLevel         string      `json:"class_level"`
-	SubjectID          pgtype.UUID `json:"subject_id"`
-	SubjectCode        string      `json:"subject_code"`
-	SubjectName        string      `json:"subject_name"`
-	SubjectCategory    string      `json:"subject_category"`
-	IsScheduleActivity bool        `json:"is_schedule_activity"`
-	DefaultWeeklyHours int32       `json:"default_weekly_hours"`
-	TeacherEmployeeID  pgtype.UUID `json:"teacher_employee_id"`
-	TeacherName        string      `json:"teacher_name"`
-	TeacherNip         string      `json:"teacher_nip"`
+	ID                            pgtype.UUID `json:"id"`
+	ClassID                       pgtype.UUID `json:"class_id"`
+	ClassCode                     string      `json:"class_code"`
+	ClassName                     string      `json:"class_name"`
+	ClassLevel                    string      `json:"class_level"`
+	SubjectID                     pgtype.UUID `json:"subject_id"`
+	SubjectCode                   string      `json:"subject_code"`
+	SubjectName                   string      `json:"subject_name"`
+	SubjectCategory               string      `json:"subject_category"`
+	IsScheduleActivity            bool        `json:"is_schedule_activity"`
+	DefaultWeeklyHours            int32       `json:"default_weekly_hours"`
+	TeacherEmployeeID             pgtype.UUID `json:"teacher_employee_id"`
+	TeacherName                   string      `json:"teacher_name"`
+	TeacherNip                    string      `json:"teacher_nip"`
+	ExpectedIntraWeeklyHours      float64     `json:"expected_intra_weekly_hours"`
+	ExpectedKokuWeeklyHours       float64     `json:"expected_koku_weekly_hours"`
+	ExpectedAdditionalWeeklyHours float64     `json:"expected_additional_weekly_hours"`
+	ExpectedWeeklyHours           float64     `json:"expected_weekly_hours"`
 }
 
 func (q *Queries) ListWeeklyTimetableAssignments(ctx context.Context, academicYearID pgtype.UUID) ([]ListWeeklyTimetableAssignmentsRow, error) {
@@ -718,6 +982,10 @@ func (q *Queries) ListWeeklyTimetableAssignments(ctx context.Context, academicYe
 			&i.TeacherEmployeeID,
 			&i.TeacherName,
 			&i.TeacherNip,
+			&i.ExpectedIntraWeeklyHours,
+			&i.ExpectedKokuWeeklyHours,
+			&i.ExpectedAdditionalWeeklyHours,
+			&i.ExpectedWeeklyHours,
 		); err != nil {
 			return nil, err
 		}
@@ -774,6 +1042,13 @@ SELECT
     ts.id,
     ts.assignment_id,
     ts.day_of_week,
+    ts.lesson_period_id,
+    COALESCE(lpt.period_number, 0)::int AS period_number,
+    ts.slot_type,
+    ts.lesson_hours::float8 AS lesson_hours,
+    COALESCE(lpt.label, '')::text AS lesson_period_label,
+    COALESCE(lpt.activity_type, ts.slot_type)::text AS lesson_period_activity_type,
+    COALESCE(lpt.is_counted_as_lesson, ts.lesson_hours > 0)::boolean AS is_counted_as_lesson,
     ts.start_time,
     ts.end_time,
     ts.room_label,
@@ -796,32 +1071,40 @@ JOIN class_subject_assignments a ON a.id = ts.assignment_id
 JOIN school_classes c ON c.id = a.class_id
 JOIN subjects s ON s.id = a.subject_id
 JOIN employees e ON e.id = a.teacher_employee_id
+LEFT JOIN lesson_period_templates lpt ON lpt.id = ts.lesson_period_id
 WHERE c.academic_year_id = $1
   AND c.is_active = TRUE
 ORDER BY ts.day_of_week ASC, ts.start_time ASC, c.level ASC, c.name ASC, s.name ASC
 `
 
 type ListWeeklyTimetableSlotsRow struct {
-	ID                 pgtype.UUID        `json:"id"`
-	AssignmentID       pgtype.UUID        `json:"assignment_id"`
-	DayOfWeek          int16              `json:"day_of_week"`
-	StartTime          pgtype.Time        `json:"start_time"`
-	EndTime            pgtype.Time        `json:"end_time"`
-	RoomLabel          string             `json:"room_label"`
-	Notes              string             `json:"notes"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	ClassID            pgtype.UUID        `json:"class_id"`
-	ClassName          string             `json:"class_name"`
-	ClassCode          string             `json:"class_code"`
-	ClassLevel         string             `json:"class_level"`
-	SubjectID          pgtype.UUID        `json:"subject_id"`
-	SubjectName        string             `json:"subject_name"`
-	SubjectCode        string             `json:"subject_code"`
-	SubjectCategory    string             `json:"subject_category"`
-	IsScheduleActivity bool               `json:"is_schedule_activity"`
-	TeacherEmployeeID  pgtype.UUID        `json:"teacher_employee_id"`
-	TeacherName        string             `json:"teacher_name"`
+	ID                       pgtype.UUID        `json:"id"`
+	AssignmentID             pgtype.UUID        `json:"assignment_id"`
+	DayOfWeek                int16              `json:"day_of_week"`
+	LessonPeriodID           pgtype.UUID        `json:"lesson_period_id"`
+	PeriodNumber             int32              `json:"period_number"`
+	SlotType                 string             `json:"slot_type"`
+	LessonHours              float64            `json:"lesson_hours"`
+	LessonPeriodLabel        string             `json:"lesson_period_label"`
+	LessonPeriodActivityType string             `json:"lesson_period_activity_type"`
+	IsCountedAsLesson        bool               `json:"is_counted_as_lesson"`
+	StartTime                pgtype.Time        `json:"start_time"`
+	EndTime                  pgtype.Time        `json:"end_time"`
+	RoomLabel                string             `json:"room_label"`
+	Notes                    string             `json:"notes"`
+	CreatedAt                pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                pgtype.Timestamptz `json:"updated_at"`
+	ClassID                  pgtype.UUID        `json:"class_id"`
+	ClassName                string             `json:"class_name"`
+	ClassCode                string             `json:"class_code"`
+	ClassLevel               string             `json:"class_level"`
+	SubjectID                pgtype.UUID        `json:"subject_id"`
+	SubjectName              string             `json:"subject_name"`
+	SubjectCode              string             `json:"subject_code"`
+	SubjectCategory          string             `json:"subject_category"`
+	IsScheduleActivity       bool               `json:"is_schedule_activity"`
+	TeacherEmployeeID        pgtype.UUID        `json:"teacher_employee_id"`
+	TeacherName              string             `json:"teacher_name"`
 }
 
 func (q *Queries) ListWeeklyTimetableSlots(ctx context.Context, academicYearID pgtype.UUID) ([]ListWeeklyTimetableSlotsRow, error) {
@@ -837,6 +1120,13 @@ func (q *Queries) ListWeeklyTimetableSlots(ctx context.Context, academicYearID p
 			&i.ID,
 			&i.AssignmentID,
 			&i.DayOfWeek,
+			&i.LessonPeriodID,
+			&i.PeriodNumber,
+			&i.SlotType,
+			&i.LessonHours,
+			&i.LessonPeriodLabel,
+			&i.LessonPeriodActivityType,
+			&i.IsCountedAsLesson,
 			&i.StartTime,
 			&i.EndTime,
 			&i.RoomLabel,
@@ -978,38 +1268,100 @@ func (q *Queries) LockTimetableMutationScope(ctx context.Context, lockKey string
 	return column_1, err
 }
 
+const updateLessonPeriodTemplate = `-- name: UpdateLessonPeriodTemplate :one
+UPDATE lesson_period_templates
+SET day_of_week = $1,
+    period_number = $2,
+    start_time = $3,
+    end_time = $4,
+    activity_type = $5,
+    label = $6,
+    is_counted_as_lesson = $7,
+    updated_at = NOW()
+WHERE id = $8
+RETURNING id, academic_year_id, day_of_week, period_number, start_time, end_time, activity_type, label, is_counted_as_lesson, created_at, updated_at
+`
+
+type UpdateLessonPeriodTemplateParams struct {
+	DayOfWeek         int16       `json:"day_of_week"`
+	PeriodNumber      int32       `json:"period_number"`
+	StartTime         pgtype.Time `json:"start_time"`
+	EndTime           pgtype.Time `json:"end_time"`
+	ActivityType      string      `json:"activity_type"`
+	Label             string      `json:"label"`
+	IsCountedAsLesson bool        `json:"is_counted_as_lesson"`
+	ID                pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateLessonPeriodTemplate(ctx context.Context, arg UpdateLessonPeriodTemplateParams) (LessonPeriodTemplate, error) {
+	row := q.db.QueryRow(ctx, updateLessonPeriodTemplate,
+		arg.DayOfWeek,
+		arg.PeriodNumber,
+		arg.StartTime,
+		arg.EndTime,
+		arg.ActivityType,
+		arg.Label,
+		arg.IsCountedAsLesson,
+		arg.ID,
+	)
+	var i LessonPeriodTemplate
+	err := row.Scan(
+		&i.ID,
+		&i.AcademicYearID,
+		&i.DayOfWeek,
+		&i.PeriodNumber,
+		&i.StartTime,
+		&i.EndTime,
+		&i.ActivityType,
+		&i.Label,
+		&i.IsCountedAsLesson,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateTimetableSlot = `-- name: UpdateTimetableSlot :one
 UPDATE timetable_slots
-SET assignment_id = $2,
-    day_of_week = $3,
-    start_time = $4,
-    end_time = $5,
-    room_label = $6,
-    notes = $7,
+SET assignment_id = $1,
+    day_of_week = $2,
+    start_time = $3,
+    end_time = $4,
+    room_label = $5,
+    notes = $6,
+    lesson_period_id = $7,
+    slot_type = $8,
+    lesson_hours = $9,
     updated_at = NOW()
-WHERE id = $1
-RETURNING id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at
+WHERE id = $10
+RETURNING id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at, lesson_period_id, slot_type, lesson_hours
 `
 
 type UpdateTimetableSlotParams struct {
-	ID           pgtype.UUID `json:"id"`
-	AssignmentID pgtype.UUID `json:"assignment_id"`
-	DayOfWeek    int16       `json:"day_of_week"`
-	StartTime    pgtype.Time `json:"start_time"`
-	EndTime      pgtype.Time `json:"end_time"`
-	RoomLabel    string      `json:"room_label"`
-	Notes        string      `json:"notes"`
+	AssignmentID   pgtype.UUID    `json:"assignment_id"`
+	DayOfWeek      int16          `json:"day_of_week"`
+	StartTime      pgtype.Time    `json:"start_time"`
+	EndTime        pgtype.Time    `json:"end_time"`
+	RoomLabel      string         `json:"room_label"`
+	Notes          string         `json:"notes"`
+	LessonPeriodID pgtype.UUID    `json:"lesson_period_id"`
+	SlotType       string         `json:"slot_type"`
+	LessonHours    pgtype.Numeric `json:"lesson_hours"`
+	ID             pgtype.UUID    `json:"id"`
 }
 
 func (q *Queries) UpdateTimetableSlot(ctx context.Context, arg UpdateTimetableSlotParams) (TimetableSlot, error) {
 	row := q.db.QueryRow(ctx, updateTimetableSlot,
-		arg.ID,
 		arg.AssignmentID,
 		arg.DayOfWeek,
 		arg.StartTime,
 		arg.EndTime,
 		arg.RoomLabel,
 		arg.Notes,
+		arg.LessonPeriodID,
+		arg.SlotType,
+		arg.LessonHours,
+		arg.ID,
 	)
 	var i TimetableSlot
 	err := row.Scan(
@@ -1022,6 +1374,9 @@ func (q *Queries) UpdateTimetableSlot(ctx context.Context, arg UpdateTimetableSl
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LessonPeriodID,
+		&i.SlotType,
+		&i.LessonHours,
 	)
 	return i, err
 }

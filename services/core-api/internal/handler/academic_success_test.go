@@ -37,6 +37,13 @@ type fakeAcademicService struct {
 	weeklyErr       error
 	conflictsCalled bool
 	conflictsErr    error
+	lessonCalled    bool
+	lessonErr       error
+	createLessonArg db.CreateLessonPeriodTemplateParams
+	updateLessonArg db.UpdateLessonPeriodTemplateParams
+	deleteLessonID  pgtype.UUID
+	workloadCalled  bool
+	workloadErr     error
 
 	createYearArg      db.CreateAcademicYearParams
 	activateYearID     pgtype.UUID
@@ -118,6 +125,43 @@ func (f *fakeAcademicService) ListTimetableSlots(context.Context) ([]db.ListTime
 		return nil, f.listErr
 	}
 	return []db.ListTimetableSlotsRow{}, nil
+}
+
+func (f *fakeAcademicService) GetLessonPeriodOverview(context.Context) (service.LessonPeriodOverview, error) {
+	f.lessonCalled = true
+	if f.lessonErr != nil {
+		return service.LessonPeriodOverview{}, f.lessonErr
+	}
+	return service.LessonPeriodOverview{Items: []db.ListLessonPeriodTemplatesRow{}}, nil
+}
+
+func (f *fakeAcademicService) CreateLessonPeriodTemplate(_ context.Context, p db.CreateLessonPeriodTemplateParams) (db.LessonPeriodTemplate, error) {
+	f.createLessonArg = p
+	if f.createErr != nil {
+		return db.LessonPeriodTemplate{}, f.createErr
+	}
+	return db.LessonPeriodTemplate{AcademicYearID: p.AcademicYearID, DayOfWeek: p.DayOfWeek, PeriodNumber: p.PeriodNumber, StartTime: p.StartTime, EndTime: p.EndTime, ActivityType: p.ActivityType, Label: p.Label, IsCountedAsLesson: p.IsCountedAsLesson}, nil
+}
+
+func (f *fakeAcademicService) UpdateLessonPeriodTemplate(_ context.Context, p db.UpdateLessonPeriodTemplateParams) (db.LessonPeriodTemplate, error) {
+	f.updateLessonArg = p
+	if f.updateErr != nil {
+		return db.LessonPeriodTemplate{}, f.updateErr
+	}
+	return db.LessonPeriodTemplate{ID: p.ID, DayOfWeek: p.DayOfWeek, PeriodNumber: p.PeriodNumber, StartTime: p.StartTime, EndTime: p.EndTime, ActivityType: p.ActivityType, Label: p.Label, IsCountedAsLesson: p.IsCountedAsLesson}, nil
+}
+
+func (f *fakeAcademicService) DeleteLessonPeriodTemplate(_ context.Context, id pgtype.UUID) error {
+	f.deleteLessonID = id
+	return f.deleteErr
+}
+
+func (f *fakeAcademicService) GetTeacherWorkload(context.Context) (service.TeacherWorkloadOverview, error) {
+	f.workloadCalled = true
+	if f.workloadErr != nil {
+		return service.TeacherWorkloadOverview{}, f.workloadErr
+	}
+	return service.TeacherWorkloadOverview{Items: []service.TeacherWorkloadRow{}}, nil
 }
 
 func (f *fakeAcademicService) GetStats(context.Context) (db.GetAcademicStatsRow, error) {

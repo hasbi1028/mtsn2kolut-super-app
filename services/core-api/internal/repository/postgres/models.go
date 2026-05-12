@@ -1746,6 +1746,20 @@ type Job struct {
 	NotBefore    pgtype.Timestamptz `json:"not_before"`
 }
 
+type LessonPeriodTemplate struct {
+	ID                pgtype.UUID        `json:"id"`
+	AcademicYearID    pgtype.UUID        `json:"academic_year_id"`
+	DayOfWeek         int16              `json:"day_of_week"`
+	PeriodNumber      int32              `json:"period_number"`
+	StartTime         pgtype.Time        `json:"start_time"`
+	EndTime           pgtype.Time        `json:"end_time"`
+	ActivityType      string             `json:"activity_type"`
+	Label             string             `json:"label"`
+	IsCountedAsLesson bool               `json:"is_counted_as_lesson"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
 type LetterClassification struct {
 	Code        string `json:"code"`
 	Name        string `json:"name"`
@@ -2106,15 +2120,18 @@ type Subject struct {
 }
 
 type TimetableSlot struct {
-	ID           pgtype.UUID        `json:"id"`
-	AssignmentID pgtype.UUID        `json:"assignment_id"`
-	DayOfWeek    int16              `json:"day_of_week"`
-	StartTime    pgtype.Time        `json:"start_time"`
-	EndTime      pgtype.Time        `json:"end_time"`
-	RoomLabel    string             `json:"room_label"`
-	Notes        string             `json:"notes"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID             pgtype.UUID        `json:"id"`
+	AssignmentID   pgtype.UUID        `json:"assignment_id"`
+	DayOfWeek      int16              `json:"day_of_week"`
+	StartTime      pgtype.Time        `json:"start_time"`
+	EndTime        pgtype.Time        `json:"end_time"`
+	RoomLabel      string             `json:"room_label"`
+	Notes          string             `json:"notes"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	LessonPeriodID pgtype.UUID        `json:"lesson_period_id"`
+	SlotType       string             `json:"slot_type"`
+	LessonHours    pgtype.Numeric     `json:"lesson_hours"`
 }
 
 type User struct {

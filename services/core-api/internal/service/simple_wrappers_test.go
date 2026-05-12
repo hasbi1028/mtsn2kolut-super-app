@@ -473,6 +473,10 @@ type fakeAcademicStore struct {
 	weeklyAssignments  []db.ListWeeklyTimetableAssignmentsRow
 	weeklySlots        []db.ListWeeklyTimetableSlotsRow
 	weeklyConflicts    []db.ListTimetableConflictsRow
+	lessonPeriods      []db.ListLessonPeriodTemplatesRow
+	createLessonArg    db.CreateLessonPeriodTemplateParams
+	updateLessonArg    db.UpdateLessonPeriodTemplateParams
+	deleteLessonID     pgtype.UUID
 	stats              db.GetAcademicStatsRow
 	dashboardSummary   db.GetAcademicDashboardSummaryRow
 	curriculumProfiles []db.CurriculumProfile
@@ -621,6 +625,25 @@ func (f *fakeAcademicStore) ListWeeklyTimetableSlots(ctx context.Context, academ
 
 func (f *fakeAcademicStore) ListTimetableConflicts(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListTimetableConflictsRow, error) {
 	return f.weeklyConflicts, nil
+}
+
+func (f *fakeAcademicStore) ListLessonPeriodTemplates(ctx context.Context, academicYearID pgtype.UUID) ([]db.ListLessonPeriodTemplatesRow, error) {
+	return f.lessonPeriods, nil
+}
+
+func (f *fakeAcademicStore) CreateLessonPeriodTemplate(ctx context.Context, arg db.CreateLessonPeriodTemplateParams) (db.LessonPeriodTemplate, error) {
+	f.createLessonArg = arg
+	return db.LessonPeriodTemplate{AcademicYearID: arg.AcademicYearID, DayOfWeek: arg.DayOfWeek, PeriodNumber: arg.PeriodNumber, StartTime: arg.StartTime, EndTime: arg.EndTime, ActivityType: arg.ActivityType, Label: arg.Label, IsCountedAsLesson: arg.IsCountedAsLesson}, nil
+}
+
+func (f *fakeAcademicStore) UpdateLessonPeriodTemplate(ctx context.Context, arg db.UpdateLessonPeriodTemplateParams) (db.LessonPeriodTemplate, error) {
+	f.updateLessonArg = arg
+	return db.LessonPeriodTemplate{ID: arg.ID, DayOfWeek: arg.DayOfWeek, PeriodNumber: arg.PeriodNumber, StartTime: arg.StartTime, EndTime: arg.EndTime, ActivityType: arg.ActivityType, Label: arg.Label, IsCountedAsLesson: arg.IsCountedAsLesson}, nil
+}
+
+func (f *fakeAcademicStore) DeleteLessonPeriodTemplate(ctx context.Context, id pgtype.UUID) error {
+	f.deleteLessonID = id
+	return nil
 }
 
 func (f *fakeAcademicStore) GetAcademicStats(ctx context.Context) (db.GetAcademicStatsRow, error) {

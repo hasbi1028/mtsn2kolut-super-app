@@ -257,6 +257,13 @@ SELECT
     ts.id,
     ts.assignment_id,
     ts.day_of_week,
+    ts.lesson_period_id,
+    COALESCE(lpt.period_number, 0)::int AS period_number,
+    ts.slot_type,
+    ts.lesson_hours::float8 AS lesson_hours,
+    COALESCE(lpt.label, '')::text AS lesson_period_label,
+    COALESCE(lpt.activity_type, ts.slot_type)::text AS lesson_period_activity_type,
+    COALESCE(lpt.is_counted_as_lesson, ts.lesson_hours > 0)::boolean AS is_counted_as_lesson,
     ts.start_time,
     ts.end_time,
     ts.room_label,
@@ -276,6 +283,7 @@ JOIN class_subject_assignments csa ON csa.id = ts.assignment_id
 JOIN school_classes c ON c.id = csa.class_id
 JOIN subjects sub ON sub.id = csa.subject_id
 JOIN employees e ON e.id = csa.teacher_employee_id
+LEFT JOIN lesson_period_templates lpt ON lpt.id = ts.lesson_period_id
 WHERE csa.class_id = $1
 ORDER BY ts.day_of_week ASC, ts.start_time ASC, sub.name ASC;
 
@@ -284,6 +292,13 @@ SELECT
     ts.id,
     ts.assignment_id,
     ts.day_of_week,
+    ts.lesson_period_id,
+    COALESCE(lpt.period_number, 0)::int AS period_number,
+    ts.slot_type,
+    ts.lesson_hours::float8 AS lesson_hours,
+    COALESCE(lpt.label, '')::text AS lesson_period_label,
+    COALESCE(lpt.activity_type, ts.slot_type)::text AS lesson_period_activity_type,
+    COALESCE(lpt.is_counted_as_lesson, ts.lesson_hours > 0)::boolean AS is_counted_as_lesson,
     ts.start_time,
     ts.end_time,
     ts.room_label,
@@ -303,31 +318,56 @@ JOIN class_subject_assignments csa ON csa.id = ts.assignment_id
 JOIN school_classes c ON c.id = csa.class_id
 JOIN subjects sub ON sub.id = csa.subject_id
 JOIN employees e ON e.id = csa.teacher_employee_id
+LEFT JOIN lesson_period_templates lpt ON lpt.id = ts.lesson_period_id
 WHERE csa.class_id = sqlc.arg(class_id)
   AND ts.id = sqlc.arg(id);
 
 -- name: CreateRombelTimetableSlot :one
 WITH inserted AS (
-    INSERT INTO timetable_slots (assignment_id, day_of_week, start_time, end_time, room_label, notes)
+    INSERT INTO timetable_slots (
+        assignment_id, day_of_week, start_time, end_time, room_label, notes,
+        lesson_period_id, slot_type, lesson_hours
+    )
     SELECT
         sqlc.arg(assignment_id),
         sqlc.arg(day_of_week),
         sqlc.arg(start_time),
         sqlc.arg(end_time),
         sqlc.arg(room_label),
-        sqlc.arg(notes)
+        sqlc.arg(notes),
+        sqlc.narg(lesson_period_id),
+        sqlc.arg(slot_type),
+        sqlc.arg(lesson_hours)
     WHERE EXISTS (
         SELECT 1
         FROM class_subject_assignments csa
         WHERE csa.id = sqlc.arg(assignment_id)
           AND csa.class_id = sqlc.arg(class_id)
     )
+      AND (
+        sqlc.narg(lesson_period_id)::uuid IS NULL
+        OR EXISTS (
+          SELECT 1
+          FROM lesson_period_templates lpt
+          JOIN school_classes c ON c.academic_year_id = lpt.academic_year_id
+          WHERE lpt.id = sqlc.narg(lesson_period_id)::uuid
+            AND c.id = sqlc.arg(class_id)
+            AND lpt.day_of_week = sqlc.arg(day_of_week)
+        )
+      )
     RETURNING *
 )
 SELECT
     inserted.id,
     inserted.assignment_id,
     inserted.day_of_week,
+    inserted.lesson_period_id,
+    COALESCE(lpt.period_number, 0)::int AS period_number,
+    inserted.slot_type,
+    inserted.lesson_hours::float8 AS lesson_hours,
+    COALESCE(lpt.label, '')::text AS lesson_period_label,
+    COALESCE(lpt.activity_type, inserted.slot_type)::text AS lesson_period_activity_type,
+    COALESCE(lpt.is_counted_as_lesson, inserted.lesson_hours > 0)::boolean AS is_counted_as_lesson,
     inserted.start_time,
     inserted.end_time,
     inserted.room_label,
@@ -346,7 +386,8 @@ FROM inserted
 JOIN class_subject_assignments csa ON csa.id = inserted.assignment_id
 JOIN school_classes c ON c.id = csa.class_id
 JOIN subjects sub ON sub.id = csa.subject_id
-JOIN employees e ON e.id = csa.teacher_employee_id;
+JOIN employees e ON e.id = csa.teacher_employee_id
+LEFT JOIN lesson_period_templates lpt ON lpt.id = inserted.lesson_period_id;
 
 -- name: UpdateRombelTimetableSlot :one
 WITH updated AS (
@@ -357,6 +398,9 @@ WITH updated AS (
         end_time = sqlc.arg(end_time),
         room_label = sqlc.arg(room_label),
         notes = sqlc.arg(notes),
+        lesson_period_id = sqlc.narg(lesson_period_id),
+        slot_type = sqlc.arg(slot_type),
+        lesson_hours = sqlc.arg(lesson_hours),
         updated_at = NOW()
     FROM class_subject_assignments current_assignment
     WHERE timetable_slots.id = sqlc.arg(id)
@@ -368,12 +412,30 @@ WITH updated AS (
           WHERE next_assignment.id = sqlc.arg(assignment_id)
             AND next_assignment.class_id = sqlc.arg(class_id)
       )
+      AND (
+        sqlc.narg(lesson_period_id)::uuid IS NULL
+        OR EXISTS (
+          SELECT 1
+          FROM lesson_period_templates lpt
+          JOIN school_classes c ON c.academic_year_id = lpt.academic_year_id
+          WHERE lpt.id = sqlc.narg(lesson_period_id)::uuid
+            AND c.id = sqlc.arg(class_id)
+            AND lpt.day_of_week = sqlc.arg(day_of_week)
+        )
+      )
     RETURNING timetable_slots.*
 )
 SELECT
     updated.id,
     updated.assignment_id,
     updated.day_of_week,
+    updated.lesson_period_id,
+    COALESCE(lpt.period_number, 0)::int AS period_number,
+    updated.slot_type,
+    updated.lesson_hours::float8 AS lesson_hours,
+    COALESCE(lpt.label, '')::text AS lesson_period_label,
+    COALESCE(lpt.activity_type, updated.slot_type)::text AS lesson_period_activity_type,
+    COALESCE(lpt.is_counted_as_lesson, updated.lesson_hours > 0)::boolean AS is_counted_as_lesson,
     updated.start_time,
     updated.end_time,
     updated.room_label,
@@ -392,7 +454,8 @@ FROM updated
 JOIN class_subject_assignments csa ON csa.id = updated.assignment_id
 JOIN school_classes c ON c.id = csa.class_id
 JOIN subjects sub ON sub.id = csa.subject_id
-JOIN employees e ON e.id = csa.teacher_employee_id;
+JOIN employees e ON e.id = csa.teacher_employee_id
+LEFT JOIN lesson_period_templates lpt ON lpt.id = updated.lesson_period_id;
 
 -- name: DeleteRombelTimetableSlot :execrows
 DELETE FROM timetable_slots ts
