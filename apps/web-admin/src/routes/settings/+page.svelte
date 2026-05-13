@@ -214,9 +214,18 @@
 
   async function saveSettings() {
     try {
+      const payload = {
+        max_concurrent: appSettings.max_concurrent,
+        headless: appSettings.headless,
+        pusaka_geo_base_lat: appSettings.pusaka_geo_base_lat,
+        pusaka_geo_base_lng: appSettings.pusaka_geo_base_lng,
+        pusaka_geo_default_radius_m: appSettings.pusaka_geo_default_radius_m,
+        pusaka_geo_checkin_radius_m: appSettings.pusaka_geo_checkin_radius_m,
+        pusaka_geo_checkout_radius_m: appSettings.pusaka_geo_checkout_radius_m
+      };
       const res  = await fetch('/api/pusaka/settings', {
         method: 'PUT', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(appSettings),
+        body: JSON.stringify(payload),
       });
       await readClientJson<unknown>(res);
       showToast('Pengaturan worker disimpan.');

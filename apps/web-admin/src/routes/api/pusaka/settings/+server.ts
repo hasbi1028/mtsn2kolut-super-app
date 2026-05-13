@@ -20,10 +20,9 @@ export const GET = async (event: RequestEvent) => {
 		const rows = await proxy(event).get<GoSetting[]>('/api/pusaka/settings');
 		const flat: Record<string, unknown> = {};
 		for (const { key, value } of rows) {
-			if (BLOCKED.has(key)) continue;
+			if (BLOCKED.has(key) || !EDITABLE_KEYS.has(key)) continue;
 			if (NUMBER_KEYS.has(key)) flat[key] = Number(value);
 			else if (key === 'headless') flat[key] = value === 'true';
-			else flat[key] = value;
 		}
 		return json(flat);
 	} catch (e) {

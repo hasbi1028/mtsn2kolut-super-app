@@ -764,6 +764,7 @@ describe('api proxy route handlers', () => {
 			{ key: 'pusaka_geo_base_lat', value: '-3.2163111' },
 			{ key: 'pusaka_geo_checkin_radius_m', value: '55' },
 			{ key: 'admin_password', value: 'secret' },
+			{ key: 'default_max_attempts', value: '3' },
 			{ key: 'browser_path', value: '/usr/bin/chromium' }
 		]);
 
@@ -775,8 +776,7 @@ describe('api proxy route handlers', () => {
 			max_concurrent: 9,
 			headless: true,
 			pusaka_geo_base_lat: -3.2163111,
-			pusaka_geo_checkin_radius_m: 55,
-			browser_path: '/usr/bin/chromium'
+			pusaka_geo_checkin_radius_m: 55
 		});
 	});
 
