@@ -23,6 +23,7 @@ type fakeSystemBackupService struct {
 	job        service.SystemBackupJob
 	validation service.SystemBackupRestoreValidation
 	command    service.SystemBackupRestoreCommand
+	offsite    service.SystemBackupOffsiteStatus
 	err        error
 }
 
@@ -67,6 +68,13 @@ func (f *fakeSystemBackupService) RestoreCommand(ctx context.Context, id string)
 		return service.SystemBackupRestoreCommand{}, f.err
 	}
 	return f.command, nil
+}
+
+func (f *fakeSystemBackupService) OffsiteStatus(ctx context.Context) (service.SystemBackupOffsiteStatus, error) {
+	if f.err != nil {
+		return service.SystemBackupOffsiteStatus{}, f.err
+	}
+	return f.offsite, nil
 }
 
 func TestSystemBackupHandlerStatusAndList(t *testing.T) {

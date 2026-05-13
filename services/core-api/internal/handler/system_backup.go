@@ -27,6 +27,7 @@ type systemBackupService interface {
 	Job(ctx context.Context, id string) (service.SystemBackupJob, error)
 	ValidateRestore(ctx context.Context, id string) (service.SystemBackupRestoreValidation, error)
 	RestoreCommand(ctx context.Context, id string) (service.SystemBackupRestoreCommand, error)
+	OffsiteStatus(ctx context.Context) (service.SystemBackupOffsiteStatus, error)
 }
 
 func NewSystemBackup(svc systemBackupService) *SystemBackup {
@@ -49,6 +50,15 @@ func (h *SystemBackup) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, list)
+}
+
+func (h *SystemBackup) OffsiteStatus(w http.ResponseWriter, r *http.Request) {
+	status, err := h.svc.OffsiteStatus(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, status)
 }
 
 func (h *SystemBackup) RunManual(w http.ResponseWriter, r *http.Request) {

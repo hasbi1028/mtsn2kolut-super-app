@@ -60,10 +60,24 @@
 		rollback_note: string;
 	};
 
+	type OffsiteStatus = {
+		configured: boolean;
+		provider?: string;
+		target_label?: string;
+		source: string;
+		last_sync_at?: string;
+		last_sync_success?: boolean;
+		remote_backup_count: number;
+		remote_size_bytes: number;
+		health: 'ok' | 'warning' | 'error' | string;
+		warnings: string[];
+	};
+
 	let loading = $state(true);
 	let refreshing = $state(false);
 	let errorMessage = $state('');
 	let status = $state<BackupStatus | null>(null);
+	let offsite = $state<OffsiteStatus | null>(null);
 	let backups = $state<BackupFile[]>([]);
 	let manualBackupRunning = $state(false);
 	let manualBackupReason = $state('');
@@ -86,15 +100,19 @@
 		else loading = true;
 		errorMessage = '';
 		try {
-			const [statusData, listData] = await Promise.all([
+			const [statusData, offsiteData, listData] = await Promise.all([
 				fetch('/api/system/backups/status').then((response) =>
 					readClientApiData<BackupStatus>(response, 'Gagal memuat status backup')
+				),
+				fetch('/api/system/backups/offsite').then((response) =>
+					readClientApiData<OffsiteStatus>(response, 'Gagal memuat status offsite')
 				),
 				fetch('/api/system/backups').then((response) =>
 					readClientApiData<BackupList>(response, 'Gagal memuat daftar backup')
 				)
 			]);
 			status = statusData;
+			offsite = offsiteData;
 			backups = Array.isArray(listData.items) ? listData.items : [];
 			if (showToast) toast.success('Status backup diperbarui');
 		} catch (error) {
@@ -418,13 +436,48 @@
 			</div>
 		</div>
 		<div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-			<h2 class="text-lg font-semibold text-slate-950">Backup Offsite</h2>
-			<p class="mt-2 text-sm text-slate-600">
-				Backup saat ini dipantau dari server lokal. Untuk ketahanan bencana, Sprint lanjutan direkomendasikan menambah sinkronisasi ke lokasi kedua seperti Google Drive, S3-compatible storage, NAS, atau server lain.
-			</p>
-			<div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-				Rekomendasi: aktifkan monitoring offsite setelah Backup Center dan backup manual stabil.
+			<div class="flex items-start justify-between gap-3">
+				<div>
+					<h2 class="text-lg font-semibold text-slate-950">Backup Offsite</h2>
+					<p class="mt-1 text-sm text-slate-600">Monitoring lokasi backup kedua: Google Drive, S3-compatible storage, NAS, rsync server, atau mount eksternal.</p>
+				</div>
+				{#if offsite}
+					<span class={`rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClass(offsite.health)}`}>{statusLabel(offsite.health)}</span>
+				{/if}
 			</div>
+			{#if offsite}
+				<div class="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+					<div class="rounded-2xl bg-slate-50 p-3">
+						<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Status</p>
+						<p class="mt-1 font-semibold text-slate-900">{offsite.configured ? 'Terkonfigurasi' : 'Belum dikonfigurasi'}</p>
+						<p class="mt-1 text-xs text-slate-500">{offsite.provider || 'Provider belum diatur'} · {offsite.source}</p>
+					</div>
+					<div class="rounded-2xl bg-slate-50 p-3">
+						<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Sync Terakhir</p>
+						<p class="mt-1 font-semibold text-slate-900">{formatDate(offsite.last_sync_at)}</p>
+						<p class="mt-1 text-xs text-slate-500">{offsite.last_sync_success === true ? 'berhasil' : offsite.last_sync_success === false ? 'gagal' : 'belum ada status'}</p>
+					</div>
+					<div class="rounded-2xl bg-slate-50 p-3">
+						<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Remote Backup</p>
+						<p class="mt-1 font-semibold text-slate-900">{offsite.remote_backup_count} file</p>
+						<p class="mt-1 text-xs text-slate-500">{formatBytes(offsite.remote_size_bytes)}</p>
+					</div>
+					<div class="rounded-2xl bg-slate-50 p-3">
+						<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Target</p>
+						<p class="mt-1 truncate font-semibold text-slate-900">{offsite.target_label || 'Belum ada label target'}</p>
+						<p class="mt-1 text-xs text-slate-500">Cloud secret tidak disimpan di aplikasi</p>
+					</div>
+				</div>
+				{#if offsite.warnings.length > 0}
+					<div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+						<ul class="list-disc space-y-1 pl-5">
+							{#each offsite.warnings as warning}<li>{warning}</li>{/each}
+						</ul>
+					</div>
+				{/if}
+			{:else}
+				<div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Status offsite belum dimuat.</div>
+			{/if}
 		</div>
 	</section>
 </div>

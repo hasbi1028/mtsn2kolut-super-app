@@ -253,6 +253,7 @@ func TestSystemBackupRoutesUseBackupPermissionsWithAdminFallback(t *testing.T) {
 		`requireBackupCreate := mw.RequireAnyPermissionOrRole([]string{"backup.create"}, "admin")`,
 		`requireBackupRestorePlan := mw.RequireAnyPermissionOrRole([]string{"backup.restore_plan"}, "admin")`,
 		`r.With(requireBackupRead).Get("/api/system/backups/status", systemBackupH.Status)`,
+		`r.With(requireBackupRead).Get("/api/system/backups/offsite", systemBackupH.OffsiteStatus)`,
 		`r.With(requireBackupRead).Get("/api/system/backups", systemBackupH.List)`,
 		`r.With(requireBackupCreate).Post("/api/system/backups/run", systemBackupH.RunManual)`,
 		`r.With(requireBackupRead).Get("/api/system/backups/jobs/{job_id}", systemBackupH.Job)`,

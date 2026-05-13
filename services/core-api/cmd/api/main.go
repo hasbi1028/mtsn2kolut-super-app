@@ -66,11 +66,16 @@ func main() {
 	auditSvc := service.NewAudit(q)
 	internalAnalyticsSvc := service.NewInternalAnalytics(q)
 	systemBackupSvc := service.NewSystemBackup(service.SystemBackupConfig{
-		BackupDir:     getEnv("POSTGRES_BACKUP_DIR", service.DefaultSystemBackupDir),
-		ScriptPath:    getEnv("POSTGRES_BACKUP_SCRIPT_PATH", service.DefaultSystemBackupScriptPath),
-		TimerName:     getEnv("POSTGRES_BACKUP_TIMER_NAME", service.DefaultSystemBackupTimerName),
-		ServiceName:   getEnv("POSTGRES_BACKUP_SERVICE_NAME", service.DefaultSystemBackupServiceName),
-		RetentionDays: int(int32Env("POSTGRES_BACKUP_RETENTION_DAYS", int32(service.DefaultSystemBackupRetentionDays))),
+		BackupDir:             getEnv("POSTGRES_BACKUP_DIR", service.DefaultSystemBackupDir),
+		ScriptPath:            getEnv("POSTGRES_BACKUP_SCRIPT_PATH", service.DefaultSystemBackupScriptPath),
+		TimerName:             getEnv("POSTGRES_BACKUP_TIMER_NAME", service.DefaultSystemBackupTimerName),
+		ServiceName:           getEnv("POSTGRES_BACKUP_SERVICE_NAME", service.DefaultSystemBackupServiceName),
+		RetentionDays:         int(int32Env("POSTGRES_BACKUP_RETENTION_DAYS", int32(service.DefaultSystemBackupRetentionDays))),
+		OffsiteProvider:       getEnv("POSTGRES_BACKUP_OFFSITE_PROVIDER", ""),
+		OffsiteTargetLabel:    getEnv("POSTGRES_BACKUP_OFFSITE_TARGET_LABEL", ""),
+		OffsiteStatusFile:     getEnv("POSTGRES_BACKUP_OFFSITE_STATUS_FILE", ""),
+		OffsiteRemoteDir:      getEnv("POSTGRES_BACKUP_OFFSITE_REMOTE_DIR", ""),
+		OffsiteStaleThreshold: time.Duration(int32Env("POSTGRES_BACKUP_OFFSITE_STALE_HOURS", int32(service.DefaultOffsiteBackupStaleHours))) * time.Hour,
 	})
 	pusakaSchedulerSvc := service.NewPusakaScheduler(q, pusakaJobSvc, settSvc, auditSvc)
 	notificationSvc := service.NewNotification(q)
@@ -287,6 +292,7 @@ func main() {
 		r.With(requireAnalyticsRead).Get("/api/internal-analytics/daily", internalAnalyticsH.ListDailyAggregates)
 		r.With(requireAnalyticsExport).Get("/api/internal-analytics/export", internalAnalyticsH.ExportAggregates)
 		r.With(requireBackupRead).Get("/api/system/backups/status", systemBackupH.Status)
+		r.With(requireBackupRead).Get("/api/system/backups/offsite", systemBackupH.OffsiteStatus)
 		r.With(requireBackupRead).Get("/api/system/backups", systemBackupH.List)
 		r.With(requireBackupCreate).Post("/api/system/backups/run", systemBackupH.RunManual)
 		r.With(requireBackupRead).Get("/api/system/backups/jobs/{job_id}", systemBackupH.Job)
