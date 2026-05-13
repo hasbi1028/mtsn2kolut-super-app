@@ -65,6 +65,12 @@ func main() {
 	settSvc := service.NewSetting(q)
 	auditSvc := service.NewAudit(q)
 	internalAnalyticsSvc := service.NewInternalAnalytics(q)
+	systemBackupSvc := service.NewSystemBackup(service.SystemBackupConfig{
+		BackupDir:     getEnv("POSTGRES_BACKUP_DIR", service.DefaultSystemBackupDir),
+		TimerName:     getEnv("POSTGRES_BACKUP_TIMER_NAME", service.DefaultSystemBackupTimerName),
+		ServiceName:   getEnv("POSTGRES_BACKUP_SERVICE_NAME", service.DefaultSystemBackupServiceName),
+		RetentionDays: int(int32Env("POSTGRES_BACKUP_RETENTION_DAYS", int32(service.DefaultSystemBackupRetentionDays))),
+	})
 	pusakaSchedulerSvc := service.NewPusakaScheduler(q, pusakaJobSvc, settSvc, auditSvc)
 	notificationSvc := service.NewNotification(q)
 	librarySvc := service.NewLibrary(q)
@@ -122,6 +128,7 @@ func main() {
 	empSchedH := handler.NewEmployeeSchedule(empSchedSvc)
 	settH := handler.NewSetting(settSvc)
 	internalAnalyticsH := handler.NewInternalAnalytics(internalAnalyticsSvc)
+	systemBackupH := handler.NewSystemBackup(systemBackupSvc)
 	pusakaSchedulerH := handler.NewPusakaScheduler(pusakaSchedulerSvc)
 	pusakaWorkerH := handler.NewPusakaWorker(pusakaJobSvc, pusakaAttendanceSvc, settSvc)
 	notificationH := handler.NewNotification(notificationSvc)
@@ -241,6 +248,8 @@ func main() {
 	requireAuditRead := mw.RequirePermission("audit.read")
 	requireAnalyticsRead := mw.RequireAnyPermissionOrRole([]string{"analytics.read"}, "admin")
 	requireAnalyticsExport := mw.RequireAnyPermissionOrRole([]string{"analytics.export"}, "admin")
+	requireBackupRead := mw.RequireAnyPermissionOrRole([]string{"backup.read"}, "admin")
+	requireBackupDownload := mw.RequireAnyPermissionOrRole([]string{"backup.download"}, "admin")
 	requireSchoolProfileSettings := mw.RequirePermission("settings.school_profile")
 	requireEmployeesRead := mw.RequireAnyPermissionOrRole([]string{"employees.read", "employees.manage"}, "admin")
 	requireEmployeesManage := mw.RequireAnyPermissionOrRole([]string{"employees.manage"}, "admin")
@@ -274,6 +283,9 @@ func main() {
 		r.With(requireAnalyticsRead).Get("/api/internal-analytics/summary", internalAnalyticsH.Summary)
 		r.With(requireAnalyticsRead).Get("/api/internal-analytics/daily", internalAnalyticsH.ListDailyAggregates)
 		r.With(requireAnalyticsExport).Get("/api/internal-analytics/export", internalAnalyticsH.ExportAggregates)
+		r.With(requireBackupRead).Get("/api/system/backups/status", systemBackupH.Status)
+		r.With(requireBackupRead).Get("/api/system/backups", systemBackupH.List)
+		r.With(requireBackupDownload).Get("/api/system/backups/{id}/download", systemBackupH.Download)
 		r.Get("/api/school-profile", settH.SchoolProfile)
 		r.With(requireSchoolProfileSettings).Put("/api/school-profile", settH.UpdateSchoolProfile)
 

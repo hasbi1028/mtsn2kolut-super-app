@@ -235,6 +235,34 @@ func TestInternalAnalyticsExportRouteUsesExportPermissionAndRateLimitedIngestion
 	}
 }
 
+func TestSystemBackupRoutesUseBackupPermissionsWithAdminFallback(t *testing.T) {
+	raw, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	source := string(raw)
+	jwtStart := strings.Index(source, "r.Use(mw.JWT(jwtSecret")
+	workerStart := strings.Index(source, "r.Use(mw.WorkerKey(workerKey))")
+	if jwtStart < 0 || workerStart <= jwtStart {
+		t.Fatalf("authenticated route block not found")
+	}
+	authenticatedBlock := source[jwtStart:workerStart]
+	for _, want := range []string{
+		`requireBackupRead := mw.RequireAnyPermissionOrRole([]string{"backup.read"}, "admin")`,
+		`requireBackupDownload := mw.RequireAnyPermissionOrRole([]string{"backup.download"}, "admin")`,
+		`r.With(requireBackupRead).Get("/api/system/backups/status", systemBackupH.Status)`,
+		`r.With(requireBackupRead).Get("/api/system/backups", systemBackupH.List)`,
+		`r.With(requireBackupDownload).Get("/api/system/backups/{id}/download", systemBackupH.Download)`,
+	} {
+		if !strings.Contains(source, want) && !strings.Contains(authenticatedBlock, want) {
+			t.Fatalf("system backup route contract missing %q", want)
+		}
+	}
+	if strings.Contains(source[:jwtStart], "/api/system/backups") {
+		t.Fatalf("system backup routes must not be exposed before JWT middleware")
+	}
+}
+
 func TestInternalAnalyticsAdminActivityMiddlewareAndRollupLoopAreStarted(t *testing.T) {
 	raw, err := os.ReadFile("main.go")
 	if err != nil {

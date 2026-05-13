@@ -32,6 +32,8 @@ export const RBAC_PERMISSION_CATALOG = [
 	{ code: 'bank_soal.review', module: 'bank_soal', action: 'review', description: 'Melakukan review/verifikasi soal.' },
 	{ code: 'bank_soal.settings', module: 'bank_soal', action: 'settings', description: 'Melihat/mengelola pengaturan Bank Soal.' },
 	{ code: 'bank_soal.update', module: 'bank_soal', action: 'update', description: 'Mengubah soal Bank Soal.' },
+	{ code: 'backup.download', module: 'backup', action: 'download', description: 'Mengunduh file backup PostgreSQL yang tersedia.' },
+	{ code: 'backup.read', module: 'backup', action: 'read', description: 'Melihat status dan daftar backup PostgreSQL.' },
 	{ code: 'dashboard.read', module: 'dashboard', action: 'read', description: 'Melihat dashboard utama.' },
 	{ code: 'document_cycles.manage', module: 'document_cycles', action: 'manage', description: 'Mengelola siklus dokumen.' },
 	{ code: 'document_cycles.read', module: 'document_cycles', action: 'read', description: 'Melihat siklus dokumen.' },
