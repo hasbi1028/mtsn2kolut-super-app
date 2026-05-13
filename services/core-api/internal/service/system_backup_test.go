@@ -282,3 +282,53 @@ func TestSystemBackupRestoreCommandIsManualOnly(t *testing.T) {
 		t.Fatalf("commands = %s, want quoted backup path", joined)
 	}
 }
+
+func TestSystemBackupOffsiteStatusNotConfiguredWarns(t *testing.T) {
+	svc := NewSystemBackup(SystemBackupConfig{BackupDir: t.TempDir()})
+	status, err := svc.OffsiteStatus(context.Background())
+	if err != nil {
+		t.Fatalf("OffsiteStatus() error = %v", err)
+	}
+	if status.Configured || status.Health != "warning" || len(status.Warnings) == 0 {
+		t.Fatalf("OffsiteStatus() = %+v, want not configured warning", status)
+	}
+}
+
+func TestSystemBackupOffsiteStatusFromJSONFile(t *testing.T) {
+	dir := t.TempDir()
+	statusFile := filepath.Join(dir, "offsite-status.json")
+	now := time.Date(2026, 5, 13, 12, 0, 0, 0, time.UTC)
+	content := `{"provider":"rclone","target":"gdrive:mtsn2kolut/backup","last_sync_at":"2026-05-13T11:30:00Z","last_sync_success":true,"remote_backup_count":3,"remote_size_bytes":1234}`
+	writeBackupFile(t, statusFile, content)
+	svc := NewSystemBackup(SystemBackupConfig{BackupDir: dir, OffsiteStatusFile: statusFile, Now: func() time.Time { return now }})
+	status, err := svc.OffsiteStatus(context.Background())
+	if err != nil {
+		t.Fatalf("OffsiteStatus() error = %v", err)
+	}
+	if !status.Configured || status.Health != "ok" || status.RemoteBackupCount != 3 || status.LastSyncAt == nil {
+		t.Fatalf("OffsiteStatus() = %+v, want healthy status file", status)
+	}
+	if strings.Contains(strings.ToLower(status.TargetLabel), "secret") {
+		t.Fatalf("target label not sanitized: %q", status.TargetLabel)
+	}
+}
+
+func TestSystemBackupOffsiteStatusFromRemoteDirWarnsWhenStale(t *testing.T) {
+	dir := t.TempDir()
+	remote := filepath.Join(dir, "remote")
+	if err := os.Mkdir(remote, 0o700); err != nil {
+		t.Fatalf("mkdir remote: %v", err)
+	}
+	backup := filepath.Join(remote, "pusaka_20260512_000001.dump")
+	writeBackupFile(t, backup, "dump")
+	now := time.Date(2026, 5, 13, 12, 0, 0, 0, time.UTC)
+	mustChtimes(t, backup, now.Add(-25*time.Hour))
+	svc := NewSystemBackup(SystemBackupConfig{BackupDir: dir, OffsiteRemoteDir: remote, Now: func() time.Time { return now }})
+	status, err := svc.OffsiteStatus(context.Background())
+	if err != nil {
+		t.Fatalf("OffsiteStatus() error = %v", err)
+	}
+	if !status.Configured || status.Health != "warning" || status.RemoteBackupCount != 1 {
+		t.Fatalf("OffsiteStatus() = %+v, want stale remote dir warning", status)
+	}
+}

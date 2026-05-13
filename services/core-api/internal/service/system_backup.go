@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -22,6 +23,7 @@ const (
 	DefaultSystemBackupServiceName   = "mtsn2kolut-postgresql-backup.service"
 	DefaultSystemBackupRetentionDays = 30
 	DefaultSystemBackupScriptPath    = "/home/servermtsn2kolut/mtsn2kolut-super-app/deploy/backup-postgresql.sh"
+	DefaultOffsiteBackupStaleHours   = 24
 
 	systemBackupSchedule          = "*-*-* 00:00:00"
 	systemBackupTimezone          = "WITA"
@@ -34,14 +36,19 @@ const (
 type SystemBackupCommandRunner func(ctx context.Context, name string, args ...string) ([]byte, error)
 
 type SystemBackupConfig struct {
-	BackupDir     string
-	ScriptPath    string
-	TimerName     string
-	ServiceName   string
-	RetentionDays int
-	RunTimeout    time.Duration
-	Now           func() time.Time
-	CommandRunner SystemBackupCommandRunner
+	BackupDir             string
+	ScriptPath            string
+	TimerName             string
+	ServiceName           string
+	RetentionDays         int
+	RunTimeout            time.Duration
+	OffsiteProvider       string
+	OffsiteTargetLabel    string
+	OffsiteStatusFile     string
+	OffsiteRemoteDir      string
+	OffsiteStaleThreshold time.Duration
+	Now                   func() time.Time
+	CommandRunner         SystemBackupCommandRunner
 }
 
 type SystemBackup struct {
@@ -95,6 +102,30 @@ type SystemBackupDownload struct {
 	Filename  string
 	SizeBytes int64
 	ModTime   time.Time
+}
+
+type SystemBackupOffsiteStatus struct {
+	Configured        bool       `json:"configured"`
+	Provider          string     `json:"provider,omitempty"`
+	TargetLabel       string     `json:"target_label,omitempty"`
+	Source            string     `json:"source"`
+	LastSyncAt        *time.Time `json:"last_sync_at,omitempty"`
+	LastSyncSuccess   *bool      `json:"last_sync_success,omitempty"`
+	RemoteBackupCount int        `json:"remote_backup_count"`
+	RemoteSizeBytes   int64      `json:"remote_size_bytes"`
+	Health            string     `json:"health"`
+	Warnings          []string   `json:"warnings"`
+}
+
+type systemBackupOffsiteStatusFile struct {
+	Provider          string `json:"provider"`
+	TargetLabel       string `json:"target_label"`
+	Target            string `json:"target"`
+	LastSyncAt        string `json:"last_sync_at"`
+	LastSyncSuccess   *bool  `json:"last_sync_success"`
+	RemoteBackupCount int    `json:"remote_backup_count"`
+	RemoteSizeBytes   int64  `json:"remote_size_bytes"`
+	Message           string `json:"message"`
 }
 
 type SystemBackupRunRequest struct {
@@ -159,6 +190,13 @@ func NewSystemBackup(cfg SystemBackupConfig) *SystemBackup {
 	if cfg.RunTimeout <= 0 {
 		cfg.RunTimeout = systemBackupRunTimeout
 	}
+	if cfg.OffsiteStaleThreshold <= 0 {
+		cfg.OffsiteStaleThreshold = time.Duration(DefaultOffsiteBackupStaleHours) * time.Hour
+	}
+	cfg.OffsiteProvider = strings.TrimSpace(cfg.OffsiteProvider)
+	cfg.OffsiteTargetLabel = sanitizeBackupOperatorText(cfg.OffsiteTargetLabel, 160)
+	cfg.OffsiteStatusFile = strings.TrimSpace(cfg.OffsiteStatusFile)
+	cfg.OffsiteRemoteDir = strings.TrimSpace(cfg.OffsiteRemoteDir)
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
@@ -168,6 +206,147 @@ func NewSystemBackup(cfg SystemBackupConfig) *SystemBackup {
 		}
 	}
 	return &SystemBackup{cfg: cfg, jobs: map[string]SystemBackupJob{}}
+}
+
+func (s *SystemBackup) OffsiteStatus(ctx context.Context) (SystemBackupOffsiteStatus, error) {
+	status := SystemBackupOffsiteStatus{
+		Configured:  false,
+		Provider:    s.cfg.OffsiteProvider,
+		TargetLabel: s.cfg.OffsiteTargetLabel,
+		Source:      "not_configured",
+		Health:      "warning",
+		Warnings:    []string{"Offsite backup belum dikonfigurasi. Backup masih bergantung pada storage lokal server."},
+	}
+
+	if s.cfg.OffsiteStatusFile != "" {
+		return s.offsiteStatusFromFile(status)
+	}
+	if s.cfg.OffsiteRemoteDir != "" {
+		return s.offsiteStatusFromRemoteDir(status)
+	}
+	if s.cfg.OffsiteProvider != "" || s.cfg.OffsiteTargetLabel != "" {
+		status.Configured = true
+		status.Source = "configured_without_status"
+		status.Health = "warning"
+		status.Warnings = []string{"Konfigurasi offsite ditemukan, tetapi status sync/log belum tersedia untuk diverifikasi."}
+	}
+	return status, nil
+}
+
+func (s *SystemBackup) offsiteStatusFromFile(base SystemBackupOffsiteStatus) (SystemBackupOffsiteStatus, error) {
+	content, err := os.ReadFile(s.cfg.OffsiteStatusFile)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			base.Configured = true
+			base.Source = "status_file"
+			base.Health = "error"
+			base.Warnings = []string{"File status offsite belum ditemukan."}
+			return base, nil
+		}
+		return SystemBackupOffsiteStatus{}, err
+	}
+	var payload systemBackupOffsiteStatusFile
+	if err := json.Unmarshal(content, &payload); err != nil {
+		base.Configured = true
+		base.Source = "status_file"
+		base.Health = "error"
+		base.Warnings = []string{"File status offsite bukan JSON valid."}
+		return base, nil
+	}
+	if payload.Provider != "" {
+		base.Provider = sanitizeBackupOperatorText(payload.Provider, 80)
+	}
+	if payload.TargetLabel != "" {
+		base.TargetLabel = sanitizeBackupOperatorText(payload.TargetLabel, 160)
+	} else if payload.Target != "" {
+		base.TargetLabel = sanitizeBackupOperatorText(payload.Target, 160)
+	}
+	base.Configured = true
+	base.Source = "status_file"
+	base.LastSyncSuccess = payload.LastSyncSuccess
+	base.RemoteBackupCount = payload.RemoteBackupCount
+	base.RemoteSizeBytes = payload.RemoteSizeBytes
+	base.Health = "ok"
+	base.Warnings = []string{}
+	if payload.LastSyncAt != "" {
+		if parsed, err := time.Parse(time.RFC3339, payload.LastSyncAt); err == nil {
+			base.LastSyncAt = &parsed
+		} else {
+			base.Warnings = append(base.Warnings, "Waktu sync offsite pada status file tidak valid.")
+		}
+	}
+	base.applyOffsiteHealth(s.cfg.Now(), s.cfg.OffsiteStaleThreshold)
+	return base, nil
+}
+
+func (s *SystemBackup) offsiteStatusFromRemoteDir(base SystemBackupOffsiteStatus) (SystemBackupOffsiteStatus, error) {
+	entries, err := os.ReadDir(s.cfg.OffsiteRemoteDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			base.Configured = true
+			base.Source = "remote_dir"
+			base.Health = "error"
+			base.Warnings = []string{"Folder offsite tidak ditemukan atau belum dimount."}
+			return base, nil
+		}
+		return SystemBackupOffsiteStatus{}, err
+	}
+	latest := time.Time{}
+	var total int64
+	count := 0
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".dump") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		count++
+		total += info.Size()
+		if info.ModTime().After(latest) {
+			latest = info.ModTime()
+		}
+	}
+	success := count > 0
+	base.Configured = true
+	base.Source = "remote_dir"
+	base.LastSyncSuccess = &success
+	base.RemoteBackupCount = count
+	base.RemoteSizeBytes = total
+	base.Health = "ok"
+	base.Warnings = []string{}
+	if !latest.IsZero() {
+		base.LastSyncAt = &latest
+	}
+	base.applyOffsiteHealth(s.cfg.Now(), s.cfg.OffsiteStaleThreshold)
+	return base, nil
+}
+
+func (s *SystemBackupOffsiteStatus) applyOffsiteHealth(now time.Time, staleAfter time.Duration) {
+	if !s.Configured {
+		return
+	}
+	if s.LastSyncSuccess != nil && !*s.LastSyncSuccess {
+		s.Warnings = append(s.Warnings, "Sync offsite terakhir gagal.")
+	}
+	if s.LastSyncAt == nil {
+		s.Warnings = append(s.Warnings, "Waktu sync offsite terakhir belum tersedia.")
+	} else if now.Sub(*s.LastSyncAt) > staleAfter {
+		s.Warnings = append(s.Warnings, "Sync offsite terakhir lebih lama dari 24 jam.")
+	}
+	if s.RemoteBackupCount == 0 {
+		s.Warnings = append(s.Warnings, "Belum ada file backup .dump yang terdeteksi di lokasi offsite.")
+	}
+	if len(s.Warnings) > 0 {
+		if s.LastSyncSuccess != nil && !*s.LastSyncSuccess {
+			s.Health = "error"
+		} else {
+			s.Health = "warning"
+		}
+	} else {
+		s.Health = "ok"
+	}
 }
 
 func (s *SystemBackup) Status(ctx context.Context) (SystemBackupStatus, error) {
@@ -713,6 +892,14 @@ func sanitizeBackupReason(value string) string {
 	value = strings.TrimSpace(value)
 	value = strings.ReplaceAll(value, "\x00", "")
 	return strings.Join(strings.Fields(value), " ")
+}
+
+func sanitizeBackupOperatorText(value string, maxLen int) string {
+	value = sanitizeBackupReason(redactBackupSecretLine(value))
+	if maxLen > 0 && len(value) > maxLen {
+		return value[:maxLen]
+	}
+	return value
 }
 
 func cleanBackupScriptPath(path string) (string, error) {
