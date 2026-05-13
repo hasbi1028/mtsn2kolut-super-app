@@ -96,6 +96,26 @@ function staticCacheControlForPath(pathname: string): string | null {
 	return null;
 }
 
+function isStateChangingMethod(method: string): boolean {
+	return !['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase());
+}
+
+function originMatchesRequest(event: RequestEvent): boolean {
+	const origin = event.request.headers.get('origin');
+	if (origin) return origin === event.url.origin;
+	const referer = event.request.headers.get('referer');
+	if (!referer) return false;
+	try {
+		return new URL(referer).origin === event.url.origin;
+	} catch {
+		return false;
+	}
+}
+
+function isProtectedBffMutation(event: RequestEvent, isPublic: boolean): boolean {
+	return event.url.pathname.startsWith('/api/') && !isPublic && isStateChangingMethod(event.request.method);
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	const isPublic = isPublicPath(event.url.pathname);
 	let access = event.cookies.get('access_token');
@@ -173,6 +193,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 			throw error(403, 'password change required');
 		}
 		throw redirect(302, '/settings/account');
+	}
+
+	if (isProtectedBffMutation(event, isPublic) && !originMatchesRequest(event)) {
+		throw error(403, 'csrf validation failed');
 	}
 
 	// Permission-aware gate: prefer dynamic RBAC permissions, keep legacy role fallback during migration.

@@ -241,6 +241,28 @@ func TestJWTBlocksMustChangePasswordExceptSafeAuthPaths(t *testing.T) {
 	}
 }
 
+func TestJWTRejectsNonHS256HMACTokens(t *testing.T) {
+	secret := "secret"
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS384, jwt.MapClaims{
+		"sub":  "11111111-1111-1111-1111-111111111111",
+		"type": "access",
+	}).SignedString([]byte(secret))
+	if err != nil {
+		t.Fatalf("SignedString() error = %v", err)
+	}
+	mw := JWT(secret, nil, nil)
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	req := httptest.NewRequest(http.MethodGet, "/api/students", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
 func signedTestAccessToken(t *testing.T, secret string, claims jwt.MapClaims) string {
 	t.Helper()
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))

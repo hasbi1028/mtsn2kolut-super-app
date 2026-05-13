@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -258,8 +257,7 @@ func (h *Academic) CreateLessonPeriod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body lessonPeriodRequest
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
+	if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
 		return
 	}
 	params, ok := parseCreateLessonPeriod(w, body)
@@ -285,8 +283,7 @@ func (h *Academic) UpdateLessonPeriod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body lessonPeriodRequest
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
+	if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
 		return
 	}
 	params, ok := parseUpdateLessonPeriod(w, id, body)
@@ -344,8 +341,7 @@ func (h *Academic) ActivateYear(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Confirmation string `json:"confirmation"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
+	if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
 		return
 	}
 	row, err := h.svc.ActivateYear(r.Context(), id, body.Confirmation)
@@ -365,8 +361,7 @@ func (h *Academic) PreviewYearRollover(w http.ResponseWriter, r *http.Request) {
 		SourceAcademicYearID string `json:"source_academic_year_id"`
 		TargetAcademicYearID string `json:"target_academic_year_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
+	if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
 		return
 	}
 	sourceID, err := parseOptionalUUID(body.SourceAcademicYearID)
@@ -401,8 +396,7 @@ func (h *Academic) ApplyYearRollover(w http.ResponseWriter, r *http.Request) {
 		Confirmation         string `json:"confirmation"`
 		SafetyToken          string `json:"safety_token"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
+	if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
 		return
 	}
 	sourceID, err := parseOptionalUUID(body.SourceAcademicYearID)
@@ -434,8 +428,7 @@ func (h *Academic) DryRunAcademicImport(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var body service.AcademicImportDryRunInput
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
+	if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
 		return
 	}
 	result, err := h.svc.DryRunAcademicImport(r.Context(), body)
@@ -460,8 +453,7 @@ func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 			EndDate   string `json:"end_date"`
 			IsActive  bool   `json:"is_active"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
+		if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
 			return
 		}
 		var startDate, endDate pgtype.Date
@@ -492,8 +484,7 @@ func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 			Level          string `json:"level"`
 			IsActive       bool   `json:"is_active"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
+		if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
 			return
 		}
 		yearID, err := parseUUID(body.AcademicYearID)
@@ -515,8 +506,7 @@ func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 		api.Created(w, row)
 	case "subjects":
 		var body subjectRequest
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
+		if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
 			return
 		}
 		row, err := h.svc.CreateSubject(r.Context(), createSubjectParams(body))
@@ -531,8 +521,7 @@ func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 			SubjectID         string `json:"subject_id"`
 			TeacherEmployeeID string `json:"teacher_employee_id"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
+		if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
 			return
 		}
 		classID, err := parseUUID(body.ClassID)
@@ -569,8 +558,7 @@ func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 			RoomLabel    string `json:"room_label"`
 			Notes        string `json:"notes"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
+		if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
 			return
 		}
 		assignmentID, err := parseUUID(body.AssignmentID)
@@ -627,8 +615,7 @@ func (h *Academic) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if entity == "subjects" {
 		var body subjectRequest
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
+		if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
 			return
 		}
 		row, err := h.svc.UpdateSubject(r.Context(), updateSubjectParams(id, body))
@@ -651,8 +638,7 @@ func (h *Academic) Update(w http.ResponseWriter, r *http.Request) {
 		RoomLabel    string `json:"room_label"`
 		Notes        string `json:"notes"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "Data yang dikirim tidak dapat dibaca")
+	if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
 		return
 	}
 	assignmentID, err := parseUUID(body.AssignmentID)

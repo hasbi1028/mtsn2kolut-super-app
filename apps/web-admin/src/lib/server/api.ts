@@ -131,6 +131,22 @@ function isMalformedJsonError(e: unknown): boolean {
 	return e instanceof SyntaxError && /json|unexpected end|unexpected token|not valid json/i.test(e.message);
 }
 
+const SECRET_LOG_PATTERNS: Array<[RegExp, string]> = [
+	[/\b(Bearer\s+)[A-Za-z0-9._~+\/-]+=*/gi, '$1[REDACTED]'],
+	[/\b(access_token|refresh_token|token|password|secret|cookie)\b\s*[:=]\s*([^\s,;}&]+)/gi, '$1=[REDACTED]'],
+	[/\b(authorization)\b\s*[:=]\s*(?!Bearer\s+\[REDACTED\])([^\s,;}]+)/gi, '$1: [REDACTED]'],
+	[/([?&](?:token|access_token|refresh_token|password|secret)=)[^\s&]+/gi, '$1[REDACTED]'],
+];
+
+export function redactForLog(value: unknown): string {
+	let text = typeof value === 'string' ? value : JSON.stringify(value);
+	if (!text) text = String(value ?? '');
+	for (const [pattern, replacement] of SECRET_LOG_PATTERNS) {
+		text = text.replace(pattern, replacement);
+	}
+	return text.length > 1000 ? `${text.slice(0, 1000)}…[truncated]` : text;
+}
+
 async function parseEnvelope<T>(res: Response): Promise<ApiEnvelope<T> | undefined> {
 	const text = await res.text();
 	if (!text) return undefined;
@@ -386,18 +402,18 @@ export async function getVerifiedUserFromAccessToken(
 export function handleRouteError(e: unknown, route = ''): Response {
 	const route_label = route ? `[${route}]` : '[api-proxy]';
 	if (e instanceof RequestPayloadError) {
-		console.warn(`${route_label} malformed request JSON:`, e.message);
+		console.warn(`${route_label} malformed request JSON:`, redactForLog(e.message));
 		return json({ error: e.message }, { status: 400 });
 	}
 	if (e instanceof ApiError) {
 		const prefix = route ? `[${route}]` : '[api-proxy]';
-		console.error(`${prefix} upstream ${e.status}:`, e.upstreamMessage);
+		console.error(`${prefix} upstream ${e.status}:`, redactForLog(e.upstreamMessage));
 		// Jangan expose detail 5xx dari Go sebagai 500 SvelteKit — pakai 503
 		const status = e.status >= 500 ? 503 : e.status;
 		const message = e.status >= 500 ? GENERIC_UPSTREAM_ERROR : e.message;
 		return json({ error: message }, { status });
 	}
-	const msg = (e as Error)?.message ?? String(e);
+	const msg = redactForLog((e as Error)?.message ?? String(e));
 	if (isMalformedJsonError(e)) {
 		console.warn(`${route_label} malformed request JSON:`, msg);
 		return json({ error: 'Payload JSON tidak valid' }, { status: 400 });

@@ -23,11 +23,11 @@ func JWT(secret string, currentVersion authVersionProvider, validateSession acce
 			}
 			claims := jwt.MapClaims{}
 			_, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (any, error) {
-				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				if t.Method != jwt.SigningMethodHS256 {
 					return nil, jwt.ErrSignatureInvalid
 				}
 				return []byte(secret), nil
-			})
+			}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 			if err != nil {
 				api.Unauthorized(w)
 				return
