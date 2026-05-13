@@ -3939,8 +3939,8 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 									<span class="font-semibold text-foreground">{questionTypeConfig.label}:</span> {questionTypeConfig.desc}
 								</span>
 							</div>
-							<div class="grid gap-2 lg:grid-cols-[8rem_minmax(0,1fr)_5.5rem_8rem_6.5rem_10.5rem] lg:items-end">
-								<div class="self-center">
+							<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-[8rem_minmax(16rem,1fr)_5.5rem_10rem] 2xl:grid-cols-[8rem_minmax(18rem,1fr)_5.5rem_10rem_8rem_10.5rem] xl:items-end">
+								<div class="self-center md:col-span-2 xl:col-span-1">
 									<h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-foreground">Metadata</h3>
 									<p class="mt-0.5 text-[10px] text-muted-foreground">Data wajib</p>
 								</div>
