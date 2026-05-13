@@ -147,6 +147,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 			{ href: '/settings/users', label: 'Pengguna & Hak Akses', icon: 'users', roles: ['admin'], permissions: ['users.read'] },
 			{ href: '/settings/rbac', label: 'Peran & Izin Akses', icon: 'shield', roles: ['admin'], permissions: ['roles.read'] },
 			{ href: '/settings/user-change-requests', label: 'Perubahan Data', icon: 'file-text', roles: ['admin'], permissions: ['profile_changes.review'] },
+			{ href: '/settings/backups', label: 'Backup & Restore', icon: 'server', roles: ['admin'], permissions: ['backup.read'] },
 			{ href: '/settings/audit-logs', label: 'Audit Aktivitas', icon: 'file-text', roles: ['admin'], permissions: ['audit.read'] },
 			{ href: '/settings/analytics', label: 'Statistik Penggunaan', icon: 'activity', roles: ['admin'], permissions: ['analytics.read'] },
 			{ href: '/settings', label: 'Pengaturan Sistem', icon: 'settings', roles: ['admin'], permissions: ['settings.account'] }

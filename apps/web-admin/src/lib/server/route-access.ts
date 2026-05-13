@@ -39,6 +39,7 @@ const ADMIN_ONLY_PREFIXES = [
 	'/settings/user-change-requests',
 	'/settings/audit-logs',
 	'/settings/school-profile',
+	'/settings/backups',
 	'/api/academic',
 	'/api/employees',
 	'/api/parents',
@@ -47,6 +48,7 @@ const ADMIN_ONLY_PREFIXES = [
 	'/api/rbac',
 	'/api/website',
 	'/api/school-profile',
+	'/api/system/backups',
 	'/api/asesmen/events',
 	'/api/asesmen/packages',
 	'/api/asesmen/sessions',
@@ -205,6 +207,7 @@ function settingsPermission(pathname: string): string[] | undefined {
 	if (matchesPathSegment(pathname, '/settings/account')) return undefined;
 	if (matchesPathSegment(pathname, '/settings/audit-logs')) return ['audit.read'];
 	if (matchesPathSegment(pathname, '/settings/analytics')) return ['analytics.read'];
+	if (matchesPathSegment(pathname, '/settings/backups')) return ['backup.read'];
 	if (matchesPathSegment(pathname, '/settings/rbac')) return ['roles.read'];
 	if (matchesPathSegment(pathname, '/settings/school-profile') || matchesPathSegment(pathname, '/api/school-profile')) return ['settings.school_profile'];
 	if (pathname === '/settings') return ['settings.account'];
@@ -321,6 +324,13 @@ function employeePermission(pathname: string, method: string): string[] | undefi
 	return isReadMethod(method) ? ['employees.read', 'employees.manage'] : ['employees.manage'];
 }
 
+function systemBackupPermission(pathname: string, method: string): string[] | undefined {
+	if (!matchesPathSegment(pathname, '/api/system/backups')) return undefined;
+	if (!isReadMethod(method)) return [];
+	if (/^\/api\/system\/backups\/[^/]+\/download\/?$/.test(pathname)) return ['backup.download'];
+	return ['backup.read'];
+}
+
 function isRombelTimetableJournalSessionPath(pathname: string): boolean {
 	return /^\/api\/academic\/rombel\/[^/]+\/timetable-slots\/[^/]+\/journal-session\/?$/.test(pathname.split('?')[0] ?? pathname);
 }
@@ -329,6 +339,8 @@ export function requiredPermissionsForPath(pathname: string, method: string): st
 	const settings = settingsPermission(pathname);
 	if (settings) return settings;
 	if (matchesPathSegment(pathname, '/api/internal-analytics/events')) return [];
+	const systemBackups = systemBackupPermission(pathname, method);
+	if (systemBackups) return systemBackups;
 	if (matchesPathSegment(pathname, '/api/internal-analytics/export')) return ['analytics.export'];
 	if (matchesPathSegment(pathname, '/api/internal-analytics')) return isReadMethod(method) ? ['analytics.read'] : ['analytics.read'];
 	if (matchesPathSegment(pathname, '/api/rbac')) return isReadMethod(method) ? ['roles.read'] : ['roles.manage'];
