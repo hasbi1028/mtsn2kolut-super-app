@@ -326,6 +326,7 @@ function employeePermission(pathname: string, method: string): string[] | undefi
 
 function systemBackupPermission(pathname: string, method: string): string[] | undefined {
 	if (!matchesPathSegment(pathname, '/api/system/backups')) return undefined;
+	if (method === 'POST' && /^\/api\/system\/backups\/[^/]+\/(validate-restore|restore-command)\/?$/.test(pathname)) return ['backup.restore_plan'];
 	if (method === 'POST' && pathname === '/api/system/backups/run') return ['backup.create'];
 	if (!isReadMethod(method)) return [];
 	if (/^\/api\/system\/backups\/[^/]+\/download\/?$/.test(pathname)) return ['backup.download'];

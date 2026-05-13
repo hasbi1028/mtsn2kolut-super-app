@@ -233,3 +233,52 @@ func mustChtimes(t *testing.T, path string, ts time.Time) {
 		t.Fatalf("chtimes %s: %v", path, err)
 	}
 }
+
+func TestSystemBackupValidateRestoreUsesPgRestoreListOnly(t *testing.T) {
+	dir := t.TempDir()
+	backupPath := filepath.Join(dir, "pusaka_20260513_000001.dump")
+	writeBackupFile(t, backupPath, "dump")
+	var calls []string
+	svc := NewSystemBackup(SystemBackupConfig{
+		BackupDir: dir,
+		Now:       func() time.Time { return time.Date(2026, 5, 13, 12, 0, 0, 0, time.UTC) },
+		CommandRunner: func(ctx context.Context, name string, args ...string) ([]byte, error) {
+			calls = append(calls, name+" "+strings.Join(args, " "))
+			if name == "pg_restore" && len(args) == 2 && args[0] == "--list" && args[1] == backupPath {
+				return []byte("; header\n1234; 2615 2200 SCHEMA - public postgres\n1235; 1259 TABLE public users postgres\n"), nil
+			}
+			return nil, errors.New("unexpected command")
+		},
+	})
+	result, err := svc.ValidateRestore(context.Background(), "pusaka_20260513_000001.dump")
+	if err != nil {
+		t.Fatalf("ValidateRestore() error = %v", err)
+	}
+	if !result.Valid || result.ObjectCount != 2 || len(result.Preview) != 2 {
+		t.Fatalf("ValidateRestore() = %+v, want valid object preview", result)
+	}
+	if len(calls) != 1 || strings.Contains(calls[0], "--dbname") {
+		t.Fatalf("calls = %v, want pg_restore --list only", calls)
+	}
+}
+
+func TestSystemBackupRestoreCommandIsManualOnly(t *testing.T) {
+	dir := t.TempDir()
+	backupPath := filepath.Join(dir, "pusaka_20260513_000001.dump")
+	writeBackupFile(t, backupPath, "dump")
+	svc := NewSystemBackup(SystemBackupConfig{BackupDir: dir})
+	cmd, err := svc.RestoreCommand(context.Background(), "pusaka_20260513_000001.dump")
+	if err != nil {
+		t.Fatalf("RestoreCommand() error = %v", err)
+	}
+	joined := strings.Join(cmd.Commands, "\n")
+	if !strings.Contains(joined, "pg_restore --list") || !strings.Contains(joined, "$DATABASE_URL") {
+		t.Fatalf("commands = %s, want validation and DATABASE_URL placeholder", joined)
+	}
+	if strings.Contains(joined, "postgres://") || strings.Contains(joined, "password") {
+		t.Fatalf("commands expose secret-like content: %s", joined)
+	}
+	if !strings.Contains(joined, shellQuoteForOperator(backupPath)) {
+		t.Fatalf("commands = %s, want quoted backup path", joined)
+	}
+}

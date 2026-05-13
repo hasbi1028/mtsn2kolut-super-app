@@ -35,6 +35,7 @@ export const RBAC_PERMISSION_CATALOG = [
 	{ code: 'backup.create', module: 'backup', action: 'create', description: 'Menjalankan backup PostgreSQL manual dari Backup Center.' },
 	{ code: 'backup.download', module: 'backup', action: 'download', description: 'Mengunduh file backup PostgreSQL yang tersedia.' },
 	{ code: 'backup.read', module: 'backup', action: 'read', description: 'Melihat status dan daftar backup PostgreSQL.' },
+	{ code: 'backup.restore_plan', module: 'backup', action: 'restore_plan', description: 'Memvalidasi metadata backup dan membuat SOP/perintah restore manual tanpa menjalankan restore production.' },
 	{ code: 'dashboard.read', module: 'dashboard', action: 'read', description: 'Melihat dashboard utama.' },
 	{ code: 'document_cycles.manage', module: 'document_cycles', action: 'manage', description: 'Mengelola siklus dokumen.' },
 	{ code: 'document_cycles.read', module: 'document_cycles', action: 'read', description: 'Melihat siklus dokumen.' },

@@ -111,6 +111,26 @@ type SystemBackupJob struct {
 	Error       string     `json:"error,omitempty"`
 }
 
+type SystemBackupRestoreValidation struct {
+	BackupID    string    `json:"backup_id"`
+	Valid       bool      `json:"valid"`
+	ObjectCount int       `json:"object_count"`
+	Preview     []string  `json:"preview"`
+	CheckedAt   time.Time `json:"checked_at"`
+	Command     string    `json:"command"`
+	Warnings    []string  `json:"warnings"`
+}
+
+type SystemBackupRestoreCommand struct {
+	BackupID       string    `json:"backup_id"`
+	GeneratedAt    time.Time `json:"generated_at"`
+	SafetyLevel    string    `json:"safety_level"`
+	Warnings       []string  `json:"warnings"`
+	PreflightSteps []string  `json:"preflight_steps"`
+	Commands       []string  `json:"commands"`
+	RollbackNote   string    `json:"rollback_note"`
+}
+
 type systemdBackupStatus struct {
 	TimerEnabled   bool
 	TimerActive    bool
@@ -336,6 +356,84 @@ func (s *SystemBackup) Job(ctx context.Context, id string) (SystemBackupJob, err
 		return SystemBackupJob{}, domain.ErrNotFound
 	}
 	return job, nil
+}
+
+func (s *SystemBackup) ValidateRestore(ctx context.Context, id string) (SystemBackupRestoreValidation, error) {
+	download, err := s.Download(ctx, id)
+	if err != nil {
+		return SystemBackupRestoreValidation{}, err
+	}
+	if _, err := exec.LookPath("pg_restore"); err != nil {
+		return SystemBackupRestoreValidation{}, domain.ErrNotFound
+	}
+	validationCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	output, err := s.cfg.CommandRunner(validationCtx, "pg_restore", "--list", download.Path)
+	checkedAt := s.cfg.Now()
+	cleanOutput := sanitizeBackupCommandOutput(string(output))
+	if err != nil {
+		return SystemBackupRestoreValidation{
+			BackupID:  download.Filename,
+			Valid:     false,
+			CheckedAt: checkedAt,
+			Command:   "pg_restore --list <backup.dump>",
+			Warnings:  []string{"Validasi metadata restore gagal. File tidak boleh dipakai sebelum dicek manual di server.", cleanOutput},
+		}, nil
+	}
+	preview, count := pgRestoreListPreview(string(output))
+	warnings := []string{"Validasi ini hanya membaca metadata pg_restore --list; belum melakukan restore ke database mana pun."}
+	if count == 0 {
+		warnings = append(warnings, "Daftar objek kosong; cek kembali file backup sebelum dipakai.")
+	}
+	return SystemBackupRestoreValidation{
+		BackupID:    download.Filename,
+		Valid:       count > 0,
+		ObjectCount: count,
+		Preview:     preview,
+		CheckedAt:   checkedAt,
+		Command:     "pg_restore --list <backup.dump>",
+		Warnings:    uniqueStrings(warnings),
+	}, nil
+}
+
+func (s *SystemBackup) RestoreCommand(ctx context.Context, id string) (SystemBackupRestoreCommand, error) {
+	download, err := s.Download(ctx, id)
+	if err != nil {
+		return SystemBackupRestoreCommand{}, err
+	}
+	backupPath := download.Path
+	backupName := download.Filename
+	return SystemBackupRestoreCommand{
+		BackupID:    backupName,
+		GeneratedAt: s.cfg.Now(),
+		SafetyLevel: "manual-operator-only",
+		Warnings: []string{
+			"Tidak ada eksekusi restore production dari aplikasi.",
+			"Jalankan perintah ini hanya melalui SSH/server setelah membuat backup terbaru dan mendapatkan approval eksplisit.",
+			"Ganti placeholder <TARGET_DB>, <APP_PM2_NAME>, dan <OWNER> sesuai lingkungan production; jangan tempel credential ke chat/dokumen.",
+		},
+		PreflightSteps: []string{
+			"Pastikan file backup yang dipilih benar: " + backupName,
+			"Jalankan validasi: pg_restore --list <backup.dump> dan pastikan object list terbaca.",
+			"Buat backup terbaru sebelum restore dan simpan checksum SHA256.",
+			"Umumkan downtime singkat ke operator madrasah.",
+			"Stop aplikasi yang menulis ke database sebelum restore.",
+		},
+		Commands: []string{
+			"# 1) Validasi isi backup tanpa mengubah DB",
+			"pg_restore --list " + shellQuoteForOperator(backupPath) + " | sed -n '1,40p'",
+			"# 2) Backup safety terbaru sebelum restore",
+			"/home/servermtsn2kolut/mtsn2kolut-super-app/deploy/backup-postgresql.sh",
+			"# 3) Stop aplikasi penulis DB",
+			"pm2 stop <APP_PM2_NAME>",
+			"# 4) Restore ke database target. Gunakan env DATABASE_URL di server, jangan tampilkan credential.",
+			"pg_restore --clean --if-exists --no-owner --dbname=\"$DATABASE_URL\" " + shellQuoteForOperator(backupPath),
+			"# 5) Start ulang aplikasi dan health check",
+			"pm2 start <APP_PM2_NAME>",
+			"curl -fsS http://127.0.0.1:8080/health",
+		},
+		RollbackNote: "Jika restore gagal, jangan ulangi dari UI. Simpan log terminal, restore dari backup safety terbaru, lalu cek health dan audit data.",
+	}, nil
 }
 
 func (s *SystemBackup) Download(ctx context.Context, id string) (SystemBackupDownload, error) {
@@ -655,6 +753,29 @@ func redactBackupSecretLine(line string) string {
 		}
 	}
 	return line
+}
+
+func pgRestoreListPreview(raw string) ([]string, int) {
+	preview := []string{}
+	count := 0
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, ";") {
+			continue
+		}
+		count++
+		if len(preview) < 12 {
+			preview = append(preview, line)
+		}
+	}
+	return preview, count
+}
+
+func shellQuoteForOperator(value string) string {
+	if value == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
 func backupListSize(items []SystemBackupFile) int64 {

@@ -17,11 +17,13 @@ import (
 )
 
 type fakeSystemBackupService struct {
-	status   service.SystemBackupStatus
-	list     service.SystemBackupList
-	download service.SystemBackupDownload
-	job      service.SystemBackupJob
-	err      error
+	status     service.SystemBackupStatus
+	list       service.SystemBackupList
+	download   service.SystemBackupDownload
+	job        service.SystemBackupJob
+	validation service.SystemBackupRestoreValidation
+	command    service.SystemBackupRestoreCommand
+	err        error
 }
 
 func (f *fakeSystemBackupService) Status(ctx context.Context) (service.SystemBackupStatus, error) {
@@ -51,6 +53,20 @@ func (f *fakeSystemBackupService) Job(ctx context.Context, id string) (service.S
 		return service.SystemBackupJob{}, f.err
 	}
 	return f.job, nil
+}
+
+func (f *fakeSystemBackupService) ValidateRestore(ctx context.Context, id string) (service.SystemBackupRestoreValidation, error) {
+	if f.err != nil {
+		return service.SystemBackupRestoreValidation{}, f.err
+	}
+	return f.validation, nil
+}
+
+func (f *fakeSystemBackupService) RestoreCommand(ctx context.Context, id string) (service.SystemBackupRestoreCommand, error) {
+	if f.err != nil {
+		return service.SystemBackupRestoreCommand{}, f.err
+	}
+	return f.command, nil
 }
 
 func TestSystemBackupHandlerStatusAndList(t *testing.T) {
