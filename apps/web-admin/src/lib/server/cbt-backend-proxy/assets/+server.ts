@@ -3,6 +3,19 @@ import type { RequestEvent } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
 import { apiPathWithQuery, handleRouteError, jsonProxyResponse, proxy } from '$lib/server/api';
 
+type AssetPayload = { url?: string; [key: string]: unknown };
+
+function normalizeBankSoalAssetUrl(url: string) {
+	return url.replace(/^\/api\/cbt\/assets\//, '/api/bank-soal/assets/');
+}
+
+function normalizeAssetPayload(data: unknown) {
+	if (!data || typeof data !== 'object') return data;
+	const payload = data as AssetPayload;
+	if (typeof payload.url !== 'string') return data;
+	return { ...payload, url: normalizeBankSoalAssetUrl(payload.url) };
+}
+
 export const GET = async (event: RequestEvent) => {
 	try {
 		const questionId = event.url.searchParams.get('question_id');
@@ -25,7 +38,7 @@ export const POST = async (event: RequestEvent) => {
 		});
 		return await jsonProxyResponse<{ data?: unknown }, unknown>(res, {
 			status: 201,
-			map: (data) => data.data ?? data
+			map: (data) => normalizeAssetPayload(data.data ?? data)
 		});
 	} catch (e) {
 		return handleRouteError(e, 'cbt/assets POST');
