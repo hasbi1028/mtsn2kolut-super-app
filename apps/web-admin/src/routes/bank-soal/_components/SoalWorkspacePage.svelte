@@ -2716,6 +2716,10 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		openMenuId = '';
 	}
 
+	function normalizeEditorAssetUrl(url: string): string {
+		return url.replace(/^\/api\/cbt\/assets\//, '/api/bank-soal/assets/');
+	}
+
 	async function uploadImageInEditor(file: File): Promise<string> {
 		const form = new FormData();
 		form.set('file', file);
@@ -2723,7 +2727,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		if (editingId) form.set('question_id', editingId);
 		const res = await fetch('/api/bank-soal/assets', { method: 'POST', body: form });
 		const payload = await readClientApiData<{ url?: string }>(res, 'Upload gambar gagal');
-		return payload.url ?? '';
+		return normalizeEditorAssetUrl(payload.url ?? '');
 	}
 
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
