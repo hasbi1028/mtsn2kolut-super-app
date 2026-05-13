@@ -83,8 +83,8 @@ Default username:
 Password **wajib** diberikan lewat environment; repo tidak menyediakan password default. Gunakan password dummy terkontrol khusus E2E dan jangan pakai credential pribadi/produksi:
 
 ```bash
-BANK_SOAL_E2E_PASSWORD='<controlled-e2e-password>' \
-DATABASE_URL='postgresql://user:pass@host:5432/dbname' \
+BANK_SOAL_E2E_PASSWORD='[REDACTED_E2E_PASSWORD]' \
+DATABASE_URL='postgresql://example_user:example_password@example-host:5432/example_db' \
 npm run db:seed:bank-soal-e2e-roles
 ```
 
@@ -92,9 +92,9 @@ Override username/password per persona bila diperlukan:
 
 ```bash
 BANK_SOAL_E2E_CREATOR_USERNAME=e2e_bs_creator_a \
-BANK_SOAL_E2E_CREATOR_PASSWORD='dummy-creator-password' \
-BANK_SOAL_E2E_PASSWORD='dummy-shared-password' \
-DATABASE_URL='postgresql://user:pass@host:5432/dbname' \
+BANK_SOAL_E2E_CREATOR_PASSWORD='[REDACTED_CREATOR_PASSWORD]' \
+BANK_SOAL_E2E_PASSWORD='[REDACTED_SHARED_PASSWORD]' \
+DATABASE_URL='postgresql://example_user:example_password@example-host:5432/example_db' \
 npm run db:seed:bank-soal-e2e-roles
 ```
 
@@ -102,8 +102,8 @@ Untuk local development eksplisit tanpa `DATABASE_URL`:
 
 ```bash
 ALLOW_LOCAL_DATABASE_URL=true \
-LOCAL_DATABASE_URL='postgresql://user:pass@localhost:5432/dbname' \
-BANK_SOAL_E2E_PASSWORD='<controlled-e2e-password>' \
+LOCAL_DATABASE_URL='postgresql://example_user:example_password@localhost:5432/example_db' \
+BANK_SOAL_E2E_PASSWORD='[REDACTED_E2E_PASSWORD]' \
 npm run db:seed:bank-soal-e2e-roles
 ```
 
@@ -121,7 +121,7 @@ Setelah seed, smoke bisa dijalankan dengan credential eksplisit atau memakai def
 ```bash
 WEB_ADMIN_BANK_SOAL_E2E_BASE_URL=http://localhost:5173 \
 WEB_ADMIN_BANK_SOAL_E2E_USE_SEEDED_DEFAULTS=true \
-BANK_SOAL_E2E_PASSWORD='<controlled-e2e-password>' \
+BANK_SOAL_E2E_PASSWORD='[REDACTED_E2E_PASSWORD]' \
 npm --prefix apps/web-admin run smoke:bank-soal:roles
 ```
 

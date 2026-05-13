@@ -39,12 +39,12 @@ describe('active frontend API aliases', () => {
 	it('keeps removed route trees absent from web-admin source', () => {
 		const removedRoutes = [
 			'routes/cbt',
-			'routes/api/cbt',
 			'routes/bank-soal/komposer',
 			'routes/bank-soal/import',
 			'routes/bank-soal/review'
 		].map((routePath) => path.join(SRC_ROOT, routePath));
 
 		expect(removedRoutes.filter((routePath) => existsSync(routePath)).map((routePath) => toPosix(path.relative(SRC_ROOT, routePath)))).toEqual([]);
+		expect(existsSync(path.join(SRC_ROOT, 'routes/api/cbt'))).toBe(true);
 	});
 });

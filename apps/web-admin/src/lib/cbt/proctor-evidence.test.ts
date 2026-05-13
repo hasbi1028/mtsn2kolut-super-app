@@ -17,6 +17,7 @@ describe('CBT proctor evidence helpers', () => {
 			'submit_guard',
 			'stale_connection',
 			'warning',
+			'anti_cheat',
 			'force_submit',
 			'reset_access',
 			'export_print'

@@ -21,9 +21,9 @@ Required environment variables:
 ```bash
 WEB_ADMIN_SMOKE_BASE_URL=https://admin.example.sch.id
 WEB_ADMIN_SMOKE_ADMIN_USERNAME=admin-user
-WEB_ADMIN_SMOKE_ADMIN_PASSWORD=admin-password
+WEB_ADMIN_SMOKE_ADMIN_PASSWORD='[REDACTED_ADMIN_PASSWORD]'
 WEB_ADMIN_SMOKE_GURU_USERNAME=guru-user
-WEB_ADMIN_SMOKE_GURU_PASSWORD=guru-password
+WEB_ADMIN_SMOKE_GURU_PASSWORD='[REDACTED_GURU_PASSWORD]'
 ```
 
 Optional environment variables:
