@@ -488,8 +488,8 @@
 	>
 		Cari menu
 	</button>
-	<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/95 p-1 shadow-sm ring-1 ring-border">
-		<img src="/brand/logo-kemenag-icon-64.png" alt="Logo Kemenag" class="h-full w-full object-contain" />
+	<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-emerald-900 shadow-sm ring-1 ring-emerald-300/20">
+		<img src="/brand/madrasah-mark.svg" alt="Ikon MTsN 2 Kolaka Utara" class="h-full w-full object-cover" />
 	</span>
 	<span class="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">MTsN 2 Kolut</span>
 	{#if user}
@@ -512,8 +512,8 @@
 >
 	<!-- Brand -->
 	<div class={`flex h-14 shrink-0 items-center border-b border-border ${desktopExpanded ? 'gap-2.5 px-4' : 'justify-center px-3'}`}>
-		<span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white p-1 shadow-sm ring-1 ring-border">
-			<img src="/brand/logo-kemenag-icon-64.png" alt="Logo Kemenag" class="h-full w-full object-contain" />
+		<span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-emerald-900 shadow-sm ring-1 ring-emerald-300/20">
+			<img src="/brand/madrasah-mark.svg" alt="Ikon MTsN 2 Kolaka Utara" class="h-full w-full object-cover" />
 		</span>
 		<div class={`min-w-0 ${desktopExpanded ? 'block' : 'block lg:hidden'}`}>
 			<p class="truncate text-sm font-semibold text-foreground">MTsN 2 Kolut</p>
