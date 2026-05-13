@@ -8,7 +8,7 @@ interface GoJob {
 	run_type: string; status: string; error_message: string;
 	claimed_by: string; claimed_at: string;
 	attempts: number; max_attempts: number;
-	next_retry_at: string; created_at: string; updated_at: string;
+	next_retry_at: string; created_at: string; updated_at: string; not_before: string;
 }
 
 interface GoJobsResponse {
@@ -29,6 +29,7 @@ export const GET = async (event: RequestEvent) => {
 			id: j.id, run_type: j.run_type, status: j.status,
 			error_message: j.error_message, attempts: j.attempts,
 			max_attempts: j.max_attempts, next_retry_at: j.next_retry_at,
+			not_before: j.not_before, not_before_wita: toWITA(j.not_before),
 			claimed_by: j.claimed_by, created_at: j.created_at,
 			created_at_wita: toWITA(j.created_at),
 			nip: j.employee_nip, nama: j.employee_nama,

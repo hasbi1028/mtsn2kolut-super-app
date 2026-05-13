@@ -47,6 +47,9 @@ func TestHealthGetReportsDatabaseState(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("Health.Get(ok) status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
+	if !strings.Contains(rec.Body.String(), `"clock"`) || !strings.Contains(rec.Body.String(), `"server_utc"`) {
+		t.Fatalf("Health.Get(ok) missing clock diagnostics: %s", rec.Body.String())
+	}
 
 	rec = httptest.NewRecorder()
 	(&Health{pool: fakeHealthDB{err: errors.New("down")}}).Get(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
