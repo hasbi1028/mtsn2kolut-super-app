@@ -250,8 +250,11 @@ func TestSystemBackupRoutesUseBackupPermissionsWithAdminFallback(t *testing.T) {
 	for _, want := range []string{
 		`requireBackupRead := mw.RequireAnyPermissionOrRole([]string{"backup.read"}, "admin")`,
 		`requireBackupDownload := mw.RequireAnyPermissionOrRole([]string{"backup.download"}, "admin")`,
+		`requireBackupCreate := mw.RequireAnyPermissionOrRole([]string{"backup.create"}, "admin")`,
 		`r.With(requireBackupRead).Get("/api/system/backups/status", systemBackupH.Status)`,
 		`r.With(requireBackupRead).Get("/api/system/backups", systemBackupH.List)`,
+		`r.With(requireBackupCreate).Post("/api/system/backups/run", systemBackupH.RunManual)`,
+		`r.With(requireBackupRead).Get("/api/system/backups/jobs/{job_id}", systemBackupH.Job)`,
 		`r.With(requireBackupDownload).Get("/api/system/backups/{id}/download", systemBackupH.Download)`,
 	} {
 		if !strings.Contains(source, want) && !strings.Contains(authenticatedBlock, want) {
@@ -337,7 +340,7 @@ func TestInternalAnalyticsFrontendKeepsCollectorFirstPartyAndNoThirdPartyTrackin
 		source := string(raw)
 		for _, needle := range forbiddenNeedles {
 			if strings.Contains(source, needle) {
-					t.Fatalf("internal analytics must not add third-party tracking; found %q in %s", needle, path)
+				t.Fatalf("internal analytics must not add third-party tracking; found %q in %s", needle, path)
 			}
 		}
 		return nil

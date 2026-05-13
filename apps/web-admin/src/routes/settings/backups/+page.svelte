@@ -45,10 +45,13 @@
 	let errorMessage = $state('');
 	let status = $state<BackupStatus | null>(null);
 	let backups = $state<BackupFile[]>([]);
+	let manualBackupRunning = $state(false);
+	let manualBackupReason = $state('');
 
 	const isAdmin = $derived(Boolean(page.data.user?.roles?.includes('admin') || page.data.user?.role === 'admin'));
 	const permissions = $derived(page.data.user?.permissions ?? []);
 	const canDownload = $derived(isAdmin || permissions.includes('backup.download'));
+	const canCreate = $derived(isAdmin || permissions.includes('backup.create'));
 
 	onMount(() => {
 		void loadBackups();
@@ -76,6 +79,32 @@
 		} finally {
 			loading = false;
 			refreshing = false;
+		}
+	}
+
+
+	async function runManualBackup() {
+		if (!canCreate || manualBackupRunning) return;
+		const confirmed = window.confirm('Buat backup database PostgreSQL sekarang? Proses ini aman, tetapi dapat memakan waktu beberapa menit.');
+		if (!confirmed) return;
+		manualBackupRunning = true;
+		try {
+			const data = await fetch('/api/system/backups', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ reason: manualBackupReason })
+			}).then((response) => readClientApiData<{ status: string; output?: string; error?: string }>(response, 'Gagal menjalankan backup manual'));
+			if (data.status === 'success') {
+				toast.success('Backup manual berhasil dibuat');
+				manualBackupReason = '';
+				await loadBackups(false);
+			} else {
+				toast.error(data.error || 'Backup manual belum berhasil');
+			}
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Backup manual gagal dijalankan');
+		} finally {
+			manualBackupRunning = false;
 		}
 	}
 
@@ -145,9 +174,21 @@
 					Pantau backup PostgreSQL harian, cek kesehatan timer, dan unduh file backup resmi. Sprint ini bersifat read-only: belum ada restore production langsung dari aplikasi.
 				</p>
 			</div>
-			<Button variant="outline" onclick={() => loadBackups(true)} disabled={refreshing}>
-				{refreshing ? 'Memuat...' : 'Refresh Status'}
-			</Button>
+			<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+				<input
+					class="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+					placeholder="Alasan backup manual (opsional)"
+					maxlength="200"
+					bind:value={manualBackupReason}
+					disabled={!canCreate || manualBackupRunning}
+				/>
+				<Button onclick={runManualBackup} disabled={!canCreate || manualBackupRunning}>
+					{manualBackupRunning ? 'Membuat Backup...' : 'Buat Backup Sekarang'}
+				</Button>
+				<Button variant="outline" onclick={() => loadBackups(true)} disabled={refreshing || manualBackupRunning}>
+					{refreshing ? 'Memuat...' : 'Refresh Status'}
+				</Button>
+			</div>
 		</div>
 	</section>
 
@@ -276,7 +317,7 @@
 				Restore database production bersifat destruktif, sehingga tombol restore langsung belum dibuka pada Sprint Backup 1. Tahap berikutnya akan menambahkan validasi restore dan generate SOP/command manual yang aman.
 			</p>
 			<div class="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-				Tidak ada aksi restore production dari halaman ini.
+				Tidak ada aksi restore production dari halaman ini. Tombol backup manual hanya membuat file dump baru, bukan mengubah database.
 			</div>
 		</div>
 		<div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">

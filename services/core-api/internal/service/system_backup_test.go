@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -150,6 +151,72 @@ func TestSystemBackupStatusWarnsWhenTimerUnavailable(t *testing.T) {
 	}
 	if status.Health != "error" || len(status.Warnings) == 0 {
 		t.Fatalf("Status() = %+v, want warning/error when timer cannot be verified", status)
+	}
+}
+
+func TestSystemBackupRunManualExecutesFixedScriptAndSanitizesOutput(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "backup.sh")
+	writeBackupFile(t, script, "#!/usr/bin/env bash\n")
+	if err := os.Chmod(script, 0o700); err != nil {
+		t.Fatalf("chmod script: %v", err)
+	}
+	now := time.Date(2026, 5, 13, 11, 0, 0, 0, time.UTC)
+	var gotName string
+	var gotArgs []string
+	svc := NewSystemBackup(SystemBackupConfig{
+		BackupDir:  dir,
+		ScriptPath: script,
+		Now:        func() time.Time { return now },
+		CommandRunner: func(ctx context.Context, name string, args ...string) ([]byte, error) {
+			gotName = name
+			gotArgs = append([]string{}, args...)
+			return []byte("Starting backup\npassword=secret\nBackup completed\n"), nil
+		},
+	})
+
+	job, err := svc.RunManual(context.Background(), SystemBackupRunRequest{Reason: " before deploy  "})
+	if err != nil {
+		t.Fatalf("RunManual() error = %v", err)
+	}
+	if job.Status != "success" || job.ID != "backup-20260513-110000" || job.Reason != "before deploy" {
+		t.Fatalf("job = %+v", job)
+	}
+	if gotName != "bash" || len(gotArgs) != 1 || gotArgs[0] != script {
+		t.Fatalf("command = %s %v, want bash fixed script", gotName, gotArgs)
+	}
+	if strings.Contains(strings.ToLower(job.Output), "secret") || !strings.Contains(job.Output, "[REDACTED]") {
+		t.Fatalf("output not sanitized: %q", job.Output)
+	}
+}
+
+func TestSystemBackupRunManualRejectsConcurrentRun(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "backup.sh")
+	writeBackupFile(t, script, "#!/usr/bin/env bash\n")
+	started := make(chan struct{})
+	release := make(chan struct{})
+	svc := NewSystemBackup(SystemBackupConfig{
+		BackupDir:  dir,
+		ScriptPath: script,
+		CommandRunner: func(ctx context.Context, name string, args ...string) ([]byte, error) {
+			close(started)
+			<-release
+			return []byte("done"), nil
+		},
+	})
+	done := make(chan error, 1)
+	go func() {
+		_, err := svc.RunManual(context.Background(), SystemBackupRunRequest{})
+		done <- err
+	}()
+	<-started
+	if _, err := svc.RunManual(context.Background(), SystemBackupRunRequest{}); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("second RunManual error = %v, want conflict", err)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatalf("first RunManual error = %v", err)
 	}
 }
 

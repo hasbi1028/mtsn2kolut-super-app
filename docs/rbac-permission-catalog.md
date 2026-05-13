@@ -64,6 +64,7 @@ Legacy role fallback masih aktif untuk compatibility backend tertentu. UI baru t
 
 - `backup.read` — Melihat status dan daftar backup PostgreSQL.
 - `backup.download` — Mengunduh file backup PostgreSQL yang tersedia.
+- `backup.create` — Menjalankan backup PostgreSQL manual dari Backup Center.
 
 ### dashboard
 
