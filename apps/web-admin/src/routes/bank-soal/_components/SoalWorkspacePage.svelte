@@ -182,20 +182,12 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	};
 	type EventsPayload = CbtEvent[] | { items?: CbtEvent[]; events?: CbtEvent[] };
 	type UsersPayload = UserOption[] | { items?: UserOption[]; users?: UserOption[] };
-	type DraftPayload = {
+	type ComposerMetadataMemory = {
 		eventId?: string;
 		specialEventMode?: boolean;
 		subjectId: string;
 		questionType: ComposerQuestionType;
 		authoringMode: AuthoringMode;
-		stem: string;
-		stimulus: string;
-		rubric: string;
-		explanation: string;
-		options: string[];
-		matchingPairs: MatchingPair[];
-		matchingDistractors: string[];
-		answerKey: string;
 		weight: number;
 		difficulty: string;
 		isRtl: boolean;
@@ -208,8 +200,18 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		materialTopic: string;
 		cognitiveLevel: string;
 		hotsFlag: boolean;
-		workflowStatus: string;
 		savedAt: string;
+	};
+	type DraftPayload = ComposerMetadataMemory & {
+		stem: string;
+		stimulus: string;
+		rubric: string;
+		explanation: string;
+		options: string[];
+		matchingPairs: MatchingPair[];
+		matchingDistractors: string[];
+		answerKey: string;
+		workflowStatus: string;
 	};
 	type QuestionPayloadOption = {
 		label: string;
@@ -402,6 +404,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	];
 
 	const DRAFT_KEY = (id: string | null, eventId: string) => `mtsn2-soal-komposer:${eventId || 'global'}:${id ?? 'new'}`;
+	const LAST_METADATA_KEY = (eventId: string) => `mtsn2-soal-komposer:last-metadata:${eventId || 'global'}`;
 	const EVENT_MEMBER_ROLES: Array<{ value: EventMemberRole; label: string; desc: string }> = [
 		{ value: 'panitia', label: 'Panitia', desc: 'Koordinasi kegiatan' },
 		{ value: 'pembuat_soal', label: 'Pembuat Soal', desc: 'Menyusun bank soal' },
@@ -893,21 +896,13 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	});
 
 	// ── Draft autosave ─────────────────────────────────────────────────────────
-	function buildDraftPayload(): DraftPayload {
+	function buildComposerMetadataMemory(): ComposerMetadataMemory {
 		return {
 			eventId: selectedEventId,
 			specialEventMode: specialEventQuestionMode,
 			subjectId: fSubjectId,
 			questionType: fQuestionType,
 			authoringMode: fAuthoringMode,
-			stem: fStem,
-			stimulus: fStimulus,
-			rubric: fRubric,
-			explanation: fExplanation,
-			options: [...fOptions],
-			matchingPairs: fMatchingPairs.map((pair) => ({ ...pair })),
-			matchingDistractors: [...fMatchingDistractors],
-			answerKey: fAnswerKey,
 			weight: fWeight,
 			difficulty: fDifficulty,
 			isRtl: fIsRtl,
@@ -920,8 +915,79 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			materialTopic: fMaterialTopic,
 			cognitiveLevel: fCognitiveLevel,
 			hotsFlag: fHotsFlag,
-			workflowStatus: fWorkflowStatus,
 			savedAt: new Date().toISOString(),
+		};
+	}
+
+	function applyComposerMetadataMemory(
+		meta: Partial<Omit<ComposerMetadataMemory, 'questionType' | 'authoringMode'>> & { questionType?: string; authoringMode?: string },
+		statusMessage = 'Metadata terakhir dipakai otomatis'
+	) {
+		if (!meta.subjectId) return false;
+		if (!selectedEventId && meta.eventId) selectedEventId = meta.eventId;
+		specialEventQuestionMode = !editingId && Boolean(meta.specialEventMode && (selectedEventId || meta.eventId));
+		fSubjectId = meta.subjectId ?? '';
+		fQuestionType = normalizeQuestionType(meta.questionType);
+		fOptions = normalizeOptionCount([], fQuestionType);
+		fMatchingPairs = normalizeMatchingPairs([], fQuestionType);
+		fMatchingDistractors = normalizeMatchingDistractors([], fQuestionType);
+		fAnswerKey = defaultAnswerKeyForQuestionType(fQuestionType);
+		fAuthoringMode = normalizeAuthoringMode(meta.authoringMode);
+		fWeight = meta.weight ?? 1;
+		fDifficulty = meta.difficulty ?? 'medium';
+		fIsRtl = meta.isRtl ?? false;
+		fGradeLevel = meta.gradeLevel ?? 7;
+		fAcademicPhase = meta.academicPhase ?? '';
+		fCPRef = meta.cpRef ?? '';
+		fTPRef = meta.tpRef ?? '';
+		fKDRef = meta.kdRef ?? '';
+		fIndicatorRef = meta.indicatorRef ?? '';
+		fMaterialTopic = meta.materialTopic ?? '';
+		fCognitiveLevel = meta.cognitiveLevel ?? '';
+		fHotsFlag = meta.hotsFlag ?? false;
+		draftStatus = statusMessage;
+		draftSavedAt = meta.savedAt ?? null;
+		return true;
+	}
+
+	function rememberLastComposerMetadata() {
+		if (typeof localStorage === 'undefined' || !fSubjectId) return;
+		const meta = buildComposerMetadataMemory();
+		try {
+			localStorage.setItem(LAST_METADATA_KEY(selectedEventId), JSON.stringify(meta));
+			if (selectedEventId) localStorage.setItem(LAST_METADATA_KEY(''), JSON.stringify(meta));
+		} catch {
+			/* ignore storage errors */
+		}
+	}
+
+	function restoreLastComposerMetadata(): boolean {
+		if (typeof localStorage === 'undefined') return false;
+		const keys = selectedEventId ? [LAST_METADATA_KEY(selectedEventId), LAST_METADATA_KEY('')] : [LAST_METADATA_KEY('')];
+		for (const key of keys) {
+			try {
+				const raw = localStorage.getItem(key);
+				if (!raw) continue;
+				if (applyComposerMetadataMemory(JSON.parse(raw) as Partial<ComposerMetadataMemory>)) return true;
+			} catch {
+				/* ignore malformed local cache */
+			}
+		}
+		return false;
+	}
+
+	function buildDraftPayload(): DraftPayload {
+		return {
+			...buildComposerMetadataMemory(),
+			stem: fStem,
+			stimulus: fStimulus,
+			rubric: fRubric,
+			explanation: fExplanation,
+			options: [...fOptions],
+			matchingPairs: fMatchingPairs.map((pair) => ({ ...pair })),
+			matchingDistractors: [...fMatchingDistractors],
+			answerKey: fAnswerKey,
+			workflowStatus: fWorkflowStatus,
 		};
 	}
 
@@ -985,11 +1051,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				savedAt?: string;
 			}>(activeDraftKey);
 			if (!d) return false;
-			if (!selectedEventId && d.eventId) selectedEventId = d.eventId;
-			specialEventQuestionMode = !editingId && Boolean(d.specialEventMode && (selectedEventId || d.eventId));
-			fSubjectId = d.subjectId ?? '';
-			fQuestionType = normalizeQuestionType(d.questionType);
-			fAuthoringMode = normalizeAuthoringMode(d.authoringMode);
+			applyComposerMetadataMemory(d, 'Draft lokal dipulihkan');
 			fStem = d.stem ?? '';
 			fStimulus = d.stimulus ?? '';
 			fRubric = d.rubric ?? '';
@@ -998,21 +1060,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			fMatchingPairs = normalizeMatchingPairs(d.matchingPairs ?? [], fQuestionType);
 			fMatchingDistractors = normalizeMatchingDistractors(d.matchingDistractors ?? [], fQuestionType);
 			fAnswerKey = normalizeAnswerKey(d.answerKey, fQuestionType, answerItemCountForType(fQuestionType));
-			fWeight = d.weight ?? 1;
-			fDifficulty = d.difficulty ?? 'medium';
-			fIsRtl = d.isRtl ?? false;
-			fGradeLevel = d.gradeLevel ?? 7;
-			fAcademicPhase = d.academicPhase ?? '';
-			fCPRef = d.cpRef ?? '';
-			fTPRef = d.tpRef ?? '';
-			fKDRef = d.kdRef ?? '';
-			fIndicatorRef = d.indicatorRef ?? '';
-			fMaterialTopic = d.materialTopic ?? '';
-			fCognitiveLevel = d.cognitiveLevel ?? '';
-			fHotsFlag = d.hotsFlag ?? false;
 			fWorkflowStatus = normalizeWorkflowStatus(d.workflowStatus);
-			draftStatus = 'Draft lokal dipulihkan';
-			draftSavedAt = d.savedAt ?? null;
 			return true;
 		} catch {
 			return false;
@@ -1257,6 +1305,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 
 	async function queueQuestionSave(payload: QuestionSavePayload, intent: ComposerSaveIntent, authRequired = false) {
 		const draftKey = activeDraftKey;
+		rememberLastComposerMetadata();
 		await saveBankSoalDraftPayload(draftKey, buildDraftPayload());
 		const input = buildBankSoalQuestionSyncInput({
 			draftKey,
@@ -2071,7 +2120,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		// Delay to let state settle before restoring
 		setTimeout(() => {
 			void restoreDraft().then((restored) => {
-				if (!restored) draftStatus = '';
+				if (!restored && !restoreLastComposerMetadata()) draftStatus = '';
 			});
 		}, 50);
 	}
@@ -2415,6 +2464,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			}
 			await readClientJson<unknown>(res);
 
+			rememberLastComposerMetadata();
 			await clearDraft();
 			toast.success(isReview ? 'Soal diajukan review' : editingId ? 'Draft soal berhasil diperbarui' : 'Draft soal berhasil dibuat');
 			closeComposer();
