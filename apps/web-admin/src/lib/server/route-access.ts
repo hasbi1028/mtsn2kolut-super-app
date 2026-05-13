@@ -364,7 +364,6 @@ export function canAccessProtectedRoute(user: AuthUser | undefined, pathname: st
 	if (requiredPermissions.length > 0 && hasAnyPermission(user, requiredPermissions)) return true;
 	if (
 		isGuruSafeAssessmentSupportReadPath(pathname, method)
-		&& hasAnyRole(user, ['guru'])
 		&& hasAnyPermission(user, [
 			'bank_soal.read',
 			'bank_soal.create',
