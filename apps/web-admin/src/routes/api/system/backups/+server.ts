@@ -9,3 +9,13 @@ export const GET: RequestHandler = async (event) => {
 		return handleRouteError(error, 'system/backups GET');
 	}
 };
+
+export const POST: RequestHandler = async (event) => {
+	try {
+		const body = await event.request.json().catch(() => ({}));
+		const data = await proxy(event).post('/api/system/backups/run', body);
+		return Response.json({ data });
+	} catch (error) {
+		return handleRouteError(error, 'system/backups POST');
+	}
+};

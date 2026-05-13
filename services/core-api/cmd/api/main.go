@@ -67,6 +67,7 @@ func main() {
 	internalAnalyticsSvc := service.NewInternalAnalytics(q)
 	systemBackupSvc := service.NewSystemBackup(service.SystemBackupConfig{
 		BackupDir:     getEnv("POSTGRES_BACKUP_DIR", service.DefaultSystemBackupDir),
+		ScriptPath:    getEnv("POSTGRES_BACKUP_SCRIPT_PATH", service.DefaultSystemBackupScriptPath),
 		TimerName:     getEnv("POSTGRES_BACKUP_TIMER_NAME", service.DefaultSystemBackupTimerName),
 		ServiceName:   getEnv("POSTGRES_BACKUP_SERVICE_NAME", service.DefaultSystemBackupServiceName),
 		RetentionDays: int(int32Env("POSTGRES_BACKUP_RETENTION_DAYS", int32(service.DefaultSystemBackupRetentionDays))),
@@ -250,6 +251,7 @@ func main() {
 	requireAnalyticsExport := mw.RequireAnyPermissionOrRole([]string{"analytics.export"}, "admin")
 	requireBackupRead := mw.RequireAnyPermissionOrRole([]string{"backup.read"}, "admin")
 	requireBackupDownload := mw.RequireAnyPermissionOrRole([]string{"backup.download"}, "admin")
+	requireBackupCreate := mw.RequireAnyPermissionOrRole([]string{"backup.create"}, "admin")
 	requireSchoolProfileSettings := mw.RequirePermission("settings.school_profile")
 	requireEmployeesRead := mw.RequireAnyPermissionOrRole([]string{"employees.read", "employees.manage"}, "admin")
 	requireEmployeesManage := mw.RequireAnyPermissionOrRole([]string{"employees.manage"}, "admin")
@@ -285,6 +287,8 @@ func main() {
 		r.With(requireAnalyticsExport).Get("/api/internal-analytics/export", internalAnalyticsH.ExportAggregates)
 		r.With(requireBackupRead).Get("/api/system/backups/status", systemBackupH.Status)
 		r.With(requireBackupRead).Get("/api/system/backups", systemBackupH.List)
+		r.With(requireBackupCreate).Post("/api/system/backups/run", systemBackupH.RunManual)
+		r.With(requireBackupRead).Get("/api/system/backups/jobs/{job_id}", systemBackupH.Job)
 		r.With(requireBackupDownload).Get("/api/system/backups/{id}/download", systemBackupH.Download)
 		r.Get("/api/school-profile", settH.SchoolProfile)
 		r.With(requireSchoolProfileSettings).Put("/api/school-profile", settH.UpdateSchoolProfile)

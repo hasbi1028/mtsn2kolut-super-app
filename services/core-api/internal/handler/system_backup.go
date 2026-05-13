@@ -2,7 +2,9 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"os"
 
@@ -21,6 +23,8 @@ type systemBackupService interface {
 	Status(ctx context.Context) (service.SystemBackupStatus, error)
 	List(ctx context.Context) (service.SystemBackupList, error)
 	Download(ctx context.Context, id string) (service.SystemBackupDownload, error)
+	RunManual(ctx context.Context, req service.SystemBackupRunRequest) (service.SystemBackupJob, error)
+	Job(ctx context.Context, id string) (service.SystemBackupJob, error)
 }
 
 func NewSystemBackup(svc systemBackupService) *SystemBackup {
@@ -43,6 +47,36 @@ func (h *SystemBackup) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, list)
+}
+
+func (h *SystemBackup) RunManual(w http.ResponseWriter, r *http.Request) {
+	var req service.SystemBackupRunRequest
+	if r.Body != nil {
+		defer r.Body.Close()
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+			api.BadRequest(w, "payload backup tidak valid")
+			return
+		}
+	}
+	job, err := h.svc.RunManual(r.Context(), req)
+	if err != nil {
+		if job.ID != "" {
+			api.JSON(w, http.StatusInternalServerError, api.Response{Data: job, Error: "backup manual gagal"})
+			return
+		}
+		writeSystemBackupError(w, err)
+		return
+	}
+	api.OK(w, job)
+}
+
+func (h *SystemBackup) Job(w http.ResponseWriter, r *http.Request) {
+	job, err := h.svc.Job(r.Context(), chi.URLParam(r, "job_id"))
+	if err != nil {
+		writeSystemBackupError(w, err)
+		return
+	}
+	api.OK(w, job)
 }
 
 func (h *SystemBackup) Download(w http.ResponseWriter, r *http.Request) {
@@ -76,6 +110,8 @@ func writeSystemBackupError(w http.ResponseWriter, err error) {
 		api.BadRequest(w, "backup tidak valid")
 	case errors.Is(err, domain.ErrForbidden):
 		api.Forbidden(w)
+	case errors.Is(err, domain.ErrConflict):
+		api.Conflict(w, "backup manual sedang berjalan")
 	case errors.Is(err, domain.ErrNotFound):
 		api.NotFound(w)
 	default:

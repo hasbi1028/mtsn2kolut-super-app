@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"mtsn2kolut-super-app/backend/internal/domain"
@@ -19,10 +21,12 @@ const (
 	DefaultSystemBackupTimerName     = "mtsn2kolut-postgresql-backup.timer"
 	DefaultSystemBackupServiceName   = "mtsn2kolut-postgresql-backup.service"
 	DefaultSystemBackupRetentionDays = 30
+	DefaultSystemBackupScriptPath    = "/home/servermtsn2kolut/mtsn2kolut-super-app/deploy/backup-postgresql.sh"
 
 	systemBackupSchedule          = "*-*-* 00:00:00"
 	systemBackupTimezone          = "WITA"
 	systemBackupStatusTimeout     = 2 * time.Second
+	systemBackupRunTimeout        = 10 * time.Minute
 	systemBackupStaleAfter        = 24 * time.Hour
 	systemBackupLatestSymlinkName = "latest.dump"
 )
@@ -31,15 +35,20 @@ type SystemBackupCommandRunner func(ctx context.Context, name string, args ...st
 
 type SystemBackupConfig struct {
 	BackupDir     string
+	ScriptPath    string
 	TimerName     string
 	ServiceName   string
 	RetentionDays int
+	RunTimeout    time.Duration
 	Now           func() time.Time
 	CommandRunner SystemBackupCommandRunner
 }
 
 type SystemBackup struct {
-	cfg SystemBackupConfig
+	cfg     SystemBackupConfig
+	mu      sync.Mutex
+	running bool
+	jobs    map[string]SystemBackupJob
 }
 
 type SystemBackupFile struct {
@@ -59,7 +68,7 @@ type SystemBackupListMeta struct {
 }
 
 type SystemBackupList struct {
-	Items []SystemBackupFile  `json:"items"`
+	Items []SystemBackupFile   `json:"items"`
 	Meta  SystemBackupListMeta `json:"meta"`
 }
 
@@ -88,6 +97,20 @@ type SystemBackupDownload struct {
 	ModTime   time.Time
 }
 
+type SystemBackupRunRequest struct {
+	Reason string `json:"reason"`
+}
+
+type SystemBackupJob struct {
+	ID          string     `json:"id"`
+	Status      string     `json:"status"`
+	Reason      string     `json:"reason,omitempty"`
+	StartedAt   time.Time  `json:"started_at"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	Output      string     `json:"output,omitempty"`
+	Error       string     `json:"error,omitempty"`
+}
+
 type systemdBackupStatus struct {
 	TimerEnabled   bool
 	TimerActive    bool
@@ -101,6 +124,9 @@ func NewSystemBackup(cfg SystemBackupConfig) *SystemBackup {
 	if strings.TrimSpace(cfg.BackupDir) == "" {
 		cfg.BackupDir = DefaultSystemBackupDir
 	}
+	if strings.TrimSpace(cfg.ScriptPath) == "" {
+		cfg.ScriptPath = DefaultSystemBackupScriptPath
+	}
 	if strings.TrimSpace(cfg.TimerName) == "" {
 		cfg.TimerName = DefaultSystemBackupTimerName
 	}
@@ -110,15 +136,18 @@ func NewSystemBackup(cfg SystemBackupConfig) *SystemBackup {
 	if cfg.RetentionDays <= 0 {
 		cfg.RetentionDays = DefaultSystemBackupRetentionDays
 	}
+	if cfg.RunTimeout <= 0 {
+		cfg.RunTimeout = systemBackupRunTimeout
+	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
 	if cfg.CommandRunner == nil {
 		cfg.CommandRunner = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-			return exec.CommandContext(ctx, name, args...).Output()
+			return exec.CommandContext(ctx, name, args...).CombinedOutput()
 		}
 	}
-	return &SystemBackup{cfg: cfg}
+	return &SystemBackup{cfg: cfg, jobs: map[string]SystemBackupJob{}}
 }
 
 func (s *SystemBackup) Status(ctx context.Context) (SystemBackupStatus, error) {
@@ -231,6 +260,82 @@ func (s *SystemBackup) List(ctx context.Context) (SystemBackupList, error) {
 		return items[i].Name > items[j].Name
 	})
 	return SystemBackupList{Items: items, Meta: SystemBackupListMeta{Total: len(items)}}, nil
+}
+
+func (s *SystemBackup) RunManual(ctx context.Context, req SystemBackupRunRequest) (SystemBackupJob, error) {
+	reason := sanitizeBackupReason(req.Reason)
+	if len(reason) > 200 {
+		return SystemBackupJob{}, domain.ErrBadRequest
+	}
+	scriptPath, err := cleanBackupScriptPath(s.cfg.ScriptPath)
+	if err != nil {
+		return SystemBackupJob{}, err
+	}
+	if _, err := os.Stat(scriptPath); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return SystemBackupJob{}, domain.ErrNotFound
+		}
+		return SystemBackupJob{}, err
+	}
+
+	s.mu.Lock()
+	if s.running {
+		s.mu.Unlock()
+		return SystemBackupJob{}, domain.ErrConflict
+	}
+	s.running = true
+	job := SystemBackupJob{
+		ID:        fmt.Sprintf("backup-%s", s.cfg.Now().Format("20060102-150405")),
+		Status:    "running",
+		Reason:    reason,
+		StartedAt: s.cfg.Now(),
+	}
+	s.jobs[job.ID] = job
+	s.mu.Unlock()
+
+	defer func() {
+		s.mu.Lock()
+		s.running = false
+		s.mu.Unlock()
+	}()
+
+	runCtx, cancel := context.WithTimeout(ctx, s.cfg.RunTimeout)
+	defer cancel()
+	output, runErr := s.cfg.CommandRunner(runCtx, "bash", scriptPath)
+	completedAt := s.cfg.Now()
+	job.CompletedAt = &completedAt
+	job.Output = sanitizeBackupCommandOutput(string(output))
+	if runErr != nil {
+		job.Status = "failed"
+		job.Error = sanitizeBackupCommandOutput(runErr.Error())
+		if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+			job.Error = "backup manual melewati batas waktu eksekusi"
+		}
+	} else {
+		job.Status = "success"
+		if strings.TrimSpace(job.Output) == "" {
+			job.Output = "Backup manual selesai. Periksa daftar backup terbaru."
+		}
+	}
+
+	s.mu.Lock()
+	s.jobs[job.ID] = job
+	s.mu.Unlock()
+	if runErr != nil {
+		return job, runErr
+	}
+	return job, nil
+}
+
+func (s *SystemBackup) Job(ctx context.Context, id string) (SystemBackupJob, error) {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	job, ok := s.jobs[strings.TrimSpace(id)]
+	if !ok {
+		return SystemBackupJob{}, domain.ErrNotFound
+	}
+	return job, nil
 }
 
 func (s *SystemBackup) Download(ctx context.Context, id string) (SystemBackupDownload, error) {
@@ -504,6 +609,52 @@ func validSystemdUnitName(name, suffix string) bool {
 		}
 	}
 	return true
+}
+
+func sanitizeBackupReason(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.ReplaceAll(value, "\x00", "")
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func cleanBackupScriptPath(path string) (string, error) {
+	value := filepath.Clean(strings.TrimSpace(path))
+	if value == "" || !filepath.IsAbs(value) || strings.Contains(value, "\x00") {
+		return "", domain.ErrBadRequest
+	}
+	return value, nil
+}
+
+func sanitizeBackupCommandOutput(value string) string {
+	value = strings.ReplaceAll(value, "\x00", "")
+	lines := strings.Split(value, "\n")
+	cleaned := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = redactBackupSecretLine(strings.TrimSpace(line))
+		if line == "" {
+			continue
+		}
+		cleaned = append(cleaned, line)
+	}
+	if len(cleaned) > 20 {
+		cleaned = cleaned[len(cleaned)-20:]
+	}
+	out := strings.Join(cleaned, "\n")
+	if len(out) > 4000 {
+		out = out[len(out)-4000:]
+	}
+	return out
+}
+
+func redactBackupSecretLine(line string) string {
+	lower := strings.ToLower(line)
+	secretMarkers := []string{"password", "database_url", "postgres_password", "pgpassword", "token", "secret"}
+	for _, marker := range secretMarkers {
+		if strings.Contains(lower, marker) {
+			return "[REDACTED]"
+		}
+	}
+	return line
 }
 
 func backupListSize(items []SystemBackupFile) int64 {

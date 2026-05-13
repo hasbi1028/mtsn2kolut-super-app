@@ -35,6 +35,7 @@ describe('RBAC permission catalog stabilization', () => {
 		expect(permissionLabel('analytics.security_read')).toContain('sinyal keamanan analytics');
 		expect(permissionLabel('backup.read')).toContain('status dan daftar backup');
 		expect(permissionLabel('backup.download')).toContain('Mengunduh file backup');
+		expect(permissionLabel('backup.create')).toContain('backup PostgreSQL manual');
 	});
 
 	it('documents every seeded permission in the operator catalog', () => {

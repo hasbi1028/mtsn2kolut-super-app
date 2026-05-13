@@ -20,6 +20,7 @@ type fakeSystemBackupService struct {
 	status   service.SystemBackupStatus
 	list     service.SystemBackupList
 	download service.SystemBackupDownload
+	job      service.SystemBackupJob
 	err      error
 }
 
@@ -36,6 +37,20 @@ func (f *fakeSystemBackupService) Download(ctx context.Context, id string) (serv
 		return service.SystemBackupDownload{}, f.err
 	}
 	return f.download, nil
+}
+
+func (f *fakeSystemBackupService) RunManual(ctx context.Context, req service.SystemBackupRunRequest) (service.SystemBackupJob, error) {
+	if f.err != nil {
+		return service.SystemBackupJob{}, f.err
+	}
+	return f.job, nil
+}
+
+func (f *fakeSystemBackupService) Job(ctx context.Context, id string) (service.SystemBackupJob, error) {
+	if f.err != nil {
+		return service.SystemBackupJob{}, f.err
+	}
+	return f.job, nil
 }
 
 func TestSystemBackupHandlerStatusAndList(t *testing.T) {

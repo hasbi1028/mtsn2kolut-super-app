@@ -155,8 +155,10 @@ describe('route access helpers', () => {
 		expect(requiredPermissionsForPath('/api/internal-analytics/export', 'GET')).toEqual(['analytics.export']);
 		expect(requiredPermissionsForPath('/settings/backups', 'GET')).toEqual(['backup.read']);
 		expect(requiredPermissionsForPath('/api/system/backups/status', 'GET')).toEqual(['backup.read']);
-		expect(requiredPermissionsForPath('/api/system/backups', 'GET')).toEqual(['backup.read']);
-		expect(requiredPermissionsForPath('/api/system/backups/pusaka_20260513_000001.dump/download', 'GET')).toEqual(['backup.download']);
+	expect(requiredPermissionsForPath('/api/system/backups', 'GET')).toEqual(['backup.read']);
+	expect(requiredPermissionsForPath('/api/system/backups/run', 'POST')).toEqual(['backup.create']);
+	expect(requiredPermissionsForPath('/api/system/backups/jobs/backup-20260513-110000', 'GET')).toEqual(['backup.read']);
+	expect(requiredPermissionsForPath('/api/system/backups/pusaka_20260513_000001.dump/download', 'GET')).toEqual(['backup.download']);
 		expect(canAccessProtectedRoute(plainUser, '/settings/analytics', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute(analyticsReader, '/settings/analytics', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(analyticsReader, '/api/internal-analytics/summary', 'GET')).toBe(true);
@@ -164,8 +166,10 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute(analyticsExporter, '/api/internal-analytics/export', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(plainUser, '/settings/backups', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute({ ...plainUser, permissions: ['backup.read'] }, '/settings/backups', 'GET')).toBe(true);
-		expect(canAccessProtectedRoute({ ...plainUser, permissions: ['backup.read'] }, '/api/system/backups/status', 'GET')).toBe(true);
-		expect(canAccessProtectedRoute({ ...plainUser, permissions: ['backup.read'] }, '/api/system/backups/pusaka_20260513_000001.dump/download', 'GET')).toBe(false);
+	expect(canAccessProtectedRoute({ ...plainUser, permissions: ['backup.read'] }, '/api/system/backups/status', 'GET')).toBe(true);
+	expect(canAccessProtectedRoute({ ...plainUser, permissions: ['backup.read'] }, '/api/system/backups/run', 'POST')).toBe(false);
+	expect(canAccessProtectedRoute({ ...plainUser, permissions: ['backup.create'] }, '/api/system/backups/run', 'POST')).toBe(true);
+	expect(canAccessProtectedRoute({ ...plainUser, permissions: ['backup.read'] }, '/api/system/backups/pusaka_20260513_000001.dump/download', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute({ ...plainUser, permissions: ['backup.download'] }, '/api/system/backups/pusaka_20260513_000001.dump/download', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ id: '4', username: 'admin', role: 'admin', roles: ['admin'], permissions: [] }, '/settings/backups', 'GET')).toBe(true);
 	});
