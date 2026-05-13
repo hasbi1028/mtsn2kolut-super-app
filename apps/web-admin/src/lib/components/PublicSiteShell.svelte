@@ -215,9 +215,9 @@
 	<header class="sticky top-0 z-30 border-b border-emerald-100/80 bg-white/90 backdrop-blur">
 		<div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
 				<a href={resolve('/')} class="flex items-center gap-3">
-					<div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-[oklch(0.38_0.13_145)] text-sm font-bold text-white shadow-sm">
-						MTs
-				</div>
+					<span class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-emerald-100">
+						<img src="/brand/logo-kemenag-icon-64.png" alt="Logo Kemenag" class="h-full w-full object-contain" />
+					</span>
 				<div>
 					<p class="text-sm font-semibold text-slate-900 sm:text-base">MTs Negeri 2 Kolaka Utara</p>
 					<p class="text-xs text-emerald-700/80">Website Resmi Madrasah</p>

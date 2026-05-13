@@ -23,7 +23,9 @@
 				<div class="relative z-10 flex h-full flex-col justify-between">
 					<div>
 						<a href="/" class="inline-flex items-center gap-3 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium text-emerald-50 transition hover:bg-white/15">
-							<span class="flex h-8 w-8 items-center justify-center rounded-full bg-card text-xs font-bold text-primary">MTs</span>
+							<span class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-white p-1 shadow-sm">
+								<img src="/brand/logo-kemenag-icon-64.png" alt="Logo Kemenag" class="h-full w-full object-contain" />
+							</span>
 							Kembali ke website publik
 						</a>
 						<div class="mt-16 max-w-xl">
@@ -58,9 +60,9 @@
 				<div class="w-full max-w-md">
 					<div class="mb-8 flex items-center justify-between gap-4 lg:hidden">
 						<a href="/" class="flex items-center gap-3">
-							<div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-sm font-bold text-primary-foreground shadow-sm">
-								MTs
-							</div>
+							<span class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-border">
+								<img src="/brand/logo-kemenag-icon-64.png" alt="Logo Kemenag" class="h-full w-full object-contain" />
+							</span>
 							<div>
 								<p class="text-sm font-semibold text-foreground">MTs Negeri 2 Kolaka Utara</p>
 								<p class="text-xs text-primary">Sistem Administrasi Sekolah</p>
