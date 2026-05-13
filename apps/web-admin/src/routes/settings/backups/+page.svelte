@@ -370,15 +370,35 @@
 											<span class="text-slate-400">Belum ada</span>
 										{/if}
 									</td>
-									<td class="px-5 py-4 text-right">
-										{#if canDownload && backup.downloadable}
-											<a class="inline-flex rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white" href={downloadHref(backup.id)}>
-												Download
-											</a>
-										{:else}
-											<span class="text-xs text-slate-400">Butuh izin download</span>
-										{/if}
-									</td>
+					<td class="px-5 py-4 text-right">
+						<div class="flex flex-wrap justify-end gap-2">
+							{#if canRestorePlan}
+								<Button
+									variant="outline"
+									size="sm"
+									onclick={() => validateRestore(backup)}
+									disabled={restoreBusyID === backup.id}
+								>
+									{restoreBusyID === backup.id ? 'Memeriksa...' : 'Validasi'}
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									onclick={() => generateRestoreCommand(backup)}
+									disabled={restoreBusyID === backup.id}
+								>
+									SOP Restore
+								</Button>
+							{/if}
+							{#if canDownload && backup.downloadable}
+								<a class="inline-flex rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white" href={downloadHref(backup.id)}>
+									Download
+								</a>
+							{:else}
+								<span class="text-xs text-slate-400">Butuh izin download</span>
+							{/if}
+						</div>
+					</td>
 								</tr>
 							{/each}
 						</tbody>
