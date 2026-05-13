@@ -25,6 +25,8 @@ type systemBackupService interface {
 	Download(ctx context.Context, id string) (service.SystemBackupDownload, error)
 	RunManual(ctx context.Context, req service.SystemBackupRunRequest) (service.SystemBackupJob, error)
 	Job(ctx context.Context, id string) (service.SystemBackupJob, error)
+	ValidateRestore(ctx context.Context, id string) (service.SystemBackupRestoreValidation, error)
+	RestoreCommand(ctx context.Context, id string) (service.SystemBackupRestoreCommand, error)
 }
 
 func NewSystemBackup(svc systemBackupService) *SystemBackup {
@@ -77,6 +79,24 @@ func (h *SystemBackup) Job(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, job)
+}
+
+func (h *SystemBackup) ValidateRestore(w http.ResponseWriter, r *http.Request) {
+	result, err := h.svc.ValidateRestore(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeSystemBackupError(w, err)
+		return
+	}
+	api.OK(w, result)
+}
+
+func (h *SystemBackup) RestoreCommand(w http.ResponseWriter, r *http.Request) {
+	result, err := h.svc.RestoreCommand(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeSystemBackupError(w, err)
+		return
+	}
+	api.OK(w, result)
 }
 
 func (h *SystemBackup) Download(w http.ResponseWriter, r *http.Request) {

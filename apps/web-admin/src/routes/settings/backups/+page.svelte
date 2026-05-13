@@ -40,6 +40,26 @@
 		warnings: string[];
 	};
 
+	type RestoreValidation = {
+		backup_id: string;
+		valid: boolean;
+		object_count: number;
+		preview: string[];
+		checked_at: string;
+		command: string;
+		warnings: string[];
+	};
+
+	type RestoreCommand = {
+		backup_id: string;
+		generated_at: string;
+		safety_level: string;
+		warnings: string[];
+		preflight_steps: string[];
+		commands: string[];
+		rollback_note: string;
+	};
+
 	let loading = $state(true);
 	let refreshing = $state(false);
 	let errorMessage = $state('');
@@ -47,11 +67,15 @@
 	let backups = $state<BackupFile[]>([]);
 	let manualBackupRunning = $state(false);
 	let manualBackupReason = $state('');
+	let restoreBusyID = $state('');
+	let restoreValidation = $state<RestoreValidation | null>(null);
+	let restoreCommand = $state<RestoreCommand | null>(null);
 
 	const isAdmin = $derived(Boolean(page.data.user?.roles?.includes('admin') || page.data.user?.role === 'admin'));
 	const permissions = $derived(page.data.user?.permissions ?? []);
 	const canDownload = $derived(isAdmin || permissions.includes('backup.download'));
 	const canCreate = $derived(isAdmin || permissions.includes('backup.create'));
+	const canRestorePlan = $derived(isAdmin || permissions.includes('backup.restore_plan'));
 
 	onMount(() => {
 		void loadBackups();
@@ -105,6 +129,42 @@
 			toast.error(error instanceof Error ? error.message : 'Backup manual gagal dijalankan');
 		} finally {
 			manualBackupRunning = false;
+		}
+	}
+
+	async function validateRestore(backup: BackupFile) {
+		if (!canRestorePlan || restoreBusyID) return;
+		restoreBusyID = backup.id;
+		restoreValidation = null;
+		restoreCommand = null;
+		try {
+			const data = await fetch(`/api/system/backups/${encodeURIComponent(backup.id)}/validate-restore`, {
+				method: 'POST'
+			}).then((response) => readClientApiData<RestoreValidation>(response, 'Gagal memvalidasi metadata restore'));
+			restoreValidation = data;
+			if (data.valid) toast.success(`Validasi backup OK: ${data.object_count} objek terbaca`);
+			else toast.error('Validasi backup belum aman dipakai');
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Validasi restore gagal');
+		} finally {
+			restoreBusyID = '';
+		}
+	}
+
+	async function generateRestoreCommand(backup: BackupFile) {
+		if (!canRestorePlan || restoreBusyID) return;
+		restoreBusyID = backup.id;
+		restoreCommand = null;
+		try {
+			const data = await fetch(`/api/system/backups/${encodeURIComponent(backup.id)}/restore-command`, {
+				method: 'POST'
+			}).then((response) => readClientApiData<RestoreCommand>(response, 'Gagal membuat SOP restore'));
+			restoreCommand = data;
+			toast.success('SOP restore manual dibuat');
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Gagal membuat SOP restore');
+		} finally {
+			restoreBusyID = '';
 		}
 	}
 
@@ -262,7 +322,7 @@
 				<div class="p-8 text-center text-sm text-slate-500">Belum ada file backup PostgreSQL yang tersedia.</div>
 			{:else}
 				<div class="overflow-x-auto">
-					<table class="w-full min-w-[760px] text-left text-sm">
+					<table class="w-full min-w-[980px] text-left text-sm">
 						<thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
 							<tr>
 								<th class="px-5 py-3">File</th>
@@ -305,6 +365,43 @@
 							{/each}
 						</tbody>
 					</table>
+				</div>
+			{/if}
+		</section>
+	{/if}
+
+	{#if restoreValidation || restoreCommand}
+		<section class="grid gap-4 lg:grid-cols-2">
+			{#if restoreValidation}
+				<div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+					<div class="flex items-start justify-between gap-3">
+						<div>
+							<h2 class="text-lg font-semibold text-slate-950">Hasil Validasi Restore</h2>
+							<p class="text-sm text-slate-600">{restoreValidation.backup_id} · {formatDate(restoreValidation.checked_at)}</p>
+						</div>
+						<span class={`rounded-full px-3 py-1 text-xs font-semibold ${restoreValidation.valid ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{restoreValidation.valid ? 'Valid' : 'Perlu cek manual'}</span>
+					</div>
+					<p class="mt-3 text-sm text-slate-600">Object terbaca: <strong>{restoreValidation.object_count}</strong></p>
+					{#if restoreValidation.preview.length > 0}
+						<pre class="mt-3 max-h-56 overflow-auto rounded-2xl bg-slate-950 p-4 text-xs text-slate-100">{restoreValidation.preview.join('\n')}</pre>
+					{/if}
+					{#if restoreValidation.warnings.length > 0}
+						<ul class="mt-3 list-disc space-y-1 pl-5 text-sm text-amber-700">
+							{#each restoreValidation.warnings as warning}<li>{warning}</li>{/each}
+						</ul>
+					{/if}
+				</div>
+			{/if}
+
+			{#if restoreCommand}
+				<div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+					<h2 class="text-lg font-semibold text-slate-950">SOP Restore Manual</h2>
+					<p class="mt-1 text-sm text-slate-600">{restoreCommand.backup_id} · {restoreCommand.safety_level}</p>
+					<ul class="mt-3 list-decimal space-y-1 pl-5 text-sm text-slate-700">
+						{#each restoreCommand.preflight_steps as step}<li>{step}</li>{/each}
+					</ul>
+					<pre class="mt-3 max-h-72 overflow-auto rounded-2xl bg-slate-950 p-4 text-xs text-slate-100">{restoreCommand.commands.join('\n')}</pre>
+					<p class="mt-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{restoreCommand.rollback_note}</p>
 				</div>
 			{/if}
 		</section>

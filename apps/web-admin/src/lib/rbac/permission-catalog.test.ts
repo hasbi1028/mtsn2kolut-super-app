@@ -15,7 +15,8 @@ const migration = [
 	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/081_student_parent_account_portal.sql'), 'utf8'),
 	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/082_employee_rbac_permissions.sql'), 'utf8'),
 	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/084_internal_analytics_permissions.sql'), 'utf8'),
-	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/095_backup_center_permissions.sql'), 'utf8')
+	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/095_backup_center_permissions.sql'), 'utf8'),
+	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/096_backup_restore_plan_permission.sql'), 'utf8')
 ].join('\n');
 const docs = readFileSync(resolve(repoRoot, 'docs/rbac-permission-catalog.md'), 'utf8');
 
@@ -36,6 +37,7 @@ describe('RBAC permission catalog stabilization', () => {
 		expect(permissionLabel('backup.read')).toContain('status dan daftar backup');
 		expect(permissionLabel('backup.download')).toContain('Mengunduh file backup');
 		expect(permissionLabel('backup.create')).toContain('backup PostgreSQL manual');
+		expect(permissionLabel('backup.restore_plan')).toContain('SOP/perintah restore manual');
 	});
 
 	it('documents every seeded permission in the operator catalog', () => {
@@ -60,6 +62,8 @@ describe('RBAC permission catalog stabilization', () => {
 			['/api/pusaka/settings', 'PUT'],
 			['/api/employees/employee-1', 'PUT'],
 			['/api/system/backups/status', 'GET'],
+			['/api/system/backups/pusaka_20260513_000001.dump/validate-restore', 'POST'],
+			['/api/system/backups/pusaka_20260513_000001.dump/restore-command', 'POST'],
 			['/api/system/backups/pusaka_20260513_000001.dump/download', 'GET']
 		] as const;
 		const routePermissions = routeSamples.flatMap(([path, method]) => requiredPermissionsForPath(path, method));

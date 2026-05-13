@@ -251,10 +251,13 @@ func TestSystemBackupRoutesUseBackupPermissionsWithAdminFallback(t *testing.T) {
 		`requireBackupRead := mw.RequireAnyPermissionOrRole([]string{"backup.read"}, "admin")`,
 		`requireBackupDownload := mw.RequireAnyPermissionOrRole([]string{"backup.download"}, "admin")`,
 		`requireBackupCreate := mw.RequireAnyPermissionOrRole([]string{"backup.create"}, "admin")`,
+		`requireBackupRestorePlan := mw.RequireAnyPermissionOrRole([]string{"backup.restore_plan"}, "admin")`,
 		`r.With(requireBackupRead).Get("/api/system/backups/status", systemBackupH.Status)`,
 		`r.With(requireBackupRead).Get("/api/system/backups", systemBackupH.List)`,
 		`r.With(requireBackupCreate).Post("/api/system/backups/run", systemBackupH.RunManual)`,
 		`r.With(requireBackupRead).Get("/api/system/backups/jobs/{job_id}", systemBackupH.Job)`,
+		`r.With(requireBackupRestorePlan).Post("/api/system/backups/{id}/validate-restore", systemBackupH.ValidateRestore)`,
+		`r.With(requireBackupRestorePlan).Post("/api/system/backups/{id}/restore-command", systemBackupH.RestoreCommand)`,
 		`r.With(requireBackupDownload).Get("/api/system/backups/{id}/download", systemBackupH.Download)`,
 	} {
 		if !strings.Contains(source, want) && !strings.Contains(authenticatedBlock, want) {
