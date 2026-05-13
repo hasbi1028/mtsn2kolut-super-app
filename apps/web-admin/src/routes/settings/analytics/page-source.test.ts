@@ -13,7 +13,7 @@ describe('internal analytics settings page source contract', () => {
 		expect(source).toContain('/api/internal-analytics/export');
 		expect(source).toContain('AsyncContent');
 		expect(source).toContain('Skeleton');
-		expect(source).toContain('Analytics Internal');
+		expect(source).toContain('Ringkasan Penggunaan Internal');
 		expect(source).toContain('Export CSV Agregat');
 		expect(source).not.toContain('metadata');
 		expect(source).not.toContain('actor_user_id');

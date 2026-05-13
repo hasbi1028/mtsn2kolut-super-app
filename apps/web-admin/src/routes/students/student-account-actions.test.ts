@@ -5,11 +5,11 @@ import pageSource from './+page.svelte?raw';
 describe('/students account generation actions', () => {
 	it('renders student account generation controls and safety copy', () => {
 		expect(pageSource).toContain('Akun Siswa');
-		expect(pageSource).toContain('Preview akun siswa');
-		expect(pageSource).toContain('Generate akun siswa');
-		expect(pageSource).toContain('Password hanya tampil sekali. Simpan/unduh hasil generate sekarang.');
+		expect(pageSource).toContain('Pratinjau akun siswa');
+		expect(pageSource).toContain('Buat akun siswa');
+		expect(pageSource).toContain('Password awal memakai NISN siswa dan hanya tampil sekali.');
 		expect(pageSource).toContain('Akun wajib mengganti password saat login pertama.');
-		expect(pageSource).toContain('Data resmi tetap dikunci dan perubahan melalui approval.');
+		expect(pageSource).toContain('Data resmi tetap dilindungi dan perubahan melalui persetujuan.');
 	});
 
 	it('shows account status columns and respects permission-aware action state', () => {

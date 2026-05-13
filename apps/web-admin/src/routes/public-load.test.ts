@@ -7,7 +7,7 @@ vi.mock('$lib/server/api', () => ({
 }));
 
 function event(fetch = vi.fn<typeof globalThis.fetch>(), locals: Record<string, unknown> = {}) {
-	return { fetch, locals };
+	return { fetch, locals, setHeaders: vi.fn() };
 }
 
 describe('public website server loads', () => {
