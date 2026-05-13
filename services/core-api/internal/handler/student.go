@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -86,8 +85,7 @@ func (h *Student) Create(w http.ResponseWriter, r *http.Request) {
 		IsActive    bool   `json:"is_active"`
 		Status      string `json:"status"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "Data yang dikirim tidak valid")
+	if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
 		return
 	}
 	var classID pgtype.UUID
@@ -144,8 +142,7 @@ func (h *Student) Update(w http.ResponseWriter, r *http.Request) {
 		IsActive    bool   `json:"is_active"`
 		Status      string `json:"status"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "Data yang dikirim tidak valid")
+	if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
 		return
 	}
 	var classID pgtype.UUID
@@ -190,8 +187,7 @@ func (h *Student) PublicRegister(w http.ResponseWriter, r *http.Request) {
 		ParentName  string `json:"parent_name"`
 		ParentPhone string `json:"parent_phone"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "Data yang dikirim tidak valid")
+	if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
 		return
 	}
 	if body.Nama == "" || body.Nis == "" {
@@ -245,8 +241,7 @@ func (h *Student) UpdateLifecycle(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Status string `json:"status"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "Data yang dikirim tidak valid")
+	if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
 		return
 	}
 	status := db.StudentStatusEnum(body.Status)

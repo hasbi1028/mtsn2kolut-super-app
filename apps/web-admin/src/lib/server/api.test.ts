@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RequestEvent } from '@sveltejs/kit';
 import * as apiModule from './api';
-import { ApiError, AuthValidationUnavailableError, RequestPayloadError, apiLoginWithFetch, apiPath, apiPathWithQuery, apiPublicGetWithFetch, apiPublicPostWithFetch, apiValidateAuthWithFetch, handleRouteError, jsonProxyResponse, proxy, readOptionalRequestJson, readProxyJson, readRequestJson, requireAuthorizationHeader, requiredRouteParam, streamProxyResponse } from './api';
+import { ApiError, AuthValidationUnavailableError, RequestPayloadError, apiLoginWithFetch, apiPath, apiPathWithQuery, apiPublicGetWithFetch, apiPublicPostWithFetch, apiValidateAuthWithFetch, handleRouteError, jsonProxyResponse, proxy, readOptionalRequestJson, readProxyJson, readRequestJson, redactForLog, requireAuthorizationHeader, requiredRouteParam, streamProxyResponse } from './api';
 
 function okResponse<T>(data: T, init?: ResponseInit) {
 	return new Response(JSON.stringify({ data }), {
@@ -153,6 +153,13 @@ describe('server api helpers', () => {
 		const eventFetch = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('connect ECONNREFUSED'));
 
 		await expect(apiValidateAuthWithFetch(eventFetch, 'access-1')).rejects.toBeInstanceOf(AuthValidationUnavailableError);
+	});
+
+	it('redacts secrets before BFF log output', () => {
+		expect(redactForLog('upstream failed Authorization: Bearer abc.def.ghi refresh_token=rt-secret password=secret')).toBe(
+			'upstream failed Authorization: Bearer [REDACTED] refresh_token=[REDACTED] password=[REDACTED]'
+		);
+		expect(redactForLog('/api/exam?token=participant-secret&room=1')).toBe('/api/exam?token=[REDACTED]&room=1');
 	});
 
 	it('readRequestJson returns typed request bodies and maps malformed JSON to RequestPayloadError', async () => {

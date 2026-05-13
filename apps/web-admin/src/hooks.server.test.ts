@@ -43,11 +43,11 @@ async function loadHooks() {
 	return await import('./hooks.server');
 }
 
-function makeHandleEvent(accessToken?: string, refreshToken?: string, url = 'http://localhost/dashboard', method = 'GET') {
+function makeHandleEvent(accessToken?: string, refreshToken?: string, url = 'http://localhost/dashboard', method = 'GET', headers: Record<string, string> = {}) {
 	return {
 		request: new Request(url, {
 			method,
-			headers: { 'user-agent': 'vitest-agent' }
+			headers: { 'user-agent': 'vitest-agent', ...headers }
 		}),
 		url: new URL(url),
 		getClientAddress: () => '127.0.0.1',
@@ -458,6 +458,33 @@ describe('SvelteKit handle auth gate', () => {
 		await expect(handle({ event: apiEvent, resolve: vi.fn(async () => new Response('ok')) } as never)).rejects.toMatchObject({
 			status: 403
 		});
+	});
+
+	it('blocks protected API mutations without a same-origin Origin or Referer', async () => {
+		const { handle } = await loadHooks();
+		const access = token('access', { uid: 'u1', role: 'admin', roles: ['admin'] });
+		const event = makeHandleEvent(access, undefined, 'http://localhost/api/school-profile', 'POST');
+		event.fetch.mockResolvedValueOnce(validationOkResponse());
+		const resolve = vi.fn(async () => new Response('ok'));
+
+		await expect(handle({ event, resolve } as never)).rejects.toMatchObject({
+			status: 403,
+			body: { message: 'csrf validation failed' }
+		});
+		expect(resolve).not.toHaveBeenCalled();
+	});
+
+	it('allows protected API mutations with a same-origin Origin header', async () => {
+		const { handle } = await loadHooks();
+		const access = token('access', { uid: 'u1', role: 'admin', roles: ['admin'] });
+		const event = makeHandleEvent(access, undefined, 'http://localhost/api/school-profile', 'POST', { origin: 'http://localhost' });
+		event.fetch.mockResolvedValueOnce(validationOkResponse());
+		const resolve = vi.fn(async () => new Response('ok'));
+
+		const response = await handle({ event, resolve } as never);
+
+		expect(response.status).toBe(200);
+		expect(resolve).toHaveBeenCalled();
 	});
 
 	const roleCases = [
