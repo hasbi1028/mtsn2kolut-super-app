@@ -15,9 +15,48 @@ import (
 const auditCleanupInterval = 24 * time.Hour
 
 const (
-	defaultSchedulerInterval = 30 * time.Second
-	defaultMaxAttempts       = 3
+	defaultSchedulerInterval     = 30 * time.Second
+	defaultMaxAttempts           = 3
+	defaultEmployeeScheduleGrace = 3 * time.Minute
 )
+
+type employeeScheduleWindow struct {
+	Base      time.Time
+	Latest    time.Time
+	NotBefore time.Time
+	Expired   bool
+}
+
+func parseScheduleLocalTime(localDate time.Time, runTime string, loc *time.Location) (time.Time, error) {
+	parsed, err := time.ParseInLocation("15:04", runTime, loc)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Date(localDate.Year(), localDate.Month(), localDate.Day(), parsed.Hour(), parsed.Minute(), 0, 0, loc), nil
+}
+
+func buildEmployeeScheduleWindow(localNow time.Time, runTime string, randomWindowMinutes int32, randomDelayMinutes int32, grace time.Duration, loc *time.Location) (employeeScheduleWindow, error) {
+	base, err := parseScheduleLocalTime(localNow, runTime, loc)
+	if err != nil {
+		return employeeScheduleWindow{}, err
+	}
+	if randomWindowMinutes < 0 {
+		randomWindowMinutes = 0
+	}
+	if randomDelayMinutes < 0 {
+		randomDelayMinutes = 0
+	}
+	if randomDelayMinutes > randomWindowMinutes {
+		randomDelayMinutes = randomWindowMinutes
+	}
+	latest := base.Add(time.Duration(randomWindowMinutes) * time.Minute).Add(grace)
+	return employeeScheduleWindow{
+		Base:      base,
+		Latest:    latest,
+		NotBefore: base.Add(time.Duration(randomDelayMinutes) * time.Minute),
+		Expired:   localNow.After(latest),
+	}, nil
+}
 
 type schedulerStore interface {
 	ClaimDueSchedules(ctx context.Context, arg db.ClaimDueSchedulesParams) ([]db.ClaimDueSchedulesRow, error)
@@ -150,10 +189,31 @@ func (s *PusakaScheduler) Tick(ctx context.Context, now time.Time) (PusakaSchedu
 	} else {
 		for _, es := range empSchedules {
 			result.Processed++
-			notBefore := pgtype.Timestamptz{}
+
+			var delayMinutes int32
 			if es.RandomWindowMinutes > 0 {
-				delayMinutes := rand.Int31n(int32(es.RandomWindowMinutes) + 1)
-				_ = notBefore.Scan(now.Add(time.Duration(delayMinutes) * time.Minute))
+				delayMinutes = rand.Int31n(int32(es.RandomWindowMinutes) + 1)
+			}
+
+			window, windowErr := buildEmployeeScheduleWindow(localNow, es.RunTime, int32(es.RandomWindowMinutes), delayMinutes, defaultEmployeeScheduleGrace, s.loc)
+			if windowErr != nil {
+				_ = s.store.ResetEmployeeScheduleEnqueueState(ctx, db.ResetEmployeeScheduleEnqueueStateParams{
+					ID:                  es.ID,
+					LastEnqueuedForDate: today,
+				})
+				slog.Error("scheduler: invalid employee schedule time", "employee_id", es.EmployeeID, "run_type", es.RunType, "run_time", es.RunTime, "error", windowErr)
+				continue
+			}
+
+			if window.Expired {
+				result.Skipped++
+				slog.Warn("scheduler: skipped expired employee schedule window", "employee_id", es.EmployeeID, "run_type", es.RunType, "run_time", es.RunTime, "base", window.Base.Format(time.RFC3339), "latest", window.Latest.Format(time.RFC3339), "now", localNow.Format(time.RFC3339))
+				continue
+			}
+
+			notBefore := pgtype.Timestamptz{}
+			if es.RandomWindowMinutes > 0 || window.NotBefore.After(localNow) {
+				_ = notBefore.Scan(window.NotBefore)
 			}
 			_, createErr := s.jobs.CreateWithDelay(ctx, es.EmployeeID, string(es.RunType), maxAttempts, notBefore)
 			if createErr != nil {

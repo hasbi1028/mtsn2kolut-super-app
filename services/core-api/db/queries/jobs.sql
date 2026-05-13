@@ -2,7 +2,7 @@
 SELECT j.id, j.employee_id, e.nama AS employee_nama, COALESCE(e.nip, '')::text AS employee_nip,
        j.run_type, j.status, j.error_message,
        j.claimed_by, j.claimed_at, j.attempts, j.max_attempts,
-       j.next_retry_at, j.created_at, j.updated_at
+       j.next_retry_at, j.created_at, j.updated_at, j.not_before
 FROM jobs j
 JOIN employees e ON e.id = j.employee_id
 ORDER BY j.created_at DESC
@@ -12,7 +12,7 @@ LIMIT $1 OFFSET $2;
 SELECT j.id, j.employee_id, e.nama AS employee_nama, COALESCE(e.nip, '')::text AS employee_nip,
        j.run_type, j.status, j.error_message,
        j.claimed_by, j.claimed_at, j.attempts, j.max_attempts,
-       j.next_retry_at, j.created_at, j.updated_at
+       j.next_retry_at, j.created_at, j.updated_at, j.not_before
 FROM jobs j
 JOIN employees e ON e.id = j.employee_id
 WHERE j.status = $1

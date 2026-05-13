@@ -351,7 +351,7 @@ const listJobs = `-- name: ListJobs :many
 SELECT j.id, j.employee_id, e.nama AS employee_nama, COALESCE(e.nip, '')::text AS employee_nip,
        j.run_type, j.status, j.error_message,
        j.claimed_by, j.claimed_at, j.attempts, j.max_attempts,
-       j.next_retry_at, j.created_at, j.updated_at
+       j.next_retry_at, j.created_at, j.updated_at, j.not_before
 FROM jobs j
 JOIN employees e ON e.id = j.employee_id
 ORDER BY j.created_at DESC
@@ -378,6 +378,7 @@ type ListJobsRow struct {
 	NextRetryAt  pgtype.Timestamptz `json:"next_retry_at"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	NotBefore    pgtype.Timestamptz `json:"not_before"`
 }
 
 func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]ListJobsRow, error) {
@@ -404,6 +405,7 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]ListJobsR
 			&i.NextRetryAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.NotBefore,
 		); err != nil {
 			return nil, err
 		}
@@ -419,7 +421,7 @@ const listJobsByStatus = `-- name: ListJobsByStatus :many
 SELECT j.id, j.employee_id, e.nama AS employee_nama, COALESCE(e.nip, '')::text AS employee_nip,
        j.run_type, j.status, j.error_message,
        j.claimed_by, j.claimed_at, j.attempts, j.max_attempts,
-       j.next_retry_at, j.created_at, j.updated_at
+       j.next_retry_at, j.created_at, j.updated_at, j.not_before
 FROM jobs j
 JOIN employees e ON e.id = j.employee_id
 WHERE j.status = $1
@@ -448,6 +450,7 @@ type ListJobsByStatusRow struct {
 	NextRetryAt  pgtype.Timestamptz `json:"next_retry_at"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	NotBefore    pgtype.Timestamptz `json:"not_before"`
 }
 
 func (q *Queries) ListJobsByStatus(ctx context.Context, arg ListJobsByStatusParams) ([]ListJobsByStatusRow, error) {
@@ -474,6 +477,7 @@ func (q *Queries) ListJobsByStatus(ctx context.Context, arg ListJobsByStatusPara
 			&i.NextRetryAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.NotBefore,
 		); err != nil {
 			return nil, err
 		}

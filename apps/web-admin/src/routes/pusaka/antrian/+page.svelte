@@ -14,7 +14,7 @@
 		id: string; nama: string; nip: string;
 		run_type: string; status: string;
 		attempts: number; max_attempts: number;
-		created_at: string; updated_at: string;
+		created_at: string; updated_at: string; not_before?: string;
 	}
 
 	interface JobsResponse {
@@ -242,7 +242,8 @@
 									<Table.Head>Status</Table.Head>
 									<Table.Head class="text-center">Percobaan</Table.Head>
 									<Table.Head class="hidden sm:table-cell">Dibuat</Table.Head>
-									<Table.Head class="hidden sm:table-cell">Diperbarui</Table.Head>
+									<Table.Head class="hidden md:table-cell">Mulai Setelah</Table.Head>
+									<Table.Head class="hidden lg:table-cell">Diperbarui</Table.Head>
 								</Table.Row>
 							</Table.Header>
 							<Table.Body>
@@ -257,11 +258,12 @@
 										</Table.Cell>
 										<Table.Cell class="text-center text-sm">{job.attempts}/{job.max_attempts}</Table.Cell>
 										<Table.Cell class="hidden sm:table-cell text-muted-foreground text-xs">{fmtDt(job.created_at)}</Table.Cell>
-										<Table.Cell class="hidden sm:table-cell text-muted-foreground text-xs">{fmtDt(job.updated_at)}</Table.Cell>
+										<Table.Cell class="hidden md:table-cell text-muted-foreground text-xs">{fmtDt(job.not_before ?? '')}</Table.Cell>
+										<Table.Cell class="hidden lg:table-cell text-muted-foreground text-xs">{fmtDt(job.updated_at)}</Table.Cell>
 									</Table.Row>
 								{:else}
 									<Table.Row>
-										<Table.Cell colspan={6} class="py-12 text-center text-muted-foreground">
+										<Table.Cell colspan={7} class="py-12 text-center text-muted-foreground">
 											Tidak ada job ditemukan.
 										</Table.Cell>
 									</Table.Row>
@@ -284,7 +286,8 @@
 									<Badge variant="outline">{runTypeLabel(job.run_type)}</Badge>
 									<span class="text-xs text-muted-foreground">Percobaan {job.attempts}/{job.max_attempts}</span>
 								</div>
-								<p class="mt-3 text-xs text-muted-foreground">Diperbarui {fmtDt(job.updated_at)}</p>
+								<p class="mt-3 text-xs text-muted-foreground">Mulai setelah {fmtDt(job.not_before ?? '')}</p>
+								<p class="mt-1 text-xs text-muted-foreground">Diperbarui {fmtDt(job.updated_at)}</p>
 							</div>
 						{:else}
 							<div class="rounded-2xl border border-dashed border-border bg-muted/50 px-4 py-10 text-center text-sm text-muted-foreground">

@@ -271,6 +271,40 @@ func TestSchedulerTickResetsClaimOnRunAllError(t *testing.T) {
 	}
 }
 
+func TestSchedulerEmployeeScheduleWindow(t *testing.T) {
+	loc := time.FixedZone("WITA", 8*60*60)
+
+	t.Run("builds not before from schedule base", func(t *testing.T) {
+		localNow := time.Date(2026, 5, 13, 14, 40, 0, 0, loc)
+		window, err := buildEmployeeScheduleWindow(localNow, "14:33", 28, 15, 3*time.Minute, loc)
+		if err != nil {
+			t.Fatalf("buildEmployeeScheduleWindow() error = %v", err)
+		}
+		wantNotBefore := time.Date(2026, 5, 13, 14, 48, 0, 0, loc)
+		wantLatest := time.Date(2026, 5, 13, 15, 4, 0, 0, loc)
+		if !window.NotBefore.Equal(wantNotBefore) {
+			t.Fatalf("not_before = %v, want %v", window.NotBefore, wantNotBefore)
+		}
+		if !window.Latest.Equal(wantLatest) {
+			t.Fatalf("latest = %v, want %v", window.Latest, wantLatest)
+		}
+		if window.Expired {
+			t.Fatal("window marked expired before latest boundary")
+		}
+	})
+
+	t.Run("expires late clock jumps", func(t *testing.T) {
+		localNow := time.Date(2026, 5, 13, 16, 39, 0, 0, loc)
+		window, err := buildEmployeeScheduleWindow(localNow, "14:33", 28, 0, 3*time.Minute, loc)
+		if err != nil {
+			t.Fatalf("buildEmployeeScheduleWindow() error = %v", err)
+		}
+		if !window.Expired {
+			t.Fatalf("window expired = false, want true for now=%v latest=%v", localNow, window.Latest)
+		}
+	})
+}
+
 func TestSchedulerTickEmployeeSchedulesWithoutRandomWindowStayImmediate(t *testing.T) {
 	store := &fakeSchedulerStore{
 		settings: map[string]string{"default_max_attempts": "3"},
@@ -278,6 +312,7 @@ func TestSchedulerTickEmployeeSchedulesWithoutRandomWindowStayImmediate(t *testi
 			ID:                  pgtype.UUID{Bytes: [16]byte{9}, Valid: true},
 			EmployeeID:          pgtype.UUID{Bytes: [16]byte{1}, Valid: true},
 			RunType:             db.RunTypeEnumCheckin,
+			RunTime:             "15:00",
 			RandomWindowMinutes: 0,
 		}},
 	}
@@ -316,6 +351,7 @@ func TestSchedulerTickEmployeeSchedulesRandomWindowSetsNotBefore(t *testing.T) {
 			ID:                  pgtype.UUID{Bytes: [16]byte{7}, Valid: true},
 			EmployeeID:          pgtype.UUID{Bytes: [16]byte{2}, Valid: true},
 			RunType:             db.RunTypeEnumCheckout,
+			RunTime:             "14:50",
 			RandomWindowMinutes: 15,
 		}},
 	}
@@ -343,9 +379,43 @@ func TestSchedulerTickEmployeeSchedulesRandomWindowSetsNotBefore(t *testing.T) {
 	if !call.NotBefore.Valid {
 		t.Fatalf("CreateWithDelay() not_before should be set when random window is enabled")
 	}
-	diff := call.NotBefore.Time.Sub(now)
+	base := time.Date(2026, 4, 28, 14, 50, 0, 0, time.FixedZone("WITA", 8*60*60))
+	diff := call.NotBefore.Time.Sub(base)
 	if diff < 0 || diff > 15*time.Minute {
-		t.Fatalf("CreateWithDelay() not_before diff = %v, want 0..15m", diff)
+		t.Fatalf("CreateWithDelay() not_before diff from schedule base = %v, want 0..15m", diff)
+	}
+}
+
+func TestSchedulerTickEmployeeSchedulesExpiredWindowSkipsJob(t *testing.T) {
+	store := &fakeSchedulerStore{
+		settings: map[string]string{"default_max_attempts": "3"},
+		claimedEmployeeSchedules: []db.ClaimDueEmployeeSchedulesRow{{
+			ID:                  pgtype.UUID{Bytes: [16]byte{8}, Valid: true},
+			EmployeeID:          pgtype.UUID{Bytes: [16]byte{3}, Valid: true},
+			RunType:             db.RunTypeEnumCheckout,
+			RunTime:             "14:33",
+			RandomWindowMinutes: 28,
+		}},
+	}
+	sett := &Setting{q: newFakeStore()}
+	jobs := &fakeJobRunner{}
+	svc := &PusakaScheduler{
+		store: store,
+		jobs:  jobs,
+		sett:  sett,
+		loc:   time.FixedZone("WITA", 8*60*60),
+	}
+
+	now := time.Date(2026, 5, 13, 8, 39, 0, 0, time.UTC) // 16:39 WITA
+	got, err := svc.Tick(context.Background(), now)
+	if err != nil {
+		t.Fatalf("Tick() error = %v", err)
+	}
+	if got.Processed != 1 || got.Enqueued != 0 || got.Skipped != 1 {
+		t.Fatalf("Tick() = %+v, want processed=1 enqueued=0 skipped=1", got)
+	}
+	if len(jobs.createCalls) != 0 {
+		t.Fatalf("CreateWithDelay() calls = %d, want 0 for expired window", len(jobs.createCalls))
 	}
 }
 
