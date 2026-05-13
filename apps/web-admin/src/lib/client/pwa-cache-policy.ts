@@ -4,6 +4,11 @@ const APP_SHELL_PATHS = new Set([
 	'/manifest.webmanifest',
 	'/offline.html',
 	'/pwa-icon.svg',
+	'/brand/m2k-mark.svg',
+	'/favicon.ico',
+	'/favicon-32x32.png',
+	'/pwa-icon-192.png',
+	'/pwa-icon-512.png',
 	'/robots.txt',
 	'/sw.js',
 ]);
