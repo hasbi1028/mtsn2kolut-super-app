@@ -79,6 +79,57 @@ HAVING COUNT(*) > 1;
 7. Migration `062_cbt_event_members_question_scope.sql` adds event members with roles `panitia`, `pembuat_soal`, `reviewer`, `proktor`, `pengawas`, and `korektor`; only `pembuat_soal`, `reviewer`, and `korektor` may carry `subject_id` scope.
 8. After migration, run backend health, frontend smoke, and CBT smoke checks before activating or reopening exam sessions.
 
+## Online Index Migrations
+
+`services/core-api/db/scripts/apply_migrations.js` keeps the safe default: normal migrations run inside one transaction. PostgreSQL online index operations are the only explicit exception.
+
+For `CREATE INDEX CONCURRENTLY` or `DROP INDEX CONCURRENTLY`, the migration file must include this exact marker:
+
+```sql
+-- mtsn2kolut:migration non-transactional
+```
+
+Guardrails:
+
+- Use the marker only for online index migrations; the runner rejects unmarked `CREATE/DROP INDEX CONCURRENTLY`.
+- Marked migrations may only contain `CREATE INDEX CONCURRENTLY` and `DROP INDEX CONCURRENTLY` statements.
+- Split extension/schema changes into a normal transactional migration before the online index migration.
+- Run on staging first and do not run during CBT exam windows or other high-write operational periods.
+- If a concurrent index build fails, inspect and drop any invalid index on staging before retrying production rollout.
+
+Sprint 4 adds `097_pg_trgm_extension.sql`, `098_pg_trgm_core_search_indexes.sql`, and `099_pg_trgm_operations_search_indexes.sql` for trigram-backed `ILIKE '%term%'` searches. These files are prepared as migration artifacts only; applying them remains part of the normal backend migration rollout, not this review task.
+
+## Backup Restore SOP
+
+Restore remains a manual operator action from the backend VPS. The web UI may show validation and a command plan, but it must not execute a restore automatically.
+
+Minimum defensive sequence:
+
+1. Verify the selected dump and checksum sidecar from the backup directory:
+
+```bash
+cd ~/backups/mtsn2kolut-super-app/postgresql
+sha256sum -c latest.dump.sha256
+pg_restore --list latest.dump | sed -n '1,40p'
+```
+
+2. Restore to a staging/scratch database first:
+
+```bash
+createdb -h 127.0.0.1 -U pusaka pusaka_restore_drill
+pg_restore \
+  --host=127.0.0.1 --username=pusaka --dbname=pusaka_restore_drill \
+  --single-transaction --exit-on-error \
+  --clean --if-exists --no-owner --no-privileges \
+  latest.dump
+psql -h 127.0.0.1 -U pusaka pusaka_restore_drill -c "SELECT count(*) FROM users;"
+psql -h 127.0.0.1 -U pusaka pusaka_restore_drill -c "SELECT count(*) FROM cbt_questions;"
+```
+
+3. Consider production restore only after staging succeeds, an explicit backup safety run completes, and the operator/owner approves downtime.
+
+Production restore commands must also include `--single-transaction --exit-on-error`, use server-local environment variables for connection details, and avoid printing credentials into chat, docs, or logs.
+
 ## Makefile Target Map
 
 Use these targets from the repo root unless noted otherwise:

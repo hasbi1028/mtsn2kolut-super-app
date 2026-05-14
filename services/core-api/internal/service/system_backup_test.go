@@ -275,7 +275,13 @@ func TestSystemBackupRestoreCommandIsManualOnly(t *testing.T) {
 	if !strings.Contains(joined, "pg_restore --list") || !strings.Contains(joined, "$DATABASE_URL") {
 		t.Fatalf("commands = %s, want validation and DATABASE_URL placeholder", joined)
 	}
-	if strings.Contains(joined, "postgres://") || strings.Contains(joined, "password") {
+	if !strings.Contains(joined, "sha256sum -c") || !strings.Contains(joined, "<STAGING_DB>") {
+		t.Fatalf("commands = %s, want checksum verification and staging restore first", joined)
+	}
+	if !strings.Contains(joined, "--single-transaction") || !strings.Contains(joined, "--exit-on-error") {
+		t.Fatalf("commands = %s, want defensive pg_restore flags", joined)
+	}
+	if strings.Contains(joined, "postgres://") || strings.Contains(joined, "postgresql://") || strings.Contains(joined, "password") {
 		t.Fatalf("commands expose secret-like content: %s", joined)
 	}
 	if !strings.Contains(joined, shellQuoteForOperator(backupPath)) {
