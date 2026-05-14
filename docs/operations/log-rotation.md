@@ -51,8 +51,9 @@ Jika path log production berbeda, edit path pada file tersebut sebelum dipasang.
 
 ```bash
 df -h .
-du -sh logs services/logs apps/logs 2>/dev/null || true
-find logs services/logs apps/logs -type f -size +100M -print 2>/dev/null || true
+du -sh /home/servermtsn2kolut/logs/mtsn2kolut-super-app logs services/logs apps/logs 2>/dev/null || true
+find /home/servermtsn2kolut/logs/mtsn2kolut-super-app logs services/logs apps/logs -type f -size +100M -print 2>/dev/null || true
+node scripts/validate-pm2-configs.mjs
 ```
 
 Deploy besar sebaiknya ditunda bila disk hampir penuh atau ada log >100 MB tanpa rotation.
@@ -62,3 +63,4 @@ Deploy besar sebaiknya ditunda bila disk hampir penuh atau ada log >100 MB tanpa
 - Production PM2 memakai `deploy/pm2/*.config.cjs` sebagai single source of truth.
 - Log diarahkan ke path luar repo, misalnya `/home/servermtsn2kolut/logs/mtsn2kolut-super-app/`.
 - Binary backup lama dipindahkan ke `/home/servermtsn2kolut/backups/...` dengan retensi.
+- Retensi dry-run: `deploy/scripts/runtime-artifact-retention.sh`.

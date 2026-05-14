@@ -305,10 +305,16 @@ Status implementasi: dikerjakan pada 2026-05-14.
 
 ### Sprint 5 — DevOps/release readiness
 
+Status implementasi: dikerjakan pada 2026-05-14 di worktree `sprint-5`; tidak deploy, tidak restart PM2, tidak commit.
+
 - PM2 config single source of truth.
+  - Implementasi: `deploy/pm2/*.config.cjs` menjadi sumber production, `ecosystem.config.cjs` menjadi wrapper kompatibilitas, shared default ada di `deploy/pm2/common.cjs`, dan validator `scripts/validate-pm2-configs.mjs` ditambahkan.
 - Runtime/log/binary backups outside repo.
+  - Implementasi: runbook `docs/operations/pm2-config.md`, `docs/operations/runtime-artifact-retention.md`, update `docs/operations/log-rotation.md`, update contoh logrotate ke `/home/servermtsn2kolut/logs/mtsn2kolut-super-app`, dan script dry-run `deploy/scripts/runtime-artifact-retention.sh`.
 - CI expanded to build/test gates.
+  - Implementasi: `.github/workflows/ci.yml` menjalankan secret scan, PM2 validator, dependency audit, web `check/test:unit/build`, backend `sqlc generate` + generated diff check + `go test ./...` + build, dan worker `check/test/build`.
 - Mobile release explicit artifact enforcement.
+  - Implementasi: `scripts/publish-mobile-apk.sh` production wajib `--apk`, `--commit`, `--base-url`, `--channel`, `--app-name`, `--abi`, `--version-name`, `--version-code`, `--expected-sha256`, dan `--notes`; dry-run tetap non-mutating; docs release/checklist diperbarui.
 
 ## Catatan penting
 

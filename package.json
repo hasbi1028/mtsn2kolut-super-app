@@ -20,6 +20,8 @@
     "db:seed:bank-soal-e2e-roles": "npm --prefix services/core-api/db/scripts run seed:bank-soal-e2e-roles",
     "db:seed:mobile-cbt": "npm --prefix services/core-api/db/scripts run seed:mobile-cbt",
     "db:test:cbt": "scripts/setup-cbt-test-db.sh",
+    "ops:runtime-retention": "deploy/scripts/runtime-artifact-retention.sh",
+    "ops:validate-pm2": "node scripts/validate-pm2-configs.mjs",
     "security:scan-secrets": "python3 scripts/scan-secrets.py",
     "security:scan-secrets:staged": "python3 scripts/scan-secrets.py --staged",
     "test:web": "npm --prefix apps/web-admin run test:unit"
