@@ -837,7 +837,7 @@ func (h *CbtSession) RegenerateToken(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
-	api.OK(w, row)
+	api.OK(w, serializeRegeneratedParticipantToken(row))
 }
 
 func (h *CbtSession) ResetParticipantAccess(w http.ResponseWriter, r *http.Request) {
@@ -1451,7 +1451,7 @@ func (h *CbtSession) GetRoomProctorPrintPack(w http.ResponseWriter, r *http.Requ
 	api.OK(w, map[string]any{
 		"room":         room,
 		"proctors":     proctors,
-		"participants": participants,
+		"participants": serializeProctoringRows(participants, adminAccessAllowed(r)),
 	})
 }
 
@@ -2415,10 +2415,7 @@ func (h *CbtSession) GetParticipantAnswers(w http.ResponseWriter, r *http.Reques
 func serializeProctoringRows(rows []db.GetSessionProctoringStatusRow, includeToken bool) []map[string]any {
 	items := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
-		token := ""
-		if includeToken {
-			token = row.Token
-		}
+		token := participantTokenForResponse(row.Token, includeToken)
 		items = append(items, map[string]any{
 			"participant_id":         pgUUIDString(row.ParticipantID),
 			"student_id":             pgUUIDString(row.StudentID),
@@ -2451,10 +2448,7 @@ func serializeProctoringRows(rows []db.GetSessionProctoringStatusRow, includeTok
 func serializeParticipantListRows(rows []db.ListCbtExamParticipantsRow, includeToken bool) []map[string]any {
 	items := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
-		token := ""
-		if includeToken {
-			token = row.Token
-		}
+		token := participantTokenForResponse(row.Token, includeToken)
 		items = append(items, map[string]any{
 			"id":                 pgUUIDString(row.ID),
 			"session_id":         pgUUIDString(row.SessionID),
@@ -2477,6 +2471,42 @@ func serializeParticipantListRows(rows []db.ListCbtExamParticipantsRow, includeT
 		})
 	}
 	return items
+}
+
+func serializeRegeneratedParticipantToken(row db.RegenerateParticipantTokenRow) map[string]any {
+	return map[string]any{
+		"id":             pgUUIDString(row.ID),
+		"token":          participantTokenForResponse(row.Token, true),
+		"token_revealed": false,
+	}
+}
+
+func participantTokenForResponse(token string, includeToken bool) string {
+	if !includeToken {
+		return ""
+	}
+	return maskParticipantToken(token)
+}
+
+func maskParticipantToken(token string) string {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return ""
+	}
+	if len(token) <= 4 {
+		return strings.Repeat("*", len(token))
+	}
+	groups := []string{strings.ToUpper(token[:4])}
+	remaining := len(token) - 4
+	for remaining > 0 {
+		width := 4
+		if remaining < width {
+			width = remaining
+		}
+		groups = append(groups, strings.Repeat("*", width))
+		remaining -= width
+	}
+	return strings.Join(groups, "-")
 }
 
 func serializeParticipantAnswerRows(rows []db.GetParticipantAnswersRow, includeAnswerKey bool) []map[string]any {

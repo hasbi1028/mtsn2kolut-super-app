@@ -935,8 +935,8 @@ func TestNormalizeQuestionInputSanitizesDangerousHTML(t *testing.T) {
 		SubjectID:      pgtype.UUID{Valid: true},
 		AuthoringMode:  "advance",
 		QuestionType:   "multiple_choice",
-		StemHTML:       `<p onclick="alert(1)">Halo</p><script>alert(2)</script>`,
-		StimulusHTML:   `<img src="javascript:alert(1)" onerror="alert(1)" style="background:url(javascript:alert(2))">`,
+		StemHTML:       `<p onclick="alert(1)" style="text-align:center;color:#166534">Halo</p><script>alert(2)</script>`,
+		StimulusHTML:   `<img src="javascript:alert(1)" onerror="alert(1)" style="background:url(javascript:alert(2))"><table><tr><td>Data</td></tr></table>`,
 		QuestionText:   "",
 		Options:        []QuestionOption{{Label: "A", HTML: `<span onclick="x()"><a href=javascript:alert(1)>Aman</a></span>`}, {Label: "B", Text: "B"}},
 		AnswerKey:      "A",
@@ -949,14 +949,69 @@ func TestNormalizeQuestionInputSanitizesDangerousHTML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("normalizeQuestionInput() error = %v", err)
 	}
-	if got.StemHTML != `<p>Halo</p>` {
-		t.Fatalf("StemHTML = %q, want sanitized paragraph", got.StemHTML)
+	for _, htmlValue := range []string{got.StemHTML, got.StimulusHTML, got.Options[0].HTML} {
+		assertQuestionHTMLSafe(t, htmlValue)
 	}
-	if got.StimulusHTML != `<img>` {
-		t.Fatalf("StimulusHTML = %q, want sanitized img", got.StimulusHTML)
+	if !strings.Contains(got.StemHTML, `<p style="text-align: center; color: #166534">Halo</p>`) {
+		t.Fatalf("StemHTML = %q, want rich paragraph formatting preserved", got.StemHTML)
 	}
-	if got.Options[0].HTML != `<span><a>Aman</a></span>` {
-		t.Fatalf("Option HTML = %q, want sanitized span", got.Options[0].HTML)
+	if !strings.Contains(got.StimulusHTML, `<table><tr><td>Data</td></tr></table>`) {
+		t.Fatalf("StimulusHTML = %q, want table preserved after unsafe image is dropped", got.StimulusHTML)
+	}
+	if !strings.Contains(got.Options[0].HTML, `<span>Aman</span>`) {
+		t.Fatalf("Option HTML = %q, want unsafe link dropped with text preserved", got.Options[0].HTML)
+	}
+}
+
+func TestQuestionHTMLSanitizerBlocksCommonBypassPayloads(t *testing.T) {
+	cases := []struct {
+		name     string
+		input    string
+		required string
+	}{
+		{
+			name:     "encoded javascript URL",
+			input:    `<a href="jav&#x61;script:alert(1)">Klik</a>`,
+			required: `Klik`,
+		},
+		{
+			name:     "svg onload content",
+			input:    `<svg><g onload="alert(1)"><text>Jangan</text></g></svg><p>Aman</p>`,
+			required: `<p>Aman</p>`,
+		},
+		{
+			name:     "malformed img handler",
+			input:    `<p><strong>Utuh<img src=x onerror=alert(1)</p>`,
+			required: `Utuh`,
+		},
+		{
+			name:     "data html URL",
+			input:    `<a href="data:text/html,&lt;script&gt;alert(1)&lt;/script&gt;">Data</a>`,
+			required: `Data`,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sanitizeHTML(tt.input)
+			assertQuestionHTMLSafe(t, got)
+			if !strings.Contains(got, tt.required) {
+				t.Fatalf("sanitizeHTML() = %q, want to preserve %q", got, tt.required)
+			}
+		})
+	}
+}
+
+func assertQuestionHTMLSafe(t *testing.T, value string) {
+	t.Helper()
+	lowered := strings.ToLower(value)
+	for _, forbidden := range []string{
+		"javascript:", "vbscript:", "data:text/html", "<script", "<style", "<iframe", "<object", "<embed", "<svg",
+		" onload", " onclick", " onerror", "srcdoc", "formaction", "xlink:href",
+	} {
+		if strings.Contains(lowered, forbidden) {
+			t.Fatalf("sanitized HTML %q still contains forbidden fragment %q", value, forbidden)
+		}
 	}
 }
 

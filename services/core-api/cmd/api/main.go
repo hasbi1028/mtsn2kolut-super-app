@@ -161,6 +161,8 @@ func main() {
 	passwordRateLimit := ratelimit.RateLimitWithTrustedProxies(3, 0.1, trustedProxies)
 	publicRegisterRateLimit := ratelimit.RateLimitWithTrustedProxies(3, 0.2, trustedProxies)
 	examLoginRateLimit := ratelimit.RateLimitWithTrustedProxies(8, 1, trustedProxies)
+	examRuntimeRateLimit := ratelimit.RateLimitWithTrustedProxies(240, 20, trustedProxies)
+	studentPortalRevealRateLimit := ratelimit.RateLimitWithTrustedProxies(10, 0.5, trustedProxies)
 	publicSiteRateLimit := ratelimit.RateLimitWithTrustedProxies(60, 30, trustedProxies)
 	analyticsIngestionRateLimit := ratelimit.RateLimitWithTrustedProxies(30, 10, trustedProxies)
 	publicAnalyticsRateLimit := ratelimit.RateLimitWithTrustedProxies(20, 5, trustedProxies)
@@ -196,7 +198,7 @@ func main() {
 
 	// Exam endpoints — authenticated via X-Exam-Token (no JWT needed)
 	r.With(examLoginRateLimit).Post("/api/exam/login", examH.Login)
-	r.Group(func(r chi.Router) {
+	r.With(examRuntimeRateLimit).Group(func(r chi.Router) {
 		r.Use(examTokenMW)
 		r.Get("/api/exam/status", examH.Status)
 		r.Get("/api/exam/commands", examH.Commands)
@@ -400,8 +402,8 @@ func main() {
 		r.With(requireStudentPortalRead).Get("/api/portal/student/schedule", studentPortalH.Schedule)
 		r.With(requireStudentPortalRead).Get("/api/portal/student/results", studentPortalH.Results)
 		r.With(requireStudentPortalRead).Get("/api/portal/student/cbt", studentPortalH.CbtSchedule)
-		r.With(requireStudentPortalRead).Post("/api/portal/student/cbt/{participantID}/reveal-token", studentPortalH.RevealCbtToken)
-		r.With(requireStudentPortalRead).Post("/api/student/portal/cbt/{participantID}/reveal-token", studentPortalH.RevealCbtToken)
+		r.With(requireStudentPortalRead, studentPortalRevealRateLimit).Post("/api/portal/student/cbt/{participantID}/reveal-token", studentPortalH.RevealCbtToken)
+		r.With(requireStudentPortalRead, studentPortalRevealRateLimit).Post("/api/student/portal/cbt/{participantID}/reveal-token", studentPortalH.RevealCbtToken)
 		r.With(requireStudentsManage).Get("/api/portal/preview/students", studentPortalH.PreviewStudents)
 		r.With(requireStudentsManage).Get("/api/portal/preview/students/{studentID}/profile", studentPortalH.PreviewProfile)
 		r.With(requireStudentsManage).Get("/api/portal/preview/students/{studentID}/schedule", studentPortalH.PreviewSchedule)

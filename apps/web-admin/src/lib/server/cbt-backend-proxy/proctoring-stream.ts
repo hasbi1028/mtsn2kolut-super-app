@@ -3,8 +3,11 @@ import { proxy } from '$lib/server/api';
 
 const encoder = new TextEncoder();
 const POLL_MS = 1500;
+const MAX_BACKOFF_MS = 15000;
 const PING_MS = 25000;
 const MAX_TICKS = 60 * 30; // ~45 minutes at 1.5s/tick; EventSource reconnects automatically.
+const ERROR_EVENT_EVERY = 5;
+const ERROR_EVENT_MIN_MS = 30000;
 
 type EventLike = {
 	id?: string;
@@ -24,6 +27,12 @@ function eventKey(event: EventLike): string {
 
 function eventSortValue(event: EventLike): string {
 	return String(event.created_at ?? event.id ?? '');
+}
+
+function backoffDelayMs(consecutiveFailures: number): number {
+	if (consecutiveFailures <= 0) return POLL_MS;
+	const multiplier = 2 ** Math.min(consecutiveFailures - 1, 4);
+	return Math.min(MAX_BACKOFF_MS, POLL_MS * multiplier);
 }
 
 function serializeSse(eventName: string, data: unknown, id?: string): Uint8Array {
@@ -50,7 +59,10 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 export function proctoringEventStream(event: RequestEvent, options: StreamOptions): Response {
 	const signal = event.request.signal;
 	const seen = new Set<string>();
+	const reconnectCursor = event.request.headers.get('last-event-id')?.trim() ?? '';
 	let lastPing = 0;
+	let lastErrorEvent = 0;
+	let consecutiveFailures = 0;
 	let primed = false;
 
 	const stream = new ReadableStream<Uint8Array>({
@@ -63,13 +75,40 @@ export function proctoringEventStream(event: RequestEvent, options: StreamOption
 						.filter((item) => item && typeof item === 'object')
 						.sort((a, b) => eventSortValue(a).localeCompare(eventSortValue(b)));
 
-					for (const item of events) {
-						const key = eventKey(item);
-						if (!key || seen.has(key)) continue;
-						seen.add(key);
-						if (primed) controller.enqueue(serializeSse('proctor_event', item, key));
+					if (!primed && reconnectCursor) {
+						const cursorIndex = events.findIndex((item) => eventKey(item) === reconnectCursor);
+						if (cursorIndex >= 0) {
+							for (let index = 0; index <= cursorIndex; index += 1) {
+								seen.add(eventKey(events[index]));
+							}
+							for (const item of events.slice(cursorIndex + 1)) {
+								const key = eventKey(item);
+								if (!key || seen.has(key)) continue;
+								seen.add(key);
+								controller.enqueue(serializeSse('proctor_event', item, key));
+							}
+						} else if (events.length > 0) {
+							controller.enqueue(serializeSse('stream_resync', {
+								message: 'Koneksi pengawasan disinkronkan ulang dari event terbaru.',
+								last_event_id: reconnectCursor,
+							}));
+							for (const item of events) {
+								const key = eventKey(item);
+								if (!key || seen.has(key)) continue;
+								seen.add(key);
+								controller.enqueue(serializeSse('proctor_event', item, key));
+							}
+						}
+					} else {
+						for (const item of events) {
+							const key = eventKey(item);
+							if (!key || seen.has(key)) continue;
+							seen.add(key);
+							if (primed) controller.enqueue(serializeSse('proctor_event', item, key));
+						}
 					}
 					primed = true;
+					consecutiveFailures = 0;
 
 					const now = Date.now();
 					if (now - lastPing >= PING_MS) {
@@ -77,11 +116,21 @@ export function proctoringEventStream(event: RequestEvent, options: StreamOption
 						controller.enqueue(serializeSse('ping', { time: new Date().toISOString() }));
 					}
 				} catch (error) {
-					controller.enqueue(serializeSse('stream_error', {
-						message: error instanceof Error ? error.message : 'Gagal membaca event pengawasan',
-					}));
+					consecutiveFailures += 1;
+					const now = Date.now();
+					if (
+						consecutiveFailures === 1 ||
+						consecutiveFailures % ERROR_EVENT_EVERY === 0 ||
+						now - lastErrorEvent >= ERROR_EVENT_MIN_MS
+					) {
+						lastErrorEvent = now;
+						controller.enqueue(serializeSse('stream_error', {
+							message: error instanceof Error ? error.message : 'Gagal membaca event pengawasan',
+							retry_in_ms: backoffDelayMs(consecutiveFailures),
+						}));
+					}
 				}
-				await sleep(POLL_MS, signal);
+				await sleep(backoffDelayMs(consecutiveFailures), signal);
 			}
 			controller.close();
 		},
