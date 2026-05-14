@@ -284,10 +284,17 @@ Status implementasi: dikerjakan pada 2026-05-14.
 
 ### Sprint 2 — CBT/Bank Soal hardening
 
+Status implementasi: dikerjakan pada 2026-05-14 di worktree `sprint-2`.
+
 - Bluemonday sanitizer Bank Soal.
+  - Implementasi: sanitizer regex-based di service Bank Soal diganti ke `bluemonday` allowlist policy untuk rich text soal (paragraph/heading/list/table/image/link terbatas, alignment/color aman, RTL `dir`). Test menutup bypass `javascript:`, SVG/onload, encoded payload, dan malformed tag.
 - Mask/hash token peserta CBT.
+  - Implementasi sprint ini: response/listing peserta dan proctoring serta response regenerate token tidak lagi mengembalikan raw token; admin mendapat token tersamarkan, guru tetap tidak mendapat token.
+  - Keputusan migrasi: hashing kolom token peserta ditunda karena membutuhkan migrasi DB dan kontrak login/reveal yang lebih besar. Rencana aman berikutnya adalah tambah kolom hash/token version, backfill non-destruktif dari token plaintext existing, login lookup bertahap via hash dengan fallback sementara, lalu endpoint reveal khusus yang diaudit dan rate-limited sebelum raw token lama dihapus.
 - Rate limit `/api/exam/*`.
+  - Implementasi: `/api/exam/login` tetap memakai limiter existing; route token-scoped `/api/exam/status`, `commands`, `heartbeat`, `event`, `answer`, dan `submit` diberi limiter trusted-proxy-aware ringan sebelum token lookup. Reveal token portal siswa juga diberi limiter khusus.
 - Proctoring stream backoff atau SSE backend.
+  - Implementasi: BFF SSE polling bridge mendapat exponential backoff, throttled `stream_error`, dan guard `Last-Event-ID`/resync minimal tanpa rewrite backend SSE native.
 
 ### Sprint 3 — Frontend maintainability
 

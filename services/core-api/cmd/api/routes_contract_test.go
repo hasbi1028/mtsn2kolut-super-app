@@ -99,8 +99,12 @@ func TestExamMobileRoutesRemainTokenScoped(t *testing.T) {
 		t.Fatalf("exam route block not found")
 	}
 	block := source[start:end]
+	if !strings.Contains(source, `examRuntimeRateLimit := ratelimit.RateLimitWithTrustedProxies`) {
+		t.Fatalf("exam runtime routes must define a trusted-proxy-aware limiter")
+	}
 	required := []string{
 		`r.With(examLoginRateLimit).Post("/api/exam/login", examH.Login)`,
+		`r.With(examRuntimeRateLimit).Group(func(r chi.Router)`,
 		`r.Use(examTokenMW)`,
 		`r.Get("/api/exam/status", examH.Status)`,
 		`r.Get("/api/exam/commands", examH.Commands)`,
@@ -117,6 +121,26 @@ func TestExamMobileRoutesRemainTokenScoped(t *testing.T) {
 	}
 	if strings.Contains(block, `"/api/cbt/exam`) || strings.Contains(block, `"/api/cbt/student`) {
 		t.Fatalf("mobile exam runtime must stay on /api/exam/*, not new /api/cbt/* routes:\n%s", block)
+	}
+}
+
+func TestStudentPortalRevealTokenRoutesAreRateLimited(t *testing.T) {
+	raw, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	source := string(raw)
+	if !strings.Contains(source, `studentPortalRevealRateLimit := ratelimit.RateLimitWithTrustedProxies`) {
+		t.Fatalf("student portal reveal token route must define a dedicated trusted-proxy-aware limiter")
+	}
+	required := []string{
+		`r.With(requireStudentPortalRead, studentPortalRevealRateLimit).Post("/api/portal/student/cbt/{participantID}/reveal-token", studentPortalH.RevealCbtToken)`,
+		`r.With(requireStudentPortalRead, studentPortalRevealRateLimit).Post("/api/student/portal/cbt/{participantID}/reveal-token", studentPortalH.RevealCbtToken)`,
+	}
+	for _, want := range required {
+		if !strings.Contains(source, want) {
+			t.Fatalf("student portal reveal token route missing rate limiter %q", want)
+		}
 	}
 }
 

@@ -8,23 +8,42 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/microcosm-cc/bluemonday"
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
-var stripHTMLTags = regexp.MustCompile(`(?s)<[^>]*>`)
-var stripDangerousBlockPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`),
-	regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`),
-	regexp.MustCompile(`(?is)<iframe[^>]*>.*?</iframe>`),
-	regexp.MustCompile(`(?is)<object[^>]*>.*?</object>`),
-	regexp.MustCompile(`(?is)<embed[^>]*>.*?</embed>`),
-}
-var stripEventHandlers = regexp.MustCompile(`(?i)\s+on[a-z]+\s*=\s*(".*?"|'.*?'|[^\s>]+)`)
-var stripDangerousURLs = regexp.MustCompile(`(?i)\s(?:href|src|xlink:href)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)`)
-var stripDangerousAttributes = regexp.MustCompile(`(?i)\s(?:srcdoc|style|formaction|poster)\s*=\s*(?:".*?"|'.*?'|[^\s>]+)`)
 var importAnswerTokenSeparators = regexp.MustCompile(`[,\|;/+\s]+`)
 var importMatchingPairSeparators = regexp.MustCompile(`[;,|]+`)
+var bankSoalColorStyleValue = regexp.MustCompile(`(?i)^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$`)
+var bankSoalDataAttributeValue = regexp.MustCompile(`^[a-zA-Z0-9 _.,:;@#%+=/\-()]+$`)
+var bankSoalHTMLPolicy = newBankSoalHTMLPolicy()
+var bankSoalPlainTextPolicy = bluemonday.StrictPolicy()
+
+func newBankSoalHTMLPolicy() *bluemonday.Policy {
+	p := bluemonday.NewPolicy()
+	p.AllowStandardURLs()
+	p.RequireNoReferrerOnLinks(true)
+	p.SkipElementsContent("script", "style", "iframe", "object", "embed", "svg", "template")
+
+	p.AllowElements(
+		"a", "b", "blockquote", "br", "code", "div", "em", "h1", "h2", "h3", "hr",
+		"i", "p", "pre", "s", "span", "strong", "sub", "sup", "u",
+	)
+	p.AllowLists()
+	p.AllowTables()
+	p.AllowImages()
+
+	p.AllowAttrs("dir").Matching(bluemonday.Direction).Globally()
+	p.AllowAttrs("lang").Matching(regexp.MustCompile(`^[a-zA-Z]{2,20}$`)).Globally()
+	p.AllowAttrs("class").Matching(bluemonday.SpaceSeparatedTokens).Globally()
+	p.AllowAttrs("data-align", "data-color").Matching(bankSoalDataAttributeValue).OnElements("span", "div", "p")
+	p.AllowAttrs("style").OnElements("span", "p", "div", "h1", "h2", "h3", "td", "th")
+	p.AllowStyles("text-align").MatchingEnum("left", "right", "center", "justify").Globally()
+	p.AllowStyles("color").Matching(bankSoalColorStyleValue).Globally()
+
+	return p
+}
 
 type cbtQuestionStore interface {
 	ListCbtQuestions(ctx context.Context, arg db.ListCbtQuestionsParams) ([]db.ListCbtQuestionsRow, error)

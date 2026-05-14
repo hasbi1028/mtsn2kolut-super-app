@@ -903,6 +903,35 @@ func TestCbtSessionOperationalHandlersForwardValidRequests(t *testing.T) {
 	}
 }
 
+func TestCbtSessionAdminParticipantResponsesMaskTokens(t *testing.T) {
+	sessionID := handlerTestUUID(226)
+	participantID := handlerTestUUID(227)
+	studentID := handlerTestUUID(228)
+	rawToken := "abcdef1234567890abcdef1234567890"
+
+	participants := serializeParticipantListRows([]db.ListCbtExamParticipantsRow{
+		{ID: participantID, SessionID: sessionID, StudentID: studentID, Nis: "12345", Nama: "Ahmad", Token: rawToken},
+	}, true)
+	if got := participants[0]["token"]; got == "" || got == rawToken || strings.Contains(got.(string), "34567890") {
+		t.Fatalf("participant list token = %#v, want masked token without raw value", got)
+	}
+
+	proctorRows := serializeProctoringRows([]db.GetSessionProctoringStatusRow{
+		{ParticipantID: participantID, StudentID: studentID, Nis: "12345", Nama: "Ahmad", Token: rawToken},
+	}, true)
+	if got := proctorRows[0]["token"]; got == "" || got == rawToken || strings.Contains(got.(string), "34567890") {
+		t.Fatalf("proctoring token = %#v, want masked token without raw value", got)
+	}
+
+	regenerated := serializeRegeneratedParticipantToken(db.RegenerateParticipantTokenRow{ID: participantID, Token: rawToken})
+	if got := regenerated["token"]; got == "" || got == rawToken || strings.Contains(got.(string), "34567890") {
+		t.Fatalf("regenerated token response = %#v, want masked token without raw value", got)
+	}
+	if regenerated["token_revealed"] != false {
+		t.Fatalf("token_revealed = %#v, want false", regenerated["token_revealed"])
+	}
+}
+
 func TestCbtSessionGetMinutesRedactsTokensForTeacher(t *testing.T) {
 	sessionID := handlerTestUUID(230)
 	teacherID := handlerTestUUID(231)

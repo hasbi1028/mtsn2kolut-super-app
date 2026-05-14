@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	nethtml "golang.org/x/net/html"
 
 	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
@@ -1025,13 +1026,67 @@ func legacyOptionColumns(options []QuestionOption) (string, string, string, stri
 }
 
 func derivePlainText(value string) string {
-	plain := stripHTMLTags.ReplaceAllString(value, " ")
+	plain := plainTextFromHTML(value)
 	plain = html.UnescapeString(strings.TrimSpace(plain))
 	plain = strings.Join(strings.Fields(plain), " ")
 	if len(plain) > 500 {
 		return plain[:500]
 	}
 	return plain
+}
+
+func plainTextFromHTML(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	nodes, err := nethtml.ParseFragment(strings.NewReader(value), &nethtml.Node{
+		Type: nethtml.ElementNode,
+		Data: "body",
+	})
+	if err != nil {
+		return bankSoalPlainTextPolicy.Sanitize(value)
+	}
+	var builder strings.Builder
+	for _, node := range nodes {
+		appendHTMLText(&builder, node)
+	}
+	return builder.String()
+}
+
+func appendHTMLText(builder *strings.Builder, node *nethtml.Node) {
+	if node == nil {
+		return
+	}
+	switch node.Type {
+	case nethtml.TextNode:
+		builder.WriteString(node.Data)
+		builder.WriteByte(' ')
+	case nethtml.ElementNode:
+		if node.Data == "script" || node.Data == "style" || node.Data == "svg" {
+			return
+		}
+		if node.Data == "br" {
+			builder.WriteByte(' ')
+		}
+	}
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		appendHTMLText(builder, child)
+	}
+	if node.Type == nethtml.ElementNode && isPlainTextBlockElement(node.Data) {
+		builder.WriteByte(' ')
+	}
+}
+
+func isPlainTextBlockElement(tag string) bool {
+	switch tag {
+	case "address", "article", "aside", "blockquote", "br", "caption", "div", "figcaption", "figure",
+		"footer", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr", "li", "main", "ol", "p",
+		"pre", "section", "table", "tbody", "td", "tfoot", "th", "thead", "tr", "ul":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s SaveCbtQuestionInput) reviewedAt() pgtype.Timestamptz {
@@ -1067,21 +1122,7 @@ func sanitizeHTML(value string) string {
 	if value == "" {
 		return ""
 	}
-	for _, pattern := range stripDangerousBlockPatterns {
-		value = pattern.ReplaceAllString(value, "")
-	}
-	value = html.UnescapeString(value)
-	value = stripEventHandlers.ReplaceAllString(value, "")
-	value = stripDangerousAttributes.ReplaceAllString(value, "")
-	value = stripDangerousURLs.ReplaceAllStringFunc(value, func(attr string) string {
-		if strings.Contains(strings.ToLower(html.UnescapeString(attr)), "javascript:") ||
-			strings.Contains(strings.ToLower(html.UnescapeString(attr)), "vbscript:") ||
-			strings.Contains(strings.ToLower(html.UnescapeString(attr)), "data:text/html") {
-			return ""
-		}
-		return attr
-	})
-	return strings.TrimSpace(value)
+	return strings.TrimSpace(bankSoalHTMLPolicy.Sanitize(value))
 }
 
 func mergeNotes(existing string, incoming string) string {
