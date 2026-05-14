@@ -91,6 +91,7 @@ func main() {
 	rbacSvc := service.NewRBACWithPool(pool)
 	profileChangeRequestSvc := service.NewProfileChangeRequestWithPool(pool)
 	websiteMediaH := handler.NewWebsiteMedia(getEnv("WEBSITE_MEDIA_DIR", "data/website-media"))
+	brandingH := handler.NewBranding(settSvc, getEnv("BRANDING_ASSET_DIR", "data/branding"))
 
 	if err := authSvc.SeedAdmin(mainCtx); err != nil {
 		slog.Error("seed admin", "error", err)
@@ -185,7 +186,9 @@ func main() {
 	r.With(publicSiteRateLimit).Get("/api/public/site/announcements", websiteH.ListPublishedAnnouncements)
 	r.With(publicSiteRateLimit).Get("/api/public/site/announcements/{slug}", websiteH.GetPublishedAnnouncement)
 	r.With(publicSiteRateLimit).Get("/api/public/site/pages/{slug}", websiteH.GetPublishedPage)
+	r.With(publicSiteRateLimit).Get("/api/public/branding", brandingH.Public)
 	r.Get("/api/website/media/{filename}", websiteMediaH.File)
+	r.Get("/api/branding/file/{filename}", brandingH.Asset)
 	r.With(publicAnalyticsRateLimit, mw.InternalKey(internalAPIKey)).Post("/api/internal-analytics/public-events", internalAnalyticsH.CreatePublicEvent)
 
 	// CBT/Bank Soal asset files are not public-by-obscurity. They may be accessed
@@ -261,6 +264,7 @@ func main() {
 	requireBackupCreate := mw.RequireAnyPermissionOrRole([]string{"backup.create"}, "admin")
 	requireBackupRestorePlan := mw.RequireAnyPermissionOrRole([]string{"backup.restore_plan"}, "admin")
 	requireSchoolProfileSettings := mw.RequirePermission("settings.school_profile")
+	requireBrandingSettings := mw.RequireAnyPermissionOrRole([]string{"settings.branding"}, "admin")
 	requireEmployeesRead := mw.RequireAnyPermissionOrRole([]string{"employees.read", "employees.manage"}, "admin")
 	requireEmployeesManage := mw.RequireAnyPermissionOrRole([]string{"employees.manage"}, "admin")
 
@@ -303,6 +307,10 @@ func main() {
 		r.With(requireBackupDownload).Get("/api/system/backups/{id}/download", systemBackupH.Download)
 		r.Get("/api/school-profile", settH.SchoolProfile)
 		r.With(requireSchoolProfileSettings).Put("/api/school-profile", settH.UpdateSchoolProfile)
+		r.With(requireBrandingSettings).Get("/api/branding", brandingH.Get)
+		r.With(requireBrandingSettings).Put("/api/branding", brandingH.Update)
+		r.With(requireBrandingSettings).Post("/api/branding/assets/{purpose}", brandingH.UploadAsset)
+		r.With(requireBrandingSettings).Delete("/api/branding/assets/{purpose}", brandingH.ResetAsset)
 
 		// Employees use dynamic RBAC; admin keeps the default grant.
 		r.Group(func(r chi.Router) {

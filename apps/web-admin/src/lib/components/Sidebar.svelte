@@ -14,6 +14,7 @@
 	import { findActiveSidebarHref } from '$lib/components/sidebar/sidebar-active';
 	import { readClientJson } from '$lib/client/api';
 	import type { AccountIdentity } from '$lib/client/account';
+	import { defaultBranding, versionedAsset, type BrandingSettings } from '$lib/branding';
 	import {
 		dashboardNavItem,
 		defaultPinnedByRole,
@@ -24,10 +25,12 @@
 	let {
 		user,
 		account = null,
+		branding = defaultBranding,
 		desktopExpanded = $bindable(true)
 	}: {
 		user?: { id: string; username: string; role: string; roles?: string[]; permissions?: string[]; employee_id?: string };
 		account?: AccountIdentity | null;
+		branding?: BrandingSettings;
 		desktopExpanded?: boolean;
 	} = $props();
 	let open = $state(false);
@@ -488,10 +491,10 @@
 	>
 		Cari menu
 	</button>
-	<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-emerald-900 shadow-sm ring-1 ring-emerald-300/20">
-		<img src="/brand/madrasah-mark.svg" alt="Ikon MTsN 2 Kolaka Utara" class="h-full w-full object-cover" />
+	<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl shadow-sm ring-1 ring-emerald-300/20" style={`background: ${branding.primary_color}`}>
+		<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Ikon ${branding.short_name}`} class="h-full w-full object-cover" />
 	</span>
-	<span class="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">MTsN 2 Kolut</span>
+	<span class="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{branding.short_name}</span>
 	{#if user}
 		<AccountMenu
 			{user}
@@ -512,12 +515,12 @@
 >
 	<!-- Brand -->
 	<div class={`flex h-14 shrink-0 items-center border-b border-border ${desktopExpanded ? 'gap-2.5 px-4' : 'justify-center px-3'}`}>
-		<span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-emerald-900 shadow-sm ring-1 ring-emerald-300/20">
-			<img src="/brand/madrasah-mark.svg" alt="Ikon MTsN 2 Kolaka Utara" class="h-full w-full object-cover" />
+		<span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg shadow-sm ring-1 ring-emerald-300/20" style={`background: ${branding.primary_color}`}>
+			<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Ikon ${branding.short_name}`} class="h-full w-full object-cover" />
 		</span>
 		<div class={`min-w-0 ${desktopExpanded ? 'block' : 'block lg:hidden'}`}>
-			<p class="truncate text-sm font-semibold text-foreground">MTsN 2 Kolut</p>
-			<p class="truncate text-xs text-muted-foreground">Super App Madrasah</p>
+			<p class="truncate text-sm font-semibold text-foreground">{branding.short_name}</p>
+			<p class="truncate text-xs text-muted-foreground">{branding.tagline}</p>
 		</div>
 		<button
 			class={`ml-auto hidden rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground lg:inline-flex ${desktopExpanded ? '' : 'ml-0'}`}

@@ -6,6 +6,7 @@
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import { Sonner } from '$lib/components/ui/sonner';
 	import { isPublicSitePath } from '$lib/routes/public-policy';
+	import { defaultBranding, versionedAsset } from '$lib/branding';
 	import '../app.css';
 	import { navigating, page } from '$app/state';
 
@@ -13,6 +14,7 @@
 	let isLogin = $derived(page.url.pathname === '/login');
 	let pwaRegistrationStarted = $state(false);
 	let isPublicSite = $derived(isPublicSitePath(page.url.pathname, Boolean(data.user)));
+	let branding = $derived(data.branding ?? defaultBranding);
 	let desktopSidebarExpanded = $state(true);
 	const SIDEBAR_EXPANDED_STORAGE_KEY_PREFIX = 'sidebar:desktop-expanded';
 
@@ -46,13 +48,11 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" type="image/svg+xml" href="/brand/madrasah-mark.svg" />
-	<link rel="icon" href="/favicon.ico" sizes="any" />
-	<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-	<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-	<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-	<link rel="manifest" href="/manifest.webmanifest" />
-	<meta name="theme-color" content="#166534" />
+	<link rel="icon" href={versionedAsset(branding.mark_url, branding.version)} />
+	<link rel="icon" href={versionedAsset(branding.favicon_url, branding.version)} sizes="any" />
+	<link rel="apple-touch-icon" href={versionedAsset(branding.apple_touch_icon_url, branding.version)} />
+	<link rel="manifest" href={versionedAsset('/manifest.webmanifest', branding.version)} />
+	<meta name="theme-color" content={branding.theme_color} />
 </svelte:head>
 
 <Sonner />
@@ -62,12 +62,12 @@
 {#if isLogin}
 	{@render children()}
 {:else if isPublicSite}
-	<PublicSiteShell user={data.user}>
+	<PublicSiteShell user={data.user} branding={branding}>
 		{@render children()}
 	</PublicSiteShell>
 {:else}
 	<div class="flex min-h-screen bg-background text-foreground">
-		<Sidebar bind:desktopExpanded={desktopSidebarExpanded} user={data.user} account={data.account} />
+		<Sidebar bind:desktopExpanded={desktopSidebarExpanded} user={data.user} account={data.account} branding={branding} />
 		<!--
 			lg:pl-60      — offset for expanded fixed sidebar on desktop
 			lg:pl-[5.5rem] — offset for collapsed fixed sidebar on desktop

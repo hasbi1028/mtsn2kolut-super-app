@@ -2,10 +2,12 @@
 	import { afterNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { defaultBranding, versionedAsset, type BrandingSettings } from '$lib/branding';
 
-	let { children, user } = $props<{
+	let { children, user, branding = defaultBranding } = $props<{
 		children: import('svelte').Snippet;
 		user?: { id?: string };
+		branding?: BrandingSettings;
 	}>();
 
 	const navItems = [
@@ -211,16 +213,16 @@
 
 <svelte:window onclick={handlePublicClick} onfocusin={handlePublicFocusIn} onsubmit={handlePublicSubmit} onchange={handlePublicChange} />
 
-<div class="min-h-screen bg-[linear-gradient(180deg,#f7faf7_0%,#f9fafb_22%,#ffffff_100%)]">
+<div class="min-h-screen bg-[linear-gradient(180deg,#f7faf7_0%,#f9fafb_22%,#ffffff_100%)]" style={`--brand-primary: ${branding.primary_color}; --brand-primary-soft: color-mix(in srgb, ${branding.primary_color} 12%, white)`}>
 	<header class="sticky top-0 z-30 border-b border-emerald-100/80 bg-white/90 backdrop-blur">
 		<div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
 				<a href={resolve('/')} class="flex items-center gap-3">
 					<span class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-emerald-100">
-						<img src="/brand/logo-kemenag-icon-64.png" alt="Logo Kemenag" class="h-full w-full object-contain" />
+						<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Logo ${branding.short_name}`} class="h-full w-full object-contain" />
 					</span>
 				<div>
-					<p class="text-sm font-semibold text-slate-900 sm:text-base">MTs Negeri 2 Kolaka Utara</p>
-					<p class="text-xs text-emerald-700/80">Website Resmi Madrasah</p>
+					<p class="text-sm font-semibold text-slate-900 sm:text-base">{branding.app_name}</p>
+					<p class="text-xs text-emerald-700">{branding.tagline}</p>
 				</div>
 			</a>
 
@@ -250,7 +252,7 @@
 							Masuk
 						</a>
 					{/if}
-					<a href={resolve('/ppdb')} class="rounded-full bg-[oklch(0.38_0.13_145)] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-105">
+					<a href={resolve('/ppdb')} class="rounded-full px-4 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-105" style="background: var(--brand-primary)">
 						Daftar PPDB
 					</a>
 				</div>
@@ -304,7 +306,7 @@
 									Login
 								</a>
 							{/if}
-							<a href={resolve('/ppdb')} class="flex-1 rounded-xl bg-[oklch(0.38_0.13_145)] px-3 py-2 text-center text-sm font-semibold text-white">
+							<a href={resolve('/ppdb')} class="flex-1 rounded-xl px-3 py-2 text-center text-sm font-semibold text-white" style="background: var(--brand-primary)">
 								PPDB
 							</a>
 						</div>
@@ -329,7 +331,7 @@
 						</p>
 					</div>
 					<div class="flex flex-wrap gap-2">
-							<a href={resolve('/ppdb')} class="rounded-full bg-[oklch(0.38_0.13_145)] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-105">
+							<a href={resolve('/ppdb')} class="rounded-full px-4 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-105" style="background: var(--brand-primary)">
 								Buka PPDB
 							</a>
 							<a href={resolve('/kontak')} class="rounded-full border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50">
@@ -341,7 +343,7 @@
 
 			<div class="grid gap-8 sm:grid-cols-[1.2fr,0.8fr,0.8fr]">
 				<div>
-					<p class="text-base font-semibold text-slate-900">MTs Negeri 2 Kolaka Utara</p>
+					<p class="text-base font-semibold text-slate-900">{branding.app_name}</p>
 					<p class="mt-2 max-w-2xl text-sm leading-7 text-slate-600">
 						Website resmi madrasah untuk informasi sekolah, berita kegiatan, pengumuman, dan layanan PPDB yang mudah diakses masyarakat.
 					</p>

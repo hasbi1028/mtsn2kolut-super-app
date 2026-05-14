@@ -15,6 +15,7 @@ const ADMIN_ONLY_PREFIXES = [
 	'/settings/user-change-requests',
 	'/settings/audit-logs',
 	'/settings/school-profile',
+	'/settings/branding',
 	'/settings/backups',
 	'/api/academic',
 	'/api/employees',
@@ -24,6 +25,7 @@ const ADMIN_ONLY_PREFIXES = [
 	'/api/rbac',
 	'/api/website',
 	'/api/school-profile',
+	'/api/branding',
 	'/api/system/backups',
 	'/api/asesmen/events',
 	'/api/asesmen/packages',
@@ -178,6 +180,7 @@ function settingsPermission(pathname: string): string[] | undefined {
 	if (matchesPathSegment(pathname, '/settings/backups')) return ['backup.read'];
 	if (matchesPathSegment(pathname, '/settings/rbac')) return ['roles.read'];
 	if (matchesPathSegment(pathname, '/settings/school-profile') || matchesPathSegment(pathname, '/api/school-profile')) return ['settings.school_profile'];
+	if (matchesPathSegment(pathname, '/settings/branding') || matchesPathSegment(pathname, '/api/branding')) return ['settings.branding'];
 	if (pathname === '/settings') return ['settings.account'];
 	return undefined;
 }
