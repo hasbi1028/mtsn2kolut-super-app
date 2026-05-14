@@ -166,7 +166,13 @@ LEFT JOIN LATERAL (
     COUNT(ep.id) FILTER (WHERE ep.room_id IS NOT NULL)::int AS assigned_participant_count,
     COUNT(ep.id) FILTER (WHERE ep.room_id IS NULL)::int AS unassigned_participant_count,
     COUNT(ep.id) FILTER (WHERE ep.room_id IS NOT NULL AND ep.seat_no IS NULL)::int AS missing_seat_count,
-    COUNT(ep.id) FILTER (WHERE ep.token IS NOT NULL AND ep.token ~ '^[0-9a-f]{32}$')::int AS token_ready_count,
+    COUNT(ep.id) FILTER (
+      WHERE ep.token_revoked_at IS NULL
+        AND (
+          (ep.token_hash <> '' AND ep.token_hash_version > 0)
+          OR (ep.token IS NOT NULL AND ep.token ~ '^[0-9a-f]{32}$')
+        )
+    )::int AS token_ready_count,
     COUNT(ep.id) FILTER (WHERE ep.joined_at IS NOT NULL)::int AS joined_count,
     COUNT(ep.id) FILTER (WHERE ep.submitted_at IS NOT NULL)::int AS submitted_count,
     COUNT(ep.id) FILTER (WHERE ep.score IS NOT NULL)::int AS scored_count
@@ -525,7 +531,13 @@ LEFT JOIN LATERAL (
     COUNT(*)::int AS participant_count,
     COUNT(*) FILTER (WHERE room_id IS NOT NULL)::int AS assigned_participant_count,
     COUNT(*) FILTER (WHERE room_id IS NOT NULL AND seat_no IS NULL)::int AS missing_seat_count,
-    COUNT(*) FILTER (WHERE token IS NOT NULL AND token ~ '^[0-9a-f]{32}$')::int AS token_ready_count,
+    COUNT(*) FILTER (
+      WHERE token_revoked_at IS NULL
+        AND (
+          (token_hash <> '' AND token_hash_version > 0)
+          OR (token IS NOT NULL AND token ~ '^[0-9a-f]{32}$')
+        )
+    )::int AS token_ready_count,
     COUNT(*) FILTER (WHERE joined_at IS NOT NULL)::int AS joined_count,
     COUNT(*) FILTER (WHERE submitted_at IS NOT NULL)::int AS submitted_count,
     COUNT(*) FILTER (WHERE score IS NOT NULL)::int AS scored_count

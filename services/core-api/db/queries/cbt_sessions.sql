@@ -1,6 +1,7 @@
 -- name: ListCbtExamSessions :many
 SELECT
   s.id, s.package_id, p.title AS package_title,
+  p.locked_at AS package_locked_at, p.snapshot_version AS package_snapshot_version,
   s.class_id, s.event_id,
   COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
   s.scope_type, s.scope_ref, s.mix_policy, s.assignment_mode, s.allow_cross_grade, s.is_special_event,
@@ -47,6 +48,7 @@ ORDER BY s.scheduled_start DESC;
 -- name: GetCbtExamSession :one
 SELECT
   s.id, s.package_id, p.title AS package_title, p.duration_minutes,
+  p.locked_at AS package_locked_at, p.snapshot_version AS package_snapshot_version,
   s.class_id, s.event_id,
   COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
   s.scope_type, s.scope_ref, s.mix_policy, s.assignment_mode, s.allow_cross_grade, s.is_special_event,
@@ -121,7 +123,7 @@ ORDER BY s.nama ASC;
 -- name: GetParticipantByToken :one
 SELECT
   ep.id, ep.session_id, ep.student_id,
-  ep.token, ep.room_id, ep.seat_no, ep.device_fingerprint, ep.question_order,
+  ep.token, ep.room_id, ep.seat_no, ep.device_fingerprint, ep.question_order, ep.option_order, ep.question_draw_log,
   ep.joined_at, ep.submitted_at, ep.score,
   ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
   ep.violation_count, ep.risk_score, ep.risk_level, ep.locked_at, ep.locked_reason,
@@ -134,53 +136,84 @@ SELECT
   cs.package_id,
   p.title AS package_title,
   p.duration_minutes,
-  p.randomize_questions
+  p.randomize_questions,
+  p.randomize_options,
+  p.draw_pg_count,
+  p.draw_essay_count
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
 JOIN cbt_exam_sessions cs ON cs.id = ep.session_id
 JOIN cbt_packages p ON p.id = cs.package_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
-WHERE ep.token = $1;
+WHERE ep.token_revoked_at IS NULL
+  AND (
+    (ep.token_hash <> '' AND ep.token_hash = encode(digest($1, 'sha256'), 'hex'))
+    OR (ep.token_hash = '' AND ep.token = $1)
+  );
 
 -- name: EnrollClassToSession :exec
-INSERT INTO cbt_exam_participants (session_id, student_id, token)
-SELECT $1, s.id, encode(gen_random_bytes(16), 'hex')
+INSERT INTO cbt_exam_participants (session_id, student_id, token, token_hash, token_hash_version, token_generated_at)
+SELECT $1, s.id, tok.token, encode(digest(tok.token, 'sha256'), 'hex'), 1, NOW()
 FROM students s
+CROSS JOIN LATERAL (SELECT encode(gen_random_bytes(16), 'hex') AS token) tok
 WHERE s.class_id = $2 AND s.is_active = TRUE
 ON CONFLICT (session_id, student_id) DO NOTHING;
 
 -- name: EnrollGradeToSession :exec
-INSERT INTO cbt_exam_participants (session_id, student_id, token)
-SELECT $1, s.id, encode(gen_random_bytes(16), 'hex')
+INSERT INTO cbt_exam_participants (session_id, student_id, token, token_hash, token_hash_version, token_generated_at)
+SELECT $1, s.id, tok.token, encode(digest(tok.token, 'sha256'), 'hex'), 1, NOW()
 FROM students s
 JOIN school_classes c ON c.id = s.class_id
+CROSS JOIN LATERAL (SELECT encode(gen_random_bytes(16), 'hex') AS token) tok
 WHERE c.level = $2 AND s.is_active = TRUE
 ON CONFLICT (session_id, student_id) DO NOTHING;
 
 -- name: EnrollSchoolToSession :exec
-INSERT INTO cbt_exam_participants (session_id, student_id, token)
-SELECT $1, s.id, encode(gen_random_bytes(16), 'hex')
+INSERT INTO cbt_exam_participants (session_id, student_id, token, token_hash, token_hash_version, token_generated_at)
+SELECT $1, s.id, tok.token, encode(digest(tok.token, 'sha256'), 'hex'), 1, NOW()
 FROM students s
+CROSS JOIN LATERAL (SELECT encode(gen_random_bytes(16), 'hex') AS token) tok
 WHERE s.is_active = TRUE
 ON CONFLICT (session_id, student_id) DO NOTHING;
 
 -- name: GenerateTokensForSession :exec
+WITH generated AS (
+  SELECT ep.id, encode(gen_random_bytes(16), 'hex') AS token
+  FROM cbt_exam_participants ep
+  WHERE ep.session_id = $1
+    AND (
+      ep.token = ''
+      OR ep.token IS NULL
+      OR ep.token !~ '^[0-9a-f]{32}$'
+      OR ep.token_hash = ''
+      OR ep.token_hash_version = 0
+    )
+)
 UPDATE cbt_exam_participants
-SET token = encode(gen_random_bytes(16), 'hex')
-WHERE session_id = $1
-  AND (
-    token = ''
-    OR token IS NULL
-    OR token !~ '^[0-9a-f]{32}$'
-  );
+SET token = generated.token,
+    token_hash = encode(digest(generated.token, 'sha256'), 'hex'),
+    token_hash_version = 1,
+    token_generated_at = NOW(),
+    token_revoked_at = NULL
+FROM generated
+WHERE cbt_exam_participants.id = generated.id;
 
 -- name: RegenerateParticipantToken :one
+WITH generated AS (
+  SELECT cbt_exam_participants.id, encode(gen_random_bytes(16), 'hex') AS token
+  FROM cbt_exam_participants
+  JOIN cbt_exam_sessions s ON s.id = cbt_exam_participants.session_id
+  WHERE cbt_exam_participants.id = $1
+    AND s.status IN ('draft', 'scheduled')
+)
 UPDATE cbt_exam_participants
-SET token = encode(gen_random_bytes(16), 'hex')
-FROM cbt_exam_sessions s
-WHERE cbt_exam_participants.id = $1
-  AND s.id = cbt_exam_participants.session_id
-  AND s.status IN ('draft', 'scheduled')
+SET token = generated.token,
+    token_hash = encode(digest(generated.token, 'sha256'), 'hex'),
+    token_hash_version = 1,
+    token_generated_at = NOW(),
+    token_revoked_at = NULL
+FROM generated
+WHERE cbt_exam_participants.id = generated.id
 RETURNING cbt_exam_participants.id, cbt_exam_participants.token;
 
 -- name: ResetParticipantRuntimeAccess :exec
@@ -231,6 +264,22 @@ SET question_order = $2
 WHERE id = $1
   AND (question_order IS NULL OR jsonb_array_length(question_order) = 0)
 RETURNING question_order;
+
+-- name: SetParticipantRuntimePlanIfEmpty :one
+UPDATE cbt_exam_participants
+SET question_order = $2,
+    option_order = $3,
+    question_draw_log = $4
+WHERE id = $1
+  AND (question_order IS NULL OR jsonb_array_length(question_order) = 0)
+RETURNING question_order, option_order, question_draw_log;
+
+-- name: SetParticipantOptionOrderIfEmpty :one
+UPDATE cbt_exam_participants
+SET option_order = $2
+WHERE id = $1
+  AND (option_order IS NULL OR option_order = '{}'::jsonb)
+RETURNING option_order;
 
 -- name: UpdateParticipantLogin :one
 UPDATE cbt_exam_participants
@@ -291,22 +340,45 @@ WHERE id = $1
 RETURNING violation_count, risk_score, risk_level, locked_at, locked_reason;
 
 -- name: SubmitParticipantExam :one
-WITH score_parts AS (
+WITH items AS (
+  SELECT ep.id AS participant_id, snap.question_id, snap.question_type, snap.points
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_question_snapshots snap
+    ON snap.package_id = ses.package_id
+   AND snap.snapshot_version = p.snapshot_version
+  WHERE ep.id = $1
+    AND p.snapshot_version > 0
+  UNION ALL
+  SELECT ep.id AS participant_id, q.id AS question_id, q.question_type, pq.points
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  WHERE ep.id = $1
+    AND NOT EXISTS (
+      SELECT 1 FROM cbt_package_question_snapshots snap
+      WHERE snap.package_id = ses.package_id
+        AND snap.snapshot_version = p.snapshot_version
+        AND p.snapshot_version > 0
+    )
+),
+score_parts AS (
   SELECT
     ep.id AS participant_id,
     COALESCE(SUM(
       CASE
-        WHEN q.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * pq.points
-        WHEN q.question_type <> 'essay' AND sa.is_correct IS TRUE THEN pq.points
+        WHEN items.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * items.points
+        WHEN items.question_type <> 'essay' AND sa.is_correct IS TRUE THEN items.points
         ELSE 0
       END
     ), 0)::numeric AS earned_points,
-    COALESCE(SUM(pq.points), 0)::numeric AS total_points
+    COALESCE(SUM(items.points), 0)::numeric AS total_points
   FROM cbt_exam_participants ep
-  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
-  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
-  JOIN cbt_questions q ON q.id = pq.question_id
-  LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
+  JOIN items ON items.participant_id = ep.id
+  LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = items.question_id
   WHERE ep.id = $1
   GROUP BY ep.id
 )
@@ -535,110 +607,222 @@ SELECT EXISTS(
   SELECT 1
   FROM cbt_exam_participants ep
   JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
-  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
-  JOIN cbt_questions q ON q.id = pq.question_id
   WHERE ep.id = $1
-    AND pq.question_id = $2
-    AND q.status = 'published'
+    AND (
+      EXISTS (
+        SELECT 1
+        FROM cbt_package_question_snapshots snap
+        JOIN cbt_packages p ON p.id = ses.package_id
+        WHERE snap.package_id = ses.package_id
+          AND snap.snapshot_version = p.snapshot_version
+          AND p.snapshot_version > 0
+          AND snap.question_id = $2
+      )
+      OR (
+        NOT EXISTS (
+          SELECT 1
+          FROM cbt_package_question_snapshots snap
+          JOIN cbt_packages p ON p.id = ses.package_id
+          WHERE snap.package_id = ses.package_id
+            AND snap.snapshot_version = p.snapshot_version
+            AND p.snapshot_version > 0
+        )
+        AND EXISTS (
+          SELECT 1
+          FROM cbt_package_questions pq
+          JOIN cbt_questions q ON q.id = pq.question_id
+          WHERE pq.package_id = ses.package_id
+            AND pq.question_id = $2
+            AND q.status = 'published'
+        )
+      )
+    )
 ) AS belongs_to_package;
 
 -- name: UpdateAnswerCorrectness :exec
+WITH items AS (
+  SELECT
+    ses.id AS session_id,
+    snap.question_id,
+    snap.question_type,
+    snap.answer_key
+  FROM cbt_exam_sessions ses
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_question_snapshots snap
+    ON snap.package_id = ses.package_id
+   AND snap.snapshot_version = p.snapshot_version
+  WHERE ses.id = $1
+    AND p.snapshot_version > 0
+  UNION ALL
+  SELECT
+    ses.id AS session_id,
+    q.id AS question_id,
+    q.question_type,
+    q.answer_key
+  FROM cbt_exam_sessions ses
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  WHERE ses.id = $1
+    AND NOT EXISTS (
+      SELECT 1
+      FROM cbt_package_question_snapshots snap
+      WHERE snap.package_id = ses.package_id
+        AND snap.snapshot_version = p.snapshot_version
+        AND p.snapshot_version > 0
+    )
+)
 UPDATE cbt_student_answers sa
 SET is_correct = CASE
   -- essay: skip, scored manually
-  WHEN q.question_type = 'essay' THEN NULL
+  WHEN items.question_type = 'essay' THEN NULL
   -- multiple_answer: answer is comma-separated labels, must match answer_key exactly after sorting
-  WHEN q.question_type = 'multiple_answer' THEN
+  WHEN items.question_type = 'multiple_answer' THEN
     (array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(sa.answer, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ',') =
-     array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(q.answer_key, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ','))
+     array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(items.answer_key, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ','))
   -- matching: answer is semicolon-separated left=right pairs, all pairs must match.
-  WHEN q.question_type = 'matching' THEN
+  WHEN items.question_type = 'matching' THEN
     (array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(sa.answer, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';') =
-     array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(q.answer_key, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';'))
+     array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(items.answer_key, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';'))
   -- ordering: answer is comma-separated labels and must match the exact sequence.
-  WHEN q.question_type = 'ordering' THEN
+  WHEN items.question_type = 'ordering' THEN
     (array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(sa.answer, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ',') =
-     array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(q.answer_key, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ','))
+     array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(items.answer_key, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ','))
   -- true_false: canonical Web Admin labels are A=Benar and B=Salah.
   -- Legacy mobile snapshots may still contain true/false from the earlier fallback.
-  WHEN q.question_type = 'true_false' THEN
+  WHEN items.question_type = 'true_false' THEN
     (CASE
       WHEN lower(btrim(sa.answer)) = 'true' THEN 'A'
       WHEN lower(btrim(sa.answer)) = 'false' THEN 'B'
       ELSE upper(btrim(sa.answer))
-    END = upper(btrim(q.answer_key)))
+    END = upper(btrim(items.answer_key)))
   -- agree_disagree: canonical Web Admin labels are A=Setuju and B=Tidak Setuju.
-  WHEN q.question_type = 'agree_disagree' THEN upper(btrim(sa.answer)) = upper(btrim(q.answer_key))
+  WHEN items.question_type = 'agree_disagree' THEN upper(btrim(sa.answer)) = upper(btrim(items.answer_key))
   -- short_answer: answer_key may contain accepted aliases separated by "|";
   -- normalize case, repeated whitespace, and non-breaking spaces before matching.
-  WHEN q.question_type = 'short_answer' THEN EXISTS (
+  WHEN items.question_type = 'short_answer' THEN EXISTS (
     SELECT 1
-    FROM unnest(string_to_array(q.answer_key, '|')) AS accepted(answer)
+    FROM unnest(string_to_array(items.answer_key, '|')) AS accepted(answer)
     WHERE lower(regexp_replace(btrim(replace(accepted.answer, chr(160), ' ')), '[[:space:]]+', ' ', 'g')) =
           lower(regexp_replace(btrim(replace(sa.answer, chr(160), ' ')), '[[:space:]]+', ' ', 'g'))
   )
   -- all others: exact string match
-  ELSE (sa.answer = q.answer_key)
+  ELSE (sa.answer = items.answer_key)
 END
-FROM cbt_questions q
-WHERE sa.question_id = q.id
-  AND q.question_type <> 'essay'
+FROM items
+WHERE sa.question_id = items.question_id
+  AND items.question_type <> 'essay'
   AND sa.manual_score IS NULL
   AND sa.participant_id IN (
     SELECT id FROM cbt_exam_participants WHERE session_id = $1
   );
 
 -- name: UpdateParticipantAnswerCorrectness :exec
+WITH items AS (
+  SELECT
+    ep.id AS participant_id,
+    snap.question_id,
+    snap.question_type,
+    snap.answer_key
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_question_snapshots snap
+    ON snap.package_id = ses.package_id
+   AND snap.snapshot_version = p.snapshot_version
+  WHERE ep.id = $1
+    AND p.snapshot_version > 0
+  UNION ALL
+  SELECT
+    ep.id AS participant_id,
+    q.id AS question_id,
+    q.question_type,
+    q.answer_key
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  WHERE ep.id = $1
+    AND NOT EXISTS (
+      SELECT 1
+      FROM cbt_package_question_snapshots snap
+      WHERE snap.package_id = ses.package_id
+        AND snap.snapshot_version = p.snapshot_version
+        AND p.snapshot_version > 0
+    )
+)
 UPDATE cbt_student_answers sa
 SET is_correct = CASE
-  WHEN q.question_type = 'essay' THEN NULL
-  WHEN q.question_type = 'multiple_answer' THEN
+  WHEN items.question_type = 'essay' THEN NULL
+  WHEN items.question_type = 'multiple_answer' THEN
     (array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(sa.answer, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ',') =
-     array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(q.answer_key, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ','))
-  WHEN q.question_type = 'matching' THEN
+     array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(items.answer_key, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ','))
+  WHEN items.question_type = 'matching' THEN
     (array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(sa.answer, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';') =
-     array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(q.answer_key, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';'))
-  WHEN q.question_type = 'ordering' THEN
+     array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(items.answer_key, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';'))
+  WHEN items.question_type = 'ordering' THEN
     (array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(sa.answer, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ',') =
-     array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(q.answer_key, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ','))
-  WHEN q.question_type = 'true_false' THEN
+     array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(items.answer_key, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ','))
+  WHEN items.question_type = 'true_false' THEN
     (CASE
       WHEN lower(btrim(sa.answer)) = 'true' THEN 'A'
       WHEN lower(btrim(sa.answer)) = 'false' THEN 'B'
       ELSE upper(btrim(sa.answer))
-    END = upper(btrim(q.answer_key)))
-  WHEN q.question_type = 'agree_disagree' THEN upper(btrim(sa.answer)) = upper(btrim(q.answer_key))
-  WHEN q.question_type = 'short_answer' THEN EXISTS (
+    END = upper(btrim(items.answer_key)))
+  WHEN items.question_type = 'agree_disagree' THEN upper(btrim(sa.answer)) = upper(btrim(items.answer_key))
+  WHEN items.question_type = 'short_answer' THEN EXISTS (
     SELECT 1
-    FROM unnest(string_to_array(q.answer_key, '|')) AS accepted(answer)
+    FROM unnest(string_to_array(items.answer_key, '|')) AS accepted(answer)
     WHERE lower(regexp_replace(btrim(replace(accepted.answer, chr(160), ' ')), '[[:space:]]+', ' ', 'g')) =
           lower(regexp_replace(btrim(replace(sa.answer, chr(160), ' ')), '[[:space:]]+', ' ', 'g'))
   )
-  ELSE (sa.answer = q.answer_key)
+  ELSE (sa.answer = items.answer_key)
 END
-FROM cbt_questions q
-WHERE sa.question_id = q.id
-  AND q.question_type <> 'essay'
+FROM items
+WHERE sa.question_id = items.question_id
+  AND items.question_type <> 'essay'
   AND sa.manual_score IS NULL
-  AND sa.participant_id = $1;
+  AND sa.participant_id = items.participant_id;
 
 -- name: UpdateParticipantScores :exec
-WITH score_parts AS (
+WITH items AS (
+  SELECT ses.id AS session_id, snap.question_id, snap.question_type, snap.points
+  FROM cbt_exam_sessions ses
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_question_snapshots snap
+    ON snap.package_id = ses.package_id
+   AND snap.snapshot_version = p.snapshot_version
+  WHERE ses.id = $1
+    AND p.snapshot_version > 0
+  UNION ALL
+  SELECT ses.id AS session_id, q.id AS question_id, q.question_type, pq.points
+  FROM cbt_exam_sessions ses
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  WHERE ses.id = $1
+    AND NOT EXISTS (
+      SELECT 1 FROM cbt_package_question_snapshots snap
+      WHERE snap.package_id = ses.package_id
+        AND snap.snapshot_version = p.snapshot_version
+        AND p.snapshot_version > 0
+    )
+),
+score_parts AS (
   SELECT
     ep.id AS participant_id,
     COALESCE(SUM(
       CASE
-        WHEN q.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * pq.points
-        WHEN q.question_type <> 'essay' AND sa.is_correct IS TRUE THEN pq.points
+        WHEN items.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * items.points
+        WHEN items.question_type <> 'essay' AND sa.is_correct IS TRUE THEN items.points
         ELSE 0
       END
     ), 0)::numeric AS earned_points,
-    COALESCE(SUM(pq.points), 0)::numeric AS total_points
+    COALESCE(SUM(items.points), 0)::numeric AS total_points
   FROM cbt_exam_participants ep
-  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
-  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
-  JOIN cbt_questions q ON q.id = pq.question_id
-  LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
+  JOIN items ON items.session_id = ep.session_id
+  LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = items.question_id
   WHERE ep.session_id = $1
     AND ep.submitted_at IS NOT NULL
   GROUP BY ep.id
@@ -652,22 +836,45 @@ FROM score_parts
 WHERE ep.id = score_parts.participant_id;
 
 -- name: ForceSubmitParticipant :one
-WITH score_parts AS (
+WITH items AS (
+  SELECT ep.id AS participant_id, snap.question_id, snap.question_type, snap.points
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_question_snapshots snap
+    ON snap.package_id = ses.package_id
+   AND snap.snapshot_version = p.snapshot_version
+  WHERE ep.session_id = $1 AND ep.id = $2
+    AND p.snapshot_version > 0
+  UNION ALL
+  SELECT ep.id AS participant_id, q.id AS question_id, q.question_type, pq.points
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  WHERE ep.session_id = $1 AND ep.id = $2
+    AND NOT EXISTS (
+      SELECT 1 FROM cbt_package_question_snapshots snap
+      WHERE snap.package_id = ses.package_id
+        AND snap.snapshot_version = p.snapshot_version
+        AND p.snapshot_version > 0
+    )
+),
+score_parts AS (
   SELECT
     ep.id AS participant_id,
     COALESCE(SUM(
       CASE
-        WHEN q.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * pq.points
-        WHEN q.question_type <> 'essay' AND sa.is_correct IS TRUE THEN pq.points
+        WHEN items.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * items.points
+        WHEN items.question_type <> 'essay' AND sa.is_correct IS TRUE THEN items.points
         ELSE 0
       END
     ), 0)::numeric AS earned_points,
-    COALESCE(SUM(pq.points), 0)::numeric AS total_points
+    COALESCE(SUM(items.points), 0)::numeric AS total_points
   FROM cbt_exam_participants ep
-  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
-  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
-  JOIN cbt_questions q ON q.id = pq.question_id
-  LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
+  JOIN items ON items.participant_id = ep.id
+  LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = items.question_id
   WHERE ep.session_id = $1 AND ep.id = $2
   GROUP BY ep.id
 )
@@ -847,6 +1054,7 @@ ORDER BY a.position ASC, a.question_code ASC;
 -- name: ListCbtExamSessionsByTeacher :many
 SELECT DISTINCT
   s.id, s.package_id, p.title AS package_title,
+  p.locked_at AS package_locked_at, p.snapshot_version AS package_snapshot_version,
   s.class_id, s.event_id,
   COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
   s.scope_type, s.scope_ref, s.mix_policy, s.assignment_mode, s.allow_cross_grade, s.is_special_event,
@@ -1033,3 +1241,186 @@ JOIN cbt_package_questions pq ON pq.package_id = ses.package_id AND pq.question_
 JOIN cbt_questions q ON q.id = sa.question_id
 WHERE sa.participant_id = $1
 ORDER BY pq.position ASC, q.code ASC;
+
+-- name: FinalizeOverdueParticipants :one
+WITH items AS (
+  SELECT ses.id AS session_id, snap.question_id, snap.question_type, snap.points
+  FROM cbt_exam_sessions ses
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_question_snapshots snap
+    ON snap.package_id = ses.package_id
+   AND snap.snapshot_version = p.snapshot_version
+  WHERE ses.id = $1
+    AND p.snapshot_version > 0
+  UNION ALL
+  SELECT ses.id AS session_id, q.id AS question_id, q.question_type, pq.points
+  FROM cbt_exam_sessions ses
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  WHERE ses.id = $1
+    AND NOT EXISTS (
+      SELECT 1 FROM cbt_package_question_snapshots snap
+      WHERE snap.package_id = ses.package_id
+        AND snap.snapshot_version = p.snapshot_version
+        AND p.snapshot_version > 0
+    )
+),
+eligible AS (
+  SELECT ep.id AS participant_id
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages pkg ON pkg.id = ses.package_id
+  WHERE ep.session_id = $1
+    AND ep.submitted_at IS NULL
+    AND (
+      (ses.scheduled_end IS NOT NULL AND NOW() > ses.scheduled_end)
+      OR (ep.joined_at IS NOT NULL AND pkg.duration_minutes > 0 AND NOW() > ep.joined_at + (pkg.duration_minutes::text || ' minutes')::interval)
+    )
+  FOR UPDATE OF ep
+),
+score_parts AS (
+  SELECT
+    eligible.participant_id,
+    COALESCE(SUM(
+      CASE
+        WHEN items.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * items.points
+        WHEN items.question_type <> 'essay' AND sa.is_correct IS TRUE THEN items.points
+        ELSE 0
+      END
+    ), 0)::numeric AS earned_points,
+    COALESCE(SUM(items.points), 0)::numeric AS total_points
+  FROM eligible
+  JOIN cbt_exam_participants ep ON ep.id = eligible.participant_id
+  JOIN items ON items.session_id = ep.session_id
+  LEFT JOIN cbt_student_answers sa ON sa.participant_id = eligible.participant_id AND sa.question_id = items.question_id
+  GROUP BY eligible.participant_id
+),
+updated AS (
+  UPDATE cbt_exam_participants ep
+  SET score = CASE
+        WHEN score_parts.total_points > 0 THEN ROUND((score_parts.earned_points / score_parts.total_points) * 100, 2)
+        ELSE 0
+      END,
+      submitted_at = NOW()
+  FROM score_parts
+  WHERE ep.id = score_parts.participant_id
+    AND ep.submitted_at IS NULL
+  RETURNING ep.id, ep.submitted_at, ep.score
+),
+events AS (
+  INSERT INTO cbt_participant_events (participant_id, event_type, event_data)
+  SELECT
+    updated.id,
+    'auto_submit_deadline',
+    jsonb_build_object(
+      'session_id', $1::uuid,
+      'submitted_at', updated.submitted_at,
+      'score', updated.score
+    )
+  FROM updated
+  RETURNING id
+)
+SELECT COUNT(*)::int AS finalized_count
+FROM updated;
+
+-- name: GetCbtSessionGradeSyncPreflight :one
+SELECT
+  ses.id AS session_id,
+  ses.title AS session_title,
+  ses.status AS session_status,
+  ses.class_id,
+  COALESCE(c.name, '') AS class_name,
+  COALESCE(c.code, '') AS class_code,
+  p.subject_id,
+  sub.name AS subject_name,
+  sub.code AS subject_code,
+  csa.id AS grade_assignment_id,
+  latest.grade_component_id,
+  latest.status AS latest_sync_status,
+  latest.created_at AS latest_sync_at,
+  COALESCE(participant_summary.participant_count, 0)::int AS participant_count,
+  COALESCE(participant_summary.submitted_count, 0)::int AS submitted_count,
+  COALESCE(participant_summary.scored_count, 0)::int AS scored_count,
+  COALESCE(participant_summary.missing_score_count, 0)::int AS missing_score_count
+FROM cbt_exam_sessions ses
+JOIN cbt_packages p ON p.id = ses.package_id
+JOIN subjects sub ON sub.id = p.subject_id
+LEFT JOIN school_classes c ON c.id = ses.class_id
+LEFT JOIN class_subject_assignments csa ON csa.class_id = ses.class_id AND csa.subject_id = p.subject_id
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS participant_count,
+         COUNT(*) FILTER (WHERE submitted_at IS NOT NULL)::int AS submitted_count,
+         COUNT(*) FILTER (WHERE score IS NOT NULL)::int AS scored_count,
+         COUNT(*) FILTER (WHERE submitted_at IS NOT NULL AND score IS NULL)::int AS missing_score_count
+  FROM cbt_exam_participants ep
+  WHERE ep.session_id = ses.id
+) participant_summary ON TRUE
+LEFT JOIN LATERAL (
+  SELECT run.grade_component_id, run.status, run.created_at
+  FROM cbt_result_sync_runs run
+  WHERE run.session_id = ses.id
+  ORDER BY run.created_at DESC
+  LIMIT 1
+) latest ON TRUE
+WHERE ses.id = $1;
+
+-- name: ListCbtSessionRemedialCandidates :many
+WITH items AS (
+  SELECT
+    ses.id AS session_id,
+    snap.question_id,
+    COALESCE(snap.metadata->>'kd_ref', '') AS kd_ref,
+    COALESCE(snap.metadata->>'indicator_ref', '') AS indicator_ref,
+    COALESCE(snap.metadata->>'material_topic', '') AS material_topic
+  FROM cbt_exam_sessions ses
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_question_snapshots snap
+    ON snap.package_id = ses.package_id
+   AND snap.snapshot_version = p.snapshot_version
+  WHERE ses.id = sqlc.arg(session_id)
+    AND p.snapshot_version > 0
+  UNION ALL
+  SELECT
+    ses.id AS session_id,
+    q.id AS question_id,
+    q.kd_ref,
+    q.indicator_ref,
+    q.material_topic
+  FROM cbt_exam_sessions ses
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  WHERE ses.id = sqlc.arg(session_id)
+    AND NOT EXISTS (
+      SELECT 1 FROM cbt_package_question_snapshots snap
+      WHERE snap.package_id = ses.package_id
+        AND snap.snapshot_version = p.snapshot_version
+        AND p.snapshot_version > 0
+    )
+)
+SELECT
+  ep.id AS participant_id,
+  ep.student_id,
+  st.nis,
+  st.nama,
+  COALESCE(c.code, '') AS class_code,
+  COALESCE(c.name, '') AS class_name,
+  ep.score,
+  COUNT(items.question_id)::int AS question_count,
+  COUNT(sa.id) FILTER (WHERE sa.is_correct IS FALSE)::int AS incorrect_count,
+  COUNT(sa.id) FILTER (WHERE sa.answer IS NULL OR btrim(sa.answer) = '')::int AS blank_count,
+  to_jsonb(COALESCE(array_agg(DISTINCT NULLIF(items.kd_ref, '')) FILTER (WHERE sa.is_correct IS FALSE AND NULLIF(items.kd_ref, '') IS NOT NULL), ARRAY[]::text[])) AS kd_gaps,
+  to_jsonb(COALESCE(array_agg(DISTINCT NULLIF(items.indicator_ref, '')) FILTER (WHERE sa.is_correct IS FALSE AND NULLIF(items.indicator_ref, '') IS NOT NULL), ARRAY[]::text[])) AS indicator_gaps,
+  to_jsonb(COALESCE(array_agg(DISTINCT NULLIF(items.material_topic, '')) FILTER (WHERE sa.is_correct IS FALSE AND NULLIF(items.material_topic, '') IS NOT NULL), ARRAY[]::text[])) AS material_gaps
+FROM cbt_exam_participants ep
+JOIN students st ON st.id = ep.student_id
+LEFT JOIN school_classes c ON c.id = st.class_id
+JOIN items ON items.session_id = ep.session_id
+LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = items.question_id
+WHERE ep.session_id = sqlc.arg(session_id)
+  AND ep.submitted_at IS NOT NULL
+  AND ep.score IS NOT NULL
+  AND ep.score < sqlc.arg(threshold)::numeric
+GROUP BY ep.id, st.nis, st.nama, c.code, c.name
+ORDER BY ep.score ASC, st.nama ASC;

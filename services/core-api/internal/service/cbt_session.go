@@ -111,6 +111,16 @@ type cbtScoreStore interface {
 	UpdateParticipantScores(ctx context.Context, sessionID pgtype.UUID) error
 }
 
+type cbtFinalizeOverdueStore interface {
+	UpdateAnswerCorrectness(ctx context.Context, sessionID pgtype.UUID) error
+	FinalizeOverdueParticipants(ctx context.Context, sessionID pgtype.UUID) (int32, error)
+}
+
+type cbtResultFollowUpStore interface {
+	GetCbtSessionGradeSyncPreflight(ctx context.Context, id pgtype.UUID) (db.GetCbtSessionGradeSyncPreflightRow, error)
+	ListCbtSessionRemedialCandidates(ctx context.Context, arg db.ListCbtSessionRemedialCandidatesParams) ([]db.ListCbtSessionRemedialCandidatesRow, error)
+}
+
 type cbtItemAnalysisStore interface {
 	GetSessionItemAnalysis(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionItemAnalysisRow, error)
 }
@@ -279,6 +289,43 @@ func (s *CbtSession) UpdateStatus(ctx context.Context, id pgtype.UUID, status db
 		}
 		if err := validateCbtSessionActivationReadiness(readiness); err != nil {
 			return db.CbtExamSession{}, err
+		}
+	}
+	if status == db.CbtSessionStatusEnumScheduled || status == db.CbtSessionStatusEnumActive {
+		if s.pool != nil {
+			conn, err := s.pool.Acquire(ctx)
+			if err != nil {
+				return db.CbtExamSession{}, err
+			}
+			defer conn.Release()
+
+			tx, err := conn.Begin(ctx)
+			if err != nil {
+				return db.CbtExamSession{}, err
+			}
+			defer tx.Rollback(ctx) //nolint:errcheck
+
+			qtx := s.q.WithTx(tx)
+			if _, err := lockCbtPackageSnapshot(ctx, qtx, session.PackageID, pgtype.UUID{}, "session_"+string(status)); err != nil {
+				return db.CbtExamSession{}, err
+			}
+			updated, err := qtx.UpdateCbtExamSessionStatus(ctx, db.UpdateCbtExamSessionStatusParams{
+				ID:     id,
+				Status: status,
+			})
+			if err != nil {
+				return db.CbtExamSession{}, err
+			}
+			if err := tx.Commit(ctx); err != nil {
+				return db.CbtExamSession{}, err
+			}
+			return updated, nil
+		}
+		snapshotStore, ok := s.q.(cbtPackageSnapshotStore)
+		if ok {
+			if _, err := lockCbtPackageSnapshot(ctx, snapshotStore, session.PackageID, pgtype.UUID{}, "session_"+string(status)); err != nil {
+				return db.CbtExamSession{}, err
+			}
 		}
 	}
 	return s.q.UpdateCbtExamSessionStatus(ctx, db.UpdateCbtExamSessionStatusParams{
@@ -1404,6 +1451,82 @@ func scoreSession(ctx context.Context, q cbtScoreStore, sessionID pgtype.UUID) e
 		return err
 	}
 	return nil
+}
+
+type CbtFinalizeOverdueResult struct {
+	SessionID      string `json:"session_id"`
+	FinalizedCount int32  `json:"finalized_count"`
+}
+
+func (s *CbtSession) FinalizeOverdue(ctx context.Context, sessionID pgtype.UUID) (CbtFinalizeOverdueResult, error) {
+	if s.pool == nil {
+		q, ok := s.q.(cbtFinalizeOverdueStore)
+		if !ok {
+			return CbtFinalizeOverdueResult{}, fmt.Errorf("cbt finalize store unavailable")
+		}
+		count, err := finalizeOverdueWithStore(ctx, q, sessionID)
+		if err != nil {
+			return CbtFinalizeOverdueResult{}, err
+		}
+		return CbtFinalizeOverdueResult{SessionID: pgUUIDString(sessionID), FinalizedCount: count}, nil
+	}
+
+	conn, err := s.pool.Acquire(ctx)
+	if err != nil {
+		return CbtFinalizeOverdueResult{}, err
+	}
+	defer conn.Release()
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return CbtFinalizeOverdueResult{}, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	count, err := finalizeOverdueWithStore(ctx, s.q.WithTx(tx), sessionID)
+	if err != nil {
+		return CbtFinalizeOverdueResult{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return CbtFinalizeOverdueResult{}, err
+	}
+	return CbtFinalizeOverdueResult{SessionID: pgUUIDString(sessionID), FinalizedCount: count}, nil
+}
+
+func finalizeOverdueWithStore(ctx context.Context, q cbtFinalizeOverdueStore, sessionID pgtype.UUID) (int32, error) {
+	if err := q.UpdateAnswerCorrectness(ctx, sessionID); err != nil {
+		return 0, err
+	}
+	return q.FinalizeOverdueParticipants(ctx, sessionID)
+}
+
+func (s *CbtSession) GetGradeSyncPreflight(ctx context.Context, sessionID pgtype.UUID) (db.GetCbtSessionGradeSyncPreflightRow, error) {
+	q, ok := s.q.(cbtResultFollowUpStore)
+	if !ok {
+		return db.GetCbtSessionGradeSyncPreflightRow{}, fmt.Errorf("cbt result follow-up store unavailable")
+	}
+	return q.GetCbtSessionGradeSyncPreflight(ctx, sessionID)
+}
+
+func (s *CbtSession) ListRemedialCandidates(ctx context.Context, sessionID pgtype.UUID, threshold float64) ([]db.ListCbtSessionRemedialCandidatesRow, error) {
+	q, ok := s.q.(cbtResultFollowUpStore)
+	if !ok {
+		return nil, fmt.Errorf("cbt result follow-up store unavailable")
+	}
+	if threshold <= 0 || threshold > 100 {
+		threshold = 75
+	}
+	rows, err := q.ListCbtSessionRemedialCandidates(ctx, db.ListCbtSessionRemedialCandidatesParams{
+		SessionID: sessionID,
+		Threshold: pgNumeric(threshold),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []db.ListCbtSessionRemedialCandidatesRow{}, nil
+	}
+	return rows, nil
 }
 
 func (s *CbtSession) ListByTeacher(ctx context.Context, teacherEmployeeID pgtype.UUID) ([]db.ListCbtExamSessionsByTeacherRow, error) {

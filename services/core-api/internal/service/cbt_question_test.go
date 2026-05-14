@@ -1743,14 +1743,27 @@ func TestCbtFixedPairScoringSqlContract(t *testing.T) {
 	sqlText := string(sqlBytes)
 
 	for _, phrase := range []string{
-		"WHEN q.question_type = 'true_false' THEN",
 		"WHEN lower(btrim(sa.answer)) = 'true' THEN 'A'",
 		"WHEN lower(btrim(sa.answer)) = 'false' THEN 'B'",
-		"WHEN q.question_type = 'agree_disagree' THEN",
-		"upper(btrim(sa.answer)) = upper(btrim(q.answer_key))",
 	} {
 		if !strings.Contains(sqlText, phrase) {
 			t.Fatalf("cbt_sessions.sql missing fixed-pair scoring phrase %q", phrase)
+		}
+	}
+	for _, alternatives := range [][]string{
+		{"WHEN q.question_type = 'true_false' THEN", "WHEN items.question_type = 'true_false' THEN"},
+		{"WHEN q.question_type = 'agree_disagree' THEN", "WHEN items.question_type = 'agree_disagree' THEN"},
+		{"upper(btrim(sa.answer)) = upper(btrim(q.answer_key))", "upper(btrim(sa.answer)) = upper(btrim(items.answer_key))"},
+	} {
+		found := false
+		for _, phrase := range alternatives {
+			if strings.Contains(sqlText, phrase) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("cbt_sessions.sql missing fixed-pair scoring phrase alternatives %q", alternatives)
 		}
 	}
 }

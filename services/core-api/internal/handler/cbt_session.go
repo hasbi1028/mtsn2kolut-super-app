@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -108,6 +109,15 @@ type cbtSessionRoomHandoverService interface {
 
 type cbtSessionItemAnalysisService interface {
 	GetItemAnalysis(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionItemAnalysisRow, error)
+}
+
+type cbtSessionFinalizeOverdueService interface {
+	FinalizeOverdue(ctx context.Context, sessionID pgtype.UUID) (service.CbtFinalizeOverdueResult, error)
+}
+
+type cbtSessionResultFollowUpService interface {
+	GetGradeSyncPreflight(ctx context.Context, sessionID pgtype.UUID) (db.GetCbtSessionGradeSyncPreflightRow, error)
+	ListRemedialCandidates(ctx context.Context, sessionID pgtype.UUID, threshold float64) ([]db.ListCbtSessionRemedialCandidatesRow, error)
 }
 
 func NewCbtSession(svc *service.CbtSession, audit ...cbtSessionAuditWriter) *CbtSession {
@@ -2048,6 +2058,82 @@ func (h *CbtSession) ScoreSession(w http.ResponseWriter, r *http.Request) {
 		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
 	})
 	api.OK(w, map[string]string{"status": "scored"})
+}
+
+func (h *CbtSession) FinalizeOverdue(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID sesi tidak valid")
+		return
+	}
+	svc, ok := h.svc.(cbtSessionFinalizeOverdueService)
+	if !ok {
+		api.Internal(w, errors.New("layanan finalisasi sesi tidak tersedia"))
+		return
+	}
+	result, err := svc.FinalizeOverdue(r.Context(), id)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Finalisasi sesi terlambat tidak valid")
+		return
+	}
+	api.OK(w, result)
+}
+
+func (h *CbtSession) GetGradeSyncPreflight(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID sesi tidak valid")
+		return
+	}
+	if !h.requireSessionTeacherOrAdmin(w, r, id) {
+		return
+	}
+	svc, ok := h.svc.(cbtSessionResultFollowUpService)
+	if !ok {
+		api.Internal(w, errors.New("layanan tindak lanjut hasil tidak tersedia"))
+		return
+	}
+	row, err := svc.GetGradeSyncPreflight(r.Context(), id)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Preflight sinkronisasi nilai tidak valid")
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *CbtSession) ListRemedialCandidates(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID sesi tidak valid")
+		return
+	}
+	if !h.requireSessionTeacherOrAdmin(w, r, id) {
+		return
+	}
+	threshold := 75.0
+	if raw := strings.TrimSpace(r.URL.Query().Get("threshold")); raw != "" {
+		parsed, parseErr := strconv.ParseFloat(raw, 64)
+		if parseErr != nil || parsed <= 0 || parsed > 100 {
+			api.BadRequest(w, "Ambang remediasi harus 1-100")
+			return
+		}
+		threshold = parsed
+	}
+	svc, ok := h.svc.(cbtSessionResultFollowUpService)
+	if !ok {
+		api.Internal(w, errors.New("layanan tindak lanjut hasil tidak tersedia"))
+		return
+	}
+	rows, err := svc.ListRemedialCandidates(r.Context(), id, threshold)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Daftar remediasi tidak valid")
+		return
+	}
+	api.OK(w, rows)
 }
 
 func (h *CbtSession) auditEvent(ctx context.Context, action, entityType, entityID string, extra map[string]any) {

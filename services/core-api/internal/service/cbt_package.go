@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -24,6 +25,11 @@ type cbtPackageStore interface {
 	GetCbtPackageUsage(ctx context.Context, id pgtype.UUID) (int32, error)
 	DeleteCbtPackage(ctx context.Context, id pgtype.UUID) (int64, error)
 	WithTx(tx pgx.Tx) *db.Queries
+}
+
+type cbtPackageSnapshotStore interface {
+	LockCbtPackageForSnapshot(ctx context.Context, arg db.LockCbtPackageForSnapshotParams) (db.LockCbtPackageForSnapshotRow, error)
+	CreateCbtPackageQuestionSnapshots(ctx context.Context, packageID pgtype.UUID) (int64, error)
 }
 
 type cbtPackageCreateStore interface {
@@ -194,6 +200,69 @@ func validCbtPackageSourceMode(value string) bool {
 	}
 }
 
+type CbtPackageSnapshotResult struct {
+	PackageID         string `json:"package_id"`
+	LockedAt          string `json:"locked_at"`
+	LockReason        string `json:"lock_reason"`
+	SnapshotVersion   int32  `json:"snapshot_version"`
+	SnapshotRowsAdded int64  `json:"snapshot_rows_added"`
+}
+
+func (s *CbtPackage) LockAndSnapshot(ctx context.Context, packageID, lockedBy pgtype.UUID, reason string) (CbtPackageSnapshotResult, error) {
+	if s.pool == nil {
+		store, ok := s.q.(cbtPackageSnapshotStore)
+		if !ok {
+			return CbtPackageSnapshotResult{}, fmt.Errorf("cbt package snapshot store unavailable")
+		}
+		return lockCbtPackageSnapshot(ctx, store, packageID, lockedBy, reason)
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return CbtPackageSnapshotResult{}, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	result, err := lockCbtPackageSnapshot(ctx, s.q.WithTx(tx), packageID, lockedBy, reason)
+	if err != nil {
+		return CbtPackageSnapshotResult{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return CbtPackageSnapshotResult{}, err
+	}
+	return result, nil
+}
+
+func lockCbtPackageSnapshot(ctx context.Context, q cbtPackageSnapshotStore, packageID, lockedBy pgtype.UUID, reason string) (CbtPackageSnapshotResult, error) {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "session_scheduled"
+	}
+	row, err := q.LockCbtPackageForSnapshot(ctx, db.LockCbtPackageForSnapshotParams{
+		PackageID:  packageID,
+		LockedBy:   lockedBy,
+		LockReason: reason,
+	})
+	if err != nil {
+		return CbtPackageSnapshotResult{}, err
+	}
+	inserted, err := q.CreateCbtPackageQuestionSnapshots(ctx, packageID)
+	if err != nil {
+		return CbtPackageSnapshotResult{}, err
+	}
+	lockedAt := ""
+	if row.LockedAt.Valid {
+		lockedAt = row.LockedAt.Time.Format("2006-01-02T15:04:05Z07:00")
+	}
+	return CbtPackageSnapshotResult{
+		PackageID:         pgUUIDString(row.ID),
+		LockedAt:          lockedAt,
+		LockReason:        row.LockReason,
+		SnapshotVersion:   row.SnapshotVersion,
+		SnapshotRowsAdded: inserted,
+	}, nil
+}
+
 func (s *CbtPackage) Delete(ctx context.Context, id pgtype.UUID) error {
 	sessionCount, err := s.q.GetCbtPackageUsage(ctx, id)
 	if err != nil {
@@ -210,7 +279,7 @@ func (s *CbtPackage) Delete(ctx context.Context, id pgtype.UUID) error {
 		return err
 	}
 	if rows == 0 {
-		return domain.ErrNotFound
+		return fmt.Errorf("%w: paket CBT tidak ditemukan atau sudah terkunci", domain.ErrConflict)
 	}
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -61,6 +62,11 @@ type examStore interface {
 
 type examTxStore interface {
 	WithTx(tx pgx.Tx) *db.Queries
+}
+
+type examRuntimePlanStore interface {
+	SetParticipantRuntimePlanIfEmpty(ctx context.Context, arg db.SetParticipantRuntimePlanIfEmptyParams) (db.SetParticipantRuntimePlanIfEmptyRow, error)
+	SetParticipantOptionOrderIfEmpty(ctx context.Context, arg db.SetParticipantOptionOrderIfEmptyParams) ([]byte, error)
 }
 
 func NewExam(pool *pgxpool.Pool) *Exam {
@@ -205,7 +211,8 @@ func (s *Exam) Login(ctx context.Context, token, roomToken, deviceFingerprint, l
 	}
 
 	// Build ordered question list — use stored question_order if available.
-	ordered := orderQuestions(questions, p.QuestionOrder, p.RandomizeQuestions)
+	ordered := orderQuestionsWithDraw(questions, p.QuestionOrder, p.RandomizeQuestions, p.DrawPgCount, p.DrawEssayCount)
+	optionOrder := parseOptionOrder(p.OptionOrder)
 
 	// If no question_order yet, save the order for this participant
 	if len(p.QuestionOrder) == 0 {
@@ -217,13 +224,46 @@ func (s *Exam) Login(ctx context.Context, token, roomToken, deviceFingerprint, l
 		if err != nil {
 			return LoginResult{}, err
 		}
-		if savedOrder, err := s.q.SetParticipantQuestionOrderIfEmpty(ctx, db.SetParticipantQuestionOrderIfEmptyParams{
+		optionOrder = ensureOptionOrder(ordered, optionOrder, p.RandomizeOptions)
+		optionOrderJSON := marshalJSON(optionOrder)
+		drawLogJSON := marshalJSON(map[string]any{
+			"draw_pg_count":         p.DrawPgCount,
+			"draw_essay_count":      p.DrawEssayCount,
+			"selected_question_ids": ids,
+			"randomize_questions":   p.RandomizeQuestions,
+			"randomize_options":     p.RandomizeOptions,
+		})
+		if runtimeStore, ok := s.q.(examRuntimePlanStore); ok {
+			if savedPlan, err := runtimeStore.SetParticipantRuntimePlanIfEmpty(ctx, db.SetParticipantRuntimePlanIfEmptyParams{
+				ID:              p.ID,
+				QuestionOrder:   orderJSON,
+				OptionOrder:     optionOrderJSON,
+				QuestionDrawLog: drawLogJSON,
+			}); err == nil && len(savedPlan.QuestionOrder) > 0 {
+				ordered = orderQuestionsWithDraw(questions, savedPlan.QuestionOrder, false, 0, 0)
+				optionOrder = parseOptionOrder(savedPlan.OptionOrder)
+			} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return LoginResult{}, err
+			}
+		} else if savedOrder, err := s.q.SetParticipantQuestionOrderIfEmpty(ctx, db.SetParticipantQuestionOrderIfEmptyParams{
 			ID:            p.ID,
 			QuestionOrder: orderJSON,
 		}); err == nil && len(savedOrder) > 0 {
-			ordered = orderQuestions(questions, savedOrder, p.RandomizeQuestions)
+			ordered = orderQuestionsWithDraw(questions, savedOrder, false, 0, 0)
 		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return LoginResult{}, err
+		}
+	} else if p.RandomizeOptions && len(optionOrder) == 0 {
+		optionOrder = ensureOptionOrder(ordered, optionOrder, p.RandomizeOptions)
+		if runtimeStore, ok := s.q.(examRuntimePlanStore); ok {
+			if savedOrder, err := runtimeStore.SetParticipantOptionOrderIfEmpty(ctx, db.SetParticipantOptionOrderIfEmptyParams{
+				ID:          p.ID,
+				OptionOrder: marshalJSON(optionOrder),
+			}); err == nil && len(savedOrder) > 0 {
+				optionOrder = parseOptionOrder(savedOrder)
+			} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return LoginResult{}, err
+			}
 		}
 	}
 
@@ -246,7 +286,7 @@ func (s *Exam) Login(ctx context.Context, token, roomToken, deviceFingerprint, l
 			ScheduledEnd:    p.ScheduledEnd.Time.Format(time.RFC3339),
 			DurationMinutes: p.DurationMinutes,
 		},
-		Questions:            toExamQuestions(s.q, ctx, ordered),
+		Questions:            toExamQuestions(s.q, ctx, ordered, optionOrder),
 		AnsweredCount:        len(answers),
 		TotalQuestions:       len(ordered),
 		TimeRemainingSeconds: remaining,
@@ -352,10 +392,11 @@ func (s *Exam) SubmitAnswer(ctx context.Context, p db.GetParticipantByTokenRow, 
 	if !belongs {
 		return ErrExamQuestionScope
 	}
+	storedAnswer := canonicalizeRandomizedAnswer(p.OptionOrder, questionID, answer)
 	rows, err := s.q.UpsertStudentAnswer(ctx, db.UpsertStudentAnswerParams{
 		ParticipantID: p.ID,
 		QuestionID:    questionID,
-		Answer:        answer,
+		Answer:        storedAnswer,
 	})
 	if err != nil {
 		return err
@@ -646,19 +687,19 @@ func examDeadline(end pgtype.Timestamptz, durationMin int32, joinedAt pgtype.Tim
 	return time.Time{}, false
 }
 
-func orderQuestions(questions []db.GetExamQuestionsRow, orderJSON []byte, randomize bool) []db.GetExamQuestionsRow {
+func orderQuestionsWithDraw(questions []db.GetExamQuestionsRow, orderJSON []byte, randomize bool, drawPG, drawEssay int32) []db.GetExamQuestionsRow {
 	if len(orderJSON) == 0 {
-		return defaultQuestionOrder(questions, randomize)
+		return defaultQuestionOrder(applyQuestionDraw(questions, drawPG, drawEssay), randomize)
 	}
 
 	// Reorder by stored question_order. Treat an empty JSON array as missing order
 	// so a reset/retake cannot accidentally produce an empty exam package.
 	var ids []string
 	if err := json.Unmarshal(orderJSON, &ids); err != nil {
-		return questions
+		return applyQuestionDraw(questions, drawPG, drawEssay)
 	}
 	if len(ids) == 0 {
-		return defaultQuestionOrder(questions, randomize)
+		return defaultQuestionOrder(applyQuestionDraw(questions, drawPG, drawEssay), randomize)
 	}
 	idMap := make(map[string]db.GetExamQuestionsRow, len(questions))
 	for _, q := range questions {
@@ -671,9 +712,61 @@ func orderQuestions(questions []db.GetExamQuestionsRow, orderJSON []byte, random
 		}
 	}
 	if len(ordered) == 0 {
-		return defaultQuestionOrder(questions, randomize)
+		return defaultQuestionOrder(applyQuestionDraw(questions, drawPG, drawEssay), randomize)
 	}
 	return ordered
+}
+
+func orderQuestions(questions []db.GetExamQuestionsRow, orderJSON []byte, randomize bool) []db.GetExamQuestionsRow {
+	return orderQuestionsWithDraw(questions, orderJSON, randomize, 0, 0)
+}
+
+func applyQuestionDraw(questions []db.GetExamQuestionsRow, drawPG, drawEssay int32) []db.GetExamQuestionsRow {
+	if drawPG <= 0 && drawEssay <= 0 {
+		return questions
+	}
+	objective := make([]db.GetExamQuestionsRow, 0, len(questions))
+	essay := make([]db.GetExamQuestionsRow, 0, len(questions))
+	other := make([]db.GetExamQuestionsRow, 0)
+	for _, question := range questions {
+		switch question.QuestionType {
+		case "essay":
+			essay = append(essay, question)
+		case "multiple_choice", "multiple_answer", "true_false", "agree_disagree", "matching", "ordering", "short_answer":
+			objective = append(objective, question)
+		default:
+			other = append(other, question)
+		}
+	}
+	selected := make([]db.GetExamQuestionsRow, 0, len(questions))
+	selected = append(selected, drawQuestionGroup(objective, drawPG)...)
+	selected = append(selected, drawQuestionGroup(essay, drawEssay)...)
+	if drawPG <= 0 && len(objective) == 0 {
+		selected = append(selected, other...)
+	}
+	if len(selected) == 0 {
+		return questions
+	}
+	position := make(map[string]int, len(questions))
+	for i, question := range questions {
+		position[pgUUIDString(question.ID)] = i
+	}
+	sort.SliceStable(selected, func(i, j int) bool {
+		return position[pgUUIDString(selected[i].ID)] < position[pgUUIDString(selected[j].ID)]
+	})
+	return selected
+}
+
+func drawQuestionGroup(questions []db.GetExamQuestionsRow, drawCount int32) []db.GetExamQuestionsRow {
+	if drawCount <= 0 || int(drawCount) >= len(questions) {
+		return questions
+	}
+	indices := shuffleInts(len(questions))
+	out := make([]db.GetExamQuestionsRow, 0, drawCount)
+	for i := 0; i < int(drawCount) && i < len(indices); i++ {
+		out = append(out, questions[indices[i]])
+	}
+	return out
 }
 
 func defaultQuestionOrder(questions []db.GetExamQuestionsRow, randomize bool) []db.GetExamQuestionsRow {
@@ -704,9 +797,73 @@ func shuffleInts(n int) []int {
 	return idx
 }
 
-func toExamQuestions(q examStore, ctx context.Context, rows []db.GetExamQuestionsRow) []ExamQuestion {
+func parseOptionOrder(raw []byte) map[string][]string {
+	if len(raw) == 0 {
+		return map[string][]string{}
+	}
+	var order map[string][]string
+	if err := json.Unmarshal(raw, &order); err != nil || order == nil {
+		return map[string][]string{}
+	}
+	return order
+}
+
+func ensureOptionOrder(rows []db.GetExamQuestionsRow, existing map[string][]string, randomize bool) map[string][]string {
+	if !randomize {
+		return map[string][]string{}
+	}
+	if existing == nil {
+		existing = map[string][]string{}
+	}
+	for _, row := range rows {
+		if !supportsOptionRandomization(row.QuestionType) {
+			continue
+		}
+		id := pgUUIDString(row.ID)
+		if len(existing[id]) > 0 {
+			continue
+		}
+		labels := optionLabelsForQuestion(row)
+		if len(labels) <= 1 {
+			continue
+		}
+		indices := shuffleInts(len(labels))
+		shuffled := make([]string, 0, len(labels))
+		for _, idx := range indices {
+			shuffled = append(shuffled, labels[idx])
+		}
+		existing[id] = shuffled
+	}
+	return existing
+}
+
+func supportsOptionRandomization(questionType string) bool {
+	return questionType == "multiple_choice" || questionType == "multiple_answer"
+}
+
+func optionLabelsForQuestion(row db.GetExamQuestionsRow) []string {
+	options := decodeQuestionOptions(row.Options)
+	if len(options) == 0 {
+		options = legacyOptions(row.OptionA, row.OptionB, row.OptionC, row.OptionD, row.OptionE, row.QuestionType)
+	}
+	labels := make([]string, 0, len(options))
+	for _, option := range options {
+		label := strings.ToUpper(strings.TrimSpace(option.Label))
+		if label != "" {
+			labels = append(labels, label)
+		}
+	}
+	return labels
+}
+
+func toExamQuestions(q examStore, ctx context.Context, rows []db.GetExamQuestionsRow, optionOrders ...map[string][]string) []ExamQuestion {
+	optionOrder := map[string][]string{}
+	if len(optionOrders) > 0 && optionOrders[0] != nil {
+		optionOrder = optionOrders[0]
+	}
 	out := make([]ExamQuestion, len(rows))
 	for i, r := range rows {
+		r = applyExamOptionOrder(r, optionOrder[pgUUIDString(r.ID)])
 		opts := json.RawMessage(r.Options)
 		if len(opts) == 0 {
 			opts = json.RawMessage("[]")
@@ -732,6 +889,72 @@ func toExamQuestions(q examStore, ctx context.Context, rows []db.GetExamQuestion
 		}
 	}
 	return out
+}
+
+func applyExamOptionOrder(row db.GetExamQuestionsRow, order []string) db.GetExamQuestionsRow {
+	if len(order) == 0 || !supportsOptionRandomization(row.QuestionType) {
+		return row
+	}
+	options := decodeQuestionOptions(row.Options)
+	if len(options) == 0 {
+		options = legacyOptions(row.OptionA, row.OptionB, row.OptionC, row.OptionD, row.OptionE, row.QuestionType)
+	}
+	byLabel := make(map[string]QuestionOption, len(options))
+	for _, option := range options {
+		byLabel[strings.ToUpper(strings.TrimSpace(option.Label))] = option
+	}
+	ordered := make([]QuestionOption, 0, len(order))
+	for i, canonicalLabel := range order {
+		option, ok := byLabel[strings.ToUpper(strings.TrimSpace(canonicalLabel))]
+		if !ok {
+			continue
+		}
+		option.Label = labelFromIndex(i)
+		ordered = append(ordered, option)
+	}
+	if len(ordered) == 0 {
+		return row
+	}
+	if raw, err := EncodeQuestionOptions(ordered); err == nil {
+		row.Options = raw
+	}
+	row.OptionA, row.OptionB, row.OptionC, row.OptionD, row.OptionE = legacyOptionColumns(ordered)
+	return row
+}
+
+func canonicalizeRandomizedAnswer(optionOrderJSON []byte, questionID pgtype.UUID, answer string) string {
+	order := parseOptionOrder(optionOrderJSON)[pgUUIDString(questionID)]
+	if len(order) == 0 {
+		return answer
+	}
+	parts := strings.Split(answer, ",")
+	out := make([]string, 0, len(parts))
+	changed := false
+	for _, part := range parts {
+		label := strings.ToUpper(strings.TrimSpace(part))
+		if len(label) == 1 {
+			idx := int(label[0] - 'A')
+			if idx >= 0 && idx < len(order) {
+				out = append(out, order[idx])
+				changed = true
+				continue
+			}
+		}
+		if strings.TrimSpace(part) != "" {
+			out = append(out, strings.TrimSpace(part))
+		}
+	}
+	if !changed {
+		return answer
+	}
+	return strings.Join(out, ",")
+}
+
+func labelFromIndex(idx int) string {
+	if idx < 0 || idx >= 26 {
+		return ""
+	}
+	return string(rune('A' + idx))
 }
 
 func resolveExamQuestionAssets(q examStore, ctx context.Context, questionID pgtype.UUID) (string, string, string, string) {

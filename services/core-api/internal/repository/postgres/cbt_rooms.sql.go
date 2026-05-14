@@ -32,7 +32,7 @@ VALUES (
   COALESCE(NULLIF($4::TEXT, ''), $3::TEXT),
   $5
 )
-RETURNING id, session_id, room_name, capacity, created_at, school_room_id, room_name_snapshot, capacity_override, room_token, status, is_locked, updated_at
+RETURNING id, session_id, room_name, capacity, created_at, school_room_id, room_name_snapshot, capacity_override, room_token, status, is_locked, updated_at, room_token_hash, room_token_hash_version, room_token_generated_at, room_token_revealed_at, room_token_revoked_at
 `
 
 type CreateCbtExamRoomParams struct {
@@ -65,6 +65,11 @@ func (q *Queries) CreateCbtExamRoom(ctx context.Context, arg CreateCbtExamRoomPa
 		&i.Status,
 		&i.IsLocked,
 		&i.UpdatedAt,
+		&i.RoomTokenHash,
+		&i.RoomTokenHashVersion,
+		&i.RoomTokenGeneratedAt,
+		&i.RoomTokenRevealedAt,
+		&i.RoomTokenRevokedAt,
 	)
 	return i, err
 }
@@ -120,7 +125,7 @@ func (q *Queries) DeleteCbtRoomProctorsByRoom(ctx context.Context, examRoomID pg
 }
 
 const getCbtExamRoom = `-- name: GetCbtExamRoom :one
-SELECT id, session_id, room_name, capacity, created_at, school_room_id, room_name_snapshot, capacity_override, room_token, status, is_locked, updated_at
+SELECT id, session_id, room_name, capacity, created_at, school_room_id, room_name_snapshot, capacity_override, room_token, status, is_locked, updated_at, room_token_hash, room_token_hash_version, room_token_generated_at, room_token_revealed_at, room_token_revoked_at
 FROM cbt_exam_rooms
 WHERE id = $1
 `
@@ -141,6 +146,11 @@ func (q *Queries) GetCbtExamRoom(ctx context.Context, id pgtype.UUID) (CbtExamRo
 		&i.Status,
 		&i.IsLocked,
 		&i.UpdatedAt,
+		&i.RoomTokenHash,
+		&i.RoomTokenHashVersion,
+		&i.RoomTokenGeneratedAt,
+		&i.RoomTokenRevealedAt,
+		&i.RoomTokenRevokedAt,
 	)
 	return i, err
 }

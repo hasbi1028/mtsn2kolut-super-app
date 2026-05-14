@@ -121,6 +121,83 @@ func (h *CbtEvent) Overview(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, row)
 }
 
+func (h *CbtEvent) Readiness(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	var (
+		events []db.ListCbtExamEventsRow
+		err    error
+	)
+	if adminAccessAllowed(r) {
+		events, err = h.svc.List(r.Context())
+	} else {
+		claims, ok := api.ClaimsFromContext(r.Context())
+		if !ok {
+			api.Unauthorized(w)
+			return
+		}
+		userID, userErr := authUserID(claims)
+		if userErr != nil {
+			api.Unauthorized(w)
+			return
+		}
+		events, err = h.svc.ListForUser(r.Context(), userID)
+	}
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	if len(events) == 0 {
+		api.OK(w, map[string]any{
+			"events":         []db.ListCbtExamEventsRow{},
+			"selected_event": nil,
+			"overview":       nil,
+		})
+		return
+	}
+
+	selectedID, err := parseOptionalUUID(r.URL.Query().Get("event_id"))
+	if err != nil {
+		api.BadRequest(w, "Kegiatan asesmen tidak valid")
+		return
+	}
+	if !selectedID.Valid {
+		selectedID = defaultReadinessEventID(events)
+	}
+	allowed := false
+	for _, event := range events {
+		if event.ID == selectedID {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		api.Forbidden(w)
+		return
+	}
+	overview, err := h.svc.Overview(r.Context(), selectedID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]any{
+		"events":         events,
+		"selected_event": overview.Event,
+		"overview":       overview,
+	})
+}
+
+func defaultReadinessEventID(events []db.ListCbtExamEventsRow) pgtype.UUID {
+	for _, event := range events {
+		if event.Status == "draft" || event.Status == "active" {
+			return event.ID
+		}
+	}
+	return events[0].ID
+}
+
 func (h *CbtEvent) ListPackages(w http.ResponseWriter, r *http.Request) {
 	if !cbtAccessAllowed(r) {
 		api.Forbidden(w)

@@ -13,7 +13,13 @@ import (
 
 const addCbtPackageQuestion = `-- name: AddCbtPackageQuestion :exec
 INSERT INTO cbt_package_questions (package_id, question_id, position, points)
-VALUES ($1, $2, $3, $4)
+SELECT $1, $2, $3, $4
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM cbt_packages p
+  WHERE p.id = $1
+    AND p.locked_at IS NOT NULL
+)
 `
 
 type AddCbtPackageQuestionParams struct {
@@ -36,7 +42,7 @@ func (q *Queries) AddCbtPackageQuestion(ctx context.Context, arg AddCbtPackageQu
 const createCbtPackage = `-- name: CreateCbtPackage :one
 INSERT INTO cbt_packages (id, event_id, subject_id, title, description, duration_minutes, randomize_questions, is_active, source_mode, randomize_options, draw_pg_count, draw_essay_count, random_seed, composition_log)
 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-RETURNING id, subject_id, title, description, duration_minutes, randomize_questions, is_active, created_at, updated_at, event_id, source_mode, randomize_options, draw_pg_count, draw_essay_count, random_seed, composition_log
+RETURNING id, subject_id, title, description, duration_minutes, randomize_questions, is_active, created_at, updated_at, event_id, source_mode, randomize_options, draw_pg_count, draw_essay_count, random_seed, composition_log, locked_at, locked_by, lock_reason, snapshot_version
 `
 
 type CreateCbtPackageParams struct {
@@ -89,12 +95,76 @@ func (q *Queries) CreateCbtPackage(ctx context.Context, arg CreateCbtPackagePara
 		&i.DrawEssayCount,
 		&i.RandomSeed,
 		&i.CompositionLog,
+		&i.LockedAt,
+		&i.LockedBy,
+		&i.LockReason,
+		&i.SnapshotVersion,
 	)
 	return i, err
 }
 
+const createCbtPackageQuestionSnapshots = `-- name: CreateCbtPackageQuestionSnapshots :execrows
+INSERT INTO cbt_package_question_snapshots (
+  package_id, snapshot_version, question_id, position, points, question_code,
+  question_text, question_type, options, option_a, option_b, option_c, option_d, option_e,
+  answer_key, stem_html, stem_latex, stimulus_html, stimulus_latex,
+  rubric_html, explanation_html, media_asset_ids, metadata
+)
+SELECT
+  p.id,
+  p.snapshot_version,
+  q.id,
+  pq.position,
+  pq.points,
+  q.code,
+  q.question_text,
+  q.question_type,
+  COALESCE(q.options, '[]'::jsonb),
+  q.option_a,
+  q.option_b,
+  q.option_c,
+  q.option_d,
+  q.option_e,
+  q.answer_key,
+  q.stem_html,
+  q.stem_latex,
+  q.stimulus_html,
+  q.stimulus_latex,
+  q.rubric_html,
+  q.explanation_html,
+  COALESCE(q.media_asset_ids, '[]'::jsonb),
+  jsonb_build_object(
+    'difficulty', q.difficulty,
+    'academic_phase', q.academic_phase,
+    'grade_level', q.grade_level,
+    'cp_ref', q.cp_ref,
+    'tp_ref', q.tp_ref,
+    'kd_ref', q.kd_ref,
+    'indicator_ref', q.indicator_ref,
+    'material_topic', q.material_topic,
+    'cognitive_level', q.cognitive_level,
+    'hots_flag', q.hots_flag,
+    'workflow_status', q.workflow_status,
+    'version', q.version
+  )
+FROM cbt_packages p
+JOIN cbt_package_questions pq ON pq.package_id = p.id
+JOIN cbt_questions q ON q.id = pq.question_id
+WHERE p.id = $1
+  AND p.snapshot_version > 0
+ON CONFLICT (package_id, snapshot_version, question_id) DO NOTHING
+`
+
+func (q *Queries) CreateCbtPackageQuestionSnapshots(ctx context.Context, packageID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, createCbtPackageQuestionSnapshots, packageID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteCbtPackage = `-- name: DeleteCbtPackage :execrows
-DELETE FROM cbt_packages WHERE id = $1
+DELETE FROM cbt_packages WHERE id = $1 AND locked_at IS NULL
 `
 
 func (q *Queries) DeleteCbtPackage(ctx context.Context, id pgtype.UUID) (int64, error) {
@@ -103,6 +173,33 @@ func (q *Queries) DeleteCbtPackage(ctx context.Context, id pgtype.UUID) (int64, 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const getCbtPackageLockState = `-- name: GetCbtPackageLockState :one
+SELECT id, locked_at, locked_by, lock_reason, snapshot_version
+FROM cbt_packages
+WHERE id = $1
+`
+
+type GetCbtPackageLockStateRow struct {
+	ID              pgtype.UUID        `json:"id"`
+	LockedAt        pgtype.Timestamptz `json:"locked_at"`
+	LockedBy        pgtype.UUID        `json:"locked_by"`
+	LockReason      string             `json:"lock_reason"`
+	SnapshotVersion int32              `json:"snapshot_version"`
+}
+
+func (q *Queries) GetCbtPackageLockState(ctx context.Context, id pgtype.UUID) (GetCbtPackageLockStateRow, error) {
+	row := q.db.QueryRow(ctx, getCbtPackageLockState, id)
+	var i GetCbtPackageLockStateRow
+	err := row.Scan(
+		&i.ID,
+		&i.LockedAt,
+		&i.LockedBy,
+		&i.LockReason,
+		&i.SnapshotVersion,
+	)
+	return i, err
 }
 
 const getCbtPackageQuestionQuality = `-- name: GetCbtPackageQuestionQuality :one
@@ -172,14 +269,55 @@ func (q *Queries) GetCbtPackageUsage(ctx context.Context, id pgtype.UUID) (int32
 }
 
 const getExamQuestions = `-- name: GetExamQuestions :many
+WITH active_snapshot AS (
+  SELECT snap.id, snap.package_id, snap.snapshot_version, snap.question_id, snap.position, snap.points, snap.question_code, snap.question_text, snap.question_type, snap.options, snap.option_a, snap.option_b, snap.option_c, snap.option_d, snap.option_e, snap.answer_key, snap.stem_html, snap.stem_latex, snap.stimulus_html, snap.stimulus_latex, snap.rubric_html, snap.explanation_html, snap.media_asset_ids, snap.metadata, snap.snapshot_at
+  FROM cbt_packages p
+  JOIN cbt_package_question_snapshots snap
+    ON snap.package_id = p.id
+   AND snap.snapshot_version = p.snapshot_version
+  WHERE p.id = $1
+    AND p.snapshot_version > 0
+),
+has_snapshot AS (
+  SELECT EXISTS(SELECT 1 FROM active_snapshot) AS available
+)
 SELECT
-  q.id, q.code, q.question_text, q.question_type, q.options,
-  q.option_a, q.option_b, q.option_c, q.option_d, q.option_e,
-  q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex, q.media_asset_ids
-FROM cbt_package_questions pq
-JOIN cbt_questions q ON q.id = pq.question_id
-WHERE pq.package_id = $1 AND q.status = 'published'
-ORDER BY pq.position ASC
+  rows.id, rows.code, rows.question_text, rows.question_type, rows.options,
+  rows.option_a, rows.option_b, rows.option_c, rows.option_d, rows.option_e,
+  rows.stem_html, rows.stem_latex, rows.stimulus_html, rows.stimulus_latex, rows.media_asset_ids
+FROM (
+  SELECT
+    snap.position AS sort_position,
+    snap.question_id AS id,
+    snap.question_code AS code,
+    snap.question_text,
+    snap.question_type,
+    snap.options,
+    snap.option_a,
+    snap.option_b,
+    snap.option_c,
+    snap.option_d,
+    snap.option_e,
+    snap.stem_html,
+    snap.stem_latex,
+    snap.stimulus_html,
+    snap.stimulus_latex,
+    snap.media_asset_ids
+  FROM active_snapshot snap
+  UNION ALL
+  SELECT
+    pq.position AS sort_position,
+    q.id, q.code, q.question_text, q.question_type, q.options,
+    q.option_a, q.option_b, q.option_c, q.option_d, q.option_e,
+    q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex, q.media_asset_ids
+  FROM cbt_package_questions pq
+  JOIN cbt_questions q ON q.id = pq.question_id
+  CROSS JOIN has_snapshot
+  WHERE pq.package_id = $1
+    AND q.status = 'published'
+    AND has_snapshot.available = FALSE
+) rows
+ORDER BY rows.sort_position ASC
 `
 
 type GetExamQuestionsRow struct {
@@ -245,6 +383,7 @@ SELECT p.id, p.event_id, p.subject_id, s.name AS subject_name, s.code AS subject
        COALESCE(p.draw_essay_count, 0)::int AS draw_essay_count,
        COALESCE(p.random_seed, '')::text AS random_seed,
        COALESCE(p.composition_log, '{}'::jsonb) AS composition_log,
+       p.locked_at, p.locked_by, p.lock_reason, p.snapshot_version,
        p.is_active,
        p.created_at, p.updated_at,
        COUNT(pq.question_id)::int AS question_count,
@@ -275,6 +414,10 @@ type ListCbtEventPackagesRow struct {
 	DrawEssayCount         int32              `json:"draw_essay_count"`
 	RandomSeed             string             `json:"random_seed"`
 	CompositionLog         []byte             `json:"composition_log"`
+	LockedAt               pgtype.Timestamptz `json:"locked_at"`
+	LockedBy               pgtype.UUID        `json:"locked_by"`
+	LockReason             string             `json:"lock_reason"`
+	SnapshotVersion        int32              `json:"snapshot_version"`
 	IsActive               bool               `json:"is_active"`
 	CreatedAt              pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
@@ -308,6 +451,10 @@ func (q *Queries) ListCbtEventPackages(ctx context.Context, eventID pgtype.UUID)
 			&i.DrawEssayCount,
 			&i.RandomSeed,
 			&i.CompositionLog,
+			&i.LockedAt,
+			&i.LockedBy,
+			&i.LockReason,
+			&i.SnapshotVersion,
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -403,6 +550,7 @@ SELECT p.id, p.event_id, p.subject_id, s.name AS subject_name, s.code AS subject
        COALESCE(p.draw_essay_count, 0)::int AS draw_essay_count,
        COALESCE(p.random_seed, '')::text AS random_seed,
        COALESCE(p.composition_log, '{}'::jsonb) AS composition_log,
+       p.locked_at, p.locked_by, p.lock_reason, p.snapshot_version,
        p.is_active,
        p.created_at, p.updated_at,
        COUNT(pq.question_id)::int AS question_count
@@ -430,6 +578,10 @@ type ListCbtPackagesRow struct {
 	DrawEssayCount     int32              `json:"draw_essay_count"`
 	RandomSeed         string             `json:"random_seed"`
 	CompositionLog     []byte             `json:"composition_log"`
+	LockedAt           pgtype.Timestamptz `json:"locked_at"`
+	LockedBy           pgtype.UUID        `json:"locked_by"`
+	LockReason         string             `json:"lock_reason"`
+	SnapshotVersion    int32              `json:"snapshot_version"`
 	IsActive           bool               `json:"is_active"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
@@ -461,6 +613,10 @@ func (q *Queries) ListCbtPackages(ctx context.Context, eventID pgtype.UUID) ([]L
 			&i.DrawEssayCount,
 			&i.RandomSeed,
 			&i.CompositionLog,
+			&i.LockedAt,
+			&i.LockedBy,
+			&i.LockReason,
+			&i.SnapshotVersion,
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -474,4 +630,45 @@ func (q *Queries) ListCbtPackages(ctx context.Context, eventID pgtype.UUID) ([]L
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockCbtPackageForSnapshot = `-- name: LockCbtPackageForSnapshot :one
+UPDATE cbt_packages
+SET locked_at = COALESCE(locked_at, NOW()),
+    locked_by = CASE WHEN locked_at IS NULL THEN $1::uuid ELSE locked_by END,
+    lock_reason = CASE
+      WHEN locked_at IS NULL THEN COALESCE(NULLIF($2::text, ''), 'session_scheduled')
+      ELSE lock_reason
+    END,
+    snapshot_version = CASE WHEN snapshot_version <= 0 THEN 1 ELSE snapshot_version END,
+    updated_at = NOW()
+WHERE id = $3
+RETURNING id, locked_at, locked_by, lock_reason, snapshot_version
+`
+
+type LockCbtPackageForSnapshotParams struct {
+	LockedBy   pgtype.UUID `json:"locked_by"`
+	LockReason string      `json:"lock_reason"`
+	PackageID  pgtype.UUID `json:"package_id"`
+}
+
+type LockCbtPackageForSnapshotRow struct {
+	ID              pgtype.UUID        `json:"id"`
+	LockedAt        pgtype.Timestamptz `json:"locked_at"`
+	LockedBy        pgtype.UUID        `json:"locked_by"`
+	LockReason      string             `json:"lock_reason"`
+	SnapshotVersion int32              `json:"snapshot_version"`
+}
+
+func (q *Queries) LockCbtPackageForSnapshot(ctx context.Context, arg LockCbtPackageForSnapshotParams) (LockCbtPackageForSnapshotRow, error) {
+	row := q.db.QueryRow(ctx, lockCbtPackageForSnapshot, arg.LockedBy, arg.LockReason, arg.PackageID)
+	var i LockCbtPackageForSnapshotRow
+	err := row.Scan(
+		&i.ID,
+		&i.LockedAt,
+		&i.LockedBy,
+		&i.LockReason,
+		&i.SnapshotVersion,
+	)
+	return i, err
 }

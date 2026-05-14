@@ -1012,21 +1012,33 @@ type CbtExamParticipant struct {
 	RiskLevel         string             `json:"risk_level"`
 	LockedAt          pgtype.Timestamptz `json:"locked_at"`
 	LockedReason      pgtype.Text        `json:"locked_reason"`
+	TokenHash         string             `json:"token_hash"`
+	TokenHashVersion  int32              `json:"token_hash_version"`
+	TokenGeneratedAt  pgtype.Timestamptz `json:"token_generated_at"`
+	TokenRevealedAt   pgtype.Timestamptz `json:"token_revealed_at"`
+	TokenRevokedAt    pgtype.Timestamptz `json:"token_revoked_at"`
+	OptionOrder       []byte             `json:"option_order"`
+	QuestionDrawLog   []byte             `json:"question_draw_log"`
 }
 
 type CbtExamRoom struct {
-	ID               pgtype.UUID        `json:"id"`
-	SessionID        pgtype.UUID        `json:"session_id"`
-	RoomName         string             `json:"room_name"`
-	Capacity         int32              `json:"capacity"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	SchoolRoomID     pgtype.UUID        `json:"school_room_id"`
-	RoomNameSnapshot string             `json:"room_name_snapshot"`
-	CapacityOverride pgtype.Int4        `json:"capacity_override"`
-	RoomToken        string             `json:"room_token"`
-	Status           string             `json:"status"`
-	IsLocked         bool               `json:"is_locked"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	ID                   pgtype.UUID        `json:"id"`
+	SessionID            pgtype.UUID        `json:"session_id"`
+	RoomName             string             `json:"room_name"`
+	Capacity             int32              `json:"capacity"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	SchoolRoomID         pgtype.UUID        `json:"school_room_id"`
+	RoomNameSnapshot     string             `json:"room_name_snapshot"`
+	CapacityOverride     pgtype.Int4        `json:"capacity_override"`
+	RoomToken            string             `json:"room_token"`
+	Status               string             `json:"status"`
+	IsLocked             bool               `json:"is_locked"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	RoomTokenHash        string             `json:"room_token_hash"`
+	RoomTokenHashVersion int32              `json:"room_token_hash_version"`
+	RoomTokenGeneratedAt pgtype.Timestamptz `json:"room_token_generated_at"`
+	RoomTokenRevealedAt  pgtype.Timestamptz `json:"room_token_revealed_at"`
+	RoomTokenRevokedAt   pgtype.Timestamptz `json:"room_token_revoked_at"`
 }
 
 type CbtExamSession struct {
@@ -1065,6 +1077,10 @@ type CbtPackage struct {
 	DrawEssayCount     int32              `json:"draw_essay_count"`
 	RandomSeed         string             `json:"random_seed"`
 	CompositionLog     []byte             `json:"composition_log"`
+	LockedAt           pgtype.Timestamptz `json:"locked_at"`
+	LockedBy           pgtype.UUID        `json:"locked_by"`
+	LockReason         string             `json:"lock_reason"`
+	SnapshotVersion    int32              `json:"snapshot_version"`
 }
 
 type CbtPackageQuestion struct {
@@ -1073,6 +1089,34 @@ type CbtPackageQuestion struct {
 	Position   int32              `json:"position"`
 	Points     int32              `json:"points"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+type CbtPackageQuestionSnapshot struct {
+	ID              pgtype.UUID        `json:"id"`
+	PackageID       pgtype.UUID        `json:"package_id"`
+	SnapshotVersion int32              `json:"snapshot_version"`
+	QuestionID      pgtype.UUID        `json:"question_id"`
+	Position        int32              `json:"position"`
+	Points          int32              `json:"points"`
+	QuestionCode    string             `json:"question_code"`
+	QuestionText    string             `json:"question_text"`
+	QuestionType    string             `json:"question_type"`
+	Options         []byte             `json:"options"`
+	OptionA         string             `json:"option_a"`
+	OptionB         string             `json:"option_b"`
+	OptionC         string             `json:"option_c"`
+	OptionD         string             `json:"option_d"`
+	OptionE         string             `json:"option_e"`
+	AnswerKey       string             `json:"answer_key"`
+	StemHtml        string             `json:"stem_html"`
+	StemLatex       string             `json:"stem_latex"`
+	StimulusHtml    string             `json:"stimulus_html"`
+	StimulusLatex   string             `json:"stimulus_latex"`
+	RubricHtml      string             `json:"rubric_html"`
+	ExplanationHtml string             `json:"explanation_html"`
+	MediaAssetIds   []byte             `json:"media_asset_ids"`
+	Metadata        []byte             `json:"metadata"`
+	SnapshotAt      pgtype.Timestamptz `json:"snapshot_at"`
 }
 
 type CbtParticipantEvent struct {
@@ -1150,6 +1194,21 @@ type CbtQuestionAuditLog struct {
 	Note          string             `json:"note"`
 	Metadata      []byte             `json:"metadata"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+type CbtResultSyncRun struct {
+	ID                pgtype.UUID        `json:"id"`
+	SessionID         pgtype.UUID        `json:"session_id"`
+	GradeAssignmentID pgtype.UUID        `json:"grade_assignment_id"`
+	GradeComponentID  pgtype.UUID        `json:"grade_component_id"`
+	Status            string             `json:"status"`
+	CandidateCount    int32              `json:"candidate_count"`
+	SyncedCount       int32              `json:"synced_count"`
+	SkippedCount      int32              `json:"skipped_count"`
+	Threshold         pgtype.Numeric     `json:"threshold"`
+	Notes             string             `json:"notes"`
+	CreatedBy         string             `json:"created_by"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 }
 
 type CbtRoomHandover struct {

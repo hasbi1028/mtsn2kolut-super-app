@@ -132,9 +132,10 @@ func (q *Queries) DeleteCbtExamSession(ctx context.Context, id pgtype.UUID) (int
 }
 
 const enrollClassToSession = `-- name: EnrollClassToSession :exec
-INSERT INTO cbt_exam_participants (session_id, student_id, token)
-SELECT $1, s.id, encode(gen_random_bytes(16), 'hex')
+INSERT INTO cbt_exam_participants (session_id, student_id, token, token_hash, token_hash_version, token_generated_at)
+SELECT $1, s.id, tok.token, encode(digest(tok.token, 'sha256'), 'hex'), 1, NOW()
 FROM students s
+CROSS JOIN LATERAL (SELECT encode(gen_random_bytes(16), 'hex') AS token) tok
 WHERE s.class_id = $2 AND s.is_active = TRUE
 ON CONFLICT (session_id, student_id) DO NOTHING
 `
@@ -150,10 +151,11 @@ func (q *Queries) EnrollClassToSession(ctx context.Context, arg EnrollClassToSes
 }
 
 const enrollGradeToSession = `-- name: EnrollGradeToSession :exec
-INSERT INTO cbt_exam_participants (session_id, student_id, token)
-SELECT $1, s.id, encode(gen_random_bytes(16), 'hex')
+INSERT INTO cbt_exam_participants (session_id, student_id, token, token_hash, token_hash_version, token_generated_at)
+SELECT $1, s.id, tok.token, encode(digest(tok.token, 'sha256'), 'hex'), 1, NOW()
 FROM students s
 JOIN school_classes c ON c.id = s.class_id
+CROSS JOIN LATERAL (SELECT encode(gen_random_bytes(16), 'hex') AS token) tok
 WHERE c.level = $2 AND s.is_active = TRUE
 ON CONFLICT (session_id, student_id) DO NOTHING
 `
@@ -169,9 +171,10 @@ func (q *Queries) EnrollGradeToSession(ctx context.Context, arg EnrollGradeToSes
 }
 
 const enrollSchoolToSession = `-- name: EnrollSchoolToSession :exec
-INSERT INTO cbt_exam_participants (session_id, student_id, token)
-SELECT $1, s.id, encode(gen_random_bytes(16), 'hex')
+INSERT INTO cbt_exam_participants (session_id, student_id, token, token_hash, token_hash_version, token_generated_at)
+SELECT $1, s.id, tok.token, encode(digest(tok.token, 'sha256'), 'hex'), 1, NOW()
 FROM students s
+CROSS JOIN LATERAL (SELECT encode(gen_random_bytes(16), 'hex') AS token) tok
 WHERE s.is_active = TRUE
 ON CONFLICT (session_id, student_id) DO NOTHING
 `
@@ -181,23 +184,136 @@ func (q *Queries) EnrollSchoolToSession(ctx context.Context, sessionID pgtype.UU
 	return err
 }
 
+const finalizeOverdueParticipants = `-- name: FinalizeOverdueParticipants :one
+WITH items AS (
+  SELECT ses.id AS session_id, snap.question_id, snap.question_type, snap.points
+  FROM cbt_exam_sessions ses
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_question_snapshots snap
+    ON snap.package_id = ses.package_id
+   AND snap.snapshot_version = p.snapshot_version
+  WHERE ses.id = $1
+    AND p.snapshot_version > 0
+  UNION ALL
+  SELECT ses.id AS session_id, q.id AS question_id, q.question_type, pq.points
+  FROM cbt_exam_sessions ses
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  WHERE ses.id = $1
+    AND NOT EXISTS (
+      SELECT 1 FROM cbt_package_question_snapshots snap
+      WHERE snap.package_id = ses.package_id
+        AND snap.snapshot_version = p.snapshot_version
+        AND p.snapshot_version > 0
+    )
+),
+eligible AS (
+  SELECT ep.id AS participant_id
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages pkg ON pkg.id = ses.package_id
+  WHERE ep.session_id = $1
+    AND ep.submitted_at IS NULL
+    AND (
+      (ses.scheduled_end IS NOT NULL AND NOW() > ses.scheduled_end)
+      OR (ep.joined_at IS NOT NULL AND pkg.duration_minutes > 0 AND NOW() > ep.joined_at + (pkg.duration_minutes::text || ' minutes')::interval)
+    )
+  FOR UPDATE OF ep
+),
+score_parts AS (
+  SELECT
+    eligible.participant_id,
+    COALESCE(SUM(
+      CASE
+        WHEN items.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * items.points
+        WHEN items.question_type <> 'essay' AND sa.is_correct IS TRUE THEN items.points
+        ELSE 0
+      END
+    ), 0)::numeric AS earned_points,
+    COALESCE(SUM(items.points), 0)::numeric AS total_points
+  FROM eligible
+  JOIN cbt_exam_participants ep ON ep.id = eligible.participant_id
+  JOIN items ON items.session_id = ep.session_id
+  LEFT JOIN cbt_student_answers sa ON sa.participant_id = eligible.participant_id AND sa.question_id = items.question_id
+  GROUP BY eligible.participant_id
+),
+updated AS (
+  UPDATE cbt_exam_participants ep
+  SET score = CASE
+        WHEN score_parts.total_points > 0 THEN ROUND((score_parts.earned_points / score_parts.total_points) * 100, 2)
+        ELSE 0
+      END,
+      submitted_at = NOW()
+  FROM score_parts
+  WHERE ep.id = score_parts.participant_id
+    AND ep.submitted_at IS NULL
+  RETURNING ep.id, ep.submitted_at, ep.score
+),
+events AS (
+  INSERT INTO cbt_participant_events (participant_id, event_type, event_data)
+  SELECT
+    updated.id,
+    'auto_submit_deadline',
+    jsonb_build_object(
+      'session_id', $1::uuid,
+      'submitted_at', updated.submitted_at,
+      'score', updated.score
+    )
+  FROM updated
+  RETURNING id
+)
+SELECT COUNT(*)::int AS finalized_count
+FROM updated
+`
+
+func (q *Queries) FinalizeOverdueParticipants(ctx context.Context, id pgtype.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, finalizeOverdueParticipants, id)
+	var finalized_count int32
+	err := row.Scan(&finalized_count)
+	return finalized_count, err
+}
+
 const forceSubmitParticipant = `-- name: ForceSubmitParticipant :one
-WITH score_parts AS (
+WITH items AS (
+  SELECT ep.id AS participant_id, snap.question_id, snap.question_type, snap.points
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_question_snapshots snap
+    ON snap.package_id = ses.package_id
+   AND snap.snapshot_version = p.snapshot_version
+  WHERE ep.session_id = $1 AND ep.id = $2
+    AND p.snapshot_version > 0
+  UNION ALL
+  SELECT ep.id AS participant_id, q.id AS question_id, q.question_type, pq.points
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  WHERE ep.session_id = $1 AND ep.id = $2
+    AND NOT EXISTS (
+      SELECT 1 FROM cbt_package_question_snapshots snap
+      WHERE snap.package_id = ses.package_id
+        AND snap.snapshot_version = p.snapshot_version
+        AND p.snapshot_version > 0
+    )
+),
+score_parts AS (
   SELECT
     ep.id AS participant_id,
     COALESCE(SUM(
       CASE
-        WHEN q.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * pq.points
-        WHEN q.question_type <> 'essay' AND sa.is_correct IS TRUE THEN pq.points
+        WHEN items.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * items.points
+        WHEN items.question_type <> 'essay' AND sa.is_correct IS TRUE THEN items.points
         ELSE 0
       END
     ), 0)::numeric AS earned_points,
-    COALESCE(SUM(pq.points), 0)::numeric AS total_points
+    COALESCE(SUM(items.points), 0)::numeric AS total_points
   FROM cbt_exam_participants ep
-  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
-  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
-  JOIN cbt_questions q ON q.id = pq.question_id
-  LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
+  JOIN items ON items.participant_id = ep.id
+  LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = items.question_id
   WHERE ep.session_id = $1 AND ep.id = $2
   GROUP BY ep.id
 )
@@ -231,14 +347,26 @@ func (q *Queries) ForceSubmitParticipant(ctx context.Context, arg ForceSubmitPar
 }
 
 const generateTokensForSession = `-- name: GenerateTokensForSession :exec
+WITH generated AS (
+  SELECT ep.id, encode(gen_random_bytes(16), 'hex') AS token
+  FROM cbt_exam_participants ep
+  WHERE ep.session_id = $1
+    AND (
+      ep.token = ''
+      OR ep.token IS NULL
+      OR ep.token !~ '^[0-9a-f]{32}$'
+      OR ep.token_hash = ''
+      OR ep.token_hash_version = 0
+    )
+)
 UPDATE cbt_exam_participants
-SET token = encode(gen_random_bytes(16), 'hex')
-WHERE session_id = $1
-  AND (
-    token = ''
-    OR token IS NULL
-    OR token !~ '^[0-9a-f]{32}$'
-  )
+SET token = generated.token,
+    token_hash = encode(digest(generated.token, 'sha256'), 'hex'),
+    token_hash_version = 1,
+    token_generated_at = NOW(),
+    token_revoked_at = NULL
+FROM generated
+WHERE cbt_exam_participants.id = generated.id
 `
 
 func (q *Queries) GenerateTokensForSession(ctx context.Context, sessionID pgtype.UUID) error {
@@ -249,6 +377,7 @@ func (q *Queries) GenerateTokensForSession(ctx context.Context, sessionID pgtype
 const getCbtExamSession = `-- name: GetCbtExamSession :one
 SELECT
   s.id, s.package_id, p.title AS package_title, p.duration_minutes,
+  p.locked_at AS package_locked_at, p.snapshot_version AS package_snapshot_version,
   s.class_id, s.event_id,
   COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
   s.scope_type, s.scope_ref, s.mix_policy, s.assignment_mode, s.allow_cross_grade, s.is_special_event,
@@ -261,26 +390,28 @@ WHERE s.id = $1
 `
 
 type GetCbtExamSessionRow struct {
-	ID              pgtype.UUID          `json:"id"`
-	PackageID       pgtype.UUID          `json:"package_id"`
-	PackageTitle    string               `json:"package_title"`
-	DurationMinutes int32                `json:"duration_minutes"`
-	ClassID         pgtype.UUID          `json:"class_id"`
-	EventID         pgtype.UUID          `json:"event_id"`
-	ClassName       string               `json:"class_name"`
-	ClassCode       string               `json:"class_code"`
-	ScopeType       string               `json:"scope_type"`
-	ScopeRef        string               `json:"scope_ref"`
-	MixPolicy       string               `json:"mix_policy"`
-	AssignmentMode  string               `json:"assignment_mode"`
-	AllowCrossGrade bool                 `json:"allow_cross_grade"`
-	IsSpecialEvent  bool                 `json:"is_special_event"`
-	Title           string               `json:"title"`
-	ScheduledStart  pgtype.Timestamptz   `json:"scheduled_start"`
-	ScheduledEnd    pgtype.Timestamptz   `json:"scheduled_end"`
-	Status          CbtSessionStatusEnum `json:"status"`
-	CreatedAt       pgtype.Timestamptz   `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz   `json:"updated_at"`
+	ID                     pgtype.UUID          `json:"id"`
+	PackageID              pgtype.UUID          `json:"package_id"`
+	PackageTitle           string               `json:"package_title"`
+	DurationMinutes        int32                `json:"duration_minutes"`
+	PackageLockedAt        pgtype.Timestamptz   `json:"package_locked_at"`
+	PackageSnapshotVersion int32                `json:"package_snapshot_version"`
+	ClassID                pgtype.UUID          `json:"class_id"`
+	EventID                pgtype.UUID          `json:"event_id"`
+	ClassName              string               `json:"class_name"`
+	ClassCode              string               `json:"class_code"`
+	ScopeType              string               `json:"scope_type"`
+	ScopeRef               string               `json:"scope_ref"`
+	MixPolicy              string               `json:"mix_policy"`
+	AssignmentMode         string               `json:"assignment_mode"`
+	AllowCrossGrade        bool                 `json:"allow_cross_grade"`
+	IsSpecialEvent         bool                 `json:"is_special_event"`
+	Title                  string               `json:"title"`
+	ScheduledStart         pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd           pgtype.Timestamptz   `json:"scheduled_end"`
+	Status                 CbtSessionStatusEnum `json:"status"`
+	CreatedAt              pgtype.Timestamptz   `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz   `json:"updated_at"`
 }
 
 func (q *Queries) GetCbtExamSession(ctx context.Context, id pgtype.UUID) (GetCbtExamSessionRow, error) {
@@ -291,6 +422,8 @@ func (q *Queries) GetCbtExamSession(ctx context.Context, id pgtype.UUID) (GetCbt
 		&i.PackageID,
 		&i.PackageTitle,
 		&i.DurationMinutes,
+		&i.PackageLockedAt,
+		&i.PackageSnapshotVersion,
 		&i.ClassID,
 		&i.EventID,
 		&i.ClassName,
@@ -307,6 +440,93 @@ func (q *Queries) GetCbtExamSession(ctx context.Context, id pgtype.UUID) (GetCbt
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getCbtSessionGradeSyncPreflight = `-- name: GetCbtSessionGradeSyncPreflight :one
+SELECT
+  ses.id AS session_id,
+  ses.title AS session_title,
+  ses.status AS session_status,
+  ses.class_id,
+  COALESCE(c.name, '') AS class_name,
+  COALESCE(c.code, '') AS class_code,
+  p.subject_id,
+  sub.name AS subject_name,
+  sub.code AS subject_code,
+  csa.id AS grade_assignment_id,
+  latest.grade_component_id,
+  latest.status AS latest_sync_status,
+  latest.created_at AS latest_sync_at,
+  COALESCE(participant_summary.participant_count, 0)::int AS participant_count,
+  COALESCE(participant_summary.submitted_count, 0)::int AS submitted_count,
+  COALESCE(participant_summary.scored_count, 0)::int AS scored_count,
+  COALESCE(participant_summary.missing_score_count, 0)::int AS missing_score_count
+FROM cbt_exam_sessions ses
+JOIN cbt_packages p ON p.id = ses.package_id
+JOIN subjects sub ON sub.id = p.subject_id
+LEFT JOIN school_classes c ON c.id = ses.class_id
+LEFT JOIN class_subject_assignments csa ON csa.class_id = ses.class_id AND csa.subject_id = p.subject_id
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS participant_count,
+         COUNT(*) FILTER (WHERE submitted_at IS NOT NULL)::int AS submitted_count,
+         COUNT(*) FILTER (WHERE score IS NOT NULL)::int AS scored_count,
+         COUNT(*) FILTER (WHERE submitted_at IS NOT NULL AND score IS NULL)::int AS missing_score_count
+  FROM cbt_exam_participants ep
+  WHERE ep.session_id = ses.id
+) participant_summary ON TRUE
+LEFT JOIN LATERAL (
+  SELECT run.grade_component_id, run.status, run.created_at
+  FROM cbt_result_sync_runs run
+  WHERE run.session_id = ses.id
+  ORDER BY run.created_at DESC
+  LIMIT 1
+) latest ON TRUE
+WHERE ses.id = $1
+`
+
+type GetCbtSessionGradeSyncPreflightRow struct {
+	SessionID         pgtype.UUID          `json:"session_id"`
+	SessionTitle      string               `json:"session_title"`
+	SessionStatus     CbtSessionStatusEnum `json:"session_status"`
+	ClassID           pgtype.UUID          `json:"class_id"`
+	ClassName         string               `json:"class_name"`
+	ClassCode         string               `json:"class_code"`
+	SubjectID         pgtype.UUID          `json:"subject_id"`
+	SubjectName       string               `json:"subject_name"`
+	SubjectCode       string               `json:"subject_code"`
+	GradeAssignmentID pgtype.UUID          `json:"grade_assignment_id"`
+	GradeComponentID  pgtype.UUID          `json:"grade_component_id"`
+	LatestSyncStatus  string               `json:"latest_sync_status"`
+	LatestSyncAt      pgtype.Timestamptz   `json:"latest_sync_at"`
+	ParticipantCount  int32                `json:"participant_count"`
+	SubmittedCount    int32                `json:"submitted_count"`
+	ScoredCount       int32                `json:"scored_count"`
+	MissingScoreCount int32                `json:"missing_score_count"`
+}
+
+func (q *Queries) GetCbtSessionGradeSyncPreflight(ctx context.Context, id pgtype.UUID) (GetCbtSessionGradeSyncPreflightRow, error) {
+	row := q.db.QueryRow(ctx, getCbtSessionGradeSyncPreflight, id)
+	var i GetCbtSessionGradeSyncPreflightRow
+	err := row.Scan(
+		&i.SessionID,
+		&i.SessionTitle,
+		&i.SessionStatus,
+		&i.ClassID,
+		&i.ClassName,
+		&i.ClassCode,
+		&i.SubjectID,
+		&i.SubjectName,
+		&i.SubjectCode,
+		&i.GradeAssignmentID,
+		&i.GradeComponentID,
+		&i.LatestSyncStatus,
+		&i.LatestSyncAt,
+		&i.ParticipantCount,
+		&i.SubmittedCount,
+		&i.ScoredCount,
+		&i.MissingScoreCount,
 	)
 	return i, err
 }
@@ -382,7 +602,7 @@ func (q *Queries) GetParticipantAnswers(ctx context.Context, participantID pgtyp
 const getParticipantByToken = `-- name: GetParticipantByToken :one
 SELECT
   ep.id, ep.session_id, ep.student_id,
-  ep.token, ep.room_id, ep.seat_no, ep.device_fingerprint, ep.question_order,
+  ep.token, ep.room_id, ep.seat_no, ep.device_fingerprint, ep.question_order, ep.option_order, ep.question_draw_log,
   ep.joined_at, ep.submitted_at, ep.score,
   ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
   ep.violation_count, ep.risk_score, ep.risk_level, ep.locked_at, ep.locked_reason,
@@ -395,13 +615,20 @@ SELECT
   cs.package_id,
   p.title AS package_title,
   p.duration_minutes,
-  p.randomize_questions
+  p.randomize_questions,
+  p.randomize_options,
+  p.draw_pg_count,
+  p.draw_essay_count
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
 JOIN cbt_exam_sessions cs ON cs.id = ep.session_id
 JOIN cbt_packages p ON p.id = cs.package_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
-WHERE ep.token = $1
+WHERE ep.token_revoked_at IS NULL
+  AND (
+    (ep.token_hash <> '' AND ep.token_hash = encode(digest($1, 'sha256'), 'hex'))
+    OR (ep.token_hash = '' AND ep.token = $1)
+  )
 `
 
 type GetParticipantByTokenRow struct {
@@ -413,6 +640,8 @@ type GetParticipantByTokenRow struct {
 	SeatNo             pgtype.Int4          `json:"seat_no"`
 	DeviceFingerprint  pgtype.Text          `json:"device_fingerprint"`
 	QuestionOrder      []byte               `json:"question_order"`
+	OptionOrder        []byte               `json:"option_order"`
+	QuestionDrawLog    []byte               `json:"question_draw_log"`
 	JoinedAt           pgtype.Timestamptz   `json:"joined_at"`
 	SubmittedAt        pgtype.Timestamptz   `json:"submitted_at"`
 	Score              pgtype.Numeric       `json:"score"`
@@ -437,10 +666,13 @@ type GetParticipantByTokenRow struct {
 	PackageTitle       string               `json:"package_title"`
 	DurationMinutes    int32                `json:"duration_minutes"`
 	RandomizeQuestions bool                 `json:"randomize_questions"`
+	RandomizeOptions   bool                 `json:"randomize_options"`
+	DrawPgCount        int32                `json:"draw_pg_count"`
+	DrawEssayCount     int32                `json:"draw_essay_count"`
 }
 
-func (q *Queries) GetParticipantByToken(ctx context.Context, token string) (GetParticipantByTokenRow, error) {
-	row := q.db.QueryRow(ctx, getParticipantByToken, token)
+func (q *Queries) GetParticipantByToken(ctx context.Context, digest string) (GetParticipantByTokenRow, error) {
+	row := q.db.QueryRow(ctx, getParticipantByToken, digest)
 	var i GetParticipantByTokenRow
 	err := row.Scan(
 		&i.ID,
@@ -451,6 +683,8 @@ func (q *Queries) GetParticipantByToken(ctx context.Context, token string) (GetP
 		&i.SeatNo,
 		&i.DeviceFingerprint,
 		&i.QuestionOrder,
+		&i.OptionOrder,
+		&i.QuestionDrawLog,
 		&i.JoinedAt,
 		&i.SubmittedAt,
 		&i.Score,
@@ -475,6 +709,9 @@ func (q *Queries) GetParticipantByToken(ctx context.Context, token string) (GetP
 		&i.PackageTitle,
 		&i.DurationMinutes,
 		&i.RandomizeQuestions,
+		&i.RandomizeOptions,
+		&i.DrawPgCount,
+		&i.DrawEssayCount,
 	)
 	return i, err
 }
@@ -1502,6 +1739,7 @@ func (q *Queries) ListCbtExamParticipantsByTeacher(ctx context.Context, arg List
 const listCbtExamSessions = `-- name: ListCbtExamSessions :many
 SELECT
   s.id, s.package_id, p.title AS package_title,
+  p.locked_at AS package_locked_at, p.snapshot_version AS package_snapshot_version,
   s.class_id, s.event_id,
   COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
   s.scope_type, s.scope_ref, s.mix_policy, s.assignment_mode, s.allow_cross_grade, s.is_special_event,
@@ -1550,6 +1788,8 @@ type ListCbtExamSessionsRow struct {
 	ID                         pgtype.UUID          `json:"id"`
 	PackageID                  pgtype.UUID          `json:"package_id"`
 	PackageTitle               string               `json:"package_title"`
+	PackageLockedAt            pgtype.Timestamptz   `json:"package_locked_at"`
+	PackageSnapshotVersion     int32                `json:"package_snapshot_version"`
 	ClassID                    pgtype.UUID          `json:"class_id"`
 	EventID                    pgtype.UUID          `json:"event_id"`
 	ClassName                  string               `json:"class_name"`
@@ -1589,6 +1829,8 @@ func (q *Queries) ListCbtExamSessions(ctx context.Context) ([]ListCbtExamSession
 			&i.ID,
 			&i.PackageID,
 			&i.PackageTitle,
+			&i.PackageLockedAt,
+			&i.PackageSnapshotVersion,
 			&i.ClassID,
 			&i.EventID,
 			&i.ClassName,
@@ -1627,6 +1869,7 @@ func (q *Queries) ListCbtExamSessions(ctx context.Context) ([]ListCbtExamSession
 const listCbtExamSessionsByTeacher = `-- name: ListCbtExamSessionsByTeacher :many
 SELECT DISTINCT
   s.id, s.package_id, p.title AS package_title,
+  p.locked_at AS package_locked_at, p.snapshot_version AS package_snapshot_version,
   s.class_id, s.event_id,
   COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
   s.scope_type, s.scope_ref, s.mix_policy, s.assignment_mode, s.allow_cross_grade, s.is_special_event,
@@ -1698,6 +1941,8 @@ type ListCbtExamSessionsByTeacherRow struct {
 	ID                         pgtype.UUID          `json:"id"`
 	PackageID                  pgtype.UUID          `json:"package_id"`
 	PackageTitle               string               `json:"package_title"`
+	PackageLockedAt            pgtype.Timestamptz   `json:"package_locked_at"`
+	PackageSnapshotVersion     int32                `json:"package_snapshot_version"`
 	ClassID                    pgtype.UUID          `json:"class_id"`
 	EventID                    pgtype.UUID          `json:"event_id"`
 	ClassName                  string               `json:"class_name"`
@@ -1737,6 +1982,8 @@ func (q *Queries) ListCbtExamSessionsByTeacher(ctx context.Context, teacherEmplo
 			&i.ID,
 			&i.PackageID,
 			&i.PackageTitle,
+			&i.PackageLockedAt,
+			&i.PackageSnapshotVersion,
 			&i.ClassID,
 			&i.EventID,
 			&i.ClassName,
@@ -1761,6 +2008,122 @@ func (q *Queries) ListCbtExamSessionsByTeacher(ctx context.Context, teacherEmplo
 			&i.MissingSeatCount,
 			&i.RoomsWithoutProctor,
 			&i.ProctorAssignmentCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCbtSessionRemedialCandidates = `-- name: ListCbtSessionRemedialCandidates :many
+WITH items AS (
+  SELECT
+    ses.id AS session_id,
+    snap.question_id,
+    COALESCE(snap.metadata->>'kd_ref', '') AS kd_ref,
+    COALESCE(snap.metadata->>'indicator_ref', '') AS indicator_ref,
+    COALESCE(snap.metadata->>'material_topic', '') AS material_topic
+  FROM cbt_exam_sessions ses
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_question_snapshots snap
+    ON snap.package_id = ses.package_id
+   AND snap.snapshot_version = p.snapshot_version
+  WHERE ses.id = $1
+    AND p.snapshot_version > 0
+  UNION ALL
+  SELECT
+    ses.id AS session_id,
+    q.id AS question_id,
+    q.kd_ref,
+    q.indicator_ref,
+    q.material_topic
+  FROM cbt_exam_sessions ses
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  WHERE ses.id = $1
+    AND NOT EXISTS (
+      SELECT 1 FROM cbt_package_question_snapshots snap
+      WHERE snap.package_id = ses.package_id
+        AND snap.snapshot_version = p.snapshot_version
+        AND p.snapshot_version > 0
+    )
+)
+SELECT
+  ep.id AS participant_id,
+  ep.student_id,
+  st.nis,
+  st.nama,
+  COALESCE(c.code, '') AS class_code,
+  COALESCE(c.name, '') AS class_name,
+  ep.score,
+  COUNT(items.question_id)::int AS question_count,
+  COUNT(sa.id) FILTER (WHERE sa.is_correct IS FALSE)::int AS incorrect_count,
+  COUNT(sa.id) FILTER (WHERE sa.answer IS NULL OR btrim(sa.answer) = '')::int AS blank_count,
+  to_jsonb(COALESCE(array_agg(DISTINCT NULLIF(items.kd_ref, '')) FILTER (WHERE sa.is_correct IS FALSE AND NULLIF(items.kd_ref, '') IS NOT NULL), ARRAY[]::text[])) AS kd_gaps,
+  to_jsonb(COALESCE(array_agg(DISTINCT NULLIF(items.indicator_ref, '')) FILTER (WHERE sa.is_correct IS FALSE AND NULLIF(items.indicator_ref, '') IS NOT NULL), ARRAY[]::text[])) AS indicator_gaps,
+  to_jsonb(COALESCE(array_agg(DISTINCT NULLIF(items.material_topic, '')) FILTER (WHERE sa.is_correct IS FALSE AND NULLIF(items.material_topic, '') IS NOT NULL), ARRAY[]::text[])) AS material_gaps
+FROM cbt_exam_participants ep
+JOIN students st ON st.id = ep.student_id
+LEFT JOIN school_classes c ON c.id = st.class_id
+JOIN items ON items.session_id = ep.session_id
+LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = items.question_id
+WHERE ep.session_id = $1
+  AND ep.submitted_at IS NOT NULL
+  AND ep.score IS NOT NULL
+  AND ep.score < $2::numeric
+GROUP BY ep.id, st.nis, st.nama, c.code, c.name
+ORDER BY ep.score ASC, st.nama ASC
+`
+
+type ListCbtSessionRemedialCandidatesParams struct {
+	SessionID pgtype.UUID    `json:"session_id"`
+	Threshold pgtype.Numeric `json:"threshold"`
+}
+
+type ListCbtSessionRemedialCandidatesRow struct {
+	ParticipantID  pgtype.UUID    `json:"participant_id"`
+	StudentID      pgtype.UUID    `json:"student_id"`
+	Nis            string         `json:"nis"`
+	Nama           string         `json:"nama"`
+	ClassCode      string         `json:"class_code"`
+	ClassName      string         `json:"class_name"`
+	Score          pgtype.Numeric `json:"score"`
+	QuestionCount  int32          `json:"question_count"`
+	IncorrectCount int32          `json:"incorrect_count"`
+	BlankCount     int32          `json:"blank_count"`
+	KdGaps         []byte         `json:"kd_gaps"`
+	IndicatorGaps  []byte         `json:"indicator_gaps"`
+	MaterialGaps   []byte         `json:"material_gaps"`
+}
+
+func (q *Queries) ListCbtSessionRemedialCandidates(ctx context.Context, arg ListCbtSessionRemedialCandidatesParams) ([]ListCbtSessionRemedialCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listCbtSessionRemedialCandidates, arg.SessionID, arg.Threshold)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtSessionRemedialCandidatesRow{}
+	for rows.Next() {
+		var i ListCbtSessionRemedialCandidatesRow
+		if err := rows.Scan(
+			&i.ParticipantID,
+			&i.StudentID,
+			&i.Nis,
+			&i.Nama,
+			&i.ClassCode,
+			&i.ClassName,
+			&i.Score,
+			&i.QuestionCount,
+			&i.IncorrectCount,
+			&i.BlankCount,
+			&i.KdGaps,
+			&i.IndicatorGaps,
+			&i.MaterialGaps,
 		); err != nil {
 			return nil, err
 		}
@@ -2149,11 +2512,36 @@ SELECT EXISTS(
   SELECT 1
   FROM cbt_exam_participants ep
   JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
-  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
-  JOIN cbt_questions q ON q.id = pq.question_id
   WHERE ep.id = $1
-    AND pq.question_id = $2
-    AND q.status = 'published'
+    AND (
+      EXISTS (
+        SELECT 1
+        FROM cbt_package_question_snapshots snap
+        JOIN cbt_packages p ON p.id = ses.package_id
+        WHERE snap.package_id = ses.package_id
+          AND snap.snapshot_version = p.snapshot_version
+          AND p.snapshot_version > 0
+          AND snap.question_id = $2
+      )
+      OR (
+        NOT EXISTS (
+          SELECT 1
+          FROM cbt_package_question_snapshots snap
+          JOIN cbt_packages p ON p.id = ses.package_id
+          WHERE snap.package_id = ses.package_id
+            AND snap.snapshot_version = p.snapshot_version
+            AND p.snapshot_version > 0
+        )
+        AND EXISTS (
+          SELECT 1
+          FROM cbt_package_questions pq
+          JOIN cbt_questions q ON q.id = pq.question_id
+          WHERE pq.package_id = ses.package_id
+            AND pq.question_id = $2
+            AND q.status = 'published'
+        )
+      )
+    )
 ) AS belongs_to_package
 `
 
@@ -2170,12 +2558,21 @@ func (q *Queries) QuestionBelongsToParticipantPackage(ctx context.Context, arg Q
 }
 
 const regenerateParticipantToken = `-- name: RegenerateParticipantToken :one
+WITH generated AS (
+  SELECT cbt_exam_participants.id, encode(gen_random_bytes(16), 'hex') AS token
+  FROM cbt_exam_participants
+  JOIN cbt_exam_sessions s ON s.id = cbt_exam_participants.session_id
+  WHERE cbt_exam_participants.id = $1
+    AND s.status IN ('draft', 'scheduled')
+)
 UPDATE cbt_exam_participants
-SET token = encode(gen_random_bytes(16), 'hex')
-FROM cbt_exam_sessions s
-WHERE cbt_exam_participants.id = $1
-  AND s.id = cbt_exam_participants.session_id
-  AND s.status IN ('draft', 'scheduled')
+SET token = generated.token,
+    token_hash = encode(digest(generated.token, 'sha256'), 'hex'),
+    token_hash_version = 1,
+    token_generated_at = NOW(),
+    token_revoked_at = NULL
+FROM generated
+WHERE cbt_exam_participants.id = generated.id
 RETURNING cbt_exam_participants.id, cbt_exam_participants.token
 `
 
@@ -2210,6 +2607,26 @@ func (q *Queries) ResetParticipantRuntimeAccess(ctx context.Context, id pgtype.U
 	return err
 }
 
+const setParticipantOptionOrderIfEmpty = `-- name: SetParticipantOptionOrderIfEmpty :one
+UPDATE cbt_exam_participants
+SET option_order = $2
+WHERE id = $1
+  AND (option_order IS NULL OR option_order = '{}'::jsonb)
+RETURNING option_order
+`
+
+type SetParticipantOptionOrderIfEmptyParams struct {
+	ID          pgtype.UUID `json:"id"`
+	OptionOrder []byte      `json:"option_order"`
+}
+
+func (q *Queries) SetParticipantOptionOrderIfEmpty(ctx context.Context, arg SetParticipantOptionOrderIfEmptyParams) ([]byte, error) {
+	row := q.db.QueryRow(ctx, setParticipantOptionOrderIfEmpty, arg.ID, arg.OptionOrder)
+	var option_order []byte
+	err := row.Scan(&option_order)
+	return option_order, err
+}
+
 const setParticipantQuestionOrderIfEmpty = `-- name: SetParticipantQuestionOrderIfEmpty :one
 UPDATE cbt_exam_participants
 SET question_order = $2
@@ -2230,6 +2647,41 @@ func (q *Queries) SetParticipantQuestionOrderIfEmpty(ctx context.Context, arg Se
 	return question_order, err
 }
 
+const setParticipantRuntimePlanIfEmpty = `-- name: SetParticipantRuntimePlanIfEmpty :one
+UPDATE cbt_exam_participants
+SET question_order = $2,
+    option_order = $3,
+    question_draw_log = $4
+WHERE id = $1
+  AND (question_order IS NULL OR jsonb_array_length(question_order) = 0)
+RETURNING question_order, option_order, question_draw_log
+`
+
+type SetParticipantRuntimePlanIfEmptyParams struct {
+	ID              pgtype.UUID `json:"id"`
+	QuestionOrder   []byte      `json:"question_order"`
+	OptionOrder     []byte      `json:"option_order"`
+	QuestionDrawLog []byte      `json:"question_draw_log"`
+}
+
+type SetParticipantRuntimePlanIfEmptyRow struct {
+	QuestionOrder   []byte `json:"question_order"`
+	OptionOrder     []byte `json:"option_order"`
+	QuestionDrawLog []byte `json:"question_draw_log"`
+}
+
+func (q *Queries) SetParticipantRuntimePlanIfEmpty(ctx context.Context, arg SetParticipantRuntimePlanIfEmptyParams) (SetParticipantRuntimePlanIfEmptyRow, error) {
+	row := q.db.QueryRow(ctx, setParticipantRuntimePlanIfEmpty,
+		arg.ID,
+		arg.QuestionOrder,
+		arg.OptionOrder,
+		arg.QuestionDrawLog,
+	)
+	var i SetParticipantRuntimePlanIfEmptyRow
+	err := row.Scan(&i.QuestionOrder, &i.OptionOrder, &i.QuestionDrawLog)
+	return i, err
+}
+
 const setParticipantSuspiciousFlag = `-- name: SetParticipantSuspiciousFlag :exec
 UPDATE cbt_exam_participants
 SET suspicious_flag = $2
@@ -2247,22 +2699,45 @@ func (q *Queries) SetParticipantSuspiciousFlag(ctx context.Context, arg SetParti
 }
 
 const submitParticipantExam = `-- name: SubmitParticipantExam :one
-WITH score_parts AS (
+WITH items AS (
+  SELECT ep.id AS participant_id, snap.question_id, snap.question_type, snap.points
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_question_snapshots snap
+    ON snap.package_id = ses.package_id
+   AND snap.snapshot_version = p.snapshot_version
+  WHERE ep.id = $1
+    AND p.snapshot_version > 0
+  UNION ALL
+  SELECT ep.id AS participant_id, q.id AS question_id, q.question_type, pq.points
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  WHERE ep.id = $1
+    AND NOT EXISTS (
+      SELECT 1 FROM cbt_package_question_snapshots snap
+      WHERE snap.package_id = ses.package_id
+        AND snap.snapshot_version = p.snapshot_version
+        AND p.snapshot_version > 0
+    )
+),
+score_parts AS (
   SELECT
     ep.id AS participant_id,
     COALESCE(SUM(
       CASE
-        WHEN q.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * pq.points
-        WHEN q.question_type <> 'essay' AND sa.is_correct IS TRUE THEN pq.points
+        WHEN items.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * items.points
+        WHEN items.question_type <> 'essay' AND sa.is_correct IS TRUE THEN items.points
         ELSE 0
       END
     ), 0)::numeric AS earned_points,
-    COALESCE(SUM(pq.points), 0)::numeric AS total_points
+    COALESCE(SUM(items.points), 0)::numeric AS total_points
   FROM cbt_exam_participants ep
-  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
-  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
-  JOIN cbt_questions q ON q.id = pq.question_id
-  LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
+  JOIN items ON items.participant_id = ep.id
+  LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = items.question_id
   WHERE ep.id = $1
   GROUP BY ep.id
 )
@@ -2329,46 +2804,78 @@ func (q *Queries) UnlockParticipantAntiCheat(ctx context.Context, id pgtype.UUID
 }
 
 const updateAnswerCorrectness = `-- name: UpdateAnswerCorrectness :exec
+WITH items AS (
+  SELECT
+    ses.id AS session_id,
+    snap.question_id,
+    snap.question_type,
+    snap.answer_key
+  FROM cbt_exam_sessions ses
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_question_snapshots snap
+    ON snap.package_id = ses.package_id
+   AND snap.snapshot_version = p.snapshot_version
+  WHERE ses.id = $1
+    AND p.snapshot_version > 0
+  UNION ALL
+  SELECT
+    ses.id AS session_id,
+    q.id AS question_id,
+    q.question_type,
+    q.answer_key
+  FROM cbt_exam_sessions ses
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  WHERE ses.id = $1
+    AND NOT EXISTS (
+      SELECT 1
+      FROM cbt_package_question_snapshots snap
+      WHERE snap.package_id = ses.package_id
+        AND snap.snapshot_version = p.snapshot_version
+        AND p.snapshot_version > 0
+    )
+)
 UPDATE cbt_student_answers sa
 SET is_correct = CASE
   -- essay: skip, scored manually
-  WHEN q.question_type = 'essay' THEN NULL
+  WHEN items.question_type = 'essay' THEN NULL
   -- multiple_answer: answer is comma-separated labels, must match answer_key exactly after sorting
-  WHEN q.question_type = 'multiple_answer' THEN
+  WHEN items.question_type = 'multiple_answer' THEN
     (array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(sa.answer, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ',') =
-     array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(q.answer_key, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ','))
+     array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(items.answer_key, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ','))
   -- matching: answer is semicolon-separated left=right pairs, all pairs must match.
-  WHEN q.question_type = 'matching' THEN
+  WHEN items.question_type = 'matching' THEN
     (array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(sa.answer, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';') =
-     array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(q.answer_key, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';'))
+     array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(items.answer_key, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';'))
   -- ordering: answer is comma-separated labels and must match the exact sequence.
-  WHEN q.question_type = 'ordering' THEN
+  WHEN items.question_type = 'ordering' THEN
     (array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(sa.answer, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ',') =
-     array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(q.answer_key, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ','))
+     array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(items.answer_key, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ','))
   -- true_false: canonical Web Admin labels are A=Benar and B=Salah.
   -- Legacy mobile snapshots may still contain true/false from the earlier fallback.
-  WHEN q.question_type = 'true_false' THEN
+  WHEN items.question_type = 'true_false' THEN
     (CASE
       WHEN lower(btrim(sa.answer)) = 'true' THEN 'A'
       WHEN lower(btrim(sa.answer)) = 'false' THEN 'B'
       ELSE upper(btrim(sa.answer))
-    END = upper(btrim(q.answer_key)))
+    END = upper(btrim(items.answer_key)))
   -- agree_disagree: canonical Web Admin labels are A=Setuju and B=Tidak Setuju.
-  WHEN q.question_type = 'agree_disagree' THEN upper(btrim(sa.answer)) = upper(btrim(q.answer_key))
+  WHEN items.question_type = 'agree_disagree' THEN upper(btrim(sa.answer)) = upper(btrim(items.answer_key))
   -- short_answer: answer_key may contain accepted aliases separated by "|";
   -- normalize case, repeated whitespace, and non-breaking spaces before matching.
-  WHEN q.question_type = 'short_answer' THEN EXISTS (
+  WHEN items.question_type = 'short_answer' THEN EXISTS (
     SELECT 1
-    FROM unnest(string_to_array(q.answer_key, '|')) AS accepted(answer)
+    FROM unnest(string_to_array(items.answer_key, '|')) AS accepted(answer)
     WHERE lower(regexp_replace(btrim(replace(accepted.answer, chr(160), ' ')), '[[:space:]]+', ' ', 'g')) =
           lower(regexp_replace(btrim(replace(sa.answer, chr(160), ' ')), '[[:space:]]+', ' ', 'g'))
   )
   -- all others: exact string match
-  ELSE (sa.answer = q.answer_key)
+  ELSE (sa.answer = items.answer_key)
 END
-FROM cbt_questions q
-WHERE sa.question_id = q.id
-  AND q.question_type <> 'essay'
+FROM items
+WHERE sa.question_id = items.question_id
+  AND items.question_type <> 'essay'
   AND sa.manual_score IS NULL
   AND sa.participant_id IN (
     SELECT id FROM cbt_exam_participants WHERE session_id = $1
@@ -2456,42 +2963,76 @@ func (q *Queries) UpdateCbtExamSessionStatus(ctx context.Context, arg UpdateCbtE
 }
 
 const updateParticipantAnswerCorrectness = `-- name: UpdateParticipantAnswerCorrectness :exec
+WITH items AS (
+  SELECT
+    ep.id AS participant_id,
+    snap.question_id,
+    snap.question_type,
+    snap.answer_key
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_question_snapshots snap
+    ON snap.package_id = ses.package_id
+   AND snap.snapshot_version = p.snapshot_version
+  WHERE ep.id = $1
+    AND p.snapshot_version > 0
+  UNION ALL
+  SELECT
+    ep.id AS participant_id,
+    q.id AS question_id,
+    q.question_type,
+    q.answer_key
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  WHERE ep.id = $1
+    AND NOT EXISTS (
+      SELECT 1
+      FROM cbt_package_question_snapshots snap
+      WHERE snap.package_id = ses.package_id
+        AND snap.snapshot_version = p.snapshot_version
+        AND p.snapshot_version > 0
+    )
+)
 UPDATE cbt_student_answers sa
 SET is_correct = CASE
-  WHEN q.question_type = 'essay' THEN NULL
-  WHEN q.question_type = 'multiple_answer' THEN
+  WHEN items.question_type = 'essay' THEN NULL
+  WHEN items.question_type = 'multiple_answer' THEN
     (array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(sa.answer, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ',') =
-     array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(q.answer_key, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ','))
-  WHEN q.question_type = 'matching' THEN
+     array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(items.answer_key, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ','))
+  WHEN items.question_type = 'matching' THEN
     (array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(sa.answer, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';') =
-     array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(q.answer_key, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';'))
-  WHEN q.question_type = 'ordering' THEN
+     array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(items.answer_key, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';'))
+  WHEN items.question_type = 'ordering' THEN
     (array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(sa.answer, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ',') =
-     array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(q.answer_key, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ','))
-  WHEN q.question_type = 'true_false' THEN
+     array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(items.answer_key, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ','))
+  WHEN items.question_type = 'true_false' THEN
     (CASE
       WHEN lower(btrim(sa.answer)) = 'true' THEN 'A'
       WHEN lower(btrim(sa.answer)) = 'false' THEN 'B'
       ELSE upper(btrim(sa.answer))
-    END = upper(btrim(q.answer_key)))
-  WHEN q.question_type = 'agree_disagree' THEN upper(btrim(sa.answer)) = upper(btrim(q.answer_key))
-  WHEN q.question_type = 'short_answer' THEN EXISTS (
+    END = upper(btrim(items.answer_key)))
+  WHEN items.question_type = 'agree_disagree' THEN upper(btrim(sa.answer)) = upper(btrim(items.answer_key))
+  WHEN items.question_type = 'short_answer' THEN EXISTS (
     SELECT 1
-    FROM unnest(string_to_array(q.answer_key, '|')) AS accepted(answer)
+    FROM unnest(string_to_array(items.answer_key, '|')) AS accepted(answer)
     WHERE lower(regexp_replace(btrim(replace(accepted.answer, chr(160), ' ')), '[[:space:]]+', ' ', 'g')) =
           lower(regexp_replace(btrim(replace(sa.answer, chr(160), ' ')), '[[:space:]]+', ' ', 'g'))
   )
-  ELSE (sa.answer = q.answer_key)
+  ELSE (sa.answer = items.answer_key)
 END
-FROM cbt_questions q
-WHERE sa.question_id = q.id
-  AND q.question_type <> 'essay'
+FROM items
+WHERE sa.question_id = items.question_id
+  AND items.question_type <> 'essay'
   AND sa.manual_score IS NULL
-  AND sa.participant_id = $1
+  AND sa.participant_id = items.participant_id
 `
 
-func (q *Queries) UpdateParticipantAnswerCorrectness(ctx context.Context, participantID pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, updateParticipantAnswerCorrectness, participantID)
+func (q *Queries) UpdateParticipantAnswerCorrectness(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, updateParticipantAnswerCorrectness, id)
 	return err
 }
 
@@ -2535,22 +3076,43 @@ func (q *Queries) UpdateParticipantLogin(ctx context.Context, arg UpdateParticip
 }
 
 const updateParticipantScores = `-- name: UpdateParticipantScores :exec
-WITH score_parts AS (
+WITH items AS (
+  SELECT ses.id AS session_id, snap.question_id, snap.question_type, snap.points
+  FROM cbt_exam_sessions ses
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_question_snapshots snap
+    ON snap.package_id = ses.package_id
+   AND snap.snapshot_version = p.snapshot_version
+  WHERE ses.id = $1
+    AND p.snapshot_version > 0
+  UNION ALL
+  SELECT ses.id AS session_id, q.id AS question_id, q.question_type, pq.points
+  FROM cbt_exam_sessions ses
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  WHERE ses.id = $1
+    AND NOT EXISTS (
+      SELECT 1 FROM cbt_package_question_snapshots snap
+      WHERE snap.package_id = ses.package_id
+        AND snap.snapshot_version = p.snapshot_version
+        AND p.snapshot_version > 0
+    )
+),
+score_parts AS (
   SELECT
     ep.id AS participant_id,
     COALESCE(SUM(
       CASE
-        WHEN q.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * pq.points
-        WHEN q.question_type <> 'essay' AND sa.is_correct IS TRUE THEN pq.points
+        WHEN items.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * items.points
+        WHEN items.question_type <> 'essay' AND sa.is_correct IS TRUE THEN items.points
         ELSE 0
       END
     ), 0)::numeric AS earned_points,
-    COALESCE(SUM(pq.points), 0)::numeric AS total_points
+    COALESCE(SUM(items.points), 0)::numeric AS total_points
   FROM cbt_exam_participants ep
-  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
-  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
-  JOIN cbt_questions q ON q.id = pq.question_id
-  LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
+  JOIN items ON items.session_id = ep.session_id
+  LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = items.question_id
   WHERE ep.session_id = $1
     AND ep.submitted_at IS NOT NULL
   GROUP BY ep.id
@@ -2564,8 +3126,8 @@ FROM score_parts
 WHERE ep.id = score_parts.participant_id
 `
 
-func (q *Queries) UpdateParticipantScores(ctx context.Context, sessionID pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, updateParticipantScores, sessionID)
+func (q *Queries) UpdateParticipantScores(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, updateParticipantScores, id)
 	return err
 }
 
