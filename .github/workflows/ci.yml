@@ -9,6 +9,9 @@ on:
       - 'feature/**'
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   security:
     runs-on: ubuntu-latest
@@ -17,8 +20,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Secret scan
         run: python3 scripts/scan-secrets.py
+      - name: PM2 config validation
+        run: node scripts/validate-pm2-configs.mjs
+      - name: Dependency audit
+        run: npm audit --audit-level=high --workspaces --include-workspace-root=false
 
   backend:
     runs-on: ubuntu-latest
@@ -30,8 +40,16 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: services/core-api/go.mod
+      - name: Install sqlc
+        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0
+      - name: Generate sqlc
+        run: $(go env GOPATH)/bin/sqlc generate -f db/sqlc.yaml
+      - name: Verify generated repository code
+        run: git diff --exit-code -- internal/repository/postgres
       - name: Go test
         run: go test ./...
+      - name: Go build
+        run: go build -o /tmp/core-api-ci ./cmd/api
 
   web:
     runs-on: ubuntu-latest
@@ -51,6 +69,8 @@ jobs:
         run: npm run check
       - name: Unit tests
         run: npm run test:unit
+      - name: Build
+        run: npm run build
 
   worker:
     runs-on: ubuntu-latest
@@ -67,4 +87,8 @@ jobs:
       - name: Install
         run: npm ci
       - name: Typecheck
-        run: ./node_modules/.bin/tsc --noEmit
+        run: npm run check
+      - name: Tests
+        run: npm run test --if-present
+      - name: Build
+        run: npm run build --if-present

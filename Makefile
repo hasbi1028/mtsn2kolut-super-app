@@ -50,7 +50,7 @@ dev-backend:
 # ── Check / Test ─────────────────────────────────────────────────────────────
 
 .PHONY: check check-web check-web-bun check-worker check-worker-bun check-mobile test-web test-web-bun test-worker test-worker-bun test-mobile test-backend coverage-backend-unit coverage-backend-unit-88 vet-backend audit-web lint-backend lint ci-check
-.PHONY: ops-health ops-health-backend ops-health-frontend ops-health-worker ops-backup
+.PHONY: ops-health ops-health-backend ops-health-frontend ops-health-worker ops-backup ops-validate-pm2 ops-runtime-retention
 
 check-web:
 	cd $(WEB_DIR) && npm run check
@@ -144,7 +144,7 @@ start-worker:
 start-backend:
 	$(BACKEND_DIR)/bin/api
 
-# ── PM2 (via ecosystem.config.cjs) ──────────────────────────────────────────
+# ── PM2 (deploy/pm2 is production source of truth) ──────────────────────────
 
 .PHONY: pm2-start pm2-stop pm2-restart pm2-logs pm2-status
 .PHONY: pm2-start-backend pm2-start-web pm2-start-worker
@@ -240,6 +240,12 @@ ops-health-worker:
 ops-backup:
 	./deploy/backup-postgresql.sh
 
+ops-validate-pm2:
+	node scripts/validate-pm2-configs.mjs
+
+ops-runtime-retention:
+	./deploy/scripts/runtime-artifact-retention.sh
+
 # ── Clean ────────────────────────────────────────────────────────────────────
 
 .PHONY: clean clean-build
@@ -290,6 +296,8 @@ help:
 	@echo "  db-migrate-local       apply migrations to explicit local dev database"
 	@echo "  ops-health             health check backend + frontend + worker"
 	@echo "  ops-backup             run PostgreSQL backup script"
+	@echo "  ops-validate-pm2       validate deploy/pm2 single source of truth"
+	@echo "  ops-runtime-retention  dry-run runtime/log/binary backup retention"
 	@echo ""
 	@echo "Deploy:"
 	@echo "  pm2-start-backend      start backend-only PM2 config"

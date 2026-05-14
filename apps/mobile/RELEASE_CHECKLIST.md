@@ -162,13 +162,67 @@ Setelah APK lulus quality gate dan build release selesai, publish artifact ke en
 
 ```bash
 cd /home/servermtsn2kolut/mtsn2kolut-super-app
-scripts/publish-mobile-apk.sh --apk apps/mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+APK=apps/mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+SHA="$(sha256sum "$APK" | awk '{print $1}')"
+VERSION_RAW="$(python3 - <<'PY'
+from pathlib import Path
+import re
+text = Path('apps/mobile/pubspec.yaml').read_text()
+print(re.search(r'^version:\s*([^\s#]+)', text, re.M).group(1))
+PY
+)"
+VERSION_NAME="${VERSION_RAW%%+*}"
+VERSION_CODE="${VERSION_RAW#*+}"
+scripts/publish-mobile-apk.sh \
+  --apk "$APK" \
+  --commit "$(git rev-parse --short HEAD)" \
+  --base-url https://mtsn2kolut.sch.id \
+  --channel production \
+  --app-name 'MTsN 2 Kolut CBT Mobile' \
+  --abi arm64-v8a \
+  --version-name "$VERSION_NAME" \
+  --version-code "$VERSION_CODE" \
+  --expected-sha256 "$SHA" \
+  --notes 'Flutter analyze lulus|Flutter test lulus|Uji perangkat operator lulus' \
+  --dry-run
+scripts/publish-mobile-apk.sh \
+  --apk "$APK" \
+  --commit "$(git rev-parse --short HEAD)" \
+  --base-url https://mtsn2kolut.sch.id \
+  --channel production \
+  --app-name 'MTsN 2 Kolut CBT Mobile' \
+  --abi arm64-v8a \
+  --version-name "$VERSION_NAME" \
+  --version-code "$VERSION_CODE" \
+  --expected-sha256 "$SHA" \
+  --notes 'Flutter analyze lulus|Flutter test lulus|Uji perangkat operator lulus'
 ```
 
-Jika memakai APK bernama khusus:
+Jika memakai APK bernama khusus, gunakan path APK tersebut tetapi tetap isi commit, metadata, dan SHA-256 eksplisit:
 
 ```bash
-scripts/publish-mobile-apk.sh --apk apps/mobile/build/app/outputs/flutter-apk/mtsn2kolut-mobile-b6c762d-anti-cheat-phase23-arm64-v8a-release.apk --commit b6c762d
+APK=apps/mobile/build/app/outputs/flutter-apk/mtsn2kolut-mobile-b6c762d-anti-cheat-phase23-arm64-v8a-release.apk
+SHA="$(sha256sum "$APK" | awk '{print $1}')"
+VERSION_RAW="$(python3 - <<'PY'
+from pathlib import Path
+import re
+text = Path('apps/mobile/pubspec.yaml').read_text()
+print(re.search(r'^version:\s*([^\s#]+)', text, re.M).group(1))
+PY
+)"
+VERSION_NAME="${VERSION_RAW%%+*}"
+VERSION_CODE="${VERSION_RAW#*+}"
+scripts/publish-mobile-apk.sh \
+  --apk "$APK" \
+  --commit b6c762d \
+  --base-url https://mtsn2kolut.sch.id \
+  --channel production \
+  --app-name 'MTsN 2 Kolut CBT Mobile' \
+  --abi arm64-v8a \
+  --version-name "$VERSION_NAME" \
+  --version-code "$VERSION_CODE" \
+  --expected-sha256 "$SHA" \
+  --notes 'Flutter analyze lulus|Flutter test lulus|Uji perangkat operator lulus'
 ```
 
 Script ini hanya mengubah artifact di `/home/servermtsn2kolut/releases/mtsn2kolut-mobile/`; tidak rebuild web-admin, tidak restart PM2, dan tidak menjalankan migration.

@@ -56,9 +56,15 @@ Worker VPS:
 - `.env` tersedia di `services/pusaka-worker/.env`
 - `WORKER_API_KEY` wajib untuk backend non-lokal dan harus sama dengan backend
 - `WORKER_API_TIMEOUT_MS` diset eksplisit bila default `10000` ms tidak sesuai kondisi jaringan
-- `WORKER_LOG_PATH` dan `SCREENSHOT_DIR` mengarah ke path non-public dengan permission/retention terbatas
+- `WORKER_LOG_PATH` dan `SCREENSHOT_DIR` mengarah ke path non-public dengan permission/retention terbatas; default PM2 Sprint 5 berada di `/home/servermtsn2kolut/logs/mtsn2kolut-super-app`
 
 ## Command per VPS
+
+Preflight PM2 config dari root repo, tanpa restart:
+
+```bash
+node scripts/validate-pm2-configs.mjs
+```
 
 VPS backend:
 
