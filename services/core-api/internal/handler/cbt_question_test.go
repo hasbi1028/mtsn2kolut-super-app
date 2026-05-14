@@ -101,6 +101,12 @@ type fakeCbtQuestionService struct {
 	rejectRow   db.CbtQuestion
 	rejectErr   error
 
+	returnRevisionID    pgtype.UUID
+	returnRevisionUser  string
+	returnRevisionNotes string
+	returnRevisionRow   db.CbtQuestion
+	returnRevisionErr   error
+
 	publishID   pgtype.UUID
 	publishUser string
 	publishRow  db.CbtQuestion
@@ -266,6 +272,16 @@ func (f *fakeCbtQuestionService) Reject(_ context.Context, id pgtype.UUID, actor
 		return db.CbtQuestion{}, f.rejectErr
 	}
 	return f.rejectRow, nil
+}
+
+func (f *fakeCbtQuestionService) ReturnToRevision(_ context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
+	f.returnRevisionID = id
+	f.returnRevisionUser = actor.Username
+	f.returnRevisionNotes = reviewNotes
+	if f.returnRevisionErr != nil {
+		return db.CbtQuestion{}, f.returnRevisionErr
+	}
+	return f.returnRevisionRow, nil
 }
 
 func (f *fakeCbtQuestionService) Publish(_ context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.CbtQuestion, error) {

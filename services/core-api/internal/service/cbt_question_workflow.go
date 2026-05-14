@@ -162,6 +162,39 @@ func (s *CbtQuestion) Reject(ctx context.Context, id pgtype.UUID, actor CbtQuest
 	return s.updateWithAudit(ctx, input, "reject", reviewNotes, map[string]any{"workflow_status": "rejected"})
 }
 
+func (s *CbtQuestion) ReturnToRevision(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
+	actor = normalizeCbtQuestionActor(actor)
+	if !actor.IsAdmin() && !actor.HasPermission("bank_soal.review") && !actor.HasPermission("bank_soal.publish") {
+		return db.CbtQuestion{}, domain.ErrForbidden
+	}
+	current, err := s.q.GetCbtQuestion(ctx, id)
+	if err != nil {
+		return db.CbtQuestion{}, normalizeNoRows(err)
+	}
+	if current.WorkflowStatus != "approved" {
+		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal approved yang dapat dikembalikan ke revisi", domain.ErrConflict)
+	}
+	if current.Status != "" && current.Status != db.CbtQuestionStatusEnumDraft {
+		return db.CbtQuestion{}, fmt.Errorf("%w: soal yang sudah terbit harus dibuat sebagai revisi baru", domain.ErrConflict)
+	}
+	if questionUsageLocked(current.PackageCount, current.AnswerCount) {
+		return db.CbtQuestion{}, fmt.Errorf("%w: soal sudah masuk paket ujian atau memiliki jawaban siswa. Buat revisi baru agar riwayat ujian tetap aman", domain.ErrConflict)
+	}
+	input := questionInputFromCurrent(current, actor.Username)
+	// Returning an approved question is a reviewer/publisher workflow operation, not a
+	// normal author edit. Use an internal admin-scoped actor for the shared update path
+	// while preserving the real username in audit fields.
+	input.Actor = CbtQuestionActor{UserID: actor.UserID, Username: actor.Username, Roles: []string{"admin"}, Permissions: actor.Permissions}
+	input.WorkflowStatus = "rejected"
+	input.ReviewerUsername = actor.Username
+	input.ApproverUsername = ""
+	input.ReviewNotes = mergeNotes(current.ReviewNotes, reviewNotes)
+	if strings.TrimSpace(input.ReviewNotes) == "" {
+		input.ReviewNotes = "Dikembalikan ke revisi setelah disetujui."
+	}
+	return s.updateWithAudit(ctx, input, "return_revision", reviewNotes, map[string]any{"workflow_status": "rejected"})
+}
+
 func (s *CbtQuestion) Publish(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor) (db.CbtQuestion, error) {
 	actor = normalizeCbtQuestionActor(actor)
 	if !actor.CanPublishBankSoal() {

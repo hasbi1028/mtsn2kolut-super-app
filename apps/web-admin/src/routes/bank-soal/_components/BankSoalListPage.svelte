@@ -289,6 +289,8 @@
 	let questionsPromise = $state<Promise<BankSoalOverview> | null>(null);
 	let refreshing = $state(false);
 	let deletingQuestionId = $state<string | null>(null);
+	let revisingQuestionId = $state<string | null>(null);
+	let revisionError = $state('');
 	let deleteError = $state('');
 	let requestId = 0;
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -810,6 +812,68 @@
 		return (question.workflow_status ?? 'draft') === 'draft' && (question.status ?? 'draft') === 'draft' && !questionUsageLocked(question);
 	}
 
+	function canReturnToRevision(question: Question): boolean {
+		return (
+			canReview &&
+			question.workflow_status === 'approved' &&
+			(question.status ?? 'draft') === 'draft' &&
+			!questionUsageLocked(question)
+		);
+	}
+
+	function canCreateRevision(question: Question): boolean {
+		return (
+			canCreate &&
+			!isQuickEditable(question) &&
+			(question.workflow_status === 'approved' || question.status === 'published' || questionUsageLocked(question))
+		);
+	}
+
+	function revisionDefaultNote(question: Question): string {
+		if (question.status === 'published' || questionUsageLocked(question)) return 'Membuat versi revisi baru agar riwayat paket/ujian lama tetap aman.';
+		return 'Dikembalikan ke revisi untuk perbaikan setelah review.';
+	}
+
+	async function returnToRevision(question: Question) {
+		if (!canReturnToRevision(question) || revisingQuestionId) return;
+		const notes = window.prompt('Catatan revisi untuk soal ini:', revisionDefaultNote(question));
+		if (notes === null) return;
+		revisingQuestionId = question.id;
+		revisionError = '';
+		try {
+			await fetch(`/api/bank-soal/questions/${encodeURIComponent(question.id)}/workflow`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action: 'return_revision', notes })
+			}).then((response) => readClientJson<Question>(response));
+			load(currentPage, true);
+		} catch (error) {
+			revisionError = error instanceof Error ? error.message : 'Soal belum dapat dikembalikan ke revisi';
+		} finally {
+			revisingQuestionId = null;
+		}
+	}
+
+	async function createRevision(question: Question) {
+		if (!canCreateRevision(question) || revisingQuestionId) return;
+		const notes = window.prompt('Catatan untuk draft revisi baru:', revisionDefaultNote(question));
+		if (notes === null) return;
+		revisingQuestionId = question.id;
+		revisionError = '';
+		try {
+			const row = await fetch(`/api/bank-soal/questions/${encodeURIComponent(question.id)}/revision`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ notes })
+			}).then((response) => readClientJson<Question>(response));
+			window.location.href = questionHref(row);
+		} catch (error) {
+			revisionError = error instanceof Error ? error.message : 'Draft revisi baru belum dapat dibuat';
+		} finally {
+			revisingQuestionId = null;
+		}
+	}
+
 	async function deleteQuestion(question: Question) {
 		if (!canDelete || !isSafeDeletable(question) || deletingQuestionId) return;
 		const code = compactText(question.code, 'tanpa kode');
@@ -1250,9 +1314,9 @@
 			{@const overview = value as BankSoalOverview}
 			{@const currentQuestions = overview.questions}
 			<section class="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-				{#if deleteError}
+				{#if deleteError || revisionError}
 					<div class="border-b border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-						{deleteError}
+						{deleteError || revisionError}
 					</div>
 				{/if}
 				<div class="flex flex-col gap-2 border-b border-border p-4 md:flex-row md:items-center md:justify-between">
@@ -1370,6 +1434,30 @@
 														Lihat
 													{/if}
 												</Button>
+												{#if canReturnToRevision(question)}
+													<Button
+														variant="outline"
+														size="sm"
+														class="border-warning/30 text-warning hover:bg-warning/10"
+														disabled={revisingQuestionId === question.id}
+														onclick={() => void returnToRevision(question)}
+													>
+														<HistoryIcon class="size-3.5" />
+														{revisingQuestionId === question.id ? 'Memproses' : 'Kembalikan'}
+													</Button>
+												{/if}
+												{#if canCreateRevision(question)}
+													<Button
+														variant="outline"
+														size="sm"
+														class="border-primary/20 text-primary hover:bg-primary/10"
+														disabled={revisingQuestionId === question.id}
+														onclick={() => void createRevision(question)}
+													>
+														<SparklesIcon class="size-3.5" />
+														{revisingQuestionId === question.id ? 'Membuat' : 'Revisi Baru'}
+													</Button>
+												{/if}
 												{#if canDelete && isSafeDeletable(question)}
 													<Button
 														variant="outline"
@@ -1437,6 +1525,28 @@
 											Lihat Soal
 										{/if}
 									</Button>
+									{#if canReturnToRevision(question)}
+										<Button
+											variant="outline"
+											class="w-full border-warning/30 text-warning hover:bg-warning/10"
+											disabled={revisingQuestionId === question.id}
+											onclick={() => void returnToRevision(question)}
+										>
+											<HistoryIcon class="size-4" />
+											{revisingQuestionId === question.id ? 'Memproses' : 'Kembalikan ke Revisi'}
+										</Button>
+									{/if}
+									{#if canCreateRevision(question)}
+										<Button
+											variant="outline"
+											class="w-full border-primary/20 text-primary hover:bg-primary/10"
+											disabled={revisingQuestionId === question.id}
+											onclick={() => void createRevision(question)}
+										>
+											<SparklesIcon class="size-4" />
+											{revisingQuestionId === question.id ? 'Membuat' : 'Buat Revisi Baru'}
+										</Button>
+									{/if}
 									{#if canDelete && isSafeDeletable(question)}
 										<Button
 											variant="outline"

@@ -138,6 +138,21 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 			"review_notes":    body.Notes,
 		})
 		api.OK(w, serializeQuestionModel(row))
+	case "return_revision":
+		if !hasAnyPermission(r, "bank_soal.review", "bank_soal.publish") && !hasAnyRole(r, "admin") {
+			api.Forbidden(w)
+			return
+		}
+		row, err := h.svc.ReturnToRevision(r.Context(), id, actor, body.Notes)
+		if err != nil {
+			writeClientError(w, err, "Aksi workflow soal CBT tidak valid")
+			return
+		}
+		cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_RETURN_REVISION", "cbt_question", pgUUIDString(row.ID), map[string]any{
+			"workflow_status": row.WorkflowStatus,
+			"review_notes":    body.Notes,
+		})
+		api.OK(w, serializeQuestionModel(row))
 	case "publish":
 		if !hasAnyPermission(r, "bank_soal.publish") && !hasAnyRole(r, "admin") {
 			api.Forbidden(w)

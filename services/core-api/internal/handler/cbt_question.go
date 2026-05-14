@@ -35,6 +35,7 @@ type cbtQuestionService interface {
 	SubmitReview(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error)
 	Approve(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error)
 	Reject(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error)
+	ReturnToRevision(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error)
 	Publish(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.CbtQuestion, error)
 	Archive(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.CbtQuestion, error)
 	DuplicateAsDraft(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.CbtQuestion, error)
