@@ -63,6 +63,7 @@ type cbtQuestionStore interface {
 	UpdateCbtQuestion(ctx context.Context, arg db.UpdateCbtQuestionParams) (db.CbtQuestion, error)
 	GetNextCbtQuestionVersionNumber(ctx context.Context, versionGroupID pgtype.UUID) (int32, error)
 	MarkCbtQuestionVersionNotLatest(ctx context.Context, id pgtype.UUID) error
+	MarkCbtQuestionVersionGroupNotLatest(ctx context.Context, versionGroupID pgtype.UUID) error
 	DeleteCbtQuestion(ctx context.Context, id pgtype.UUID) error
 	CreateCbtQuestionAuditLog(ctx context.Context, arg db.CreateCbtQuestionAuditLogParams) (db.CbtQuestionAuditLog, error)
 	ListCbtQuestionTimeline(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAuditLog, error)

@@ -410,6 +410,13 @@ SET is_latest_version = FALSE,
     updated_at = NOW()
 WHERE id = $1;
 
+-- name: MarkCbtQuestionVersionGroupNotLatest :exec
+UPDATE cbt_questions
+SET is_latest_version = FALSE,
+    updated_at = NOW()
+WHERE version_group_id = $1
+  AND is_latest_version = TRUE;
+
 -- name: UpdateCbtQuestion :one
 UPDATE cbt_questions
 SET

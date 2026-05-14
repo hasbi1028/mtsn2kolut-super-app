@@ -333,11 +333,11 @@ func (s *CbtQuestion) DuplicateForRevision(ctx context.Context, id pgtype.UUID, 
 			nextVersion = normalizeVersionNumber(current.VersionNumber) + 1
 		}
 		params.VersionNumber = nextVersion
-		row, err := store.CreateCbtQuestion(ctx, params)
-		if err != nil {
+		if err := store.MarkCbtQuestionVersionGroupNotLatest(ctx, versionGroupID); err != nil {
 			return db.CbtQuestion{}, err
 		}
-		if err := store.MarkCbtQuestionVersionNotLatest(ctx, current.ID); err != nil {
+		row, err := store.CreateCbtQuestion(ctx, params)
+		if err != nil {
 			return db.CbtQuestion{}, err
 		}
 		if err := logQuestionAudit(ctx, store, row.ID, actor.Username, "revision", reviewNotes, map[string]any{"source_question_id": cbtQuestionUUIDString(id)}); err != nil {

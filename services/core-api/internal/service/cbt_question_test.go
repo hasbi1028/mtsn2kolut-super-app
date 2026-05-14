@@ -32,11 +32,13 @@ type fakeQuestionStore struct {
 	createRow     db.CbtQuestion
 	createHistory []db.CreateCbtQuestionParams
 
-	updateParams       db.UpdateCbtQuestionParams
-	updateCalls        int
-	nextVersionNumber  int32
-	markNotLatestID    pgtype.UUID
-	markNotLatestCalls int
+	updateParams         db.UpdateCbtQuestionParams
+	updateCalls          int
+	nextVersionNumber    int32
+	markNotLatestID      pgtype.UUID
+	markNotLatestCalls   int
+	markGroupNotLatestID pgtype.UUID
+	markGroupLatestCalls int
 
 	deleteID          pgtype.UUID
 	deleteCalls       int
@@ -152,6 +154,12 @@ func (f *fakeQuestionStore) GetNextCbtQuestionVersionNumber(ctx context.Context,
 func (f *fakeQuestionStore) MarkCbtQuestionVersionNotLatest(ctx context.Context, id pgtype.UUID) error {
 	f.markNotLatestID = id
 	f.markNotLatestCalls++
+	return nil
+}
+
+func (f *fakeQuestionStore) MarkCbtQuestionVersionGroupNotLatest(ctx context.Context, versionGroupID pgtype.UUID) error {
+	f.markGroupNotLatestID = versionGroupID
+	f.markGroupLatestCalls++
 	return nil
 }
 
@@ -1269,8 +1277,11 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		if store.createParams.VersionGroupID != versionGroupID || store.createParams.VersionNumber != 4 || store.createParams.SourceQuestionID != questionID || store.createParams.SupersedesQuestionID != questionID || store.createParams.VersionNote != "Daya pembeda rendah" {
 			t.Fatalf("DuplicateForRevision() lineage = %+v/%d/%+v/%+v/%q, want same group v4 source/supersedes note", store.createParams.VersionGroupID, store.createParams.VersionNumber, store.createParams.SourceQuestionID, store.createParams.SupersedesQuestionID, store.createParams.VersionNote)
 		}
-		if store.markNotLatestCalls != 1 || store.markNotLatestID != questionID {
-			t.Fatalf("DuplicateForRevision() mark latest calls/id = %d/%+v, want source marked not latest", store.markNotLatestCalls, store.markNotLatestID)
+		if store.markGroupLatestCalls != 1 || store.markGroupNotLatestID != versionGroupID {
+			t.Fatalf("DuplicateForRevision() mark group latest calls/id = %d/%+v, want version group marked not latest", store.markGroupLatestCalls, store.markGroupNotLatestID)
+		}
+		if store.markNotLatestCalls != 0 {
+			t.Fatalf("DuplicateForRevision() source-only mark calls = %d, want group mark only", store.markNotLatestCalls)
 		}
 	})
 }

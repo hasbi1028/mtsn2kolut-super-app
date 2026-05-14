@@ -1910,6 +1910,19 @@ func (q *Queries) ListUngradedEssaysByTeacher(ctx context.Context, arg ListUngra
 	return items, nil
 }
 
+const markCbtQuestionVersionGroupNotLatest = `-- name: MarkCbtQuestionVersionGroupNotLatest :exec
+UPDATE cbt_questions
+SET is_latest_version = FALSE,
+    updated_at = NOW()
+WHERE version_group_id = $1
+  AND is_latest_version = TRUE
+`
+
+func (q *Queries) MarkCbtQuestionVersionGroupNotLatest(ctx context.Context, versionGroupID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markCbtQuestionVersionGroupNotLatest, versionGroupID)
+	return err
+}
+
 const markCbtQuestionVersionNotLatest = `-- name: MarkCbtQuestionVersionNotLatest :exec
 UPDATE cbt_questions
 SET is_latest_version = FALSE,
