@@ -560,7 +560,10 @@ func (s *SystemBackup) ValidateRestore(ctx context.Context, id string) (SystemBa
 		}, nil
 	}
 	preview, count := pgRestoreListPreview(string(output))
-	warnings := []string{"Validasi ini hanya membaca metadata pg_restore --list; belum melakukan restore ke database mana pun."}
+	warnings := []string{
+		"Validasi ini hanya membaca metadata pg_restore --list; belum melakukan restore ke database mana pun.",
+		"Checksum SHA256 tetap wajib diverifikasi dengan sha256sum -c sebelum restore staging maupun production.",
+	}
 	if count == 0 {
 		warnings = append(warnings, "Daftar objek kosong; cek kembali file backup sebelum dipakai.")
 	}
@@ -588,30 +591,40 @@ func (s *SystemBackup) RestoreCommand(ctx context.Context, id string) (SystemBac
 		SafetyLevel: "manual-operator-only",
 		Warnings: []string{
 			"Tidak ada eksekusi restore production dari aplikasi.",
+			"Restore production hanya boleh dipertimbangkan setelah checksum valid dan restore staging berhasil diverifikasi.",
 			"Jalankan perintah ini hanya melalui SSH/server setelah membuat backup terbaru dan mendapatkan approval eksplisit.",
-			"Ganti placeholder <TARGET_DB>, <APP_PM2_NAME>, dan <OWNER> sesuai lingkungan production; jangan tempel credential ke chat/dokumen.",
+			"Ganti placeholder <STAGING_DB>, <APP_PM2_NAME>, dan <OWNER> sesuai lingkungan; jangan tempel credential ke chat/dokumen.",
 		},
 		PreflightSteps: []string{
 			"Pastikan file backup yang dipilih benar: " + backupName,
+			"Verifikasi checksum sidecar dengan sha256sum -c sebelum membaca atau merestore dump.",
 			"Jalankan validasi: pg_restore --list <backup.dump> dan pastikan object list terbaca.",
-			"Buat backup terbaru sebelum restore dan simpan checksum SHA256.",
+			"Restore ke database staging/scratch terlebih dahulu, smoke check tabel kunci, lalu catat hasilnya.",
+			"Buat backup safety terbaru sebelum restore production dan simpan checksum SHA256.",
 			"Umumkan downtime singkat ke operator madrasah.",
-			"Stop aplikasi yang menulis ke database sebelum restore.",
+			"Stop aplikasi yang menulis ke database hanya setelah approval production restore final.",
 		},
 		Commands: []string{
-			"# 1) Validasi isi backup tanpa mengubah DB",
+			"# 1) Verifikasi checksum sidecar dari direktori backup",
+			"(cd " + shellQuoteForOperator(filepath.Dir(backupPath)) + " && sha256sum -c " + shellQuoteForOperator(filepath.Base(backupPath)+".sha256") + ")",
+			"# 2) Validasi isi backup tanpa mengubah DB",
 			"pg_restore --list " + shellQuoteForOperator(backupPath) + " | sed -n '1,40p'",
-			"# 2) Backup safety terbaru sebelum restore",
+			"# 3) Restore ke staging/scratch terlebih dahulu, bukan production",
+			"createdb <STAGING_DB>",
+			"pg_restore --single-transaction --exit-on-error --clean --if-exists --no-owner --no-privileges --dbname=\"<STAGING_DB>\" " + shellQuoteForOperator(backupPath),
+			"psql \"<STAGING_DB>\" -c \"SELECT COUNT(*) FROM users;\"",
+			"psql \"<STAGING_DB>\" -c \"SELECT COUNT(*) FROM cbt_questions;\"",
+			"# 4) Backup safety terbaru sebelum restore production",
 			"/home/servermtsn2kolut/mtsn2kolut-super-app/deploy/backup-postgresql.sh",
-			"# 3) Stop aplikasi penulis DB",
+			"# 5) Stop aplikasi penulis DB setelah approval final",
 			"pm2 stop <APP_PM2_NAME>",
-			"# 4) Restore ke database target. Gunakan env DATABASE_URL di server, jangan tampilkan credential.",
-			"pg_restore --clean --if-exists --no-owner --dbname=\"$DATABASE_URL\" " + shellQuoteForOperator(backupPath),
-			"# 5) Start ulang aplikasi dan health check",
+			"# 6) Restore production. Gunakan env DATABASE_URL di server, jangan tampilkan credential.",
+			"pg_restore --single-transaction --exit-on-error --clean --if-exists --no-owner --no-privileges --dbname=\"$DATABASE_URL\" " + shellQuoteForOperator(backupPath),
+			"# 7) Start ulang aplikasi dan health check",
 			"pm2 start <APP_PM2_NAME>",
 			"curl -fsS http://127.0.0.1:8080/health",
 		},
-		RollbackNote: "Jika restore gagal, jangan ulangi dari UI. Simpan log terminal, restore dari backup safety terbaru, lalu cek health dan audit data.",
+		RollbackNote: "Jika restore gagal, jangan ulangi dari UI. Simpan log terminal, cek staging result dan checksum, restore dari backup safety terbaru bila disetujui, lalu cek health dan audit data.",
 	}, nil
 }
 

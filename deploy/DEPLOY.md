@@ -249,35 +249,39 @@ make ops-backup
 - Log eksekusi di `~/backups/mtsn2kolut-super-app/logs/postgresql-backup.log`.
 - Retention 30 hari otomatis.
 
-Script ini memakai `flock` agar tidak overlap dengan jalankan ganda (systemd timer + manual `make ops-backup`).
+Script ini memakai `flock` agar tidak overlap dengan jalankan ganda (systemd timer + manual `make ops-backup`). Directory backup/log wajib mode `700`; dump, checksum, lock file, dan log wajib mode `600`.
 
 ### Restore drill (uji rutin di staging)
 
-Lakukan restore drill secara periodik (mis. tiap rilis besar) agar backup terbukti dapat dipakai:
+Lakukan restore drill secara periodik (mis. tiap rilis besar) agar backup terbukti dapat dipakai. Restore production tidak dijalankan dari UI dan tidak boleh menjadi langkah pertama; selalu verifikasi checksum dan restore ke staging/scratch dahulu.
 
 ```bash
 # 1. Identifikasi dump terbaru
 ls -lh ~/backups/mtsn2kolut-super-app/postgresql/latest.dump
-sha256sum -c ~/backups/mtsn2kolut-super-app/postgresql/latest.dump.sha256
+(cd ~/backups/mtsn2kolut-super-app/postgresql && sha256sum -c latest.dump.sha256)
 
-# 2. Buat database staging kosong (JANGAN ke database produksi)
+# 2. Validasi metadata dump tanpa mengubah DB
+pg_restore --list ~/backups/mtsn2kolut-super-app/postgresql/latest.dump | sed -n '1,40p'
+
+# 3. Buat database staging kosong (JANGAN ke database produksi)
 createdb -h 127.0.0.1 -U pusaka pusaka_restore_drill
 
-# 3. Restore dump
-PGPASSWORD=*** pg_restore \
+# 4. Restore dump secara defensif
+pg_restore \
   --host=127.0.0.1 --username=pusaka --dbname=pusaka_restore_drill \
+  --single-transaction --exit-on-error \
   --no-owner --no-privileges --clean --if-exists \
   ~/backups/mtsn2kolut-super-app/postgresql/latest.dump
 
-# 4. Smoke check — jumlah row tabel kunci
+# 5. Smoke check — jumlah row tabel kunci
 psql -h 127.0.0.1 -U pusaka pusaka_restore_drill -c "SELECT count(*) FROM users;"
 psql -h 127.0.0.1 -U pusaka pusaka_restore_drill -c "SELECT count(*) FROM cbt_questions;"
 
-# 5. Bersihkan database drill
+# 6. Bersihkan database drill
 dropdb -h 127.0.0.1 -U pusaka pusaka_restore_drill
 ```
 
-Catat waktu restore aktual sebagai RTO baseline. Bila restore gagal atau checksum mismatch, perbaiki source backup pipeline sebelum next deploy.
+Catat waktu restore aktual sebagai RTO baseline. Bila restore staging gagal, `pg_restore --list` gagal, atau checksum mismatch, jangan restore ke production; perbaiki source backup pipeline atau pilih backup lain sebelum next deploy.
 
 ## CI ringan
 

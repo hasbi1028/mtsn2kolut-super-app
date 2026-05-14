@@ -305,10 +305,16 @@ Status implementasi: dikerjakan pada 2026-05-14 di worktree `sprint-2`.
 
 ### Sprint 4 — DB & backup lifecycle
 
+Status implementasi: dikerjakan pada 2026-05-14 di worktree `sprint-4`; tidak deploy, tidak restart PM2, tidak menjalankan migration production, dan tidak commit.
+
 - Backup permission hardening.
+  - Implementasi: `deploy/backup-postgresql.sh` memakai `umask 077`, directory mode `700`, file/log/checksum/lock mode `600`, dan tetap idempotent dengan target backup yang sama.
 - Restore plan command/SOP defensive.
+  - Implementasi: `services/core-api/internal/service/system_backup.go`, `deploy/DEPLOY.md`, dan `docs/deployment.md` menambahkan checksum verification, `pg_restore --single-transaction --exit-on-error`, serta restore-to-staging-first sebelum production restore dipertimbangkan. UI tetap hanya menghasilkan validasi/command plan, bukan menjalankan restore otomatis.
 - Non-transactional migration support untuk online index.
+  - Implementasi: `services/core-api/db/scripts/apply_migrations.js` default tetap transactional; mode non-transactional hanya aktif dengan marker eksplisit `-- mtsn2kolut:migration non-transactional` dan dibatasi ke `CREATE/DROP INDEX CONCURRENTLY`.
 - `pg_trgm` untuk search domain besar.
+  - Implementasi: migration `097_pg_trgm_extension.sql`, `098_pg_trgm_core_search_indexes.sql`, dan `099_pg_trgm_operations_search_indexes.sql` menyiapkan extension dan online trigram index batch untuk Bank Soal, siswa/pegawai, perpustakaan, arsip, dan tata kelola. Migration dibuat sebagai artifact rollout normal dan belum diaplikasikan ke production dari sprint ini.
 
 ### Sprint 5 — DevOps/release readiness
 

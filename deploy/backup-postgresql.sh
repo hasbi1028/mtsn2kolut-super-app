@@ -4,6 +4,7 @@
 # Output: /home/servermtsn2kolut/backups/mtsn2kolut-super-app/postgresql/
 
 set -Eeuo pipefail
+umask 077
 
 APP_DIR="/home/servermtsn2kolut/mtsn2kolut-super-app"
 ENV_FILE="$APP_DIR/services/core-api/.env"
@@ -11,8 +12,12 @@ BACKUP_DIR="/home/servermtsn2kolut/backups/mtsn2kolut-super-app/postgresql"
 LOG_DIR="/home/servermtsn2kolut/backups/mtsn2kolut-super-app/logs"
 RETENTION_DAYS="30"
 LOCK_FILE="/tmp/mtsn2kolut-postgresql-backup.lock"
+LOG_FILE="$LOG_DIR/postgresql-backup.log"
 
 mkdir -p "$BACKUP_DIR" "$LOG_DIR"
+chmod 700 "$BACKUP_DIR" "$LOG_DIR"
+touch "$LOG_FILE"
+chmod 600 "$LOG_FILE"
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')" "$*"
@@ -20,6 +25,7 @@ log() {
 
 # Prevent overlapping backups
 exec 9>"$LOCK_FILE"
+chmod 600 "$LOCK_FILE" || true
 if ! flock -n 9; then
   log "Backup already running, exiting."
   exit 0
@@ -69,11 +75,11 @@ TIMESTAMP="$(date '+%Y%m%d_%H%M%S')"
 BACKUP_FILE="$BACKUP_DIR/${DB_NAME}_${TIMESTAMP}.dump"
 SHA_FILE="$BACKUP_FILE.sha256"
 LATEST_LINK="$BACKUP_DIR/latest.dump"
-LOG_FILE="$LOG_DIR/postgresql-backup.log"
 
 {
   log "Starting PostgreSQL backup: database=$DB_NAME host=$DB_HOST port=$DB_PORT user=$DB_USER"
   export PGPASSWORD="$DB_PASSWORD"
+  trap 'unset PGPASSWORD' EXIT
   pg_dump \
     --host="$DB_HOST" \
     --port="$DB_PORT" \
@@ -83,10 +89,15 @@ LOG_FILE="$LOG_DIR/postgresql-backup.log"
     --verbose \
     --file="$BACKUP_FILE"
   unset PGPASSWORD
+  trap - EXIT
+  chmod 600 "$BACKUP_FILE"
 
   sha256sum "$BACKUP_FILE" > "$SHA_FILE"
+  chmod 600 "$SHA_FILE"
   ln -sfn "$BACKUP_FILE" "$LATEST_LINK"
   (cd "$BACKUP_DIR" && sha256sum latest.dump > latest.dump.sha256)
+  chmod 600 "$BACKUP_DIR/latest.dump.sha256"
+  chmod 700 "$BACKUP_DIR" "$LOG_DIR"
 
   BACKUP_SIZE="$(du -h "$BACKUP_FILE" | awk '{print $1}')"
   log "Backup completed: $BACKUP_FILE ($BACKUP_SIZE)"
