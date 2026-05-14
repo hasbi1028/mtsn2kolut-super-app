@@ -49,6 +49,28 @@ func (h *CbtQuestion) Timeline(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, rows)
 }
 
+func (h *CbtQuestion) Versions(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID data tidak valid")
+		return
+	}
+	rows, err := h.svc.Versions(r.Context(), id, cbtQuestionActorFromRequest(r))
+	if err != nil {
+		writeDomainOrInternal(w, err, "Riwayat versi soal CBT tidak dapat diakses")
+		return
+	}
+	items := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, serializeQuestionVersionRow(row))
+	}
+	api.OK(w, map[string]any{"items": items})
+}
+
 func (h *CbtQuestion) Create(w http.ResponseWriter, r *http.Request) {
 	if !cbtAccessAllowed(r) {
 		api.Forbidden(w)

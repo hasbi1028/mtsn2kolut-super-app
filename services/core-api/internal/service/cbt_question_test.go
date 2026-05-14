@@ -32,8 +32,11 @@ type fakeQuestionStore struct {
 	createRow     db.CbtQuestion
 	createHistory []db.CreateCbtQuestionParams
 
-	updateParams db.UpdateCbtQuestionParams
-	updateCalls  int
+	updateParams       db.UpdateCbtQuestionParams
+	updateCalls        int
+	nextVersionNumber  int32
+	markNotLatestID    pgtype.UUID
+	markNotLatestCalls int
 
 	deleteID          pgtype.UUID
 	deleteCalls       int
@@ -42,6 +45,7 @@ type fakeQuestionStore struct {
 	membersByUser     []db.CbtEventMember
 	membersByUsername []db.CbtEventMember
 	auditLogs         []db.CbtQuestionAuditLog
+	versionRows       []db.ListCbtQuestionVersionsRow
 	auditErr          error
 	auditCalls        int
 	summaryCounts     db.GetCbtQuestionSummaryCountsRow
@@ -135,6 +139,22 @@ func (f *fakeQuestionStore) UpdateCbtQuestion(ctx context.Context, arg db.Update
 	}, nil
 }
 
+func (f *fakeQuestionStore) GetNextCbtQuestionVersionNumber(ctx context.Context, versionGroupID pgtype.UUID) (int32, error) {
+	if f.nextVersionNumber > 0 {
+		return f.nextVersionNumber, nil
+	}
+	if f.current.VersionNumber > 0 {
+		return f.current.VersionNumber + 1, nil
+	}
+	return 2, nil
+}
+
+func (f *fakeQuestionStore) MarkCbtQuestionVersionNotLatest(ctx context.Context, id pgtype.UUID) error {
+	f.markNotLatestID = id
+	f.markNotLatestCalls++
+	return nil
+}
+
 func (f *fakeQuestionStore) DeleteCbtQuestion(ctx context.Context, id pgtype.UUID) error {
 	f.deleteID = id
 	f.deleteCalls++
@@ -153,6 +173,10 @@ func (f *fakeQuestionStore) CreateCbtQuestionAuditLog(ctx context.Context, arg d
 
 func (f *fakeQuestionStore) ListCbtQuestionTimeline(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAuditLog, error) {
 	return f.auditLogs, nil
+}
+
+func (f *fakeQuestionStore) ListCbtQuestionVersions(ctx context.Context, id pgtype.UUID) ([]db.ListCbtQuestionVersionsRow, error) {
+	return f.versionRows, nil
 }
 
 func mustQuestionUUID(t *testing.T, value string) pgtype.UUID {
@@ -196,6 +220,15 @@ func TestNewCbtQuestionAndReadDelegation(t *testing.T) {
 	}
 	if detail.ID != questionID || detail.QuestionText != "Soal detail" {
 		t.Fatalf("GetDetail() = %+v, want detail row", detail)
+	}
+
+	store.versionRows = []db.ListCbtQuestionVersionsRow{{ID: questionID, Code: "Q-1", VersionNumber: 1, IsLatestVersion: true}}
+	versions, err := svc.Versions(context.Background(), questionID, CbtQuestionActor{Username: "admin", Roles: []string{"admin"}})
+	if err != nil {
+		t.Fatalf("Versions() error = %v", err)
+	}
+	if len(versions) != 1 || versions[0].VersionNumber != 1 || !versions[0].IsLatestVersion {
+		t.Fatalf("Versions() = %+v, want one latest v1 row", versions)
 	}
 }
 
@@ -1064,22 +1097,26 @@ func TestSubmitReviewUpdatesWorkflowAndReviewer(t *testing.T) {
 func TestCbtQuestionWorkflowActions(t *testing.T) {
 	questionID := pgtype.UUID{Bytes: [16]byte{2}, Valid: true}
 	subjectID := pgtype.UUID{Bytes: [16]byte{3}, Valid: true}
+	versionGroupID := pgtype.UUID{Bytes: [16]byte{4}, Valid: true}
 	current := db.GetCbtQuestionRow{
-		ID:             questionID,
-		SubjectID:      subjectID,
-		Code:           "Q-1",
-		QuestionText:   "Soal",
-		QuestionType:   "multiple_choice",
-		Options:        []byte(`[{"label":"A","text":"A"},{"label":"B","text":"B"},{"label":"C","text":"C"},{"label":"D","text":"D"}]`),
-		OptionA:        "A",
-		OptionB:        "B",
-		OptionC:        "C",
-		OptionD:        "D",
-		AnswerKey:      "A",
-		Difficulty:     db.CbtQuestionDifficultyEnumMedium,
-		Status:         db.CbtQuestionStatusEnumDraft,
-		WorkflowStatus: "review",
-		ReviewNotes:    "catatan lama",
+		ID:              questionID,
+		SubjectID:       subjectID,
+		Code:            "Q-1",
+		QuestionText:    "Soal",
+		QuestionType:    "multiple_choice",
+		Options:         []byte(`[{"label":"A","text":"A"},{"label":"B","text":"B"},{"label":"C","text":"C"},{"label":"D","text":"D"}]`),
+		OptionA:         "A",
+		OptionB:         "B",
+		OptionC:         "C",
+		OptionD:         "D",
+		AnswerKey:       "A",
+		Difficulty:      db.CbtQuestionDifficultyEnumMedium,
+		Status:          db.CbtQuestionStatusEnumDraft,
+		WorkflowStatus:  "review",
+		ReviewNotes:     "catatan lama",
+		VersionGroupID:  versionGroupID,
+		VersionNumber:   3,
+		IsLatestVersion: true,
 	}
 
 	t.Run("approve updates workflow and notes", func(t *testing.T) {
@@ -1207,10 +1244,13 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		if store.createParams.ReviewerUsername != "" || store.createParams.ApproverUsername != "" || store.createParams.ReviewNotes != "" {
 			t.Fatalf("DuplicateAsDraft() reviewer/approver/notes = %q/%q/%q, want cleared", store.createParams.ReviewerUsername, store.createParams.ApproverUsername, store.createParams.ReviewNotes)
 		}
+		if store.createParams.VersionGroupID.Valid || store.createParams.VersionNumber != 1 || store.createParams.SourceQuestionID.Valid || store.createParams.SupersedesQuestionID.Valid {
+			t.Fatalf("DuplicateAsDraft() lineage = %+v/%d/%+v/%+v, want independent v1 group", store.createParams.VersionGroupID, store.createParams.VersionNumber, store.createParams.SourceQuestionID, store.createParams.SupersedesQuestionID)
+		}
 	})
 
 	t.Run("duplicate for revision creates rejected draft copy with notes", func(t *testing.T) {
-		store := &fakeQuestionStore{current: current}
+		store := &fakeQuestionStore{current: current, nextVersionNumber: 4}
 		svc := &CbtQuestion{q: store}
 
 		_, err := svc.DuplicateForRevision(context.Background(), questionID, CbtQuestionActor{Username: "reviewer", Roles: []string{"admin"}}, "Daya pembeda rendah")
@@ -1225,6 +1265,12 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		}
 		if store.createParams.ReviewerUsername != "reviewer" || store.createParams.ApproverUsername != "" || store.createParams.ReviewNotes != "Daya pembeda rendah" {
 			t.Fatalf("DuplicateForRevision() reviewer/approver/notes = %q/%q/%q, want reviewer/no approver/notes", store.createParams.ReviewerUsername, store.createParams.ApproverUsername, store.createParams.ReviewNotes)
+		}
+		if store.createParams.VersionGroupID != versionGroupID || store.createParams.VersionNumber != 4 || store.createParams.SourceQuestionID != questionID || store.createParams.SupersedesQuestionID != questionID || store.createParams.VersionNote != "Daya pembeda rendah" {
+			t.Fatalf("DuplicateForRevision() lineage = %+v/%d/%+v/%+v/%q, want same group v4 source/supersedes note", store.createParams.VersionGroupID, store.createParams.VersionNumber, store.createParams.SourceQuestionID, store.createParams.SupersedesQuestionID, store.createParams.VersionNote)
+		}
+		if store.markNotLatestCalls != 1 || store.markNotLatestID != questionID {
+			t.Fatalf("DuplicateForRevision() mark latest calls/id = %d/%+v, want source marked not latest", store.markNotLatestCalls, store.markNotLatestID)
 		}
 	})
 }

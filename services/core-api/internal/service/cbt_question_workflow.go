@@ -26,6 +26,20 @@ func (s *CbtQuestion) Timeline(ctx context.Context, id pgtype.UUID, actor CbtQue
 	return rows, nil
 }
 
+func (s *CbtQuestion) Versions(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor) ([]db.ListCbtQuestionVersionsRow, error) {
+	if _, err := s.GetDetail(ctx, id, actor); err != nil {
+		return nil, err
+	}
+	rows, err := s.q.ListCbtQuestionVersions(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []db.ListCbtQuestionVersionsRow{}, nil
+	}
+	return rows, nil
+}
+
 func (s *CbtQuestion) BulkWorkflow(ctx context.Context, in BulkCbtQuestionWorkflowInput) (BulkCbtQuestionWorkflowResult, error) {
 	action := strings.TrimSpace(in.Action)
 	switch action {
@@ -253,6 +267,11 @@ func (s *CbtQuestion) DuplicateAsDraft(ctx context.Context, id pgtype.UUID, acto
 	input.ReviewerUsername = ""
 	input.ApproverUsername = ""
 	input.ReviewNotes = ""
+	input.VersionGroupID = pgtype.UUID{}
+	input.VersionNumber = 1
+	input.SourceQuestionID = pgtype.UUID{}
+	input.SupersedesQuestionID = pgtype.UUID{}
+	input.VersionNote = ""
 	if input.Code != "" {
 		input.Code = input.Code + "-COPY"
 	}
@@ -282,5 +301,48 @@ func (s *CbtQuestion) DuplicateForRevision(ctx context.Context, id pgtype.UUID, 
 	if input.Code != "" {
 		input.Code = fmt.Sprintf("%s-REV-%s", input.Code, time.Now().Format("20060102150405"))
 	}
-	return s.createWithAudit(ctx, input, "revision", reviewNotes, map[string]any{"source_question_id": cbtQuestionUUIDString(id)})
+	versionGroupID := current.VersionGroupID
+	if !versionGroupID.Valid {
+		versionGroupID = current.ID
+	}
+	input.VersionGroupID = versionGroupID
+	input.VersionNumber = 1
+	input.SourceQuestionID = current.ID
+	input.SupersedesQuestionID = current.ID
+	input.VersionNote = reviewNotes
+
+	if err := s.requireCreateQuestion(ctx, actor, input.EventID, input.SubjectID); err != nil {
+		return db.CbtQuestion{}, err
+	}
+	if createInputBypassesWorkflow(input) {
+		return db.CbtQuestion{}, fmt.Errorf("%w: soal baru hanya boleh dibuat sebagai draft atau diajukan review", domain.ErrBadRequest)
+	}
+	params, err := buildCreateQuestionParams(input)
+	if err != nil {
+		return db.CbtQuestion{}, err
+	}
+	return s.withMutationStore(ctx, func(store cbtQuestionStore) (db.CbtQuestion, error) {
+		if err := s.validateMediaAssetIDs(ctx, store, input.MediaAssetIDs, current.ID, actor); err != nil {
+			return db.CbtQuestion{}, err
+		}
+		nextVersion, err := store.GetNextCbtQuestionVersionNumber(ctx, versionGroupID)
+		if err != nil {
+			return db.CbtQuestion{}, err
+		}
+		if nextVersion < 2 {
+			nextVersion = normalizeVersionNumber(current.VersionNumber) + 1
+		}
+		params.VersionNumber = nextVersion
+		row, err := store.CreateCbtQuestion(ctx, params)
+		if err != nil {
+			return db.CbtQuestion{}, err
+		}
+		if err := store.MarkCbtQuestionVersionNotLatest(ctx, current.ID); err != nil {
+			return db.CbtQuestion{}, err
+		}
+		if err := logQuestionAudit(ctx, store, row.ID, actor.Username, "revision", reviewNotes, map[string]any{"source_question_id": cbtQuestionUUIDString(id)}); err != nil {
+			return db.CbtQuestion{}, err
+		}
+		return row, nil
+	})
 }

@@ -61,9 +61,12 @@ type cbtQuestionStore interface {
 	GetCbtQuestionAsset(ctx context.Context, id pgtype.UUID) (db.CbtQuestionAsset, error)
 	CreateCbtQuestion(ctx context.Context, arg db.CreateCbtQuestionParams) (db.CbtQuestion, error)
 	UpdateCbtQuestion(ctx context.Context, arg db.UpdateCbtQuestionParams) (db.CbtQuestion, error)
+	GetNextCbtQuestionVersionNumber(ctx context.Context, versionGroupID pgtype.UUID) (int32, error)
+	MarkCbtQuestionVersionNotLatest(ctx context.Context, id pgtype.UUID) error
 	DeleteCbtQuestion(ctx context.Context, id pgtype.UUID) error
 	CreateCbtQuestionAuditLog(ctx context.Context, arg db.CreateCbtQuestionAuditLogParams) (db.CbtQuestionAuditLog, error)
 	ListCbtQuestionTimeline(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAuditLog, error)
+	ListCbtQuestionVersions(ctx context.Context, id pgtype.UUID) ([]db.ListCbtQuestionVersionsRow, error)
 }
 
 type cbtQuestionTxStarter interface {
@@ -143,46 +146,52 @@ type QuestionOption struct {
 }
 
 type SaveCbtQuestionInput struct {
-	ID               pgtype.UUID
-	EventID          pgtype.UUID
-	SubjectID        pgtype.UUID
-	AuthoringMode    string
-	Code             string
-	QuestionText     string
-	QuestionType     string
-	Options          []QuestionOption
-	OptionA          string
-	OptionB          string
-	OptionC          string
-	OptionD          string
-	OptionE          string
-	AnswerKey        string
-	Explanation      string
-	Difficulty       db.CbtQuestionDifficultyEnum
-	Status           db.CbtQuestionStatusEnum
-	StemHTML         string
-	StemLatex        string
-	StimulusHTML     string
-	StimulusLatex    string
-	ExplanationHTML  string
-	RubricHTML       string
-	AcademicPhase    string
-	GradeLevel       pgtype.Int2
-	CPRef            string
-	TPRef            string
-	KDRef            string
-	IndicatorRef     string
-	MaterialTopic    string
-	CognitiveLevel   string
-	HotsFlag         bool
-	MediaAssetIDs    []string
-	WorkflowStatus   string
-	AuthorUsername   string
-	ReviewerUsername string
-	ApproverUsername string
-	WriterNotes      string
-	ReviewNotes      string
-	Actor            CbtQuestionActor
+	ID                   pgtype.UUID
+	EventID              pgtype.UUID
+	SubjectID            pgtype.UUID
+	AuthoringMode        string
+	Code                 string
+	QuestionText         string
+	QuestionType         string
+	Options              []QuestionOption
+	OptionA              string
+	OptionB              string
+	OptionC              string
+	OptionD              string
+	OptionE              string
+	AnswerKey            string
+	Explanation          string
+	Difficulty           db.CbtQuestionDifficultyEnum
+	Status               db.CbtQuestionStatusEnum
+	StemHTML             string
+	StemLatex            string
+	StimulusHTML         string
+	StimulusLatex        string
+	ExplanationHTML      string
+	RubricHTML           string
+	AcademicPhase        string
+	GradeLevel           pgtype.Int2
+	CPRef                string
+	TPRef                string
+	KDRef                string
+	IndicatorRef         string
+	MaterialTopic        string
+	CognitiveLevel       string
+	HotsFlag             bool
+	MediaAssetIDs        []string
+	WorkflowStatus       string
+	VersionGroupID       pgtype.UUID
+	VersionNumber        int32
+	SourceQuestionID     pgtype.UUID
+	SupersedesQuestionID pgtype.UUID
+	IsLatestVersion      bool
+	VersionNote          string
+	AuthorUsername       string
+	ReviewerUsername     string
+	ApproverUsername     string
+	WriterNotes          string
+	ReviewNotes          string
+	Actor                CbtQuestionActor
 }
 
 type CbtQuestionActor struct {

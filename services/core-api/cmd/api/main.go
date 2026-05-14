@@ -564,6 +564,7 @@ func main() {
 		r.With(requireBankSoalImport).Post("/api/bank-soal/questions/import-legacy", questionH.ImportLegacyCSV)
 		r.With(requireBankSoalRead).Get("/api/bank-soal/questions/{id}", questionH.Get)
 		r.With(requireBankSoalRead).Get("/api/bank-soal/questions/{id}/timeline", questionH.Timeline)
+		r.With(requireBankSoalRead).Get("/api/bank-soal/questions/{id}/versions", questionH.Versions)
 		r.With(requireBankSoalUpdate).Put("/api/bank-soal/questions/{id}", questionH.Update)
 		r.With(requireBankSoalCreate).Post("/api/bank-soal/questions/{id}/duplicate", questionH.Duplicate)
 		r.With(requireBankSoalUpdate).Post("/api/bank-soal/questions/{id}/revision", questionH.MarkRevision)

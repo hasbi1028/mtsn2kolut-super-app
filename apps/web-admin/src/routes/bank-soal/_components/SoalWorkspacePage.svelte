@@ -133,6 +133,7 @@
 	type MatchingPair = { left: string; right: string };
 	type ModuleMode = 'catalog' | 'composer' | 'review' | 'import';
 	type WorkspaceRouteMode = 'composer' | 'import';
+	type QuestionVersion = { id: string; code?: string; workflow_status?: string; status?: string; version_number?: number; is_latest_version?: boolean; source_question_id?: string | null; supersedes_question_id?: string | null; version_note?: string; created_at?: string; updated_at?: string; author_username?: string; reviewer_username?: string; approver_username?: string };
 	type WorkspaceRoute = '/bank-soal' | '/bank-soal/tambah' | '/bank-soal/impor' | '/bank-soal/verifikasi';
 	type AuthoringMode = 'beginner' | 'advance';
 	type ComposerIssueHint = { message: string; targetId: string };
@@ -184,6 +185,12 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			answer_count?: number;
 			is_locked?: boolean;
 		};
+		version_group_id?: string | null;
+		version_number?: number;
+		source_question_id?: string | null;
+		supersedes_question_id?: string | null;
+		is_latest_version?: boolean;
+		version_note?: string;
 	};
 	type QuestionListResponse = {
 		items: Question[];
@@ -327,7 +334,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	type BulkWorkflowResponse = { results?: BulkWorkflowResult[] } | BulkWorkflowResult[];
 	type FocusedEditor = 'stem' | 'stimulus' | 'rubric' | 'explanation' | OptionLabel;
 
-	let { data, routeMode }: { data: PageData; routeMode: WorkspaceRouteMode } = $props();
+	let { data, routeMode, questionId = '' }: { data: PageData; routeMode: WorkspaceRouteMode; questionId?: string } = $props();
 
 	function currentRouteMode(): ModuleMode {
 		return routeMode;
@@ -372,6 +379,10 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	// ── Composer state ─────────────────────────────────────────────────────────
 	let editingId = $state<string | null>(null);
 	let editingEventId = $state('');
+	let detailReadOnly = $state(false);
+	let detailQuestion = $state<Question | null>(null);
+	let questionVersions = $state<QuestionVersion[]>([]);
+	let questionVersionsLoading = $state(false);
 	let composerBusy = $state(false);
 	let composerAction = $state<ComposerSaveIntent | ''>('');
 	let draftStatus = $state('');
@@ -619,8 +630,8 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		if (!readinessChecks.stem) issues.push('Isi pertanyaan minimal 5 karakter untuk draft');
 		return issues;
 	});
-	let canSaveDraft = $derived(draftIssues.length === 0 && !composerBusy);
-	let canSubmitReview = $derived(readinessScore === 100 && !composerBusy);
+	let canSaveDraft = $derived(draftIssues.length === 0 && !composerBusy && !detailReadOnly);
+	let canSubmitReview = $derived(readinessScore === 100 && !composerBusy && !detailReadOnly);
 
 	let qualitySignals = $derived.by(() => {
 		if (isEssay) {
@@ -1747,6 +1758,77 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		}
 	}
 
+	function questionDetailHref(id: string): string {
+		return resolve(`/bank-soal/soal/${encodeURIComponent(id)}`);
+	}
+
+	function versionLabel(q: Question | QuestionVersion | null): string {
+		const version = q?.version_number && q.version_number > 0 ? q.version_number : 1;
+		return `v${version}`;
+	}
+
+	function shouldReadOnlyQuestion(q: Question): boolean {
+		return !isQuickEditable(q) || q.is_latest_version === false;
+	}
+
+	function detailLockMessage(q: Question | null): string {
+		if (!q) return '';
+		if (q.is_latest_version === false) return 'Ini versi lama. Paket dan hasil ujian lama tetap memakai versi ini. Buat revisi baru untuk perubahan berikutnya.';
+		if (q.status === 'published' || questionUsageLocked(q)) return 'Soal sudah terbit/dipakai. Tidak boleh diedit langsung; buat revisi baru agar riwayat ujian tetap valid.';
+		if (q.workflow_status === 'approved') return 'Soal sudah disetujui. Kembalikan ke revisi sebelum mengubah isi soal.';
+		if (q.workflow_status === 'review') return 'Soal sedang direview. Perubahan dinonaktifkan sampai reviewer meminta revisi.';
+		return 'Soal dibuka dalam mode lihat.';
+	}
+
+	async function loadQuestionVersions(id: string) {
+		questionVersionsLoading = true;
+		try {
+			const payload = await fetch(clientApiPath`/api/bank-soal/questions/${id}/versions`).then((response) =>
+				readClientApiData<{ items?: QuestionVersion[] } | QuestionVersion[]>(response, 'Riwayat versi soal belum dapat dimuat')
+			);
+			questionVersions = Array.isArray(payload) ? payload : (payload.items ?? []);
+		} catch (error) {
+			questionVersions = [];
+			toast.error(mutationErrorMessage(error, 'Riwayat versi soal belum dapat dimuat.'));
+		} finally {
+			questionVersionsLoading = false;
+		}
+	}
+
+	async function returnDetailToRevision() {
+		if (!detailQuestion?.id) return;
+		const notes = window.prompt('Catatan revisi untuk soal ini:', 'Dikembalikan ke revisi agar dapat diperbaiki dari halaman komposer.');
+		if (notes === null) return;
+		try {
+			const row = await fetch(`/api/bank-soal/questions/${encodeURIComponent(detailQuestion.id)}/workflow`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action: 'return_revision', notes })
+			}).then((response) => readClientJson<Question>(response));
+			toast.success('Soal dikembalikan ke revisi. Editor sudah aktif.');
+			await openEdit(row);
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Soal belum dapat dikembalikan ke revisi.'));
+		}
+	}
+
+	async function createDetailRevision() {
+		if (!detailQuestion?.id) return;
+		const notes = window.prompt('Catatan untuk draft revisi baru:', 'Membuat versi revisi baru agar riwayat paket/ujian lama tetap aman.');
+		if (notes === null) return;
+		try {
+			const row = await fetch(`/api/bank-soal/questions/${encodeURIComponent(detailQuestion.id)}/revision`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ notes })
+			}).then((response) => readClientJson<Question>(response));
+			toast.success(`Revisi baru ${versionLabel(row)} dibuat.`);
+			window.location.href = questionDetailHref(row.id);
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Draft revisi baru belum dapat dibuat.'));
+		}
+	}
+
 	function closeQuestionPreview() {
 		questionPreviewOpen = false;
 		questionPreview = null;
@@ -1760,19 +1842,30 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	function openQuestion(q: Question) {
-		if (isQuickEditable(q)) {
-			void openEdit(q);
-			return;
-		}
-		void openQuestionPreview(q);
+		window.location.href = questionDetailHref(q.id);
 	}
 
 	async function openQuestionFromRouteParam(id: string) {
 		try {
 			const q = await loadQuestionDetail({ id } as Question);
-			openQuestion(q);
+			if (shouldReadOnlyQuestion(q)) await openReadonlyDetail(q);
+			else await openEdit(q);
 		} catch (error) {
-			toast.error(mutationErrorMessage(error, 'Gagal membuka soal dari tautan lama.'));
+			toast.error(mutationErrorMessage(error, 'Gagal membuka soal dari tautan.'));
+		}
+	}
+
+	async function openReadonlyDetail(q: Question) {
+		composerBusy = true;
+		try {
+			await openEdit(q);
+			detailQuestion = await loadQuestionDetail(q);
+			detailReadOnly = true;
+			showInspector = true;
+			composerMobilePanel = 'preview';
+			void loadQuestionVersions(detailQuestion.id);
+		} finally {
+			composerBusy = false;
 		}
 	}
 
@@ -1807,6 +1900,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	function openCreate() {
+		detailReadOnly = false;
+		detailQuestion = null;
+		questionVersions = [];
 		editingId = null;
 		editingEventId = '';
 		specialEventQuestionMode = false;
@@ -1824,6 +1920,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	async function openEdit(q: Question) {
+		detailReadOnly = false;
+		detailQuestion = null;
+		questionVersions = [];
 		if (!isQuickEditable(q)) {
 			setModuleMode('catalog');
 			toast.warning(explainQuickEditBlocked(q));
@@ -1907,6 +2006,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	function closeComposer() {
+		detailReadOnly = false;
+		detailQuestion = null;
+		questionVersions = [];
 		setModuleMode('catalog');
 		editingId = null;
 		editingEventId = '';
@@ -2534,7 +2636,8 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		void migrateLegacyBankSoalDrafts().then(() => refreshOfflineQueueState()).then(() => {
 			if (browserOnline() && offlineQueueCount > 0) void syncBankSoalOfflineQueue(false);
 		});
-		if (routeMode === 'composer' && questionId) void openQuestionFromRouteParam(questionId);
+		const routeQuestionId = questionId || params.get('question_id') || '';
+		if (routeMode === 'composer' && routeQuestionId) void openQuestionFromRouteParam(routeQuestionId);
 		else if (routeMode === 'composer') {
 			setTimeout(() => {
 				void restoreDraft().then((restored) => {
@@ -3493,18 +3596,18 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 
 <!-- ── Composer Inline Section ─────────────────────────────────────────────── -->
 {#snippet composerPanel()}
-	<section class="soal-composer-inline relative flex min-h-[42rem] flex-col overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-sm">
+	<section class="soal-composer-inline {detailReadOnly ? 'soal-composer-readonly' : ''} relative flex min-h-[42rem] flex-col overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-sm">
 			<div class="shrink-0 border-b border-primary/20 bg-gradient-to-r from-primary/10 via-card to-warning/10 px-4 py-4 md:px-5">
 				<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
 					<div class="min-w-0">
 						<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Studio Penyusun soal Bank Soal</p>
 						<div class="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
 							<h2 class="text-xl font-black uppercase italic tracking-tight text-foreground">
-								{editingId ? 'Edit Butir Soal' : 'Penyusunan Soal Baru'}
+								{detailReadOnly ? `Lihat Butir Soal ${versionLabel(detailQuestion)}` : editingId ? 'Edit Butir Soal' : 'Penyusunan Soal Baru'}
 							</h2>
 						</div>
 						<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-							Susun metadata, naskah, kunci/rubrik, lalu cek preview siswa sebelum diajukan review. Autosave lokal dan Ctrl+S tetap aktif.
+							{detailReadOnly ? detailLockMessage(detailQuestion) : 'Susun metadata, naskah, kunci/rubrik, lalu cek preview siswa sebelum diajukan review. Autosave lokal dan Ctrl+S tetap aktif.'}
 						</p>
 						<div class="mt-3 flex flex-wrap gap-2">
 							<span class="rounded-full border border-primary/20 bg-card px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">{composerScopeLabel}</span>
@@ -3545,7 +3648,41 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			</div>
 
 			<div class="min-h-0 flex-1 overflow-y-auto bg-muted/50 p-4 md:p-5">
-				<section class="mb-4 rounded-2xl border border-primary/20 bg-card p-4 shadow-sm">
+				{#if detailReadOnly}
+					<section class="mb-4 rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm text-warning shadow-sm">
+						<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+							<div>
+								<p class="text-[10px] font-black uppercase tracking-[0.24em]">Mode lihat / terkunci</p>
+								<p class="mt-1 font-semibold">{detailLockMessage(detailQuestion)}</p>
+							</div>
+							<div class="flex flex-wrap gap-2">
+								{#if detailQuestion?.workflow_status === 'approved' && detailQuestion?.status !== 'published' && !questionUsageLocked(detailQuestion) && detailQuestion?.is_latest_version !== false}
+									<Button type="button" size="sm" variant="outline" onclick={() => void returnDetailToRevision()}>Kembalikan ke Revisi</Button>
+								{/if}
+								{#if detailQuestion && (detailQuestion.status === 'published' || questionUsageLocked(detailQuestion) || detailQuestion.is_latest_version === false)}
+									<Button type="button" size="sm" onclick={() => void createDetailRevision()}>Buat Revisi Baru</Button>
+								{/if}
+							</div>
+						</div>
+						<div class="mt-3 rounded-xl border border-border/70 bg-card/80 p-3">
+							<p class="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Riwayat Versi</p>
+							{#if questionVersionsLoading}
+								<p class="mt-2 text-xs text-muted-foreground">Memuat versi...</p>
+							{:else if questionVersions.length === 0}
+								<p class="mt-2 text-xs text-muted-foreground">Belum ada riwayat versi lain.</p>
+							{:else}
+								<div class="mt-2 flex flex-wrap gap-2">
+									{#each questionVersions as version}
+										<a class={`rounded-full border px-3 py-1 text-xs font-bold ${version.id === editingId ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-foreground'}`} href={questionDetailHref(version.id)}>
+											{versionLabel(version)}{version.is_latest_version ? ' • terbaru' : ''}
+										</a>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					</section>
+				{/if}
+				<section class="mb-4 rounded-2xl border border-primary/20 bg-card p-4 shadow-sm {detailReadOnly ? 'pointer-events-none opacity-75' : ''}">
 					<div class="mb-3 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
 						<div>
 							<p class="text-[10px] font-black uppercase tracking-[0.24em] text-primary">Alur penyusunan</p>
@@ -4066,7 +4203,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 					</Button>
 					<LoadingButton
 						onclick={() => void saveQuestion('draft')}
-						disabled={!canSaveDraft}
+						disabled={detailReadOnly || !canSaveDraft}
 						loading={composerAction === 'draft'}
 						loadingLabel="Menyimpan draft..."
 						variant="outline"
@@ -4076,7 +4213,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 					</LoadingButton>
 					<LoadingButton
 						onclick={() => void saveQuestion('review')}
-						disabled={!canSubmitReview}
+						disabled={detailReadOnly || !canSubmitReview}
 						loading={composerAction === 'review'}
 						loadingLabel="Mengajukan..."
 						class="h-8 bg-success text-xs text-background hover:bg-success disabled:opacity-50"
@@ -4188,6 +4325,18 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 {/snippet}
 
 <style>
+	:global(.soal-composer-readonly input),
+	:global(.soal-composer-readonly textarea),
+	:global(.soal-composer-readonly select),
+	:global(.soal-composer-readonly [contenteditable='true']) {
+		pointer-events: none;
+		cursor: not-allowed;
+		opacity: 0.72;
+	}
+	:global(.soal-composer-readonly input),
+	:global(.soal-composer-readonly textarea) {
+		caret-color: transparent;
+	}
 	:global(.latex-preview .latex-display) {
 		overflow-x: auto;
 		padding: 0.25rem 0;

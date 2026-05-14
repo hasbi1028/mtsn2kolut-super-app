@@ -111,6 +111,9 @@ func (q *Queries) CountCbtQuestionsFiltered(ctx context.Context, arg CountCbtQue
 }
 
 const createCbtQuestion = `-- name: CreateCbtQuestion :one
+WITH new_question AS (
+  SELECT gen_random_uuid() AS id
+)
 INSERT INTO cbt_questions (
   id, event_id, subject_id, code, question_text, question_type, options,
   option_a, option_b, option_c, option_d, option_e,
@@ -121,58 +124,73 @@ INSERT INTO cbt_questions (
   cp_ref, tp_ref, kd_ref, indicator_ref,
   material_topic, cognitive_level, hots_flag,
   media_asset_ids, workflow_status, version,
+  version_group_id, version_number, source_question_id,
+  supersedes_question_id, is_latest_version, version_note,
   author_username, reviewer_username, reviewed_at,
   approver_username, approved_at, writer_notes, review_notes
 )
-VALUES (
-  gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+SELECT
+  new_question.id, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
   $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31,
-  $32, $33, $34, $35, $36, $37, $38, $39, $40
-)
-RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options, stem_html, stem_latex, stimulus_html, stimulus_latex, explanation_html, rubric_html, academic_phase, grade_level, cp_ref, tp_ref, kd_ref, indicator_ref, material_topic, cognitive_level, hots_flag, media_asset_ids, workflow_status, version, author_username, reviewer_username, reviewed_at, approver_username, approved_at, writer_notes, review_notes, event_id
+  $32, $33,
+  COALESCE($41::uuid, new_question.id),
+  $42,
+  $43::uuid,
+  $44::uuid,
+  $45,
+  $46,
+  $34, $35, $36, $37, $38, $39, $40
+FROM new_question
+RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options, stem_html, stem_latex, stimulus_html, stimulus_latex, explanation_html, rubric_html, academic_phase, grade_level, cp_ref, tp_ref, kd_ref, indicator_ref, material_topic, cognitive_level, hots_flag, media_asset_ids, workflow_status, version, author_username, reviewer_username, reviewed_at, approver_username, approved_at, writer_notes, review_notes, event_id, version_group_id, version_number, source_question_id, supersedes_question_id, is_latest_version, version_note
 `
 
 type CreateCbtQuestionParams struct {
-	EventID          pgtype.UUID               `json:"event_id"`
-	SubjectID        pgtype.UUID               `json:"subject_id"`
-	Code             string                    `json:"code"`
-	QuestionText     string                    `json:"question_text"`
-	QuestionType     string                    `json:"question_type"`
-	Options          []byte                    `json:"options"`
-	OptionA          string                    `json:"option_a"`
-	OptionB          string                    `json:"option_b"`
-	OptionC          string                    `json:"option_c"`
-	OptionD          string                    `json:"option_d"`
-	OptionE          string                    `json:"option_e"`
-	AnswerKey        string                    `json:"answer_key"`
-	Explanation      string                    `json:"explanation"`
-	Difficulty       CbtQuestionDifficultyEnum `json:"difficulty"`
-	Status           CbtQuestionStatusEnum     `json:"status"`
-	StemHtml         string                    `json:"stem_html"`
-	StemLatex        string                    `json:"stem_latex"`
-	StimulusHtml     string                    `json:"stimulus_html"`
-	StimulusLatex    string                    `json:"stimulus_latex"`
-	ExplanationHtml  string                    `json:"explanation_html"`
-	RubricHtml       string                    `json:"rubric_html"`
-	AcademicPhase    string                    `json:"academic_phase"`
-	GradeLevel       pgtype.Int2               `json:"grade_level"`
-	CpRef            string                    `json:"cp_ref"`
-	TpRef            string                    `json:"tp_ref"`
-	KdRef            string                    `json:"kd_ref"`
-	IndicatorRef     string                    `json:"indicator_ref"`
-	MaterialTopic    string                    `json:"material_topic"`
-	CognitiveLevel   string                    `json:"cognitive_level"`
-	HotsFlag         bool                      `json:"hots_flag"`
-	MediaAssetIds    []byte                    `json:"media_asset_ids"`
-	WorkflowStatus   string                    `json:"workflow_status"`
-	Version          int32                     `json:"version"`
-	AuthorUsername   string                    `json:"author_username"`
-	ReviewerUsername string                    `json:"reviewer_username"`
-	ReviewedAt       pgtype.Timestamptz        `json:"reviewed_at"`
-	ApproverUsername string                    `json:"approver_username"`
-	ApprovedAt       pgtype.Timestamptz        `json:"approved_at"`
-	WriterNotes      string                    `json:"writer_notes"`
-	ReviewNotes      string                    `json:"review_notes"`
+	EventID              pgtype.UUID               `json:"event_id"`
+	SubjectID            pgtype.UUID               `json:"subject_id"`
+	Code                 string                    `json:"code"`
+	QuestionText         string                    `json:"question_text"`
+	QuestionType         string                    `json:"question_type"`
+	Options              []byte                    `json:"options"`
+	OptionA              string                    `json:"option_a"`
+	OptionB              string                    `json:"option_b"`
+	OptionC              string                    `json:"option_c"`
+	OptionD              string                    `json:"option_d"`
+	OptionE              string                    `json:"option_e"`
+	AnswerKey            string                    `json:"answer_key"`
+	Explanation          string                    `json:"explanation"`
+	Difficulty           CbtQuestionDifficultyEnum `json:"difficulty"`
+	Status               CbtQuestionStatusEnum     `json:"status"`
+	StemHtml             string                    `json:"stem_html"`
+	StemLatex            string                    `json:"stem_latex"`
+	StimulusHtml         string                    `json:"stimulus_html"`
+	StimulusLatex        string                    `json:"stimulus_latex"`
+	ExplanationHtml      string                    `json:"explanation_html"`
+	RubricHtml           string                    `json:"rubric_html"`
+	AcademicPhase        string                    `json:"academic_phase"`
+	GradeLevel           pgtype.Int2               `json:"grade_level"`
+	CpRef                string                    `json:"cp_ref"`
+	TpRef                string                    `json:"tp_ref"`
+	KdRef                string                    `json:"kd_ref"`
+	IndicatorRef         string                    `json:"indicator_ref"`
+	MaterialTopic        string                    `json:"material_topic"`
+	CognitiveLevel       string                    `json:"cognitive_level"`
+	HotsFlag             bool                      `json:"hots_flag"`
+	MediaAssetIds        []byte                    `json:"media_asset_ids"`
+	WorkflowStatus       string                    `json:"workflow_status"`
+	Version              int32                     `json:"version"`
+	AuthorUsername       string                    `json:"author_username"`
+	ReviewerUsername     string                    `json:"reviewer_username"`
+	ReviewedAt           pgtype.Timestamptz        `json:"reviewed_at"`
+	ApproverUsername     string                    `json:"approver_username"`
+	ApprovedAt           pgtype.Timestamptz        `json:"approved_at"`
+	WriterNotes          string                    `json:"writer_notes"`
+	ReviewNotes          string                    `json:"review_notes"`
+	VersionGroupID       pgtype.UUID               `json:"version_group_id"`
+	VersionNumber        int32                     `json:"version_number"`
+	SourceQuestionID     pgtype.UUID               `json:"source_question_id"`
+	SupersedesQuestionID pgtype.UUID               `json:"supersedes_question_id"`
+	IsLatestVersion      bool                      `json:"is_latest_version"`
+	VersionNote          string                    `json:"version_note"`
 }
 
 func (q *Queries) CreateCbtQuestion(ctx context.Context, arg CreateCbtQuestionParams) (CbtQuestion, error) {
@@ -217,6 +235,12 @@ func (q *Queries) CreateCbtQuestion(ctx context.Context, arg CreateCbtQuestionPa
 		arg.ApprovedAt,
 		arg.WriterNotes,
 		arg.ReviewNotes,
+		arg.VersionGroupID,
+		arg.VersionNumber,
+		arg.SourceQuestionID,
+		arg.SupersedesQuestionID,
+		arg.IsLatestVersion,
+		arg.VersionNote,
 	)
 	var i CbtQuestion
 	err := row.Scan(
@@ -263,6 +287,12 @@ func (q *Queries) CreateCbtQuestion(ctx context.Context, arg CreateCbtQuestionPa
 		&i.WriterNotes,
 		&i.ReviewNotes,
 		&i.EventID,
+		&i.VersionGroupID,
+		&i.VersionNumber,
+		&i.SourceQuestionID,
+		&i.SupersedesQuestionID,
+		&i.IsLatestVersion,
+		&i.VersionNote,
 	)
 	return i, err
 }
@@ -321,6 +351,8 @@ SELECT q.id, q.event_id, q.subject_id, q.code, q.question_text, q.question_type,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
+       q.version_group_id, q.version_number, q.source_question_id,
+       q.supersedes_question_id, q.is_latest_version, q.version_note,
        q.author_username, q.reviewer_username, q.reviewed_at,
        q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
        COALESCE(pkg_usage.package_count, 0)::int AS package_count,
@@ -340,51 +372,57 @@ WHERE q.id = $1
 `
 
 type GetCbtQuestionRow struct {
-	ID               pgtype.UUID               `json:"id"`
-	EventID          pgtype.UUID               `json:"event_id"`
-	SubjectID        pgtype.UUID               `json:"subject_id"`
-	Code             string                    `json:"code"`
-	QuestionText     string                    `json:"question_text"`
-	QuestionType     string                    `json:"question_type"`
-	Options          []byte                    `json:"options"`
-	OptionA          string                    `json:"option_a"`
-	OptionB          string                    `json:"option_b"`
-	OptionC          string                    `json:"option_c"`
-	OptionD          string                    `json:"option_d"`
-	OptionE          string                    `json:"option_e"`
-	AnswerKey        string                    `json:"answer_key"`
-	Explanation      string                    `json:"explanation"`
-	Difficulty       CbtQuestionDifficultyEnum `json:"difficulty"`
-	Status           CbtQuestionStatusEnum     `json:"status"`
-	CreatedAt        pgtype.Timestamptz        `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz        `json:"updated_at"`
-	StemHtml         string                    `json:"stem_html"`
-	StemLatex        string                    `json:"stem_latex"`
-	StimulusHtml     string                    `json:"stimulus_html"`
-	StimulusLatex    string                    `json:"stimulus_latex"`
-	ExplanationHtml  string                    `json:"explanation_html"`
-	RubricHtml       string                    `json:"rubric_html"`
-	AcademicPhase    string                    `json:"academic_phase"`
-	GradeLevel       pgtype.Int2               `json:"grade_level"`
-	CpRef            string                    `json:"cp_ref"`
-	TpRef            string                    `json:"tp_ref"`
-	KdRef            string                    `json:"kd_ref"`
-	IndicatorRef     string                    `json:"indicator_ref"`
-	MaterialTopic    string                    `json:"material_topic"`
-	CognitiveLevel   string                    `json:"cognitive_level"`
-	HotsFlag         bool                      `json:"hots_flag"`
-	MediaAssetIds    []byte                    `json:"media_asset_ids"`
-	WorkflowStatus   string                    `json:"workflow_status"`
-	Version          int32                     `json:"version"`
-	AuthorUsername   string                    `json:"author_username"`
-	ReviewerUsername string                    `json:"reviewer_username"`
-	ReviewedAt       pgtype.Timestamptz        `json:"reviewed_at"`
-	ApproverUsername string                    `json:"approver_username"`
-	ApprovedAt       pgtype.Timestamptz        `json:"approved_at"`
-	WriterNotes      string                    `json:"writer_notes"`
-	ReviewNotes      string                    `json:"review_notes"`
-	PackageCount     int32                     `json:"package_count"`
-	AnswerCount      int32                     `json:"answer_count"`
+	ID                   pgtype.UUID               `json:"id"`
+	EventID              pgtype.UUID               `json:"event_id"`
+	SubjectID            pgtype.UUID               `json:"subject_id"`
+	Code                 string                    `json:"code"`
+	QuestionText         string                    `json:"question_text"`
+	QuestionType         string                    `json:"question_type"`
+	Options              []byte                    `json:"options"`
+	OptionA              string                    `json:"option_a"`
+	OptionB              string                    `json:"option_b"`
+	OptionC              string                    `json:"option_c"`
+	OptionD              string                    `json:"option_d"`
+	OptionE              string                    `json:"option_e"`
+	AnswerKey            string                    `json:"answer_key"`
+	Explanation          string                    `json:"explanation"`
+	Difficulty           CbtQuestionDifficultyEnum `json:"difficulty"`
+	Status               CbtQuestionStatusEnum     `json:"status"`
+	CreatedAt            pgtype.Timestamptz        `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz        `json:"updated_at"`
+	StemHtml             string                    `json:"stem_html"`
+	StemLatex            string                    `json:"stem_latex"`
+	StimulusHtml         string                    `json:"stimulus_html"`
+	StimulusLatex        string                    `json:"stimulus_latex"`
+	ExplanationHtml      string                    `json:"explanation_html"`
+	RubricHtml           string                    `json:"rubric_html"`
+	AcademicPhase        string                    `json:"academic_phase"`
+	GradeLevel           pgtype.Int2               `json:"grade_level"`
+	CpRef                string                    `json:"cp_ref"`
+	TpRef                string                    `json:"tp_ref"`
+	KdRef                string                    `json:"kd_ref"`
+	IndicatorRef         string                    `json:"indicator_ref"`
+	MaterialTopic        string                    `json:"material_topic"`
+	CognitiveLevel       string                    `json:"cognitive_level"`
+	HotsFlag             bool                      `json:"hots_flag"`
+	MediaAssetIds        []byte                    `json:"media_asset_ids"`
+	WorkflowStatus       string                    `json:"workflow_status"`
+	Version              int32                     `json:"version"`
+	VersionGroupID       pgtype.UUID               `json:"version_group_id"`
+	VersionNumber        int32                     `json:"version_number"`
+	SourceQuestionID     pgtype.UUID               `json:"source_question_id"`
+	SupersedesQuestionID pgtype.UUID               `json:"supersedes_question_id"`
+	IsLatestVersion      bool                      `json:"is_latest_version"`
+	VersionNote          string                    `json:"version_note"`
+	AuthorUsername       string                    `json:"author_username"`
+	ReviewerUsername     string                    `json:"reviewer_username"`
+	ReviewedAt           pgtype.Timestamptz        `json:"reviewed_at"`
+	ApproverUsername     string                    `json:"approver_username"`
+	ApprovedAt           pgtype.Timestamptz        `json:"approved_at"`
+	WriterNotes          string                    `json:"writer_notes"`
+	ReviewNotes          string                    `json:"review_notes"`
+	PackageCount         int32                     `json:"package_count"`
+	AnswerCount          int32                     `json:"answer_count"`
 }
 
 func (q *Queries) GetCbtQuestion(ctx context.Context, id pgtype.UUID) (GetCbtQuestionRow, error) {
@@ -427,6 +465,12 @@ func (q *Queries) GetCbtQuestion(ctx context.Context, id pgtype.UUID) (GetCbtQue
 		&i.MediaAssetIds,
 		&i.WorkflowStatus,
 		&i.Version,
+		&i.VersionGroupID,
+		&i.VersionNumber,
+		&i.SourceQuestionID,
+		&i.SupersedesQuestionID,
+		&i.IsLatestVersion,
+		&i.VersionNote,
 		&i.AuthorUsername,
 		&i.ReviewerUsername,
 		&i.ReviewedAt,
@@ -451,6 +495,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
+       q.version_group_id, q.version_number, q.source_question_id,
+       q.supersedes_question_id, q.is_latest_version, q.version_note,
        q.author_username, q.reviewer_username, q.reviewed_at,
        q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
        COALESCE(pkg_usage.package_count, 0)::int AS package_count,
@@ -471,53 +517,59 @@ WHERE q.id = $1
 `
 
 type GetCbtQuestionDetailRow struct {
-	ID               pgtype.UUID               `json:"id"`
-	EventID          pgtype.UUID               `json:"event_id"`
-	SubjectID        pgtype.UUID               `json:"subject_id"`
-	SubjectName      string                    `json:"subject_name"`
-	SubjectCode      string                    `json:"subject_code"`
-	Code             string                    `json:"code"`
-	QuestionText     string                    `json:"question_text"`
-	QuestionType     string                    `json:"question_type"`
-	Options          []byte                    `json:"options"`
-	OptionA          string                    `json:"option_a"`
-	OptionB          string                    `json:"option_b"`
-	OptionC          string                    `json:"option_c"`
-	OptionD          string                    `json:"option_d"`
-	OptionE          string                    `json:"option_e"`
-	AnswerKey        string                    `json:"answer_key"`
-	Explanation      string                    `json:"explanation"`
-	Difficulty       CbtQuestionDifficultyEnum `json:"difficulty"`
-	Status           CbtQuestionStatusEnum     `json:"status"`
-	CreatedAt        pgtype.Timestamptz        `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz        `json:"updated_at"`
-	StemHtml         string                    `json:"stem_html"`
-	StemLatex        string                    `json:"stem_latex"`
-	StimulusHtml     string                    `json:"stimulus_html"`
-	StimulusLatex    string                    `json:"stimulus_latex"`
-	ExplanationHtml  string                    `json:"explanation_html"`
-	RubricHtml       string                    `json:"rubric_html"`
-	AcademicPhase    string                    `json:"academic_phase"`
-	GradeLevel       pgtype.Int2               `json:"grade_level"`
-	CpRef            string                    `json:"cp_ref"`
-	TpRef            string                    `json:"tp_ref"`
-	KdRef            string                    `json:"kd_ref"`
-	IndicatorRef     string                    `json:"indicator_ref"`
-	MaterialTopic    string                    `json:"material_topic"`
-	CognitiveLevel   string                    `json:"cognitive_level"`
-	HotsFlag         bool                      `json:"hots_flag"`
-	MediaAssetIds    []byte                    `json:"media_asset_ids"`
-	WorkflowStatus   string                    `json:"workflow_status"`
-	Version          int32                     `json:"version"`
-	AuthorUsername   string                    `json:"author_username"`
-	ReviewerUsername string                    `json:"reviewer_username"`
-	ReviewedAt       pgtype.Timestamptz        `json:"reviewed_at"`
-	ApproverUsername string                    `json:"approver_username"`
-	ApprovedAt       pgtype.Timestamptz        `json:"approved_at"`
-	WriterNotes      string                    `json:"writer_notes"`
-	ReviewNotes      string                    `json:"review_notes"`
-	PackageCount     int32                     `json:"package_count"`
-	AnswerCount      int32                     `json:"answer_count"`
+	ID                   pgtype.UUID               `json:"id"`
+	EventID              pgtype.UUID               `json:"event_id"`
+	SubjectID            pgtype.UUID               `json:"subject_id"`
+	SubjectName          string                    `json:"subject_name"`
+	SubjectCode          string                    `json:"subject_code"`
+	Code                 string                    `json:"code"`
+	QuestionText         string                    `json:"question_text"`
+	QuestionType         string                    `json:"question_type"`
+	Options              []byte                    `json:"options"`
+	OptionA              string                    `json:"option_a"`
+	OptionB              string                    `json:"option_b"`
+	OptionC              string                    `json:"option_c"`
+	OptionD              string                    `json:"option_d"`
+	OptionE              string                    `json:"option_e"`
+	AnswerKey            string                    `json:"answer_key"`
+	Explanation          string                    `json:"explanation"`
+	Difficulty           CbtQuestionDifficultyEnum `json:"difficulty"`
+	Status               CbtQuestionStatusEnum     `json:"status"`
+	CreatedAt            pgtype.Timestamptz        `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz        `json:"updated_at"`
+	StemHtml             string                    `json:"stem_html"`
+	StemLatex            string                    `json:"stem_latex"`
+	StimulusHtml         string                    `json:"stimulus_html"`
+	StimulusLatex        string                    `json:"stimulus_latex"`
+	ExplanationHtml      string                    `json:"explanation_html"`
+	RubricHtml           string                    `json:"rubric_html"`
+	AcademicPhase        string                    `json:"academic_phase"`
+	GradeLevel           pgtype.Int2               `json:"grade_level"`
+	CpRef                string                    `json:"cp_ref"`
+	TpRef                string                    `json:"tp_ref"`
+	KdRef                string                    `json:"kd_ref"`
+	IndicatorRef         string                    `json:"indicator_ref"`
+	MaterialTopic        string                    `json:"material_topic"`
+	CognitiveLevel       string                    `json:"cognitive_level"`
+	HotsFlag             bool                      `json:"hots_flag"`
+	MediaAssetIds        []byte                    `json:"media_asset_ids"`
+	WorkflowStatus       string                    `json:"workflow_status"`
+	Version              int32                     `json:"version"`
+	VersionGroupID       pgtype.UUID               `json:"version_group_id"`
+	VersionNumber        int32                     `json:"version_number"`
+	SourceQuestionID     pgtype.UUID               `json:"source_question_id"`
+	SupersedesQuestionID pgtype.UUID               `json:"supersedes_question_id"`
+	IsLatestVersion      bool                      `json:"is_latest_version"`
+	VersionNote          string                    `json:"version_note"`
+	AuthorUsername       string                    `json:"author_username"`
+	ReviewerUsername     string                    `json:"reviewer_username"`
+	ReviewedAt           pgtype.Timestamptz        `json:"reviewed_at"`
+	ApproverUsername     string                    `json:"approver_username"`
+	ApprovedAt           pgtype.Timestamptz        `json:"approved_at"`
+	WriterNotes          string                    `json:"writer_notes"`
+	ReviewNotes          string                    `json:"review_notes"`
+	PackageCount         int32                     `json:"package_count"`
+	AnswerCount          int32                     `json:"answer_count"`
 }
 
 func (q *Queries) GetCbtQuestionDetail(ctx context.Context, id pgtype.UUID) (GetCbtQuestionDetailRow, error) {
@@ -562,6 +614,12 @@ func (q *Queries) GetCbtQuestionDetail(ctx context.Context, id pgtype.UUID) (Get
 		&i.MediaAssetIds,
 		&i.WorkflowStatus,
 		&i.Version,
+		&i.VersionGroupID,
+		&i.VersionNumber,
+		&i.SourceQuestionID,
+		&i.SupersedesQuestionID,
+		&i.IsLatestVersion,
+		&i.VersionNote,
 		&i.AuthorUsername,
 		&i.ReviewerUsername,
 		&i.ReviewedAt,
@@ -634,6 +692,19 @@ func (q *Queries) GetCbtQuestionSummaryCounts(ctx context.Context, arg GetCbtQue
 		&i.PackageUsage,
 	)
 	return i, err
+}
+
+const getNextCbtQuestionVersionNumber = `-- name: GetNextCbtQuestionVersionNumber :one
+SELECT (COALESCE(MAX(version_number), 0)::int + 1)::int
+FROM cbt_questions
+WHERE version_group_id = $1
+`
+
+func (q *Queries) GetNextCbtQuestionVersionNumber(ctx context.Context, versionGroupID pgtype.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, getNextCbtQuestionVersionNumber, versionGroupID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const listCbtQuestionStemTextsBySubject = `-- name: ListCbtQuestionStemTextsBySubject :many
@@ -890,6 +961,70 @@ func (q *Queries) ListCbtQuestionTimeline(ctx context.Context, questionID pgtype
 	return items, nil
 }
 
+const listCbtQuestionVersions = `-- name: ListCbtQuestionVersions :many
+SELECT q.id, q.code, q.workflow_status, q.status, q.version_number,
+       q.is_latest_version, q.source_question_id, q.supersedes_question_id,
+       q.version_note, q.created_at, q.updated_at,
+       q.author_username, q.reviewer_username, q.approver_username
+FROM cbt_questions q
+WHERE q.version_group_id = (
+  SELECT source.version_group_id FROM cbt_questions source WHERE source.id = $1
+)
+ORDER BY q.version_number DESC, q.created_at DESC
+`
+
+type ListCbtQuestionVersionsRow struct {
+	ID                   pgtype.UUID           `json:"id"`
+	Code                 string                `json:"code"`
+	WorkflowStatus       string                `json:"workflow_status"`
+	Status               CbtQuestionStatusEnum `json:"status"`
+	VersionNumber        int32                 `json:"version_number"`
+	IsLatestVersion      bool                  `json:"is_latest_version"`
+	SourceQuestionID     pgtype.UUID           `json:"source_question_id"`
+	SupersedesQuestionID pgtype.UUID           `json:"supersedes_question_id"`
+	VersionNote          string                `json:"version_note"`
+	CreatedAt            pgtype.Timestamptz    `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz    `json:"updated_at"`
+	AuthorUsername       string                `json:"author_username"`
+	ReviewerUsername     string                `json:"reviewer_username"`
+	ApproverUsername     string                `json:"approver_username"`
+}
+
+func (q *Queries) ListCbtQuestionVersions(ctx context.Context, id pgtype.UUID) ([]ListCbtQuestionVersionsRow, error) {
+	rows, err := q.db.Query(ctx, listCbtQuestionVersions, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtQuestionVersionsRow{}
+	for rows.Next() {
+		var i ListCbtQuestionVersionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.WorkflowStatus,
+			&i.Status,
+			&i.VersionNumber,
+			&i.IsLatestVersion,
+			&i.SourceQuestionID,
+			&i.SupersedesQuestionID,
+			&i.VersionNote,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AuthorUsername,
+			&i.ReviewerUsername,
+			&i.ApproverUsername,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCbtQuestions = `-- name: ListCbtQuestions :many
 SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject_code,
        q.code, q.question_text, q.question_type, q.options,
@@ -912,6 +1047,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
+       q.version_group_id, q.version_number, q.source_question_id,
+       q.supersedes_question_id, q.is_latest_version, q.version_note,
        q.author_username, q.reviewer_username, q.reviewed_at,
        q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
        COALESCE(pkg_usage.package_count, 0)::int AS package_count,
@@ -938,53 +1075,59 @@ type ListCbtQuestionsParams struct {
 }
 
 type ListCbtQuestionsRow struct {
-	ID               pgtype.UUID               `json:"id"`
-	EventID          pgtype.UUID               `json:"event_id"`
-	SubjectID        pgtype.UUID               `json:"subject_id"`
-	SubjectName      string                    `json:"subject_name"`
-	SubjectCode      string                    `json:"subject_code"`
-	Code             string                    `json:"code"`
-	QuestionText     string                    `json:"question_text"`
-	QuestionType     string                    `json:"question_type"`
-	Options          []byte                    `json:"options"`
-	OptionA          string                    `json:"option_a"`
-	OptionB          string                    `json:"option_b"`
-	OptionC          string                    `json:"option_c"`
-	OptionD          string                    `json:"option_d"`
-	OptionE          string                    `json:"option_e"`
-	AnswerKey        string                    `json:"answer_key"`
-	Explanation      string                    `json:"explanation"`
-	Difficulty       CbtQuestionDifficultyEnum `json:"difficulty"`
-	Status           CbtQuestionStatusEnum     `json:"status"`
-	CreatedAt        pgtype.Timestamptz        `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz        `json:"updated_at"`
-	StemHtml         string                    `json:"stem_html"`
-	StemLatex        string                    `json:"stem_latex"`
-	StimulusHtml     string                    `json:"stimulus_html"`
-	StimulusLatex    string                    `json:"stimulus_latex"`
-	ExplanationHtml  string                    `json:"explanation_html"`
-	RubricHtml       string                    `json:"rubric_html"`
-	AcademicPhase    string                    `json:"academic_phase"`
-	GradeLevel       pgtype.Int2               `json:"grade_level"`
-	CpRef            string                    `json:"cp_ref"`
-	TpRef            string                    `json:"tp_ref"`
-	KdRef            string                    `json:"kd_ref"`
-	IndicatorRef     string                    `json:"indicator_ref"`
-	MaterialTopic    string                    `json:"material_topic"`
-	CognitiveLevel   string                    `json:"cognitive_level"`
-	HotsFlag         bool                      `json:"hots_flag"`
-	MediaAssetIds    []byte                    `json:"media_asset_ids"`
-	WorkflowStatus   string                    `json:"workflow_status"`
-	Version          int32                     `json:"version"`
-	AuthorUsername   string                    `json:"author_username"`
-	ReviewerUsername string                    `json:"reviewer_username"`
-	ReviewedAt       pgtype.Timestamptz        `json:"reviewed_at"`
-	ApproverUsername string                    `json:"approver_username"`
-	ApprovedAt       pgtype.Timestamptz        `json:"approved_at"`
-	WriterNotes      string                    `json:"writer_notes"`
-	ReviewNotes      string                    `json:"review_notes"`
-	PackageCount     int32                     `json:"package_count"`
-	AnswerCount      int32                     `json:"answer_count"`
+	ID                   pgtype.UUID               `json:"id"`
+	EventID              pgtype.UUID               `json:"event_id"`
+	SubjectID            pgtype.UUID               `json:"subject_id"`
+	SubjectName          string                    `json:"subject_name"`
+	SubjectCode          string                    `json:"subject_code"`
+	Code                 string                    `json:"code"`
+	QuestionText         string                    `json:"question_text"`
+	QuestionType         string                    `json:"question_type"`
+	Options              []byte                    `json:"options"`
+	OptionA              string                    `json:"option_a"`
+	OptionB              string                    `json:"option_b"`
+	OptionC              string                    `json:"option_c"`
+	OptionD              string                    `json:"option_d"`
+	OptionE              string                    `json:"option_e"`
+	AnswerKey            string                    `json:"answer_key"`
+	Explanation          string                    `json:"explanation"`
+	Difficulty           CbtQuestionDifficultyEnum `json:"difficulty"`
+	Status               CbtQuestionStatusEnum     `json:"status"`
+	CreatedAt            pgtype.Timestamptz        `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz        `json:"updated_at"`
+	StemHtml             string                    `json:"stem_html"`
+	StemLatex            string                    `json:"stem_latex"`
+	StimulusHtml         string                    `json:"stimulus_html"`
+	StimulusLatex        string                    `json:"stimulus_latex"`
+	ExplanationHtml      string                    `json:"explanation_html"`
+	RubricHtml           string                    `json:"rubric_html"`
+	AcademicPhase        string                    `json:"academic_phase"`
+	GradeLevel           pgtype.Int2               `json:"grade_level"`
+	CpRef                string                    `json:"cp_ref"`
+	TpRef                string                    `json:"tp_ref"`
+	KdRef                string                    `json:"kd_ref"`
+	IndicatorRef         string                    `json:"indicator_ref"`
+	MaterialTopic        string                    `json:"material_topic"`
+	CognitiveLevel       string                    `json:"cognitive_level"`
+	HotsFlag             bool                      `json:"hots_flag"`
+	MediaAssetIds        []byte                    `json:"media_asset_ids"`
+	WorkflowStatus       string                    `json:"workflow_status"`
+	Version              int32                     `json:"version"`
+	VersionGroupID       pgtype.UUID               `json:"version_group_id"`
+	VersionNumber        int32                     `json:"version_number"`
+	SourceQuestionID     pgtype.UUID               `json:"source_question_id"`
+	SupersedesQuestionID pgtype.UUID               `json:"supersedes_question_id"`
+	IsLatestVersion      bool                      `json:"is_latest_version"`
+	VersionNote          string                    `json:"version_note"`
+	AuthorUsername       string                    `json:"author_username"`
+	ReviewerUsername     string                    `json:"reviewer_username"`
+	ReviewedAt           pgtype.Timestamptz        `json:"reviewed_at"`
+	ApproverUsername     string                    `json:"approver_username"`
+	ApprovedAt           pgtype.Timestamptz        `json:"approved_at"`
+	WriterNotes          string                    `json:"writer_notes"`
+	ReviewNotes          string                    `json:"review_notes"`
+	PackageCount         int32                     `json:"package_count"`
+	AnswerCount          int32                     `json:"answer_count"`
 }
 
 func (q *Queries) ListCbtQuestions(ctx context.Context, arg ListCbtQuestionsParams) ([]ListCbtQuestionsRow, error) {
@@ -1035,6 +1178,12 @@ func (q *Queries) ListCbtQuestions(ctx context.Context, arg ListCbtQuestionsPara
 			&i.MediaAssetIds,
 			&i.WorkflowStatus,
 			&i.Version,
+			&i.VersionGroupID,
+			&i.VersionNumber,
+			&i.SourceQuestionID,
+			&i.SupersedesQuestionID,
+			&i.IsLatestVersion,
+			&i.VersionNote,
 			&i.AuthorUsername,
 			&i.ReviewerUsername,
 			&i.ReviewedAt,
@@ -1077,6 +1226,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
+       q.version_group_id, q.version_number, q.source_question_id,
+       q.supersedes_question_id, q.is_latest_version, q.version_note,
        q.author_username, q.reviewer_username, q.reviewed_at,
        q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
        COALESCE(pkg_usage.package_count, 0)::int AS package_count,
@@ -1173,53 +1324,59 @@ type ListCbtQuestionsFilteredParams struct {
 }
 
 type ListCbtQuestionsFilteredRow struct {
-	ID               pgtype.UUID               `json:"id"`
-	EventID          pgtype.UUID               `json:"event_id"`
-	SubjectID        pgtype.UUID               `json:"subject_id"`
-	SubjectName      string                    `json:"subject_name"`
-	SubjectCode      string                    `json:"subject_code"`
-	Code             string                    `json:"code"`
-	QuestionText     string                    `json:"question_text"`
-	QuestionType     string                    `json:"question_type"`
-	Options          []byte                    `json:"options"`
-	OptionA          string                    `json:"option_a"`
-	OptionB          string                    `json:"option_b"`
-	OptionC          string                    `json:"option_c"`
-	OptionD          string                    `json:"option_d"`
-	OptionE          string                    `json:"option_e"`
-	AnswerKey        string                    `json:"answer_key"`
-	Explanation      string                    `json:"explanation"`
-	Difficulty       CbtQuestionDifficultyEnum `json:"difficulty"`
-	Status           CbtQuestionStatusEnum     `json:"status"`
-	CreatedAt        pgtype.Timestamptz        `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz        `json:"updated_at"`
-	StemHtml         string                    `json:"stem_html"`
-	StemLatex        string                    `json:"stem_latex"`
-	StimulusHtml     string                    `json:"stimulus_html"`
-	StimulusLatex    string                    `json:"stimulus_latex"`
-	ExplanationHtml  string                    `json:"explanation_html"`
-	RubricHtml       string                    `json:"rubric_html"`
-	AcademicPhase    string                    `json:"academic_phase"`
-	GradeLevel       pgtype.Int2               `json:"grade_level"`
-	CpRef            string                    `json:"cp_ref"`
-	TpRef            string                    `json:"tp_ref"`
-	KdRef            string                    `json:"kd_ref"`
-	IndicatorRef     string                    `json:"indicator_ref"`
-	MaterialTopic    string                    `json:"material_topic"`
-	CognitiveLevel   string                    `json:"cognitive_level"`
-	HotsFlag         bool                      `json:"hots_flag"`
-	MediaAssetIds    []byte                    `json:"media_asset_ids"`
-	WorkflowStatus   string                    `json:"workflow_status"`
-	Version          int32                     `json:"version"`
-	AuthorUsername   string                    `json:"author_username"`
-	ReviewerUsername string                    `json:"reviewer_username"`
-	ReviewedAt       pgtype.Timestamptz        `json:"reviewed_at"`
-	ApproverUsername string                    `json:"approver_username"`
-	ApprovedAt       pgtype.Timestamptz        `json:"approved_at"`
-	WriterNotes      string                    `json:"writer_notes"`
-	ReviewNotes      string                    `json:"review_notes"`
-	PackageCount     int32                     `json:"package_count"`
-	AnswerCount      int32                     `json:"answer_count"`
+	ID                   pgtype.UUID               `json:"id"`
+	EventID              pgtype.UUID               `json:"event_id"`
+	SubjectID            pgtype.UUID               `json:"subject_id"`
+	SubjectName          string                    `json:"subject_name"`
+	SubjectCode          string                    `json:"subject_code"`
+	Code                 string                    `json:"code"`
+	QuestionText         string                    `json:"question_text"`
+	QuestionType         string                    `json:"question_type"`
+	Options              []byte                    `json:"options"`
+	OptionA              string                    `json:"option_a"`
+	OptionB              string                    `json:"option_b"`
+	OptionC              string                    `json:"option_c"`
+	OptionD              string                    `json:"option_d"`
+	OptionE              string                    `json:"option_e"`
+	AnswerKey            string                    `json:"answer_key"`
+	Explanation          string                    `json:"explanation"`
+	Difficulty           CbtQuestionDifficultyEnum `json:"difficulty"`
+	Status               CbtQuestionStatusEnum     `json:"status"`
+	CreatedAt            pgtype.Timestamptz        `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz        `json:"updated_at"`
+	StemHtml             string                    `json:"stem_html"`
+	StemLatex            string                    `json:"stem_latex"`
+	StimulusHtml         string                    `json:"stimulus_html"`
+	StimulusLatex        string                    `json:"stimulus_latex"`
+	ExplanationHtml      string                    `json:"explanation_html"`
+	RubricHtml           string                    `json:"rubric_html"`
+	AcademicPhase        string                    `json:"academic_phase"`
+	GradeLevel           pgtype.Int2               `json:"grade_level"`
+	CpRef                string                    `json:"cp_ref"`
+	TpRef                string                    `json:"tp_ref"`
+	KdRef                string                    `json:"kd_ref"`
+	IndicatorRef         string                    `json:"indicator_ref"`
+	MaterialTopic        string                    `json:"material_topic"`
+	CognitiveLevel       string                    `json:"cognitive_level"`
+	HotsFlag             bool                      `json:"hots_flag"`
+	MediaAssetIds        []byte                    `json:"media_asset_ids"`
+	WorkflowStatus       string                    `json:"workflow_status"`
+	Version              int32                     `json:"version"`
+	VersionGroupID       pgtype.UUID               `json:"version_group_id"`
+	VersionNumber        int32                     `json:"version_number"`
+	SourceQuestionID     pgtype.UUID               `json:"source_question_id"`
+	SupersedesQuestionID pgtype.UUID               `json:"supersedes_question_id"`
+	IsLatestVersion      bool                      `json:"is_latest_version"`
+	VersionNote          string                    `json:"version_note"`
+	AuthorUsername       string                    `json:"author_username"`
+	ReviewerUsername     string                    `json:"reviewer_username"`
+	ReviewedAt           pgtype.Timestamptz        `json:"reviewed_at"`
+	ApproverUsername     string                    `json:"approver_username"`
+	ApprovedAt           pgtype.Timestamptz        `json:"approved_at"`
+	WriterNotes          string                    `json:"writer_notes"`
+	ReviewNotes          string                    `json:"review_notes"`
+	PackageCount         int32                     `json:"package_count"`
+	AnswerCount          int32                     `json:"answer_count"`
 }
 
 func (q *Queries) ListCbtQuestionsFiltered(ctx context.Context, arg ListCbtQuestionsFilteredParams) ([]ListCbtQuestionsFilteredRow, error) {
@@ -1286,6 +1443,12 @@ func (q *Queries) ListCbtQuestionsFiltered(ctx context.Context, arg ListCbtQuest
 			&i.MediaAssetIds,
 			&i.WorkflowStatus,
 			&i.Version,
+			&i.VersionGroupID,
+			&i.VersionNumber,
+			&i.SourceQuestionID,
+			&i.SupersedesQuestionID,
+			&i.IsLatestVersion,
+			&i.VersionNote,
 			&i.AuthorUsername,
 			&i.ReviewerUsername,
 			&i.ReviewedAt,
@@ -1328,6 +1491,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
+       q.version_group_id, q.version_number, q.source_question_id,
+       q.supersedes_question_id, q.is_latest_version, q.version_note,
        q.author_username, q.reviewer_username, q.reviewed_at,
        q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
        COALESCE(pkg_usage.package_count, 0)::int AS package_count,
@@ -1424,53 +1589,59 @@ type ListCbtQuestionsScopedParams struct {
 }
 
 type ListCbtQuestionsScopedRow struct {
-	ID               pgtype.UUID               `json:"id"`
-	EventID          pgtype.UUID               `json:"event_id"`
-	SubjectID        pgtype.UUID               `json:"subject_id"`
-	SubjectName      string                    `json:"subject_name"`
-	SubjectCode      string                    `json:"subject_code"`
-	Code             string                    `json:"code"`
-	QuestionText     string                    `json:"question_text"`
-	QuestionType     string                    `json:"question_type"`
-	Options          []byte                    `json:"options"`
-	OptionA          string                    `json:"option_a"`
-	OptionB          string                    `json:"option_b"`
-	OptionC          string                    `json:"option_c"`
-	OptionD          string                    `json:"option_d"`
-	OptionE          string                    `json:"option_e"`
-	AnswerKey        string                    `json:"answer_key"`
-	Explanation      string                    `json:"explanation"`
-	Difficulty       CbtQuestionDifficultyEnum `json:"difficulty"`
-	Status           CbtQuestionStatusEnum     `json:"status"`
-	CreatedAt        pgtype.Timestamptz        `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz        `json:"updated_at"`
-	StemHtml         string                    `json:"stem_html"`
-	StemLatex        string                    `json:"stem_latex"`
-	StimulusHtml     string                    `json:"stimulus_html"`
-	StimulusLatex    string                    `json:"stimulus_latex"`
-	ExplanationHtml  string                    `json:"explanation_html"`
-	RubricHtml       string                    `json:"rubric_html"`
-	AcademicPhase    string                    `json:"academic_phase"`
-	GradeLevel       pgtype.Int2               `json:"grade_level"`
-	CpRef            string                    `json:"cp_ref"`
-	TpRef            string                    `json:"tp_ref"`
-	KdRef            string                    `json:"kd_ref"`
-	IndicatorRef     string                    `json:"indicator_ref"`
-	MaterialTopic    string                    `json:"material_topic"`
-	CognitiveLevel   string                    `json:"cognitive_level"`
-	HotsFlag         bool                      `json:"hots_flag"`
-	MediaAssetIds    []byte                    `json:"media_asset_ids"`
-	WorkflowStatus   string                    `json:"workflow_status"`
-	Version          int32                     `json:"version"`
-	AuthorUsername   string                    `json:"author_username"`
-	ReviewerUsername string                    `json:"reviewer_username"`
-	ReviewedAt       pgtype.Timestamptz        `json:"reviewed_at"`
-	ApproverUsername string                    `json:"approver_username"`
-	ApprovedAt       pgtype.Timestamptz        `json:"approved_at"`
-	WriterNotes      string                    `json:"writer_notes"`
-	ReviewNotes      string                    `json:"review_notes"`
-	PackageCount     int32                     `json:"package_count"`
-	AnswerCount      int32                     `json:"answer_count"`
+	ID                   pgtype.UUID               `json:"id"`
+	EventID              pgtype.UUID               `json:"event_id"`
+	SubjectID            pgtype.UUID               `json:"subject_id"`
+	SubjectName          string                    `json:"subject_name"`
+	SubjectCode          string                    `json:"subject_code"`
+	Code                 string                    `json:"code"`
+	QuestionText         string                    `json:"question_text"`
+	QuestionType         string                    `json:"question_type"`
+	Options              []byte                    `json:"options"`
+	OptionA              string                    `json:"option_a"`
+	OptionB              string                    `json:"option_b"`
+	OptionC              string                    `json:"option_c"`
+	OptionD              string                    `json:"option_d"`
+	OptionE              string                    `json:"option_e"`
+	AnswerKey            string                    `json:"answer_key"`
+	Explanation          string                    `json:"explanation"`
+	Difficulty           CbtQuestionDifficultyEnum `json:"difficulty"`
+	Status               CbtQuestionStatusEnum     `json:"status"`
+	CreatedAt            pgtype.Timestamptz        `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz        `json:"updated_at"`
+	StemHtml             string                    `json:"stem_html"`
+	StemLatex            string                    `json:"stem_latex"`
+	StimulusHtml         string                    `json:"stimulus_html"`
+	StimulusLatex        string                    `json:"stimulus_latex"`
+	ExplanationHtml      string                    `json:"explanation_html"`
+	RubricHtml           string                    `json:"rubric_html"`
+	AcademicPhase        string                    `json:"academic_phase"`
+	GradeLevel           pgtype.Int2               `json:"grade_level"`
+	CpRef                string                    `json:"cp_ref"`
+	TpRef                string                    `json:"tp_ref"`
+	KdRef                string                    `json:"kd_ref"`
+	IndicatorRef         string                    `json:"indicator_ref"`
+	MaterialTopic        string                    `json:"material_topic"`
+	CognitiveLevel       string                    `json:"cognitive_level"`
+	HotsFlag             bool                      `json:"hots_flag"`
+	MediaAssetIds        []byte                    `json:"media_asset_ids"`
+	WorkflowStatus       string                    `json:"workflow_status"`
+	Version              int32                     `json:"version"`
+	VersionGroupID       pgtype.UUID               `json:"version_group_id"`
+	VersionNumber        int32                     `json:"version_number"`
+	SourceQuestionID     pgtype.UUID               `json:"source_question_id"`
+	SupersedesQuestionID pgtype.UUID               `json:"supersedes_question_id"`
+	IsLatestVersion      bool                      `json:"is_latest_version"`
+	VersionNote          string                    `json:"version_note"`
+	AuthorUsername       string                    `json:"author_username"`
+	ReviewerUsername     string                    `json:"reviewer_username"`
+	ReviewedAt           pgtype.Timestamptz        `json:"reviewed_at"`
+	ApproverUsername     string                    `json:"approver_username"`
+	ApprovedAt           pgtype.Timestamptz        `json:"approved_at"`
+	WriterNotes          string                    `json:"writer_notes"`
+	ReviewNotes          string                    `json:"review_notes"`
+	PackageCount         int32                     `json:"package_count"`
+	AnswerCount          int32                     `json:"answer_count"`
 }
 
 func (q *Queries) ListCbtQuestionsScoped(ctx context.Context, arg ListCbtQuestionsScopedParams) ([]ListCbtQuestionsScopedRow, error) {
@@ -1537,6 +1708,12 @@ func (q *Queries) ListCbtQuestionsScoped(ctx context.Context, arg ListCbtQuestio
 			&i.MediaAssetIds,
 			&i.WorkflowStatus,
 			&i.Version,
+			&i.VersionGroupID,
+			&i.VersionNumber,
+			&i.SourceQuestionID,
+			&i.SupersedesQuestionID,
+			&i.IsLatestVersion,
+			&i.VersionNote,
 			&i.AuthorUsername,
 			&i.ReviewerUsername,
 			&i.ReviewedAt,
@@ -1733,6 +1910,18 @@ func (q *Queries) ListUngradedEssaysByTeacher(ctx context.Context, arg ListUngra
 	return items, nil
 }
 
+const markCbtQuestionVersionNotLatest = `-- name: MarkCbtQuestionVersionNotLatest :exec
+UPDATE cbt_questions
+SET is_latest_version = FALSE,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+func (q *Queries) MarkCbtQuestionVersionNotLatest(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markCbtQuestionVersionNotLatest, id)
+	return err
+}
+
 const updateCbtQuestion = `-- name: UpdateCbtQuestion :one
 UPDATE cbt_questions
 SET
@@ -1777,7 +1966,7 @@ SET
   review_notes       = $39,
   updated_at         = NOW()
 WHERE id = $1
-RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options, stem_html, stem_latex, stimulus_html, stimulus_latex, explanation_html, rubric_html, academic_phase, grade_level, cp_ref, tp_ref, kd_ref, indicator_ref, material_topic, cognitive_level, hots_flag, media_asset_ids, workflow_status, version, author_username, reviewer_username, reviewed_at, approver_username, approved_at, writer_notes, review_notes, event_id
+RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options, stem_html, stem_latex, stimulus_html, stimulus_latex, explanation_html, rubric_html, academic_phase, grade_level, cp_ref, tp_ref, kd_ref, indicator_ref, material_topic, cognitive_level, hots_flag, media_asset_ids, workflow_status, version, author_username, reviewer_username, reviewed_at, approver_username, approved_at, writer_notes, review_notes, event_id, version_group_id, version_number, source_question_id, supersedes_question_id, is_latest_version, version_note
 `
 
 type UpdateCbtQuestionParams struct {
@@ -1909,6 +2098,12 @@ func (q *Queries) UpdateCbtQuestion(ctx context.Context, arg UpdateCbtQuestionPa
 		&i.WriterNotes,
 		&i.ReviewNotes,
 		&i.EventID,
+		&i.VersionGroupID,
+		&i.VersionNumber,
+		&i.SourceQuestionID,
+		&i.SupersedesQuestionID,
+		&i.IsLatestVersion,
+		&i.VersionNote,
 	)
 	return i, err
 }

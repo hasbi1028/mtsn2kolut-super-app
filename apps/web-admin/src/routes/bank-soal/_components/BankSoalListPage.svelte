@@ -639,7 +639,7 @@
 	}
 
 	function questionHref(question: Question): string {
-		return resolve('/bank-soal/tambah') + `?question_id=${encodeURIComponent(question.id)}`;
+		return resolve(`/bank-soal/soal/${encodeURIComponent(question.id)}`);
 	}
 
 	function reviewHref(): string {

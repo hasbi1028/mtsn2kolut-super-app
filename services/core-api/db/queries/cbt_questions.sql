@@ -20,6 +20,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
+       q.version_group_id, q.version_number, q.source_question_id,
+       q.supersedes_question_id, q.is_latest_version, q.version_note,
        q.author_username, q.reviewer_username, q.reviewed_at,
        q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
        COALESCE(pkg_usage.package_count, 0)::int AS package_count,
@@ -60,6 +62,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
+       q.version_group_id, q.version_number, q.source_question_id,
+       q.supersedes_question_id, q.is_latest_version, q.version_note,
        q.author_username, q.reviewer_username, q.reviewed_at,
        q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
        COALESCE(pkg_usage.package_count, 0)::int AS package_count,
@@ -158,6 +162,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
+       q.version_group_id, q.version_number, q.source_question_id,
+       q.supersedes_question_id, q.is_latest_version, q.version_note,
        q.author_username, q.reviewer_username, q.reviewed_at,
        q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
        COALESCE(pkg_usage.package_count, 0)::int AS package_count,
@@ -305,6 +311,8 @@ SELECT q.id, q.event_id, q.subject_id, q.code, q.question_text, q.question_type,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
+       q.version_group_id, q.version_number, q.source_question_id,
+       q.supersedes_question_id, q.is_latest_version, q.version_note,
        q.author_username, q.reviewer_username, q.reviewed_at,
        q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
        COALESCE(pkg_usage.package_count, 0)::int AS package_count,
@@ -333,6 +341,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
+       q.version_group_id, q.version_number, q.source_question_id,
+       q.supersedes_question_id, q.is_latest_version, q.version_note,
        q.author_username, q.reviewer_username, q.reviewed_at,
        q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
        COALESCE(pkg_usage.package_count, 0)::int AS package_count,
@@ -357,6 +367,9 @@ FROM cbt_questions
 WHERE subject_id = $1;
 
 -- name: CreateCbtQuestion :one
+WITH new_question AS (
+  SELECT gen_random_uuid() AS id
+)
 INSERT INTO cbt_questions (
   id, event_id, subject_id, code, question_text, question_type, options,
   option_a, option_b, option_c, option_d, option_e,
@@ -367,15 +380,35 @@ INSERT INTO cbt_questions (
   cp_ref, tp_ref, kd_ref, indicator_ref,
   material_topic, cognitive_level, hots_flag,
   media_asset_ids, workflow_status, version,
+  version_group_id, version_number, source_question_id,
+  supersedes_question_id, is_latest_version, version_note,
   author_username, reviewer_username, reviewed_at,
   approver_username, approved_at, writer_notes, review_notes
 )
-VALUES (
-  gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+SELECT
+  new_question.id, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
   $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31,
-  $32, $33, $34, $35, $36, $37, $38, $39, $40
-)
+  $32, $33,
+  COALESCE(sqlc.narg(version_group_id)::uuid, new_question.id),
+  sqlc.arg(version_number),
+  sqlc.narg(source_question_id)::uuid,
+  sqlc.narg(supersedes_question_id)::uuid,
+  sqlc.arg(is_latest_version),
+  sqlc.arg(version_note),
+  $34, $35, $36, $37, $38, $39, $40
+FROM new_question
 RETURNING *;
+
+-- name: GetNextCbtQuestionVersionNumber :one
+SELECT (COALESCE(MAX(version_number), 0)::int + 1)::int
+FROM cbt_questions
+WHERE version_group_id = $1;
+
+-- name: MarkCbtQuestionVersionNotLatest :exec
+UPDATE cbt_questions
+SET is_latest_version = FALSE,
+    updated_at = NOW()
+WHERE id = $1;
 
 -- name: UpdateCbtQuestion :one
 UPDATE cbt_questions
@@ -436,6 +469,17 @@ SELECT id, question_id, actor_username, action, note, metadata, created_at
 FROM cbt_question_audit_logs
 WHERE question_id = $1
 ORDER BY created_at ASC, id ASC;
+
+-- name: ListCbtQuestionVersions :many
+SELECT q.id, q.code, q.workflow_status, q.status, q.version_number,
+       q.is_latest_version, q.source_question_id, q.supersedes_question_id,
+       q.version_note, q.created_at, q.updated_at,
+       q.author_username, q.reviewer_username, q.approver_username
+FROM cbt_questions q
+WHERE q.version_group_id = (
+  SELECT source.version_group_id FROM cbt_questions source WHERE source.id = $1
+)
+ORDER BY q.version_number DESC, q.created_at DESC;
 
 -- name: ListUngradedEssays :many
 SELECT

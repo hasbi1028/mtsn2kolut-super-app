@@ -236,6 +236,10 @@ func (f *fakeCbtQuestionService) Timeline(_ context.Context, _ pgtype.UUID, _ se
 	return f.timelineRows, nil
 }
 
+func (f *fakeCbtQuestionService) Versions(_ context.Context, _ pgtype.UUID, _ service.CbtQuestionActor) ([]db.ListCbtQuestionVersionsRow, error) {
+	return []db.ListCbtQuestionVersionsRow{}, nil
+}
+
 func (f *fakeCbtQuestionService) BulkWorkflow(_ context.Context, in service.BulkCbtQuestionWorkflowInput) (service.BulkCbtQuestionWorkflowResult, error) {
 	f.bulkInput = in
 	if f.bulkErr != nil {
