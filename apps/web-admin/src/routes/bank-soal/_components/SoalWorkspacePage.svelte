@@ -43,6 +43,53 @@
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { htmlToPlainText } from '$lib/utils/html-text';
+	import {
+		ANSWER_LABELS,
+		DIFFICULTY_LABEL,
+		DRAFT_KEY,
+		EVENT_MEMBER_ROLES,
+		LAST_METADATA_KEY,
+		MAX_MATCHING_DISTRACTOR_COUNT,
+		PAGE_SIZE,
+		QUESTION_TYPE_CONFIGS,
+		WORKFLOW_LABEL,
+		answerKeyLabelForQuestion,
+		answerKeyLabels,
+		buildMatchingAnswerKey,
+		canSubmitRevisionReview,
+		composerStageToneClass,
+		createEmptyMatchingPairs,
+		defaultAnswerKeyForQuestionType,
+		defaultOptionsForQuestionType,
+		editorAllowedForQuestionType,
+		explainQuickEditBlocked,
+		getQuestionTypeConfig,
+		isQuickEditable,
+		normalizeAnswerKey,
+		normalizeAuthoringMode,
+		normalizeMatchingDistractors,
+		normalizeMatchingPairs,
+		normalizeOptionCount,
+		normalizeOrderingAnswerKey,
+		normalizeQuestionType,
+		normalizeWorkflowStatus,
+		optionLabelAt,
+		optionPrimaryContent,
+		optionSecondaryContent,
+		optionsToMatchingDistractors,
+		optionsToMatchingPairs,
+		orderingAnswerKeyLabels,
+		parseShortAnswerAliases,
+		questionTypeLabel,
+		questionUsageLocked,
+		questionUsageText,
+		revisionReason,
+		revisionSourceLabel,
+		revisionSourceOptions,
+		richTextHasContent,
+		stemPreview,
+		workflowClass,
+	} from './soal-workspace.model';
 
 	// ── Types ─────────────────────────────────────────────────────────────────
 	type Subject = { id: string; name: string; code: string };
@@ -95,18 +142,6 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	type BulkWorkflowAction = 'approve' | 'reject' | 'publish';
 	type ComposerQuestionType = 'multiple_choice' | 'multiple_answer' | 'true_false' | 'agree_disagree' | 'matching' | 'ordering' | 'short_answer' | 'essay';
 	type ComposerSaveIntent = 'draft' | 'review';
-	type AnswerMode = 'single_option' | 'multi_option' | 'fixed_pair' | 'matching' | 'ordering' | 'short_text' | 'rubric';
-	type QuestionTypeConfig = {
-		id: ComposerQuestionType;
-		label: string;
-		shortLabel: string;
-		desc: string;
-		studentHint: string;
-		answerMode: AnswerMode;
-		minOptions: number;
-		maxOptions: number;
-		fixedOptions?: string[];
-	};
 	type Question = {
 		id: string;
 		event_id?: string | null;
@@ -293,126 +328,6 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	type FocusedEditor = 'stem' | 'stimulus' | 'rubric' | 'explanation' | OptionLabel;
 
 	let { data, routeMode }: { data: PageData; routeMode: WorkspaceRouteMode } = $props();
-
-	// ── Constants ─────────────────────────────────────────────────────────────
-	const PAGE_SIZE = 15;
-	const MIN_OPTION_COUNT = 4;
-	const MAX_OPTION_COUNT = 6;
-	const MIN_MATCHING_PAIR_COUNT = 2;
-	const DEFAULT_MATCHING_PAIR_COUNT = 4;
-	const MAX_MATCHING_PAIR_COUNT = 6;
-	const MAX_MATCHING_DISTRACTOR_COUNT = 4;
-	const ANSWER_LABELS: OptionLabel[] = ['A', 'B', 'C', 'D', 'E', 'F'];
-	const TRUE_FALSE_OPTIONS = ['Benar', 'Salah'];
-	const AGREE_DISAGREE_OPTIONS = ['Setuju', 'Tidak Setuju'];
-	const QUESTION_TYPE_CONFIGS: QuestionTypeConfig[] = [
-		{
-			id: 'multiple_choice',
-			label: 'Pilihan Ganda',
-			shortLabel: 'PG',
-			desc: 'Satu jawaban benar dari beberapa opsi.',
-			studentHint: 'Siswa memilih satu jawaban.',
-			answerMode: 'single_option',
-			minOptions: MIN_OPTION_COUNT,
-			maxOptions: MAX_OPTION_COUNT,
-		},
-		{
-			id: 'multiple_answer',
-			label: 'Jawaban Ganda',
-			shortLabel: 'Ganda',
-			desc: 'Lebih dari satu opsi dapat menjadi kunci.',
-			studentHint: 'Siswa memilih semua jawaban benar.',
-			answerMode: 'multi_option',
-			minOptions: MIN_OPTION_COUNT,
-			maxOptions: MAX_OPTION_COUNT,
-		},
-		{
-			id: 'true_false',
-			label: 'Benar/Salah',
-			shortLabel: 'B/S',
-			desc: 'Pernyataan dengan kunci benar atau salah.',
-			studentHint: 'Siswa memilih Benar atau Salah.',
-			answerMode: 'fixed_pair',
-			minOptions: 2,
-			maxOptions: 2,
-			fixedOptions: TRUE_FALSE_OPTIONS,
-		},
-		{
-			id: 'agree_disagree',
-			label: 'Setuju/Tidak Setuju',
-			shortLabel: 'S/TS',
-			desc: 'Respons sikap/pendapat dengan kunci setuju atau tidak setuju.',
-			studentHint: 'Siswa memilih Setuju atau Tidak Setuju.',
-			answerMode: 'fixed_pair',
-			minOptions: 2,
-			maxOptions: 2,
-			fixedOptions: AGREE_DISAGREE_OPTIONS,
-		},
-		{
-			id: 'matching',
-			label: 'Menjodohkan',
-			shortLabel: 'Jodoh',
-			desc: 'Pasangkan pernyataan kiri dengan jawaban kanan.',
-			studentHint: 'Siswa memilih pasangan yang sesuai untuk setiap baris.',
-			answerMode: 'matching',
-			minOptions: MIN_MATCHING_PAIR_COUNT,
-			maxOptions: MAX_MATCHING_PAIR_COUNT,
-		},
-		{
-			id: 'ordering',
-			label: 'Mengurutkan',
-			shortLabel: 'Urutan',
-			desc: 'Siswa menyusun opsi sesuai urutan kunci.',
-			studentHint: 'Siswa mengurutkan semua opsi jawaban.',
-			answerMode: 'ordering',
-			minOptions: MIN_OPTION_COUNT,
-			maxOptions: MAX_OPTION_COUNT,
-		},
-		{
-			id: 'short_answer',
-			label: 'Isian Singkat',
-			shortLabel: 'Isian',
-			desc: 'Jawaban pendek dengan kunci teks.',
-			studentHint: 'Siswa mengetik jawaban singkat.',
-			answerMode: 'short_text',
-			minOptions: 0,
-			maxOptions: 0,
-		},
-		{
-			id: 'essay',
-			label: 'Essay',
-			shortLabel: 'Essay',
-			desc: 'Jawaban uraian dikoreksi manual dengan pedoman.',
-			studentHint: 'Siswa menulis jawaban uraian.',
-			answerMode: 'rubric',
-			minOptions: 0,
-			maxOptions: 0,
-		},
-	];
-	const WORKFLOW_LABEL: Record<string, string> = {
-		draft: 'Draft',
-		review: 'Menunggu Review',
-		approved: 'Disetujui',
-		rejected: 'Perlu Revisi',
-	};
-	const DIFFICULTY_LABEL: Record<string, string> = { easy: 'Mudah', medium: 'Sedang', hard: 'Sulit' };
-	const revisionSourceOptions: Array<{ id: RevisionSourceFilter; label: string; desc: string }> = [
-		{ id: '', label: 'Semua Revisi', desc: 'Semua sumber' },
-		{ id: 'item_analysis', label: 'Analisis Butir', desc: 'Dari hasil ujian' },
-		{ id: 'reviewer', label: 'Reviewer', desc: 'Catatan penelaah' },
-		{ id: 'workflow', label: 'Workflow', desc: 'Tanpa reviewer' },
-	];
-
-	const DRAFT_KEY = (id: string | null, eventId: string) => `mtsn2-soal-komposer:${eventId || 'global'}:${id ?? 'new'}`;
-	const LAST_METADATA_KEY = (eventId: string) => `mtsn2-soal-komposer:last-metadata:${eventId || 'global'}`;
-	const EVENT_MEMBER_ROLES: Array<{ value: EventMemberRole; label: string; desc: string }> = [
-		{ value: 'panitia', label: 'Panitia', desc: 'Koordinasi kegiatan' },
-		{ value: 'pembuat_soal', label: 'Pembuat Soal', desc: 'Menyusun bank soal' },
-		{ value: 'reviewer', label: 'Reviewer', desc: 'Menelaah mutu soal' },
-		{ value: 'proktor', label: 'Proktor', desc: 'Teknis sesi ujian' },
-		{ value: 'pengawas', label: 'Pengawas', desc: 'Pengawasan ruang' },
-		{ value: 'korektor', label: 'Korektor', desc: 'Koreksi uraian' },
-	];
 
 	function currentRouteMode(): ModuleMode {
 		return routeMode;
@@ -1688,39 +1603,6 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		load(1);
 	}
 
-	function richTextHasContent(html: string): boolean {
-		return htmlToPlainText(html).length > 0 || html.includes('<img');
-	}
-
-	function createEmptyMatchingPairs(count = DEFAULT_MATCHING_PAIR_COUNT): MatchingPair[] {
-		return Array.from({ length: count }, () => ({ left: '', right: '' }));
-	}
-
-	function isComposerQuestionType(value: string | undefined): value is ComposerQuestionType {
-		return QUESTION_TYPE_CONFIGS.some((config) => config.id === value);
-	}
-
-	function getQuestionTypeConfig(type: ComposerQuestionType): QuestionTypeConfig {
-		return QUESTION_TYPE_CONFIGS.find((config) => config.id === type) ?? QUESTION_TYPE_CONFIGS[0]!;
-	}
-
-	function normalizeQuestionType(value: string | undefined): ComposerQuestionType {
-		const normalized = (value ?? '').trim().toLowerCase();
-		return isComposerQuestionType(normalized) ? normalized : 'multiple_choice';
-	}
-
-	function questionTypeLabel(value: string | undefined): string {
-		return getQuestionTypeConfig(normalizeQuestionType(value)).shortLabel;
-	}
-
-	function normalizeAuthoringMode(value: string | undefined): AuthoringMode {
-		return value === 'advance' ? 'advance' : 'beginner';
-	}
-
-	function normalizeWorkflowStatus(value: string | undefined): string {
-		return value === 'review' ? 'review' : 'draft';
-	}
-
 	function setQuestionType(type: ComposerQuestionType) {
 		const changed = fQuestionType !== type;
 		fQuestionType = type;
@@ -1740,149 +1622,14 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		if (mode === 'beginner') fWorkflowStatus = 'draft';
 	}
 
-	function defaultAnswerKeyForQuestionType(type: ComposerQuestionType): string {
-		const config = getQuestionTypeConfig(type);
-		if (config.answerMode === 'single_option' || config.answerMode === 'fixed_pair') return 'A';
-		if (config.answerMode === 'matching') return buildMatchingAnswerKey(DEFAULT_MATCHING_PAIR_COUNT);
-		if (config.answerMode === 'ordering') return normalizeOrderingAnswerKey('', config.minOptions);
-		return '';
-	}
-
-	function defaultOptionsForQuestionType(type: ComposerQuestionType): string[] {
-		const config = getQuestionTypeConfig(type);
-		if (config.answerMode === 'fixed_pair') return [...(config.fixedOptions ?? [])];
-		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option' && config.answerMode !== 'ordering') return [];
-		return Array.from({ length: config.minOptions }, () => '');
-	}
-
-	function normalizeOptionCount(options: string[], type: ComposerQuestionType = fQuestionType): string[] {
-		const config = getQuestionTypeConfig(type);
-		if (config.answerMode === 'fixed_pair') return [...(config.fixedOptions ?? [])];
-		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option' && config.answerMode !== 'ordering') return [];
-		let normalized = options.slice(0, config.maxOptions);
-		while (normalized.length < config.minOptions) normalized = [...normalized, ''];
-		return normalized;
-	}
-
-	function normalizeMatchingPairs(pairs: MatchingPair[], type: ComposerQuestionType = fQuestionType): MatchingPair[] {
-		const config = getQuestionTypeConfig(type);
-		if (config.answerMode !== 'matching') return createEmptyMatchingPairs();
-		let normalized = pairs
-			.slice(0, config.maxOptions)
-			.map((pair) => ({ left: pair.left ?? '', right: pair.right ?? '' }));
-		const minCount = pairs.length === 0 ? DEFAULT_MATCHING_PAIR_COUNT : config.minOptions;
-		while (normalized.length < minCount) normalized = [...normalized, { left: '', right: '' }];
-		return normalized;
-	}
-
-	function optionsToMatchingPairs(options: OptionItem[]): MatchingPair[] {
-		return options.filter((option) => !option.is_distractor).map((option) => ({
-			left: option.html || option.text || option.latex || '',
-			right: option.match_html || option.match_text || '',
-		}));
-	}
-
-	function normalizeMatchingDistractors(distractors: string[], type: ComposerQuestionType = fQuestionType): string[] {
-		const config = getQuestionTypeConfig(type);
-		if (config.answerMode !== 'matching') return [];
-		return distractors.slice(0, MAX_MATCHING_DISTRACTOR_COUNT);
-	}
-
-	function optionsToMatchingDistractors(options: OptionItem[]): string[] {
-		return options
-			.filter((option) => option.is_distractor)
-			.map((option) => option.match_html || option.match_text || '')
-			.filter((option) => option.trim().length > 0);
-	}
-
 	function answerItemCountForType(type: ComposerQuestionType = fQuestionType): number {
 		return getQuestionTypeConfig(type).answerMode === 'matching' ? fMatchingPairs.length : fOptions.length;
-	}
-
-	function optionLabelAt(index: number): OptionLabel {
-		return ANSWER_LABELS[index] ?? 'A';
-	}
-
-	function answerKeyLabels(value: string | undefined, labels: OptionLabel[]): OptionLabel[] {
-		const keys: OptionLabel[] = [];
-		for (const raw of (value ?? '').split(',')) {
-			const label = raw.trim().toUpperCase() as OptionLabel;
-			if (!labels.includes(label) || keys.includes(label)) continue;
-			keys.push(label);
-		}
-		return keys.sort((a, b) => ANSWER_LABELS.indexOf(a) - ANSWER_LABELS.indexOf(b));
-	}
-
-	function orderingAnswerKeyLabels(value: string | undefined, labels: OptionLabel[]): OptionLabel[] {
-		const ordered: OptionLabel[] = [];
-		for (const raw of (value ?? '').split(',')) {
-			const label = raw.trim().toUpperCase() as OptionLabel;
-			if (!labels.includes(label) || ordered.includes(label)) continue;
-			ordered.push(label);
-		}
-		for (const label of labels) {
-			if (!ordered.includes(label)) ordered.push(label);
-		}
-		return ordered;
-	}
-
-	function normalizeOrderingAnswerKey(value: string | undefined, optionCount: number): string {
-		return orderingAnswerKeyLabels(value, ANSWER_LABELS.slice(0, optionCount)).join(',');
 	}
 
 	function fixedOptionTextForKey(key: string): string {
 		const label = key.trim().toUpperCase() as OptionLabel;
 		const index = activeOptionLabels.indexOf(label);
 		return questionTypeConfig.fixedOptions?.[index] ?? label;
-	}
-
-	function buildMatchingAnswerKey(count: number): string {
-		return Array.from({ length: count }, (_, index) => `${optionLabelAt(index)}=${index + 1}`).join(';');
-	}
-
-	function normalizeMatchingAnswerKey(value: string | undefined, count: number): string {
-		const fallback = buildMatchingAnswerKey(count);
-		const rawPairs = (value ?? '').split(';');
-		const labels = ANSWER_LABELS.slice(0, count);
-		const matches: Record<string, string> = {};
-		for (const rawPair of rawPairs) {
-			const [rawLeft, rawRight] = rawPair.split('=');
-			const left = rawLeft?.trim().toUpperCase() ?? '';
-			const right = rawRight?.trim() ?? '';
-			if (!labels.includes(left as OptionLabel) || !/^[1-6]$/.test(right)) continue;
-			const rightIndex = Number(right) - 1;
-			if (rightIndex < 0 || rightIndex >= count) continue;
-			matches[left] = String(rightIndex + 1);
-		}
-		if (Object.keys(matches).length !== count) return fallback;
-		return labels.map((label) => `${label}=${matches[label]}`).join(';');
-	}
-
-	function normalizeShortAnswerComparable(value: string): string {
-		return value.replace(/\u00a0/g, ' ').trim().replace(/\s+/g, ' ').toLocaleLowerCase('id-ID');
-	}
-
-	function parseShortAnswerAliases(value: string | undefined): string[] {
-		const aliases: string[] = [];
-		for (const raw of (value ?? '').split('|')) {
-			const alias = raw.replace(/\u00a0/g, ' ').trim().replace(/\s+/g, ' ');
-			const comparable = normalizeShortAnswerComparable(alias);
-			if (!comparable || aliases.some((item) => normalizeShortAnswerComparable(item) === comparable)) continue;
-			aliases.push(alias);
-		}
-		return aliases;
-	}
-
-	function normalizeAnswerKey(value: string | undefined, type: ComposerQuestionType = fQuestionType, optionCount = fOptions.length): string {
-		const config = getQuestionTypeConfig(type);
-		if (config.answerMode === 'rubric') return '';
-		if (config.answerMode === 'short_text') return parseShortAnswerAliases(value).join('|');
-		if (config.answerMode === 'matching') return normalizeMatchingAnswerKey(value, optionCount);
-		if (config.answerMode === 'ordering') return normalizeOrderingAnswerKey(value, optionCount);
-		const labels = ANSWER_LABELS.slice(0, optionCount);
-		const keys = answerKeyLabels(value, labels);
-		if (config.answerMode === 'multi_option') return keys.join(',');
-		return keys[0] ?? defaultAnswerKeyForQuestionType(type);
 	}
 
 	function isAnswerLabelSelected(label: OptionLabel): boolean {
@@ -1913,12 +1660,6 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		if (index < 0 || nextIndex < 0 || nextIndex >= ordered.length) return;
 		[ordered[index], ordered[nextIndex]] = [ordered[nextIndex], ordered[index]];
 		fAnswerKey = ordered.join(',');
-	}
-
-	function editorAllowedForQuestionType(editor: FocusedEditor, type: ComposerQuestionType): boolean {
-		if (editor === 'stem' || editor === 'stimulus' || editor === 'explanation') return true;
-		if (editor === 'rubric') return getQuestionTypeConfig(type).answerMode === 'rubric';
-		return getQuestionTypeConfig(type).answerMode === 'single_option' || getQuestionTypeConfig(type).answerMode === 'multi_option' || getQuestionTypeConfig(type).answerMode === 'ordering';
 	}
 
 	function addOption() {
@@ -1963,55 +1704,12 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		fMatchingDistractors = fMatchingDistractors.filter((_, i) => i !== index);
 	}
 
-	function questionUsageLocked(q: Question): boolean {
-		const packages = q.package_count ?? q.usage?.package_count ?? 0;
-		const answers = q.answer_count ?? q.usage?.answer_count ?? 0;
-		return Boolean(q.is_locked ?? q.usage?.is_locked ?? (packages > 0 || answers > 0));
-	}
-
-	function questionUsageText(q: Question): string {
-		const packages = q.package_count ?? q.usage?.package_count ?? 0;
-		const answers = q.answer_count ?? q.usage?.answer_count ?? 0;
-		if (packages > 0 && answers > 0) return `${packages} paket, ${answers} jawaban`;
-		if (packages > 0) return `${packages} paket`;
-		if (answers > 0) return `${answers} jawaban`;
-		return 'Belum dipakai';
-	}
-
-	function revisionSourceLabel(q: Question): string {
-		const note = (q.review_notes ?? '').toLowerCase();
-		if (note.includes('analisis butir')) return 'Analisis Butir';
-		if ((q.reviewer_username ?? '').trim()) return `Reviewer: ${q.reviewer_username}`;
-		return 'Alur Verifikasi';
-	}
-
-	function revisionReason(q: Question): string {
-		const note = (q.review_notes ?? '').replace(/\s+/g, ' ').trim();
-		if (!note) return 'Belum ada catatan alasan revisi.';
-		return note.length > 180 ? `${note.slice(0, 180)}...` : note;
-	}
-
-	function canSubmitRevisionReview(q: Question): boolean {
-		return q.workflow_status === 'rejected' && q.status === 'draft' && !questionUsageLocked(q);
-	}
-
 	function canDecideReview(q: Question): boolean {
 		return canReviewWorkflow && q.workflow_status === 'review' && q.status === 'draft' && !questionUsageLocked(q);
 	}
 
 	function canPublishQuestion(q: Question): boolean {
 		return canPublishWorkflow && q.workflow_status === 'approved' && q.status === 'draft' && !questionUsageLocked(q);
-	}
-
-	function isQuickEditable(q: Question): boolean {
-		return isComposerQuestionType(q.question_type) && (q.workflow_status === 'draft' || q.workflow_status === 'rejected') && q.status === 'draft' && !questionUsageLocked(q);
-	}
-
-	function explainQuickEditBlocked(q: Question): string {
-		if (questionUsageLocked(q)) return 'Soal sudah dipakai. Gunakan Duplikat untuk membuat revisi draft.';
-		if ((q.workflow_status !== 'draft' && q.workflow_status !== 'rejected') || q.status !== 'draft') return 'Soal sudah masuk alur review/publikasi. Gunakan Duplikat untuk revisi.';
-		if (!isComposerQuestionType(q.question_type)) return 'Tipe soal ini belum masuk komposer utama. Gunakan Duplikat setelah tipe ini dimigrasikan.';
-		return 'Buat revisi lewat Duplikat agar riwayat soal tetap aman.';
 	}
 
 	async function loadQuestionDetail(q: Question): Promise<Question> {
@@ -2785,57 +2483,6 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		search = (e.target as HTMLInputElement).value;
 		if (searchTimer) clearTimeout(searchTimer);
 		searchTimer = setTimeout(() => load(1), 400);
-	}
-
-	function stemPreview(q: Question): string {
-		const t = htmlToPlainText(q.stem_html || q.question_text || '');
-		return t.length > 90 ? t.slice(0, 90) + '…' : t || '(kosong)';
-	}
-
-	function workflowClass(status: string): string {
-		const map: Record<string, string> = {
-			draft: 'bg-muted text-muted-foreground',
-			review: 'bg-warning/15 text-warning',
-			approved: 'bg-success/15 text-success',
-			rejected: 'bg-destructive/15 text-destructive',
-		};
-		return map[status] ?? 'bg-muted text-muted-foreground';
-	}
-
-	function answerKeyLabelForQuestion(q: Question): string {
-		const key = (q.answer_key ?? '').trim();
-		const type = normalizeQuestionType(q.question_type);
-		if (type === 'essay') return q.rubric_html ? 'Rubrik uraian tersedia' : 'Rubrik belum tersedia';
-		if (!key) return 'Kunci belum tersedia atau dirahasiakan';
-		if (type === 'multiple_answer') return `Kunci: ${answerKeyLabels(key, ANSWER_LABELS).join(', ') || key}`;
-		if (type === 'matching') return `Pasangan: ${key.split(';').map((part) => part.trim()).filter(Boolean).join(' · ')}`;
-		if (type === 'short_answer') return `Jawaban diterima: ${parseShortAnswerAliases(key).join(' / ') || key}`;
-		if (type === 'true_false' || type === 'agree_disagree') {
-			const config = getQuestionTypeConfig(type);
-			const index = ANSWER_LABELS.indexOf(key.toUpperCase() as OptionLabel);
-			return `Kunci: ${config.fixedOptions?.[index] ?? key}`;
-		}
-		return `Kunci: ${key}`;
-	}
-
-	function optionPrimaryContent(option: OptionItem): string {
-		if (option.is_distractor) return option.match_html || option.match_text || '-';
-		return option.html || option.text || option.latex || '-';
-	}
-
-	function optionSecondaryContent(option: OptionItem): string {
-		if (option.is_distractor) return '';
-		return option.match_html || option.match_text || '';
-	}
-
-	function composerStageToneClass(tone: ComposerStageCard['tone']): string {
-		const map: Record<ComposerStageCard['tone'], string> = {
-			green: 'border-primary/20 bg-primary/10 text-primary',
-			amber: 'border-warning/30 bg-warning/10 text-warning',
-			red: 'border-destructive/30 bg-destructive/10 text-destructive',
-			slate: 'border-border bg-muted/50 text-foreground',
-		};
-		return map[tone];
 	}
 
 	function scrollToComposerSection(targetId: string) {
