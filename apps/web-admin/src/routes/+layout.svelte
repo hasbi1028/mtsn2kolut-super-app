@@ -5,19 +5,14 @@
 	import RouteProgress from '$lib/components/RouteProgress.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import { Sonner } from '$lib/components/ui/sonner';
+	import { isPublicSitePath } from '$lib/routes/public-policy';
 	import '../app.css';
 	import { navigating, page } from '$app/state';
 
 	let { children, data } = $props();
 	let isLogin = $derived(page.url.pathname === '/login');
 	let pwaRegistrationStarted = $state(false);
-	const publicExactPaths = new Set(['/', '/ppdb', '/profil', '/berita', '/pengumuman', '/kontak']);
-	const publicPrefixPaths = ['/berita/', '/pengumuman/'];
-	let isPublicSite = $derived.by(() => {
-		const pathname = page.url.pathname;
-		if (pathname === '/' && data.user) return false;
-		return publicExactPaths.has(pathname) || publicPrefixPaths.some((prefix) => pathname.startsWith(prefix));
-	});
+	let isPublicSite = $derived(isPublicSitePath(page.url.pathname, Boolean(data.user)));
 	let desktopSidebarExpanded = $state(true);
 	const SIDEBAR_EXPANDED_STORAGE_KEY_PREFIX = 'sidebar:desktop-expanded';
 

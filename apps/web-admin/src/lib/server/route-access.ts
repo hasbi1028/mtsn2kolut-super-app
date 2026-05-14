@@ -1,29 +1,5 @@
 import type { AuthUser } from '$lib/server/auth';
-
-const PUBLIC_EXACT_PATHS = new Set([
-	'/',
-	'/login',
-	'/ppdb',
-	'/profil',
-	'/berita',
-	'/pengumuman',
-	'/kontak',
-	'/api/auth/logout',
-	'/api/public/analytics/events',
-	'/api/public/register-student',
-	'/api/public/site/posts',
-	'/api/public/site/announcements'
-]);
-
-const PUBLIC_PREFIXES = [
-	'/berita/',
-	'/pengumuman/',
-	'/api/exam/',
-	'/releases/mobile/',
-	'/api/public/site/pages/',
-	'/api/public/site/posts/',
-	'/api/public/site/announcements/'
-] as const;
+import { isPublicPath, matchesPathSegment } from '$lib/routes/public-policy';
 
 const ADMIN_ONLY_PREFIXES = [
 	'/employees',
@@ -98,15 +74,7 @@ const GRADES_PREFIXES = ['/grades', '/api/grades'] as const;
 const JOURNAL_PREFIXES = ['/journal', '/api/journal'] as const;
 const EMPLOYEE_PREFIXES = ['/employees', '/api/employees'] as const;
 
-function matchesPathSegment(pathname: string, prefix: string) {
-	const normalizedPrefix = prefix === '/' ? '/' : prefix.replace(/\/$/, '');
-	return pathname === normalizedPrefix || pathname.startsWith(`${normalizedPrefix}/`);
-}
-
-export function isPublicPath(pathname: string) {
-	if (PUBLIC_EXACT_PATHS.has(pathname)) return true;
-	return PUBLIC_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
-}
+export { isPublicPath };
 
 export function userRoles(user: AuthUser | undefined): string[] {
 	if (!user) return [];
