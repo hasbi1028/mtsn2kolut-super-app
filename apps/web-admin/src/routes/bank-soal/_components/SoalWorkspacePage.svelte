@@ -1858,7 +1858,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	async function openReadonlyDetail(q: Question) {
 		composerBusy = true;
 		try {
-			await openEdit(q);
+			await openEdit(q, { allowReadOnly: true });
 			detailQuestion = await loadQuestionDetail(q);
 			detailReadOnly = true;
 			showInspector = true;
@@ -1919,11 +1919,11 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		}, 50);
 	}
 
-	async function openEdit(q: Question) {
+	async function openEdit(q: Question, options: { allowReadOnly?: boolean } = {}) {
 		detailReadOnly = false;
 		detailQuestion = null;
 		questionVersions = [];
-		if (!isQuickEditable(q)) {
+		if (!options.allowReadOnly && !isQuickEditable(q)) {
 			setModuleMode('catalog');
 			toast.warning(explainQuickEditBlocked(q));
 			return;
@@ -1966,11 +1966,13 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			focusedEditor = null;
 			composerMobilePanel = 'write';
 			setModuleMode('composer');
-			setTimeout(() => {
-				void restoreDraft().then((restored) => {
-					if (restored) toast.info('Draft edit lokal dipulihkan otomatis.');
-				});
-			}, 50);
+			if (!options.allowReadOnly) {
+				setTimeout(() => {
+					void restoreDraft().then((restored) => {
+						if (restored) toast.info('Draft edit lokal dipulihkan otomatis.');
+					});
+				}, 50);
+			}
 		} catch (error) {
 			toast.error(mutationErrorMessage(error, 'Gagal memuat detail soal. Form memakai data ringkas dari daftar.'));
 			editingId = q.id;
@@ -2622,10 +2624,10 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 
 	onMount(() => {
 		const params = new URLSearchParams(window.location.search);
-		const questionId = params.get('question_id');
+		const queryQuestionId = params.get('question_id');
 		selectedEventId = params.get('event_id') ?? '';
 		const hasComposerPrefill = applyComposerQueryPrefill(params);
-		if (questionId) {
+		if (queryQuestionId) {
 			params.delete('question_id');
 			const query = params.toString();
 			window.history.replaceState({}, '', query ? `${window.location.pathname}?${query}` : window.location.pathname);
@@ -2636,7 +2638,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		void migrateLegacyBankSoalDrafts().then(() => refreshOfflineQueueState()).then(() => {
 			if (browserOnline() && offlineQueueCount > 0) void syncBankSoalOfflineQueue(false);
 		});
-		const routeQuestionId = questionId || params.get('question_id') || '';
+		const routeQuestionId = questionId || queryQuestionId || '';
 		if (routeMode === 'composer' && routeQuestionId) void openQuestionFromRouteParam(routeQuestionId);
 		else if (routeMode === 'composer') {
 			setTimeout(() => {
