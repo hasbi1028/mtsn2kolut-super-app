@@ -217,6 +217,11 @@
 		return proctorEventLabel(event);
 	}
 
+	function participantRoomHref(row: ProctoringRow): string | undefined {
+		if (!row.room_id) return undefined;
+		return '/asesmen/sesi/' + encodeURIComponent(sessionId) + '/rooms/' + encodeURIComponent(String(row.room_id)) + '/proctoring';
+	}
+
 
 	function shouldPlayAlertSound(event: ProctoringEvent) {
 		if (!audioAlertsEnabled) return false;
@@ -451,7 +456,10 @@
 								<Table.Cell><Badge variant="outline" class={badgeClass(riskLevel(row))}>{riskLabel(riskLevel(row))}</Badge></Table.Cell>
 								<Table.Cell>{row.violation_count ?? 0} · skor {row.risk_score ?? 0}</Table.Cell>
 								<Table.Cell>{row.last_violation_reason || fmtDate(row.last_violation_at)}</Table.Cell>
-								<Table.Cell class="text-right"><div class="flex justify-end gap-2"><Button size="sm" variant="outline" href={row.room_id ? resolve(`/asesmen/sesi/${sessionId}/rooms/${row.room_id}/proctoring`) : undefined}>Ruang</Button><LoadingButton size="sm" variant="outline" onclick={() => void unlockParticipant(row)} loading={actionBusyId === `unlock-${row.participant_id}`} disabled={!row.locked_at || !row.room_id || (actionBusyId !== '' && actionBusyId !== `unlock-${row.participant_id}`)} loadingLabel="Membuka...">Buka Kunci</LoadingButton></div></Table.Cell>
+								{@const roomHref = participantRoomHref(row)}
+								{@const unlockBusy = actionBusyId === `unlock-${row.participant_id}`}
+								{@const anyActionBusy = actionBusyId !== ''}
+								<Table.Cell class="text-right"><div class="flex justify-end gap-2"><Button size="sm" variant="outline" href={roomHref}>Ruang</Button><LoadingButton size="sm" variant="outline" onclick={() => void unlockParticipant(row)} loading={unlockBusy} disabled={!row.locked_at || !row.room_id || (anyActionBusy && !unlockBusy)} loadingLabel="Membuka...">Buka Kunci</LoadingButton></div></Table.Cell>
 							</Table.Row>
 						{/each}
 					</Table.Body>

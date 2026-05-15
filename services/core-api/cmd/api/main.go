@@ -53,6 +53,7 @@ func main() {
 	websiteSvc := service.NewWebsite(q)
 	pusakaJobSvc := service.NewPusakaJobWithPool(pool)
 	pusakaAttendanceSvc := service.NewPusakaAttendance(q)
+	pusakaAttendanceTelegramSvc := service.NewPusakaAttendanceTelegram(q, getEnv("TELEGRAM_BOT_TOKEN", ""))
 	questionSvc := service.NewCbtQuestionWithPool(pool)
 	nonTestAssessmentSvc := service.NewNonTestAssessmentWithPool(pool)
 	questionAssetSvc := service.NewCbtQuestionAsset(q, getEnv("CBT_ASSET_DIR", "data/cbt-assets"))
@@ -102,6 +103,7 @@ func main() {
 		os.Exit(1)
 	}
 	pusakaSchedulerSvc.Start(mainCtx)
+	pusakaAttendanceTelegramSvc.Start(mainCtx)
 	internalAnalyticsRollupCancel := internalAnalyticsSvc.StartRollupLoop(mainCtx, service.InternalAnalyticsRollupLoopConfig{
 		Interval:       durationEnv("INTERNAL_ANALYTICS_ROLLUP_INTERVAL", 10*time.Minute),
 		Lookback:       durationEnv("INTERNAL_ANALYTICS_ROLLUP_LOOKBACK", 48*time.Hour),
@@ -117,6 +119,7 @@ func main() {
 	healthH := handler.NewHealth(pool, pusakaJobSvc, settSvc, internalAnalyticsSvc)
 	pusakaJobH := handler.NewPusakaJob(pusakaJobSvc)
 	pusakaAttendanceH := handler.NewPusakaAttendance(pusakaAttendanceSvc)
+	pusakaAttendanceTelegramH := handler.NewPusakaAttendanceTelegram(pusakaAttendanceTelegramSvc)
 	studentH := handler.NewStudent(studentSvc)
 	parentH := handler.NewParent(parentSvc)
 	portalH := handler.NewPortal(portalSvc)
@@ -846,6 +849,11 @@ func main() {
 			r.Get("/api/pusaka/attendance/summary", pusakaAttendanceH.GetSummary)
 			r.Get("/api/pusaka/attendance/by-date/{date}", pusakaAttendanceH.ByDate)
 			r.Get("/api/pusaka/attendance/by-employee/{id}", pusakaAttendanceH.ByEmployee)
+			r.Get("/api/pusaka/attendance-telegram/settings", pusakaAttendanceTelegramH.GetSettings)
+			r.Put("/api/pusaka/attendance-telegram/settings", pusakaAttendanceTelegramH.UpdateSettings)
+			r.Get("/api/pusaka/attendance-telegram/logs", pusakaAttendanceTelegramH.ListLogs)
+			r.Post("/api/pusaka/attendance-telegram/send", pusakaAttendanceTelegramH.SendNow)
+			r.Post("/api/pusaka/attendance-telegram/tick", pusakaAttendanceTelegramH.Tick)
 
 			r.Get("/api/pusaka/schedules", pusakaScheduleH.List)
 			r.Post("/api/pusaka/schedules", pusakaScheduleH.Create)
@@ -929,6 +937,7 @@ func main() {
 	slog.Info("shutting down...")
 
 	internalAnalyticsRollupCancel()
+	pusakaAttendanceTelegramSvc.Stop()
 	pusakaSchedulerSvc.Stop()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

@@ -48,6 +48,7 @@
 	let viewMode  = $state<ViewMode>('normal');
 	let recordsPromise = $state<Promise<AttendanceOverview> | null>(null);
 	let refreshing = $state(false);
+	let sendingTelegram = $state(false);
 	let loadedRangeKey = $state('');
 	let attendanceRequestId = 0;
 
@@ -193,6 +194,30 @@
 		URL.revokeObjectURL(url);
 	}
 
+	async function sendTelegramReport() {
+		if (!startDate) {
+			toast.error('Pilih tanggal laporan lebih dulu');
+			return;
+		}
+		sendingTelegram = true;
+		try {
+			const res = await fetch('/api/pusaka/attendance-telegram/send', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ date: startDate, include_caption: true, include_image: true })
+			});
+			const payload = await readClientJson<Record<string, unknown>>(res);
+			if (payload?.error) throw new Error(String(payload.error));
+			const data = isRecord(payload?.data) ? payload.data : payload;
+			const target = typeof data.target_chat_id_masked === 'string' ? data.target_chat_id_masked : 'Telegram';
+			toast.success(`Laporan daftar hadir terkirim ke ${target}`);
+		} catch (error) {
+			toast.error(attendanceErrorMessage(error));
+		} finally {
+			sendingTelegram = false;
+		}
+	}
+
 	onMount(() => {
 		const today = todayWita();
 		startDate = today;
@@ -266,6 +291,8 @@
 					<LoadingButton class="h-10 w-full sm:w-auto" size="sm" onclick={() => void load()} loading={refreshing} loadingLabel="Memuat..." label="Terapkan" />
 					<div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
 						<LoadingButton variant="outline" class="h-10 w-full bg-card sm:w-auto" size="sm" onclick={exportCSV} disabled={records.length === 0} label="↓ CSV" />
+						<LoadingButton variant="outline" class="h-10 w-full bg-card sm:w-auto" size="sm" onclick={() => void sendTelegramReport()} loading={sendingTelegram} loadingLabel="Mengirim..." label="Telegram" />
+						<LoadingButton variant="ghost" class="h-10 w-full sm:w-auto" size="sm" href={resolve('/pusaka/telegram-laporan')} label="Atur Jadwal" />
 						<div class="col-span-2 flex h-10 overflow-hidden rounded-md border border-border bg-card sm:col-span-1">
 							<button
 								class="flex flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors {viewMode === 'normal' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/50'}"

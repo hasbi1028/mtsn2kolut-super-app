@@ -381,8 +381,9 @@
 	}
 
 	function nonTestSourceHref(component: GradeComponent) {
-		const sourceId = component.source_non_test_assessment_id;
-		return sourceId ? resolve(`/asesmen/non-tes?assessment_id=${sourceId}`) : resolve('/asesmen/non-tes');
+		const sourceId = component.source_non_test_assessment_id ? String(component.source_non_test_assessment_id) : '';
+		if (!sourceId) return resolve('/asesmen/non-tes');
+		return resolve(`/asesmen/non-tes?assessment_id=${encodeURIComponent(sourceId)}`);
 	}
 
 	function nonTestGradeLockMessage() {

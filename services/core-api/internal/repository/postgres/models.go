@@ -2002,6 +2002,32 @@ type PusakaAccount struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type PusakaAttendanceTelegramLog struct {
+	ID                pgtype.UUID        `json:"id"`
+	ReportDate        pgtype.Date        `json:"report_date"`
+	TargetChatID      string             `json:"target_chat_id"`
+	SendMode          string             `json:"send_mode"`
+	Status            string             `json:"status"`
+	TelegramMessageID pgtype.Text        `json:"telegram_message_id"`
+	ErrorMessage      pgtype.Text        `json:"error_message"`
+	RequestedBy       pgtype.UUID        `json:"requested_by"`
+	SentAt            pgtype.Timestamptz `json:"sent_at"`
+}
+
+type PusakaAttendanceTelegramSetting struct {
+	ID             pgtype.UUID        `json:"id"`
+	SettingsKey    string             `json:"settings_key"`
+	IsEnabled      bool               `json:"is_enabled"`
+	SendTime       pgtype.Time        `json:"send_time"`
+	Timezone       string             `json:"timezone"`
+	TargetChatID   string             `json:"target_chat_id"`
+	IncludeCaption bool               `json:"include_caption"`
+	IncludeImage   bool               `json:"include_image"`
+	ReportMode     string             `json:"report_mode"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type RbacPermission struct {
 	ID          pgtype.UUID        `json:"id"`
 	Code        string             `json:"code"`
