@@ -11,6 +11,7 @@ const finalBankSoalRoutes = [
 	'/bank-soal/daftar',
 	'/bank-soal/tambah',
 	'/bank-soal/verifikasi',
+	'/bank-soal/penerbitan',
 	'/bank-soal/impor',
 	'/bank-soal/analisis-butir',
 	'/bank-soal/mapel-kd',
@@ -34,6 +35,7 @@ describe('Bank Soal final route map', () => {
 		expect(bankSoalItems.map((item) => item.href)).toEqual(finalBankSoalRoutes);
 		expect(new Set(bankSoalItems.map((item) => item.href)).size).toBe(finalBankSoalRoutes.length);
 		expect(bankSoalItems.find((item) => item.href === '/bank-soal/verifikasi')?.permissions).toEqual(['bank_soal.review']);
+		expect(bankSoalItems.find((item) => item.href === '/bank-soal/penerbitan')?.permissions).toEqual(['bank_soal.publish']);
 		expect(bankSoalItems.find((item) => item.href === '/bank-soal/impor')?.permissions).toEqual(['bank_soal.import']);
 		expect(bankSoalItems.find((item) => item.href === '/bank-soal/pengaturan')?.permissions).toEqual(['bank_soal.settings']);
 	});

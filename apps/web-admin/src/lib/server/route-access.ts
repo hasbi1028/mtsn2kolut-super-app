@@ -190,6 +190,7 @@ function bankSoalPermission(pathname: string, method: string): string[] | undefi
 	if (!pathname.startsWith('/api/')) {
 		if (matchesPathSegment(pathname, '/bank-soal/tambah')) return ['bank_soal.create'];
 		if (matchesPathSegment(pathname, '/bank-soal/verifikasi')) return ['bank_soal.review'];
+		if (matchesPathSegment(pathname, '/bank-soal/penerbitan')) return ['bank_soal.publish'];
 		if (matchesPathSegment(pathname, '/bank-soal/impor')) return ['bank_soal.import'];
 		if (matchesPathSegment(pathname, '/bank-soal/pengaturan')) return ['bank_soal.settings'];
 		if (matchesPathSegment(pathname, '/bank-soal/analisis-butir')) return ['bank_soal.analytics'];
@@ -213,6 +214,7 @@ function isBankSoalGuruFallbackPath(pathname: string, method: string) {
 	if (pathname.startsWith('/api/')) return true;
 	return !matchesPathSegment(pathname, '/bank-soal/tambah')
 		&& !matchesPathSegment(pathname, '/bank-soal/verifikasi')
+		&& !matchesPathSegment(pathname, '/bank-soal/penerbitan')
 		&& !matchesPathSegment(pathname, '/bank-soal/impor')
 		&& !matchesPathSegment(pathname, '/bank-soal/pengaturan');
 }
