@@ -32,6 +32,7 @@
 	type PoolQuestion = {
 		id: string; subject_id: string; code?: string; question_text?: string; question_type?: string; status?: string; event_id?: string | null;
 		target_level?: string; difficulty?: string; workflow_status?: string; cp_ref?: string; tp_ref?: string; kd_ref?: string; material_topic?: string; cognitive_level?: string; hots_flag?: boolean;
+		author_username?: string; created_at?: string; updated_at?: string; package_count?: number;
 	};
 	type QuestionListPayload = { items?: PoolQuestion[]; meta?: { total?: number } };
 
@@ -62,11 +63,16 @@
 	let poolMetadata = $state('all');
 	let poolTopic = $state('all');
 	let poolCurriculumSearch = $state('');
+	let poolAuthor = $state('all');
+	let poolCreatedFrom = $state('');
+	let poolCreatedTo = $state('');
+	let poolUsage = $state('all');
 	let poolSort = $state('metadata_first');
 
 	let isLocked = $derived(Boolean(detail?.package.locked_at || detail?.readiness.locked));
 	let poolForSubject = $derived(pool.filter((q) => q.subject_id === detail?.package.subject_id));
 	let availablePool = $derived(sortPoolQuestions(poolForSubject.filter(matchesPoolFilters).filter((q) => !rows.some((row) => row.question_id === q.id))));
+	let poolAuthors = $derived(Array.from(new Set(poolForSubject.map((q) => String(q.author_username ?? '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b)));
 	let selectedQuestions = $derived(availablePool.filter((q) => selectedPool.has(q.id)));
 	let missingLabel = $derived(detail ? `${Math.max(0, targetPg - countType(rows, 'multiple_choice'))} PG + ${Math.max(0, targetEssay - countType(rows, 'essay'))} Essay kurang` : '');
 
@@ -99,6 +105,19 @@
 		return { published: 'Terbit', draft: 'Draft', review: 'Review', archived: 'Arsip', rejected: 'Ditolak' }[value ?? ''] ?? (value || 'Belum');
 	}
 
+	function parseDateOnly(value: string, endOfDay = false) {
+		if (!value) return null;
+		const parsed = new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}`);
+		return Number.isNaN(parsed.getTime()) ? null : parsed;
+	}
+
+	function dateLabel(value?: string) {
+		if (!value) return 'Tanggal kosong';
+		const parsed = new Date(value);
+		if (Number.isNaN(parsed.getTime())) return value;
+		return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(parsed);
+	}
+
 	function matchesPoolFilters(item: PoolQuestion) {
 		const term = poolSearch.trim().toLowerCase();
 		if (term && !`${item.code ?? ''} ${item.question_text ?? ''} ${item.material_topic ?? ''}`.toLowerCase().includes(term)) return false;
@@ -112,6 +131,14 @@
 		if (poolMetadata === 'complete' && hasMetadataGap(item)) return false;
 		if (poolMetadata === 'gap' && !hasMetadataGap(item)) return false;
 		if (poolTopic !== 'all' && String(item.material_topic ?? '') !== poolTopic) return false;
+		if (poolAuthor !== 'all' && String(item.author_username ?? '') !== poolAuthor) return false;
+		if (poolUsage === 'unused' && Number(item.package_count ?? 0) > 0) return false;
+		if (poolUsage === 'used' && Number(item.package_count ?? 0) === 0) return false;
+		const createdAt = item.created_at ? new Date(item.created_at) : null;
+		const from = parseDateOnly(poolCreatedFrom);
+		const to = parseDateOnly(poolCreatedTo, true);
+		if (from && (!createdAt || createdAt < from)) return false;
+		if (to && (!createdAt || createdAt > to)) return false;
 		const cur = poolCurriculumSearch.trim().toLowerCase();
 		if (cur && !`${item.cp_ref ?? ''} ${item.tp_ref ?? ''} ${item.kd_ref ?? ''}`.toLowerCase().includes(cur)) return false;
 		return true;
@@ -119,6 +146,10 @@
 
 	function sortPoolQuestions(items: PoolQuestion[]) {
 		return [...items].sort((a, b) => {
+			if (poolSort === 'newest') return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
+			if (poolSort === 'oldest') return new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime();
+			if (poolSort === 'author') return String(a.author_username ?? '').localeCompare(String(b.author_username ?? '')) || String(a.code ?? '').localeCompare(String(b.code ?? ''));
+			if (poolSort === 'unused_first') return Number(a.package_count ?? 0) - Number(b.package_count ?? 0) || String(a.code ?? '').localeCompare(String(b.code ?? ''));
 			if (poolSort === 'hots_first') return Number(Boolean(b.hots_flag)) - Number(Boolean(a.hots_flag));
 			if (poolSort === 'difficulty') return String(a.difficulty ?? '').localeCompare(String(b.difficulty ?? '')) || String(a.code ?? '').localeCompare(String(b.code ?? ''));
 			if (poolSort === 'type') return String(a.question_type ?? '').localeCompare(String(b.question_type ?? '')) || String(a.code ?? '').localeCompare(String(b.code ?? ''));
@@ -150,6 +181,7 @@
 
 	async function fetchQuestionPool(payload: DetailPayload) {
 		const params = new URLSearchParams({ limit: '1000', offset: '0', scope: payload.package.event_id ? 'event_pool' : 'global' });
+		params.set('subject_id', payload.package.subject_id);
 		if (payload.package.event_id) params.set('event_id', payload.package.event_id);
 		const q = await fetch(clientApiPathWithQuery('/api/bank-soal/questions', params)).then((res) => readClientApiData<QuestionListPayload | PoolQuestion[]>(res));
 		pool = Array.isArray(q) ? q : (q.items ?? []);
@@ -317,8 +349,17 @@
 									<option value="all">Semua kesulitan</option><option value="easy">Mudah</option><option value="medium">Sedang</option><option value="hard">Sulit</option>
 								</select>
 								<Input placeholder="Cari CP/TP/KD..." bind:value={poolCurriculumSearch} />
+								<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={poolAuthor}>
+									<option value="all">Semua pembuat</option>
+									{#each poolAuthors as author}<option value={author}>{author}</option>{/each}
+								</select>
+								<label class="space-y-1 text-xs text-muted-foreground"><span>Dari tanggal</span><Input type="date" bind:value={poolCreatedFrom} /></label>
+								<label class="space-y-1 text-xs text-muted-foreground"><span>Sampai tanggal</span><Input type="date" bind:value={poolCreatedTo} /></label>
+								<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={poolUsage}>
+									<option value="all">Semua pemakaian</option><option value="unused">Belum dipakai paket</option><option value="used">Sudah dipakai paket</option>
+								</select>
 								<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={poolSort}>
-									<option value="metadata_first">Metadata lengkap dulu</option><option value="hots_first">HOTS dulu</option><option value="difficulty">Kesulitan</option><option value="type">Jenis soal</option><option value="code">Kode A-Z</option>
+									<option value="metadata_first">Metadata lengkap dulu</option><option value="newest">Terbaru dibuat</option><option value="oldest">Terlama dibuat</option><option value="author">Pembuat A-Z</option><option value="unused_first">Belum dipakai dulu</option><option value="hots_first">HOTS dulu</option><option value="difficulty">Kesulitan</option><option value="type">Jenis soal</option><option value="code">Kode A-Z</option>
 								</select>
 							</div>
 							{#if poolStatus !== 'published'}<p class="mt-2 text-xs text-warning">Mode audit: soal belum Terbit bisa dilihat, tetapi backend tetap menolak jika dimasukkan ke paket resmi.</p>{/if}
@@ -338,6 +379,9 @@
 												<Badge variant="outline">{difficultyLabel(q.difficulty)}</Badge>
 												{#if q.cognitive_level}<Badge variant="outline">{q.cognitive_level}</Badge>{/if}
 												{#if q.hots_flag}<Badge variant="outline">HOTS</Badge>{/if}
+												{#if q.author_username}<Badge variant="outline">Pembuat: {q.author_username}</Badge>{/if}
+												{#if q.created_at}<Badge variant="outline">{dateLabel(q.created_at)}</Badge>{/if}
+												{#if Number(q.package_count ?? 0) > 0}<Badge variant="outline">Dipakai {q.package_count} paket</Badge>{:else}<Badge variant="outline">Belum dipakai</Badge>{/if}
 												{#if hasMetadataGap(q)}<Badge class="bg-warning/10 text-warning border-warning/30">Metadata kurang</Badge>{/if}
 											</div>
 											{#if q.material_topic}<p class="mt-1 text-xs text-muted-foreground">Materi: {q.material_topic}</p>{/if}
