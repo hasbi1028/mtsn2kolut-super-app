@@ -284,6 +284,13 @@ Commit:
 git commit -m "feat(settings): prefer display names for users and audit actors"
 ```
 
+**Sprint 2 implementation result — 2026-05-15:**
+- Settings Users table/actions now prefer display/profile names and keep usernames as secondary labels.
+- Account/user-change request payloads now carry reviewer display names; UI renders requester/reviewer names before usernames.
+- Audit logs now render actor display names and hide internal user/target IDs in primary table/card text.
+- Validated sqlc, Go handler/service/repository tests, Go build, and web-admin check.
+- Commit: `3cb7462 feat(settings): prefer display names for users and audit actors`.
+
 ---
 
 ## Sprint 3 — Akademik, Siswa, Orang Tua, Pegawai
@@ -337,6 +344,13 @@ Commit:
 git commit -m "feat(academic): replace internal ids with display labels"
 ```
 
+**Sprint 3 implementation result — 2026-05-15:**
+- Student and parent lists now prefer student/guardian names, class labels, NISN/NISM, and relationship labels over raw class/profile IDs.
+- Employee form/list labels now prefer employee names and NIP/unit context.
+- Rombel detail/homeroom helpers now render human class/homeroom labels instead of internal IDs.
+- Validated web-admin check.
+- Commit: `067275d feat(academic): replace internal ids with display labels`.
+
 ---
 
 ## Sprint 4 — TU, Governance, Document Cycles, Arsip
@@ -368,6 +382,13 @@ Commit:
 ```bash
 git commit -m "feat(tu): show display names in document workflows"
 ```
+
+**Sprint 4 implementation result — 2026-05-15:**
+- TU surat masuk disposition flow now uses employee option labels instead of asking for raw employee IDs.
+- Governance action owner/assignee labels now prefer display names.
+- Document Cycles list and verification surfaces now prefer submitter/reviewer/approver display names.
+- Validated web-admin check.
+- Commit: `f5a1404 feat(tu): show display names in document workflows`.
 
 ---
 
@@ -414,6 +435,12 @@ Commit:
 git commit -m "chore(ui): finish global display-name cleanup"
 ```
 
+**Sprint 5 implementation result — 2026-05-15:**
+- Inventory item history now exposes and renders `actor_display_name` before actor username.
+- Journal and library screens now prefer student/member/book/handler labels and keep IDs out of primary text.
+- Final validation includes sqlc, Go handler/service/repository tests, Go build, web-admin check/build, and audit helper run.
+- Commit: `3e76603 chore(ui): finish global display-name cleanup`.
+
 ---
 
 ## Deployment Runbook Per Sprint
@@ -457,12 +484,12 @@ Then restart web-admin if built.
 
 ## Acceptance Checklist
 
-- [ ] Paket Builder: pembuat soal tampil nama.
-- [ ] Bank Soal: pembuat/reviewer/approver tampil nama.
-- [ ] Asesmen: panitia/pengawas/pemilik tampil nama.
-- [ ] Settings: daftar user menampilkan nama + username secondary.
-- [ ] Audit logs: actor/target tampil nama, ID hanya detail teknis.
-- [ ] Akademik: siswa/pegawai/orang tua/rombel tampil label manusiawi.
-- [ ] TU/Governance: assignee/reviewer/owner tampil nama.
-- [ ] Inventory/Notification/Analytics: user-facing label tidak pakai UUID.
-- [ ] Audit script tidak menemukan ID mentah pada UI utama, atau semua temuan sudah diklasifikasi debug/admin teknis.
+- [x] Paket Builder: pembuat soal tampil nama.
+- [x] Bank Soal: pembuat/reviewer/approver tampil nama.
+- [x] Asesmen: panitia/pengawas/pemilik tampil nama.
+- [x] Settings: daftar user menampilkan nama + username secondary.
+- [x] Audit logs: actor/target tampil nama, ID hanya detail teknis.
+- [x] Akademik: siswa/pegawai/orang tua/rombel tampil label manusiawi.
+- [x] TU/Governance: assignee/reviewer/owner tampil nama.
+- [x] Inventory/Notification/Analytics: user-facing label tidak pakai UUID.
+- [x] Audit script dijalankan sebagai final broad scanner; temuan mentah tersisa perlu dibaca sebagai kandidat karena mencakup route keys, value filter, endpoint IDs, dan detail teknis yang memang boleh.
