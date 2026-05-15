@@ -23,6 +23,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { readClientApiData, readClientJson } from '$lib/client/api';
+	import { displayName } from '$lib/utils/display-name';
 
 	interface Stats {
 		compliance_actions?: number;
@@ -660,17 +661,24 @@
 	}
 
 	function actionOwnerLabel(action: ComplianceActionRow) {
-		if (action.responsible_employee_name) return action.responsible_employee_name;
-		if (action.responsible_employee_id) return employees.find((employee) => employee.id === action.responsible_employee_id)?.nama ?? 'PIC tanpa nama';
-		if (action.owner_unit_name) return action.owner_unit_name;
-		if (action.owner_unit_id) return units.find((unit) => unit.id === action.owner_unit_id)?.name ?? 'Unit tanpa nama';
-		return 'Belum ada PIC';
+		const employee = action.responsible_employee_id ? employees.find((item) => item.id === action.responsible_employee_id) : undefined;
+		const unit = action.owner_unit_id ? units.find((item) => item.id === action.owner_unit_id) : undefined;
+		return displayName(
+			{
+				nama: action.responsible_employee_name || employee?.nama,
+				label: action.owner_unit_name || unit?.name
+			},
+			'Belum ada PIC'
+		);
 	}
 
 	function actionOwnerUnitLabel(action: ComplianceActionRow) {
-		if (action.owner_unit_name) return action.owner_unit_name;
-		if (action.responsible_employee_nip) return action.responsible_employee_nip;
-		return actionOwnerKey(action) === 'unassigned' ? 'Perlu penugasan' : 'Unit belum dicatat';
+		const unit = action.owner_unit_id ? units.find((item) => item.id === action.owner_unit_id) : undefined;
+		return displayName({ name: action.owner_unit_name || unit?.name }, actionOwnerKey(action) === 'unassigned' ? 'Perlu penugasan' : 'Unit belum dicatat');
+	}
+
+	function employeeOptionLabel(employee: EmployeeOption) {
+		return [displayName({ nama: employee.nama }, 'Pegawai tanpa nama'), employee.nip ? `NIP ${employee.nip}` : ''].filter(Boolean).join(' · ');
 	}
 
 	function buildActionYears() {
@@ -1233,8 +1241,8 @@
 												</Table.Cell>
 												<Table.Cell class="min-w-[230px] text-sm text-foreground">{linkedLabel(action)}</Table.Cell>
 												<Table.Cell class="min-w-[170px]">
-													<p class="text-sm">{action.responsible_employee_name || '-'}</p>
-													<p class="text-xs text-muted-foreground">{action.owner_unit_name || action.responsible_employee_nip || 'Belum ditetapkan'}</p>
+													<p class="text-sm">{actionOwnerLabel(action)}</p>
+													<p class="text-xs text-muted-foreground">{actionOwnerUnitLabel(action)}</p>
 												</Table.Cell>
 												<Table.Cell>
 													<div class="flex flex-col gap-1">
@@ -1363,7 +1371,7 @@
 					<label for="action-employee" class="text-sm font-medium">PIC Pegawai</label>
 					<select id="action-employee" bind:value={actionForm.responsible_employee_id} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 						<option value="">Tanpa PIC</option>
-						{#each employees as employee (employee.id)}<option value={employee.id}>{employee.nama} · {employee.nip}</option>{/each}
+						{#each employees as employee (employee.id)}<option value={employee.id}>{employeeOptionLabel(employee)}</option>{/each}
 					</select>
 				</div>
 				<div class="sm:col-span-2">

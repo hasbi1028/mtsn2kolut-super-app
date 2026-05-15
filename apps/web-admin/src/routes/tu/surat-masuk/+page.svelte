@@ -14,6 +14,7 @@
 	import { onMount } from 'svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { readClientApiData, readClientJson } from '$lib/client/api';
+	import { displayName } from '$lib/utils/display-name';
 
 	type IncomingLetter = {
 		id: string;
@@ -40,6 +41,13 @@
 		disposed_at: string;
 		nomor_agenda: string;
 		letter_perihal: string;
+	};
+
+	type EmployeeOption = {
+		id: string;
+		nip: string;
+		nama: string;
+		unit_kerja: string;
 	};
 
 	let lettersPromise = $state<Promise<IncomingLetter[]> | null>(null);
@@ -73,6 +81,7 @@
 	let newDisposisiAssignee = $state('');
 	let newDisposisiInstruksi = $state('');
 	let disposisiBusy = $state(false);
+	let employeeOptions = $state<EmployeeOption[]>([]);
 
 	async function fetchLetters(): Promise<IncomingLetter[]> {
 		const params = new URLSearchParams();
@@ -80,6 +89,19 @@
 		if (filterStatus) params.set('status', filterStatus);
 		const res = await fetch(`/api/tu/surat/incoming?${params}`);
 		return readClientApiData<IncomingLetter[]>(res, 'Gagal memuat surat masuk');
+	}
+
+	async function fetchEmployeeOptions(): Promise<EmployeeOption[]> {
+		const res = await fetch('/api/governance/employee-options');
+		return readClientApiData<EmployeeOption[]>(res, 'Gagal memuat daftar pegawai');
+	}
+
+	async function loadEmployeeOptions() {
+		try {
+			employeeOptions = await fetchEmployeeOptions();
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Gagal memuat daftar pegawai');
+		}
 	}
 
 	function loadLetters() {
@@ -138,6 +160,7 @@
 
 	onMount(() => {
 		loadLetters();
+		void loadEmployeeOptions();
 	});
 
 	async function createLetter() {
@@ -259,7 +282,7 @@
 
 	async function createDisposisi() {
 		if (!disposisiLetter) return;
-		if (!newDisposisiAssignee.trim()) { toast.error('Nama/ID pegawai penerima wajib diisi'); return; }
+		if (!newDisposisiAssignee.trim()) { toast.error('Pegawai penerima wajib dipilih'); return; }
 		disposisiBusy = true;
 		try {
 			const res = await fetch('/api/tu/surat/disposisi', {
@@ -288,6 +311,11 @@
 		if (!raw) return '-';
 		const d = new Date(raw);
 		return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+	}
+
+	function employeeLabel(employee: EmployeeOption) {
+		const label = displayName({ nama: employee.nama }, 'Pegawai tanpa nama');
+		return [label, employee.unit_kerja, employee.nip ? `NIP ${employee.nip}` : ''].filter(Boolean).join(' · ');
 	}
 
 	const sifatColors: Record<string, string> = {
@@ -546,8 +574,17 @@
 			<div class="space-y-2 border-t border-border pt-3">
 				<p class="text-sm font-medium text-foreground">Buat Disposisi Baru</p>
 				<div class="space-y-1">
-					<label for="disp-assignee" class="text-xs text-muted-foreground">ID Pegawai Penerima <span class="text-destructive">*</span></label>
-					<Input id="disp-assignee" bind:value={newDisposisiAssignee} placeholder="ID pegawai" />
+					<label for="disp-assignee" class="text-xs text-muted-foreground">Pegawai Penerima <span class="text-destructive">*</span></label>
+					<select
+						id="disp-assignee"
+						bind:value={newDisposisiAssignee}
+						class="w-full rounded-md border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+					>
+						<option value="">Pilih pegawai penerima</option>
+						{#each employeeOptions as employee (employee.id)}
+							<option value={employee.id}>{employeeLabel(employee)}</option>
+						{/each}
+					</select>
 				</div>
 				<div class="space-y-1">
 					<label for="disp-instruksi" class="text-xs text-muted-foreground">Instruksi</label>

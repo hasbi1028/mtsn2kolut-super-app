@@ -33,6 +33,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { toast } from '$lib/components/ui/sonner';
 	import { readClientJson } from '$lib/client/api';
+	import { displayName } from '$lib/utils/display-name';
 
 	interface DocumentCycleStats {
 		active_catalogs: number;
@@ -182,6 +183,7 @@
 		to_status: string;
 		notes: string;
 		actor_username: string;
+		actor_display_name?: string;
 		created_at: string;
 	}
 
@@ -926,8 +928,8 @@
 				domainAreaLabel(item.domain_area),
 				snpLabel(item.snp_standard),
 				item.regulation_ref,
-				item.responsible_employee_name || 'Belum ada PIC',
-				item.verifier_employee_name || 'Belum ada verifikator',
+				obligationResponsibleName(item),
+				displayName({ nama: item.verifier_employee_name }, 'Belum ada verifikator'),
 				formatDate(item.due_date),
 				item.evidence_item_title,
 				item.archive_document_title,
@@ -945,7 +947,7 @@
 			...events.map((event) => [
 				formatDateTime(event.created_at),
 				eventTypeLabel(event.event_type),
-				event.actor_username || 'Sistem',
+				cycleEventActorName(event),
 				event.from_status ? statusLabel(event.from_status) : '',
 				event.to_status ? statusLabel(event.to_status) : '',
 				event.notes
@@ -958,6 +960,33 @@
 	function exportSelectedAuditCsv(events: DocumentCycleEvent[]) {
 		if (!selectedObligation) return;
 		exportAuditCsv(selectedObligation, events);
+	}
+
+	function cycleEventActorName(event: DocumentCycleEvent) {
+		if (!event.actor_username && !event.actor_display_name) return 'Sistem';
+		return displayName(
+			{
+				display_name: event.actor_display_name,
+				username: event.actor_username
+			},
+			'Sistem'
+		);
+	}
+
+	function obligationResponsibleName(item: DocumentCycleObligation, fallback = 'Belum ada PIC') {
+		return displayName({ nama: item.responsible_employee_name }, fallback);
+	}
+
+	function obligationResponsibleMeta(item: DocumentCycleObligation) {
+		const unit = displayName({ name: item.owner_unit_name }, 'Tanpa unit');
+		if (item.responsible_employee_name && item.responsible_employee_nip) {
+			return `${unit} · NIP ${item.responsible_employee_nip}`;
+		}
+		return unit;
+	}
+
+	function catalogDefaultResponsibleName(catalog: DocumentCycleCatalog) {
+		return displayName({ nama: catalog.default_responsible_employee_name }, 'Belum ditentukan');
 	}
 
 	function attentionLabel(item: DocumentCycleObligation): string {
@@ -1212,8 +1241,8 @@
 													<p class="text-xs text-muted-foreground">{formatDate(item.period_start)} - {formatDate(item.period_end)}</p>
 												</Table.Cell>
 												<Table.Cell class="min-w-56">
-													<p class="text-sm text-foreground">{item.responsible_employee_name || 'Belum ditentukan'}</p>
-													<p class="text-xs text-muted-foreground">{item.owner_unit_name || 'Tanpa unit'}{item.responsible_employee_nip ? ` · ${item.responsible_employee_nip}` : ''}</p>
+													<p class="text-sm text-foreground">{obligationResponsibleName(item, 'Belum ditentukan')}</p>
+													<p class="text-xs text-muted-foreground">{obligationResponsibleMeta(item)}</p>
 												</Table.Cell>
 												<Table.Cell class="whitespace-nowrap">
 													<p class={item.is_overdue ? 'text-sm font-medium text-destructive' : 'text-sm text-foreground'}>Jatuh tempo {formatDate(item.due_date)}</p>
@@ -1273,7 +1302,7 @@
 									<div class="flex items-start justify-between gap-3">
 										<div>
 											<p class="text-sm font-medium text-foreground">{item.catalog_title}</p>
-											<p class="text-xs text-muted-foreground">{item.period_label} · {item.responsible_employee_name || 'Belum ada PIC'}</p>
+											<p class="text-xs text-muted-foreground">{item.period_label} · {obligationResponsibleName(item)}</p>
 										</div>
 										<Badge variant={item.is_overdue ? 'destructive' : 'outline'}>{attentionLabel(item)}</Badge>
 									</div>
@@ -1343,11 +1372,11 @@
 										</div>
 										<div>
 											<p class="text-xs font-medium text-muted-foreground">PIC Penyusun</p>
-											<p class="mt-1 text-foreground">{selectedObligation.responsible_employee_name || 'Belum ditentukan'}</p>
+											<p class="mt-1 text-foreground">{obligationResponsibleName(selectedObligation, 'Belum ditentukan')}</p>
 										</div>
 										<div>
 											<p class="text-xs font-medium text-muted-foreground">Verifikator</p>
-											<p class="mt-1 text-foreground">{selectedObligation.verifier_employee_name || 'Belum ditentukan'}</p>
+											<p class="mt-1 text-foreground">{displayName({ nama: selectedObligation.verifier_employee_name }, 'Belum ditentukan')}</p>
 										</div>
 										<div>
 											<p class="text-xs font-medium text-muted-foreground">SNP / Regulasi</p>
@@ -1572,7 +1601,7 @@
 												</div>
 												<div>
 													<label for="audit-actor-filter" class="text-xs font-medium text-muted-foreground">Aktor</label>
-													<Input id="audit-actor-filter" class="mt-1" placeholder="username atau sistem" bind:value={auditActorFilter} />
+													<Input id="audit-actor-filter" class="mt-1" placeholder="nama aktor atau sistem" bind:value={auditActorFilter} />
 												</div>
 												<Button type="button" variant="outline" size="sm" onclick={() => applyAuditFilters()}>
 													<RefreshCcwIcon class="mr-2 size-3.5" />
@@ -1624,7 +1653,7 @@
 																	</p>
 																{/if}
 																<p class="mt-2 text-sm text-foreground">{event.notes || 'Tanpa catatan.'}</p>
-																<p class="mt-2 text-xs text-muted-foreground">{event.actor_username ? `oleh ${event.actor_username}` : 'oleh sistem'}</p>
+																<p class="mt-2 text-xs text-muted-foreground">oleh {cycleEventActorName(event)}</p>
 															</div>
 														{/each}
 													</div>
@@ -1748,7 +1777,7 @@
 													<p class="mt-2 text-xs text-muted-foreground">Alur dokumen: {statusLabel(item.status)}</p>
 												</Table.Cell>
 												<Table.Cell class="min-w-56">
-													<p class="text-sm text-foreground">{item.responsible_employee_name || 'Belum ada PIC'}</p>
+													<p class="text-sm text-foreground">{obligationResponsibleName(item)}</p>
 													<p class={item.is_overdue ? 'mt-1 text-xs font-medium text-destructive' : 'mt-1 text-xs text-muted-foreground'}>Jatuh tempo {formatDate(item.due_date)}</p>
 												</Table.Cell>
 												<Table.Cell class="min-w-64">
@@ -2019,7 +2048,7 @@
 													<Badge variant="outline">{frequencyLabel(catalog.frequency)}</Badge>
 												</Table.Cell>
 												<Table.Cell>
-													<p class="text-sm text-foreground">{catalog.default_responsible_employee_name || 'Belum ditentukan'}</p>
+													<p class="text-sm text-foreground">{catalogDefaultResponsibleName(catalog)}</p>
 													<p class="text-xs text-muted-foreground">{catalog.default_owner_unit_name || 'Tanpa unit'}</p>
 												</Table.Cell>
 												<Table.Cell class="text-sm">

@@ -21,6 +21,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { toast } from '$lib/components/ui/sonner';
 	import { readClientJson } from '$lib/client/api';
+	import { displayName } from '$lib/utils/display-name';
 
 	let { data }: { data: PageData } = $props();
 
@@ -139,6 +140,18 @@
 		if (!item.verifier_employee_id) issues.push('verifikator');
 		if (!item.archive_document_id) issues.push('arsip digital');
 		return issues;
+	}
+
+	function responsibleName(item: DocumentCycleObligation) {
+		return displayName({ nama: item.responsible_employee_name }, 'Belum ada PIC');
+	}
+
+	function responsibleMeta(item: DocumentCycleObligation) {
+		const unit = displayName({ name: item.owner_unit_name }, 'Tanpa unit');
+		if (item.responsible_employee_name && item.responsible_employee_nip) {
+			return `${unit} · NIP ${item.responsible_employee_nip}`;
+		}
+		return unit;
 	}
 
 	function statusNote(status: string): string {
@@ -309,8 +322,8 @@
 											</div>
 										</Table.Cell>
 										<Table.Cell class="min-w-56">
-											<p class="text-sm text-foreground">{item.responsible_employee_name || 'Belum ada PIC'}</p>
-											<p class="text-xs text-muted-foreground">{item.owner_unit_name || 'Tanpa unit'}{item.responsible_employee_nip ? ` · ${item.responsible_employee_nip}` : ''}</p>
+											<p class="text-sm text-foreground">{responsibleName(item)}</p>
+											<p class="text-xs text-muted-foreground">{responsibleMeta(item)}</p>
 										</Table.Cell>
 										<Table.Cell class="whitespace-nowrap">
 											<p class={item.is_overdue ? 'text-sm font-medium text-destructive' : 'text-sm text-foreground'}>Jatuh tempo {formatDate(item.due_date)}</p>
