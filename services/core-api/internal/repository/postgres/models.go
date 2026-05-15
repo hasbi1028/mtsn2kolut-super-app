@@ -2012,6 +2012,7 @@ type PusakaAttendanceTelegramLog struct {
 	ErrorMessage      pgtype.Text        `json:"error_message"`
 	RequestedBy       pgtype.UUID        `json:"requested_by"`
 	SentAt            pgtype.Timestamptz `json:"sent_at"`
+	ScheduleTime      string             `json:"schedule_time"`
 }
 
 type PusakaAttendanceTelegramSetting struct {
@@ -2026,6 +2027,8 @@ type PusakaAttendanceTelegramSetting struct {
 	ReportMode     string             `json:"report_mode"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	SendTimes      []string           `json:"send_times"`
+	SendDays       []int32            `json:"send_days"`
 }
 
 type RbacPermission struct {

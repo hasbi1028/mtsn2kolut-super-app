@@ -13,11 +13,11 @@ import (
 
 const createPusakaAttendanceTelegramLog = `-- name: CreatePusakaAttendanceTelegramLog :one
 INSERT INTO pusaka_attendance_telegram_logs (
-  report_date, target_chat_id, send_mode, status,
+  report_date, target_chat_id, send_mode, schedule_time, status,
   telegram_message_id, error_message, requested_by
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, report_date, target_chat_id, send_mode, status,
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, report_date, target_chat_id, send_mode, schedule_time, status,
           telegram_message_id, error_message, requested_by, sent_at
 `
 
@@ -25,28 +25,44 @@ type CreatePusakaAttendanceTelegramLogParams struct {
 	ReportDate        pgtype.Date `json:"report_date"`
 	TargetChatID      string      `json:"target_chat_id"`
 	SendMode          string      `json:"send_mode"`
+	ScheduleTime      string      `json:"schedule_time"`
 	Status            string      `json:"status"`
 	TelegramMessageID pgtype.Text `json:"telegram_message_id"`
 	ErrorMessage      pgtype.Text `json:"error_message"`
 	RequestedBy       pgtype.UUID `json:"requested_by"`
 }
 
-func (q *Queries) CreatePusakaAttendanceTelegramLog(ctx context.Context, arg CreatePusakaAttendanceTelegramLogParams) (PusakaAttendanceTelegramLog, error) {
+type CreatePusakaAttendanceTelegramLogRow struct {
+	ID                pgtype.UUID        `json:"id"`
+	ReportDate        pgtype.Date        `json:"report_date"`
+	TargetChatID      string             `json:"target_chat_id"`
+	SendMode          string             `json:"send_mode"`
+	ScheduleTime      string             `json:"schedule_time"`
+	Status            string             `json:"status"`
+	TelegramMessageID pgtype.Text        `json:"telegram_message_id"`
+	ErrorMessage      pgtype.Text        `json:"error_message"`
+	RequestedBy       pgtype.UUID        `json:"requested_by"`
+	SentAt            pgtype.Timestamptz `json:"sent_at"`
+}
+
+func (q *Queries) CreatePusakaAttendanceTelegramLog(ctx context.Context, arg CreatePusakaAttendanceTelegramLogParams) (CreatePusakaAttendanceTelegramLogRow, error) {
 	row := q.db.QueryRow(ctx, createPusakaAttendanceTelegramLog,
 		arg.ReportDate,
 		arg.TargetChatID,
 		arg.SendMode,
+		arg.ScheduleTime,
 		arg.Status,
 		arg.TelegramMessageID,
 		arg.ErrorMessage,
 		arg.RequestedBy,
 	)
-	var i PusakaAttendanceTelegramLog
+	var i CreatePusakaAttendanceTelegramLogRow
 	err := row.Scan(
 		&i.ID,
 		&i.ReportDate,
 		&i.TargetChatID,
 		&i.SendMode,
+		&i.ScheduleTime,
 		&i.Status,
 		&i.TelegramMessageID,
 		&i.ErrorMessage,
@@ -58,14 +74,30 @@ func (q *Queries) CreatePusakaAttendanceTelegramLog(ctx context.Context, arg Cre
 
 const getPusakaAttendanceTelegramSettings = `-- name: GetPusakaAttendanceTelegramSettings :one
 SELECT id, settings_key, is_enabled, send_time, timezone, target_chat_id,
-       include_caption, include_image, report_mode, created_at, updated_at
+       send_times, send_days, include_caption, include_image, report_mode, created_at, updated_at
 FROM pusaka_attendance_telegram_settings
 WHERE settings_key = 'default'
 `
 
-func (q *Queries) GetPusakaAttendanceTelegramSettings(ctx context.Context) (PusakaAttendanceTelegramSetting, error) {
+type GetPusakaAttendanceTelegramSettingsRow struct {
+	ID             pgtype.UUID        `json:"id"`
+	SettingsKey    string             `json:"settings_key"`
+	IsEnabled      bool               `json:"is_enabled"`
+	SendTime       pgtype.Time        `json:"send_time"`
+	Timezone       string             `json:"timezone"`
+	TargetChatID   string             `json:"target_chat_id"`
+	SendTimes      []string           `json:"send_times"`
+	SendDays       []int32            `json:"send_days"`
+	IncludeCaption bool               `json:"include_caption"`
+	IncludeImage   bool               `json:"include_image"`
+	ReportMode     string             `json:"report_mode"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetPusakaAttendanceTelegramSettings(ctx context.Context) (GetPusakaAttendanceTelegramSettingsRow, error) {
 	row := q.db.QueryRow(ctx, getPusakaAttendanceTelegramSettings)
-	var i PusakaAttendanceTelegramSetting
+	var i GetPusakaAttendanceTelegramSettingsRow
 	err := row.Scan(
 		&i.ID,
 		&i.SettingsKey,
@@ -73,6 +105,8 @@ func (q *Queries) GetPusakaAttendanceTelegramSettings(ctx context.Context) (Pusa
 		&i.SendTime,
 		&i.Timezone,
 		&i.TargetChatID,
+		&i.SendTimes,
+		&i.SendDays,
 		&i.IncludeCaption,
 		&i.IncludeImage,
 		&i.ReportMode,
@@ -88,6 +122,7 @@ SELECT EXISTS (
   FROM pusaka_attendance_telegram_logs
   WHERE report_date = $1
     AND target_chat_id = $2
+    AND schedule_time = $3
     AND send_mode = 'scheduled'
 )::boolean
 `
@@ -95,10 +130,11 @@ SELECT EXISTS (
 type HasPusakaAttendanceTelegramScheduledLogParams struct {
 	ReportDate   pgtype.Date `json:"report_date"`
 	TargetChatID string      `json:"target_chat_id"`
+	ScheduleTime string      `json:"schedule_time"`
 }
 
 func (q *Queries) HasPusakaAttendanceTelegramScheduledLog(ctx context.Context, arg HasPusakaAttendanceTelegramScheduledLogParams) (bool, error) {
-	row := q.db.QueryRow(ctx, hasPusakaAttendanceTelegramScheduledLog, arg.ReportDate, arg.TargetChatID)
+	row := q.db.QueryRow(ctx, hasPusakaAttendanceTelegramScheduledLog, arg.ReportDate, arg.TargetChatID, arg.ScheduleTime)
 	var column_1 bool
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -112,6 +148,7 @@ SELECT id,
          ELSE repeat('*', GREATEST(length(target_chat_id) - 4, 0)) || right(target_chat_id, 4)
        END::text AS target_chat_id_masked,
        send_mode,
+       schedule_time,
        status,
        telegram_message_id,
        error_message,
@@ -132,6 +169,7 @@ type ListPusakaAttendanceTelegramLogsRow struct {
 	ReportDate         pgtype.Date        `json:"report_date"`
 	TargetChatIDMasked string             `json:"target_chat_id_masked"`
 	SendMode           string             `json:"send_mode"`
+	ScheduleTime       string             `json:"schedule_time"`
 	Status             string             `json:"status"`
 	TelegramMessageID  pgtype.Text        `json:"telegram_message_id"`
 	ErrorMessage       pgtype.Text        `json:"error_message"`
@@ -153,6 +191,7 @@ func (q *Queries) ListPusakaAttendanceTelegramLogs(ctx context.Context, arg List
 			&i.ReportDate,
 			&i.TargetChatIDMasked,
 			&i.SendMode,
+			&i.ScheduleTime,
 			&i.Status,
 			&i.TelegramMessageID,
 			&i.ErrorMessage,
@@ -220,13 +259,15 @@ func (q *Queries) ListPusakaAttendanceTelegramReportRows(ctx context.Context, ta
 
 const upsertPusakaAttendanceTelegramSettings = `-- name: UpsertPusakaAttendanceTelegramSettings :one
 INSERT INTO pusaka_attendance_telegram_settings (
-  settings_key, is_enabled, send_time, timezone, target_chat_id,
+  settings_key, is_enabled, send_time, send_times, send_days, timezone, target_chat_id,
   include_caption, include_image, report_mode
 )
-VALUES ('default', $1, $2, $3, $4, $5, $6, $7)
+VALUES ('default', $1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (settings_key) DO UPDATE
 SET is_enabled = EXCLUDED.is_enabled,
     send_time = EXCLUDED.send_time,
+    send_times = EXCLUDED.send_times,
+    send_days = EXCLUDED.send_days,
     timezone = EXCLUDED.timezone,
     target_chat_id = EXCLUDED.target_chat_id,
     include_caption = EXCLUDED.include_caption,
@@ -234,12 +275,14 @@ SET is_enabled = EXCLUDED.is_enabled,
     report_mode = EXCLUDED.report_mode,
     updated_at = now()
 RETURNING id, settings_key, is_enabled, send_time, timezone, target_chat_id,
-          include_caption, include_image, report_mode, created_at, updated_at
+          send_times, send_days, include_caption, include_image, report_mode, created_at, updated_at
 `
 
 type UpsertPusakaAttendanceTelegramSettingsParams struct {
 	IsEnabled      bool        `json:"is_enabled"`
 	SendTime       pgtype.Time `json:"send_time"`
+	SendTimes      []string    `json:"send_times"`
+	SendDays       []int32     `json:"send_days"`
 	Timezone       string      `json:"timezone"`
 	TargetChatID   string      `json:"target_chat_id"`
 	IncludeCaption bool        `json:"include_caption"`
@@ -247,17 +290,35 @@ type UpsertPusakaAttendanceTelegramSettingsParams struct {
 	ReportMode     string      `json:"report_mode"`
 }
 
-func (q *Queries) UpsertPusakaAttendanceTelegramSettings(ctx context.Context, arg UpsertPusakaAttendanceTelegramSettingsParams) (PusakaAttendanceTelegramSetting, error) {
+type UpsertPusakaAttendanceTelegramSettingsRow struct {
+	ID             pgtype.UUID        `json:"id"`
+	SettingsKey    string             `json:"settings_key"`
+	IsEnabled      bool               `json:"is_enabled"`
+	SendTime       pgtype.Time        `json:"send_time"`
+	Timezone       string             `json:"timezone"`
+	TargetChatID   string             `json:"target_chat_id"`
+	SendTimes      []string           `json:"send_times"`
+	SendDays       []int32            `json:"send_days"`
+	IncludeCaption bool               `json:"include_caption"`
+	IncludeImage   bool               `json:"include_image"`
+	ReportMode     string             `json:"report_mode"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpsertPusakaAttendanceTelegramSettings(ctx context.Context, arg UpsertPusakaAttendanceTelegramSettingsParams) (UpsertPusakaAttendanceTelegramSettingsRow, error) {
 	row := q.db.QueryRow(ctx, upsertPusakaAttendanceTelegramSettings,
 		arg.IsEnabled,
 		arg.SendTime,
+		arg.SendTimes,
+		arg.SendDays,
 		arg.Timezone,
 		arg.TargetChatID,
 		arg.IncludeCaption,
 		arg.IncludeImage,
 		arg.ReportMode,
 	)
-	var i PusakaAttendanceTelegramSetting
+	var i UpsertPusakaAttendanceTelegramSettingsRow
 	err := row.Scan(
 		&i.ID,
 		&i.SettingsKey,
@@ -265,6 +326,8 @@ func (q *Queries) UpsertPusakaAttendanceTelegramSettings(ctx context.Context, ar
 		&i.SendTime,
 		&i.Timezone,
 		&i.TargetChatID,
+		&i.SendTimes,
+		&i.SendDays,
 		&i.IncludeCaption,
 		&i.IncludeImage,
 		&i.ReportMode,

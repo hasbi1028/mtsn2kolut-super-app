@@ -33,11 +33,11 @@ var (
 )
 
 type pusakaAttendanceTelegramStore interface {
-	GetPusakaAttendanceTelegramSettings(ctx context.Context) (db.PusakaAttendanceTelegramSetting, error)
-	UpsertPusakaAttendanceTelegramSettings(ctx context.Context, arg db.UpsertPusakaAttendanceTelegramSettingsParams) (db.PusakaAttendanceTelegramSetting, error)
+	GetPusakaAttendanceTelegramSettings(ctx context.Context) (db.GetPusakaAttendanceTelegramSettingsRow, error)
+	UpsertPusakaAttendanceTelegramSettings(ctx context.Context, arg db.UpsertPusakaAttendanceTelegramSettingsParams) (db.UpsertPusakaAttendanceTelegramSettingsRow, error)
 	ListPusakaAttendanceTelegramReportRows(ctx context.Context, tanggal pgtype.Date) ([]db.ListPusakaAttendanceTelegramReportRowsRow, error)
 	HasPusakaAttendanceTelegramScheduledLog(ctx context.Context, arg db.HasPusakaAttendanceTelegramScheduledLogParams) (bool, error)
-	CreatePusakaAttendanceTelegramLog(ctx context.Context, arg db.CreatePusakaAttendanceTelegramLogParams) (db.PusakaAttendanceTelegramLog, error)
+	CreatePusakaAttendanceTelegramLog(ctx context.Context, arg db.CreatePusakaAttendanceTelegramLogParams) (db.CreatePusakaAttendanceTelegramLogRow, error)
 	ListPusakaAttendanceTelegramLogs(ctx context.Context, arg db.ListPusakaAttendanceTelegramLogsParams) ([]db.ListPusakaAttendanceTelegramLogsRow, error)
 }
 
@@ -50,25 +50,29 @@ type PusakaAttendanceTelegram struct {
 }
 
 type AttendanceTelegramSettingsResponse struct {
-	IsEnabled          bool   `json:"is_enabled"`
-	SendTime           string `json:"send_time"`
-	Timezone           string `json:"timezone"`
-	TargetChatID       string `json:"target_chat_id"`
-	TargetChatIDMasked string `json:"target_chat_id_masked"`
-	IncludeCaption     bool   `json:"include_caption"`
-	IncludeImage       bool   `json:"include_image"`
-	ReportMode         string `json:"report_mode"`
-	BotConfigured      bool   `json:"bot_configured"`
+	IsEnabled          bool     `json:"is_enabled"`
+	SendTime           string   `json:"send_time"`
+	SendTimes          []string `json:"send_times"`
+	SendDays           []int32  `json:"send_days"`
+	Timezone           string   `json:"timezone"`
+	TargetChatID       string   `json:"target_chat_id"`
+	TargetChatIDMasked string   `json:"target_chat_id_masked"`
+	IncludeCaption     bool     `json:"include_caption"`
+	IncludeImage       bool     `json:"include_image"`
+	ReportMode         string   `json:"report_mode"`
+	BotConfigured      bool     `json:"bot_configured"`
 }
 
 type UpdateAttendanceTelegramSettingsInput struct {
-	IsEnabled      bool   `json:"is_enabled"`
-	SendTime       string `json:"send_time"`
-	Timezone       string `json:"timezone"`
-	TargetChatID   string `json:"target_chat_id"`
-	IncludeCaption bool   `json:"include_caption"`
-	IncludeImage   bool   `json:"include_image"`
-	ReportMode     string `json:"report_mode"`
+	IsEnabled      bool     `json:"is_enabled"`
+	SendTime       string   `json:"send_time"`
+	SendTimes      []string `json:"send_times"`
+	SendDays       []int32  `json:"send_days"`
+	Timezone       string   `json:"timezone"`
+	TargetChatID   string   `json:"target_chat_id"`
+	IncludeCaption bool     `json:"include_caption"`
+	IncludeImage   bool     `json:"include_image"`
+	ReportMode     string   `json:"report_mode"`
 }
 
 type SendAttendanceTelegramReportInput struct {
@@ -78,6 +82,7 @@ type SendAttendanceTelegramReportInput struct {
 	IncludeImage   bool        `json:"include_image"`
 	SendMode       string      `json:"send_mode"`
 	RequestedBy    pgtype.UUID `json:"-"`
+	ScheduleTime   string      `json:"-"`
 }
 
 type AttendanceTelegramReportResult struct {
@@ -149,7 +154,7 @@ func (s *PusakaAttendanceTelegram) Stop() {
 func (s *PusakaAttendanceTelegram) GetSettings(ctx context.Context) (AttendanceTelegramSettingsResponse, error) {
 	row, err := s.q.GetPusakaAttendanceTelegramSettings(ctx)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return AttendanceTelegramSettingsResponse{IsEnabled: false, SendTime: "17:00", Timezone: attendanceTelegramDefaultTimezone, TargetChatID: attendanceTelegramDefaultChatID, TargetChatIDMasked: maskChatID(attendanceTelegramDefaultChatID), IncludeCaption: true, IncludeImage: true, ReportMode: "ringkas", BotConfigured: s.botToken != ""}, nil
+		return AttendanceTelegramSettingsResponse{IsEnabled: false, SendTime: "17:00", SendTimes: []string{"17:00"}, SendDays: defaultAttendanceTelegramSendDays(), Timezone: attendanceTelegramDefaultTimezone, TargetChatID: attendanceTelegramDefaultChatID, TargetChatIDMasked: maskChatID(attendanceTelegramDefaultChatID), IncludeCaption: true, IncludeImage: true, ReportMode: "ringkas", BotConfigured: s.botToken != ""}, nil
 	}
 	if err != nil {
 		return AttendanceTelegramSettingsResponse{}, err
@@ -176,15 +181,23 @@ func (s *PusakaAttendanceTelegram) UpdateSettings(ctx context.Context, in Update
 	if in.IsEnabled && strings.TrimSpace(in.TargetChatID) == "" {
 		return AttendanceTelegramSettingsResponse{}, errors.New("target Telegram wajib diisi saat jadwal aktif")
 	}
-	micros, err := parseHHMMToMicros(in.SendTime)
+	sendTimes, err := normalizeSendTimes(in.SendTimes, in.SendTime)
 	if err != nil {
 		return AttendanceTelegramSettingsResponse{}, err
 	}
-	row, err := s.q.UpsertPusakaAttendanceTelegramSettings(ctx, db.UpsertPusakaAttendanceTelegramSettingsParams{IsEnabled: in.IsEnabled, SendTime: pgtype.Time{Microseconds: micros, Valid: true}, Timezone: in.Timezone, TargetChatID: strings.TrimSpace(in.TargetChatID), IncludeCaption: in.IncludeCaption, IncludeImage: in.IncludeImage, ReportMode: in.ReportMode})
+	sendDays, err := normalizeSendDays(in.SendDays)
 	if err != nil {
 		return AttendanceTelegramSettingsResponse{}, err
 	}
-	return s.settingsResponse(row), nil
+	micros, err := parseHHMMToMicros(sendTimes[0])
+	if err != nil {
+		return AttendanceTelegramSettingsResponse{}, err
+	}
+	row, err := s.q.UpsertPusakaAttendanceTelegramSettings(ctx, db.UpsertPusakaAttendanceTelegramSettingsParams{IsEnabled: in.IsEnabled, SendTime: pgtype.Time{Microseconds: micros, Valid: true}, SendTimes: sendTimes, SendDays: sendDays, Timezone: in.Timezone, TargetChatID: strings.TrimSpace(in.TargetChatID), IncludeCaption: in.IncludeCaption, IncludeImage: in.IncludeImage, ReportMode: in.ReportMode})
+	if err != nil {
+		return AttendanceTelegramSettingsResponse{}, err
+	}
+	return s.settingsResponseFromUpsert(row), nil
 }
 
 func (s *PusakaAttendanceTelegram) ListLogs(ctx context.Context, limit, offset int32) ([]db.ListPusakaAttendanceTelegramLogsRow, error) {
@@ -203,18 +216,27 @@ func (s *PusakaAttendanceTelegram) RunDue(ctx context.Context, now time.Time) er
 		return nil
 	}
 	localNow := now.In(s.loc)
-	current := localNow.Hour()*60 + localNow.Minute()
-	scheduled := int(settings.SendTime.Microseconds / int64(time.Minute/time.Microsecond))
-	if current != scheduled {
+	if !sendDayEnabled(settings.SendDays, int32(localNow.Weekday())) {
 		return nil
 	}
-	reportDate := datePg(localNow)
-	exists, err := s.q.HasPusakaAttendanceTelegramScheduledLog(ctx, db.HasPusakaAttendanceTelegramScheduledLogParams{ReportDate: reportDate, TargetChatID: settings.TargetChatID})
-	if err != nil || exists {
+	current := localNow.Format("15:04")
+	sendTimes, err := normalizeSendTimes(settings.SendTimes, microsToHHMM(settings.SendTime.Microseconds))
+	if err != nil {
 		return err
 	}
-	_, err = s.SendReport(ctx, SendAttendanceTelegramReportInput{Date: localNow.Format("2006-01-02"), TargetChatID: settings.TargetChatID, IncludeCaption: settings.IncludeCaption, IncludeImage: settings.IncludeImage, SendMode: "scheduled"})
-	return err
+	for _, scheduled := range sendTimes {
+		if current != scheduled {
+			continue
+		}
+		reportDate := datePg(localNow)
+		exists, err := s.q.HasPusakaAttendanceTelegramScheduledLog(ctx, db.HasPusakaAttendanceTelegramScheduledLogParams{ReportDate: reportDate, TargetChatID: settings.TargetChatID, ScheduleTime: scheduled})
+		if err != nil || exists {
+			return err
+		}
+		_, err = s.SendReport(ctx, SendAttendanceTelegramReportInput{Date: localNow.Format("2006-01-02"), TargetChatID: settings.TargetChatID, IncludeCaption: settings.IncludeCaption, IncludeImage: settings.IncludeImage, SendMode: "scheduled", ScheduleTime: scheduled})
+		return err
+	}
+	return nil
 }
 
 func (s *PusakaAttendanceTelegram) SendReport(ctx context.Context, in SendAttendanceTelegramReportInput) (AttendanceTelegramReportResult, error) {
@@ -267,7 +289,7 @@ func (s *PusakaAttendanceTelegram) SendReport(ctx context.Context, in SendAttend
 		msgText = pgtype.Text{String: msgID, Valid: true}
 		result.TelegramMessageID = msgID
 	}
-	_, _ = s.q.CreatePusakaAttendanceTelegramLog(ctx, db.CreatePusakaAttendanceTelegramLogParams{ReportDate: datePg(date), TargetChatID: chatID, SendMode: in.SendMode, Status: status, TelegramMessageID: msgText, ErrorMessage: errText, RequestedBy: in.RequestedBy})
+	_, _ = s.q.CreatePusakaAttendanceTelegramLog(ctx, db.CreatePusakaAttendanceTelegramLogParams{ReportDate: datePg(date), TargetChatID: chatID, SendMode: in.SendMode, ScheduleTime: in.ScheduleTime, Status: status, TelegramMessageID: msgText, ErrorMessage: errText, RequestedBy: in.RequestedBy})
 	result.Status = status
 	return result, sendErr
 }
@@ -373,8 +395,90 @@ func (s *PusakaAttendanceTelegram) doTelegram(req *http.Request) (string, error)
 	return "", nil
 }
 
-func (s *PusakaAttendanceTelegram) settingsResponse(row db.PusakaAttendanceTelegramSetting) AttendanceTelegramSettingsResponse {
-	return AttendanceTelegramSettingsResponse{IsEnabled: row.IsEnabled, SendTime: microsToHHMM(row.SendTime.Microseconds), Timezone: row.Timezone, TargetChatID: row.TargetChatID, TargetChatIDMasked: maskChatID(row.TargetChatID), IncludeCaption: row.IncludeCaption, IncludeImage: row.IncludeImage, ReportMode: row.ReportMode, BotConfigured: s.botToken != ""}
+func (s *PusakaAttendanceTelegram) settingsResponse(row db.GetPusakaAttendanceTelegramSettingsRow) AttendanceTelegramSettingsResponse {
+	sendTime := microsToHHMM(row.SendTime.Microseconds)
+	sendTimes, _ := normalizeSendTimes(row.SendTimes, sendTime)
+	sendDays, _ := normalizeSendDays(row.SendDays)
+	return AttendanceTelegramSettingsResponse{IsEnabled: row.IsEnabled, SendTime: sendTime, SendTimes: sendTimes, SendDays: sendDays, Timezone: row.Timezone, TargetChatID: row.TargetChatID, TargetChatIDMasked: maskChatID(row.TargetChatID), IncludeCaption: row.IncludeCaption, IncludeImage: row.IncludeImage, ReportMode: row.ReportMode, BotConfigured: s.botToken != ""}
+}
+
+func (s *PusakaAttendanceTelegram) settingsResponseFromUpsert(row db.UpsertPusakaAttendanceTelegramSettingsRow) AttendanceTelegramSettingsResponse {
+	sendTime := microsToHHMM(row.SendTime.Microseconds)
+	sendTimes, _ := normalizeSendTimes(row.SendTimes, sendTime)
+	sendDays, _ := normalizeSendDays(row.SendDays)
+	return AttendanceTelegramSettingsResponse{IsEnabled: row.IsEnabled, SendTime: sendTime, SendTimes: sendTimes, SendDays: sendDays, Timezone: row.Timezone, TargetChatID: row.TargetChatID, TargetChatIDMasked: maskChatID(row.TargetChatID), IncludeCaption: row.IncludeCaption, IncludeImage: row.IncludeImage, ReportMode: row.ReportMode, BotConfigured: s.botToken != ""}
+}
+
+func defaultAttendanceTelegramSendDays() []int32 {
+	return []int32{1, 2, 3, 4, 5, 6}
+}
+
+func normalizeSendDays(values []int32) ([]int32, error) {
+	if len(values) == 0 {
+		return defaultAttendanceTelegramSendDays(), nil
+	}
+	seen := map[int32]bool{}
+	out := make([]int32, 0, len(values))
+	for _, day := range values {
+		if day < 0 || day > 6 {
+			return nil, errors.New("hari kirim tidak valid")
+		}
+		if !seen[day] {
+			seen[day] = true
+			out = append(out, day)
+		}
+	}
+	if len(out) == 0 {
+		return nil, errors.New("minimal satu hari kirim harus dipilih")
+	}
+	return out, nil
+}
+
+func sendDayEnabled(values []int32, day int32) bool {
+	sendDays, err := normalizeSendDays(values)
+	if err != nil {
+		return false
+	}
+	for _, enabled := range sendDays {
+		if enabled == day {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeSendTimes(values []string, fallback string) ([]string, error) {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values)+1)
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		micros, err := parseHHMMToMicros(value)
+		if err != nil {
+			return nil, err
+		}
+		normalized := microsToHHMM(micros)
+		if !seen[normalized] {
+			seen[normalized] = true
+			out = append(out, normalized)
+		}
+	}
+	if len(out) == 0 {
+		if strings.TrimSpace(fallback) == "" {
+			fallback = "17:00"
+		}
+		micros, err := parseHHMMToMicros(fallback)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, microsToHHMM(micros))
+	}
+	if len(out) > 8 {
+		return nil, errors.New("maksimal 8 jadwal kirim per hari")
+	}
+	return out, nil
 }
 
 func parseHHMMToMicros(v string) (int64, error) {

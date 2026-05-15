@@ -1,18 +1,20 @@
 -- name: GetPusakaAttendanceTelegramSettings :one
 SELECT id, settings_key, is_enabled, send_time, timezone, target_chat_id,
-       include_caption, include_image, report_mode, created_at, updated_at
+       send_times, send_days, include_caption, include_image, report_mode, created_at, updated_at
 FROM pusaka_attendance_telegram_settings
 WHERE settings_key = 'default';
 
 -- name: UpsertPusakaAttendanceTelegramSettings :one
 INSERT INTO pusaka_attendance_telegram_settings (
-  settings_key, is_enabled, send_time, timezone, target_chat_id,
+  settings_key, is_enabled, send_time, send_times, send_days, timezone, target_chat_id,
   include_caption, include_image, report_mode
 )
-VALUES ('default', $1, $2, $3, $4, $5, $6, $7)
+VALUES ('default', $1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (settings_key) DO UPDATE
 SET is_enabled = EXCLUDED.is_enabled,
     send_time = EXCLUDED.send_time,
+    send_times = EXCLUDED.send_times,
+    send_days = EXCLUDED.send_days,
     timezone = EXCLUDED.timezone,
     target_chat_id = EXCLUDED.target_chat_id,
     include_caption = EXCLUDED.include_caption,
@@ -20,7 +22,7 @@ SET is_enabled = EXCLUDED.is_enabled,
     report_mode = EXCLUDED.report_mode,
     updated_at = now()
 RETURNING id, settings_key, is_enabled, send_time, timezone, target_chat_id,
-          include_caption, include_image, report_mode, created_at, updated_at;
+          send_times, send_days, include_caption, include_image, report_mode, created_at, updated_at;
 
 -- name: ListPusakaAttendanceTelegramReportRows :many
 SELECT e.id AS employee_id,
@@ -42,16 +44,17 @@ SELECT EXISTS (
   FROM pusaka_attendance_telegram_logs
   WHERE report_date = $1
     AND target_chat_id = $2
+    AND schedule_time = $3
     AND send_mode = 'scheduled'
 )::boolean;
 
 -- name: CreatePusakaAttendanceTelegramLog :one
 INSERT INTO pusaka_attendance_telegram_logs (
-  report_date, target_chat_id, send_mode, status,
+  report_date, target_chat_id, send_mode, schedule_time, status,
   telegram_message_id, error_message, requested_by
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, report_date, target_chat_id, send_mode, status,
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, report_date, target_chat_id, send_mode, schedule_time, status,
           telegram_message_id, error_message, requested_by, sent_at;
 
 -- name: ListPusakaAttendanceTelegramLogs :many
@@ -62,6 +65,7 @@ SELECT id,
          ELSE repeat('*', GREATEST(length(target_chat_id) - 4, 0)) || right(target_chat_id, 4)
        END::text AS target_chat_id_masked,
        send_mode,
+       schedule_time,
        status,
        telegram_message_id,
        error_message,
