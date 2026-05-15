@@ -46,6 +46,7 @@
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { htmlToPlainText } from '$lib/utils/html-text';
+	import { displayName } from '$lib/utils/display-name';
 	import {
 		ANSWER_LABELS,
 		DIFFICULTY_LABEL,
@@ -185,7 +186,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		difficulty: string;
 		status: string;
 		author_username: string;
+		author_display_name?: string;
 		reviewer_username?: string;
+		reviewer_display_name?: string;
 		reviewed_at?: string | null;
 		review_notes?: string;
 		created_at: string;
@@ -333,6 +336,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		status?: string;
 		notes?: string;
 		actor_username?: string;
+	actor_display_name?: string;
 		created_at?: string;
 	};
 	type BulkWorkflowResult = {
@@ -1269,7 +1273,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	function memberDisplayName(member: EventMember): string {
-		return member.employee_nama ?? member.employee_name ?? member.username ?? member.user_id;
+		return displayName({ nama: member.employee_nama ?? member.employee_name, username: member.username, id: member.user_id }, 'Anggota');
 	}
 
 	function memberRoleLabel(role: string): string {
@@ -3166,9 +3170,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 								</Table.Cell>
 									<Table.Cell class="text-sm text-foreground max-w-xs">
 										<div class="truncate">{stemPreview(q)}</div>
-										{#if q.author_username}
-											<div class="text-[10px] text-muted-foreground mt-0.5">{q.author_username}</div>
-										{/if}
+						{#if q.author_username || q.author_display_name}
+							<div class="text-[10px] text-muted-foreground mt-0.5">{displayName({ display_name: q.author_display_name, username: q.author_username }, 'Penulis')}</div>
+						{/if}
 										<div class="mt-1 flex flex-wrap gap-1">
 											<span class="rounded bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success">
 												{questionTypeLabel(q.question_type)}
@@ -3357,7 +3361,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 						<span class="rounded bg-card px-1.5 py-0.5 font-semibold text-success">{questionTypeLabel(reviewDecisionQuestion.question_type)}</span>
 						<span>{reviewDecisionQuestion.subject_name || reviewDecisionQuestion.subject_code || 'Mapel belum ada'}</span>
 						<span>{reviewDecisionQuestion.code || 'Tanpa kode'}</span>
-						{#if reviewDecisionQuestion.author_username}<span>Guru: {reviewDecisionQuestion.author_username}</span>{/if}
+						{#if reviewDecisionQuestion.author_username || reviewDecisionQuestion.author_display_name}<span>Guru: {displayName({ display_name: reviewDecisionQuestion.author_display_name, username: reviewDecisionQuestion.author_username }, 'Guru')}</span>{/if}
 					</div>
 					<div class="max-h-64 space-y-3 overflow-auto rounded-md border border-border bg-card p-3 text-sm">
 						{#if reviewDecisionQuestion.stimulus_html}
@@ -3563,7 +3567,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 					<div class="rounded border border-border bg-muted/50 px-2 py-1.5">
 						<div class="flex flex-wrap items-center gap-1.5">
 							<span class="font-semibold text-success">{item.action ?? item.status ?? 'Perubahan'}</span>
-							{#if item.actor_username}<span class="text-muted-foreground">oleh {item.actor_username}</span>{/if}
+							{#if item.actor_username || item.actor_display_name}<span class="text-muted-foreground">oleh {displayName({ display_name: item.actor_display_name, username: item.actor_username }, 'Pengguna')}</span>{/if}
 							{#if item.created_at}<span class="text-muted-foreground">{new Date(item.created_at).toLocaleString('id-ID')}</span>{/if}
 						</div>
 						{#if item.notes}<p class="mt-1 text-muted-foreground">{item.notes}</p>{/if}

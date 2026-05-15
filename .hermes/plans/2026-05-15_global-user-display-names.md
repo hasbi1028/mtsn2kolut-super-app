@@ -218,6 +218,21 @@ Deploy if requested/needed:
 4. restart `mtsn2kolut-web-admin`.
 5. smoke test `/health`, web root, protected route expected redirect/401.
 
+**Sprint 1 implementation result — 2026-05-15:**
+- Completed CBT/Bank Soal/Asesmen actor-name cleanup for the high-visibility flows.
+- `cbt_questions.sql` now exposes `actor_display_name` for question timeline rows in addition to existing author/reviewer/approver display-name fields.
+- Updated Go service/handler interfaces and tests for `ListCbtQuestionTimelineRow` after sqlc generation.
+- Patched Bank Soal workspace/detail/review components to render `displayName(...)` for author, reviewer, approver, and timeline actors.
+- Patched Asesmen event members page so member names and user dropdowns prefer employee/profile names; usernames remain secondary labels, internal IDs are hidden from primary UI.
+- Validated:
+  - `/home/servermtsn2kolut/go/bin/sqlc generate -f db/sqlc.yaml`
+  - `go test ./internal/handler ./internal/service ./internal/repository/postgres`
+  - `go build -o /tmp/core-api-user-display-sprint1 ./cmd/api`
+  - `npm --prefix apps/web-admin run check`
+  - `npm --prefix apps/web-admin run build`
+  - targeted audit for raw actor username/ID rendering in `bank-soal` and `asesmen` routes.
+- Deployment intentionally deferred; deploy/restart only when requested.
+
 ---
 
 ## Sprint 2 — Settings, Users, RBAC, Audit Logs

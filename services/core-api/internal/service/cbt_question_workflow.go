@@ -12,7 +12,7 @@ import (
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
-func (s *CbtQuestion) Timeline(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor) ([]db.CbtQuestionAuditLog, error) {
+func (s *CbtQuestion) Timeline(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor) ([]db.ListCbtQuestionTimelineRow, error) {
 	if _, err := s.GetDetail(ctx, id, actor); err != nil {
 		return nil, err
 	}
@@ -21,7 +21,7 @@ func (s *CbtQuestion) Timeline(ctx context.Context, id pgtype.UUID, actor CbtQue
 		return nil, err
 	}
 	if rows == nil {
-		return []db.CbtQuestionAuditLog{}, nil
+		return []db.ListCbtQuestionTimelineRow{}, nil
 	}
 	return rows, nil
 }

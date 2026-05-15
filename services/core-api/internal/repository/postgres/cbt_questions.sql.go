@@ -980,25 +980,46 @@ func (q *Queries) ListCbtQuestionSummaryRecent(ctx context.Context, arg ListCbtQ
 }
 
 const listCbtQuestionTimeline = `-- name: ListCbtQuestionTimeline :many
-SELECT id, question_id, actor_username, action, note, metadata, created_at
-FROM cbt_question_audit_logs
-WHERE question_id = $1
-ORDER BY created_at ASC, id ASC
+SELECT log.id,
+       log.question_id,
+       log.actor_username,
+       COALESCE(NULLIF(btrim(actor_emp.nama), ''), NULLIF(btrim(actor_user.display_name), ''), log.actor_username) AS actor_display_name,
+       log.action,
+       log.note,
+       log.metadata,
+       log.created_at
+FROM cbt_question_audit_logs log
+LEFT JOIN users actor_user ON actor_user.username = log.actor_username
+LEFT JOIN employees actor_emp ON actor_emp.id = actor_user.employee_id
+WHERE log.question_id = $1
+ORDER BY log.created_at ASC, log.id ASC
 `
 
-func (q *Queries) ListCbtQuestionTimeline(ctx context.Context, questionID pgtype.UUID) ([]CbtQuestionAuditLog, error) {
+type ListCbtQuestionTimelineRow struct {
+	ID               pgtype.UUID        `json:"id"`
+	QuestionID       pgtype.UUID        `json:"question_id"`
+	ActorUsername    string             `json:"actor_username"`
+	ActorDisplayName string             `json:"actor_display_name"`
+	Action           string             `json:"action"`
+	Note             string             `json:"note"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListCbtQuestionTimeline(ctx context.Context, questionID pgtype.UUID) ([]ListCbtQuestionTimelineRow, error) {
 	rows, err := q.db.Query(ctx, listCbtQuestionTimeline, questionID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []CbtQuestionAuditLog{}
+	items := []ListCbtQuestionTimelineRow{}
 	for rows.Next() {
-		var i CbtQuestionAuditLog
+		var i ListCbtQuestionTimelineRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.QuestionID,
 			&i.ActorUsername,
+			&i.ActorDisplayName,
 			&i.Action,
 			&i.Note,
 			&i.Metadata,

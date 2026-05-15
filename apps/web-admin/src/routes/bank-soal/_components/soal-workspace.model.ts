@@ -285,6 +285,7 @@ export type TimelineItem = {
 	status?: string;
 	notes?: string;
 	actor_username?: string;
+	actor_display_name?: string;
 	created_at?: string;
 };
 export type BulkWorkflowResult = {

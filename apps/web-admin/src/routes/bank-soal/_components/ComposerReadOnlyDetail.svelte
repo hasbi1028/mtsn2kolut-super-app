@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { displayName } from '$lib/utils/display-name';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
@@ -333,7 +334,7 @@
 							<div class="rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs">
 								<div class="flex flex-wrap items-center gap-1.5">
 									<span class="font-semibold text-success">{item.action ?? item.status ?? 'Perubahan'}</span>
-									{#if item.actor_username}<span class="text-muted-foreground">oleh {item.actor_username}</span>{/if}
+									{#if item.actor_username || item.actor_display_name}<span class="text-muted-foreground">oleh {displayName({ display_name: item.actor_display_name, username: item.actor_username }, 'Pengguna')}</span>{/if}
 									{#if item.created_at}<span class="text-muted-foreground">{composerDateTimeLabel(item.created_at)}</span>{/if}
 								</div>
 								{#if item.notes}<p class="mt-1 text-muted-foreground">{item.notes}</p>{/if}

@@ -179,8 +179,21 @@ func (f *fakeQuestionStore) CreateCbtQuestionAuditLog(ctx context.Context, arg d
 	return row, nil
 }
 
-func (f *fakeQuestionStore) ListCbtQuestionTimeline(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAuditLog, error) {
-	return f.auditLogs, nil
+func (f *fakeQuestionStore) ListCbtQuestionTimeline(ctx context.Context, questionID pgtype.UUID) ([]db.ListCbtQuestionTimelineRow, error) {
+	rows := make([]db.ListCbtQuestionTimelineRow, 0, len(f.auditLogs))
+	for _, log := range f.auditLogs {
+		rows = append(rows, db.ListCbtQuestionTimelineRow{
+			ID:               log.ID,
+			QuestionID:       log.QuestionID,
+			ActorUsername:    log.ActorUsername,
+			ActorDisplayName: log.ActorUsername,
+			Action:           log.Action,
+			Note:             log.Note,
+			Metadata:         log.Metadata,
+			CreatedAt:        log.CreatedAt,
+		})
+	}
+	return rows, nil
 }
 
 func (f *fakeQuestionStore) ListCbtQuestionVersions(ctx context.Context, id pgtype.UUID) ([]db.ListCbtQuestionVersionsRow, error) {

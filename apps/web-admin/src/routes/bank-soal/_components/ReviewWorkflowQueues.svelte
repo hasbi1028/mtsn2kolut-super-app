@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import { displayName } from '$lib/utils/display-name';
 
 	type RevisionSourceFilter = '' | 'item_analysis' | 'reviewer' | 'workflow';
 	type OptionItem = {
@@ -43,7 +44,9 @@
 		options: OptionItem[];
 		answer_key: string;
 		author_username: string;
+		author_display_name?: string;
 		reviewer_username?: string;
+		reviewer_display_name?: string;
 		reviewed_at?: string | null;
 		review_notes?: string;
 		created_at: string;
@@ -226,8 +229,8 @@
 						</button>
 						<div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
 							<span>{q.code || 'Tanpa kode'}</span>
-							{#if q.author_username}<span>Guru: {q.author_username}</span>{/if}
-							{#if q.reviewer_username}<span>Reviewer: {q.reviewer_username}</span>{/if}
+							{#if q.author_username || q.author_display_name}<span>Guru: {displayName({ display_name: q.author_display_name, username: q.author_username }, 'Guru')}</span>{/if}
+							{#if q.reviewer_username || q.reviewer_display_name}<span>Reviewer: {displayName({ display_name: q.reviewer_display_name, username: q.reviewer_username }, 'Reviewer')}</span>{/if}
 							{#if action !== 'approved'}<span>{difficultyLabel[q.difficulty] ?? q.difficulty ?? 'Sedang'}</span>{/if}
 						</div>
 						{#if action === 'revision'}

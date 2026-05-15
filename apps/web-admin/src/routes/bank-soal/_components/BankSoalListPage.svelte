@@ -31,6 +31,7 @@
 	import { clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { canCreateBankSoal, canDeleteBankSoal, canImportBankSoal, canManageBankSoalSettings, canReviewBankSoal } from '$lib/bank-soal/access';
 	import { htmlToPlainText } from '$lib/utils/html-text';
+	import { displayName } from '$lib/utils/display-name';
 
 	type PageData = {
 		user?: {
@@ -76,7 +77,9 @@
 		status?: string;
 		workflow_status?: string;
 		author_username?: string;
+		author_display_name?: string;
 		reviewer_username?: string;
+		reviewer_display_name?: string;
 		review_notes?: string;
 		authoring_mode?: string;
 		suggested_mode?: string;
@@ -716,7 +719,7 @@
 			.slice(0, 5)
 			.map((question) => ({
 				id: question.id,
-				actor: compactText(question.author_username || question.reviewer_username, 'Tim Bank Soal'),
+				actor: displayName({ display_name: question.author_display_name || question.reviewer_display_name, username: question.author_username || question.reviewer_username }, 'Tim Bank Soal'),
 				action: activityAction(question),
 				object: `${compactText(question.code, 'Tanpa kode')} · ${compactText(question.material_topic || question.subject_name, 'Soal')}`,
 				time: formatDate(question.updated_at || question.created_at),
@@ -1397,7 +1400,7 @@
 												</div>
 												<p class="line-clamp-2 text-sm leading-6 text-foreground">{questionPratinjau(question)}</p>
 												<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-													<span>{compactText(question.author_username, 'Penulis belum tercatat')}</span>
+													<span>{displayName({ display_name: question.author_display_name, username: question.author_username }, 'Penulis belum tercatat')}</span>
 													<span>{difficultyLabel(question.difficulty)}</span>
 													<span>{compactText(question.material_topic, 'Materi belum diisi')}</span>
 													<span>Dibuat {formatDate(question.created_at)}</span>

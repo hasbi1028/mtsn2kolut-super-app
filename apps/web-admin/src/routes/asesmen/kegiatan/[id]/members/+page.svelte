@@ -12,6 +12,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPath, readClientApiData, readClientJson } from '$lib/client/api';
+	import { displayName } from '$lib/utils/display-name';
 
 	type Subject = { id: string; name: string; code?: string };
 	type CbtEvent = { id: string; title: string; status?: string; exam_type?: string; academic_year_name?: string };
@@ -80,12 +81,17 @@
 	}
 
 	function userDisplayName(user: UserOption): string {
-		const profile = user.profile_nama?.trim();
-		return profile ? `${profile} (${user.username})` : user.username;
+		return displayName({ display_name: user.profile_nama, username: user.username, id: user.id }, 'Pengguna');
 	}
 
 	function memberDisplayName(member: EventMember): string {
-		return member.employee_nama ?? member.employee_name ?? member.username ?? member.user_id;
+		return displayName({ display_name: member.employee_nama ?? member.employee_name, username: member.username, id: member.user_id }, 'Pengguna');
+	}
+
+	function memberSecondaryLabel(member: EventMember): string {
+		const primary = memberDisplayName(member);
+		const username = (member.username ?? '').trim();
+		return username && username !== primary ? username : '';
 	}
 
 	function roleLabel(role: string): string {
@@ -289,7 +295,11 @@
 						<Table.Body>
 							{#each filteredMembers as member (member.id)}
 								<Table.Row>
-									<Table.Cell class="font-medium text-foreground">{memberDisplayName(member)}<div class="text-xs font-normal text-muted-foreground">{member.username ?? member.user_id}</div></Table.Cell>
+									<Table.Cell class="font-medium text-foreground">
+										{memberDisplayName(member)}
+										{@const secondary = memberSecondaryLabel(member)}
+										{#if secondary}<div class="text-xs font-normal text-muted-foreground">{secondary}</div>{/if}
+									</Table.Cell>
 									<Table.Cell><span class="rounded bg-success/10 px-2 py-1 text-xs font-semibold text-success">{roleLabel(member.role)}</span></Table.Cell>
 									<Table.Cell class="text-sm text-muted-foreground">{subjectLabel(member)}</Table.Cell>
 									<Table.Cell class="text-right">

@@ -139,7 +139,7 @@ type fakeCbtQuestionService struct {
 	importResult service.ImportLegacyQuestionsResult
 	importErr    error
 
-	timelineRows []db.CbtQuestionAuditLog
+	timelineRows []db.ListCbtQuestionTimelineRow
 	timelineErr  error
 
 	bulkInput  service.BulkCbtQuestionWorkflowInput
@@ -229,7 +229,7 @@ func (f *fakeCbtQuestionService) DeleteWithActor(_ context.Context, id pgtype.UU
 	return f.deleteErr
 }
 
-func (f *fakeCbtQuestionService) Timeline(_ context.Context, _ pgtype.UUID, _ service.CbtQuestionActor) ([]db.CbtQuestionAuditLog, error) {
+func (f *fakeCbtQuestionService) Timeline(_ context.Context, _ pgtype.UUID, _ service.CbtQuestionActor) ([]db.ListCbtQuestionTimelineRow, error) {
 	if f.timelineErr != nil {
 		return nil, f.timelineErr
 	}
