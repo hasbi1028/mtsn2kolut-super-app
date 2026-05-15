@@ -258,9 +258,12 @@ func serializeQuestionDetailRow(row db.GetCbtQuestionDetailRow, includeAnswerKey
 		"is_latest_version":      row.IsLatestVersion,
 		"version_note":           row.VersionNote,
 		"author_username":        row.AuthorUsername,
+		"author_display_name":    row.AuthorDisplayName,
 		"reviewer_username":      row.ReviewerUsername,
+		"reviewer_display_name":  row.ReviewerDisplayName,
 		"reviewed_at":            row.ReviewedAt,
 		"approver_username":      row.ApproverUsername,
+		"approver_display_name":  row.ApproverDisplayName,
 		"approved_at":            row.ApprovedAt,
 		"writer_notes":           row.WriterNotes,
 		"review_notes":           row.ReviewNotes,
@@ -342,8 +345,11 @@ func serializeQuestionVersionRow(row db.ListCbtQuestionVersionsRow) map[string]a
 		"created_at":             row.CreatedAt,
 		"updated_at":             row.UpdatedAt,
 		"author_username":        row.AuthorUsername,
+		"author_display_name":    row.AuthorDisplayName,
 		"reviewer_username":      row.ReviewerUsername,
+		"reviewer_display_name":  row.ReviewerDisplayName,
 		"approver_username":      row.ApproverUsername,
+		"approver_display_name":  row.ApproverDisplayName,
 	}
 }
 

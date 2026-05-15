@@ -113,8 +113,12 @@ export type Question = {
 	difficulty: string;
 	status: string;
 	author_username: string;
+	author_display_name?: string;
 	reviewer_username?: string;
+	reviewer_display_name?: string;
 	reviewed_at?: string | null;
+	approver_username?: string;
+	approver_display_name?: string;
 	review_notes?: string;
 	created_at: string;
 	package_count?: number;
@@ -145,8 +149,11 @@ export type QuestionVersion = {
 	created_at?: string;
 	updated_at?: string;
 	author_username?: string;
+	author_display_name?: string;
 	reviewer_username?: string;
+	reviewer_display_name?: string;
 	approver_username?: string;
+	approver_display_name?: string;
 	review_notes?: string;
 };
 export type QuestionListResponse = {

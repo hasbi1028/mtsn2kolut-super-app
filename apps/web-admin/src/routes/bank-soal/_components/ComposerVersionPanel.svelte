@@ -23,6 +23,15 @@
 	function isCurrent(version: QuestionVersion): boolean {
 		return version.id === currentQuestion?.id;
 	}
+
+	function actorLabel(version: QuestionVersion): string {
+		const reviewer = (version.reviewer_display_name || version.reviewer_username || '').trim();
+		if (reviewer) return `Reviewer: ${reviewer}`;
+		const approver = (version.approver_display_name || version.approver_username || '').trim();
+		if (approver) return `Approver: ${approver}`;
+		const author = (version.author_display_name || version.author_username || '').trim();
+		return author ? `Penulis: ${author}` : 'Aktor belum tercatat';
+	}
 </script>
 
 <section class="rounded-xl border border-border bg-card p-4 shadow-sm" aria-label="Riwayat versi soal">
@@ -73,15 +82,7 @@
 						</div>
 						<div class="shrink-0 text-left text-xs text-muted-foreground md:text-right">
 							<p>{composerDateTimeLabel(version.updated_at ?? version.created_at)}</p>
-							<p class="mt-1">
-								{version.reviewer_username
-									? `Reviewer: ${version.reviewer_username}`
-									: version.approver_username
-										? `Approver: ${version.approver_username}`
-										: version.author_username
-											? `Penulis: ${version.author_username}`
-											: 'Aktor belum tercatat'}
-							</p>
+							<p class="mt-1">{actorLabel(version)}</p>
 						</div>
 					</div>
 				</a>

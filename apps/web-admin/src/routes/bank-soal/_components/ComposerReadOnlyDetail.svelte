@@ -76,8 +76,14 @@
 		bahasa: false,
 	});
 
-	let reviewerChecklistComplete = $derived(Object.values(reviewerChecklist).every(Boolean));
 	let options = $derived(question.options ?? []);
+	let reviewerChecklistComplete = $derived(Object.values(reviewerChecklist).every(Boolean));
+	let authorName = $derived((question.author_display_name || '').trim());
+	let authorUsername = $derived((question.author_username || '').trim());
+	let reviewerName = $derived((question.reviewer_display_name || '').trim());
+	let reviewerUsername = $derived((question.reviewer_username || '').trim());
+	let approverName = $derived((question.approver_display_name || '').trim());
+	let approverUsername = $derived((question.approver_username || '').trim());
 
 	const reviewItems = [
 		{ key: 'materi', label: 'Materi benar' },
@@ -162,7 +168,10 @@
 		</div>
 		<div class="rounded-lg border border-border bg-muted/50 px-3 py-2">
 			<p class="text-xs font-semibold text-muted-foreground">Penulis</p>
-			<p class="mt-0.5 text-sm font-bold text-foreground">{question.author_username || '-'}</p>
+			<p class="mt-0.5 text-sm font-bold text-foreground">{authorName || authorUsername || '-'}</p>
+			{#if authorName && authorUsername && authorName !== authorUsername}
+				<p class="mt-0.5 text-[11px] font-semibold text-muted-foreground">{authorUsername}</p>
+			{/if}
 		</div>
 		<div class="rounded-lg border border-border bg-muted/50 px-3 py-2">
 			<p class="text-xs font-semibold text-muted-foreground">Diperbarui</p>
