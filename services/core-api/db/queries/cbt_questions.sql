@@ -22,12 +22,24 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.media_asset_ids, q.workflow_status, q.version,
        q.version_group_id, q.version_number, q.source_question_id,
        q.supersedes_question_id, q.is_latest_version, q.version_note,
-       q.author_username, q.reviewer_username, q.reviewed_at,
-       q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
+       q.author_username,
+       COALESCE(NULLIF(btrim(author_emp.nama), ''), NULLIF(btrim(author_user.display_name), ''), q.author_username) AS author_display_name,
+       q.reviewer_username,
+       COALESCE(NULLIF(btrim(reviewer_emp.nama), ''), NULLIF(btrim(reviewer_user.display_name), ''), q.reviewer_username) AS reviewer_display_name,
+       q.reviewed_at,
+       q.approver_username,
+       COALESCE(NULLIF(btrim(approver_emp.nama), ''), NULLIF(btrim(approver_user.display_name), ''), q.approver_username) AS approver_display_name,
+       q.approved_at, q.writer_notes, q.review_notes,
        COALESCE(pkg_usage.package_count, 0)::int AS package_count,
        COALESCE(answer_usage.answer_count, 0)::int AS answer_count
 FROM cbt_questions q
 JOIN subjects s ON s.id = q.subject_id
+LEFT JOIN users author_user ON author_user.username = q.author_username
+LEFT JOIN employees author_emp ON author_emp.id = author_user.employee_id
+LEFT JOIN users reviewer_user ON reviewer_user.username = q.reviewer_username
+LEFT JOIN employees reviewer_emp ON reviewer_emp.id = reviewer_user.employee_id
+LEFT JOIN users approver_user ON approver_user.username = q.approver_username
+LEFT JOIN employees approver_emp ON approver_emp.id = approver_user.employee_id
 LEFT JOIN LATERAL (
   SELECT COUNT(*)::int AS package_count
   FROM cbt_package_questions pq
@@ -64,12 +76,24 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.media_asset_ids, q.workflow_status, q.version,
        q.version_group_id, q.version_number, q.source_question_id,
        q.supersedes_question_id, q.is_latest_version, q.version_note,
-       q.author_username, q.reviewer_username, q.reviewed_at,
-       q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
+       q.author_username,
+       COALESCE(NULLIF(btrim(author_emp.nama), ''), NULLIF(btrim(author_user.display_name), ''), q.author_username) AS author_display_name,
+       q.reviewer_username,
+       COALESCE(NULLIF(btrim(reviewer_emp.nama), ''), NULLIF(btrim(reviewer_user.display_name), ''), q.reviewer_username) AS reviewer_display_name,
+       q.reviewed_at,
+       q.approver_username,
+       COALESCE(NULLIF(btrim(approver_emp.nama), ''), NULLIF(btrim(approver_user.display_name), ''), q.approver_username) AS approver_display_name,
+       q.approved_at, q.writer_notes, q.review_notes,
        COALESCE(pkg_usage.package_count, 0)::int AS package_count,
        COALESCE(answer_usage.answer_count, 0)::int AS answer_count
 FROM cbt_questions q
 JOIN subjects s ON s.id = q.subject_id
+LEFT JOIN users author_user ON author_user.username = q.author_username
+LEFT JOIN employees author_emp ON author_emp.id = author_user.employee_id
+LEFT JOIN users reviewer_user ON reviewer_user.username = q.reviewer_username
+LEFT JOIN employees reviewer_emp ON reviewer_emp.id = reviewer_user.employee_id
+LEFT JOIN users approver_user ON approver_user.username = q.approver_username
+LEFT JOIN employees approver_emp ON approver_emp.id = approver_user.employee_id
 LEFT JOIN LATERAL (
   SELECT COUNT(*)::int AS package_count
   FROM cbt_package_questions pq
@@ -195,12 +219,24 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.media_asset_ids, q.workflow_status, q.version,
        q.version_group_id, q.version_number, q.source_question_id,
        q.supersedes_question_id, q.is_latest_version, q.version_note,
-       q.author_username, q.reviewer_username, q.reviewed_at,
-       q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
+       q.author_username,
+       COALESCE(NULLIF(btrim(author_emp.nama), ''), NULLIF(btrim(author_user.display_name), ''), q.author_username) AS author_display_name,
+       q.reviewer_username,
+       COALESCE(NULLIF(btrim(reviewer_emp.nama), ''), NULLIF(btrim(reviewer_user.display_name), ''), q.reviewer_username) AS reviewer_display_name,
+       q.reviewed_at,
+       q.approver_username,
+       COALESCE(NULLIF(btrim(approver_emp.nama), ''), NULLIF(btrim(approver_user.display_name), ''), q.approver_username) AS approver_display_name,
+       q.approved_at, q.writer_notes, q.review_notes,
        COALESCE(pkg_usage.package_count, 0)::int AS package_count,
        COALESCE(answer_usage.answer_count, 0)::int AS answer_count
 FROM cbt_questions q
 JOIN subjects s ON s.id = q.subject_id
+LEFT JOIN users author_user ON author_user.username = q.author_username
+LEFT JOIN employees author_emp ON author_emp.id = author_user.employee_id
+LEFT JOIN users reviewer_user ON reviewer_user.username = q.reviewer_username
+LEFT JOIN employees reviewer_emp ON reviewer_emp.id = reviewer_user.employee_id
+LEFT JOIN users approver_user ON approver_user.username = q.approver_username
+LEFT JOIN employees approver_emp ON approver_emp.id = approver_user.employee_id
 LEFT JOIN LATERAL (
   SELECT COUNT(*)::int AS package_count
   FROM cbt_package_questions pq
