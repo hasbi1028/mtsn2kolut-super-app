@@ -83,6 +83,30 @@ func (f *fakeCbtPackageHandlerService) Create(ctx context.Context, input service
 	return f.createRow, nil
 }
 
+func (f *fakeCbtPackageHandlerService) Detail(ctx context.Context, id pgtype.UUID) (service.CbtPackageDetailResult, error) {
+	return service.CbtPackageDetailResult{}, nil
+}
+
+func (f *fakeCbtPackageHandlerService) Readiness(ctx context.Context, eventID pgtype.UUID) (service.CbtPackageReadinessOverview, error) {
+	return service.CbtPackageReadinessOverview{}, nil
+}
+
+func (f *fakeCbtPackageHandlerService) UpdateMetadata(ctx context.Context, input service.UpdateCbtPackageInput) (service.CbtPackageDetailResult, error) {
+	return service.CbtPackageDetailResult{}, nil
+}
+
+func (f *fakeCbtPackageHandlerService) ReplaceQuestions(ctx context.Context, input service.ReplaceCbtPackageQuestionsInput) (service.CbtPackageDetailResult, error) {
+	return service.CbtPackageDetailResult{}, nil
+}
+
+func (f *fakeCbtPackageHandlerService) Clone(ctx context.Context, input service.CloneCbtPackageInput) (service.CbtPackageDetailResult, error) {
+	return service.CbtPackageDetailResult{}, nil
+}
+
+func (f *fakeCbtPackageHandlerService) LockAndSnapshot(ctx context.Context, packageID, lockedBy pgtype.UUID, reason string) (service.CbtPackageSnapshotResult, error) {
+	return service.CbtPackageSnapshotResult{}, nil
+}
+
 func (f *fakeCbtPackageHandlerService) Delete(ctx context.Context, id pgtype.UUID) error {
 	f.deleteID = id
 	return f.deleteErr

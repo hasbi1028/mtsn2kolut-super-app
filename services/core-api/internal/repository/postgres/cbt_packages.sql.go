@@ -39,6 +39,90 @@ func (q *Queries) AddCbtPackageQuestion(ctx context.Context, arg AddCbtPackageQu
 	return err
 }
 
+const cloneCbtPackage = `-- name: CloneCbtPackage :one
+INSERT INTO cbt_packages (
+  id, event_id, subject_id, title, description, duration_minutes,
+  randomize_questions, is_active, source_mode, randomize_options,
+  draw_pg_count, draw_essay_count, random_seed, composition_log
+)
+SELECT gen_random_uuid(),
+       event_id,
+       subject_id,
+       COALESCE(NULLIF($1::text, ''), title || ' - Revisi'),
+       description,
+       duration_minutes,
+       randomize_questions,
+       is_active,
+       COALESCE(source_mode, 'teacher_class'),
+       COALESCE(randomize_options, FALSE),
+       COALESCE(draw_pg_count, 0),
+       COALESCE(draw_essay_count, 0),
+       COALESCE(random_seed, ''),
+       jsonb_set(
+         COALESCE(composition_log, '{}'::jsonb),
+         '{cloned_from_package_id}',
+         to_jsonb(src.id::text),
+         TRUE
+       )
+FROM cbt_packages src
+WHERE src.id = $2
+RETURNING id, subject_id, title, description, duration_minutes, randomize_questions, is_active, created_at, updated_at, event_id, source_mode, randomize_options, draw_pg_count, draw_essay_count, random_seed, composition_log, locked_at, locked_by, lock_reason, snapshot_version
+`
+
+type CloneCbtPackageParams struct {
+	Title    string      `json:"title"`
+	SourceID pgtype.UUID `json:"source_id"`
+}
+
+func (q *Queries) CloneCbtPackage(ctx context.Context, arg CloneCbtPackageParams) (CbtPackage, error) {
+	row := q.db.QueryRow(ctx, cloneCbtPackage, arg.Title, arg.SourceID)
+	var i CbtPackage
+	err := row.Scan(
+		&i.ID,
+		&i.SubjectID,
+		&i.Title,
+		&i.Description,
+		&i.DurationMinutes,
+		&i.RandomizeQuestions,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.EventID,
+		&i.SourceMode,
+		&i.RandomizeOptions,
+		&i.DrawPgCount,
+		&i.DrawEssayCount,
+		&i.RandomSeed,
+		&i.CompositionLog,
+		&i.LockedAt,
+		&i.LockedBy,
+		&i.LockReason,
+		&i.SnapshotVersion,
+	)
+	return i, err
+}
+
+const cloneCbtPackageQuestions = `-- name: CloneCbtPackageQuestions :execrows
+INSERT INTO cbt_package_questions (package_id, question_id, position, points)
+SELECT $1, question_id, position, points
+FROM cbt_package_questions source_questions
+WHERE source_questions.package_id = $2
+ORDER BY position ASC
+`
+
+type CloneCbtPackageQuestionsParams struct {
+	TargetID pgtype.UUID `json:"target_id"`
+	SourceID pgtype.UUID `json:"source_id"`
+}
+
+func (q *Queries) CloneCbtPackageQuestions(ctx context.Context, arg CloneCbtPackageQuestionsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, cloneCbtPackageQuestions, arg.TargetID, arg.SourceID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createCbtPackage = `-- name: CreateCbtPackage :one
 INSERT INTO cbt_packages (id, event_id, subject_id, title, description, duration_minutes, randomize_questions, is_active, source_mode, randomize_options, draw_pg_count, draw_essay_count, random_seed, composition_log)
 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
@@ -173,6 +257,112 @@ func (q *Queries) DeleteCbtPackage(ctx context.Context, id pgtype.UUID) (int64, 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const deleteCbtPackageQuestions = `-- name: DeleteCbtPackageQuestions :execrows
+DELETE FROM cbt_package_questions
+WHERE package_id = $1
+  AND EXISTS (
+    SELECT 1
+    FROM cbt_packages p
+    WHERE p.id = $1
+      AND p.locked_at IS NULL
+  )
+`
+
+func (q *Queries) DeleteCbtPackageQuestions(ctx context.Context, packageID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteCbtPackageQuestions, packageID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getCbtPackageDetail = `-- name: GetCbtPackageDetail :one
+SELECT p.id, p.event_id, e.title AS event_title, e.status AS event_status,
+       p.subject_id, s.name AS subject_name, s.code AS subject_code,
+       p.title, p.description, p.duration_minutes, p.randomize_questions,
+       COALESCE(p.randomize_options, FALSE)::boolean AS randomize_options,
+       COALESCE(p.source_mode, 'teacher_class')::text AS source_mode,
+       COALESCE(p.draw_pg_count, 0)::int AS draw_pg_count,
+       COALESCE(p.draw_essay_count, 0)::int AS draw_essay_count,
+       COALESCE(p.random_seed, '')::text AS random_seed,
+       COALESCE(p.composition_log, '{}'::jsonb) AS composition_log,
+       p.locked_at, p.locked_by, p.lock_reason, p.snapshot_version,
+       p.is_active,
+       p.created_at, p.updated_at,
+       COUNT(DISTINCT pq.question_id)::int AS question_count,
+       COUNT(DISTINCT ses.id)::int AS session_count
+FROM cbt_packages p
+JOIN subjects s ON s.id = p.subject_id
+LEFT JOIN cbt_exam_events e ON e.id = p.event_id
+LEFT JOIN cbt_package_questions pq ON pq.package_id = p.id
+LEFT JOIN cbt_exam_sessions ses ON ses.package_id = p.id
+WHERE p.id = $1
+GROUP BY p.id, e.title, e.status, s.name, s.code
+`
+
+type GetCbtPackageDetailRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	EventID            pgtype.UUID        `json:"event_id"`
+	EventTitle         pgtype.Text        `json:"event_title"`
+	EventStatus        pgtype.Text        `json:"event_status"`
+	SubjectID          pgtype.UUID        `json:"subject_id"`
+	SubjectName        string             `json:"subject_name"`
+	SubjectCode        string             `json:"subject_code"`
+	Title              string             `json:"title"`
+	Description        string             `json:"description"`
+	DurationMinutes    int32              `json:"duration_minutes"`
+	RandomizeQuestions bool               `json:"randomize_questions"`
+	RandomizeOptions   bool               `json:"randomize_options"`
+	SourceMode         string             `json:"source_mode"`
+	DrawPgCount        int32              `json:"draw_pg_count"`
+	DrawEssayCount     int32              `json:"draw_essay_count"`
+	RandomSeed         string             `json:"random_seed"`
+	CompositionLog     []byte             `json:"composition_log"`
+	LockedAt           pgtype.Timestamptz `json:"locked_at"`
+	LockedBy           pgtype.UUID        `json:"locked_by"`
+	LockReason         string             `json:"lock_reason"`
+	SnapshotVersion    int32              `json:"snapshot_version"`
+	IsActive           bool               `json:"is_active"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	QuestionCount      int32              `json:"question_count"`
+	SessionCount       int32              `json:"session_count"`
+}
+
+func (q *Queries) GetCbtPackageDetail(ctx context.Context, id pgtype.UUID) (GetCbtPackageDetailRow, error) {
+	row := q.db.QueryRow(ctx, getCbtPackageDetail, id)
+	var i GetCbtPackageDetailRow
+	err := row.Scan(
+		&i.ID,
+		&i.EventID,
+		&i.EventTitle,
+		&i.EventStatus,
+		&i.SubjectID,
+		&i.SubjectName,
+		&i.SubjectCode,
+		&i.Title,
+		&i.Description,
+		&i.DurationMinutes,
+		&i.RandomizeQuestions,
+		&i.RandomizeOptions,
+		&i.SourceMode,
+		&i.DrawPgCount,
+		&i.DrawEssayCount,
+		&i.RandomSeed,
+		&i.CompositionLog,
+		&i.LockedAt,
+		&i.LockedBy,
+		&i.LockReason,
+		&i.SnapshotVersion,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.QuestionCount,
+		&i.SessionCount,
+	)
+	return i, err
 }
 
 const getCbtPackageLockState = `-- name: GetCbtPackageLockState :one
@@ -386,13 +576,15 @@ SELECT p.id, p.event_id, p.subject_id, s.name AS subject_name, s.code AS subject
        p.locked_at, p.locked_by, p.lock_reason, p.snapshot_version,
        p.is_active,
        p.created_at, p.updated_at,
-       COUNT(pq.question_id)::int AS question_count,
-       COUNT(pq.question_id) FILTER (WHERE q.status = 'published')::int AS published_question_count,
-       COUNT(pq.question_id) FILTER (WHERE q.event_id = p.event_id)::int AS event_question_count
+       COUNT(DISTINCT pq.question_id)::int AS question_count,
+       COUNT(DISTINCT pq.question_id) FILTER (WHERE q.status = 'published')::int AS published_question_count,
+       COUNT(DISTINCT pq.question_id) FILTER (WHERE q.event_id = p.event_id)::int AS event_question_count,
+       COUNT(DISTINCT ses.id)::int AS session_count
 FROM cbt_packages p
 JOIN subjects s ON s.id = p.subject_id
 LEFT JOIN cbt_package_questions pq ON pq.package_id = p.id
 LEFT JOIN cbt_questions q ON q.id = pq.question_id
+LEFT JOIN cbt_exam_sessions ses ON ses.package_id = p.id
 WHERE p.event_id = $1
 GROUP BY p.id, s.name, s.code
 ORDER BY s.name ASC, p.created_at DESC
@@ -424,6 +616,7 @@ type ListCbtEventPackagesRow struct {
 	QuestionCount          int32              `json:"question_count"`
 	PublishedQuestionCount int32              `json:"published_question_count"`
 	EventQuestionCount     int32              `json:"event_question_count"`
+	SessionCount           int32              `json:"session_count"`
 }
 
 func (q *Queries) ListCbtEventPackages(ctx context.Context, eventID pgtype.UUID) ([]ListCbtEventPackagesRow, error) {
@@ -461,6 +654,7 @@ func (q *Queries) ListCbtEventPackages(ctx context.Context, eventID pgtype.UUID)
 			&i.QuestionCount,
 			&i.PublishedQuestionCount,
 			&i.EventQuestionCount,
+			&i.SessionCount,
 		); err != nil {
 			return nil, err
 		}
@@ -541,6 +735,165 @@ func (q *Queries) ListCbtPackageQuestions(ctx context.Context, eventID pgtype.UU
 	return items, nil
 }
 
+const listCbtPackageQuestionsByPackage = `-- name: ListCbtPackageQuestionsByPackage :many
+SELECT pq.package_id, pq.question_id, pq.position, pq.points,
+       q.event_id, q.subject_id, q.code AS question_code, q.question_text, q.question_type, q.difficulty, q.status, q.workflow_status,
+       q.cp_ref, q.tp_ref, q.kd_ref, q.material_topic, q.cognitive_level, q.hots_flag
+FROM cbt_package_questions pq
+JOIN cbt_questions q ON q.id = pq.question_id
+WHERE pq.package_id = $1
+ORDER BY pq.position ASC, pq.created_at ASC
+`
+
+type ListCbtPackageQuestionsByPackageRow struct {
+	PackageID      pgtype.UUID               `json:"package_id"`
+	QuestionID     pgtype.UUID               `json:"question_id"`
+	Position       int32                     `json:"position"`
+	Points         int32                     `json:"points"`
+	EventID        pgtype.UUID               `json:"event_id"`
+	SubjectID      pgtype.UUID               `json:"subject_id"`
+	QuestionCode   string                    `json:"question_code"`
+	QuestionText   string                    `json:"question_text"`
+	QuestionType   string                    `json:"question_type"`
+	Difficulty     CbtQuestionDifficultyEnum `json:"difficulty"`
+	Status         CbtQuestionStatusEnum     `json:"status"`
+	WorkflowStatus string                    `json:"workflow_status"`
+	CpRef          string                    `json:"cp_ref"`
+	TpRef          string                    `json:"tp_ref"`
+	KdRef          string                    `json:"kd_ref"`
+	MaterialTopic  string                    `json:"material_topic"`
+	CognitiveLevel string                    `json:"cognitive_level"`
+	HotsFlag       bool                      `json:"hots_flag"`
+}
+
+func (q *Queries) ListCbtPackageQuestionsByPackage(ctx context.Context, packageID pgtype.UUID) ([]ListCbtPackageQuestionsByPackageRow, error) {
+	rows, err := q.db.Query(ctx, listCbtPackageQuestionsByPackage, packageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtPackageQuestionsByPackageRow{}
+	for rows.Next() {
+		var i ListCbtPackageQuestionsByPackageRow
+		if err := rows.Scan(
+			&i.PackageID,
+			&i.QuestionID,
+			&i.Position,
+			&i.Points,
+			&i.EventID,
+			&i.SubjectID,
+			&i.QuestionCode,
+			&i.QuestionText,
+			&i.QuestionType,
+			&i.Difficulty,
+			&i.Status,
+			&i.WorkflowStatus,
+			&i.CpRef,
+			&i.TpRef,
+			&i.KdRef,
+			&i.MaterialTopic,
+			&i.CognitiveLevel,
+			&i.HotsFlag,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCbtPackageReadiness = `-- name: ListCbtPackageReadiness :many
+SELECT p.id, p.event_id, p.subject_id, s.name AS subject_name, s.code AS subject_code,
+       p.title, p.duration_minutes, p.is_active, p.locked_at, p.snapshot_version,
+       COUNT(DISTINCT pq.question_id)::int AS question_count,
+       COUNT(DISTINCT pq.question_id) FILTER (WHERE q.question_type = 'multiple_choice')::int AS pg_count,
+       COUNT(DISTINCT pq.question_id) FILTER (WHERE q.question_type = 'essay')::int AS essay_count,
+       COALESCE(SUM(pq.points), 0)::int AS total_points,
+       COUNT(DISTINCT pq.question_id) FILTER (WHERE q.status = 'published')::int AS published_count,
+       COUNT(DISTINCT pq.question_id) FILTER (WHERE q.status <> 'published')::int AS unpublished_count,
+       COUNT(DISTINCT pq.question_id) FILTER (
+         WHERE q.cp_ref = ''
+            OR (q.tp_ref = '' AND q.kd_ref = '')
+            OR q.cognitive_level = ''
+       )::int AS metadata_gap_count,
+       COALESCE(usage.session_count, 0)::int AS session_count
+FROM cbt_packages p
+JOIN subjects s ON s.id = p.subject_id
+LEFT JOIN cbt_package_questions pq ON pq.package_id = p.id
+LEFT JOIN cbt_questions q ON q.id = pq.question_id
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS session_count
+  FROM cbt_exam_sessions ses
+  WHERE ses.package_id = p.id
+) usage ON TRUE
+WHERE ($1::uuid IS NULL OR p.event_id = $1::uuid)
+GROUP BY p.id, s.name, s.code, usage.session_count
+ORDER BY s.name ASC, p.title ASC
+`
+
+type ListCbtPackageReadinessRow struct {
+	ID               pgtype.UUID        `json:"id"`
+	EventID          pgtype.UUID        `json:"event_id"`
+	SubjectID        pgtype.UUID        `json:"subject_id"`
+	SubjectName      string             `json:"subject_name"`
+	SubjectCode      string             `json:"subject_code"`
+	Title            string             `json:"title"`
+	DurationMinutes  int32              `json:"duration_minutes"`
+	IsActive         bool               `json:"is_active"`
+	LockedAt         pgtype.Timestamptz `json:"locked_at"`
+	SnapshotVersion  int32              `json:"snapshot_version"`
+	QuestionCount    int32              `json:"question_count"`
+	PgCount          int32              `json:"pg_count"`
+	EssayCount       int32              `json:"essay_count"`
+	TotalPoints      int32              `json:"total_points"`
+	PublishedCount   int32              `json:"published_count"`
+	UnpublishedCount int32              `json:"unpublished_count"`
+	MetadataGapCount int32              `json:"metadata_gap_count"`
+	SessionCount     int32              `json:"session_count"`
+}
+
+func (q *Queries) ListCbtPackageReadiness(ctx context.Context, eventID pgtype.UUID) ([]ListCbtPackageReadinessRow, error) {
+	rows, err := q.db.Query(ctx, listCbtPackageReadiness, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtPackageReadinessRow{}
+	for rows.Next() {
+		var i ListCbtPackageReadinessRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventID,
+			&i.SubjectID,
+			&i.SubjectName,
+			&i.SubjectCode,
+			&i.Title,
+			&i.DurationMinutes,
+			&i.IsActive,
+			&i.LockedAt,
+			&i.SnapshotVersion,
+			&i.QuestionCount,
+			&i.PgCount,
+			&i.EssayCount,
+			&i.TotalPoints,
+			&i.PublishedCount,
+			&i.UnpublishedCount,
+			&i.MetadataGapCount,
+			&i.SessionCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCbtPackages = `-- name: ListCbtPackages :many
 SELECT p.id, p.event_id, p.subject_id, s.name AS subject_name, s.code AS subject_code,
        p.title, p.description, p.duration_minutes, p.randomize_questions,
@@ -553,10 +906,12 @@ SELECT p.id, p.event_id, p.subject_id, s.name AS subject_name, s.code AS subject
        p.locked_at, p.locked_by, p.lock_reason, p.snapshot_version,
        p.is_active,
        p.created_at, p.updated_at,
-       COUNT(pq.question_id)::int AS question_count
+       COUNT(DISTINCT pq.question_id)::int AS question_count,
+       COUNT(DISTINCT ses.id)::int AS session_count
 FROM cbt_packages p
 JOIN subjects s ON s.id = p.subject_id
 LEFT JOIN cbt_package_questions pq ON pq.package_id = p.id
+LEFT JOIN cbt_exam_sessions ses ON ses.package_id = p.id
 WHERE ($1::uuid IS NULL OR p.event_id = $1::uuid)
 GROUP BY p.id, s.name, s.code
 ORDER BY p.created_at DESC
@@ -586,6 +941,7 @@ type ListCbtPackagesRow struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	QuestionCount      int32              `json:"question_count"`
+	SessionCount       int32              `json:"session_count"`
 }
 
 func (q *Queries) ListCbtPackages(ctx context.Context, eventID pgtype.UUID) ([]ListCbtPackagesRow, error) {
@@ -621,6 +977,7 @@ func (q *Queries) ListCbtPackages(ctx context.Context, eventID pgtype.UUID) ([]L
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.QuestionCount,
+			&i.SessionCount,
 		); err != nil {
 			return nil, err
 		}
@@ -630,6 +987,72 @@ func (q *Queries) ListCbtPackages(ctx context.Context, eventID pgtype.UUID) ([]L
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockCbtPackageForEdit = `-- name: LockCbtPackageForEdit :one
+SELECT id, event_id, subject_id, title, description, duration_minutes,
+       randomize_questions, COALESCE(randomize_options, FALSE)::boolean AS randomize_options,
+       COALESCE(source_mode, 'teacher_class')::text AS source_mode,
+       COALESCE(draw_pg_count, 0)::int AS draw_pg_count,
+       COALESCE(draw_essay_count, 0)::int AS draw_essay_count,
+       COALESCE(random_seed, '')::text AS random_seed,
+       COALESCE(composition_log, '{}'::jsonb) AS composition_log,
+       locked_at, locked_by, lock_reason, snapshot_version,
+       is_active, created_at, updated_at
+FROM cbt_packages
+WHERE id = $1
+FOR UPDATE
+`
+
+type LockCbtPackageForEditRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	EventID            pgtype.UUID        `json:"event_id"`
+	SubjectID          pgtype.UUID        `json:"subject_id"`
+	Title              string             `json:"title"`
+	Description        string             `json:"description"`
+	DurationMinutes    int32              `json:"duration_minutes"`
+	RandomizeQuestions bool               `json:"randomize_questions"`
+	RandomizeOptions   bool               `json:"randomize_options"`
+	SourceMode         string             `json:"source_mode"`
+	DrawPgCount        int32              `json:"draw_pg_count"`
+	DrawEssayCount     int32              `json:"draw_essay_count"`
+	RandomSeed         string             `json:"random_seed"`
+	CompositionLog     []byte             `json:"composition_log"`
+	LockedAt           pgtype.Timestamptz `json:"locked_at"`
+	LockedBy           pgtype.UUID        `json:"locked_by"`
+	LockReason         string             `json:"lock_reason"`
+	SnapshotVersion    int32              `json:"snapshot_version"`
+	IsActive           bool               `json:"is_active"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) LockCbtPackageForEdit(ctx context.Context, id pgtype.UUID) (LockCbtPackageForEditRow, error) {
+	row := q.db.QueryRow(ctx, lockCbtPackageForEdit, id)
+	var i LockCbtPackageForEditRow
+	err := row.Scan(
+		&i.ID,
+		&i.EventID,
+		&i.SubjectID,
+		&i.Title,
+		&i.Description,
+		&i.DurationMinutes,
+		&i.RandomizeQuestions,
+		&i.RandomizeOptions,
+		&i.SourceMode,
+		&i.DrawPgCount,
+		&i.DrawEssayCount,
+		&i.RandomSeed,
+		&i.CompositionLog,
+		&i.LockedAt,
+		&i.LockedBy,
+		&i.LockReason,
+		&i.SnapshotVersion,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const lockCbtPackageForSnapshot = `-- name: LockCbtPackageForSnapshot :one
@@ -665,6 +1088,84 @@ func (q *Queries) LockCbtPackageForSnapshot(ctx context.Context, arg LockCbtPack
 	var i LockCbtPackageForSnapshotRow
 	err := row.Scan(
 		&i.ID,
+		&i.LockedAt,
+		&i.LockedBy,
+		&i.LockReason,
+		&i.SnapshotVersion,
+	)
+	return i, err
+}
+
+const updateCbtPackageMetadata = `-- name: UpdateCbtPackageMetadata :one
+UPDATE cbt_packages
+SET title = $1,
+    description = $2,
+    duration_minutes = $3,
+    randomize_questions = $4,
+    randomize_options = $5,
+    source_mode = $6,
+    draw_pg_count = $7,
+    draw_essay_count = $8,
+    random_seed = $9,
+    is_active = $10,
+    composition_log = jsonb_set(
+      COALESCE(composition_log, '{}'::jsonb),
+      '{metadata_updated_at}',
+      to_jsonb(NOW()::text),
+      TRUE
+    ),
+    updated_at = NOW()
+WHERE id = $11
+  AND locked_at IS NULL
+RETURNING id, subject_id, title, description, duration_minutes, randomize_questions, is_active, created_at, updated_at, event_id, source_mode, randomize_options, draw_pg_count, draw_essay_count, random_seed, composition_log, locked_at, locked_by, lock_reason, snapshot_version
+`
+
+type UpdateCbtPackageMetadataParams struct {
+	Title              string      `json:"title"`
+	Description        string      `json:"description"`
+	DurationMinutes    int32       `json:"duration_minutes"`
+	RandomizeQuestions bool        `json:"randomize_questions"`
+	RandomizeOptions   bool        `json:"randomize_options"`
+	SourceMode         string      `json:"source_mode"`
+	DrawPgCount        int32       `json:"draw_pg_count"`
+	DrawEssayCount     int32       `json:"draw_essay_count"`
+	RandomSeed         string      `json:"random_seed"`
+	IsActive           bool        `json:"is_active"`
+	ID                 pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateCbtPackageMetadata(ctx context.Context, arg UpdateCbtPackageMetadataParams) (CbtPackage, error) {
+	row := q.db.QueryRow(ctx, updateCbtPackageMetadata,
+		arg.Title,
+		arg.Description,
+		arg.DurationMinutes,
+		arg.RandomizeQuestions,
+		arg.RandomizeOptions,
+		arg.SourceMode,
+		arg.DrawPgCount,
+		arg.DrawEssayCount,
+		arg.RandomSeed,
+		arg.IsActive,
+		arg.ID,
+	)
+	var i CbtPackage
+	err := row.Scan(
+		&i.ID,
+		&i.SubjectID,
+		&i.Title,
+		&i.Description,
+		&i.DurationMinutes,
+		&i.RandomizeQuestions,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.EventID,
+		&i.SourceMode,
+		&i.RandomizeOptions,
+		&i.DrawPgCount,
+		&i.DrawEssayCount,
+		&i.RandomSeed,
+		&i.CompositionLog,
 		&i.LockedAt,
 		&i.LockedBy,
 		&i.LockReason,

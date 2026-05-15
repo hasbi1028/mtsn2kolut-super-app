@@ -461,7 +461,13 @@ func main() {
 		r.With(requireAsesmenScore).Post("/api/cbt/non-test-assessments/{id}/submissions", nonTestAssessmentH.UpsertSubmission)
 
 		r.With(requireCbt).Get("/api/cbt/packages", packageH.List)
+		r.With(requireCbt).Get("/api/cbt/packages/readiness", packageH.Readiness)
 		r.With(requireAsesmenPackageManage).Post("/api/cbt/packages", packageH.Create)
+		r.With(requireCbt).Get("/api/cbt/packages/{id}", packageH.Get)
+		r.With(requireAsesmenPackageManage).Put("/api/cbt/packages/{id}", packageH.Update)
+		r.With(requireAsesmenPackageManage).Put("/api/cbt/packages/{id}/questions", packageH.ReplaceQuestions)
+		r.With(requireAsesmenPackageManage).Post("/api/cbt/packages/{id}/clone", packageH.Clone)
+		r.With(requireAsesmenPackageManage).Post("/api/cbt/packages/{id}/lock", packageH.Lock)
 		r.With(requireAsesmenPackageManage).Delete("/api/cbt/packages/{id}", packageH.Delete)
 
 		// CBT Events (kegiatan ujian) — admin manages, event members can read workflow readiness.
@@ -584,7 +590,13 @@ func main() {
 		r.With(requireAsesmenScore).Post("/api/asesmen/non-test-assessments/{id}/submissions/generate", nonTestAssessmentH.GenerateSubmissions)
 		r.With(requireAsesmenScore).Post("/api/asesmen/non-test-assessments/{id}/submissions", nonTestAssessmentH.UpsertSubmission)
 		r.With(requireCbt).Get("/api/asesmen/packages", packageH.List)
+		r.With(requireCbt).Get("/api/asesmen/packages/readiness", packageH.Readiness)
 		r.With(requireAsesmenPackageManage).Post("/api/asesmen/packages", packageH.Create)
+		r.With(requireCbt).Get("/api/asesmen/packages/{id}", packageH.Get)
+		r.With(requireAsesmenPackageManage).Put("/api/asesmen/packages/{id}", packageH.Update)
+		r.With(requireAsesmenPackageManage).Put("/api/asesmen/packages/{id}/questions", packageH.ReplaceQuestions)
+		r.With(requireAsesmenPackageManage).Post("/api/asesmen/packages/{id}/clone", packageH.Clone)
+		r.With(requireAsesmenPackageManage).Post("/api/asesmen/packages/{id}/lock", packageH.Lock)
 		r.With(requireAsesmenPackageManage).Delete("/api/asesmen/packages/{id}", packageH.Delete)
 		r.With(requireCbt).Get("/api/asesmen/readiness", eventH.Readiness)
 		r.With(requireCbt).Get("/api/asesmen/events", eventH.List)

@@ -936,10 +936,16 @@
 									{/if}
 								</Table.Cell>
 								<Table.Cell>
-									<LoadingButton
-										variant="destructive"
-										size="xs"
-										onclick={() => deletePackage(p.id, p.title)}
+					<a
+						href={`${resolve('/asesmen/paket')}/${p.id}`}
+						class="mr-2 inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted"
+					>
+						Detail/Edit
+					</a>
+					<LoadingButton
+						variant="destructive"
+						size="xs"
+						onclick={() => deletePackage(p.id, p.title)}
 										loading={deleteBusyId === p.id}
 										disabled={deleteBusyId !== '' && deleteBusyId !== p.id}
 										loadingLabel="Menghapus..."
@@ -1009,7 +1015,13 @@
 							{#if p.description}
 								<p class="mt-3 text-sm text-muted-foreground">{p.description}</p>
 							{/if}
-							<div class="mt-4">
+							<div class="mt-4 flex gap-2">
+								<a
+									href={`${resolve('/asesmen/paket')}/${p.id}`}
+									class="inline-flex flex-1 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-semibold hover:bg-muted"
+								>
+									Detail/Edit
+								</a>
 								<LoadingButton
 									variant="destructive"
 									size="sm"
