@@ -351,7 +351,7 @@
 		const params = new URLSearchParams();
 		params.set('event_id', eventId);
 		params.set('subject_id', row.subject_id);
-		if (row.level) params.set('grade_level', row.level);
+		if (row.level) params.set('target_level', row.level);
 		if (row.teacher_username) params.set('teacher_username', row.teacher_username);
 		params.set('question_type', questionType);
 		return `/bank-soal/tambah?${params.toString()}`;

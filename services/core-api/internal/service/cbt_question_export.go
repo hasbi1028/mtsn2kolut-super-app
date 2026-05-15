@@ -77,7 +77,7 @@ func exportQuestionCSVHeaders() []string {
 	headers = append(headers,
 		"distraktor_1", "distraktor_2", "distraktor_3", "distraktor_4",
 		"rubrik", "pembahasan", "kesulitan", "status", "workflow_status",
-		"grade_level", "cp_ref", "tp_ref", "kd_ref", "indicator_ref",
+		"target_level", "cp_ref", "tp_ref", "kd_ref", "indicator_ref",
 		"material_topic", "cognitive_level", "hots_flag",
 	)
 	return headers
@@ -121,7 +121,7 @@ func exportQuestionCSVRow(row db.ListCbtQuestionsFilteredRow) []string {
 		string(row.Difficulty),
 		string(row.Status),
 		row.WorkflowStatus,
-		exportInt2(row.GradeLevel),
+		exportQuestionTargetLevel(row.TargetLevel, row.GradeLevel),
 		row.CpRef,
 		row.TpRef,
 		row.KdRef,
@@ -201,40 +201,42 @@ func firstExportContent(values ...string) string {
 	return ""
 }
 
-func exportInt2(value pgtype.Int2) string {
-	if !value.Valid {
-		return ""
+func exportQuestionTargetLevel(targetLevel pgtype.Text, gradeLevel pgtype.Int2) string {
+	if targetLevel.Valid {
+		if normalized, ok := normalizeQuestionTargetLevel(targetLevel.String); ok {
+			return normalized
+		}
 	}
-	return strconv.Itoa(int(value.Int16))
+	return questionTargetLevelFromGradeLevel(gradeLevel)
 }
 
 func templateQuestionCSVRecords() [][]string {
 	return [][]string{
 		exportQuestionCSVHeaders(),
 		templateQuestionCSVRow(map[string]string{
-			"kode":        "TPL-PG-001",
-			"tipe":        "pg",
-			"soal":        "Contoh soal pilihan ganda",
-			"opsi_a":      "Opsi A",
-			"opsi_b":      "Opsi B benar",
-			"opsi_c":      "Opsi C",
-			"opsi_d":      "Opsi D",
-			"jawaban":     "B",
-			"kesulitan":   "sedang",
-			"grade_level": "8",
+			"kode":         "TPL-PG-001",
+			"tipe":         "pg",
+			"soal":         "Contoh soal pilihan ganda",
+			"opsi_a":       "Opsi A",
+			"opsi_b":       "Opsi B benar",
+			"opsi_c":       "Opsi C",
+			"opsi_d":       "Opsi D",
+			"jawaban":      "B",
+			"kesulitan":    "sedang",
+			"target_level": "VIII",
 		}),
 		templateQuestionCSVRow(map[string]string{
-			"kode":        "TPL-PGK-001",
-			"tipe":        "pg_kompleks",
-			"soal":        "Contoh soal pilihan ganda kompleks",
-			"opsi_a":      "Pernyataan A benar",
-			"opsi_b":      "Pernyataan B",
-			"opsi_c":      "Pernyataan C benar",
-			"opsi_d":      "Pernyataan D",
-			"jawaban":     "A,C",
-			"kesulitan":   "sedang",
-			"grade_level": "8",
-			"hots_flag":   "false",
+			"kode":         "TPL-PGK-001",
+			"tipe":         "pg_kompleks",
+			"soal":         "Contoh soal pilihan ganda kompleks",
+			"opsi_a":       "Pernyataan A benar",
+			"opsi_b":       "Pernyataan B",
+			"opsi_c":       "Pernyataan C benar",
+			"opsi_d":       "Pernyataan D",
+			"jawaban":      "A,C",
+			"kesulitan":    "sedang",
+			"target_level": "VIII",
+			"hots_flag":    "false",
 		}),
 		templateQuestionCSVRow(map[string]string{
 			"kode":      "TPL-BS-001",
@@ -264,13 +266,13 @@ func templateQuestionCSVRecords() [][]string {
 			"kesulitan":    "sedang",
 		}),
 		templateQuestionCSVRow(map[string]string{
-			"kode":        "TPL-ESSAY-001",
-			"tipe":        "essay",
-			"soal":        "Contoh soal uraian",
-			"rubrik":      "Tuliskan pedoman koreksi atau rubrik singkat",
-			"pembahasan":  "Opsional: catatan pembahasan",
-			"kesulitan":   "sedang",
-			"grade_level": "9",
+			"kode":         "TPL-ESSAY-001",
+			"tipe":         "essay",
+			"soal":         "Contoh soal uraian",
+			"rubrik":       "Tuliskan pedoman koreksi atau rubrik singkat",
+			"pembahasan":   "Opsional: catatan pembahasan",
+			"kesulitan":    "sedang",
+			"target_level": "IX",
 		}),
 	}
 }

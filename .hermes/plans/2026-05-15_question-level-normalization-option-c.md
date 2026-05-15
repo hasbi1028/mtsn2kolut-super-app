@@ -76,7 +76,28 @@ npm --prefix apps/web-admin run build
 
 **Verification:** same as Tahap 1.
 
+## Tahap 3 — Audit and normalize import/export/reporting paths
+
+**Objective:** Ensure any non-interactive surface (template/import/export/reporting/print/readiness) uses `target_level`, not legacy `grade_level`.
+
+**Scope:**
+- Search remaining `grade_level` references and classify:
+  - allowed internal DB/sqlc/query compatibility;
+  - allowed legacy request input/fallback;
+  - not allowed public/export/reporting output.
+- For import templates or exports, prefer column/key `target_level` / `tingkat` with values `VII`, `VIII`, `IX`.
+- For reporting/print/readiness labels, display `target_level` and use `grade_level` only as fallback for old data/link compatibility.
+- Add tests around any export/public reporting serializer changed in this stage.
+
+**Verification:** same as Tahap 1.
+
+**Tahap 3 result 2026-05-15:**
+- Bank Soal CSV export/template now uses `target_level`; `grade_level` header is blocked by tests.
+- CSV import accepts official `target_level`/`tingkat` values (`VII`, `VIII`, `IX`) and still accepts legacy numeric `grade_level`/`kelas` fallback.
+- CBT package snapshot metadata no longer writes `grade_level` for newly snapshotted package questions.
+- Kelengkapan Soal composer links now prefill `target_level`, not `grade_level`.
+- Mapel/KD coverage and internal analytics documentation prefer `target_level`; frontend `grade_level` references left only as optional legacy fallback.
+
 ## Later stages (not in this execution)
 
-- Tahap 3: Audit import/export/reporting paths.
 - Tahap 4: Drop DB column `grade_level` only if no remaining dependency.

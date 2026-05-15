@@ -128,6 +128,7 @@ func (s *CbtQuestion) ImportLegacyCSV(ctx context.Context, input ImportLegacyQue
 			ExplanationHTML:  explanationHTML,
 			RubricHTML:       rubricHTML,
 			GradeLevel:       importGradeLevel(row),
+			TargetLevel:      importTargetLevel(row),
 			CPRef:            firstCSVValue(row, "cp_ref", "cpref", "cp"),
 			TPRef:            firstCSVValue(row, "tp_ref", "tpref", "tp"),
 			KDRef:            firstCSVValue(row, "kd_ref", "kdref", "kd"),
@@ -541,6 +542,15 @@ func importQuestionDifficulty(row map[string]string) db.CbtQuestionDifficultyEnu
 	default:
 		return db.CbtQuestionDifficultyEnumMedium
 	}
+}
+
+func importTargetLevel(row map[string]string) string {
+	value := strings.TrimSpace(firstCSVValue(row, "target_level", "targetlevel", "tingkat_soal", "tingkatsoal", "tingkat", "kelas", "level"))
+	if normalized, ok := normalizeQuestionTargetLevel(value); ok {
+		return normalized
+	}
+	legacyGrade := importGradeLevel(row)
+	return questionTargetLevelFromGradeLevel(legacyGrade)
 }
 
 func importGradeLevel(row map[string]string) pgtype.Int2 {

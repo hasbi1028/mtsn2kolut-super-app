@@ -183,7 +183,7 @@ Allowed metadata:
 
 - `role`
 - `subject_id`
-- `grade_level`
+- `target_level`
 - `question_type`
 - `authoring_mode` seperti `beginner` atau `advance`
 - `workflow_status`
@@ -226,7 +226,7 @@ Allowed metadata:
 - `route_group`
 - `assessment_kind` seperti `cbt`, `non_test`, atau `mixed`
 - `subject_id`
-- `grade_level`
+- `target_level`
 - `scope_type`
 - `session_status`
 - `participant_count_bucket`

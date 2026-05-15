@@ -914,6 +914,7 @@ func TestCbtQuestionExportCSVMapsStructuredTypes(t *testing.T) {
 				Status:         db.CbtQuestionStatusEnumDraft,
 				WorkflowStatus: "draft",
 				GradeLevel:     pgtype.Int2{Int16: 8, Valid: true},
+				TargetLevel:    pgtype.Text{String: "VIII", Valid: true},
 				HotsFlag:       true,
 			},
 			{
@@ -956,7 +957,13 @@ func TestCbtQuestionExportCSVMapsStructuredTypes(t *testing.T) {
 		t.Fatalf("ExportCSV() records = %d, want header + 2 rows", len(records))
 	}
 	header := csvHeaderIndex(records[0])
-	if records[1][header["tipe"]] != "pg_kompleks" || records[1][header["opsi_e"]] != "Enam" || records[1][header["jawaban"]] != "B,E" || records[1][header["grade_level"]] != "8" || records[1][header["hots_flag"]] != "true" {
+	if _, ok := header["grade_level"]; ok {
+		t.Fatalf("ExportCSV() header exposed legacy grade_level: %+v", records[0])
+	}
+	if _, ok := header["target_level"]; !ok {
+		t.Fatalf("ExportCSV() header missing target_level: %+v", records[0])
+	}
+	if records[1][header["tipe"]] != "pg_kompleks" || records[1][header["opsi_e"]] != "Enam" || records[1][header["jawaban"]] != "B,E" || records[1][header["target_level"]] != "VIII" || records[1][header["hots_flag"]] != "true" {
 		t.Fatalf("multiple answer CSV row = %+v, want type/options/key/metadata mapped", records[1])
 	}
 	if records[2][header["tipe"]] != "menjodohkan" || records[2][header["kiri_a"]] != "Satu" || records[2][header["kanan_2"]] != "2" || records[2][header["distraktor_1"]] != "Tiga" {
@@ -979,7 +986,7 @@ func TestCbtQuestionExportCSVMapsStructuredTypes(t *testing.T) {
 	if imported.Imported != 2 || imported.Skipped != 0 {
 		t.Fatalf("roundtrip import result = %+v, want 2 imported and no skipped rows", imported)
 	}
-	if importStore.createHistory[0].QuestionType != "multiple_answer" || importStore.createHistory[0].AnswerKey != "B,E" || importStore.createHistory[0].GradeLevel.Int16 != 8 || !importStore.createHistory[0].HotsFlag {
+	if importStore.createHistory[0].QuestionType != "multiple_answer" || importStore.createHistory[0].AnswerKey != "B,E" || importStore.createHistory[0].TargetLevel.String != "VIII" || importStore.createHistory[0].GradeLevel.Int16 != 8 || !importStore.createHistory[0].HotsFlag {
 		t.Fatalf("roundtrip multiple answer params = %+v, want type/key/metadata preserved", importStore.createHistory[0])
 	}
 	if importStore.createHistory[1].QuestionType != "matching" || importStore.createHistory[1].AnswerKey != "A=1;B=2" || !strings.Contains(string(importStore.createHistory[1].Options), `"is_distractor":true`) {
@@ -1004,6 +1011,12 @@ func TestCbtQuestionTemplateCSVRoundtripsThroughImport(t *testing.T) {
 	header := csvHeaderIndex(records[0])
 	if header["tipe"] == 0 || header["rubrik"] == 0 || header["distraktor_1"] == 0 {
 		t.Fatalf("TemplateCSV() header = %+v, want multi-type columns", records[0])
+	}
+	if _, ok := header["grade_level"]; ok {
+		t.Fatalf("TemplateCSV() header exposed legacy grade_level: %+v", records[0])
+	}
+	if _, ok := header["target_level"]; !ok {
+		t.Fatalf("TemplateCSV() header missing target_level: %+v", records[0])
 	}
 
 	importStore := &fakeQuestionStore{

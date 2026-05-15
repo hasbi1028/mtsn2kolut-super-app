@@ -220,7 +220,6 @@ SELECT
   jsonb_build_object(
     'difficulty', q.difficulty,
     'academic_phase', q.academic_phase,
-    'grade_level', q.grade_level,
     'target_level', q.target_level,
     'cp_ref', q.cp_ref,
     'tp_ref', q.tp_ref,
