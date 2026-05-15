@@ -13,6 +13,9 @@
 	import LegacyRichTextEditor from '$lib/components/LegacyRichTextEditor.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import RichContent from '$lib/components/RichContent.svelte';
+	import ComposerMobileSteps, { type ComposerMobileStep } from './ComposerMobileSteps.svelte';
+	import ComposerQualityChecklist from './ComposerQualityChecklist.svelte';
+	import ComposerReadOnlyDetail from './ComposerReadOnlyDetail.svelte';
 	import ComposerDraftNotice from './ComposerDraftNotice.svelte';
 	import CatalogTargetPanel from './CatalogTargetPanel.svelte';
 	import ImportWorkflowPanel from './ImportWorkflowPanel.svelte';
@@ -90,6 +93,15 @@
 		stemPreview,
 		workflowClass,
 	} from './soal-workspace.model';
+	import {
+		bankSoalListContextParams,
+		bankSoalListHref,
+		bankSoalQuestionDetailHref,
+		composerRouteQuestionId,
+		composerTimeLabel,
+		detailRouteQuestionId,
+		questionVersionLabel,
+	} from './soal-workspace.navigation';
 
 	// ── Types ─────────────────────────────────────────────────────────────────
 	type Subject = { id: string; name: string; code: string };
@@ -381,14 +393,21 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	let editingEventId = $state('');
 	let detailReadOnly = $state(false);
 	let detailQuestion = $state<Question | null>(null);
+	let detailRouteId = $state('');
+	let detailRouteStatus = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
+	let detailRouteError = $state('');
+	let detailBackHref = $state('/bank-soal');
 	let questionVersions = $state<QuestionVersion[]>([]);
 	let questionVersionsLoading = $state(false);
 	let composerBusy = $state(false);
 	let composerAction = $state<ComposerSaveIntent | ''>('');
 	let draftStatus = $state('');
 	let draftSavedAt = $state<string | null>(null);
+	let pendingLocalDraft = $state<DraftPayload | null>(null);
+	let pendingLocalDraftSavedAt = $state<string | null>(null);
 	let showInspector = $state(false);
 	let composerMobilePanel = $state<'write' | 'preview'>('write');
+	let composerMobileStepId = $state<ComposerMobileStep['id']>('metadata');
 	let focusedEditor = $state<FocusedEditor | null>(null);
 	let lastDraftSig = '';
 	let questionsRequestId = 0;
@@ -528,6 +547,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		{ label: 'Terbit', value: publishedCount, tone: 'emerald', helper: 'siap dipakai paket', workflowStatus: '', status: 'published', active: !filterWorkflow && filterStatus === 'published' },
 	]);
 	let selectedSubject = $derived(subjects.find((subject) => subject.id === fSubjectId) ?? null);
+	let isDetailRoute = $derived(Boolean(detailRouteId));
 	let composerModeLabel = $derived(fAuthoringMode === 'advance' ? 'Mode advance' : 'Mode pemula');
 	let composerScopeLabel = $derived(specialEventQuestionMode ? `Khusus ${selectedEventTitle}` : 'Bank soal pakai ulang');
 	let composerStageCards = $derived.by<ComposerStageCard[]>(() => [
@@ -624,6 +644,32 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	let passedChecks = $derived(Object.values(readinessChecks).filter(Boolean).length);
 	let totalChecks = $derived(Object.keys(readinessChecks).length);
 	let readinessScore = $derived(Math.round((passedChecks / totalChecks) * 100));
+	let composerMobileSteps = $derived.by<ComposerMobileStep[]>(() => [
+		{ id: 'metadata', label: 'Metadata', helper: 'Pilih mapel, tipe, tingkat, dan kesulitan.', complete: readinessChecks.subject, targetId: 'composer-metadata' },
+		{ id: 'question', label: 'Soal', helper: 'Tulis stimulus dan pertanyaan utama.', complete: readinessChecks.stem, targetId: 'composer-question' },
+		{ id: 'answer', label: 'Jawaban', helper: 'Lengkapi opsi/kunci/rubrik sesuai tipe soal.', complete: readinessChecks.options && readinessChecks.answerKey && readinessChecks.rubric, targetId: isMatching ? 'composer-matching' : isEssay ? 'composer-rubric' : 'composer-options' },
+		{ id: 'preview', label: 'Preview', helper: 'Cek tampilan siswa dan sinyal kualitas sebelum kirim review.', complete: readinessScore === 100, targetId: 'composer-preview' },
+	]);
+
+	function selectComposerMobileStep(step: ComposerMobileStep) {
+		composerMobileStepId = step.id;
+		if (step.id === 'preview') openInspector();
+		else composerMobilePanel = 'write';
+		scrollComposerSection(step.targetId);
+	}
+
+	function previousComposerMobileStep() {
+		const index = composerMobileSteps.findIndex((step) => step.id === composerMobileStepId);
+		const next = composerMobileSteps[Math.max(0, index - 1)];
+		if (next) selectComposerMobileStep(next);
+	}
+
+	function nextComposerMobileStep() {
+		const index = composerMobileSteps.findIndex((step) => step.id === composerMobileStepId);
+		const next = composerMobileSteps[Math.min(composerMobileSteps.length - 1, index + 1)];
+		if (next) selectComposerMobileStep(next);
+	}
+
 	let draftIssues = $derived.by(() => {
 		const issues: string[] = [];
 		if (!readinessChecks.subject) issues.push('Pilih mata pelajaran sebelum menyimpan draft');
@@ -1759,7 +1805,38 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	function questionDetailHref(id: string): string {
-		return resolve(`/bank-soal/soal/${encodeURIComponent(id)}`);
+		const search = typeof window === 'undefined' ? '' : window.location.search;
+		return bankSoalQuestionDetailHref(id, search);
+	}
+
+	function refreshDetailBackHref() {
+		const search = typeof window === 'undefined' ? '' : window.location.search;
+		detailBackHref = bankSoalListHref(search);
+	}
+
+	function canEditDetailQuestion(q: Question | null): boolean {
+		return Boolean(q && isQuickEditable(q));
+	}
+
+	function canReturnDetailRevision(q: Question | null): boolean {
+		return Boolean(q && q.workflow_status === 'approved' && q.status !== 'published' && !questionUsageLocked(q) && q.is_latest_version !== false && canReviewWorkflow);
+	}
+
+	function canCreateDetailRevision(q: Question | null): boolean {
+		return Boolean(q && (q.status === 'published' || questionUsageLocked(q) || q.is_latest_version === false));
+	}
+
+	function canReviewDetailQuestion(q: Question | null): boolean {
+		return Boolean(q && canDecideReview(q));
+	}
+
+	function canPublishDetailQuestion(q: Question | null): boolean {
+		return Boolean(q && canPublishQuestion(q));
+	}
+
+	function openDetailReviewDecision(q: Question, decision: ReviewDecision, notes = '') {
+		reviewDecisionNotes = notes;
+		openReviewDecision(q, decision);
 	}
 
 	function versionLabel(q: Question | QuestionVersion | null): string {
@@ -1846,24 +1923,42 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	async function openQuestionFromRouteParam(id: string) {
+		detailRouteStatus = 'loading';
+		detailRouteError = '';
+		detailRouteId = id;
+		refreshDetailBackHref();
+		setModuleMode('composer');
 		try {
 			const q = await loadQuestionDetail({ id } as Question);
 			if (shouldReadOnlyQuestion(q)) await openReadonlyDetail(q);
 			else await openEdit(q);
+			detailRouteStatus = 'ready';
 		} catch (error) {
-			toast.error(mutationErrorMessage(error, 'Gagal membuka soal dari tautan.'));
+			detailRouteStatus = 'error';
+			detailRouteError = mutationErrorMessage(error, 'Gagal membuka soal dari tautan.');
+			detailReadOnly = false;
+			detailQuestion = null;
+			toast.error(detailRouteError);
 		}
 	}
 
 	async function openReadonlyDetail(q: Question) {
 		composerBusy = true;
+		detailReadOnly = true;
+		detailQuestion = null;
+		questionVersions = [];
+		focusedEditor = null;
+		showInspector = true;
+		composerMobilePanel = 'preview';
 		try {
-			await openEdit(q, { allowReadOnly: true });
-			detailQuestion = await loadQuestionDetail(q);
-			detailReadOnly = true;
-			showInspector = true;
-			composerMobilePanel = 'preview';
-			void loadQuestionVersions(detailQuestion.id);
+			const d = await loadQuestionDetail(q);
+			detailQuestion = d;
+			editingId = d.id;
+			editingEventId = d.event_id ?? '';
+			if (!selectedEventId && d.event_id) selectedEventId = d.event_id;
+			void loadQuestionVersions(d.id);
+			void loadQuestionTimeline(d.id);
+			setModuleMode('composer');
 		} finally {
 			composerBusy = false;
 		}
@@ -2066,6 +2161,19 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			return `${draftStatus || 'Draft tersimpan'}${clock ? ` ${clock}` : ''}`;
 		}
 		return draftStatus || 'Penyunting lama siap untuk buat/edit soal.';
+	}
+
+
+	function actionForQualitySignal(signal: { label: string; status: string; desc: string }): string {
+		if (signal.status === 'good') return 'Sudah aman. Pertahankan pola ini saat menyusun paket.';
+		const label = signal.label.toLowerCase();
+		if (label.includes('stem') || label.includes('pertanyaan') || label.includes('instruksi')) return 'Perjelas perintah soal, tambahkan konteks, dan hindari kalimat terlalu pendek.';
+		if (label.includes('distraktor') || label.includes('opsi')) return 'Samakan kualitas opsi, hindari duplikasi, dan pastikan distraktor masuk akal.';
+		if (label.includes('rubrik') || label.includes('pedoman')) return 'Tambahkan poin penilaian agar koreksi essay konsisten.';
+		if (label.includes('kunci')) return 'Cek ulang kunci jawaban sebelum diajukan review.';
+		if (label.includes('stimulus') || label.includes('media')) return 'Tambahkan stimulus/gambar seperlunya agar soal lebih kontekstual.';
+		if (label.includes('kognitif')) return 'Isi level kognitif agar blueprint asesmen lebih mudah diaudit.';
+		return `Tindak lanjuti: ${signal.desc}`;
 	}
 
 	function offlineLastSyncLabel(): string {
@@ -2638,7 +2746,10 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		void migrateLegacyBankSoalDrafts().then(() => refreshOfflineQueueState()).then(() => {
 			if (browserOnline() && offlineQueueCount > 0) void syncBankSoalOfflineQueue(false);
 		});
-		const routeQuestionId = questionId || queryQuestionId || '';
+		const routeQuestionId = composerRouteQuestionId(questionId, window.location.search);
+		detailRouteId = detailRouteQuestionId(routeQuestionId);
+		detailRouteStatus = detailRouteId ? 'loading' : 'idle';
+		refreshDetailBackHref();
 		if (routeMode === 'composer' && routeQuestionId) void openQuestionFromRouteParam(routeQuestionId);
 		else if (routeMode === 'composer') {
 			setTimeout(() => {
@@ -3443,22 +3554,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	</div>
 
 	<div class="mb-4">
-		<p class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-			Sinyal Kualitas
-		</p>
-		<div class="space-y-2">
-			{#each qualitySignals as sig (sig.label)}
-				<div class="flex items-start gap-2">
-					<span class="mt-0.5 shrink-0 text-sm font-bold {sig.status === 'good' ? 'text-success' : 'text-warning'}">
-						{sig.status === 'good' ? '✓' : '!'}
-					</span>
-					<div>
-						<div class="text-xs font-medium text-foreground">{sig.label}</div>
-						<div class="text-[10px] text-muted-foreground">{sig.desc}</div>
-					</div>
-				</div>
-			{/each}
-		</div>
+		<ComposerQualityChecklist signals={qualitySignals} actionForSignal={actionForQualitySignal} />
 	</div>
 
 	<div class="my-3 border-t border-border"></div>
@@ -3649,7 +3745,63 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				</div>
 			</div>
 
+			{#if detailRouteStatus === 'loading'}
+				<div class="min-h-[28rem] flex-1 overflow-y-auto bg-muted/50 p-4 md:p-5">
+					<section class="rounded-2xl border border-border bg-card p-6 shadow-sm" aria-live="polite">
+						<p class="text-xs font-black uppercase tracking-[0.2em] text-primary">Memuat detail soal</p>
+						<h3 class="mt-2 text-lg font-bold text-foreground">Mohon tunggu, detail butir soal sedang dibuka...</h3>
+						<div class="mt-5 space-y-3">
+							<Skeleton class="h-6 w-1/2" />
+							<Skeleton class="h-28 w-full" />
+							<Skeleton class="h-20 w-full" />
+						</div>
+					</section>
+				</div>
+			{:else if detailRouteStatus === 'error'}
+				<div class="min-h-[28rem] flex-1 overflow-y-auto bg-muted/50 p-4 md:p-5">
+					<section class="rounded-2xl border border-destructive/30 bg-destructive/10 p-6 text-destructive shadow-sm" role="alert">
+						<p class="text-xs font-black uppercase tracking-[0.2em]">Detail soal gagal dimuat</p>
+						<h3 class="mt-2 text-lg font-bold">Komposer tidak menampilkan form kosong.</h3>
+						<p class="mt-2 text-sm">{detailRouteError || 'Data soal tidak bisa dimuat. Coba ulang atau kembali ke daftar soal.'}</p>
+						<div class="mt-4 flex flex-wrap gap-2">
+							<Button type="button" onclick={() => void openQuestionFromRouteParam(detailRouteId)} disabled={!detailRouteId}>Coba lagi</Button>
+							<a href={detailBackHref} class="inline-flex h-10 items-center rounded-md border border-destructive/30 bg-card px-3 text-sm font-semibold">Kembali ke daftar soal</a>
+						</div>
+					</section>
+				</div>
+			{:else if detailReadOnly && detailQuestion}
+				<div class="min-h-0 flex-1 overflow-y-auto bg-muted/50 p-4 md:p-5">
+					<ComposerReadOnlyDetail
+						question={detailQuestion}
+						backHref={detailBackHref}
+						versions={questionVersions}
+						versionsLoading={questionVersionsLoading}
+						timeline={questionTimeline}
+						timelineLoading={questionTimelineLoading}
+						{workflowBusyId}
+						canEdit={canEditDetailQuestion(detailQuestion)}
+						canReturnRevision={canReturnDetailRevision(detailQuestion)}
+						canCreateRevision={canCreateDetailRevision(detailQuestion)}
+						canReview={canReviewDetailQuestion(detailQuestion)}
+						canPublish={canPublishDetailQuestion(detailQuestion)}
+						lockMessage={detailLockMessage(detailQuestion)}
+						hrefForVersion={questionDetailHref}
+						onEdit={() => void openEdit(detailQuestion as Question)}
+						onReturnRevision={() => void returnDetailToRevision()}
+						onCreateRevision={() => void createDetailRevision()}
+						onReviewDecision={openDetailReviewDecision}
+						onPublish={(question) => void publishQuestion(question)}
+					/>
+				</div>
+			{:else}
 			<div class="min-h-0 flex-1 overflow-y-auto bg-muted/50 p-4 md:p-5">
+				<ComposerMobileSteps
+					steps={composerMobileSteps}
+					currentStepId={composerMobileStepId}
+					onSelect={selectComposerMobileStep}
+					onPrevious={previousComposerMobileStep}
+					onNext={nextComposerMobileStep}
+				/>
 				{#if detailReadOnly}
 					<section class="mb-4 rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm text-warning shadow-sm">
 						<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -4322,6 +4474,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 						</div>
 					</div>
 				</div>
+			{/if}
 			{/if}
 	</section>
 {/snippet}

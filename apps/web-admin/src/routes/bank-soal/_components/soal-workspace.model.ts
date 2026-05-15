@@ -125,6 +125,29 @@ export type Question = {
 		answer_count?: number;
 		is_locked?: boolean;
 	};
+	version_group_id?: string | null;
+	version_number?: number;
+	source_question_id?: string | null;
+	supersedes_question_id?: string | null;
+	is_latest_version?: boolean;
+	version_note?: string;
+};
+export type QuestionVersion = {
+	id: string;
+	code?: string;
+	workflow_status?: string;
+	status?: string;
+	version_number?: number;
+	is_latest_version?: boolean;
+	source_question_id?: string | null;
+	supersedes_question_id?: string | null;
+	version_note?: string;
+	created_at?: string;
+	updated_at?: string;
+	author_username?: string;
+	reviewer_username?: string;
+	approver_username?: string;
+	review_notes?: string;
 };
 export type QuestionListResponse = {
 	items: Question[];
