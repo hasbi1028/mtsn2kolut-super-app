@@ -314,6 +314,9 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 	if !store.createParams.TargetLevel.Valid || store.createParams.TargetLevel.String != "VIII" {
 		t.Fatalf("Create() target_level = %+v, want VIII", store.createParams.TargetLevel)
 	}
+	if !store.createParams.GradeLevel.Valid || store.createParams.GradeLevel.Int16 != 8 {
+		t.Fatalf("Create() grade_level = %+v, want derived 8 from target_level VIII", store.createParams.GradeLevel)
+	}
 	if store.createParams.OptionA != "A" || store.createParams.OptionD != "D" || store.createParams.Version != 1 || store.createParams.AuthorUsername != "guru" {
 		t.Fatalf("Create() params = %+v, want legacy options/version/author", store.createParams)
 	}
@@ -328,6 +331,37 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 	}
 	if store.deleteID != deleteID || store.deleteCalls != 1 {
 		t.Fatalf("Delete() id/calls = %v/%d, want %v/1", store.deleteID, store.deleteCalls, deleteID)
+	}
+}
+
+func TestCbtQuestionCreateAcceptsLegacyGradeLevelAndDerivesTargetLevel(t *testing.T) {
+	store := &fakeQuestionStore{
+		createRow: db.CbtQuestion{ID: pgtype.UUID{Bytes: [16]byte{8}, Valid: true}},
+	}
+	svc := &CbtQuestion{q: store}
+
+	_, err := svc.Create(context.Background(), SaveCbtQuestionInput{
+		SubjectID:      pgtype.UUID{Valid: true},
+		AuthoringMode:  "beginner",
+		QuestionType:   "multiple_choice",
+		QuestionText:   "Soal legacy grade",
+		GradeLevel:     pgtype.Int2{Int16: 7, Valid: true},
+		OptionA:        "A",
+		OptionB:        "B",
+		OptionC:        "C",
+		OptionD:        "D",
+		AnswerKey:      "A",
+		AuthorUsername: "guru",
+		Actor:          CbtQuestionActor{Username: "guru", Roles: []string{"guru"}},
+	})
+	if err != nil {
+		t.Fatalf("Create(legacy grade_level) error = %v", err)
+	}
+	if !store.createParams.TargetLevel.Valid || store.createParams.TargetLevel.String != "VII" {
+		t.Fatalf("Create(legacy grade_level) target_level = %+v, want VII", store.createParams.TargetLevel)
+	}
+	if !store.createParams.GradeLevel.Valid || store.createParams.GradeLevel.Int16 != 7 {
+		t.Fatalf("Create(legacy grade_level) grade_level = %+v, want 7", store.createParams.GradeLevel)
 	}
 }
 

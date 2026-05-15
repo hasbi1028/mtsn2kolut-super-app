@@ -522,6 +522,14 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 	} else {
 		return SaveCbtQuestionInput{}, fmt.Errorf("target_level hanya boleh berisi VII, VIII, atau IX")
 	}
+	if out.TargetLevel == "" {
+		out.TargetLevel = questionTargetLevelFromGradeLevel(out.GradeLevel)
+	}
+	if out.TargetLevel != "" {
+		out.GradeLevel = questionGradeLevelFromTargetLevel(out.TargetLevel)
+	} else {
+		out.GradeLevel = pgtype.Int2{}
+	}
 	out.CPRef = strings.TrimSpace(out.CPRef)
 	out.TPRef = strings.TrimSpace(out.TPRef)
 	out.KDRef = strings.TrimSpace(out.KDRef)

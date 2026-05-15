@@ -245,7 +245,6 @@ export type QuestionSavePayload = {
 	difficulty: string;
 	status: 'draft';
 	workflow_status: 'draft' | 'review';
-	grade_level: number;
 	target_level: string;
 	academic_phase: string;
 	cp_ref: string;

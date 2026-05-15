@@ -293,7 +293,6 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		difficulty: string;
 		status: 'draft';
 		workflow_status: 'draft' | 'review';
-		grade_level: number;
 		target_level: string;
 		academic_phase: string;
 		cp_ref: string;
@@ -356,6 +355,36 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	function normalizeTargetLevel(value: string | undefined | null): string {
 		const normalized = (value ?? '').trim().toUpperCase();
 		return targetLevelOptions.includes(normalized as (typeof targetLevelOptions)[number]) ? normalized : '';
+	}
+
+	function gradeLevelFromTargetLevel(value: string): number | null {
+		switch (normalizeTargetLevel(value)) {
+			case 'VII':
+				return 7;
+			case 'VIII':
+				return 8;
+			case 'IX':
+				return 9;
+			default:
+				return null;
+		}
+	}
+
+	function targetLevelFromGradeLevel(value: number | null | undefined): string {
+		switch (Number(value)) {
+			case 7:
+				return 'VII';
+			case 8:
+				return 'VIII';
+			case 9:
+				return 'IX';
+			default:
+				return '';
+		}
+	}
+
+	function normalizeQuestionTargetLevelValue(targetLevel: string | null | undefined, gradeLevel?: number | null): string {
+		return normalizeTargetLevel(targetLevel) || targetLevelFromGradeLevel(gradeLevel);
 	}
 
 	function currentRouteMode(): ModuleMode {
@@ -922,8 +951,8 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		fWeight = meta.weight ?? 1;
 		fDifficulty = meta.difficulty ?? 'medium';
 		fIsRtl = meta.isRtl ?? false;
-		fGradeLevel = meta.gradeLevel ?? 7;
-		fTargetLevel = normalizeTargetLevel(meta.targetLevel);
+		fGradeLevel = gradeLevelFromTargetLevel(normalizeTargetLevel(meta.targetLevel)) ?? meta.gradeLevel ?? 7;
+		fTargetLevel = normalizeQuestionTargetLevelValue(meta.targetLevel, meta.gradeLevel);
 		fAcademicPhase = meta.academicPhase ?? '';
 		fCPRef = meta.cpRef ?? '';
 		fTPRef = meta.tpRef ?? '';
@@ -2066,8 +2095,8 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			fMatchingDistractors = normalizeMatchingDistractors(optionsToMatchingDistractors(d.options ?? []), fQuestionType);
 			fAnswerKey = normalizeAnswerKey(d.answer_key, fQuestionType, answerItemCountForType(fQuestionType));
 			fDifficulty = d.difficulty || 'medium';
-			fGradeLevel = d.grade_level ?? 7;
-			fTargetLevel = normalizeTargetLevel(d.target_level);
+			fGradeLevel = gradeLevelFromTargetLevel(normalizeQuestionTargetLevelValue(d.target_level, d.grade_level)) ?? d.grade_level ?? 7;
+			fTargetLevel = normalizeQuestionTargetLevelValue(d.target_level, d.grade_level);
 			fAcademicPhase = d.academic_phase ?? '';
 			fCPRef = d.cp_ref ?? '';
 			fTPRef = d.tp_ref ?? '';
@@ -2103,8 +2132,8 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			fMatchingPairs = normalizeMatchingPairs(optionsToMatchingPairs(q.options ?? []), fQuestionType);
 			fMatchingDistractors = normalizeMatchingDistractors(optionsToMatchingDistractors(q.options ?? []), fQuestionType);
 			fAnswerKey = normalizeAnswerKey(q.answer_key, fQuestionType, answerItemCountForType(fQuestionType));
-			fGradeLevel = q.grade_level ?? 7;
-			fTargetLevel = normalizeTargetLevel(q.target_level);
+			fGradeLevel = gradeLevelFromTargetLevel(normalizeQuestionTargetLevelValue(q.target_level, q.grade_level)) ?? q.grade_level ?? 7;
+			fTargetLevel = normalizeQuestionTargetLevelValue(q.target_level, q.grade_level);
 			fAcademicPhase = q.academic_phase ?? '';
 			fCPRef = q.cp_ref ?? '';
 			fTPRef = q.tp_ref ?? '';
@@ -2333,7 +2362,6 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			difficulty: fDifficulty,
 			status: 'draft',
 			workflow_status: isReview ? 'review' : 'draft',
-			grade_level: fGradeLevel,
 			target_level: fTargetLevel,
 			academic_phase: fAcademicPhase,
 			cp_ref: fCPRef,
@@ -3994,20 +4022,31 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 										{/each}
 									</select>
 								</div>
-								<div>
-									<label for="f-grade-level" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tingkat angka</label>
-									<Input id="f-grade-level" type="number" min="1" max="12" bind:value={fGradeLevel} class="h-8 text-sm font-medium" />
-								</div>
-								<div>
-									<label for="f-target-level" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tingkat soal paket</label>
-									<select id="f-target-level" bind:value={fTargetLevel} class="h-8 w-full rounded-md border border-border bg-card px-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
-										<option value="">Belum ditentukan</option>
-										<option value="VII">VII</option>
-										<option value="VIII">VIII</option>
-										<option value="IX">IX</option>
-									</select>
-								</div>
-								<div>
+				<div>
+					<div class="mb-1 flex items-center justify-between gap-2">
+						<label for="f-target-level" class="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+							Kelas/Tingkat Soal <span class="text-destructive">*</span>
+						</label>
+						{#if !fTargetLevel}
+							<span class="text-[10px] font-semibold text-destructive">Wajib untuk paket</span>
+						{/if}
+					</div>
+					<select
+						id="f-target-level"
+						bind:value={fTargetLevel}
+						onchange={() => {
+							fGradeLevel = gradeLevelFromTargetLevel(fTargetLevel) ?? 7;
+						}}
+						class="h-8 w-full rounded-md border border-border bg-card px-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+					>
+						<option value="">Belum ditentukan</option>
+						<option value="VII">VII</option>
+						<option value="VIII">VIII</option>
+						<option value="IX">IX</option>
+					</select>
+					<p class="mt-1 text-[10px] text-muted-foreground">Satu sumber data untuk filter paket soal; angka kelas disinkron otomatis di backend.</p>
+				</div>
+				<div>
 									<label for="f-difficulty" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
 										Kesulitan
 									</label>
