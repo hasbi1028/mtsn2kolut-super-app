@@ -16,7 +16,7 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
        q.explanation_html, q.rubric_html,
-       q.academic_phase, q.grade_level,
+       q.academic_phase, q.grade_level, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
@@ -58,7 +58,7 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
        q.explanation_html, q.rubric_html,
-       q.academic_phase, q.grade_level,
+       q.academic_phase, q.grade_level, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
@@ -96,6 +96,29 @@ WHERE (
   AND (sqlc.arg(workflow_status)::text = '' OR q.workflow_status = sqlc.arg(workflow_status)::text)
   AND (sqlc.arg(status_filter)::text = '' OR q.status = sqlc.arg(status_filter)::cbt_question_status_enum)
   AND (sqlc.arg(question_type)::text = '' OR q.question_type = sqlc.arg(question_type)::text)
+  AND (sqlc.arg(target_level)::text = '' OR q.target_level = sqlc.arg(target_level)::text)
+  AND (sqlc.arg(difficulty_filter)::text = '' OR q.difficulty = sqlc.arg(difficulty_filter)::cbt_question_difficulty_enum)
+  AND (sqlc.arg(cognitive_level)::text = '' OR q.cognitive_level = sqlc.arg(cognitive_level)::text)
+  AND (sqlc.arg(material_topic)::text = '' OR q.material_topic ILIKE '%' || sqlc.arg(material_topic)::text || '%')
+  AND (
+    sqlc.arg(metadata_filter)::text = ''
+    OR (
+      sqlc.arg(metadata_filter)::text = 'complete'
+      AND NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NOT NULL
+      AND NULLIF(btrim(q.cp_ref), '') IS NOT NULL
+      AND (NULLIF(btrim(q.tp_ref), '') IS NOT NULL OR NULLIF(btrim(q.kd_ref), '') IS NOT NULL)
+      AND NULLIF(btrim(q.cognitive_level), '') IS NOT NULL
+    )
+    OR (
+      sqlc.arg(metadata_filter)::text = 'gap'
+      AND (
+        NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NULL
+        OR NULLIF(btrim(q.cp_ref), '') IS NULL
+        OR (NULLIF(btrim(q.tp_ref), '') IS NULL AND NULLIF(btrim(q.kd_ref), '') IS NULL)
+        OR NULLIF(btrim(q.cognitive_level), '') IS NULL
+      )
+    )
+  )
   AND (sqlc.arg(hots_filter)::text = '' OR (sqlc.arg(hots_filter)::text = 'yes' AND q.hots_flag = TRUE) OR (sqlc.arg(hots_filter)::text = 'no' AND q.hots_flag = FALSE))
   AND (
     sqlc.arg(is_admin)::bool
@@ -135,9 +158,17 @@ WHERE (
     OR q.question_text ILIKE '%' || sqlc.arg(search_query)::text || '%'
     OR q.material_topic ILIKE '%' || sqlc.arg(search_query)::text || '%'
     OR q.cp_ref ILIKE '%' || sqlc.arg(search_query)::text || '%'
+    OR q.tp_ref ILIKE '%' || sqlc.arg(search_query)::text || '%'
     OR q.kd_ref ILIKE '%' || sqlc.arg(search_query)::text || '%'
+    OR q.indicator_ref ILIKE '%' || sqlc.arg(search_query)::text || '%'
   )
-ORDER BY q.created_at DESC
+ORDER BY
+  CASE WHEN sqlc.arg(sort_order)::text = 'code_asc' THEN q.code END ASC,
+  CASE WHEN sqlc.arg(sort_order)::text = 'updated_desc' THEN q.updated_at END DESC,
+  CASE WHEN sqlc.arg(sort_order)::text = 'created_asc' THEN q.created_at END ASC,
+  CASE WHEN sqlc.arg(sort_order)::text = 'difficulty_asc' THEN q.difficulty::text END ASC,
+  CASE WHEN sqlc.arg(sort_order)::text = 'type_asc' THEN q.question_type END ASC,
+  q.created_at DESC
 LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
 
 -- name: ListCbtQuestionsScoped :many
@@ -158,7 +189,7 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
        q.explanation_html, q.rubric_html,
-       q.academic_phase, q.grade_level,
+       q.academic_phase, q.grade_level, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
@@ -196,6 +227,29 @@ WHERE (
   AND (sqlc.arg(workflow_status)::text = '' OR q.workflow_status = sqlc.arg(workflow_status)::text)
   AND (sqlc.arg(status_filter)::text = '' OR q.status = sqlc.arg(status_filter)::cbt_question_status_enum)
   AND (sqlc.arg(question_type)::text = '' OR q.question_type = sqlc.arg(question_type)::text)
+  AND (sqlc.arg(target_level)::text = '' OR q.target_level = sqlc.arg(target_level)::text)
+  AND (sqlc.arg(difficulty_filter)::text = '' OR q.difficulty = sqlc.arg(difficulty_filter)::cbt_question_difficulty_enum)
+  AND (sqlc.arg(cognitive_level)::text = '' OR q.cognitive_level = sqlc.arg(cognitive_level)::text)
+  AND (sqlc.arg(material_topic)::text = '' OR q.material_topic ILIKE '%' || sqlc.arg(material_topic)::text || '%')
+  AND (
+    sqlc.arg(metadata_filter)::text = ''
+    OR (
+      sqlc.arg(metadata_filter)::text = 'complete'
+      AND NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NOT NULL
+      AND NULLIF(btrim(q.cp_ref), '') IS NOT NULL
+      AND (NULLIF(btrim(q.tp_ref), '') IS NOT NULL OR NULLIF(btrim(q.kd_ref), '') IS NOT NULL)
+      AND NULLIF(btrim(q.cognitive_level), '') IS NOT NULL
+    )
+    OR (
+      sqlc.arg(metadata_filter)::text = 'gap'
+      AND (
+        NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NULL
+        OR NULLIF(btrim(q.cp_ref), '') IS NULL
+        OR (NULLIF(btrim(q.tp_ref), '') IS NULL AND NULLIF(btrim(q.kd_ref), '') IS NULL)
+        OR NULLIF(btrim(q.cognitive_level), '') IS NULL
+      )
+    )
+  )
   AND (sqlc.arg(hots_filter)::text = '' OR (sqlc.arg(hots_filter)::text = 'yes' AND q.hots_flag = TRUE) OR (sqlc.arg(hots_filter)::text = 'no' AND q.hots_flag = FALSE))
   AND (
     sqlc.arg(is_admin)::bool
@@ -235,9 +289,17 @@ WHERE (
     OR q.question_text ILIKE '%' || sqlc.arg(search_query)::text || '%'
     OR q.material_topic ILIKE '%' || sqlc.arg(search_query)::text || '%'
     OR q.cp_ref ILIKE '%' || sqlc.arg(search_query)::text || '%'
+    OR q.tp_ref ILIKE '%' || sqlc.arg(search_query)::text || '%'
     OR q.kd_ref ILIKE '%' || sqlc.arg(search_query)::text || '%'
+    OR q.indicator_ref ILIKE '%' || sqlc.arg(search_query)::text || '%'
   )
-ORDER BY q.created_at DESC
+ORDER BY
+  CASE WHEN sqlc.arg(sort_order)::text = 'code_asc' THEN q.code END ASC,
+  CASE WHEN sqlc.arg(sort_order)::text = 'updated_desc' THEN q.updated_at END DESC,
+  CASE WHEN sqlc.arg(sort_order)::text = 'created_asc' THEN q.created_at END ASC,
+  CASE WHEN sqlc.arg(sort_order)::text = 'difficulty_asc' THEN q.difficulty::text END ASC,
+  CASE WHEN sqlc.arg(sort_order)::text = 'type_asc' THEN q.question_type END ASC,
+  q.created_at DESC
 LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
 
 -- name: CountCbtQuestionsFiltered :one
@@ -259,6 +321,29 @@ WHERE (
   AND (sqlc.arg(workflow_status)::text = '' OR q.workflow_status = sqlc.arg(workflow_status)::text)
   AND (sqlc.arg(status_filter)::text = '' OR q.status = sqlc.arg(status_filter)::cbt_question_status_enum)
   AND (sqlc.arg(question_type)::text = '' OR q.question_type = sqlc.arg(question_type)::text)
+  AND (sqlc.arg(target_level)::text = '' OR q.target_level = sqlc.arg(target_level)::text)
+  AND (sqlc.arg(difficulty_filter)::text = '' OR q.difficulty = sqlc.arg(difficulty_filter)::cbt_question_difficulty_enum)
+  AND (sqlc.arg(cognitive_level)::text = '' OR q.cognitive_level = sqlc.arg(cognitive_level)::text)
+  AND (sqlc.arg(material_topic)::text = '' OR q.material_topic ILIKE '%' || sqlc.arg(material_topic)::text || '%')
+  AND (
+    sqlc.arg(metadata_filter)::text = ''
+    OR (
+      sqlc.arg(metadata_filter)::text = 'complete'
+      AND NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NOT NULL
+      AND NULLIF(btrim(q.cp_ref), '') IS NOT NULL
+      AND (NULLIF(btrim(q.tp_ref), '') IS NOT NULL OR NULLIF(btrim(q.kd_ref), '') IS NOT NULL)
+      AND NULLIF(btrim(q.cognitive_level), '') IS NOT NULL
+    )
+    OR (
+      sqlc.arg(metadata_filter)::text = 'gap'
+      AND (
+        NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NULL
+        OR NULLIF(btrim(q.cp_ref), '') IS NULL
+        OR (NULLIF(btrim(q.tp_ref), '') IS NULL AND NULLIF(btrim(q.kd_ref), '') IS NULL)
+        OR NULLIF(btrim(q.cognitive_level), '') IS NULL
+      )
+    )
+  )
   AND (sqlc.arg(hots_filter)::text = '' OR (sqlc.arg(hots_filter)::text = 'yes' AND q.hots_flag = TRUE) OR (sqlc.arg(hots_filter)::text = 'no' AND q.hots_flag = FALSE))
   AND (
     sqlc.arg(is_admin)::bool
@@ -298,7 +383,9 @@ WHERE (
     OR q.question_text ILIKE '%' || sqlc.arg(search_query)::text || '%'
     OR q.material_topic ILIKE '%' || sqlc.arg(search_query)::text || '%'
     OR q.cp_ref ILIKE '%' || sqlc.arg(search_query)::text || '%'
+    OR q.tp_ref ILIKE '%' || sqlc.arg(search_query)::text || '%'
     OR q.kd_ref ILIKE '%' || sqlc.arg(search_query)::text || '%'
+    OR q.indicator_ref ILIKE '%' || sqlc.arg(search_query)::text || '%'
   );
 
 -- name: GetCbtQuestion :one
@@ -307,7 +394,7 @@ SELECT q.id, q.event_id, q.subject_id, q.code, q.question_text, q.question_type,
        q.answer_key, q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
        q.explanation_html, q.rubric_html,
-       q.academic_phase, q.grade_level,
+       q.academic_phase, q.grade_level, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
@@ -337,7 +424,7 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.answer_key, q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
        q.explanation_html, q.rubric_html,
-       q.academic_phase, q.grade_level,
+       q.academic_phase, q.grade_level, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
@@ -388,7 +475,7 @@ INSERT INTO cbt_questions (
   answer_key, explanation, difficulty, status,
   stem_html, stem_latex, stimulus_html, stimulus_latex,
   explanation_html, rubric_html,
-  academic_phase, grade_level,
+  academic_phase, grade_level, target_level,
   cp_ref, tp_ref, kd_ref, indicator_ref,
   material_topic, cognitive_level, hots_flag,
   media_asset_ids, workflow_status, version,
@@ -400,14 +487,14 @@ INSERT INTO cbt_questions (
 SELECT
   new_question.id, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
   $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31,
-  $32, $33,
+  $32, $33, $34,
   COALESCE(sqlc.narg(version_group_id)::uuid, new_question.id),
   sqlc.arg(version_number),
   sqlc.narg(source_question_id)::uuid,
   sqlc.narg(supersedes_question_id)::uuid,
   sqlc.arg(is_latest_version),
   sqlc.arg(version_note),
-  $34, $35, $36, $37, $38, $39, $40
+  $35, $36, $37, $38, $39, $40, $41
 FROM new_question
 RETURNING *;
 
@@ -455,22 +542,23 @@ SET
   rubric_html        = $22,
   academic_phase     = $23,
   grade_level        = $24,
-  cp_ref             = $25,
-  tp_ref             = $26,
-  kd_ref             = $27,
-  indicator_ref      = $28,
-  material_topic     = $29,
-  cognitive_level    = $30,
-  hots_flag          = $31,
-  media_asset_ids    = $32,
-  workflow_status    = $33,
+  target_level       = $25,
+  cp_ref             = $26,
+  tp_ref             = $27,
+  kd_ref             = $28,
+  indicator_ref      = $29,
+  material_topic     = $30,
+  cognitive_level    = $31,
+  hots_flag          = $32,
+  media_asset_ids    = $33,
+  workflow_status    = $34,
   version            = version + 1,
-  reviewer_username  = $34,
-  reviewed_at        = $35,
-  approver_username  = $36,
-  approved_at        = $37,
-  writer_notes       = $38,
-  review_notes       = $39,
+  reviewer_username  = $35,
+  reviewed_at        = $36,
+  approver_username  = $37,
+  approved_at        = $38,
+  writer_notes       = $39,
+  review_notes       = $40,
   updated_at         = NOW()
 WHERE id = $1
 RETURNING *;

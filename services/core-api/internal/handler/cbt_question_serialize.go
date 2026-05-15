@@ -167,6 +167,7 @@ func serializeQuestionListRow(row db.ListCbtQuestionsFilteredRow, includeAnswerK
 		"rubric_html":            row.RubricHtml,
 		"academic_phase":         row.AcademicPhase,
 		"grade_level":            nullableInt(row.GradeLevel),
+		"target_level":           nullableText(row.TargetLevel),
 		"cp_ref":                 row.CpRef,
 		"tp_ref":                 row.TpRef,
 		"kd_ref":                 row.KdRef,
@@ -241,6 +242,7 @@ func serializeQuestionDetailRow(row db.GetCbtQuestionDetailRow, includeAnswerKey
 		"rubric_html":            row.RubricHtml,
 		"academic_phase":         row.AcademicPhase,
 		"grade_level":            nullableInt(row.GradeLevel),
+		"target_level":           nullableText(row.TargetLevel),
 		"cp_ref":                 row.CpRef,
 		"tp_ref":                 row.TpRef,
 		"kd_ref":                 row.KdRef,
@@ -305,6 +307,7 @@ func serializeQuestionModel(row db.CbtQuestion) map[string]any {
 		"rubric_html":            row.RubricHtml,
 		"academic_phase":         row.AcademicPhase,
 		"grade_level":            nullableInt(row.GradeLevel),
+		"target_level":           nullableText(row.TargetLevel),
 		"cp_ref":                 row.CpRef,
 		"tp_ref":                 row.TpRef,
 		"kd_ref":                 row.KdRef,
@@ -369,6 +372,13 @@ func nullableInt(value pgtype.Int2) any {
 		return nil
 	}
 	return value.Int16
+}
+
+func nullableText(value pgtype.Text) string {
+	if !value.Valid {
+		return ""
+	}
+	return strings.TrimSpace(value.String)
 }
 
 func serviceAuthoringModeFromRow(questionType, stemLatex, stimulusLatex, academicPhase, cpRef, tpRef, kdRef, indicatorRef, materialTopic, cognitiveLevel string, hotsFlag bool, workflowStatus, writerNotes, reviewNotes, rubricHTML string) string {

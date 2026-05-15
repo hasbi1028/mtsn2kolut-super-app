@@ -1177,6 +1177,7 @@ type CbtQuestion struct {
 	SupersedesQuestionID pgtype.UUID               `json:"supersedes_question_id"`
 	IsLatestVersion      bool                      `json:"is_latest_version"`
 	VersionNote          string                    `json:"version_note"`
+	TargetLevel          pgtype.Text               `json:"target_level"`
 }
 
 type CbtQuestionAsset struct {

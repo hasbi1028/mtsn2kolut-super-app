@@ -100,6 +100,7 @@ export type Question = {
 	rubric_html?: string;
 	academic_phase?: string;
 	grade_level?: number | null;
+	target_level?: string | null;
 	cp_ref?: string;
 	tp_ref?: string;
 	kd_ref?: string;
@@ -198,6 +199,7 @@ export type ComposerMetadataMemory = {
 	difficulty: string;
 	isRtl: boolean;
 	gradeLevel: number;
+	targetLevel: string;
 	academicPhase: string;
 	cpRef: string;
 	tpRef: string;
@@ -244,6 +246,7 @@ export type QuestionSavePayload = {
 	status: 'draft';
 	workflow_status: 'draft' | 'review';
 	grade_level: number;
+	target_level: string;
 	academic_phase: string;
 	cp_ref: string;
 	tp_ref: string;

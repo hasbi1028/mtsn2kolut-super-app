@@ -88,6 +88,7 @@ type cbtQuestionBody struct {
 	RubricHTML      string                   `json:"rubric_html"`
 	AcademicPhase   string                   `json:"academic_phase"`
 	GradeLevel      int16                    `json:"grade_level"`
+	TargetLevel     string                   `json:"target_level"`
 	CPRef           string                   `json:"cp_ref"`
 	TPRef           string                   `json:"tp_ref"`
 	KDRef           string                   `json:"kd_ref"`
@@ -181,9 +182,15 @@ func questionListInputFromRequest(r *http.Request, defaultLimit int32, maxLimit 
 		WorkflowStatus: r.URL.Query().Get("workflow_status"),
 		Status:         r.URL.Query().Get("status"),
 		QuestionType:   r.URL.Query().Get("question_type"),
+		TargetLevel:    r.URL.Query().Get("target_level"),
+		Difficulty:     r.URL.Query().Get("difficulty"),
+		CognitiveLevel: r.URL.Query().Get("cognitive_level"),
+		MaterialTopic:  r.URL.Query().Get("material_topic"),
+		MetadataFilter: r.URL.Query().Get("metadata"),
 		HotsFilter:     r.URL.Query().Get("hots"),
 		RevisionSource: r.URL.Query().Get("revision_source"),
 		SearchQuery:    r.URL.Query().Get("q"),
+		SortOrder:      r.URL.Query().Get("sort"),
 		Limit:          limit,
 		Offset:         offset,
 		Actor:          cbtQuestionActorFromRequest(r),

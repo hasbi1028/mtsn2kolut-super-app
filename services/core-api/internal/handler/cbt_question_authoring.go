@@ -229,6 +229,7 @@ func questionInputFromBody(r *http.Request, body cbtQuestionBody, id pgtype.UUID
 		RubricHTML:       body.RubricHTML,
 		AcademicPhase:    body.AcademicPhase,
 		GradeLevel:       gradeLevel,
+		TargetLevel:      body.TargetLevel,
 		CPRef:            body.CPRef,
 		TPRef:            body.TPRef,
 		KDRef:            body.KDRef,

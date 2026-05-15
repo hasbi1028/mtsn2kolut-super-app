@@ -172,6 +172,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		rubric_html?: string;
 		academic_phase?: string;
 		grade_level?: number | null;
+		target_level?: string | null;
 		cp_ref?: string;
 		tp_ref?: string;
 		kd_ref?: string;
@@ -246,6 +247,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		difficulty: string;
 		isRtl: boolean;
 		gradeLevel: number;
+		targetLevel: string;
 		academicPhase: string;
 		cpRef: string;
 		tpRef: string;
@@ -292,6 +294,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		status: 'draft';
 		workflow_status: 'draft' | 'review';
 		grade_level: number;
+		target_level: string;
 		academic_phase: string;
 		cp_ref: string;
 		tp_ref: string;
@@ -348,6 +351,13 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 
 	let { data, routeMode, questionId = '' }: { data: PageData; routeMode: WorkspaceRouteMode; questionId?: string } = $props();
 
+	const targetLevelOptions = ['', 'VII', 'VIII', 'IX'] as const;
+
+	function normalizeTargetLevel(value: string | undefined | null): string {
+		const normalized = (value ?? '').trim().toUpperCase();
+		return targetLevelOptions.includes(normalized as (typeof targetLevelOptions)[number]) ? normalized : '';
+	}
+
 	function currentRouteMode(): ModuleMode {
 		return routeMode;
 	}
@@ -373,6 +383,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	let specialEventQuestionMode = $state(false);
 	let filterWorkflow = $state('');
 	let filterStatus = $state('');
+	let filterTargetLevel = $state('');
 	let revisionSourceFilter = $state<RevisionSourceFilter>('');
 	let visibleSelectionCheckbox = $state<HTMLInputElement | null>(null);
 	let questionTargets = $state<QuestionTarget[]>([]);
@@ -456,6 +467,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	let fDifficulty = $state('medium');
 	let fIsRtl = $state(false);
 	let fGradeLevel = $state(7);
+	let fTargetLevel = $state('');
 	let fAcademicPhase = $state('');
 	let fCPRef = $state('');
 	let fTPRef = $state('');
@@ -483,6 +495,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		fDifficulty,
 		fIsRtl,
 		fGradeLevel,
+		fTargetLevel,
 		fAcademicPhase,
 		fCPRef,
 		fTPRef,
@@ -517,7 +530,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	});
 	let exportButtonLabel = $derived(questionExportButtonLabel(roles));
 	let exportSuccessMessage = $derived(questionExportSuccessMessage(roles));
-	let hasCatalogQuickFilter = $derived(Boolean(search.trim() || filterWorkflow || filterStatus));
+	let hasCatalogQuickFilter = $derived(Boolean(search.trim() || filterWorkflow || filterStatus || filterTargetLevel));
 	let reviewCount = $derived(reviewTotal);
 	let visibleReviewCount = $derived(questions.filter((item) => item.workflow_status === 'review').length);
 	let approvedCount = $derived(approvedTotal);
@@ -879,6 +892,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			difficulty: fDifficulty,
 			isRtl: fIsRtl,
 			gradeLevel: fGradeLevel,
+			targetLevel: fTargetLevel,
 			academicPhase: fAcademicPhase,
 			cpRef: fCPRef,
 			tpRef: fTPRef,
@@ -909,6 +923,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		fDifficulty = meta.difficulty ?? 'medium';
 		fIsRtl = meta.isRtl ?? false;
 		fGradeLevel = meta.gradeLevel ?? 7;
+		fTargetLevel = normalizeTargetLevel(meta.targetLevel);
 		fAcademicPhase = meta.academicPhase ?? '';
 		fCPRef = meta.cpRef ?? '';
 		fTPRef = meta.tpRef ?? '';
@@ -1011,6 +1026,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				difficulty?: string;
 				isRtl?: boolean;
 				gradeLevel?: number;
+				targetLevel?: string;
 				academicPhase?: string;
 				cpRef?: string;
 				tpRef?: string;
@@ -1069,6 +1085,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		if (filterSubject) params.set('subject_id', filterSubject);
 		if (filterWorkflow) params.set('workflow_status', filterWorkflow);
 		if (filterStatus) params.set('status', filterStatus);
+		if (filterTargetLevel) params.set('target_level', filterTargetLevel);
 		if (filterWorkflow === 'rejected' && revisionSourceFilter) params.set('revision_source', revisionSourceFilter);
 		return params;
 	}
@@ -1656,6 +1673,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		search = '';
 		filterWorkflow = '';
 		filterStatus = '';
+		filterTargetLevel = '';
 		revisionSourceFilter = '';
 		load(1);
 	}
@@ -1980,6 +1998,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		fDifficulty = 'medium';
 		fIsRtl = false;
 		fGradeLevel = 7;
+		fTargetLevel = '';
 		fAcademicPhase = '';
 		fCPRef = '';
 		fTPRef = '';
@@ -2048,6 +2067,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			fAnswerKey = normalizeAnswerKey(d.answer_key, fQuestionType, answerItemCountForType(fQuestionType));
 			fDifficulty = d.difficulty || 'medium';
 			fGradeLevel = d.grade_level ?? 7;
+			fTargetLevel = normalizeTargetLevel(d.target_level);
 			fAcademicPhase = d.academic_phase ?? '';
 			fCPRef = d.cp_ref ?? '';
 			fTPRef = d.tp_ref ?? '';
@@ -2084,6 +2104,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			fMatchingDistractors = normalizeMatchingDistractors(optionsToMatchingDistractors(q.options ?? []), fQuestionType);
 			fAnswerKey = normalizeAnswerKey(q.answer_key, fQuestionType, answerItemCountForType(fQuestionType));
 			fGradeLevel = q.grade_level ?? 7;
+			fTargetLevel = normalizeTargetLevel(q.target_level);
 			fAcademicPhase = q.academic_phase ?? '';
 			fCPRef = q.cp_ref ?? '';
 			fTPRef = q.tp_ref ?? '';
@@ -2313,6 +2334,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			status: 'draft',
 			workflow_status: isReview ? 'review' : 'draft',
 			grade_level: fGradeLevel,
+			target_level: fTargetLevel,
 			academic_phase: fAcademicPhase,
 			cp_ref: fCPRef,
 			tp_ref: fTPRef,
@@ -3011,6 +3033,17 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 					<option value="approved">Disetujui</option>
 					<option value="rejected">Perlu Revisi</option>
 				</select>
+				<select
+					id="question-target-level-filter"
+					bind:value={filterTargetLevel}
+					onchange={() => load(1)}
+					class="h-8 rounded-md border border-border bg-card px-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+				>
+					<option value="">Semua Tingkat</option>
+					<option value="VII">VII</option>
+					<option value="VIII">VIII</option>
+					<option value="IX">IX</option>
+				</select>
 				{#if hasCatalogQuickFilter}
 					<Button variant="outline" class="h-8 text-xs" onclick={clearCatalogQuickFilters}>Bersihkan Filter</Button>
 				{/if}
@@ -3127,11 +3160,20 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 											<span class="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
 												{q.suggested_mode ?? q.authoring_mode ?? 'beginner'}
 											</span>
-											{#if questionUsageLocked(q)}
-												<span class="rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
-													Terkunci: {questionUsageText(q)}
-												</span>
-											{/if}
+							{#if q.target_level}
+								<span class="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+									Tingkat {q.target_level}
+								</span>
+							{:else}
+								<span class="rounded bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+									Tingkat kosong
+								</span>
+							{/if}
+							{#if questionUsageLocked(q)}
+								<span class="rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+									Terkunci: {questionUsageText(q)}
+								</span>
+							{/if}
 										</div>
 										{#if q.workflow_status === 'rejected'}
 											<div class="mt-1 rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-[11px] leading-relaxed text-destructive">
@@ -3953,8 +3995,17 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 									</select>
 								</div>
 								<div>
-									<label for="f-grade-level" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tingkat</label>
+									<label for="f-grade-level" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tingkat angka</label>
 									<Input id="f-grade-level" type="number" min="1" max="12" bind:value={fGradeLevel} class="h-8 text-sm font-medium" />
+								</div>
+								<div>
+									<label for="f-target-level" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tingkat soal paket</label>
+									<select id="f-target-level" bind:value={fTargetLevel} class="h-8 w-full rounded-md border border-border bg-card px-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
+										<option value="">Belum ditentukan</option>
+										<option value="VII">VII</option>
+										<option value="VIII">VIII</option>
+										<option value="IX">IX</option>
+									</select>
 								</div>
 								<div>
 									<label for="f-difficulty" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

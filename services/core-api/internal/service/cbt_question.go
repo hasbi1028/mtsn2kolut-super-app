@@ -172,6 +172,7 @@ type SaveCbtQuestionInput struct {
 	RubricHTML           string
 	AcademicPhase        string
 	GradeLevel           pgtype.Int2
+	TargetLevel          string
 	CPRef                string
 	TPRef                string
 	KDRef                string
@@ -261,9 +262,15 @@ type ListCbtQuestionsInput struct {
 	WorkflowStatus string
 	Status         string
 	QuestionType   string
+	TargetLevel    string
+	Difficulty     string
+	CognitiveLevel string
+	MaterialTopic  string
+	MetadataFilter string
 	HotsFilter     string
 	RevisionSource string
 	SearchQuery    string
+	SortOrder      string
 	Limit          int32
 	Offset         int32
 	Actor          CbtQuestionActor
@@ -330,39 +337,50 @@ func (s *CbtQuestion) Summary(ctx context.Context, actor CbtQuestionActor) (CbtQ
 func (s *CbtQuestion) ListFiltered(ctx context.Context, in ListCbtQuestionsInput) ([]db.ListCbtQuestionsFilteredRow, int64, error) {
 	actor := normalizeCbtQuestionActor(in.Actor)
 	rows, err := s.q.ListCbtQuestionsFiltered(ctx, db.ListCbtQuestionsFilteredParams{
-		ScopeFilter:    normalizeQuestionScope(in.QuestionScope),
-		EventID:        in.EventID,
-		SubjectID:      in.SubjectID,
-		AuthorUsername: strings.TrimSpace(in.AuthorUsername),
-		WorkflowStatus: strings.TrimSpace(in.WorkflowStatus),
-		StatusFilter:   normalizeQuestionStatusFilter(in.Status),
-		QuestionType:   strings.TrimSpace(in.QuestionType),
-		HotsFilter:     strings.TrimSpace(in.HotsFilter),
-		IsAdmin:        actor.IsAdmin(),
-		ActorUsername:  actor.Username,
-		ActorUserID:    actor.UserID,
-		RevisionSource: normalizeRevisionSource(in.RevisionSource),
-		SearchQuery:    strings.TrimSpace(in.SearchQuery),
-		LimitCount:     in.Limit,
-		OffsetCount:    in.Offset,
+		ScopeFilter:      normalizeQuestionScope(in.QuestionScope),
+		EventID:          in.EventID,
+		SubjectID:        in.SubjectID,
+		AuthorUsername:   strings.TrimSpace(in.AuthorUsername),
+		WorkflowStatus:   strings.TrimSpace(in.WorkflowStatus),
+		StatusFilter:     normalizeQuestionStatusFilter(in.Status),
+		QuestionType:     strings.TrimSpace(in.QuestionType),
+		TargetLevel:      normalizeQuestionTargetLevelFilter(in.TargetLevel),
+		DifficultyFilter: normalizeQuestionDifficultyFilter(in.Difficulty),
+		CognitiveLevel:   strings.TrimSpace(in.CognitiveLevel),
+		MaterialTopic:    strings.TrimSpace(in.MaterialTopic),
+		MetadataFilter:   normalizeQuestionMetadataFilter(in.MetadataFilter),
+		HotsFilter:       strings.TrimSpace(in.HotsFilter),
+		IsAdmin:          actor.IsAdmin(),
+		ActorUsername:    actor.Username,
+		ActorUserID:      actor.UserID,
+		RevisionSource:   normalizeRevisionSource(in.RevisionSource),
+		SearchQuery:      strings.TrimSpace(in.SearchQuery),
+		SortOrder:        normalizeQuestionSortOrder(in.SortOrder),
+		LimitCount:       in.Limit,
+		OffsetCount:      in.Offset,
 	})
 	if err != nil {
 		return nil, 0, err
 	}
 	total, err := s.q.CountCbtQuestionsFiltered(ctx, db.CountCbtQuestionsFilteredParams{
-		ScopeFilter:    normalizeQuestionScope(in.QuestionScope),
-		EventID:        in.EventID,
-		SubjectID:      in.SubjectID,
-		AuthorUsername: strings.TrimSpace(in.AuthorUsername),
-		WorkflowStatus: strings.TrimSpace(in.WorkflowStatus),
-		StatusFilter:   normalizeQuestionStatusFilter(in.Status),
-		QuestionType:   strings.TrimSpace(in.QuestionType),
-		HotsFilter:     strings.TrimSpace(in.HotsFilter),
-		IsAdmin:        actor.IsAdmin(),
-		ActorUsername:  actor.Username,
-		ActorUserID:    actor.UserID,
-		RevisionSource: normalizeRevisionSource(in.RevisionSource),
-		SearchQuery:    strings.TrimSpace(in.SearchQuery),
+		ScopeFilter:      normalizeQuestionScope(in.QuestionScope),
+		EventID:          in.EventID,
+		SubjectID:        in.SubjectID,
+		AuthorUsername:   strings.TrimSpace(in.AuthorUsername),
+		WorkflowStatus:   strings.TrimSpace(in.WorkflowStatus),
+		StatusFilter:     normalizeQuestionStatusFilter(in.Status),
+		QuestionType:     strings.TrimSpace(in.QuestionType),
+		TargetLevel:      normalizeQuestionTargetLevelFilter(in.TargetLevel),
+		DifficultyFilter: normalizeQuestionDifficultyFilter(in.Difficulty),
+		CognitiveLevel:   strings.TrimSpace(in.CognitiveLevel),
+		MaterialTopic:    strings.TrimSpace(in.MaterialTopic),
+		MetadataFilter:   normalizeQuestionMetadataFilter(in.MetadataFilter),
+		HotsFilter:       strings.TrimSpace(in.HotsFilter),
+		IsAdmin:          actor.IsAdmin(),
+		ActorUsername:    actor.Username,
+		ActorUserID:      actor.UserID,
+		RevisionSource:   normalizeRevisionSource(in.RevisionSource),
+		SearchQuery:      strings.TrimSpace(in.SearchQuery),
 	})
 	if err != nil {
 		return nil, 0, err

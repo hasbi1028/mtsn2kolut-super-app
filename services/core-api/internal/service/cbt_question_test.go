@@ -262,9 +262,15 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 		WorkflowStatus: " draft ",
 		Status:         " published ",
 		QuestionType:   " multiple_choice ",
+		TargetLevel:    " viii ",
+		Difficulty:     " hard ",
+		CognitiveLevel: " C3 ",
+		MaterialTopic:  " bilangan ",
+		MetadataFilter: " kurang ",
 		HotsFilter:     " true ",
 		RevisionSource: " item_analysis ",
 		SearchQuery:    " aljabar ",
+		SortOrder:      " code_asc ",
 		Limit:          25,
 		Offset:         5,
 	})
@@ -274,10 +280,10 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 	if len(rows) != 1 || total != 7 {
 		t.Fatalf("ListFiltered() rows/total = %d/%d, want 1/7", len(rows), total)
 	}
-	if store.listFilterArg.AuthorUsername != "guru.ipa" || store.listFilterArg.ScopeFilter != "event_pool" || store.listFilterArg.WorkflowStatus != "draft" || store.listFilterArg.StatusFilter != "published" || store.listFilterArg.QuestionType != "multiple_choice" || store.listFilterArg.HotsFilter != "true" || store.listFilterArg.RevisionSource != "item_analysis" || store.listFilterArg.SearchQuery != "aljabar" {
+	if store.listFilterArg.AuthorUsername != "guru.ipa" || store.listFilterArg.ScopeFilter != "event_pool" || store.listFilterArg.WorkflowStatus != "draft" || store.listFilterArg.StatusFilter != "published" || store.listFilterArg.QuestionType != "multiple_choice" || store.listFilterArg.TargetLevel != "VIII" || store.listFilterArg.DifficultyFilter != "hard" || store.listFilterArg.CognitiveLevel != "C3" || store.listFilterArg.MaterialTopic != "bilangan" || store.listFilterArg.MetadataFilter != "gap" || store.listFilterArg.HotsFilter != "true" || store.listFilterArg.RevisionSource != "item_analysis" || store.listFilterArg.SearchQuery != "aljabar" || store.listFilterArg.SortOrder != "code_asc" {
 		t.Fatalf("ListFiltered() arg = %+v, want trimmed filters", store.listFilterArg)
 	}
-	if store.countArg.AuthorUsername != store.listFilterArg.AuthorUsername || store.countArg.ScopeFilter != store.listFilterArg.ScopeFilter || store.countArg.WorkflowStatus != store.listFilterArg.WorkflowStatus || store.countArg.StatusFilter != store.listFilterArg.StatusFilter || store.countArg.RevisionSource != store.listFilterArg.RevisionSource || store.countArg.SearchQuery != store.listFilterArg.SearchQuery {
+	if store.countArg.AuthorUsername != store.listFilterArg.AuthorUsername || store.countArg.ScopeFilter != store.listFilterArg.ScopeFilter || store.countArg.WorkflowStatus != store.listFilterArg.WorkflowStatus || store.countArg.StatusFilter != store.listFilterArg.StatusFilter || store.countArg.TargetLevel != store.listFilterArg.TargetLevel || store.countArg.DifficultyFilter != store.listFilterArg.DifficultyFilter || store.countArg.CognitiveLevel != store.listFilterArg.CognitiveLevel || store.countArg.MaterialTopic != store.listFilterArg.MaterialTopic || store.countArg.MetadataFilter != store.listFilterArg.MetadataFilter || store.countArg.RevisionSource != store.listFilterArg.RevisionSource || store.countArg.SearchQuery != store.listFilterArg.SearchQuery {
 		t.Fatalf("ListFiltered() count arg = %+v, want same trimmed filters", store.countArg)
 	}
 
@@ -286,6 +292,7 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 		AuthoringMode:  "beginner",
 		QuestionType:   "single_choice",
 		QuestionText:   " Soal mudah ",
+		TargetLevel:    " viii ",
 		OptionA:        " A ",
 		OptionB:        " B ",
 		OptionC:        " C ",
@@ -304,6 +311,9 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 	if store.createParams.QuestionType != "multiple_choice" || store.createParams.QuestionText != "Soal mudah" || store.createParams.AnswerKey != "B" {
 		t.Fatalf("Create() params = %+v, want normalized type/text/answer", store.createParams)
 	}
+	if !store.createParams.TargetLevel.Valid || store.createParams.TargetLevel.String != "VIII" {
+		t.Fatalf("Create() target_level = %+v, want VIII", store.createParams.TargetLevel)
+	}
 	if store.createParams.OptionA != "A" || store.createParams.OptionD != "D" || store.createParams.Version != 1 || store.createParams.AuthorUsername != "guru" {
 		t.Fatalf("Create() params = %+v, want legacy options/version/author", store.createParams)
 	}
@@ -318,6 +328,32 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 	}
 	if store.deleteID != deleteID || store.deleteCalls != 1 {
 		t.Fatalf("Delete() id/calls = %v/%d, want %v/1", store.deleteID, store.deleteCalls, deleteID)
+	}
+}
+
+func TestCbtQuestionCreateRejectsInvalidTargetLevel(t *testing.T) {
+	store := &fakeQuestionStore{}
+	svc := &CbtQuestion{q: store}
+
+	_, err := svc.Create(context.Background(), SaveCbtQuestionInput{
+		SubjectID:      pgtype.UUID{Valid: true},
+		AuthoringMode:  "beginner",
+		QuestionType:   "multiple_choice",
+		QuestionText:   "Soal tingkat tidak valid",
+		TargetLevel:    "X",
+		OptionA:        "A",
+		OptionB:        "B",
+		OptionC:        "C",
+		OptionD:        "D",
+		AnswerKey:      "A",
+		AuthorUsername: "guru",
+		Actor:          CbtQuestionActor{Username: "guru", Roles: []string{"guru"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "target_level") {
+		t.Fatalf("Create(invalid target_level) error = %v, want target_level validation", err)
+	}
+	if store.createCalls != 0 {
+		t.Fatalf("Create(invalid target_level) calls = %d, want 0", store.createCalls)
 	}
 }
 

@@ -118,7 +118,7 @@ WHERE package_id = $1
 -- name: ListCbtPackageQuestions :many
 SELECT pq.package_id, pq.question_id, pq.position, pq.points,
        q.event_id, q.code AS question_code, q.question_text, q.question_type, q.difficulty, q.status, q.workflow_status,
-       q.cp_ref, q.tp_ref, q.kd_ref, q.material_topic, q.cognitive_level, q.hots_flag
+       q.target_level, q.cp_ref, q.tp_ref, q.kd_ref, q.material_topic, q.cognitive_level, q.hots_flag
 FROM cbt_package_questions pq
 JOIN cbt_questions q ON q.id = pq.question_id
 JOIN cbt_packages p ON p.id = pq.package_id
@@ -128,7 +128,7 @@ ORDER BY pq.package_id, pq.position ASC;
 -- name: ListCbtPackageQuestionsByPackage :many
 SELECT pq.package_id, pq.question_id, pq.position, pq.points,
        q.event_id, q.subject_id, q.code AS question_code, q.question_text, q.question_type, q.difficulty, q.status, q.workflow_status,
-       q.cp_ref, q.tp_ref, q.kd_ref, q.material_topic, q.cognitive_level, q.hots_flag
+       q.target_level, q.cp_ref, q.tp_ref, q.kd_ref, q.material_topic, q.cognitive_level, q.hots_flag
 FROM cbt_package_questions pq
 JOIN cbt_questions q ON q.id = pq.question_id
 WHERE pq.package_id = $1
@@ -205,7 +205,8 @@ SELECT p.id, p.event_id, p.subject_id, s.name AS subject_name, s.code AS subject
        COUNT(DISTINCT pq.question_id) FILTER (WHERE q.status = 'published')::int AS published_count,
        COUNT(DISTINCT pq.question_id) FILTER (WHERE q.status <> 'published')::int AS unpublished_count,
        COUNT(DISTINCT pq.question_id) FILTER (
-         WHERE q.cp_ref = ''
+         WHERE NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NULL
+            OR q.cp_ref = ''
             OR (q.tp_ref = '' AND q.kd_ref = '')
             OR q.cognitive_level = ''
        )::int AS metadata_gap_count,
@@ -234,7 +235,8 @@ SELECT
   COUNT(q.id) FILTER (WHERE q.status = 'published')::int AS published_questions,
   COUNT(q.id) FILTER (WHERE q.status <> 'published')::int AS unpublished_questions,
   COUNT(q.id) FILTER (
-    WHERE q.cp_ref = ''
+    WHERE NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NULL
+       OR q.cp_ref = ''
        OR (q.tp_ref = '' AND q.kd_ref = '')
        OR q.cognitive_level = ''
   )::int AS metadata_gap_questions
@@ -347,6 +349,7 @@ SELECT
     'difficulty', q.difficulty,
     'academic_phase', q.academic_phase,
     'grade_level', q.grade_level,
+    'target_level', q.target_level,
     'cp_ref', q.cp_ref,
     'tp_ref', q.tp_ref,
     'kd_ref', q.kd_ref,

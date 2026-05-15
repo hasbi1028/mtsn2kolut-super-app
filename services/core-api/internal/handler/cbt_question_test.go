@@ -376,6 +376,7 @@ func TestCbtQuestionDecodeAndInputMapping(t *testing.T) {
 		"rubric_html":"<p>Rubrik</p>",
 		"academic_phase":"D",
 		"grade_level":8,
+		"target_level":"VIII",
 		"cp_ref":"CP-1",
 		"tp_ref":"TP-1",
 		"kd_ref":"KD-1",
@@ -412,6 +413,9 @@ func TestCbtQuestionDecodeAndInputMapping(t *testing.T) {
 	if !input.GradeLevel.Valid || input.GradeLevel.Int16 != 8 {
 		t.Fatalf("questionInputFromBody() grade_level = %v, want 8", input.GradeLevel)
 	}
+	if input.TargetLevel != "VIII" {
+		t.Fatalf("questionInputFromBody() target_level = %q, want VIII", input.TargetLevel)
+	}
 	if input.Difficulty != db.CbtQuestionDifficultyEnumEasy || input.Status != db.CbtQuestionStatusEnumDraft || len(input.Options) != 1 || len(input.MediaAssetIDs) != 1 {
 		t.Fatalf("questionInputFromBody() detail = %+v, want mapped difficulty/status/options/media", input)
 	}
@@ -443,6 +447,7 @@ func TestCbtQuestionSerializerHelpers(t *testing.T) {
 		CreatedAt:      cbtQuestionTestTimestamp(8),
 		UpdatedAt:      cbtQuestionTestTimestamp(9),
 		GradeLevel:     pgtype.Int2{Int16: 8, Valid: true},
+		TargetLevel:    pgtype.Text{String: "VIII", Valid: true},
 		MediaAssetIds:  []byte(`["asset-1"]`),
 		WorkflowStatus: "draft",
 		Version:        2,
@@ -454,6 +459,9 @@ func TestCbtQuestionSerializerHelpers(t *testing.T) {
 	}
 	if listMap["grade_level"] != int16(8) {
 		t.Fatalf("serializeQuestionListRow() grade_level = %#v, want int16(8)", listMap["grade_level"])
+	}
+	if listMap["target_level"] != "VIII" {
+		t.Fatalf("serializeQuestionListRow() target_level = %#v, want VIII", listMap["target_level"])
 	}
 	if got := requireAnySlice(t, listMap["options"], "options"); len(got) != 1 {
 		t.Fatalf("serializeQuestionListRow() options len = %d, want 1", len(got))
@@ -490,6 +498,7 @@ func TestCbtQuestionSerializerHelpers(t *testing.T) {
 		Options:        []byte(`[{"label":"A","html":"<b>A</b>"}]`),
 		Difficulty:     db.CbtQuestionDifficultyEnumHard,
 		Status:         db.CbtQuestionStatusEnumPublished,
+		TargetLevel:    pgtype.Text{String: "IX", Valid: true},
 		HotsFlag:       true,
 		MediaAssetIds:  []byte(`["asset-2","asset-3"]`),
 		WorkflowStatus: "published",
@@ -498,6 +507,9 @@ func TestCbtQuestionSerializerHelpers(t *testing.T) {
 	modelMap := serializeQuestionModel(model)
 	if modelMap["authoring_mode"] != "advance" || modelMap["status"] != db.CbtQuestionStatusEnumPublished || modelMap["grade_level"] != nil {
 		t.Fatalf("serializeQuestionModel() = %+v, want advance published model with nil grade", modelMap)
+	}
+	if modelMap["target_level"] != "IX" {
+		t.Fatalf("serializeQuestionModel() target_level = %#v, want IX", modelMap["target_level"])
 	}
 	if got := requireAnySlice(t, modelMap["media_asset_ids"], "model media_asset_ids"); len(got) != 2 {
 		t.Fatalf("serializeQuestionModel() media_asset_ids len = %d, want 2", len(got))

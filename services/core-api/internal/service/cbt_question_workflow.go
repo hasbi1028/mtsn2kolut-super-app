@@ -116,6 +116,59 @@ func normalizeQuestionStatusFilter(value string) string {
 	}
 }
 
+func normalizeQuestionTargetLevel(value string) (string, bool) {
+	normalized := strings.ToUpper(strings.TrimSpace(value))
+	switch normalized {
+	case "":
+		return "", true
+	case "VII", "VIII", "IX":
+		return normalized, true
+	default:
+		return normalized, false
+	}
+}
+
+func normalizeQuestionTargetLevelFilter(value string) string {
+	normalized, ok := normalizeQuestionTargetLevel(value)
+	if !ok {
+		return ""
+	}
+	return normalized
+}
+
+func normalizeQuestionDifficultyFilter(value string) string {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case string(db.CbtQuestionDifficultyEnumEasy):
+		return string(db.CbtQuestionDifficultyEnumEasy)
+	case string(db.CbtQuestionDifficultyEnumMedium):
+		return string(db.CbtQuestionDifficultyEnumMedium)
+	case string(db.CbtQuestionDifficultyEnumHard):
+		return string(db.CbtQuestionDifficultyEnumHard)
+	default:
+		return ""
+	}
+}
+
+func normalizeQuestionMetadataFilter(value string) string {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "complete", "lengkap":
+		return "complete"
+	case "gap", "missing", "kurang":
+		return "gap"
+	default:
+		return ""
+	}
+}
+
+func normalizeQuestionSortOrder(value string) string {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "code_asc", "updated_desc", "created_asc", "difficulty_asc", "type_asc":
+		return strings.TrimSpace(strings.ToLower(value))
+	default:
+		return ""
+	}
+}
+
 func (s *CbtQuestion) SubmitReview(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
 	actor = normalizeCbtQuestionActor(actor)
 	current, err := s.q.GetCbtQuestion(ctx, id)

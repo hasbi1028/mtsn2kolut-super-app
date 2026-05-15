@@ -215,3 +215,37 @@ func TestCreateCbtPackageEventQuestionScope(t *testing.T) {
 		}
 	})
 }
+
+func TestCbtPackageReadinessCountsMissingTargetLevelAsMetadataGap(t *testing.T) {
+	questions := []db.ListCbtPackageQuestionsByPackageRow{
+		{
+			QuestionID:     pgtype.UUID{Bytes: [16]byte{8}, Valid: true},
+			QuestionType:   "multiple_choice",
+			Status:         db.CbtQuestionStatusEnumPublished,
+			TargetLevel:    pgtype.Text{},
+			CpRef:          "CP-1",
+			TpRef:          "TP-1",
+			CognitiveLevel: "C2",
+			Points:         1,
+		},
+		{
+			QuestionID:     pgtype.UUID{Bytes: [16]byte{9}, Valid: true},
+			QuestionType:   "essay",
+			Status:         db.CbtQuestionStatusEnumPublished,
+			TargetLevel:    pgtype.Text{String: "VIII", Valid: true},
+			CpRef:          "CP-1",
+			KdRef:          "KD-1",
+			CognitiveLevel: "C4",
+			Points:         2,
+		},
+	}
+
+	readiness := cbtPackageReadinessStatusFromQuestions(questions, 0, false)
+
+	if readiness.MetadataGapCount != 1 {
+		t.Fatalf("MetadataGapCount = %d, want 1 for missing target_level", readiness.MetadataGapCount)
+	}
+	if readiness.PgCount != 1 || readiness.EssayCount != 1 || readiness.TotalPoints != 3 {
+		t.Fatalf("readiness counts = %+v, want package counts preserved", readiness)
+	}
+}

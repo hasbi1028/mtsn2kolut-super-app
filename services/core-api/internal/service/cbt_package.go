@@ -430,7 +430,7 @@ func cbtPackageReadinessStatusFromQuestions(questions []db.ListCbtPackageQuestio
 		} else {
 			unpublishedCount++
 		}
-		if strings.TrimSpace(question.CpRef) == "" || (strings.TrimSpace(question.TpRef) == "" && strings.TrimSpace(question.KdRef) == "") || strings.TrimSpace(question.CognitiveLevel) == "" {
+		if strings.TrimSpace(question.TargetLevel.String) == "" || strings.TrimSpace(question.CpRef) == "" || (strings.TrimSpace(question.TpRef) == "" && strings.TrimSpace(question.KdRef) == "") || strings.TrimSpace(question.CognitiveLevel) == "" {
 			metadataGapCount++
 		}
 	}

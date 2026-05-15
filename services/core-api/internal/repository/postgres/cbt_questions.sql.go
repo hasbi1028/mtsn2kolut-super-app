@@ -30,63 +30,93 @@ WHERE (
   AND ($5::text = '' OR q.workflow_status = $5::text)
   AND ($6::text = '' OR q.status = $6::cbt_question_status_enum)
   AND ($7::text = '' OR q.question_type = $7::text)
-  AND ($8::text = '' OR ($8::text = 'yes' AND q.hots_flag = TRUE) OR ($8::text = 'no' AND q.hots_flag = FALSE))
+  AND ($8::text = '' OR q.target_level = $8::text)
+  AND ($9::text = '' OR q.difficulty = $9::cbt_question_difficulty_enum)
+  AND ($10::text = '' OR q.cognitive_level = $10::text)
+  AND ($11::text = '' OR q.material_topic ILIKE '%' || $11::text || '%')
   AND (
-    $9::bool
+    $12::text = ''
+    OR (
+      $12::text = 'complete'
+      AND NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NOT NULL
+      AND NULLIF(btrim(q.cp_ref), '') IS NOT NULL
+      AND (NULLIF(btrim(q.tp_ref), '') IS NOT NULL OR NULLIF(btrim(q.kd_ref), '') IS NOT NULL)
+      AND NULLIF(btrim(q.cognitive_level), '') IS NOT NULL
+    )
+    OR (
+      $12::text = 'gap'
+      AND (
+        NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NULL
+        OR NULLIF(btrim(q.cp_ref), '') IS NULL
+        OR (NULLIF(btrim(q.tp_ref), '') IS NULL AND NULLIF(btrim(q.kd_ref), '') IS NULL)
+        OR NULLIF(btrim(q.cognitive_level), '') IS NULL
+      )
+    )
+  )
+  AND ($13::text = '' OR ($13::text = 'yes' AND q.hots_flag = TRUE) OR ($13::text = 'no' AND q.hots_flag = FALSE))
+  AND (
+    $14::bool
     OR q.status = 'published'
-    OR q.author_username = $10::text
+    OR q.author_username = $15::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
       WHERE m.event_id = q.event_id
-        AND m.user_id = $11::uuid
+        AND m.user_id = $16::uuid
         AND m.role IN ('reviewer', 'panitia')
         AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
     )
   )
   AND (
-    $12::text = ''
+    $17::text = ''
     OR (
-      $12::text = 'item_analysis'
+      $17::text = 'item_analysis'
       AND q.workflow_status = 'rejected'
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
-      $12::text = 'reviewer'
+      $17::text = 'reviewer'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
-      $12::text = 'workflow'
+      $17::text = 'workflow'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
   )
   AND (
-    $13::text = ''
-    OR q.code ILIKE '%' || $13::text || '%'
-    OR q.question_text ILIKE '%' || $13::text || '%'
-    OR q.material_topic ILIKE '%' || $13::text || '%'
-    OR q.cp_ref ILIKE '%' || $13::text || '%'
-    OR q.kd_ref ILIKE '%' || $13::text || '%'
+    $18::text = ''
+    OR q.code ILIKE '%' || $18::text || '%'
+    OR q.question_text ILIKE '%' || $18::text || '%'
+    OR q.material_topic ILIKE '%' || $18::text || '%'
+    OR q.cp_ref ILIKE '%' || $18::text || '%'
+    OR q.tp_ref ILIKE '%' || $18::text || '%'
+    OR q.kd_ref ILIKE '%' || $18::text || '%'
+    OR q.indicator_ref ILIKE '%' || $18::text || '%'
   )
 `
 
 type CountCbtQuestionsFilteredParams struct {
-	ScopeFilter    string      `json:"scope_filter"`
-	EventID        pgtype.UUID `json:"event_id"`
-	SubjectID      pgtype.UUID `json:"subject_id"`
-	AuthorUsername string      `json:"author_username"`
-	WorkflowStatus string      `json:"workflow_status"`
-	StatusFilter   string      `json:"status_filter"`
-	QuestionType   string      `json:"question_type"`
-	HotsFilter     string      `json:"hots_filter"`
-	IsAdmin        bool        `json:"is_admin"`
-	ActorUsername  string      `json:"actor_username"`
-	ActorUserID    pgtype.UUID `json:"actor_user_id"`
-	RevisionSource string      `json:"revision_source"`
-	SearchQuery    string      `json:"search_query"`
+	ScopeFilter      string      `json:"scope_filter"`
+	EventID          pgtype.UUID `json:"event_id"`
+	SubjectID        pgtype.UUID `json:"subject_id"`
+	AuthorUsername   string      `json:"author_username"`
+	WorkflowStatus   string      `json:"workflow_status"`
+	StatusFilter     string      `json:"status_filter"`
+	QuestionType     string      `json:"question_type"`
+	TargetLevel      string      `json:"target_level"`
+	DifficultyFilter string      `json:"difficulty_filter"`
+	CognitiveLevel   string      `json:"cognitive_level"`
+	MaterialTopic    string      `json:"material_topic"`
+	MetadataFilter   string      `json:"metadata_filter"`
+	HotsFilter       string      `json:"hots_filter"`
+	IsAdmin          bool        `json:"is_admin"`
+	ActorUsername    string      `json:"actor_username"`
+	ActorUserID      pgtype.UUID `json:"actor_user_id"`
+	RevisionSource   string      `json:"revision_source"`
+	SearchQuery      string      `json:"search_query"`
 }
 
 func (q *Queries) CountCbtQuestionsFiltered(ctx context.Context, arg CountCbtQuestionsFilteredParams) (int64, error) {
@@ -98,6 +128,11 @@ func (q *Queries) CountCbtQuestionsFiltered(ctx context.Context, arg CountCbtQue
 		arg.WorkflowStatus,
 		arg.StatusFilter,
 		arg.QuestionType,
+		arg.TargetLevel,
+		arg.DifficultyFilter,
+		arg.CognitiveLevel,
+		arg.MaterialTopic,
+		arg.MetadataFilter,
 		arg.HotsFilter,
 		arg.IsAdmin,
 		arg.ActorUsername,
@@ -120,7 +155,7 @@ INSERT INTO cbt_questions (
   answer_key, explanation, difficulty, status,
   stem_html, stem_latex, stimulus_html, stimulus_latex,
   explanation_html, rubric_html,
-  academic_phase, grade_level,
+  academic_phase, grade_level, target_level,
   cp_ref, tp_ref, kd_ref, indicator_ref,
   material_topic, cognitive_level, hots_flag,
   media_asset_ids, workflow_status, version,
@@ -132,16 +167,16 @@ INSERT INTO cbt_questions (
 SELECT
   new_question.id, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
   $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31,
-  $32, $33,
-  COALESCE($41::uuid, new_question.id),
-  $42,
-  $43::uuid,
+  $32, $33, $34,
+  COALESCE($42::uuid, new_question.id),
+  $43,
   $44::uuid,
-  $45,
+  $45::uuid,
   $46,
-  $34, $35, $36, $37, $38, $39, $40
+  $47,
+  $35, $36, $37, $38, $39, $40, $41
 FROM new_question
-RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options, stem_html, stem_latex, stimulus_html, stimulus_latex, explanation_html, rubric_html, academic_phase, grade_level, cp_ref, tp_ref, kd_ref, indicator_ref, material_topic, cognitive_level, hots_flag, media_asset_ids, workflow_status, version, author_username, reviewer_username, reviewed_at, approver_username, approved_at, writer_notes, review_notes, event_id, version_group_id, version_number, source_question_id, supersedes_question_id, is_latest_version, version_note
+RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options, stem_html, stem_latex, stimulus_html, stimulus_latex, explanation_html, rubric_html, academic_phase, grade_level, cp_ref, tp_ref, kd_ref, indicator_ref, material_topic, cognitive_level, hots_flag, media_asset_ids, workflow_status, version, author_username, reviewer_username, reviewed_at, approver_username, approved_at, writer_notes, review_notes, event_id, version_group_id, version_number, source_question_id, supersedes_question_id, is_latest_version, version_note, target_level
 `
 
 type CreateCbtQuestionParams struct {
@@ -168,6 +203,7 @@ type CreateCbtQuestionParams struct {
 	RubricHtml           string                    `json:"rubric_html"`
 	AcademicPhase        string                    `json:"academic_phase"`
 	GradeLevel           pgtype.Int2               `json:"grade_level"`
+	TargetLevel          pgtype.Text               `json:"target_level"`
 	CpRef                string                    `json:"cp_ref"`
 	TpRef                string                    `json:"tp_ref"`
 	KdRef                string                    `json:"kd_ref"`
@@ -218,6 +254,7 @@ func (q *Queries) CreateCbtQuestion(ctx context.Context, arg CreateCbtQuestionPa
 		arg.RubricHtml,
 		arg.AcademicPhase,
 		arg.GradeLevel,
+		arg.TargetLevel,
 		arg.CpRef,
 		arg.TpRef,
 		arg.KdRef,
@@ -293,6 +330,7 @@ func (q *Queries) CreateCbtQuestion(ctx context.Context, arg CreateCbtQuestionPa
 		&i.SupersedesQuestionID,
 		&i.IsLatestVersion,
 		&i.VersionNote,
+		&i.TargetLevel,
 	)
 	return i, err
 }
@@ -347,7 +385,7 @@ SELECT q.id, q.event_id, q.subject_id, q.code, q.question_text, q.question_type,
        q.answer_key, q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
        q.explanation_html, q.rubric_html,
-       q.academic_phase, q.grade_level,
+       q.academic_phase, q.grade_level, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
@@ -398,6 +436,7 @@ type GetCbtQuestionRow struct {
 	RubricHtml           string                    `json:"rubric_html"`
 	AcademicPhase        string                    `json:"academic_phase"`
 	GradeLevel           pgtype.Int2               `json:"grade_level"`
+	TargetLevel          pgtype.Text               `json:"target_level"`
 	CpRef                string                    `json:"cp_ref"`
 	TpRef                string                    `json:"tp_ref"`
 	KdRef                string                    `json:"kd_ref"`
@@ -455,6 +494,7 @@ func (q *Queries) GetCbtQuestion(ctx context.Context, id pgtype.UUID) (GetCbtQue
 		&i.RubricHtml,
 		&i.AcademicPhase,
 		&i.GradeLevel,
+		&i.TargetLevel,
 		&i.CpRef,
 		&i.TpRef,
 		&i.KdRef,
@@ -491,7 +531,7 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.answer_key, q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
        q.explanation_html, q.rubric_html,
-       q.academic_phase, q.grade_level,
+       q.academic_phase, q.grade_level, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
@@ -557,6 +597,7 @@ type GetCbtQuestionDetailRow struct {
 	RubricHtml           string                    `json:"rubric_html"`
 	AcademicPhase        string                    `json:"academic_phase"`
 	GradeLevel           pgtype.Int2               `json:"grade_level"`
+	TargetLevel          pgtype.Text               `json:"target_level"`
 	CpRef                string                    `json:"cp_ref"`
 	TpRef                string                    `json:"tp_ref"`
 	KdRef                string                    `json:"kd_ref"`
@@ -619,6 +660,7 @@ func (q *Queries) GetCbtQuestionDetail(ctx context.Context, id pgtype.UUID) (Get
 		&i.RubricHtml,
 		&i.AcademicPhase,
 		&i.GradeLevel,
+		&i.TargetLevel,
 		&i.CpRef,
 		&i.TpRef,
 		&i.KdRef,
@@ -1078,7 +1120,7 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
        q.explanation_html, q.rubric_html,
-       q.academic_phase, q.grade_level,
+       q.academic_phase, q.grade_level, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
@@ -1138,6 +1180,7 @@ type ListCbtQuestionsRow struct {
 	RubricHtml           string                    `json:"rubric_html"`
 	AcademicPhase        string                    `json:"academic_phase"`
 	GradeLevel           pgtype.Int2               `json:"grade_level"`
+	TargetLevel          pgtype.Text               `json:"target_level"`
 	CpRef                string                    `json:"cp_ref"`
 	TpRef                string                    `json:"tp_ref"`
 	KdRef                string                    `json:"kd_ref"`
@@ -1203,6 +1246,7 @@ func (q *Queries) ListCbtQuestions(ctx context.Context, arg ListCbtQuestionsPara
 			&i.RubricHtml,
 			&i.AcademicPhase,
 			&i.GradeLevel,
+			&i.TargetLevel,
 			&i.CpRef,
 			&i.TpRef,
 			&i.KdRef,
@@ -1257,7 +1301,7 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
        q.explanation_html, q.rubric_html,
-       q.academic_phase, q.grade_level,
+       q.academic_phase, q.grade_level, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
@@ -1295,7 +1339,30 @@ WHERE (
   AND ($8::text = '' OR q.workflow_status = $8::text)
   AND ($9::text = '' OR q.status = $9::cbt_question_status_enum)
   AND ($10::text = '' OR q.question_type = $10::text)
-  AND ($11::text = '' OR ($11::text = 'yes' AND q.hots_flag = TRUE) OR ($11::text = 'no' AND q.hots_flag = FALSE))
+  AND ($11::text = '' OR q.target_level = $11::text)
+  AND ($12::text = '' OR q.difficulty = $12::cbt_question_difficulty_enum)
+  AND ($13::text = '' OR q.cognitive_level = $13::text)
+  AND ($14::text = '' OR q.material_topic ILIKE '%' || $14::text || '%')
+  AND (
+    $15::text = ''
+    OR (
+      $15::text = 'complete'
+      AND NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NOT NULL
+      AND NULLIF(btrim(q.cp_ref), '') IS NOT NULL
+      AND (NULLIF(btrim(q.tp_ref), '') IS NOT NULL OR NULLIF(btrim(q.kd_ref), '') IS NOT NULL)
+      AND NULLIF(btrim(q.cognitive_level), '') IS NOT NULL
+    )
+    OR (
+      $15::text = 'gap'
+      AND (
+        NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NULL
+        OR NULLIF(btrim(q.cp_ref), '') IS NULL
+        OR (NULLIF(btrim(q.tp_ref), '') IS NULL AND NULLIF(btrim(q.kd_ref), '') IS NULL)
+        OR NULLIF(btrim(q.cognitive_level), '') IS NULL
+      )
+    )
+  )
+  AND ($16::text = '' OR ($16::text = 'yes' AND q.hots_flag = TRUE) OR ($16::text = 'no' AND q.hots_flag = FALSE))
   AND (
     $1::bool
     OR q.status = 'published'
@@ -1309,53 +1376,67 @@ WHERE (
     )
   )
   AND (
-    $12::text = ''
+    $17::text = ''
     OR (
-      $12::text = 'item_analysis'
+      $17::text = 'item_analysis'
       AND q.workflow_status = 'rejected'
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
-      $12::text = 'reviewer'
+      $17::text = 'reviewer'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
-      $12::text = 'workflow'
+      $17::text = 'workflow'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
   )
   AND (
-    $13::text = ''
-    OR q.code ILIKE '%' || $13::text || '%'
-    OR q.question_text ILIKE '%' || $13::text || '%'
-    OR q.material_topic ILIKE '%' || $13::text || '%'
-    OR q.cp_ref ILIKE '%' || $13::text || '%'
-    OR q.kd_ref ILIKE '%' || $13::text || '%'
+    $18::text = ''
+    OR q.code ILIKE '%' || $18::text || '%'
+    OR q.question_text ILIKE '%' || $18::text || '%'
+    OR q.material_topic ILIKE '%' || $18::text || '%'
+    OR q.cp_ref ILIKE '%' || $18::text || '%'
+    OR q.tp_ref ILIKE '%' || $18::text || '%'
+    OR q.kd_ref ILIKE '%' || $18::text || '%'
+    OR q.indicator_ref ILIKE '%' || $18::text || '%'
   )
-ORDER BY q.created_at DESC
-LIMIT $15 OFFSET $14
+ORDER BY
+  CASE WHEN $19::text = 'code_asc' THEN q.code END ASC,
+  CASE WHEN $19::text = 'updated_desc' THEN q.updated_at END DESC,
+  CASE WHEN $19::text = 'created_asc' THEN q.created_at END ASC,
+  CASE WHEN $19::text = 'difficulty_asc' THEN q.difficulty::text END ASC,
+  CASE WHEN $19::text = 'type_asc' THEN q.question_type END ASC,
+  q.created_at DESC
+LIMIT $21 OFFSET $20
 `
 
 type ListCbtQuestionsFilteredParams struct {
-	IsAdmin        bool        `json:"is_admin"`
-	ActorUsername  string      `json:"actor_username"`
-	ActorUserID    pgtype.UUID `json:"actor_user_id"`
-	ScopeFilter    string      `json:"scope_filter"`
-	EventID        pgtype.UUID `json:"event_id"`
-	SubjectID      pgtype.UUID `json:"subject_id"`
-	AuthorUsername string      `json:"author_username"`
-	WorkflowStatus string      `json:"workflow_status"`
-	StatusFilter   string      `json:"status_filter"`
-	QuestionType   string      `json:"question_type"`
-	HotsFilter     string      `json:"hots_filter"`
-	RevisionSource string      `json:"revision_source"`
-	SearchQuery    string      `json:"search_query"`
-	OffsetCount    int32       `json:"offset_count"`
-	LimitCount     int32       `json:"limit_count"`
+	IsAdmin          bool        `json:"is_admin"`
+	ActorUsername    string      `json:"actor_username"`
+	ActorUserID      pgtype.UUID `json:"actor_user_id"`
+	ScopeFilter      string      `json:"scope_filter"`
+	EventID          pgtype.UUID `json:"event_id"`
+	SubjectID        pgtype.UUID `json:"subject_id"`
+	AuthorUsername   string      `json:"author_username"`
+	WorkflowStatus   string      `json:"workflow_status"`
+	StatusFilter     string      `json:"status_filter"`
+	QuestionType     string      `json:"question_type"`
+	TargetLevel      string      `json:"target_level"`
+	DifficultyFilter string      `json:"difficulty_filter"`
+	CognitiveLevel   string      `json:"cognitive_level"`
+	MaterialTopic    string      `json:"material_topic"`
+	MetadataFilter   string      `json:"metadata_filter"`
+	HotsFilter       string      `json:"hots_filter"`
+	RevisionSource   string      `json:"revision_source"`
+	SearchQuery      string      `json:"search_query"`
+	SortOrder        string      `json:"sort_order"`
+	OffsetCount      int32       `json:"offset_count"`
+	LimitCount       int32       `json:"limit_count"`
 }
 
 type ListCbtQuestionsFilteredRow struct {
@@ -1387,6 +1468,7 @@ type ListCbtQuestionsFilteredRow struct {
 	RubricHtml           string                    `json:"rubric_html"`
 	AcademicPhase        string                    `json:"academic_phase"`
 	GradeLevel           pgtype.Int2               `json:"grade_level"`
+	TargetLevel          pgtype.Text               `json:"target_level"`
 	CpRef                string                    `json:"cp_ref"`
 	TpRef                string                    `json:"tp_ref"`
 	KdRef                string                    `json:"kd_ref"`
@@ -1426,9 +1508,15 @@ func (q *Queries) ListCbtQuestionsFiltered(ctx context.Context, arg ListCbtQuest
 		arg.WorkflowStatus,
 		arg.StatusFilter,
 		arg.QuestionType,
+		arg.TargetLevel,
+		arg.DifficultyFilter,
+		arg.CognitiveLevel,
+		arg.MaterialTopic,
+		arg.MetadataFilter,
 		arg.HotsFilter,
 		arg.RevisionSource,
 		arg.SearchQuery,
+		arg.SortOrder,
 		arg.OffsetCount,
 		arg.LimitCount,
 	)
@@ -1468,6 +1556,7 @@ func (q *Queries) ListCbtQuestionsFiltered(ctx context.Context, arg ListCbtQuest
 			&i.RubricHtml,
 			&i.AcademicPhase,
 			&i.GradeLevel,
+			&i.TargetLevel,
 			&i.CpRef,
 			&i.TpRef,
 			&i.KdRef,
@@ -1522,7 +1611,7 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
        q.explanation_html, q.rubric_html,
-       q.academic_phase, q.grade_level,
+       q.academic_phase, q.grade_level, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
@@ -1560,7 +1649,30 @@ WHERE (
   AND ($8::text = '' OR q.workflow_status = $8::text)
   AND ($9::text = '' OR q.status = $9::cbt_question_status_enum)
   AND ($10::text = '' OR q.question_type = $10::text)
-  AND ($11::text = '' OR ($11::text = 'yes' AND q.hots_flag = TRUE) OR ($11::text = 'no' AND q.hots_flag = FALSE))
+  AND ($11::text = '' OR q.target_level = $11::text)
+  AND ($12::text = '' OR q.difficulty = $12::cbt_question_difficulty_enum)
+  AND ($13::text = '' OR q.cognitive_level = $13::text)
+  AND ($14::text = '' OR q.material_topic ILIKE '%' || $14::text || '%')
+  AND (
+    $15::text = ''
+    OR (
+      $15::text = 'complete'
+      AND NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NOT NULL
+      AND NULLIF(btrim(q.cp_ref), '') IS NOT NULL
+      AND (NULLIF(btrim(q.tp_ref), '') IS NOT NULL OR NULLIF(btrim(q.kd_ref), '') IS NOT NULL)
+      AND NULLIF(btrim(q.cognitive_level), '') IS NOT NULL
+    )
+    OR (
+      $15::text = 'gap'
+      AND (
+        NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NULL
+        OR NULLIF(btrim(q.cp_ref), '') IS NULL
+        OR (NULLIF(btrim(q.tp_ref), '') IS NULL AND NULLIF(btrim(q.kd_ref), '') IS NULL)
+        OR NULLIF(btrim(q.cognitive_level), '') IS NULL
+      )
+    )
+  )
+  AND ($16::text = '' OR ($16::text = 'yes' AND q.hots_flag = TRUE) OR ($16::text = 'no' AND q.hots_flag = FALSE))
   AND (
     $1::bool
     OR q.status = 'published'
@@ -1574,53 +1686,67 @@ WHERE (
     )
   )
   AND (
-    $12::text = ''
+    $17::text = ''
     OR (
-      $12::text = 'item_analysis'
+      $17::text = 'item_analysis'
       AND q.workflow_status = 'rejected'
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
-      $12::text = 'reviewer'
+      $17::text = 'reviewer'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
-      $12::text = 'workflow'
+      $17::text = 'workflow'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
   )
   AND (
-    $13::text = ''
-    OR q.code ILIKE '%' || $13::text || '%'
-    OR q.question_text ILIKE '%' || $13::text || '%'
-    OR q.material_topic ILIKE '%' || $13::text || '%'
-    OR q.cp_ref ILIKE '%' || $13::text || '%'
-    OR q.kd_ref ILIKE '%' || $13::text || '%'
+    $18::text = ''
+    OR q.code ILIKE '%' || $18::text || '%'
+    OR q.question_text ILIKE '%' || $18::text || '%'
+    OR q.material_topic ILIKE '%' || $18::text || '%'
+    OR q.cp_ref ILIKE '%' || $18::text || '%'
+    OR q.tp_ref ILIKE '%' || $18::text || '%'
+    OR q.kd_ref ILIKE '%' || $18::text || '%'
+    OR q.indicator_ref ILIKE '%' || $18::text || '%'
   )
-ORDER BY q.created_at DESC
-LIMIT $15 OFFSET $14
+ORDER BY
+  CASE WHEN $19::text = 'code_asc' THEN q.code END ASC,
+  CASE WHEN $19::text = 'updated_desc' THEN q.updated_at END DESC,
+  CASE WHEN $19::text = 'created_asc' THEN q.created_at END ASC,
+  CASE WHEN $19::text = 'difficulty_asc' THEN q.difficulty::text END ASC,
+  CASE WHEN $19::text = 'type_asc' THEN q.question_type END ASC,
+  q.created_at DESC
+LIMIT $21 OFFSET $20
 `
 
 type ListCbtQuestionsScopedParams struct {
-	IsAdmin        bool        `json:"is_admin"`
-	ActorUsername  string      `json:"actor_username"`
-	ActorUserID    pgtype.UUID `json:"actor_user_id"`
-	ScopeFilter    string      `json:"scope_filter"`
-	EventID        pgtype.UUID `json:"event_id"`
-	SubjectID      pgtype.UUID `json:"subject_id"`
-	AuthorUsername string      `json:"author_username"`
-	WorkflowStatus string      `json:"workflow_status"`
-	StatusFilter   string      `json:"status_filter"`
-	QuestionType   string      `json:"question_type"`
-	HotsFilter     string      `json:"hots_filter"`
-	RevisionSource string      `json:"revision_source"`
-	SearchQuery    string      `json:"search_query"`
-	OffsetCount    int32       `json:"offset_count"`
-	LimitCount     int32       `json:"limit_count"`
+	IsAdmin          bool        `json:"is_admin"`
+	ActorUsername    string      `json:"actor_username"`
+	ActorUserID      pgtype.UUID `json:"actor_user_id"`
+	ScopeFilter      string      `json:"scope_filter"`
+	EventID          pgtype.UUID `json:"event_id"`
+	SubjectID        pgtype.UUID `json:"subject_id"`
+	AuthorUsername   string      `json:"author_username"`
+	WorkflowStatus   string      `json:"workflow_status"`
+	StatusFilter     string      `json:"status_filter"`
+	QuestionType     string      `json:"question_type"`
+	TargetLevel      string      `json:"target_level"`
+	DifficultyFilter string      `json:"difficulty_filter"`
+	CognitiveLevel   string      `json:"cognitive_level"`
+	MaterialTopic    string      `json:"material_topic"`
+	MetadataFilter   string      `json:"metadata_filter"`
+	HotsFilter       string      `json:"hots_filter"`
+	RevisionSource   string      `json:"revision_source"`
+	SearchQuery      string      `json:"search_query"`
+	SortOrder        string      `json:"sort_order"`
+	OffsetCount      int32       `json:"offset_count"`
+	LimitCount       int32       `json:"limit_count"`
 }
 
 type ListCbtQuestionsScopedRow struct {
@@ -1652,6 +1778,7 @@ type ListCbtQuestionsScopedRow struct {
 	RubricHtml           string                    `json:"rubric_html"`
 	AcademicPhase        string                    `json:"academic_phase"`
 	GradeLevel           pgtype.Int2               `json:"grade_level"`
+	TargetLevel          pgtype.Text               `json:"target_level"`
 	CpRef                string                    `json:"cp_ref"`
 	TpRef                string                    `json:"tp_ref"`
 	KdRef                string                    `json:"kd_ref"`
@@ -1691,9 +1818,15 @@ func (q *Queries) ListCbtQuestionsScoped(ctx context.Context, arg ListCbtQuestio
 		arg.WorkflowStatus,
 		arg.StatusFilter,
 		arg.QuestionType,
+		arg.TargetLevel,
+		arg.DifficultyFilter,
+		arg.CognitiveLevel,
+		arg.MaterialTopic,
+		arg.MetadataFilter,
 		arg.HotsFilter,
 		arg.RevisionSource,
 		arg.SearchQuery,
+		arg.SortOrder,
 		arg.OffsetCount,
 		arg.LimitCount,
 	)
@@ -1733,6 +1866,7 @@ func (q *Queries) ListCbtQuestionsScoped(ctx context.Context, arg ListCbtQuestio
 			&i.RubricHtml,
 			&i.AcademicPhase,
 			&i.GradeLevel,
+			&i.TargetLevel,
 			&i.CpRef,
 			&i.TpRef,
 			&i.KdRef,
@@ -1996,25 +2130,26 @@ SET
   rubric_html        = $22,
   academic_phase     = $23,
   grade_level        = $24,
-  cp_ref             = $25,
-  tp_ref             = $26,
-  kd_ref             = $27,
-  indicator_ref      = $28,
-  material_topic     = $29,
-  cognitive_level    = $30,
-  hots_flag          = $31,
-  media_asset_ids    = $32,
-  workflow_status    = $33,
+  target_level       = $25,
+  cp_ref             = $26,
+  tp_ref             = $27,
+  kd_ref             = $28,
+  indicator_ref      = $29,
+  material_topic     = $30,
+  cognitive_level    = $31,
+  hots_flag          = $32,
+  media_asset_ids    = $33,
+  workflow_status    = $34,
   version            = version + 1,
-  reviewer_username  = $34,
-  reviewed_at        = $35,
-  approver_username  = $36,
-  approved_at        = $37,
-  writer_notes       = $38,
-  review_notes       = $39,
+  reviewer_username  = $35,
+  reviewed_at        = $36,
+  approver_username  = $37,
+  approved_at        = $38,
+  writer_notes       = $39,
+  review_notes       = $40,
   updated_at         = NOW()
 WHERE id = $1
-RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options, stem_html, stem_latex, stimulus_html, stimulus_latex, explanation_html, rubric_html, academic_phase, grade_level, cp_ref, tp_ref, kd_ref, indicator_ref, material_topic, cognitive_level, hots_flag, media_asset_ids, workflow_status, version, author_username, reviewer_username, reviewed_at, approver_username, approved_at, writer_notes, review_notes, event_id, version_group_id, version_number, source_question_id, supersedes_question_id, is_latest_version, version_note
+RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options, stem_html, stem_latex, stimulus_html, stimulus_latex, explanation_html, rubric_html, academic_phase, grade_level, cp_ref, tp_ref, kd_ref, indicator_ref, material_topic, cognitive_level, hots_flag, media_asset_ids, workflow_status, version, author_username, reviewer_username, reviewed_at, approver_username, approved_at, writer_notes, review_notes, event_id, version_group_id, version_number, source_question_id, supersedes_question_id, is_latest_version, version_note, target_level
 `
 
 type UpdateCbtQuestionParams struct {
@@ -2042,6 +2177,7 @@ type UpdateCbtQuestionParams struct {
 	RubricHtml       string                    `json:"rubric_html"`
 	AcademicPhase    string                    `json:"academic_phase"`
 	GradeLevel       pgtype.Int2               `json:"grade_level"`
+	TargetLevel      pgtype.Text               `json:"target_level"`
 	CpRef            string                    `json:"cp_ref"`
 	TpRef            string                    `json:"tp_ref"`
 	KdRef            string                    `json:"kd_ref"`
@@ -2085,6 +2221,7 @@ func (q *Queries) UpdateCbtQuestion(ctx context.Context, arg UpdateCbtQuestionPa
 		arg.RubricHtml,
 		arg.AcademicPhase,
 		arg.GradeLevel,
+		arg.TargetLevel,
 		arg.CpRef,
 		arg.TpRef,
 		arg.KdRef,
@@ -2152,6 +2289,7 @@ func (q *Queries) UpdateCbtQuestion(ctx context.Context, arg UpdateCbtQuestionPa
 		&i.SupersedesQuestionID,
 		&i.IsLatestVersion,
 		&i.VersionNote,
+		&i.TargetLevel,
 	)
 	return i, err
 }

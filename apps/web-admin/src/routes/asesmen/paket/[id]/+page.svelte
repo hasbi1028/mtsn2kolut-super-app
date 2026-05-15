@@ -20,7 +20,7 @@
 	};
 	type PackageQuestion = {
 		question_id: string; position: number; points: number; question_code?: string; question_text?: string;
-		question_type?: string; difficulty?: string; status?: string; workflow_status?: string; cp_ref?: string; tp_ref?: string; kd_ref?: string;
+		question_type?: string; difficulty?: string; status?: string; workflow_status?: string; target_level?: string; cp_ref?: string; tp_ref?: string; kd_ref?: string;
 		material_topic?: string; cognitive_level?: string; hots_flag?: boolean;
 	};
 	type Readiness = {
@@ -31,7 +31,7 @@
 	type DetailPayload = { package: PackageRow; questions: PackageQuestion[]; readiness: Readiness };
 	type PoolQuestion = {
 		id: string; subject_id: string; code?: string; question_text?: string; question_type?: string; status?: string; event_id?: string | null;
-		cp_ref?: string; tp_ref?: string; kd_ref?: string; material_topic?: string; cognitive_level?: string; hots_flag?: boolean;
+		target_level?: string; difficulty?: string; workflow_status?: string; cp_ref?: string; tp_ref?: string; kd_ref?: string; material_topic?: string; cognitive_level?: string; hots_flag?: boolean;
 	};
 	type QuestionListPayload = { items?: PoolQuestion[]; meta?: { total?: number } };
 
@@ -52,10 +52,21 @@
 	let targetPg = $state(20);
 	let targetEssay = $state(5);
 	let rows = $state<PackageQuestion[]>([]);
+	let poolSearch = $state('');
+	let poolLevel = $state('all');
+	let poolType = $state('all');
+	let poolStatus = $state('published');
+	let poolCognitive = $state('all');
+	let poolHots = $state('all');
+	let poolDifficulty = $state('all');
+	let poolMetadata = $state('all');
+	let poolTopic = $state('all');
+	let poolCurriculumSearch = $state('');
+	let poolSort = $state('metadata_first');
 
 	let isLocked = $derived(Boolean(detail?.package.locked_at || detail?.readiness.locked));
-	let poolForSubject = $derived(pool.filter((q) => q.subject_id === detail?.package.subject_id && q.status === 'published'));
-	let availablePool = $derived(poolForSubject.filter((q) => !rows.some((row) => row.question_id === q.id)));
+	let poolForSubject = $derived(pool.filter((q) => q.subject_id === detail?.package.subject_id));
+	let availablePool = $derived(sortPoolQuestions(poolForSubject.filter(matchesPoolFilters).filter((q) => !rows.some((row) => row.question_id === q.id))));
 	let selectedQuestions = $derived(availablePool.filter((q) => selectedPool.has(q.id)));
 	let missingLabel = $derived(detail ? `${Math.max(0, targetPg - countType(rows, 'multiple_choice'))} PG + ${Math.max(0, targetEssay - countType(rows, 'essay'))} Essay kurang` : '');
 
@@ -69,7 +80,51 @@
 	}
 
 	function hasMetadataGap(item: PackageQuestion | PoolQuestion) {
-		return !String(item.cp_ref ?? '').trim() || !(String(item.tp_ref ?? '').trim() || String(item.kd_ref ?? '').trim()) || !String(item.cognitive_level ?? '').trim();
+		return !String(item.target_level ?? '').trim() || !String(item.cp_ref ?? '').trim() || !(String(item.tp_ref ?? '').trim() || String(item.kd_ref ?? '').trim()) || !String(item.cognitive_level ?? '').trim();
+	}
+
+	function inferLevelFromText(text?: string) {
+		const upper = String(text ?? '').toUpperCase();
+		if (/\bVII\b/.test(upper)) return 'VII';
+		if (/\bVIII\b/.test(upper)) return 'VIII';
+		if (/\bIX\b/.test(upper)) return 'IX';
+		return 'all';
+	}
+
+	function difficultyLabel(value?: string) {
+		return { easy: 'Mudah', medium: 'Sedang', hard: 'Sulit' }[value ?? ''] ?? (value || 'Belum');
+	}
+
+	function statusLabel(value?: string) {
+		return { published: 'Terbit', draft: 'Draft', review: 'Review', archived: 'Arsip', rejected: 'Ditolak' }[value ?? ''] ?? (value || 'Belum');
+	}
+
+	function matchesPoolFilters(item: PoolQuestion) {
+		const term = poolSearch.trim().toLowerCase();
+		if (term && !`${item.code ?? ''} ${item.question_text ?? ''} ${item.material_topic ?? ''}`.toLowerCase().includes(term)) return false;
+		if (poolLevel !== 'all' && item.target_level !== poolLevel) return false;
+		if (poolType !== 'all' && item.question_type !== poolType) return false;
+		if (poolStatus !== 'all' && item.status !== poolStatus) return false;
+		if (poolCognitive !== 'all' && item.cognitive_level !== poolCognitive) return false;
+		if (poolHots === 'hots' && !item.hots_flag) return false;
+		if (poolHots === 'non_hots' && item.hots_flag) return false;
+		if (poolDifficulty !== 'all' && item.difficulty !== poolDifficulty) return false;
+		if (poolMetadata === 'complete' && hasMetadataGap(item)) return false;
+		if (poolMetadata === 'gap' && !hasMetadataGap(item)) return false;
+		if (poolTopic !== 'all' && String(item.material_topic ?? '') !== poolTopic) return false;
+		const cur = poolCurriculumSearch.trim().toLowerCase();
+		if (cur && !`${item.cp_ref ?? ''} ${item.tp_ref ?? ''} ${item.kd_ref ?? ''}`.toLowerCase().includes(cur)) return false;
+		return true;
+	}
+
+	function sortPoolQuestions(items: PoolQuestion[]) {
+		return [...items].sort((a, b) => {
+			if (poolSort === 'hots_first') return Number(Boolean(b.hots_flag)) - Number(Boolean(a.hots_flag));
+			if (poolSort === 'difficulty') return String(a.difficulty ?? '').localeCompare(String(b.difficulty ?? '')) || String(a.code ?? '').localeCompare(String(b.code ?? ''));
+			if (poolSort === 'type') return String(a.question_type ?? '').localeCompare(String(b.question_type ?? '')) || String(a.code ?? '').localeCompare(String(b.code ?? ''));
+			if (poolSort === 'code') return String(a.code ?? '').localeCompare(String(b.code ?? ''));
+			return Number(hasMetadataGap(a)) - Number(hasMetadataGap(b)) || String(a.code ?? '').localeCompare(String(b.code ?? ''));
+		});
 	}
 
 	function syncForm(payload: DetailPayload) {
@@ -83,6 +138,7 @@
 		targetPg = payload.package.draw_pg_count || 20;
 		targetEssay = payload.package.draw_essay_count || 5;
 		rows = [...payload.questions].sort((a, b) => a.position - b.position);
+		if (poolLevel === 'all') poolLevel = inferLevelFromText(payload.package.title);
 		selectedPool = new Set();
 	}
 
@@ -93,7 +149,7 @@
 	}
 
 	async function fetchQuestionPool(payload: DetailPayload) {
-		const params = new URLSearchParams({ limit: '500', offset: '0', status: 'published', scope: payload.package.event_id ? 'event_pool' : 'global' });
+		const params = new URLSearchParams({ limit: '1000', offset: '0', scope: payload.package.event_id ? 'event_pool' : 'global' });
 		if (payload.package.event_id) params.set('event_id', payload.package.event_id);
 		const q = await fetch(clientApiPathWithQuery('/api/bank-soal/questions', params)).then((res) => readClientApiData<QuestionListPayload | PoolQuestion[]>(res));
 		pool = Array.isArray(q) ? q : (q.items ?? []);
@@ -135,7 +191,7 @@
 	function addSelected() {
 		const next = [...rows];
 		for (const question of selectedQuestions) {
-			next.push({ question_id: question.id, position: next.length + 1, points: 1, question_code: question.code, question_text: question.question_text, question_type: question.question_type, status: question.status, cp_ref: question.cp_ref, tp_ref: question.tp_ref, kd_ref: question.kd_ref, material_topic: question.material_topic, cognitive_level: question.cognitive_level, hots_flag: question.hots_flag });
+			next.push({ question_id: question.id, position: next.length + 1, points: 1, question_code: question.code, question_text: question.question_text, question_type: question.question_type, status: question.status, cp_ref: question.cp_ref, tp_ref: question.tp_ref, kd_ref: question.kd_ref, material_topic: question.material_topic, cognitive_level: question.cognitive_level, hots_flag: question.hots_flag, target_level: question.target_level, difficulty: question.difficulty });
 		}
 		rows = next; selectedPool = new Set(); activeTab = 'questions';
 	}
@@ -145,7 +201,7 @@
 		const needPg = Math.max(0, targetPg - countType(next, 'multiple_choice'));
 		const needEssay = Math.max(0, targetEssay - countType(next, 'essay'));
 		const picked = [...availablePool.filter((q) => q.question_type === 'multiple_choice').slice(0, needPg), ...availablePool.filter((q) => q.question_type === 'essay').slice(0, needEssay)];
-		for (const q of picked) next.push({ question_id: q.id, position: next.length + 1, points: 1, question_code: q.code, question_text: q.question_text, question_type: q.question_type, status: q.status, cp_ref: q.cp_ref, tp_ref: q.tp_ref, kd_ref: q.kd_ref, material_topic: q.material_topic, cognitive_level: q.cognitive_level, hots_flag: q.hots_flag });
+		for (const q of picked) next.push({ question_id: q.id, position: next.length + 1, points: 1, question_code: q.code, question_text: q.question_text, question_type: q.question_type, status: q.status, cp_ref: q.cp_ref, tp_ref: q.tp_ref, kd_ref: q.kd_ref, material_topic: q.material_topic, cognitive_level: q.cognitive_level, hots_flag: q.hots_flag, target_level: q.target_level, difficulty: q.difficulty });
 		rows = next;
 		toast.info(`${picked.length} soal ditambahkan ke draft paket`);
 	}
@@ -230,7 +286,68 @@
 					</Table.Body></Table.Root></div>
 				</Card.Content></Card.Root>
 			{:else if activeTab === 'pool'}
-				<Card.Root><Card.Header><Card.Title class="text-base">Tambah dari Bank Soal</Card.Title><Card.Description>{availablePool.length} soal terbit tersedia untuk mapel ini.</Card.Description></Card.Header><Card.Content class="space-y-3"><button class="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50" disabled={isLocked || selectedQuestions.length === 0} onclick={addSelected}>Tambah {selectedQuestions.length} Soal</button><div class="grid gap-2 md:grid-cols-2">{#each availablePool as q (q.id)}<label class="rounded-xl border p-3 text-sm"><div class="flex gap-2"><input type="checkbox" checked={selectedPool.has(q.id)} disabled={isLocked} onchange={() => togglePool(q.id)} /><div><p class="font-semibold">{q.code || q.id} · {typeLabel(q.question_type)}</p><p class="line-clamp-2 text-muted-foreground">{q.question_text}</p><div class="mt-2 flex flex-wrap gap-1">{#if q.hots_flag}<Badge variant="outline">HOTS</Badge>{/if}{#if hasMetadataGap(q)}<Badge class="bg-warning/10 text-warning border-warning/30">Metadata kurang</Badge>{/if}</div></div></div></label>{:else}<p class="text-sm text-muted-foreground">Belum ada soal terbit yang bisa ditambahkan.</p>{/each}</div></Card.Content></Card.Root>
+				<Card.Root>
+					<Card.Header>
+						<Card.Title class="text-base">Tambah dari Bank Soal</Card.Title>
+						<Card.Description>{availablePool.length} soal tersedia sesuai filter untuk mapel ini. Default filter status = Terbit agar aman untuk paket resmi.</Card.Description>
+					</Card.Header>
+					<Card.Content class="space-y-4">
+						<div class="rounded-2xl border bg-muted/30 p-3">
+							<div class="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+								<Input placeholder="Cari kode, teks soal, materi..." bind:value={poolSearch} />
+								<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={poolLevel}>
+									<option value="all">Semua tingkat</option><option value="VII">VII</option><option value="VIII">VIII</option><option value="IX">IX</option>
+								</select>
+								<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={poolType}>
+									<option value="all">Semua jenis</option><option value="multiple_choice">Pilihan Ganda</option><option value="essay">Essay</option><option value="true_false">Benar/Salah</option><option value="short_answer">Isian</option>
+								</select>
+								<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={poolStatus}>
+									<option value="published">Terbit saja</option><option value="all">Semua status</option><option value="draft">Draft</option><option value="review">Review</option><option value="archived">Arsip</option>
+								</select>
+								<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={poolMetadata}>
+									<option value="all">Semua metadata</option><option value="complete">Metadata lengkap</option><option value="gap">Metadata kurang</option>
+								</select>
+								<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={poolCognitive}>
+									<option value="all">Semua level</option><option value="C1">C1</option><option value="C2">C2</option><option value="C3">C3</option><option value="C4">C4</option><option value="C5">C5</option><option value="C6">C6</option>
+								</select>
+								<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={poolHots}>
+									<option value="all">Semua HOTS</option><option value="hots">HOTS</option><option value="non_hots">Non-HOTS</option>
+								</select>
+								<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={poolDifficulty}>
+									<option value="all">Semua kesulitan</option><option value="easy">Mudah</option><option value="medium">Sedang</option><option value="hard">Sulit</option>
+								</select>
+								<Input placeholder="Cari CP/TP/KD..." bind:value={poolCurriculumSearch} />
+								<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={poolSort}>
+									<option value="metadata_first">Metadata lengkap dulu</option><option value="hots_first">HOTS dulu</option><option value="difficulty">Kesulitan</option><option value="type">Jenis soal</option><option value="code">Kode A-Z</option>
+								</select>
+							</div>
+							{#if poolStatus !== 'published'}<p class="mt-2 text-xs text-warning">Mode audit: soal belum Terbit bisa dilihat, tetapi backend tetap menolak jika dimasukkan ke paket resmi.</p>{/if}
+						</div>
+						<button class="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50" disabled={isLocked || selectedQuestions.length === 0} onclick={addSelected}>Tambah {selectedQuestions.length} Soal</button>
+						<div class="grid gap-2 md:grid-cols-2">
+							{#each availablePool as q (q.id)}
+								<label class="rounded-xl border p-3 text-sm">
+									<div class="flex gap-2">
+										<input type="checkbox" checked={selectedPool.has(q.id)} disabled={isLocked || q.status !== 'published'} onchange={() => togglePool(q.id)} />
+										<div class="min-w-0 flex-1">
+											<p class="font-semibold">{q.code || q.id} · {typeLabel(q.question_type)}</p>
+											<p class="line-clamp-2 text-muted-foreground">{q.question_text}</p>
+											<div class="mt-2 flex flex-wrap gap-1">
+												{#if q.target_level}<Badge variant="outline">Tingkat {q.target_level}</Badge>{:else}<Badge class="bg-warning/10 text-warning border-warning/30">Tingkat kosong</Badge>{/if}
+												<Badge variant="outline">{statusLabel(q.status)}</Badge>
+												<Badge variant="outline">{difficultyLabel(q.difficulty)}</Badge>
+												{#if q.cognitive_level}<Badge variant="outline">{q.cognitive_level}</Badge>{/if}
+												{#if q.hots_flag}<Badge variant="outline">HOTS</Badge>{/if}
+												{#if hasMetadataGap(q)}<Badge class="bg-warning/10 text-warning border-warning/30">Metadata kurang</Badge>{/if}
+											</div>
+											{#if q.material_topic}<p class="mt-1 text-xs text-muted-foreground">Materi: {q.material_topic}</p>{/if}
+										</div>
+									</div>
+								</label>
+							{:else}<p class="text-sm text-muted-foreground">Belum ada soal sesuai filter yang bisa ditambahkan.</p>{/each}
+						</div>
+					</Card.Content>
+				</Card.Root>
 			{:else if activeTab === 'blueprint'}
 				<Card.Root><Card.Header><Card.Title class="text-base">Blueprint & Mutu</Card.Title></Card.Header><Card.Content class="grid gap-3 md:grid-cols-3"><div class="rounded-xl border p-4"><p class="text-xs text-muted-foreground">Status</p><p class="text-lg font-semibold">{detail.readiness.status}</p></div><div class="rounded-xl border p-4"><p class="text-xs text-muted-foreground">Metadata kurang</p><p class="text-lg font-semibold">{rows.filter(hasMetadataGap).length}</p></div><div class="rounded-xl border p-4"><p class="text-xs text-muted-foreground">HOTS</p><p class="text-lg font-semibold">{rows.filter((r) => r.hots_flag).length}</p></div><div class="md:col-span-3 text-sm text-muted-foreground">Distribusi: PG {countType(rows, 'multiple_choice')}, Essay {countType(rows, 'essay')}. Lengkapi CP/TP/KD dan level kognitif di Bank Soal untuk menutup gap metadata.</div></Card.Content></Card.Root>
 			{:else}

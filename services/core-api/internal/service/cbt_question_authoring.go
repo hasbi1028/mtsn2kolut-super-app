@@ -404,6 +404,7 @@ func buildCreateQuestionParams(input SaveCbtQuestionInput) (db.CreateCbtQuestion
 		RubricHtml:           normalized.RubricHTML,
 		AcademicPhase:        normalized.AcademicPhase,
 		GradeLevel:           normalized.GradeLevel,
+		TargetLevel:          questionTargetLevelText(normalized.TargetLevel),
 		CpRef:                normalized.CPRef,
 		TpRef:                normalized.TPRef,
 		KdRef:                normalized.KDRef,
@@ -483,6 +484,7 @@ func buildUpdateQuestionParams(current db.GetCbtQuestionRow, input SaveCbtQuesti
 		RubricHtml:       normalized.RubricHTML,
 		AcademicPhase:    normalized.AcademicPhase,
 		GradeLevel:       normalized.GradeLevel,
+		TargetLevel:      questionTargetLevelText(normalized.TargetLevel),
 		CpRef:            normalized.CPRef,
 		TpRef:            normalized.TPRef,
 		KdRef:            normalized.KDRef,
@@ -515,6 +517,11 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 	out.ExplanationHTML = sanitizeHTML(out.ExplanationHTML)
 	out.RubricHTML = sanitizeHTML(out.RubricHTML)
 	out.AcademicPhase = strings.TrimSpace(out.AcademicPhase)
+	if targetLevel, ok := normalizeQuestionTargetLevel(out.TargetLevel); ok {
+		out.TargetLevel = targetLevel
+	} else {
+		return SaveCbtQuestionInput{}, fmt.Errorf("target_level hanya boleh berisi VII, VIII, atau IX")
+	}
 	out.CPRef = strings.TrimSpace(out.CPRef)
 	out.TPRef = strings.TrimSpace(out.TPRef)
 	out.KDRef = strings.TrimSpace(out.KDRef)
@@ -611,6 +618,11 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 	}
 
 	return out, nil
+}
+
+func questionTargetLevelText(value string) pgtype.Text {
+	trimmed := strings.TrimSpace(value)
+	return pgtype.Text{String: trimmed, Valid: trimmed != ""}
 }
 
 func validateQuestion(input SaveCbtQuestionInput) error {
@@ -1175,6 +1187,7 @@ func questionInputFromCurrent(current db.GetCbtQuestionRow, username string) Sav
 		RubricHTML:           current.RubricHtml,
 		AcademicPhase:        current.AcademicPhase,
 		GradeLevel:           current.GradeLevel,
+		TargetLevel:          current.TargetLevel.String,
 		CPRef:                current.CpRef,
 		TPRef:                current.TpRef,
 		KDRef:                current.KdRef,
