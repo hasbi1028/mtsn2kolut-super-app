@@ -47,6 +47,9 @@
 	{:else if name === 'clipboard'}
 		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
 		<rect x="9" y="3" width="6" height="4" rx="1" ry="1" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+	{:else if name === 'check-circle'}
+		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />
+		<circle cx="12" cy="12" r="9" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
 	{:else if name === 'pen-tool'}
 		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
 	{:else if name === 'book'}
