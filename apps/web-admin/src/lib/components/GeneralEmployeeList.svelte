@@ -11,6 +11,7 @@
   import SuccessPanel from '$lib/components/SuccessPanel.svelte';
   import { confirmAction } from '$lib/confirm-dialog';
   import { readClientJson } from '$lib/client/api';
+  import { displayName } from '$lib/utils/display-name';
 
   interface Employee {
     id: string;
@@ -84,6 +85,10 @@
 
   function genderLabel(value: string) {
     return { L: 'Laki-laki', P: 'Perempuan' }[value] ?? '—';
+  }
+
+  function employeeName(employee: Employee) {
+    return displayName({ nama: employee.nama, name: employee.nip }, 'Pegawai tanpa nama');
   }
 
   function showError(message: string) {
@@ -233,9 +238,11 @@
         {#each filteredEmployees as e (e.id)}
           <Table.Row>
             <Table.Cell>
-              <div class="font-medium">{e.nama}</div>
-              <div class="font-mono text-xs text-primary">{e.pegawai_uid}</div>
-              <div class="text-xs text-muted-foreground">NIP {e.nip || '—'}</div>
+              <div class="font-medium">{employeeName(e)}</div>
+              <div class="text-xs text-muted-foreground">NIP {e.nip || 'belum diisi'}</div>
+              {#if e.unit_kerja}
+                <div class="text-xs text-muted-foreground">{e.unit_kerja}</div>
+              {/if}
               <div class="mt-1">
                 {#if e.is_active}
                   <Badge variant="outline" class="text-[11px] border-primary/20 text-primary">Aktif</Badge>
@@ -323,7 +330,7 @@
 
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
-          <label for="edit-pegawai-uid" class="mb-1 block text-xs font-medium text-muted-foreground">ID Pegawai</label>
+          <label for="edit-pegawai-uid" class="mb-1 block text-xs font-medium text-muted-foreground">ID internal pegawai</label>
           <input id="edit-pegawai-uid" class="w-full rounded-md border border-input bg-muted px-3 py-2 font-mono text-sm text-muted-foreground" value={editingEmployee?.pegawai_uid ?? ''} readonly />
         </div>
         <div>
@@ -345,7 +352,7 @@
         <div>
           <label for="edit-tanggal-lahir" class="mb-1 block text-xs font-medium text-muted-foreground">Tanggal Lahir</label>
           <input id="edit-tanggal-lahir" type="date" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.tanggal_lahir} />
-          <p class="mt-1 text-[11px] text-muted-foreground">ID pegawai baru memakai tahun lahir saat dibuat.</p>
+          <p class="mt-1 text-[11px] text-muted-foreground">Nomor internal pegawai baru memakai tahun lahir saat dibuat.</p>
         </div>
         <div>
           <label for="edit-jenis-kelamin" class="mb-1 block text-xs font-medium text-muted-foreground">Jenis Kelamin</label>

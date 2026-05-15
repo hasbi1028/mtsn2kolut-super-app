@@ -908,7 +908,7 @@
 										<Input
 											id="homeroom-employee-search"
 											bind:value={employeeSearch}
-											placeholder="Nama, UID, NIP, atau tipe pegawai"
+											placeholder="Nama, NIP, atau tipe pegawai"
 											class="pl-8"
 											disabled={employeesLoading && !employeesLoaded && employeeOptions.length === 0}
 										/>
@@ -1144,7 +1144,7 @@
 										<Input
 											id="subject-teacher-search"
 											bind:value={subjectTeacherSearch}
-											placeholder="Nama, UID, NIP, atau tipe pegawai"
+											placeholder="Nama, NIP, atau tipe pegawai"
 											class="pl-8"
 											disabled={employeesLoading && !employeesLoaded && employeeOptions.length === 0}
 										/>

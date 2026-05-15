@@ -40,12 +40,11 @@ export function employmentTypeLabel(value: string | null | undefined) {
 
 export function employeeOptionSubtitle(option: HomeroomEmployeeOption) {
 	const parts: string[] = [];
-	if (option.pegawaiUid) parts.push(`UID ${option.pegawaiUid}`);
-	if (option.nip && option.nip !== option.pegawaiUid) parts.push(`NIP ${option.nip}`);
+	if (option.nip) parts.push(`NIP ${option.nip}`);
 	const employmentLabel = employmentTypeLabel(option.employmentType);
 	if (employmentLabel) parts.push(employmentLabel);
 	if (option.isFallback && parts.length === 0) parts.push('Dari data rombel');
-	return parts.join(' - ') || 'Tanpa UID/NIP';
+	return parts.join(' - ') || 'NIP belum tersedia';
 }
 
 export function buildHomeroomEmployeeOptions(args: {

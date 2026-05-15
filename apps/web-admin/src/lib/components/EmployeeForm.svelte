@@ -59,7 +59,7 @@
       });
       await readClientJson<unknown>(res);
       form = { nip: '', nama: '', unit_kerja: '', employment_type: '', tanggal_lahir: '', jenis_kelamin: '', tempat_lahir: '', pusaka_username: '', pusaka_password: '' };
-      success = 'Pegawai baru berhasil ditambahkan ke master data. ID pegawai dibuat otomatis; jika eligible PUSAKA, akun integrasinya bisa dilengkapi sekarang atau nanti dari menu PUSAKA.';
+      success = 'Pegawai baru berhasil ditambahkan ke master data. Nomor internal pegawai dibuat otomatis; jika eligible PUSAKA, akun integrasinya bisa dilengkapi sekarang atau nanti dari menu PUSAKA.';
       onadd?.();
     } catch (error) {
       showError(mutationErrorMessage(error, 'Gagal menyimpan pegawai.'));
@@ -101,7 +101,7 @@
       <div>
         <label for="f-tanggal-lahir" class="mb-1 block text-xs font-medium text-muted-foreground">Tanggal Lahir</label>
         <Input id="f-tanggal-lahir" type="date" bind:value={form.tanggal_lahir} />
-        <p class="mt-1 text-[11px] text-muted-foreground">Dipakai untuk membuat ID pegawai otomatis.</p>
+        <p class="mt-1 text-[11px] text-muted-foreground">Dipakai untuk membuat nomor internal pegawai otomatis.</p>
       </div>
       <div>
         <label for="f-jenis-kelamin" class="mb-1 block text-xs font-medium text-muted-foreground">Jenis Kelamin</label>

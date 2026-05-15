@@ -21,6 +21,7 @@
 		type StudentAccountGenerationCandidate,
 		type StudentAccountGenerationResult
 	} from '$lib/client/account-generation';
+	import { displayName } from '$lib/utils/display-name';
 
 	type Student = {
 		id: string; nis: string; nisn: string; nama: string; gender: string;
@@ -367,6 +368,22 @@
 		return student.parent_name || 'Wali belum diisi';
 	}
 
+	function classOptionLabel(item: Pick<SchoolClass, 'code' | 'name'>) {
+		const name = displayName({ name: item.name, label: item.code }, 'Rombel belum bernama');
+		return item.code ? `${item.code} - ${name}` : name;
+	}
+
+	function studentClassLabel(student: Student) {
+		const name = displayName({ name: student.class_name, label: student.class_code }, '');
+		if (student.class_code && name && name !== student.class_code) return `${student.class_code} - ${name}`;
+		return name || student.class_code || 'Belum ada kelas';
+	}
+
+	function selectedClassLabel() {
+		const selected = classes.find((item) => item.id === formClassId);
+		return selected ? classOptionLabel(selected) : 'Belum ada kelas';
+	}
+
 	function studentAccountCandidate(student: Student): StudentAccountGenerationCandidate | undefined {
 		return studentAccountSummary?.candidates.find((candidate) => candidate.student_id === student.id);
 	}
@@ -629,7 +646,7 @@
 								<select id="s-class" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={formClassId}>
 									<option value="">-- Belum ada kelas --</option>
 									{#each classes as c (c.id)}
-										<option value={c.id}>{c.code} — {c.name}</option>
+										<option value={c.id}>{classOptionLabel(c)}</option>
 									{/each}
 								</select>
 							</div>
@@ -665,7 +682,7 @@
 							</div>
 							<div class="rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary">
 								<p class="font-semibold">{formNama || 'Nama siswa belum diisi'}</p>
-								<p class="mt-1">NIS {formNis || '-'} · {formClassId ? 'Kelas dipilih' : 'Belum ada kelas'} · {formStatus}</p>
+								<p class="mt-1">NIS {formNis || '-'} · {selectedClassLabel()} · {formStatus}</p>
 							</div>
 						</div>
 					{/if}
@@ -777,7 +794,11 @@
 										{s.gender === 'L' ? 'L' : 'P'}
 									</Badge>
 								</Table.Cell>
-								<Table.Cell class="text-muted-foreground">{s.class_code || '—'}</Table.Cell>
+								<Table.Cell class="text-muted-foreground">
+									<div class="space-y-0.5">
+										<p>{studentClassLabel(s)}</p>
+									</div>
+								</Table.Cell>
 								<Table.Cell class="text-muted-foreground text-sm">
 									<div class="max-w-56">
 										<p class="truncate">{parentSummary(s)}</p>
@@ -892,7 +913,7 @@
 							</div>
 							<div class="mt-3 flex flex-wrap items-center gap-2">
 								<Badge variant="outline" class="text-xs">{s.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</Badge>
-								<Badge variant="outline" class="text-xs">{s.class_code || 'Belum ada kelas'}</Badge>
+								<Badge variant="outline" class="text-xs">{studentClassLabel(s)}</Badge>
 								<Badge class={lifecycleBadgeClass(s.status)}>{s.status}</Badge>
 								<Badge class={accountStatusClass(accountCandidate)}>{accountStatusLabel(accountCandidate)}</Badge>
 							</div>

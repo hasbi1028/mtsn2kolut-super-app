@@ -22,6 +22,7 @@
 		type ParentAccountGenerationCandidate,
 		type ParentAccountGenerationResult
 	} from '$lib/client/account-generation';
+	import { displayName } from '$lib/utils/display-name';
 
 	type Parent = {
 		id: string;
@@ -35,7 +36,10 @@
 		id: string;
 		nama: string;
 		nis: string;
+		nisn?: string | null;
 		class_name: string;
+		class_code?: string | null;
+		status?: string | null;
 	};
 
 	type ParentsOverview = {
@@ -265,6 +269,39 @@
 
 	function parentAccountCandidate(parent: Parent): ParentAccountGenerationCandidate | undefined {
 		return parentAccountSummary?.candidates.find((candidate) => candidate.parent_id === parent.id);
+	}
+
+	function studentClassLabel(student: Student) {
+		const name = displayName({ name: student.class_name, label: student.class_code }, '');
+		if (student.class_code && name && name !== student.class_code) return `${student.class_code} - ${name}`;
+		return name || student.class_code || 'Belum ada kelas';
+	}
+
+	function studentIdentityLabel(student: Student) {
+		if (student.nisn) return `NISN ${student.nisn}`;
+		if (student.nis) return `NIS ${student.nis}`;
+		return 'Nomor induk belum diisi';
+	}
+
+	function studentStatusLabel(student: Student) {
+		const labels: Record<string, string> = {
+			prospective: 'Calon siswa',
+			active: 'Aktif',
+			alumni: 'Alumni',
+			mutated: 'Mutasi'
+		};
+		return student.status ? (labels[student.status] ?? student.status) : '';
+	}
+
+	function studentOptionLabel(student: Student) {
+		return [
+			displayName({ nama: student.nama }, 'Siswa tanpa nama'),
+			studentIdentityLabel(student),
+			studentClassLabel(student),
+			studentStatusLabel(student)
+		]
+			.filter(Boolean)
+			.join(' - ');
 	}
 
 	function accountStatusLabel(candidate: ParentAccountGenerationCandidate | undefined) {
@@ -568,7 +605,7 @@
 				<select class="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fSelectedStudentId}>
 					<option value="">-- Pilih Siswa untuk Ditautkan --</option>
 					{#each students as s (s.id)}
-						<option value={s.id}>{s.nama} ({s.nis})</option>
+						<option value={s.id}>{studentOptionLabel(s)}</option>
 					{/each}
 				</select>
 				<LoadingButton size="sm" onclick={() => void linkStudent()} loading={linkBusy} loadingLabel="Menautkan..." disabled={linkBusy || !fSelectedStudentId}>
@@ -614,8 +651,11 @@
 							<Table.Body>
 								{#each currentLinkedStudents as c (c.id)}
 									<Table.Row>
-										<Table.Cell class="py-2">{c.nama}</Table.Cell>
-										<Table.Cell class="py-2 text-xs">{c.class_name || '—'}</Table.Cell>
+										<Table.Cell class="py-2">
+											<p class="font-medium">{displayName({ nama: c.nama }, 'Siswa tanpa nama')}</p>
+											<p class="text-xs text-muted-foreground">{studentIdentityLabel(c)}</p>
+										</Table.Cell>
+										<Table.Cell class="py-2 text-xs">{studentClassLabel(c)}</Table.Cell>
 										<Table.Cell class="py-2 text-right">
 											<LoadingButton
 												size="sm"
