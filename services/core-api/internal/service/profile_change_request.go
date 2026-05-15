@@ -93,6 +93,7 @@ type ProfileChangeRequestListItem struct {
 	RequesterUsername    string
 	RequesterDisplayName string
 	ReviewerUsername     string
+	ReviewerDisplayName  string
 	ProfileNama          string
 	FieldLabel           string
 }
@@ -620,6 +621,7 @@ func listItemFromOwnProfileChangeRequestRow(row db.ListOwnProfileChangeRequestsR
 		RequesterUsername:    row.RequesterUsername,
 		RequesterDisplayName: row.RequesterDisplayName,
 		ReviewerUsername:     reviewer,
+		ReviewerDisplayName:  row.ReviewerDisplayName,
 		ProfileNama:          row.ProfileNama,
 		FieldLabel:           profileChangeFieldLabel(row.ProfileType, row.FieldKey),
 	}
@@ -650,6 +652,7 @@ func listItemFromProfileChangeRequestRow(row db.ListProfileChangeRequestsRow) Pr
 		RequesterUsername:    row.RequesterUsername,
 		RequesterDisplayName: row.RequesterDisplayName,
 		ReviewerUsername:     reviewer,
+		ReviewerDisplayName:  row.ReviewerDisplayName,
 		ProfileNama:          row.ProfileNama,
 		FieldLabel:           profileChangeFieldLabel(row.ProfileType, row.FieldKey),
 	}

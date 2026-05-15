@@ -10,11 +10,13 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { readClientApiData } from '$lib/client/api';
+	import { displayName } from '$lib/utils/display-name';
 
 	type AuditLog = {
 		id: string;
 		user_id: string | null;
 		username: string | null;
+		user_display_name?: string | null;
 		action: string;
 		entity_type: string;
 		entity_id: string;
@@ -40,6 +42,7 @@
 			if (scopeFilter === 'auth' && !isAuthLog(log)) return false;
 			if (!q) return true;
 			return [
+				log.user_display_name ?? '',
 				log.username ?? '',
 				log.action,
 				log.entity_type,
@@ -107,12 +110,29 @@
 		return [
 			parsed.device_label,
 			parsed.scope,
-			parsed.revoked_session_id,
-			parsed.renamed_session_id,
 			parsed.username
 		]
 			.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
 			.join(' • ');
+	}
+
+	function actorLabel(log: AuditLog) {
+		return displayName({
+			display_name: log.user_display_name,
+			username: log.username
+		}, 'Sistem');
+	}
+
+	function auditTargetLabel(log: AuditLog) {
+		return authSummary(log) || metaPath(log.metadata) || log.entity_type || '—';
+	}
+
+	function auditTechnicalTitle(log: AuditLog) {
+		const parts = [
+			log.user_id ? `User ID internal: ${log.user_id}` : '',
+			log.entity_id ? `Target ID internal: ${log.entity_id}` : ''
+		].filter(Boolean);
+		return parts.join('\n');
 	}
 
 	async function fetchLogs(pageNumber: number): Promise<AuditLog[]> {
@@ -246,13 +266,18 @@
 							{#each currentLogs as log (log.id)}
 								<Table.Row class="hover:bg-success/10">
 									<Table.Cell class="text-xs text-muted-foreground whitespace-nowrap">{fmtDt(log.created_at)}</Table.Cell>
-									<Table.Cell class="font-medium text-sm">{log.username ?? '—'}</Table.Cell>
+									<Table.Cell>
+										<div class="font-medium text-sm">{actorLabel(log)}</div>
+										{#if log.username}
+											<div class="mt-1 text-xs text-muted-foreground">@{log.username}</div>
+										{/if}
+									</Table.Cell>
 									<Table.Cell>
 										<Badge variant="outline" class="text-xs font-mono {methodColor(log.action)}">{log.action}</Badge>
 									</Table.Cell>
 									<Table.Cell class="text-sm">{log.entity_type}</Table.Cell>
-									<Table.Cell class="text-xs text-muted-foreground font-mono truncate max-w-[300px]" title={authSummary(log) || metaPath(log.metadata) || log.entity_id}>
-										{authSummary(log) || metaPath(log.metadata) || log.entity_id}
+									<Table.Cell class="max-w-[300px] truncate text-xs text-muted-foreground" title={auditTechnicalTitle(log) || auditTargetLabel(log)}>
+										{auditTargetLabel(log)}
 									</Table.Cell>
 									<Table.Cell class="text-center text-xs font-mono">
 										{metaStatus(log.metadata) ?? '—'}
@@ -269,13 +294,16 @@
 								<div class="flex items-start justify-between gap-3">
 									<div class="min-w-0">
 										<p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">{fmtDt(log.created_at)}</p>
-										<p class="mt-1 text-sm font-semibold text-foreground">{log.username ?? '—'}</p>
+										<p class="mt-1 text-sm font-semibold text-foreground">{actorLabel(log)}</p>
+										{#if log.username}
+											<p class="mt-1 text-xs text-muted-foreground">@{log.username}</p>
+										{/if}
 										<p class="mt-1 text-sm text-muted-foreground">{log.entity_type}</p>
 									</div>
 									<Badge variant="outline" class="text-xs font-mono {methodColor(log.action)}">{log.action}</Badge>
 								</div>
 								<p class="mt-3 rounded-xl bg-muted/50 px-3 py-2 text-xs font-mono text-muted-foreground break-all">
-									{authSummary(log) || metaPath(log.metadata) || log.entity_id}
+									{auditTargetLabel(log)}
 								</p>
 								<p class="mt-3 text-xs text-muted-foreground">Status {metaStatus(log.metadata) ?? '—'}</p>
 							</div>

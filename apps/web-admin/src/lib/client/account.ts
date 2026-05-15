@@ -55,6 +55,7 @@ export type AccountChangeRequest = {
 	status: AccountChangeRequestStatus | string;
 	reviewer_user_id?: string | null;
 	reviewer_username?: string | null;
+	reviewer_display_name?: string | null;
 	review_note?: string | null;
 	reviewed_at?: string | null;
 	created_at?: string | null;
@@ -67,6 +68,7 @@ export type AccountChangeHistoryItem = {
 	status: string;
 	created_at?: string | null;
 	reviewer_username?: string | null;
+	reviewer_display_name?: string | null;
 	review_note?: string | null;
 };
 
@@ -282,11 +284,11 @@ export function changeRequestTimelineItems(request: AccountChangeRequest): Accou
 		return items;
 	}
 
-	if (request.reviewed_at || request.reviewer_username || request.review_note) {
+	if (request.reviewed_at || request.reviewer_display_name || request.reviewer_username || request.review_note) {
 		items.push({
 			label: `Review ${changeRequestStatusLabel(request.status)}`,
 			at: request.reviewed_at || request.updated_at,
-			actor: request.reviewer_username || null,
+			actor: request.reviewer_display_name || request.reviewer_username || null,
 			note: request.review_note || null,
 			status: request.status
 		});

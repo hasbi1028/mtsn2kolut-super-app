@@ -15,6 +15,7 @@
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { readClientApiData, readClientJson } from '$lib/client/api';
 	import { trackInternalAnalyticsEvent } from '$lib/analytics/internal-analytics';
+	import { displayName } from '$lib/utils/display-name';
 	import {
 		employeeAccountGenerationCSV,
 		fetchRBACMatrix,
@@ -202,6 +203,18 @@
 		return candidate.class_name ? `Kelas ${candidate.class_name}` : candidate.profile_type;
 	}
 
+	function userDisplayLabel(user: User) {
+		return displayName({
+			display_name: user.display_name,
+			nama: user.profile_nama,
+			username: user.username
+		}, 'Pengguna');
+	}
+
+	function userUsernameLabel(user: User) {
+		return user.username?.trim() ? `@${user.username.trim()}` : 'Username belum tercatat';
+	}
+
 	function selectProfileCandidate(candidate: UserProfileCandidate) {
 		clearProfileSelection();
 		if (candidate.profile_type === 'employee') fEmpId = candidate.id;
@@ -273,18 +286,19 @@
 		} finally { fBusy = false; }
 	}
 
-	async function deleteUser(id: string, name: string) {
-		if (name === 'admin') {
+	async function deleteUser(user: User) {
+		if (user.username === 'admin') {
 			toast.error('User admin utama tidak bisa dihapus');
 			return;
 		}
+		const name = userDisplayLabel(user);
 		if (!(await confirmAction({
 			title: 'Hapus Pengguna',
 			message: `Hapus pengguna "${name}"?`,
 			confirmLabel: 'Hapus Pengguna',
 			tone: 'danger'
 		}))) return;
-		const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+		const res = await fetch(`/api/users/${user.id}`, { method: 'DELETE' });
 		try {
 			await readClientJson<unknown>(res);
 		} catch (error) {
@@ -304,7 +318,7 @@
 		const actionLabel = next ? 'mengaktifkan' : 'menonaktifkan';
 		if (!(await confirmAction({
 			title: `${actionLabel} Akun`,
-			message: `${actionLabel} akun "${user.username}"?`,
+			message: `${actionLabel} akun "${userDisplayLabel(user)}"?`,
 			confirmLabel: actionLabel,
 			tone: 'warning'
 		}))) return;
@@ -344,7 +358,7 @@
 		if (user.roles.includes('admin') && !roles.includes('admin')) {
 			if (!(await confirmAction({
 				title: 'Lepas Peran Admin',
-				message: `Lepas role admin dari "${user.username}"? Backend tetap akan menolak jika ini admin aktif terakhir.`,
+				message: `Lepas role admin dari "${userDisplayLabel(user)}"? Backend tetap akan menolak jika ini admin aktif terakhir.`,
 				confirmLabel: 'Perbarui Peran',
 				tone: 'warning'
 			}))) return;
@@ -368,7 +382,7 @@
 	}
 
 	async function resetPasswordForUser(user: User) {
-		const password = window.prompt(`Password baru untuk ${user.username} (minimal 8 karakter):`);
+		const password = window.prompt(`Password baru untuk ${userDisplayLabel(user)} (minimal 8 karakter):`);
 		if (password === null) return;
 		if (password.trim().length < 8) {
 			toast.error('Password minimal 8 karakter.');
@@ -376,7 +390,7 @@
 		}
 		if (!(await confirmAction({
 			title: 'Reset Password',
-			message: `Reset password untuk "${user.username}"? Semua session aktif user akan dicabut.`,
+			message: `Reset password untuk "${userDisplayLabel(user)}"? Semua session aktif user akan dicabut.`,
 			confirmLabel: 'Reset Password',
 			tone: 'warning'
 		}))) return;
@@ -755,7 +769,7 @@
 				<Table.Root>
 					<Table.Header>
 						<Table.Row class="bg-muted/50">
-							<Table.Head>Username / Display Name</Table.Head>
+							<Table.Head>Nama / Username</Table.Head>
 							<Table.Head>Peran Dinamis</Table.Head>
 							<Table.Head>Profil Terhubung</Table.Head>
 							<Table.Head>Status</Table.Head>
@@ -768,8 +782,8 @@
 						{#each overview.users as u (u.id)}
 							<Table.Row>
 								<Table.Cell class="font-medium">
-									<div>{u.username}</div>
-									<div class="mt-1 text-xs font-normal text-muted-foreground">{u.display_name || u.profile_nama || '—'}</div>
+									<div>{userDisplayLabel(u)}</div>
+									<div class="mt-1 text-xs font-normal text-muted-foreground">{userUsernameLabel(u)}</div>
 								</Table.Cell>
 								<Table.Cell>
 									<div class="flex max-w-md flex-wrap gap-1.5">
@@ -823,7 +837,7 @@
 										>
 											{u.is_active ? 'Nonaktifkan' : 'Aktifkan'}
 										</Button>
-										<Button variant="ghost" size="sm" onclick={() => deleteUser(u.id, u.username)}
+										<Button variant="ghost" size="sm" onclick={() => deleteUser(u)}
 											class="text-destructive hover:text-destructive hover:bg-destructive/10">Hapus</Button>
 									</div>
 								</Table.Cell>
@@ -848,8 +862,8 @@
 						<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
-									<p class="text-sm font-semibold text-foreground">{u.username}</p>
-									<p class="mt-1 text-xs text-muted-foreground">{u.display_name || u.profile_nama || '—'}</p>
+									<p class="text-sm font-semibold text-foreground">{userDisplayLabel(u)}</p>
+									<p class="mt-1 text-xs text-muted-foreground">{userUsernameLabel(u)}</p>
 									<div class="mt-1 flex flex-wrap gap-1">
 										{#each availableRoles as r (r.value)}
 											<button
@@ -893,7 +907,7 @@
 								>
 									{u.is_active ? 'Nonaktifkan' : 'Aktifkan'}
 								</Button>
-								<Button variant="ghost" size="sm" onclick={() => deleteUser(u.id, u.username)}
+								<Button variant="ghost" size="sm" onclick={() => deleteUser(u)}
 									class="flex-1 justify-center text-destructive hover:text-destructive hover:bg-destructive/10">Hapus</Button>
 							</div>
 						</div>

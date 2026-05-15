@@ -80,12 +80,19 @@ RETURNING *;
 SELECT
     pcr.*,
     req.username AS requester_username,
-    COALESCE(NULLIF(req.display_name, ''), e.nama, s.nama, p.nama, req.username)::text AS requester_display_name,
+    COALESCE(NULLIF(btrim(req.display_name), ''), req_e.nama, req_s.nama, req_p.nama, e.nama, s.nama, p.nama, req.username)::text AS requester_display_name,
     reviewer.username AS reviewer_username,
+    COALESCE(NULLIF(btrim(reviewer.display_name), ''), reviewer_e.nama, reviewer_s.nama, reviewer_p.nama, reviewer.username, '')::text AS reviewer_display_name,
     COALESCE(e.nama, s.nama, p.nama, '')::text AS profile_nama
 FROM profile_change_requests pcr
 JOIN users req ON req.id = pcr.requester_user_id
 LEFT JOIN users reviewer ON reviewer.id = pcr.reviewer_user_id
+LEFT JOIN employees req_e ON req_e.id = req.employee_id
+LEFT JOIN students req_s ON req_s.id = req.student_id
+LEFT JOIN parents req_p ON req_p.id = req.parent_id
+LEFT JOIN employees reviewer_e ON reviewer_e.id = reviewer.employee_id
+LEFT JOIN students reviewer_s ON reviewer_s.id = reviewer.student_id
+LEFT JOIN parents reviewer_p ON reviewer_p.id = reviewer.parent_id
 LEFT JOIN employees e ON e.id = pcr.target_employee_id
 LEFT JOIN students s ON s.id = pcr.target_student_id
 LEFT JOIN parents p ON p.id = pcr.target_parent_id
@@ -96,12 +103,19 @@ ORDER BY pcr.created_at DESC;
 SELECT
     pcr.*,
     req.username AS requester_username,
-    COALESCE(NULLIF(req.display_name, ''), e.nama, s.nama, p.nama, req.username)::text AS requester_display_name,
+    COALESCE(NULLIF(btrim(req.display_name), ''), req_e.nama, req_s.nama, req_p.nama, e.nama, s.nama, p.nama, req.username)::text AS requester_display_name,
     reviewer.username AS reviewer_username,
+    COALESCE(NULLIF(btrim(reviewer.display_name), ''), reviewer_e.nama, reviewer_s.nama, reviewer_p.nama, reviewer.username, '')::text AS reviewer_display_name,
     COALESCE(e.nama, s.nama, p.nama, '')::text AS profile_nama
 FROM profile_change_requests pcr
 JOIN users req ON req.id = pcr.requester_user_id
 LEFT JOIN users reviewer ON reviewer.id = pcr.reviewer_user_id
+LEFT JOIN employees req_e ON req_e.id = req.employee_id
+LEFT JOIN students req_s ON req_s.id = req.student_id
+LEFT JOIN parents req_p ON req_p.id = req.parent_id
+LEFT JOIN employees reviewer_e ON reviewer_e.id = reviewer.employee_id
+LEFT JOIN students reviewer_s ON reviewer_s.id = reviewer.student_id
+LEFT JOIN parents reviewer_p ON reviewer_p.id = reviewer.parent_id
 LEFT JOIN employees e ON e.id = pcr.target_employee_id
 LEFT JOIN students s ON s.id = pcr.target_student_id
 LEFT JOIN parents p ON p.id = pcr.target_parent_id
@@ -120,7 +134,8 @@ AND (
 AND (
     sqlc.arg(search)::TEXT = ''
     OR req.username ILIKE '%' || sqlc.arg(search)::TEXT || '%'
-    OR COALESCE(NULLIF(req.display_name, ''), e.nama, s.nama, p.nama, req.username)::TEXT ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+    OR COALESCE(NULLIF(btrim(req.display_name), ''), req_e.nama, req_s.nama, req_p.nama, e.nama, s.nama, p.nama, req.username)::TEXT ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+    OR COALESCE(NULLIF(btrim(reviewer.display_name), ''), reviewer_e.nama, reviewer_s.nama, reviewer_p.nama, reviewer.username, '')::TEXT ILIKE '%' || sqlc.arg(search)::TEXT || '%'
     OR COALESCE(e.nama, s.nama, p.nama, '')::TEXT ILIKE '%' || sqlc.arg(search)::TEXT || '%'
     OR pcr.field_key ILIKE '%' || sqlc.arg(search)::TEXT || '%'
     OR pcr.reason ILIKE '%' || sqlc.arg(search)::TEXT || '%'

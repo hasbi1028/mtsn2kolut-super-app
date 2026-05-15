@@ -358,9 +358,21 @@ VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: ListAuditLogs :many
-SELECT a.id, a.user_id, u.username, a.action, a.entity_type, a.entity_id, a.metadata, a.created_at
+SELECT
+    a.id,
+    a.user_id,
+    u.username,
+    COALESCE(NULLIF(btrim(u.display_name), ''), ue.nama, us.nama, up.nama, u.username, '')::text AS user_display_name,
+    a.action,
+    a.entity_type,
+    a.entity_id,
+    a.metadata,
+    a.created_at
 FROM audit_logs a
 LEFT JOIN users u ON u.id = a.user_id
+LEFT JOIN employees ue ON ue.id = u.employee_id
+LEFT JOIN students us ON us.id = u.student_id
+LEFT JOIN parents up ON up.id = u.parent_id
 ORDER BY a.created_at DESC
 LIMIT $1 OFFSET $2;
 
@@ -484,9 +496,21 @@ WHERE s.is_active = TRUE
 ORDER BY mp.nama ASC, mp.id ASC, ps.is_primary_contact DESC, s.nama ASC, s.id ASC;
 
 -- name: ListEntityAuditLogs :many
-SELECT a.id, a.user_id, u.username, a.action, a.entity_type, a.entity_id, a.metadata, a.created_at
+SELECT
+    a.id,
+    a.user_id,
+    u.username,
+    COALESCE(NULLIF(btrim(u.display_name), ''), ue.nama, us.nama, up.nama, u.username, '')::text AS user_display_name,
+    a.action,
+    a.entity_type,
+    a.entity_id,
+    a.metadata,
+    a.created_at
 FROM audit_logs a
 LEFT JOIN users u ON u.id = a.user_id
+LEFT JOIN employees ue ON ue.id = u.employee_id
+LEFT JOIN students us ON us.id = u.student_id
+LEFT JOIN parents up ON up.id = u.parent_id
 WHERE (
     a.entity_type = $1
     AND a.entity_id = $2
@@ -557,6 +581,11 @@ SELECT
         ELSE ''
     END::text AS reviewer_username,
     CASE
+        WHEN a.action IN ('ACCOUNT_CHANGE_REQUEST_APPROVED', 'ACCOUNT_CHANGE_REQUEST_REJECTED')
+            THEN COALESCE(NULLIF(btrim(reviewer.display_name), ''), reviewer_emp.nama, reviewer_student.nama, reviewer_parent.nama, reviewer.username, '')
+        ELSE ''
+    END::text AS reviewer_display_name,
+    CASE
         WHEN a.action IN ('ACCOUNT_CHANGE_REQUEST_APPROVED', 'ACCOUNT_CHANGE_REQUEST_REJECTED') THEN COALESCE(pcr.review_note, '')
         ELSE ''
     END::text AS review_note
@@ -566,6 +595,9 @@ LEFT JOIN profile_change_requests pcr
 LEFT JOIN users reviewer
     ON reviewer.id = a.user_id
    AND a.action IN ('ACCOUNT_CHANGE_REQUEST_APPROVED', 'ACCOUNT_CHANGE_REQUEST_REJECTED')
+LEFT JOIN employees reviewer_emp ON reviewer_emp.id = reviewer.employee_id
+LEFT JOIN students reviewer_student ON reviewer_student.id = reviewer.student_id
+LEFT JOIN parents reviewer_parent ON reviewer_parent.id = reviewer.parent_id
 ORDER BY a.created_at DESC
 LIMIT sqlc.arg(limit_count)::int;
 

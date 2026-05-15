@@ -353,12 +353,19 @@ const listOwnProfileChangeRequests = `-- name: ListOwnProfileChangeRequests :man
 SELECT
     pcr.id, pcr.requester_user_id, pcr.profile_type, pcr.target_employee_id, pcr.target_student_id, pcr.target_parent_id, pcr.field_key, pcr.current_value, pcr.requested_value, pcr.reason, pcr.status, pcr.reviewer_user_id, pcr.review_note, pcr.reviewed_at, pcr.created_at, pcr.updated_at,
     req.username AS requester_username,
-    COALESCE(NULLIF(req.display_name, ''), e.nama, s.nama, p.nama, req.username)::text AS requester_display_name,
+    COALESCE(NULLIF(btrim(req.display_name), ''), req_e.nama, req_s.nama, req_p.nama, e.nama, s.nama, p.nama, req.username)::text AS requester_display_name,
     reviewer.username AS reviewer_username,
+    COALESCE(NULLIF(btrim(reviewer.display_name), ''), reviewer_e.nama, reviewer_s.nama, reviewer_p.nama, reviewer.username, '')::text AS reviewer_display_name,
     COALESCE(e.nama, s.nama, p.nama, '')::text AS profile_nama
 FROM profile_change_requests pcr
 JOIN users req ON req.id = pcr.requester_user_id
 LEFT JOIN users reviewer ON reviewer.id = pcr.reviewer_user_id
+LEFT JOIN employees req_e ON req_e.id = req.employee_id
+LEFT JOIN students req_s ON req_s.id = req.student_id
+LEFT JOIN parents req_p ON req_p.id = req.parent_id
+LEFT JOIN employees reviewer_e ON reviewer_e.id = reviewer.employee_id
+LEFT JOIN students reviewer_s ON reviewer_s.id = reviewer.student_id
+LEFT JOIN parents reviewer_p ON reviewer_p.id = reviewer.parent_id
 LEFT JOIN employees e ON e.id = pcr.target_employee_id
 LEFT JOIN students s ON s.id = pcr.target_student_id
 LEFT JOIN parents p ON p.id = pcr.target_parent_id
@@ -386,6 +393,7 @@ type ListOwnProfileChangeRequestsRow struct {
 	RequesterUsername    string                     `json:"requester_username"`
 	RequesterDisplayName string                     `json:"requester_display_name"`
 	ReviewerUsername     pgtype.Text                `json:"reviewer_username"`
+	ReviewerDisplayName  string                     `json:"reviewer_display_name"`
 	ProfileNama          string                     `json:"profile_nama"`
 }
 
@@ -418,6 +426,7 @@ func (q *Queries) ListOwnProfileChangeRequests(ctx context.Context, requesterUse
 			&i.RequesterUsername,
 			&i.RequesterDisplayName,
 			&i.ReviewerUsername,
+			&i.ReviewerDisplayName,
 			&i.ProfileNama,
 		); err != nil {
 			return nil, err
@@ -434,12 +443,19 @@ const listProfileChangeRequests = `-- name: ListProfileChangeRequests :many
 SELECT
     pcr.id, pcr.requester_user_id, pcr.profile_type, pcr.target_employee_id, pcr.target_student_id, pcr.target_parent_id, pcr.field_key, pcr.current_value, pcr.requested_value, pcr.reason, pcr.status, pcr.reviewer_user_id, pcr.review_note, pcr.reviewed_at, pcr.created_at, pcr.updated_at,
     req.username AS requester_username,
-    COALESCE(NULLIF(req.display_name, ''), e.nama, s.nama, p.nama, req.username)::text AS requester_display_name,
+    COALESCE(NULLIF(btrim(req.display_name), ''), req_e.nama, req_s.nama, req_p.nama, e.nama, s.nama, p.nama, req.username)::text AS requester_display_name,
     reviewer.username AS reviewer_username,
+    COALESCE(NULLIF(btrim(reviewer.display_name), ''), reviewer_e.nama, reviewer_s.nama, reviewer_p.nama, reviewer.username, '')::text AS reviewer_display_name,
     COALESCE(e.nama, s.nama, p.nama, '')::text AS profile_nama
 FROM profile_change_requests pcr
 JOIN users req ON req.id = pcr.requester_user_id
 LEFT JOIN users reviewer ON reviewer.id = pcr.reviewer_user_id
+LEFT JOIN employees req_e ON req_e.id = req.employee_id
+LEFT JOIN students req_s ON req_s.id = req.student_id
+LEFT JOIN parents req_p ON req_p.id = req.parent_id
+LEFT JOIN employees reviewer_e ON reviewer_e.id = reviewer.employee_id
+LEFT JOIN students reviewer_s ON reviewer_s.id = reviewer.student_id
+LEFT JOIN parents reviewer_p ON reviewer_p.id = reviewer.parent_id
 LEFT JOIN employees e ON e.id = pcr.target_employee_id
 LEFT JOIN students s ON s.id = pcr.target_student_id
 LEFT JOIN parents p ON p.id = pcr.target_parent_id
@@ -458,7 +474,8 @@ AND (
 AND (
     $4::TEXT = ''
     OR req.username ILIKE '%' || $4::TEXT || '%'
-    OR COALESCE(NULLIF(req.display_name, ''), e.nama, s.nama, p.nama, req.username)::TEXT ILIKE '%' || $4::TEXT || '%'
+    OR COALESCE(NULLIF(btrim(req.display_name), ''), req_e.nama, req_s.nama, req_p.nama, e.nama, s.nama, p.nama, req.username)::TEXT ILIKE '%' || $4::TEXT || '%'
+    OR COALESCE(NULLIF(btrim(reviewer.display_name), ''), reviewer_e.nama, reviewer_s.nama, reviewer_p.nama, reviewer.username, '')::TEXT ILIKE '%' || $4::TEXT || '%'
     OR COALESCE(e.nama, s.nama, p.nama, '')::TEXT ILIKE '%' || $4::TEXT || '%'
     OR pcr.field_key ILIKE '%' || $4::TEXT || '%'
     OR pcr.reason ILIKE '%' || $4::TEXT || '%'
@@ -501,6 +518,7 @@ type ListProfileChangeRequestsRow struct {
 	RequesterUsername    string                     `json:"requester_username"`
 	RequesterDisplayName string                     `json:"requester_display_name"`
 	ReviewerUsername     pgtype.Text                `json:"reviewer_username"`
+	ReviewerDisplayName  string                     `json:"reviewer_display_name"`
 	ProfileNama          string                     `json:"profile_nama"`
 }
 
@@ -540,6 +558,7 @@ func (q *Queries) ListProfileChangeRequests(ctx context.Context, arg ListProfile
 			&i.RequesterUsername,
 			&i.RequesterDisplayName,
 			&i.ReviewerUsername,
+			&i.ReviewerDisplayName,
 			&i.ProfileNama,
 		); err != nil {
 			return nil, err

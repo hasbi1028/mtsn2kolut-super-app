@@ -58,6 +58,7 @@
 		type SidebarPreferences
 	} from '$lib/client/account';
 	import { confirmAction } from '$lib/confirm-dialog';
+	import { displayName } from '$lib/utils/display-name';
 
 	type AccountOverview = {
 		account: AccountIdentity;
@@ -88,6 +89,13 @@
 	let pwForm = $state({ current: '', next: '', confirm: '' });
 	let pwLoading = $state(false);
 	let logoutAllLoading = $state(false);
+
+	function historyReviewerLabel(item: AccountChangeHistoryItem) {
+		return displayName({
+			display_name: item.reviewer_display_name,
+			username: item.reviewer_username
+		}, 'Reviewer');
+	}
 	let revokeSessionLoading = $state<string | null>(null);
 	let renameSessionLoading = $state<string | null>(null);
 	let refreshLoading = $state(false);

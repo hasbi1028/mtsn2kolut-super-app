@@ -105,12 +105,13 @@ type AccountContactPatch struct {
 }
 
 type AccountChangeHistoryItem struct {
-	Action           string
-	FieldKey         string
-	Status           string
-	CreatedAt        pgtype.Timestamptz
-	ReviewerUsername string
-	ReviewNote       string
+	Action              string
+	FieldKey            string
+	Status              string
+	CreatedAt           pgtype.Timestamptz
+	ReviewerUsername    string
+	ReviewerDisplayName string
+	ReviewNote          string
 }
 
 type UploadAccountAvatarInput struct {
@@ -642,12 +643,13 @@ func accountChangeHistoryItemFromRow(row db.ListOwnAccountChangeHistoryRow) (Acc
 		return AccountChangeHistoryItem{}, false
 	}
 	return AccountChangeHistoryItem{
-		Action:           action,
-		FieldKey:         normalizeAccountChangeHistoryField(row.FieldKey),
-		Status:           normalizeAccountChangeHistoryStatus(row.Status),
-		CreatedAt:        row.CreatedAt,
-		ReviewerUsername: strings.TrimSpace(row.ReviewerUsername),
-		ReviewNote:       strings.TrimSpace(row.ReviewNote),
+		Action:              action,
+		FieldKey:            normalizeAccountChangeHistoryField(row.FieldKey),
+		Status:              normalizeAccountChangeHistoryStatus(row.Status),
+		CreatedAt:           row.CreatedAt,
+		ReviewerUsername:    strings.TrimSpace(row.ReviewerUsername),
+		ReviewerDisplayName: strings.TrimSpace(row.ReviewerDisplayName),
+		ReviewNote:          strings.TrimSpace(row.ReviewNote),
 	}, true
 }
 

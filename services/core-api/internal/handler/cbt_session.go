@@ -603,14 +603,15 @@ func (h *CbtSession) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 type cbtSessionAuditLogResponse struct {
-	ID         string          `json:"id"`
-	UserID     string          `json:"user_id"`
-	Username   string          `json:"username"`
-	Action     string          `json:"action"`
-	EntityType string          `json:"entity_type"`
-	EntityID   string          `json:"entity_id"`
-	Metadata   json.RawMessage `json:"metadata"`
-	CreatedAt  string          `json:"created_at"`
+	ID              string          `json:"id"`
+	UserID          string          `json:"user_id"`
+	Username        string          `json:"username"`
+	UserDisplayName string          `json:"user_display_name"`
+	Action          string          `json:"action"`
+	EntityType      string          `json:"entity_type"`
+	EntityID        string          `json:"entity_id"`
+	Metadata        json.RawMessage `json:"metadata"`
+	CreatedAt       string          `json:"created_at"`
 }
 
 func serializeCbtSessionAuditLogs(rows []db.ListEntityAuditLogsRow) []cbtSessionAuditLogResponse {
@@ -621,14 +622,15 @@ func serializeCbtSessionAuditLogs(rows []db.ListEntityAuditLogsRow) []cbtSession
 			metadata = json.RawMessage(row.Metadata)
 		}
 		items = append(items, cbtSessionAuditLogResponse{
-			ID:         pgUUIDString(row.ID),
-			UserID:     pgUUIDString(row.UserID),
-			Username:   row.Username.String,
-			Action:     row.Action,
-			EntityType: row.EntityType,
-			EntityID:   row.EntityID,
-			Metadata:   metadata,
-			CreatedAt:  timestamptzRFC3339(row.CreatedAt),
+			ID:              pgUUIDString(row.ID),
+			UserID:          pgUUIDString(row.UserID),
+			Username:        row.Username.String,
+			UserDisplayName: row.UserDisplayName,
+			Action:          row.Action,
+			EntityType:      row.EntityType,
+			EntityID:        row.EntityID,
+			Metadata:        metadata,
+			CreatedAt:       timestamptzRFC3339(row.CreatedAt),
 		})
 	}
 	return items

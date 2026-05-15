@@ -524,9 +524,21 @@ func (q *Queries) IncrementUserAuthVersion(ctx context.Context, id pgtype.UUID) 
 }
 
 const listAuditLogs = `-- name: ListAuditLogs :many
-SELECT a.id, a.user_id, u.username, a.action, a.entity_type, a.entity_id, a.metadata, a.created_at
+SELECT
+    a.id,
+    a.user_id,
+    u.username,
+    COALESCE(NULLIF(btrim(u.display_name), ''), ue.nama, us.nama, up.nama, u.username, '')::text AS user_display_name,
+    a.action,
+    a.entity_type,
+    a.entity_id,
+    a.metadata,
+    a.created_at
 FROM audit_logs a
 LEFT JOIN users u ON u.id = a.user_id
+LEFT JOIN employees ue ON ue.id = u.employee_id
+LEFT JOIN students us ON us.id = u.student_id
+LEFT JOIN parents up ON up.id = u.parent_id
 ORDER BY a.created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -537,14 +549,15 @@ type ListAuditLogsParams struct {
 }
 
 type ListAuditLogsRow struct {
-	ID         pgtype.UUID        `json:"id"`
-	UserID     pgtype.UUID        `json:"user_id"`
-	Username   pgtype.Text        `json:"username"`
-	Action     string             `json:"action"`
-	EntityType string             `json:"entity_type"`
-	EntityID   string             `json:"entity_id"`
-	Metadata   []byte             `json:"metadata"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	ID              pgtype.UUID        `json:"id"`
+	UserID          pgtype.UUID        `json:"user_id"`
+	Username        pgtype.Text        `json:"username"`
+	UserDisplayName string             `json:"user_display_name"`
+	Action          string             `json:"action"`
+	EntityType      string             `json:"entity_type"`
+	EntityID        string             `json:"entity_id"`
+	Metadata        []byte             `json:"metadata"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]ListAuditLogsRow, error) {
@@ -560,6 +573,7 @@ func (q *Queries) ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([
 			&i.ID,
 			&i.UserID,
 			&i.Username,
+			&i.UserDisplayName,
 			&i.Action,
 			&i.EntityType,
 			&i.EntityID,
@@ -748,9 +762,21 @@ func (q *Queries) ListEmployeeProfileCandidates(ctx context.Context, arg ListEmp
 }
 
 const listEntityAuditLogs = `-- name: ListEntityAuditLogs :many
-SELECT a.id, a.user_id, u.username, a.action, a.entity_type, a.entity_id, a.metadata, a.created_at
+SELECT
+    a.id,
+    a.user_id,
+    u.username,
+    COALESCE(NULLIF(btrim(u.display_name), ''), ue.nama, us.nama, up.nama, u.username, '')::text AS user_display_name,
+    a.action,
+    a.entity_type,
+    a.entity_id,
+    a.metadata,
+    a.created_at
 FROM audit_logs a
 LEFT JOIN users u ON u.id = a.user_id
+LEFT JOIN employees ue ON ue.id = u.employee_id
+LEFT JOIN students us ON us.id = u.student_id
+LEFT JOIN parents up ON up.id = u.parent_id
 WHERE (
     a.entity_type = $1
     AND a.entity_id = $2
@@ -772,14 +798,15 @@ type ListEntityAuditLogsParams struct {
 }
 
 type ListEntityAuditLogsRow struct {
-	ID         pgtype.UUID        `json:"id"`
-	UserID     pgtype.UUID        `json:"user_id"`
-	Username   pgtype.Text        `json:"username"`
-	Action     string             `json:"action"`
-	EntityType string             `json:"entity_type"`
-	EntityID   string             `json:"entity_id"`
-	Metadata   []byte             `json:"metadata"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	ID              pgtype.UUID        `json:"id"`
+	UserID          pgtype.UUID        `json:"user_id"`
+	Username        pgtype.Text        `json:"username"`
+	UserDisplayName string             `json:"user_display_name"`
+	Action          string             `json:"action"`
+	EntityType      string             `json:"entity_type"`
+	EntityID        string             `json:"entity_id"`
+	Metadata        []byte             `json:"metadata"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) ListEntityAuditLogs(ctx context.Context, arg ListEntityAuditLogsParams) ([]ListEntityAuditLogsRow, error) {
@@ -800,6 +827,7 @@ func (q *Queries) ListEntityAuditLogs(ctx context.Context, arg ListEntityAuditLo
 			&i.ID,
 			&i.UserID,
 			&i.Username,
+			&i.UserDisplayName,
 			&i.Action,
 			&i.EntityType,
 			&i.EntityID,
@@ -874,6 +902,11 @@ SELECT
         ELSE ''
     END::text AS reviewer_username,
     CASE
+        WHEN a.action IN ('ACCOUNT_CHANGE_REQUEST_APPROVED', 'ACCOUNT_CHANGE_REQUEST_REJECTED')
+            THEN COALESCE(NULLIF(btrim(reviewer.display_name), ''), reviewer_emp.nama, reviewer_student.nama, reviewer_parent.nama, reviewer.username, '')
+        ELSE ''
+    END::text AS reviewer_display_name,
+    CASE
         WHEN a.action IN ('ACCOUNT_CHANGE_REQUEST_APPROVED', 'ACCOUNT_CHANGE_REQUEST_REJECTED') THEN COALESCE(pcr.review_note, '')
         ELSE ''
     END::text AS review_note
@@ -883,6 +916,9 @@ LEFT JOIN profile_change_requests pcr
 LEFT JOIN users reviewer
     ON reviewer.id = a.user_id
    AND a.action IN ('ACCOUNT_CHANGE_REQUEST_APPROVED', 'ACCOUNT_CHANGE_REQUEST_REJECTED')
+LEFT JOIN employees reviewer_emp ON reviewer_emp.id = reviewer.employee_id
+LEFT JOIN students reviewer_student ON reviewer_student.id = reviewer.student_id
+LEFT JOIN parents reviewer_parent ON reviewer_parent.id = reviewer.parent_id
 ORDER BY a.created_at DESC
 LIMIT $1::int
 `
@@ -893,12 +929,13 @@ type ListOwnAccountChangeHistoryParams struct {
 }
 
 type ListOwnAccountChangeHistoryRow struct {
-	Action           string             `json:"action"`
-	FieldKey         string             `json:"field_key"`
-	Status           string             `json:"status"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	ReviewerUsername string             `json:"reviewer_username"`
-	ReviewNote       string             `json:"review_note"`
+	Action              string             `json:"action"`
+	FieldKey            string             `json:"field_key"`
+	Status              string             `json:"status"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	ReviewerUsername    string             `json:"reviewer_username"`
+	ReviewerDisplayName string             `json:"reviewer_display_name"`
+	ReviewNote          string             `json:"review_note"`
 }
 
 func (q *Queries) ListOwnAccountChangeHistory(ctx context.Context, arg ListOwnAccountChangeHistoryParams) ([]ListOwnAccountChangeHistoryRow, error) {
@@ -916,6 +953,7 @@ func (q *Queries) ListOwnAccountChangeHistory(ctx context.Context, arg ListOwnAc
 			&i.Status,
 			&i.CreatedAt,
 			&i.ReviewerUsername,
+			&i.ReviewerDisplayName,
 			&i.ReviewNote,
 		); err != nil {
 			return nil, err

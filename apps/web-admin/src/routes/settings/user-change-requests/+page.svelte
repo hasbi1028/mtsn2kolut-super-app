@@ -29,6 +29,7 @@
 		profileTypeLabel,
 		type AccountChangeRequest
 	} from '$lib/client/account';
+	import { displayName } from '$lib/utils/display-name';
 
 	type ReviewStatus = 'approved' | 'rejected';
 
@@ -251,7 +252,17 @@
 	}
 
 	function requesterLabel(request: AccountChangeRequest) {
-		return request.requester_display_name || request.requester_username || request.requester_user_id || 'Pengguna';
+		return displayName({
+			display_name: request.requester_display_name,
+			username: request.requester_username
+		}, 'Pengguna');
+	}
+
+	function reviewerLabel(request: AccountChangeRequest) {
+		return displayName({
+			display_name: request.reviewer_display_name,
+			username: request.reviewer_username
+		}, 'Reviewer');
 	}
 
 	function targetIDLabel(request: AccountChangeRequest) {
@@ -511,7 +522,7 @@
 															</div>
 														{/if}
 													{:else if request.status !== 'pending'}
-														<p class="text-xs text-muted-foreground">{request.reviewer_username ? `Direview oleh ${request.reviewer_username}` : 'Sudah diproses'}</p>
+														<p class="text-xs text-muted-foreground">{request.reviewer_display_name || request.reviewer_username ? `Direview oleh ${reviewerLabel(request)}` : 'Sudah diproses'}</p>
 													{/if}
 												</div>
 											</Table.Cell>
@@ -535,7 +546,10 @@
 														<div>
 															<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status Review</p>
 															<p class="mt-1 text-sm font-medium text-foreground">{changeRequestStatusLabel(request.status)}</p>
-															<p class="text-xs text-muted-foreground">Reviewer: {request.reviewer_username || '—'}</p>
+															<p class="text-xs text-muted-foreground">Reviewer: {request.reviewer_display_name || request.reviewer_username ? reviewerLabel(request) : '—'}</p>
+															{#if request.reviewer_username}
+																<p class="text-xs text-muted-foreground">Username reviewer: {request.reviewer_username}</p>
+															{/if}
 															<p class="text-xs text-muted-foreground">Catatan: {request.review_note || '—'}</p>
 														</div>
 														<div class="md:col-span-2">
@@ -611,7 +625,10 @@
 											</div>
 											<div>
 												<p class="text-xs font-semibold text-muted-foreground">Review</p>
-												<p class="text-sm text-foreground">{request.reviewer_username || '—'}</p>
+												<p class="text-sm text-foreground">{request.reviewer_display_name || request.reviewer_username ? reviewerLabel(request) : '—'}</p>
+												{#if request.reviewer_username}
+													<p class="text-xs text-muted-foreground">Username reviewer: {request.reviewer_username}</p>
+												{/if}
 												<p class="text-xs text-muted-foreground">{request.review_note || 'Belum ada catatan'}</p>
 											</div>
 											<div class="text-xs text-muted-foreground">

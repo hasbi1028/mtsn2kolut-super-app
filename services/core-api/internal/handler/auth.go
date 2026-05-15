@@ -81,12 +81,13 @@ type authAccountContactResponse struct {
 }
 
 type authAccountChangeHistoryResponse struct {
-	Action           string `json:"action"`
-	FieldKey         string `json:"field_key"`
-	Status           string `json:"status"`
-	CreatedAt        string `json:"created_at"`
-	ReviewerUsername string `json:"reviewer_username,omitempty"`
-	ReviewNote       string `json:"review_note,omitempty"`
+	Action              string `json:"action"`
+	FieldKey            string `json:"field_key"`
+	Status              string `json:"status"`
+	CreatedAt           string `json:"created_at"`
+	ReviewerUsername    string `json:"reviewer_username,omitempty"`
+	ReviewerDisplayName string `json:"reviewer_display_name,omitempty"`
+	ReviewNote          string `json:"review_note,omitempty"`
 }
 
 const maxAccountAvatarUploadBytes int64 = 2 * 1024 * 1024
@@ -705,12 +706,13 @@ func authAccountChangeHistoryResponses(items []service.AccountChangeHistoryItem)
 	responses := make([]authAccountChangeHistoryResponse, 0, len(items))
 	for _, item := range items {
 		responses = append(responses, authAccountChangeHistoryResponse{
-			Action:           item.Action,
-			FieldKey:         item.FieldKey,
-			Status:           item.Status,
-			CreatedAt:        timestamptzRFC3339(item.CreatedAt),
-			ReviewerUsername: item.ReviewerUsername,
-			ReviewNote:       item.ReviewNote,
+			Action:              item.Action,
+			FieldKey:            item.FieldKey,
+			Status:              item.Status,
+			CreatedAt:           timestamptzRFC3339(item.CreatedAt),
+			ReviewerUsername:    item.ReviewerUsername,
+			ReviewerDisplayName: item.ReviewerDisplayName,
+			ReviewNote:          item.ReviewNote,
 		})
 	}
 	return responses

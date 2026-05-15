@@ -51,6 +51,7 @@ type profileChangeRequestResponse struct {
 	Status               string `json:"status"`
 	ReviewerUserID       string `json:"reviewer_user_id,omitempty"`
 	ReviewerUsername     string `json:"reviewer_username,omitempty"`
+	ReviewerDisplayName  string `json:"reviewer_display_name,omitempty"`
 	ReviewNote           string `json:"review_note,omitempty"`
 	ReviewedAt           string `json:"reviewed_at,omitempty"`
 	CreatedAt            string `json:"created_at"`
@@ -326,6 +327,7 @@ func profileChangeRequestResponseFromListItem(item service.ProfileChangeRequestL
 		Status:               string(item.Status),
 		ReviewerUserID:       pgUUIDString(item.ReviewerUserID),
 		ReviewerUsername:     item.ReviewerUsername,
+		ReviewerDisplayName:  item.ReviewerDisplayName,
 		ReviewNote:           item.ReviewNote,
 		ReviewedAt:           timestamptzRFC3339(item.ReviewedAt),
 		CreatedAt:            timestamptzRFC3339(item.CreatedAt),
