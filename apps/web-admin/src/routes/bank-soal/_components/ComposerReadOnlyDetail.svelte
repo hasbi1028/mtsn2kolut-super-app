@@ -143,7 +143,7 @@
 		</div>
 		<div class="rounded-lg border border-border bg-muted/50 px-3 py-2">
 			<p class="text-xs font-semibold text-muted-foreground">Tipe dan tingkat</p>
-			<p class="mt-0.5 text-sm font-bold text-foreground">{questionTypeLabel(question.question_type)} · Kelas {question.grade_level ?? '-'}</p>
+			<p class="mt-0.5 text-sm font-bold text-foreground">{questionTypeLabel(question.question_type)} · Tingkat {question.target_level ?? '-'}</p>
 		</div>
 		<div class="rounded-lg border border-border bg-muted/50 px-3 py-2">
 			<p class="text-xs font-semibold text-muted-foreground">Status</p>

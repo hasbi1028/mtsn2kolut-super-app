@@ -29,6 +29,7 @@
 		explanation_html?: string;
 		rubric_html?: string;
 		academic_phase?: string;
+		target_level?: string | null;
 		grade_level?: number | null;
 		cp_ref?: string;
 		tp_ref?: string;

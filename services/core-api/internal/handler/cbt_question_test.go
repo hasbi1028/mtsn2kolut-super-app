@@ -457,8 +457,8 @@ func TestCbtQuestionSerializerHelpers(t *testing.T) {
 	if listMap["subject_name"] != "Matematika" || listMap["subject_code"] != "MTK" || listMap["authoring_mode"] != "beginner" {
 		t.Fatalf("serializeQuestionListRow() = %+v, want subject metadata and beginner mode", listMap)
 	}
-	if listMap["grade_level"] != int16(8) {
-		t.Fatalf("serializeQuestionListRow() grade_level = %#v, want int16(8)", listMap["grade_level"])
+	if _, ok := listMap["grade_level"]; ok {
+		t.Fatalf("serializeQuestionListRow() exposed legacy grade_level = %#v", listMap["grade_level"])
 	}
 	if listMap["target_level"] != "VIII" {
 		t.Fatalf("serializeQuestionListRow() target_level = %#v, want VIII", listMap["target_level"])
@@ -488,6 +488,9 @@ func TestCbtQuestionSerializerHelpers(t *testing.T) {
 	if detailMap["subject_name"] != "Bahasa Arab" || detailMap["suggested_mode"] != "advance" || detailMap["rubric_html"] != "<p>Rubrik</p>" {
 		t.Fatalf("serializeQuestionDetailRow() = %+v, want detail metadata and advance mode", detailMap)
 	}
+	if _, ok := detailMap["grade_level"]; ok {
+		t.Fatalf("serializeQuestionDetailRow() exposed legacy grade_level = %#v", detailMap["grade_level"])
+	}
 
 	model := db.CbtQuestion{
 		ID:             handlerTestUUID(5),
@@ -505,8 +508,11 @@ func TestCbtQuestionSerializerHelpers(t *testing.T) {
 		Version:        3,
 	}
 	modelMap := serializeQuestionModel(model)
-	if modelMap["authoring_mode"] != "advance" || modelMap["status"] != db.CbtQuestionStatusEnumPublished || modelMap["grade_level"] != nil {
-		t.Fatalf("serializeQuestionModel() = %+v, want advance published model with nil grade", modelMap)
+	if modelMap["authoring_mode"] != "advance" || modelMap["status"] != db.CbtQuestionStatusEnumPublished {
+		t.Fatalf("serializeQuestionModel() = %+v, want advance published model", modelMap)
+	}
+	if _, ok := modelMap["grade_level"]; ok {
+		t.Fatalf("serializeQuestionModel() exposed legacy grade_level = %#v", modelMap["grade_level"])
 	}
 	if modelMap["target_level"] != "IX" {
 		t.Fatalf("serializeQuestionModel() target_level = %#v, want IX", modelMap["target_level"])

@@ -2755,15 +2755,16 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		if (routeMode !== 'composer') return false;
 		let applied = false;
 		const subjectId = params.get('subject_id') ?? '';
-		const gradeLevel = Number(params.get('grade_level') ?? '');
+		const targetLevel = normalizeQuestionTargetLevelValue(params.get('target_level'), Number(params.get('grade_level') ?? '') || null);
 		const questionType = params.get('question_type') ?? '';
 		if (subjectId) {
 			fSubjectId = subjectId;
 			filterSubject = subjectId;
 			applied = true;
 		}
-		if (Number.isFinite(gradeLevel) && gradeLevel > 0) {
-			fGradeLevel = gradeLevel;
+		if (targetLevel) {
+			fTargetLevel = targetLevel;
+			fGradeLevel = gradeLevelFromTargetLevel(targetLevel) ?? fGradeLevel;
 			applied = true;
 		}
 		if (questionType) {

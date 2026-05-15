@@ -61,8 +61,22 @@ npm --prefix apps/web-admin run check
 npm --prefix apps/web-admin run build
 ```
 
+## Tahap 2 — Hide `grade_level` from public API responses
+
+**Objective:** Public API/UI consumers see `target_level` as the single field. DB/query structs can still hold `grade_level` internally.
+
+**Backend:**
+- Update public question serializers to omit `grade_level` from JSON maps.
+- Keep `target_level` in list/detail/package pool/package question responses.
+- Add handler tests proving public question list/detail response does not include `grade_level`.
+
+**Frontend:**
+- Keep TypeScript `grade_level?: number | null` optional for temporary backward compatibility only.
+- New UI must not depend on `grade_level` for display/save.
+
+**Verification:** same as Tahap 1.
+
 ## Later stages (not in this execution)
 
-- Tahap 2: Remove `grade_level` from public JSON response after API consumers verified.
 - Tahap 3: Audit import/export/reporting paths.
 - Tahap 4: Drop DB column `grade_level` only if no remaining dependency.

@@ -81,6 +81,7 @@
 		authoring_mode?: string;
 		suggested_mode?: string;
 		academic_phase?: string;
+		target_level?: string | null;
 		grade_level?: number | null;
 		cp_ref?: string;
 		tp_ref?: string;
@@ -779,10 +780,11 @@
 	}
 
 	function gradeLabel(question: Question): string {
-		const grade = question.grade_level ? `Kelas ${question.grade_level}` : '';
+		const level = compactText(question.target_level, '') || (question.grade_level ? `Kelas ${question.grade_level}` : '');
 		const phase = compactText(question.academic_phase, '');
-		if (grade && phase) return `${grade} / Fase ${phase}`;
-		return grade || (phase ? `Fase ${phase}` : 'Level belum diisi');
+		const levelLabel = level && level.startsWith('Kelas ') ? level : (level ? `Tingkat ${level}` : '');
+		if (levelLabel && phase) return `${levelLabel} / Fase ${phase}`;
+		return levelLabel || (phase ? `Fase ${phase}` : 'Level belum diisi');
 	}
 
 	function questionUsageLocked(question: Question): boolean {
