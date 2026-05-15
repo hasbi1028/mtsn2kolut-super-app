@@ -197,9 +197,9 @@ func questionInputFromBody(r *http.Request, body cbtQuestionBody, id pgtype.UUID
 		return service.SaveCbtQuestionInput{}, err
 	}
 
-	gradeLevel := pgtype.Int2{}
-	if body.GradeLevel > 0 {
-		gradeLevel = pgtype.Int2{Int16: body.GradeLevel, Valid: true}
+	targetLevel := strings.TrimSpace(body.TargetLevel)
+	if targetLevel == "" && body.GradeLevel > 0 {
+		targetLevel = legacyQuestionTargetLevelFromInt(body.GradeLevel)
 	}
 
 	username := currentUsername(r)
@@ -228,8 +228,7 @@ func questionInputFromBody(r *http.Request, body cbtQuestionBody, id pgtype.UUID
 		ExplanationHTML:  body.ExplanationHTML,
 		RubricHTML:       body.RubricHTML,
 		AcademicPhase:    body.AcademicPhase,
-		GradeLevel:       gradeLevel,
-		TargetLevel:      body.TargetLevel,
+		TargetLevel:      targetLevel,
 		CPRef:            body.CPRef,
 		TPRef:            body.TPRef,
 		KDRef:            body.KDRef,
@@ -246,6 +245,19 @@ func questionInputFromBody(r *http.Request, body cbtQuestionBody, id pgtype.UUID
 		ReviewNotes:      body.ReviewNotes,
 		Actor:            cbtQuestionActorFromRequest(r),
 	}, nil
+}
+
+func legacyQuestionTargetLevelFromInt(value int16) string {
+	switch value {
+	case 7:
+		return "VII"
+	case 8:
+		return "VIII"
+	case 9:
+		return "IX"
+	default:
+		return ""
+	}
 }
 
 func cbtQuestionActorFromRequest(r *http.Request) service.CbtQuestionActor {

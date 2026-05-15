@@ -98,6 +98,25 @@ npm --prefix apps/web-admin run build
 - Kelengkapan Soal composer links now prefill `target_level`, not `grade_level`.
 - Mapel/KD coverage and internal analytics documentation prefer `target_level`; frontend `grade_level` references left only as optional legacy fallback.
 
-## Later stages (not in this execution)
+## Tahap 4 — Final dependency removal and DB column drop
 
-- Tahap 4: Drop DB column `grade_level` only if no remaining dependency.
+**Objective:** Remove `grade_level` from application dependencies and drop `cbt_questions.grade_level` only after code no longer compiles against it.
+
+**Safety rules:**
+- Re-audit all `grade_level` references first.
+- Replace DB/query filtering with `target_level` semantics.
+- Keep request compatibility only through request/body/CSV parsing helpers that convert legacy numeric input into `target_level`; do not write/read `cbt_questions.grade_level`.
+- Create a DB backup before production migration.
+- Validate migration in a transaction before production apply.
+- Run sqlc after query changes to prove no generated Go code depends on the dropped column.
+
+**Verification:** same as Tahap 1 plus production health and protected route smoke tests after deploy.
+
+**Tahap 4 implementation result 2026-05-15:**
+- Added migration `services/core-api/db/migrations/106_drop_cbt_questions_grade_level.sql` to drop the legacy `cbt_questions.grade_level` column and `idx_cbt_questions_grade_level`, with rollback notes.
+- Removed app DB read/write dependency on `cbt_questions.grade_level`; sqlc-generated structs no longer expose `GradeLevel` for `cbt_questions` query results/params.
+- Kept legacy compatibility only at request/CSV parsing boundaries: incoming `grade_level` can still be translated to `target_level`, but it is not persisted to a DB column.
+- Updated readiness/completeness SQL to compare question `target_level` with class/event roman level values.
+- Updated Bank Soal frontend display paths to rely on `target_level`; optional public `grade_level` fallback was removed from the main Bank Soal display models.
+- Production dry-run transaction passed: after applying migration inside `BEGIN`, `information_schema.columns` returned `grade_level_still_exists_after_migration = false`, then `ROLLBACK`.
+- Verification passed before production apply: sqlc generate, Go handler/service/repository tests, Go build, Svelte check, and SvelteKit production build.

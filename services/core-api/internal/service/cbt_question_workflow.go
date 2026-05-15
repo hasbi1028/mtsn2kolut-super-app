@@ -136,35 +136,6 @@ func normalizeQuestionTargetLevelFilter(value string) string {
 	return normalized
 }
 
-func questionGradeLevelFromTargetLevel(value string) pgtype.Int2 {
-	switch strings.ToUpper(strings.TrimSpace(value)) {
-	case "VII":
-		return pgtype.Int2{Int16: 7, Valid: true}
-	case "VIII":
-		return pgtype.Int2{Int16: 8, Valid: true}
-	case "IX":
-		return pgtype.Int2{Int16: 9, Valid: true}
-	default:
-		return pgtype.Int2{}
-	}
-}
-
-func questionTargetLevelFromGradeLevel(value pgtype.Int2) string {
-	if !value.Valid {
-		return ""
-	}
-	switch value.Int16 {
-	case 7:
-		return "VII"
-	case 8:
-		return "VIII"
-	case 9:
-		return "IX"
-	default:
-		return ""
-	}
-}
-
 func normalizeQuestionDifficultyFilter(value string) string {
 	switch strings.TrimSpace(strings.ToLower(value)) {
 	case string(db.CbtQuestionDifficultyEnumEasy):

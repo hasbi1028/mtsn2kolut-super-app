@@ -127,7 +127,6 @@ func (s *CbtQuestion) ImportLegacyCSV(ctx context.Context, input ImportLegacyQue
 			StimulusHTML:     stimulusHTML,
 			ExplanationHTML:  explanationHTML,
 			RubricHTML:       rubricHTML,
-			GradeLevel:       importGradeLevel(row),
 			TargetLevel:      importTargetLevel(row),
 			CPRef:            firstCSVValue(row, "cp_ref", "cpref", "cp"),
 			TPRef:            firstCSVValue(row, "tp_ref", "tpref", "tp"),
@@ -549,20 +548,29 @@ func importTargetLevel(row map[string]string) string {
 	if normalized, ok := normalizeQuestionTargetLevel(value); ok {
 		return normalized
 	}
-	legacyGrade := importGradeLevel(row)
-	return questionTargetLevelFromGradeLevel(legacyGrade)
+	legacyGrade := importLegacyGradeLevel(row)
+	switch legacyGrade {
+	case "7":
+		return "VII"
+	case "8":
+		return "VIII"
+	case "9":
+		return "IX"
+	default:
+		return ""
+	}
 }
 
-func importGradeLevel(row map[string]string) pgtype.Int2 {
-	value := strings.TrimSpace(firstCSVValue(row, "grade_level", "gradelevel", "kelas", "tingkat"))
+func importLegacyGradeLevel(row map[string]string) string {
+	value := strings.TrimSpace(firstCSVValue(row, "grade_level", "gradelevel"))
 	if value == "" {
-		return pgtype.Int2{}
+		return ""
 	}
 	parsed, err := strconv.Atoi(value)
-	if err != nil || parsed <= 0 || parsed > 12 {
-		return pgtype.Int2{}
+	if err != nil {
+		return ""
 	}
-	return pgtype.Int2{Int16: int16(parsed), Valid: true}
+	return strconv.Itoa(parsed)
 }
 
 func importBoolean(row map[string]string, keys ...string) bool {

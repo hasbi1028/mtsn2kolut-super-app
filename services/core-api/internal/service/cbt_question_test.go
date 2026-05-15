@@ -314,9 +314,6 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 	if !store.createParams.TargetLevel.Valid || store.createParams.TargetLevel.String != "VIII" {
 		t.Fatalf("Create() target_level = %+v, want VIII", store.createParams.TargetLevel)
 	}
-	if !store.createParams.GradeLevel.Valid || store.createParams.GradeLevel.Int16 != 8 {
-		t.Fatalf("Create() grade_level = %+v, want derived 8 from target_level VIII", store.createParams.GradeLevel)
-	}
 	if store.createParams.OptionA != "A" || store.createParams.OptionD != "D" || store.createParams.Version != 1 || store.createParams.AuthorUsername != "guru" {
 		t.Fatalf("Create() params = %+v, want legacy options/version/author", store.createParams)
 	}
@@ -334,7 +331,7 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 	}
 }
 
-func TestCbtQuestionCreateAcceptsLegacyGradeLevelAndDerivesTargetLevel(t *testing.T) {
+func TestCbtQuestionCreateAllowsMissingTargetLevel(t *testing.T) {
 	store := &fakeQuestionStore{
 		createRow: db.CbtQuestion{ID: pgtype.UUID{Bytes: [16]byte{8}, Valid: true}},
 	}
@@ -344,8 +341,7 @@ func TestCbtQuestionCreateAcceptsLegacyGradeLevelAndDerivesTargetLevel(t *testin
 		SubjectID:      pgtype.UUID{Valid: true},
 		AuthoringMode:  "beginner",
 		QuestionType:   "multiple_choice",
-		QuestionText:   "Soal legacy grade",
-		GradeLevel:     pgtype.Int2{Int16: 7, Valid: true},
+		QuestionText:   "Soal tanpa tingkat",
 		OptionA:        "A",
 		OptionB:        "B",
 		OptionC:        "C",
@@ -355,13 +351,13 @@ func TestCbtQuestionCreateAcceptsLegacyGradeLevelAndDerivesTargetLevel(t *testin
 		Actor:          CbtQuestionActor{Username: "guru", Roles: []string{"guru"}},
 	})
 	if err != nil {
-		t.Fatalf("Create(legacy grade_level) error = %v", err)
+		t.Fatalf("Create(missing target_level) error = %v", err)
 	}
-	if !store.createParams.TargetLevel.Valid || store.createParams.TargetLevel.String != "VII" {
-		t.Fatalf("Create(legacy grade_level) target_level = %+v, want VII", store.createParams.TargetLevel)
+	if store.createCalls != 1 {
+		t.Fatalf("Create(missing target_level) calls = %d, want 1", store.createCalls)
 	}
-	if !store.createParams.GradeLevel.Valid || store.createParams.GradeLevel.Int16 != 7 {
-		t.Fatalf("Create(legacy grade_level) grade_level = %+v, want 7", store.createParams.GradeLevel)
+	if store.createParams.TargetLevel.Valid {
+		t.Fatalf("Create(missing target_level) target_level = %+v, want null", store.createParams.TargetLevel)
 	}
 }
 
@@ -913,7 +909,6 @@ func TestCbtQuestionExportCSVMapsStructuredTypes(t *testing.T) {
 				Difficulty:     db.CbtQuestionDifficultyEnumMedium,
 				Status:         db.CbtQuestionStatusEnumDraft,
 				WorkflowStatus: "draft",
-				GradeLevel:     pgtype.Int2{Int16: 8, Valid: true},
 				TargetLevel:    pgtype.Text{String: "VIII", Valid: true},
 				HotsFlag:       true,
 			},
@@ -986,7 +981,7 @@ func TestCbtQuestionExportCSVMapsStructuredTypes(t *testing.T) {
 	if imported.Imported != 2 || imported.Skipped != 0 {
 		t.Fatalf("roundtrip import result = %+v, want 2 imported and no skipped rows", imported)
 	}
-	if importStore.createHistory[0].QuestionType != "multiple_answer" || importStore.createHistory[0].AnswerKey != "B,E" || importStore.createHistory[0].TargetLevel.String != "VIII" || importStore.createHistory[0].GradeLevel.Int16 != 8 || !importStore.createHistory[0].HotsFlag {
+	if importStore.createHistory[0].QuestionType != "multiple_answer" || importStore.createHistory[0].AnswerKey != "B,E" || importStore.createHistory[0].TargetLevel.String != "VIII" || !importStore.createHistory[0].HotsFlag {
 		t.Fatalf("roundtrip multiple answer params = %+v, want type/key/metadata preserved", importStore.createHistory[0])
 	}
 	if importStore.createHistory[1].QuestionType != "matching" || importStore.createHistory[1].AnswerKey != "A=1;B=2" || !strings.Contains(string(importStore.createHistory[1].Options), `"is_distractor":true`) {

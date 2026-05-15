@@ -99,7 +99,6 @@ export type Question = {
 	explanation_html?: string;
 	rubric_html?: string;
 	academic_phase?: string;
-	grade_level?: number | null;
 	target_level?: string | null;
 	cp_ref?: string;
 	tp_ref?: string;

@@ -121,7 +121,7 @@ func exportQuestionCSVRow(row db.ListCbtQuestionsFilteredRow) []string {
 		string(row.Difficulty),
 		string(row.Status),
 		row.WorkflowStatus,
-		exportQuestionTargetLevel(row.TargetLevel, row.GradeLevel),
+		exportQuestionTargetLevel(row.TargetLevel),
 		row.CpRef,
 		row.TpRef,
 		row.KdRef,
@@ -201,13 +201,13 @@ func firstExportContent(values ...string) string {
 	return ""
 }
 
-func exportQuestionTargetLevel(targetLevel pgtype.Text, gradeLevel pgtype.Int2) string {
+func exportQuestionTargetLevel(targetLevel pgtype.Text) string {
 	if targetLevel.Valid {
 		if normalized, ok := normalizeQuestionTargetLevel(targetLevel.String); ok {
 			return normalized
 		}
 	}
-	return questionTargetLevelFromGradeLevel(gradeLevel)
+	return ""
 }
 
 func templateQuestionCSVRecords() [][]string {

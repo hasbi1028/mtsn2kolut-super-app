@@ -403,7 +403,6 @@ func buildCreateQuestionParams(input SaveCbtQuestionInput) (db.CreateCbtQuestion
 		ExplanationHtml:      normalized.ExplanationHTML,
 		RubricHtml:           normalized.RubricHTML,
 		AcademicPhase:        normalized.AcademicPhase,
-		GradeLevel:           normalized.GradeLevel,
 		TargetLevel:          questionTargetLevelText(normalized.TargetLevel),
 		CpRef:                normalized.CPRef,
 		TpRef:                normalized.TPRef,
@@ -483,7 +482,6 @@ func buildUpdateQuestionParams(current db.GetCbtQuestionRow, input SaveCbtQuesti
 		ExplanationHtml:  normalized.ExplanationHTML,
 		RubricHtml:       normalized.RubricHTML,
 		AcademicPhase:    normalized.AcademicPhase,
-		GradeLevel:       normalized.GradeLevel,
 		TargetLevel:      questionTargetLevelText(normalized.TargetLevel),
 		CpRef:            normalized.CPRef,
 		TpRef:            normalized.TPRef,
@@ -523,12 +521,7 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 		return SaveCbtQuestionInput{}, fmt.Errorf("target_level hanya boleh berisi VII, VIII, atau IX")
 	}
 	if out.TargetLevel == "" {
-		out.TargetLevel = questionTargetLevelFromGradeLevel(out.GradeLevel)
-	}
-	if out.TargetLevel != "" {
-		out.GradeLevel = questionGradeLevelFromTargetLevel(out.TargetLevel)
-	} else {
-		out.GradeLevel = pgtype.Int2{}
+		out.TargetLevel = ""
 	}
 	out.CPRef = strings.TrimSpace(out.CPRef)
 	out.TPRef = strings.TrimSpace(out.TPRef)
@@ -1194,7 +1187,6 @@ func questionInputFromCurrent(current db.GetCbtQuestionRow, username string) Sav
 		ExplanationHTML:      current.ExplanationHtml,
 		RubricHTML:           current.RubricHtml,
 		AcademicPhase:        current.AcademicPhase,
-		GradeLevel:           current.GradeLevel,
 		TargetLevel:          current.TargetLevel.String,
 		CPRef:                current.CpRef,
 		TPRef:                current.TpRef,

@@ -155,7 +155,7 @@ INSERT INTO cbt_questions (
   answer_key, explanation, difficulty, status,
   stem_html, stem_latex, stimulus_html, stimulus_latex,
   explanation_html, rubric_html,
-  academic_phase, grade_level, target_level,
+  academic_phase, target_level,
   cp_ref, tp_ref, kd_ref, indicator_ref,
   material_topic, cognitive_level, hots_flag,
   media_asset_ids, workflow_status, version,
@@ -166,17 +166,17 @@ INSERT INTO cbt_questions (
 )
 SELECT
   new_question.id, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-  $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31,
-  $32, $33, $34,
-  COALESCE($42::uuid, new_question.id),
-  $43,
+  $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
+  $31, $32, $33,
+  COALESCE($41::uuid, new_question.id),
+  $42,
+  $43::uuid,
   $44::uuid,
-  $45::uuid,
+  $45,
   $46,
-  $47,
-  $35, $36, $37, $38, $39, $40, $41
+  $34, $35, $36, $37, $38, $39, $40
 FROM new_question
-RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options, stem_html, stem_latex, stimulus_html, stimulus_latex, explanation_html, rubric_html, academic_phase, grade_level, cp_ref, tp_ref, kd_ref, indicator_ref, material_topic, cognitive_level, hots_flag, media_asset_ids, workflow_status, version, author_username, reviewer_username, reviewed_at, approver_username, approved_at, writer_notes, review_notes, event_id, version_group_id, version_number, source_question_id, supersedes_question_id, is_latest_version, version_note, target_level
+RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options, stem_html, stem_latex, stimulus_html, stimulus_latex, explanation_html, rubric_html, academic_phase, cp_ref, tp_ref, kd_ref, indicator_ref, material_topic, cognitive_level, hots_flag, media_asset_ids, workflow_status, version, author_username, reviewer_username, reviewed_at, approver_username, approved_at, writer_notes, review_notes, event_id, version_group_id, version_number, source_question_id, supersedes_question_id, is_latest_version, version_note, target_level
 `
 
 type CreateCbtQuestionParams struct {
@@ -202,7 +202,6 @@ type CreateCbtQuestionParams struct {
 	ExplanationHtml      string                    `json:"explanation_html"`
 	RubricHtml           string                    `json:"rubric_html"`
 	AcademicPhase        string                    `json:"academic_phase"`
-	GradeLevel           pgtype.Int2               `json:"grade_level"`
 	TargetLevel          pgtype.Text               `json:"target_level"`
 	CpRef                string                    `json:"cp_ref"`
 	TpRef                string                    `json:"tp_ref"`
@@ -253,7 +252,6 @@ func (q *Queries) CreateCbtQuestion(ctx context.Context, arg CreateCbtQuestionPa
 		arg.ExplanationHtml,
 		arg.RubricHtml,
 		arg.AcademicPhase,
-		arg.GradeLevel,
 		arg.TargetLevel,
 		arg.CpRef,
 		arg.TpRef,
@@ -305,7 +303,6 @@ func (q *Queries) CreateCbtQuestion(ctx context.Context, arg CreateCbtQuestionPa
 		&i.ExplanationHtml,
 		&i.RubricHtml,
 		&i.AcademicPhase,
-		&i.GradeLevel,
 		&i.CpRef,
 		&i.TpRef,
 		&i.KdRef,
@@ -385,7 +382,7 @@ SELECT q.id, q.event_id, q.subject_id, q.code, q.question_text, q.question_type,
        q.answer_key, q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
        q.explanation_html, q.rubric_html,
-       q.academic_phase, q.grade_level, q.target_level,
+       q.academic_phase, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
@@ -435,7 +432,6 @@ type GetCbtQuestionRow struct {
 	ExplanationHtml      string                    `json:"explanation_html"`
 	RubricHtml           string                    `json:"rubric_html"`
 	AcademicPhase        string                    `json:"academic_phase"`
-	GradeLevel           pgtype.Int2               `json:"grade_level"`
 	TargetLevel          pgtype.Text               `json:"target_level"`
 	CpRef                string                    `json:"cp_ref"`
 	TpRef                string                    `json:"tp_ref"`
@@ -493,7 +489,6 @@ func (q *Queries) GetCbtQuestion(ctx context.Context, id pgtype.UUID) (GetCbtQue
 		&i.ExplanationHtml,
 		&i.RubricHtml,
 		&i.AcademicPhase,
-		&i.GradeLevel,
 		&i.TargetLevel,
 		&i.CpRef,
 		&i.TpRef,
@@ -531,7 +526,7 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.answer_key, q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
        q.explanation_html, q.rubric_html,
-       q.academic_phase, q.grade_level, q.target_level,
+       q.academic_phase, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
@@ -596,7 +591,6 @@ type GetCbtQuestionDetailRow struct {
 	ExplanationHtml      string                    `json:"explanation_html"`
 	RubricHtml           string                    `json:"rubric_html"`
 	AcademicPhase        string                    `json:"academic_phase"`
-	GradeLevel           pgtype.Int2               `json:"grade_level"`
 	TargetLevel          pgtype.Text               `json:"target_level"`
 	CpRef                string                    `json:"cp_ref"`
 	TpRef                string                    `json:"tp_ref"`
@@ -659,7 +653,6 @@ func (q *Queries) GetCbtQuestionDetail(ctx context.Context, id pgtype.UUID) (Get
 		&i.ExplanationHtml,
 		&i.RubricHtml,
 		&i.AcademicPhase,
-		&i.GradeLevel,
 		&i.TargetLevel,
 		&i.CpRef,
 		&i.TpRef,
@@ -1120,7 +1113,7 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
        q.explanation_html, q.rubric_html,
-       q.academic_phase, q.grade_level, q.target_level,
+       q.academic_phase, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
@@ -1179,7 +1172,6 @@ type ListCbtQuestionsRow struct {
 	ExplanationHtml      string                    `json:"explanation_html"`
 	RubricHtml           string                    `json:"rubric_html"`
 	AcademicPhase        string                    `json:"academic_phase"`
-	GradeLevel           pgtype.Int2               `json:"grade_level"`
 	TargetLevel          pgtype.Text               `json:"target_level"`
 	CpRef                string                    `json:"cp_ref"`
 	TpRef                string                    `json:"tp_ref"`
@@ -1245,7 +1237,6 @@ func (q *Queries) ListCbtQuestions(ctx context.Context, arg ListCbtQuestionsPara
 			&i.ExplanationHtml,
 			&i.RubricHtml,
 			&i.AcademicPhase,
-			&i.GradeLevel,
 			&i.TargetLevel,
 			&i.CpRef,
 			&i.TpRef,
@@ -1301,7 +1292,7 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
        q.explanation_html, q.rubric_html,
-       q.academic_phase, q.grade_level, q.target_level,
+       q.academic_phase, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
@@ -1467,7 +1458,6 @@ type ListCbtQuestionsFilteredRow struct {
 	ExplanationHtml      string                    `json:"explanation_html"`
 	RubricHtml           string                    `json:"rubric_html"`
 	AcademicPhase        string                    `json:"academic_phase"`
-	GradeLevel           pgtype.Int2               `json:"grade_level"`
 	TargetLevel          pgtype.Text               `json:"target_level"`
 	CpRef                string                    `json:"cp_ref"`
 	TpRef                string                    `json:"tp_ref"`
@@ -1555,7 +1545,6 @@ func (q *Queries) ListCbtQuestionsFiltered(ctx context.Context, arg ListCbtQuest
 			&i.ExplanationHtml,
 			&i.RubricHtml,
 			&i.AcademicPhase,
-			&i.GradeLevel,
 			&i.TargetLevel,
 			&i.CpRef,
 			&i.TpRef,
@@ -1611,7 +1600,7 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
        q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
        q.explanation_html, q.rubric_html,
-       q.academic_phase, q.grade_level, q.target_level,
+       q.academic_phase, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
@@ -1777,7 +1766,6 @@ type ListCbtQuestionsScopedRow struct {
 	ExplanationHtml      string                    `json:"explanation_html"`
 	RubricHtml           string                    `json:"rubric_html"`
 	AcademicPhase        string                    `json:"academic_phase"`
-	GradeLevel           pgtype.Int2               `json:"grade_level"`
 	TargetLevel          pgtype.Text               `json:"target_level"`
 	CpRef                string                    `json:"cp_ref"`
 	TpRef                string                    `json:"tp_ref"`
@@ -1865,7 +1853,6 @@ func (q *Queries) ListCbtQuestionsScoped(ctx context.Context, arg ListCbtQuestio
 			&i.ExplanationHtml,
 			&i.RubricHtml,
 			&i.AcademicPhase,
-			&i.GradeLevel,
 			&i.TargetLevel,
 			&i.CpRef,
 			&i.TpRef,
@@ -2129,27 +2116,26 @@ SET
   explanation_html   = $21,
   rubric_html        = $22,
   academic_phase     = $23,
-  grade_level        = $24,
-  target_level       = $25,
-  cp_ref             = $26,
-  tp_ref             = $27,
-  kd_ref             = $28,
-  indicator_ref      = $29,
-  material_topic     = $30,
-  cognitive_level    = $31,
-  hots_flag          = $32,
-  media_asset_ids    = $33,
-  workflow_status    = $34,
+  target_level       = $24,
+  cp_ref             = $25,
+  tp_ref             = $26,
+  kd_ref             = $27,
+  indicator_ref      = $28,
+  material_topic     = $29,
+  cognitive_level    = $30,
+  hots_flag          = $31,
+  media_asset_ids    = $32,
+  workflow_status    = $33,
   version            = version + 1,
-  reviewer_username  = $35,
-  reviewed_at        = $36,
-  approver_username  = $37,
-  approved_at        = $38,
-  writer_notes       = $39,
-  review_notes       = $40,
+  reviewer_username  = $34,
+  reviewed_at        = $35,
+  approver_username  = $36,
+  approved_at        = $37,
+  writer_notes       = $38,
+  review_notes       = $39,
   updated_at         = NOW()
 WHERE id = $1
-RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options, stem_html, stem_latex, stimulus_html, stimulus_latex, explanation_html, rubric_html, academic_phase, grade_level, cp_ref, tp_ref, kd_ref, indicator_ref, material_topic, cognitive_level, hots_flag, media_asset_ids, workflow_status, version, author_username, reviewer_username, reviewed_at, approver_username, approved_at, writer_notes, review_notes, event_id, version_group_id, version_number, source_question_id, supersedes_question_id, is_latest_version, version_note, target_level
+RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options, stem_html, stem_latex, stimulus_html, stimulus_latex, explanation_html, rubric_html, academic_phase, cp_ref, tp_ref, kd_ref, indicator_ref, material_topic, cognitive_level, hots_flag, media_asset_ids, workflow_status, version, author_username, reviewer_username, reviewed_at, approver_username, approved_at, writer_notes, review_notes, event_id, version_group_id, version_number, source_question_id, supersedes_question_id, is_latest_version, version_note, target_level
 `
 
 type UpdateCbtQuestionParams struct {
@@ -2176,7 +2162,6 @@ type UpdateCbtQuestionParams struct {
 	ExplanationHtml  string                    `json:"explanation_html"`
 	RubricHtml       string                    `json:"rubric_html"`
 	AcademicPhase    string                    `json:"academic_phase"`
-	GradeLevel       pgtype.Int2               `json:"grade_level"`
 	TargetLevel      pgtype.Text               `json:"target_level"`
 	CpRef            string                    `json:"cp_ref"`
 	TpRef            string                    `json:"tp_ref"`
@@ -2220,7 +2205,6 @@ func (q *Queries) UpdateCbtQuestion(ctx context.Context, arg UpdateCbtQuestionPa
 		arg.ExplanationHtml,
 		arg.RubricHtml,
 		arg.AcademicPhase,
-		arg.GradeLevel,
 		arg.TargetLevel,
 		arg.CpRef,
 		arg.TpRef,
@@ -2264,7 +2248,6 @@ func (q *Queries) UpdateCbtQuestion(ctx context.Context, arg UpdateCbtQuestionPa
 		&i.ExplanationHtml,
 		&i.RubricHtml,
 		&i.AcademicPhase,
-		&i.GradeLevel,
 		&i.CpRef,
 		&i.TpRef,
 		&i.KdRef,

@@ -82,7 +82,6 @@
 		suggested_mode?: string;
 		academic_phase?: string;
 		target_level?: string | null;
-		grade_level?: number | null;
 		cp_ref?: string;
 		tp_ref?: string;
 		kd_ref?: string;
@@ -780,7 +779,7 @@
 	}
 
 	function gradeLabel(question: Question): string {
-		const level = compactText(question.target_level, '') || (question.grade_level ? `Kelas ${question.grade_level}` : '');
+		const level = compactText(question.target_level, '');
 		const phase = compactText(question.academic_phase, '');
 		const levelLabel = level && level.startsWith('Kelas ') ? level : (level ? `Tingkat ${level}` : '');
 		if (levelLabel && phase) return `${levelLabel} / Fase ${phase}`;

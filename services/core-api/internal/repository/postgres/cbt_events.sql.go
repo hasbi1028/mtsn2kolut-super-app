@@ -934,7 +934,7 @@ LEFT JOIN cbt_questions q ON q.subject_id = sa.subject_id
     q.event_id = $1
     OR (q.event_id IS NULL AND q.status = 'published')
   )
-  AND (sa.numeric_grade_level IS NULL OR q.grade_level = sa.numeric_grade_level)
+  AND (sa.level = '' OR q.target_level = sa.level)
   AND q.status <> 'archived'
   AND q.workflow_status <> 'rejected'
   AND (sa.status_filter <> 'published_only' OR q.status = 'published')
@@ -1069,7 +1069,7 @@ CROSS JOIN req
 LEFT JOIN cbt_questions q ON q.subject_id = tt.subject_id
   AND q.author_username = tt.teacher_username
   AND (q.event_id = $1 OR (q.event_id IS NULL AND q.status = 'published'))
-  AND (tt.numeric_grade_level IS NULL OR q.grade_level = tt.numeric_grade_level)
+  AND (tt.level = '' OR q.target_level = tt.level)
   AND q.status <> 'archived'
   AND q.workflow_status <> 'rejected'
   AND (req.status_filter <> 'published_only' OR q.status = 'published')

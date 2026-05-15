@@ -410,9 +410,6 @@ func TestCbtQuestionDecodeAndInputMapping(t *testing.T) {
 	if input.AnswerKey != "A" || input.AuthorUsername != "guru.ipa" || input.ReviewerUsername != "guru.ipa" || input.ApproverUsername != "guru.ipa" {
 		t.Fatalf("questionInputFromBody() answer/usernames = %q/%q/%q/%q, want trimmed answer and current user", input.AnswerKey, input.AuthorUsername, input.ReviewerUsername, input.ApproverUsername)
 	}
-	if !input.GradeLevel.Valid || input.GradeLevel.Int16 != 8 {
-		t.Fatalf("questionInputFromBody() grade_level = %v, want 8", input.GradeLevel)
-	}
 	if input.TargetLevel != "VIII" {
 		t.Fatalf("questionInputFromBody() target_level = %q, want VIII", input.TargetLevel)
 	}
@@ -446,7 +443,7 @@ func TestCbtQuestionSerializerHelpers(t *testing.T) {
 		Status:         db.CbtQuestionStatusEnumDraft,
 		CreatedAt:      cbtQuestionTestTimestamp(8),
 		UpdatedAt:      cbtQuestionTestTimestamp(9),
-		GradeLevel:     pgtype.Int2{Int16: 8, Valid: true},
+		AcademicPhase:  "Fase D",
 		TargetLevel:    pgtype.Text{String: "VIII", Valid: true},
 		MediaAssetIds:  []byte(`["asset-1"]`),
 		WorkflowStatus: "draft",
@@ -454,8 +451,8 @@ func TestCbtQuestionSerializerHelpers(t *testing.T) {
 		AuthorUsername: "guru.mtk",
 	}
 	listMap := serializeQuestionListRow(listRow, true)
-	if listMap["subject_name"] != "Matematika" || listMap["subject_code"] != "MTK" || listMap["authoring_mode"] != "beginner" {
-		t.Fatalf("serializeQuestionListRow() = %+v, want subject metadata and beginner mode", listMap)
+	if listMap["subject_name"] != "Matematika" || listMap["subject_code"] != "MTK" || listMap["authoring_mode"] != "advance" {
+		t.Fatalf("serializeQuestionListRow() = %+v, want subject metadata and suggested mode", listMap)
 	}
 	if _, ok := listMap["grade_level"]; ok {
 		t.Fatalf("serializeQuestionListRow() exposed legacy grade_level = %#v", listMap["grade_level"])

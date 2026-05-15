@@ -15,7 +15,6 @@
 		subject_code?: string;
 		academic_phase?: string;
 		target_level?: string | null;
-		grade_level?: number | null;
 		cp_ref?: string;
 		tp_ref?: string;
 		kd_ref?: string;
@@ -63,7 +62,7 @@
 		const kd = new Set(group.map((item) => item.kd_ref?.trim()).filter(Boolean));
 		const topics = new Set(group.map((item) => item.material_topic?.trim()).filter(Boolean));
 		const levels = Array.from(new Set(group.map((item) => item.cognitive_level?.trim()).filter(Boolean))) as string[];
-		const grades = Array.from(new Set(group.map((item) => item.target_level ? `Tingkat ${item.target_level}` : item.grade_level ? `Kelas ${item.grade_level}` : item.academic_phase?.trim()).filter(Boolean))) as string[];
+		const grades = Array.from(new Set(group.map((item) => item.target_level ? `Tingkat ${item.target_level}` : item.academic_phase?.trim()).filter(Boolean))) as string[];
 		return {
 			key: subject,
 			subject,

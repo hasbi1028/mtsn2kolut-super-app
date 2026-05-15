@@ -171,7 +171,6 @@ type SaveCbtQuestionInput struct {
 	ExplanationHTML      string
 	RubricHTML           string
 	AcademicPhase        string
-	GradeLevel           pgtype.Int2
 	TargetLevel          string
 	CPRef                string
 	TPRef                string

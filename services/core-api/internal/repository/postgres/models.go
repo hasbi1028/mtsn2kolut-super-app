@@ -1152,7 +1152,6 @@ type CbtQuestion struct {
 	ExplanationHtml      string                    `json:"explanation_html"`
 	RubricHtml           string                    `json:"rubric_html"`
 	AcademicPhase        string                    `json:"academic_phase"`
-	GradeLevel           pgtype.Int2               `json:"grade_level"`
 	CpRef                string                    `json:"cp_ref"`
 	TpRef                string                    `json:"tp_ref"`
 	KdRef                string                    `json:"kd_ref"`

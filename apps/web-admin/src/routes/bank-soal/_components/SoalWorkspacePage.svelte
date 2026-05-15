@@ -171,7 +171,6 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		explanation_html?: string;
 		rubric_html?: string;
 		academic_phase?: string;
-		grade_level?: number | null;
 		target_level?: string | null;
 		cp_ref?: string;
 		tp_ref?: string;
@@ -370,21 +369,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		}
 	}
 
-	function targetLevelFromGradeLevel(value: number | null | undefined): string {
-		switch (Number(value)) {
-			case 7:
-				return 'VII';
-			case 8:
-				return 'VIII';
-			case 9:
-				return 'IX';
-			default:
-				return '';
-		}
-	}
 
-	function normalizeQuestionTargetLevelValue(targetLevel: string | null | undefined, gradeLevel?: number | null): string {
-		return normalizeTargetLevel(targetLevel) || targetLevelFromGradeLevel(gradeLevel);
+	function normalizeQuestionTargetLevelValue(targetLevel: string | null | undefined): string {
+		return normalizeTargetLevel(targetLevel);
 	}
 
 	function currentRouteMode(): ModuleMode {
@@ -952,7 +939,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		fDifficulty = meta.difficulty ?? 'medium';
 		fIsRtl = meta.isRtl ?? false;
 		fGradeLevel = gradeLevelFromTargetLevel(normalizeTargetLevel(meta.targetLevel)) ?? meta.gradeLevel ?? 7;
-		fTargetLevel = normalizeQuestionTargetLevelValue(meta.targetLevel, meta.gradeLevel);
+		fTargetLevel = normalizeQuestionTargetLevelValue(meta.targetLevel);
 		fAcademicPhase = meta.academicPhase ?? '';
 		fCPRef = meta.cpRef ?? '';
 		fTPRef = meta.tpRef ?? '';
@@ -2095,8 +2082,8 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			fMatchingDistractors = normalizeMatchingDistractors(optionsToMatchingDistractors(d.options ?? []), fQuestionType);
 			fAnswerKey = normalizeAnswerKey(d.answer_key, fQuestionType, answerItemCountForType(fQuestionType));
 			fDifficulty = d.difficulty || 'medium';
-			fGradeLevel = gradeLevelFromTargetLevel(normalizeQuestionTargetLevelValue(d.target_level, d.grade_level)) ?? d.grade_level ?? 7;
-			fTargetLevel = normalizeQuestionTargetLevelValue(d.target_level, d.grade_level);
+			fGradeLevel = gradeLevelFromTargetLevel(normalizeQuestionTargetLevelValue(d.target_level)) ?? 7;
+			fTargetLevel = normalizeQuestionTargetLevelValue(d.target_level);
 			fAcademicPhase = d.academic_phase ?? '';
 			fCPRef = d.cp_ref ?? '';
 			fTPRef = d.tp_ref ?? '';
@@ -2132,8 +2119,8 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			fMatchingPairs = normalizeMatchingPairs(optionsToMatchingPairs(q.options ?? []), fQuestionType);
 			fMatchingDistractors = normalizeMatchingDistractors(optionsToMatchingDistractors(q.options ?? []), fQuestionType);
 			fAnswerKey = normalizeAnswerKey(q.answer_key, fQuestionType, answerItemCountForType(fQuestionType));
-			fGradeLevel = gradeLevelFromTargetLevel(normalizeQuestionTargetLevelValue(q.target_level, q.grade_level)) ?? q.grade_level ?? 7;
-			fTargetLevel = normalizeQuestionTargetLevelValue(q.target_level, q.grade_level);
+			fGradeLevel = gradeLevelFromTargetLevel(normalizeQuestionTargetLevelValue(q.target_level)) ?? 7;
+			fTargetLevel = normalizeQuestionTargetLevelValue(q.target_level);
 			fAcademicPhase = q.academic_phase ?? '';
 			fCPRef = q.cp_ref ?? '';
 			fTPRef = q.tp_ref ?? '';
@@ -2755,7 +2742,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		if (routeMode !== 'composer') return false;
 		let applied = false;
 		const subjectId = params.get('subject_id') ?? '';
-		const targetLevel = normalizeQuestionTargetLevelValue(params.get('target_level'), Number(params.get('grade_level') ?? '') || null);
+		const targetLevel = normalizeQuestionTargetLevelValue(params.get('target_level'));
 		const questionType = params.get('question_type') ?? '';
 		if (subjectId) {
 			fSubjectId = subjectId;
