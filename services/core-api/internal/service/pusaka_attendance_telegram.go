@@ -406,7 +406,19 @@ func cleanTime(v string) string {
 	if v == "" {
 		return "-"
 	}
-	if len(v) >= 5 {
+	for _, field := range strings.Fields(v) {
+		if strings.Contains(field, ":") {
+			v = field
+			break
+		}
+	}
+	if dot := strings.IndexByte(v, '.'); dot > 0 {
+		v = v[:dot]
+	}
+	if len(v) >= 8 && v[2] == ':' && v[5] == ':' {
+		return v[:8]
+	}
+	if len(v) >= 5 && v[2] == ':' {
 		return v[:5]
 	}
 	return v
@@ -461,7 +473,7 @@ func renderAttendancePNG(r attendanceReport) ([]byte, error) {
 		drawText(img, 990, y+8, strings.ToUpper(row.Status), 2, statusColor(row.Status))
 		y += rowH
 	}
-	drawText(img, 30, height-28, "GENERATED "+r.GeneratedAt.Format("2006-01-02 15:04 WITA"), 2, color.RGBA{100, 116, 139, 255})
+	drawText(img, 30, height-28, "GENERATED "+r.GeneratedAt.Format("2006-01-02 15:04:05 WITA"), 2, color.RGBA{100, 116, 139, 255})
 	var buf bytes.Buffer
 	err := png.Encode(&buf, img)
 	return buf.Bytes(), err
