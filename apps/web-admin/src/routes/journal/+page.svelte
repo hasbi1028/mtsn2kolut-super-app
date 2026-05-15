@@ -15,6 +15,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
+	import { displayName } from '$lib/utils/display-name';
 
 	type Assignment = {
 		id: string;
@@ -207,6 +208,14 @@
 		const d = new Date(raw);
 		return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 	}
+
+	function teacherName(row: Pick<Assignment | Session, 'teacher_name'>) {
+		return displayName({ name: row.teacher_name }, 'Guru');
+	}
+
+	function studentName(row: Pick<AttendanceSummary, 'nama'>) {
+		return displayName({ nama: row.nama }, 'Siswa');
+	}
 </script>
 
 <div class="container mx-auto max-w-6xl space-y-6 p-6">
@@ -239,7 +248,7 @@
 					>
 						<option value="">-- Pilih kelas & mata pelajaran --</option>
 						{#each assignments as a (a.id)}
-							<option value={a.id}>{a.class_name} – {a.subject_name} ({a.teacher_name})</option>
+							<option value={a.id}>{a.class_name} – {a.subject_name} ({teacherName(a)})</option>
 						{/each}
 					</select>
 				{/if}
@@ -380,7 +389,7 @@
 										{#each currentOverview.summary as st, i (st.student_id)}
 											<Table.Row>
 												<Table.Cell class="text-muted-foreground">{i + 1}</Table.Cell>
-												<Table.Cell class="font-medium">{st.nama}</Table.Cell>
+												<Table.Cell class="font-medium">{studentName(st)}</Table.Cell>
 												<Table.Cell class="text-sm text-muted-foreground">{st.nis}</Table.Cell>
 												<Table.Cell class="text-center">
 													<Badge class="bg-success/15 text-success hover:bg-success/15">{st.hadir}</Badge>

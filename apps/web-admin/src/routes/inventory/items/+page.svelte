@@ -13,6 +13,7 @@
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { readClientApiData, readClientJson } from '$lib/client/api';
+	import { displayName } from '$lib/utils/display-name';
 
 	interface Item {
 		id: string;
@@ -33,6 +34,7 @@
 		action: string;
 		summary: string;
 		actor_username: string;
+		actor_display_name?: string;
 		created_at: string;
 	}
 
@@ -153,6 +155,16 @@
 		if (value === 'create') return 'Dibuat';
 		if (value === 'delete') return 'Dihapus';
 		return 'Diperbarui';
+	}
+
+	function eventActorName(event: ItemEvent) {
+		return displayName(
+			{
+				display_name: event.actor_display_name,
+				username: event.actor_username
+			},
+			'sistem'
+		);
 	}
 
 	function formatDateTime(value: string) {
@@ -803,7 +815,7 @@
 										</div>
 										<p class="mt-2 text-sm text-foreground">{event.summary}</p>
 										<p class="mt-2 text-xs text-muted-foreground">
-											{event.actor_username ? `oleh ${event.actor_username}` : 'oleh sistem'}
+											oleh {eventActorName(event)}
 										</p>
 									</div>
 								{/each}

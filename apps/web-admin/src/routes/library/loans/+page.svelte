@@ -13,6 +13,7 @@
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { readClientApiData, readClientJson } from '$lib/client/api';
+	import { displayName } from '$lib/utils/display-name';
 
 	interface LoanRow {
 		id: string;
@@ -33,8 +34,8 @@
 	}
 
 	interface Book { id: string; kode: string; judul: string; tersedia: number; }
-	interface Student { id: string; nis: string; nama: string; }
-	interface Employee { id: string; nip: string; nama: string; }
+	interface Student { id: string; nis: string; nama: string; display_name?: string; }
+	interface Employee { id: string; nip: string; nama: string; display_name?: string; }
 
 	interface LoansOverview {
 		loans: LoanRow[];
@@ -204,6 +205,16 @@
 		fMemberId = id;
 		fMemberLabel = `${nama} (${nip_nis})`;
 		fMemberSearch = nama;
+	}
+
+	function memberName(member: Pick<LoanRow, 'member_nama'> | Student | Employee) {
+		return displayName(
+			{
+				display_name: 'display_name' in member ? member.display_name : '',
+				nama: 'nama' in member ? member.nama : member.member_nama
+			},
+			'Anggota'
+		);
 	}
 
 	function selectBook(id: string, kode: string, judul: string) {
@@ -411,7 +422,7 @@
 											<p class="text-xs text-muted-foreground font-mono">{loan.book_kode}</p>
 										</Table.Cell>
 										<Table.Cell>
-											<p class="max-w-[120px] truncate" title={loan.member_nama}>{loan.member_nama}</p>
+											<p class="max-w-[120px] truncate" title={memberName(loan)}>{memberName(loan)}</p>
 											<p class="text-xs text-muted-foreground">{loan.member_nip_nis}</p>
 										</Table.Cell>
 										<Table.Cell class="text-xs text-muted-foreground">{formatDate(loan.dipinjam_at)}</Table.Cell>
@@ -506,9 +517,9 @@
 						{#each (fMemberType === 'student' ? filteredStudents : filteredEmployees) as m (m.id)}
 							<button
 								class="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 text-left"
-								onclick={() => selectMember(m.id, m.nama, (m as Student).nis ?? (m as Employee).nip)}
+								onclick={() => selectMember(m.id, memberName(m), (m as Student).nis ?? (m as Employee).nip)}
 							>
-								<span class="font-medium">{m.nama}</span>
+								<span class="font-medium">{memberName(m)}</span>
 								<span class="text-xs text-muted-foreground">{(m as Student).nis ?? (m as Employee).nip}</span>
 							</button>
 						{:else}
@@ -575,7 +586,7 @@
 		{#if returnLoan}
 			<div class="space-y-2 text-sm text-foreground">
 				<p><span class="font-medium">Buku:</span> {returnLoan.book_judul}</p>
-				<p><span class="font-medium">Anggota:</span> {returnLoan.member_nama}</p>
+				<p><span class="font-medium">Anggota:</span> {memberName(returnLoan)}</p>
 				<p><span class="font-medium">Jatuh Tempo:</span> {formatDate(returnLoan.jatuh_tempo)}</p>
 				{#if estimatedDenda > 0}
 					<div class="rounded-md bg-warning/10 border border-warning/30 p-3">

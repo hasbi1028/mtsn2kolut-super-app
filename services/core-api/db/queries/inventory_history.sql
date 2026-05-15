@@ -11,8 +11,19 @@ SELECT
     e.action,
     e.summary,
     e.created_at,
-    COALESCE(u.username, '') AS actor_username
+    COALESCE(u.username, '') AS actor_username,
+    COALESCE(
+        NULLIF(btrim(eu.nama), ''),
+        NULLIF(btrim(s.nama), ''),
+        NULLIF(btrim(p.nama), ''),
+        NULLIF(btrim(u.display_name), ''),
+        u.username,
+        ''
+    )::text AS actor_display_name
 FROM inventory_item_events e
 LEFT JOIN users u ON u.id = e.actor_user_id
+LEFT JOIN employees eu ON eu.id = u.employee_id
+LEFT JOIN students s ON s.id = u.student_id
+LEFT JOIN parents p ON p.id = u.parent_id
 WHERE e.item_id = $1
 ORDER BY e.created_at DESC;

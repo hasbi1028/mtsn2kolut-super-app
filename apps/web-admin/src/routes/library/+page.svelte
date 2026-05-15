@@ -9,6 +9,7 @@
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { readClientApiData } from '$lib/client/api';
+	import { displayName } from '$lib/utils/display-name';
 
 	interface Stats {
 		total_judul: number;
@@ -49,6 +50,10 @@
 
 	function formatRupiah(n: number) {
 		return `Rp ${n.toLocaleString('id-ID')}`;
+	}
+
+	function memberName(loan: Pick<LoanRow, 'member_nama'>) {
+		return displayName({ nama: loan.member_nama }, 'Anggota');
 	}
 
 	async function fetchOverview(): Promise<LibraryOverview> {
@@ -205,7 +210,7 @@
 												<span class="text-xs text-muted-foreground">{loan.book_kode}</span>
 											</Table.Cell>
 											<Table.Cell>
-												<span class="block truncate max-w-[120px]" title={loan.member_nama}>{loan.member_nama}</span>
+												<span class="block truncate max-w-[120px]" title={memberName(loan)}>{memberName(loan)}</span>
 												<span class="text-xs text-muted-foreground">{loan.member_nip_nis}</span>
 											</Table.Cell>
 											<Table.Cell>
@@ -256,7 +261,7 @@
 												<span class="text-xs text-muted-foreground">{loan.book_kode}</span>
 											</Table.Cell>
 											<Table.Cell>
-												<span class="block truncate max-w-[120px]" title={loan.member_nama}>{loan.member_nama}</span>
+												<span class="block truncate max-w-[120px]" title={memberName(loan)}>{memberName(loan)}</span>
 												<span class="text-xs text-muted-foreground">{loan.member_nip_nis}</span>
 											</Table.Cell>
 											<Table.Cell class="text-destructive font-medium text-xs">

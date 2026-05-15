@@ -51,21 +51,33 @@ SELECT
     e.action,
     e.summary,
     e.created_at,
-    COALESCE(u.username, '') AS actor_username
+    COALESCE(u.username, '') AS actor_username,
+    COALESCE(
+        NULLIF(btrim(eu.nama), ''),
+        NULLIF(btrim(s.nama), ''),
+        NULLIF(btrim(p.nama), ''),
+        NULLIF(btrim(u.display_name), ''),
+        u.username,
+        ''
+    )::text AS actor_display_name
 FROM inventory_item_events e
 LEFT JOIN users u ON u.id = e.actor_user_id
+LEFT JOIN employees eu ON eu.id = u.employee_id
+LEFT JOIN students s ON s.id = u.student_id
+LEFT JOIN parents p ON p.id = u.parent_id
 WHERE e.item_id = $1
 ORDER BY e.created_at DESC
 `
 
 type ListInventoryItemEventsByItemRow struct {
-	ID            pgtype.UUID        `json:"id"`
-	ItemID        pgtype.UUID        `json:"item_id"`
-	ActorUserID   pgtype.UUID        `json:"actor_user_id"`
-	Action        string             `json:"action"`
-	Summary       string             `json:"summary"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	ActorUsername string             `json:"actor_username"`
+	ID               pgtype.UUID        `json:"id"`
+	ItemID           pgtype.UUID        `json:"item_id"`
+	ActorUserID      pgtype.UUID        `json:"actor_user_id"`
+	Action           string             `json:"action"`
+	Summary          string             `json:"summary"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	ActorUsername    string             `json:"actor_username"`
+	ActorDisplayName string             `json:"actor_display_name"`
 }
 
 func (q *Queries) ListInventoryItemEventsByItem(ctx context.Context, itemID pgtype.UUID) ([]ListInventoryItemEventsByItemRow, error) {
@@ -85,6 +97,7 @@ func (q *Queries) ListInventoryItemEventsByItem(ctx context.Context, itemID pgty
 			&i.Summary,
 			&i.CreatedAt,
 			&i.ActorUsername,
+			&i.ActorDisplayName,
 		); err != nil {
 			return nil, err
 		}

@@ -14,6 +14,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { onMount } from 'svelte';
 	import { clientApiPath, readClientApiData, readClientJson } from '$lib/client/api';
+	import { displayName } from '$lib/utils/display-name';
 
 	type SessionDetail = {
 		id: string;
@@ -191,6 +192,14 @@
 		return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 	}
 
+	function teacherName(session: Pick<SessionDetail, 'teacher_name'>) {
+		return displayName({ name: session.teacher_name }, 'Guru');
+	}
+
+	function studentName(attendance: Pick<Attendance, 'nama'>) {
+		return displayName({ nama: attendance.nama }, 'Siswa');
+	}
+
 	const statusColors: Record<string, string> = {
 		hadir: 'bg-success text-background hover:bg-success',
 		sakit: 'bg-warning text-background hover:bg-warning/90',
@@ -242,7 +251,7 @@
 						<p class="text-sm text-muted-foreground">
 							{currentDetail.session.class_name} ({currentDetail.session.class_code}) &nbsp;·&nbsp;
 							{currentDetail.session.subject_name} &nbsp;·&nbsp;
-							{currentDetail.session.teacher_name}
+							{teacherName(currentDetail.session)}
 						</p>
 					</div>
 					<Button variant="outline" size="sm" onclick={() => (editMode = !editMode)}>
@@ -326,7 +335,7 @@
 								{@const cur = attendanceState[att.student_id] ?? { status: att.status, catatan: att.catatan }}
 								<Table.Row>
 									<Table.Cell class="text-muted-foreground">{i + 1}</Table.Cell>
-									<Table.Cell class="font-medium">{att.nama}</Table.Cell>
+									<Table.Cell class="font-medium">{studentName(att)}</Table.Cell>
 									<Table.Cell class="text-sm text-muted-foreground">{att.nis}</Table.Cell>
 									<Table.Cell>
 										<div class="flex gap-1">
