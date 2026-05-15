@@ -20,8 +20,10 @@
 	type CbtPackage = {
 		id: string; subject_id: string; subject_name: string; subject_code: string;
 		title: string; description: string; duration_minutes: number;
-		randomize_questions: boolean; is_active: boolean;
+		randomize_questions: boolean; randomize_options?: boolean; is_active: boolean;
 		question_count: number; created_at: string;
+		locked_at?: string | null; snapshot_version?: number; session_count?: number;
+		draw_pg_count?: number; draw_essay_count?: number;
 		event_id?: string | null;
 	};
 	type Question = {
@@ -117,6 +119,17 @@
 	let hiddenEventPackageCount = $state(0);
 	let eventContext = $state<EventContext | null>(null);
 	const eventId = page.url.searchParams.get('event_id') ?? '';
+
+	let searchTerm = $state('');
+	let subjectFilter = $state('all');
+	let readinessFilter = $state('all');
+	let activeFilter = $state('all');
+	let lockFilter = $state('all');
+	let usageFilter = $state('all');
+	let sortMode = $state('needs_first');
+	let selectedPackageIds = new SvelteSet<string>();
+	let bulkBusy = $state(false);
+	let showUtsMode = $state(true);
 
 	let questionPool = $derived(
 		fSubjectId
@@ -342,6 +355,191 @@
 		const unpublishedCount = questions.filter((question) => question.status !== 'published').length;
 		const totalPoints = questions.reduce((sum, question) => sum + (Number(question.points) || 0), 0);
 		return { questions, typeBuckets, cognitiveBuckets, hotsCount, missingCount, unpublishedCount, totalPoints };
+	}
+
+
+	function packageTargets(pkg: CbtPackage) {
+		return {
+			pg: Number(pkg.draw_pg_count ?? 0) > 0 ? Number(pkg.draw_pg_count) : 20,
+			essay: Number(pkg.draw_essay_count ?? 0) > 0 ? Number(pkg.draw_essay_count) : 5,
+		};
+	}
+
+	function packageReadinessStatus(pkg: CbtPackage, quality = packageQualitySummary(pkg.id)) {
+		const targets = packageTargets(pkg);
+		const pgCount = quality.questions.filter((question) => questionTypeLabel(question.question_type) === 'PG').length;
+		const essayCount = quality.questions.filter((question) => questionTypeLabel(question.question_type) === 'Essay').length;
+		if (pkg.locked_at) return 'locked';
+		if (quality.questions.length === 0) return 'empty';
+		if (quality.unpublishedCount > 0) return 'unpublished';
+		if (quality.missingCount > 0) return 'metadata';
+		if (pgCount < targets.pg || essayCount < targets.essay) return 'short';
+		return 'ready';
+	}
+
+	function readinessLabel(status: string) {
+		return {
+			all: 'Semua', empty: 'Kosong', short: 'Kurang Soal', metadata: 'Metadata Kurang',
+			unpublished: 'Belum Terbit', ready: 'Siap', locked: 'Locked'
+		}[status] ?? status;
+	}
+
+	function readinessBadgeClass(status: string) {
+		return {
+			empty: 'border-muted bg-muted text-muted-foreground',
+			short: 'border-warning/30 bg-warning/10 text-warning',
+			metadata: 'border-warning/30 bg-warning/10 text-warning',
+			unpublished: 'border-destructive/30 bg-destructive/10 text-destructive',
+			ready: 'border-success/20 bg-success/10 text-success',
+			locked: 'border-primary/20 bg-primary/10 text-primary',
+		}[status] ?? 'border-border bg-card text-foreground';
+	}
+
+	function packageProgress(pkg: CbtPackage, quality = packageQualitySummary(pkg.id)) {
+		const targets = packageTargets(pkg);
+		const pgCount = quality.questions.filter((question) => questionTypeLabel(question.question_type) === 'PG').length;
+		const essayCount = quality.questions.filter((question) => questionTypeLabel(question.question_type) === 'Essay').length;
+		const targetTotal = targets.pg + targets.essay;
+		const achieved = Math.min(pgCount, targets.pg) + Math.min(essayCount, targets.essay);
+		return { pgCount, essayCount, targetTotal, achieved, percent: targetTotal > 0 ? Math.round((achieved / targetTotal) * 100) : 0 };
+	}
+
+	function matchesPackageFilters(pkg: CbtPackage) {
+		const quality = packageQualitySummary(pkg.id);
+		const status = packageReadinessStatus(pkg, quality);
+		const term = searchTerm.trim().toLowerCase();
+		const haystack = `${pkg.title} ${pkg.description ?? ''} ${pkg.subject_name} ${pkg.subject_code}`.toLowerCase();
+		if (term && !haystack.includes(term)) return false;
+		if (subjectFilter !== 'all' && pkg.subject_id !== subjectFilter) return false;
+		if (readinessFilter !== 'all' && status !== readinessFilter) return false;
+		if (activeFilter === 'active' && !pkg.is_active) return false;
+		if (activeFilter === 'inactive' && pkg.is_active) return false;
+		if (lockFilter === 'locked' && !pkg.locked_at) return false;
+		if (lockFilter === 'unlocked' && pkg.locked_at) return false;
+		if (usageFilter === 'used' && Number(pkg.session_count ?? 0) === 0) return false;
+		if (usageFilter === 'unused' && Number(pkg.session_count ?? 0) > 0) return false;
+		return true;
+	}
+
+	function readinessRank(pkg: CbtPackage) {
+		const status = packageReadinessStatus(pkg);
+		return { empty: 0, short: 1, metadata: 2, unpublished: 3, ready: 4, locked: 5 }[status] ?? 9;
+	}
+
+	function sortPackages(items: CbtPackage[]) {
+		return [...items].sort((a, b) => {
+			if (sortMode === 'name_asc') return a.title.localeCompare(b.title);
+			if (sortMode === 'subject_asc') return `${a.subject_name}${a.title}`.localeCompare(`${b.subject_name}${b.title}`);
+			if (sortMode === 'questions_asc') return a.question_count - b.question_count || a.title.localeCompare(b.title);
+			if (sortMode === 'questions_desc') return b.question_count - a.question_count || a.title.localeCompare(b.title);
+			if (sortMode === 'created_desc') return String(b.created_at).localeCompare(String(a.created_at));
+			return readinessRank(a) - readinessRank(b) || a.subject_name.localeCompare(b.subject_name) || a.title.localeCompare(b.title);
+		});
+	}
+
+	function packageSummary(items: CbtPackage[]) {
+		return {
+			total: items.length,
+			empty: items.filter((pkg) => packageReadinessStatus(pkg) === 'empty').length,
+			short: items.filter((pkg) => packageReadinessStatus(pkg) === 'short').length,
+			ready: items.filter((pkg) => packageReadinessStatus(pkg) === 'ready').length,
+			locked: items.filter((pkg) => Boolean(pkg.locked_at)).length,
+			used: items.filter((pkg) => Number(pkg.session_count ?? 0) > 0).length,
+		};
+	}
+
+	function togglePackageSelection(id: string) {
+		if (selectedPackageIds.has(id)) selectedPackageIds.delete(id);
+		else selectedPackageIds.add(id);
+	}
+
+	function selectVisiblePackages(items: CbtPackage[]) {
+		for (const item of items) selectedPackageIds.add(item.id);
+	}
+
+	function clearPackageSelection() {
+		selectedPackageIds.clear();
+	}
+
+	function csvEscape(value: unknown) {
+		const text = String(value ?? '');
+		return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+	}
+
+	function packageCsvRows(items: CbtPackage[]) {
+		const header = ['paket','mapel','status','aktif','locked','dipakai_sesi','soal','pg','essay','target_pg','target_essay','metadata_gap','belum_terbit','total_poin'];
+		const rows = items.map((pkg) => {
+			const quality = packageQualitySummary(pkg.id);
+			const progress = packageProgress(pkg, quality);
+			const targets = packageTargets(pkg);
+			return [pkg.title, pkg.subject_code, readinessLabel(packageReadinessStatus(pkg, quality)), pkg.is_active ? 'aktif' : 'nonaktif', pkg.locked_at ? 'locked' : 'belum_locked', Number(pkg.session_count ?? 0), quality.questions.length, progress.pgCount, progress.essayCount, targets.pg, targets.essay, quality.missingCount, quality.unpublishedCount, quality.totalPoints];
+		});
+		return [header, ...rows].map((row) => row.map(csvEscape).join(',')).join('\n');
+	}
+
+	function exportPackagesCsv(items: CbtPackage[], filename = 'rekap-paket-soal.csv') {
+		const blob = new Blob([packageCsvRows(items)], { type: 'text/csv;charset=utf-8' });
+		const url = URL.createObjectURL(blob);
+		const anchor = document.createElement('a');
+		anchor.href = url;
+		anchor.download = filename;
+		anchor.click();
+		URL.revokeObjectURL(url);
+	}
+
+	async function bulkLockSelected() {
+		const selected = packages.filter((pkg) => selectedPackageIds.has(pkg.id));
+		const lockable = selected.filter((pkg) => !pkg.locked_at && packageReadinessStatus(pkg) === 'ready');
+		if (lockable.length === 0) {
+			showError('Tidak ada paket terpilih yang siap dan belum locked.');
+			return;
+		}
+		if (!(await confirmPhrase('Bulk Lock Paket', `${lockable.length} paket siap akan dikunci/snapshot. Paket yang sudah locked atau belum siap dilewati.`, 'LOCK'))) return;
+		bulkBusy = true;
+		try {
+			for (const pkg of lockable) {
+				const res = await fetch(clientApiPath`/api/asesmen/packages/${pkg.id}/lock`, {
+					method: 'POST', headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ reason: 'Bulk lock dari daftar paket' }),
+				});
+				await readClientJson<unknown>(res);
+			}
+			setOperationState('success', 'Bulk Lock Selesai', `${lockable.length} paket berhasil dikunci.`);
+			clearPackageSelection();
+			await refreshPackages();
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Bulk lock paket gagal.'));
+		} finally { bulkBusy = false; }
+	}
+
+	async function bulkSetActive(active: boolean) {
+		const selected = packages.filter((pkg) => selectedPackageIds.has(pkg.id));
+		const editable = selected.filter((pkg) => !pkg.locked_at && pkg.is_active !== active);
+		if (editable.length === 0) {
+			showError('Tidak ada paket terpilih yang bisa diubah status aktifnya.');
+			return;
+		}
+		if (!(await confirmPhrase(active ? 'Aktifkan Paket' : 'Nonaktifkan Paket', `${editable.length} paket akan diubah statusnya. Paket locked dilewati.`, active ? 'AKTIF' : 'NONAKTIF'))) return;
+		bulkBusy = true;
+		try {
+			for (const pkg of editable) {
+				const res = await fetch(clientApiPath`/api/asesmen/packages/${pkg.id}`, {
+					method: 'PUT', headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						title: pkg.title, description: pkg.description ?? '', duration_minutes: pkg.duration_minutes,
+						randomize_questions: pkg.randomize_questions, randomize_options: Boolean(pkg.randomize_options),
+						source_mode: 'teacher_class', draw_pg_count: Number(pkg.draw_pg_count ?? 20), draw_essay_count: Number(pkg.draw_essay_count ?? 5),
+						is_active: active,
+					}),
+				});
+				await readClientJson<unknown>(res);
+			}
+			setOperationState('success', 'Bulk Status Selesai', `${editable.length} paket berhasil ${active ? 'diaktifkan' : 'dinonaktifkan'}.`);
+			clearPackageSelection();
+			await refreshPackages();
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Bulk ubah status paket gagal.'));
+		} finally { bulkBusy = false; }
 	}
 
 	function strictEventPackages(items: CbtPackage[]) {
@@ -861,18 +1059,85 @@
 			{@const overview = value as PackagesOverview}
 			{@const eventPackages = strictEventPackages(overview.packages)}
 			{@const currentPackages = eventPackages}
+			{@const filteredPackages = sortPackages(currentPackages.filter(matchesPackageFilters))}
+			{@const summary = packageSummary(currentPackages)}
 			{@const hiddenPackages = hiddenPackageCount(overview.packages)}
 		<Card.Root id="paket-saya" class="overflow-hidden border-border shadow-sm">
-			<Card.Header class="pb-2">
+			<Card.Header class="space-y-4 pb-4">
 				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div>
 						<p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Paket Saya</p>
-						<Card.Title class="mt-1 text-base">Daftar Paket ({currentPackages.length})</Card.Title>
+						<Card.Title class="mt-1 text-base">Daftar Paket ({filteredPackages.length}/{currentPackages.length})</Card.Title>
 					</div>
-					<a href={createPackageHref} class="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Buat Paket</a>
+					<div class="flex flex-wrap gap-2">
+						<LoadingButton variant="outline" size="sm" onclick={() => exportPackagesCsv(filteredPackages, 'rekap-paket-soal-filtered.csv')}>Export Filter</LoadingButton>
+						<a href={createPackageHref} class="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Buat Paket</a>
+					</div>
 				</div>
 				{#if hiddenPackages > 0}
 					<Card.Description>{hiddenPackages} template global atau paket event lain disembunyikan dari daftar event ini.</Card.Description>
+				{/if}
+
+				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+					{#each [
+						['Total', summary.total, 'text-foreground'],
+						['Kosong', summary.empty, 'text-muted-foreground'],
+						['Kurang', summary.short, 'text-warning'],
+						['Siap', summary.ready, 'text-success'],
+						['Locked', summary.locked, 'text-primary'],
+						['Dipakai Sesi', summary.used, 'text-foreground']
+					] as item (`summary-${item[0]}`)}
+						<div class="rounded-xl border border-border bg-muted/30 p-3">
+							<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{item[0]}</p>
+							<p class={`mt-1 text-2xl font-semibold ${item[2]}`}>{item[1]}</p>
+						</div>
+					{/each}
+				</div>
+
+				<div class="rounded-2xl border border-border bg-muted/30 p-3">
+					<div class="grid gap-3 lg:grid-cols-[1.3fr_0.9fr_0.9fr_0.8fr_0.8fr_0.8fr_0.9fr]">
+						<Input placeholder="Cari paket, mapel, kode, deskripsi..." bind:value={searchTerm} />
+						<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={subjectFilter}>
+							<option value="all">Semua mapel</option>
+							{#each subjects as s (s.id)}<option value={s.id}>{s.code} — {s.name}</option>{/each}
+						</select>
+						<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={readinessFilter}>
+							{#each ['all','empty','short','metadata','unpublished','ready','locked'] as status (status)}
+								<option value={status}>{readinessLabel(status)}</option>
+							{/each}
+						</select>
+						<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={activeFilter}>
+							<option value="all">Semua status</option><option value="active">Aktif</option><option value="inactive">Nonaktif</option>
+						</select>
+						<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={lockFilter}>
+							<option value="all">Semua lock</option><option value="locked">Locked</option><option value="unlocked">Belum locked</option>
+						</select>
+						<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={usageFilter}>
+							<option value="all">Semua sesi</option><option value="used">Dipakai sesi</option><option value="unused">Belum dipakai</option>
+						</select>
+						<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={sortMode}>
+							<option value="needs_first">Prioritas gap</option><option value="name_asc">Nama A-Z</option><option value="subject_asc">Mapel A-Z</option><option value="questions_asc">Soal sedikit</option><option value="questions_desc">Soal banyak</option><option value="created_desc">Terbaru</option>
+						</select>
+					</div>
+					<div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+						<label class="flex items-center gap-2"><input type="checkbox" bind:checked={showUtsMode} class="rounded" /> Mode kesiapan UTS: target 20 PG + 5 Essay</label>
+						<div class="flex flex-wrap gap-2">
+							<LoadingButton size="xs" variant="outline" onclick={() => selectVisiblePackages(filteredPackages)}>Pilih hasil filter</LoadingButton>
+							<LoadingButton size="xs" variant="outline" onclick={clearPackageSelection}>Bersihkan pilihan</LoadingButton>
+						</div>
+					</div>
+				</div>
+
+				{#if selectedPackageIds.size > 0}
+					<div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary">
+						<p><span class="font-semibold">{selectedPackageIds.size} paket dipilih.</span> Bulk action hanya memproses paket yang aman; paket locked/belum siap otomatis dilewati.</p>
+						<div class="flex flex-wrap gap-2">
+							<LoadingButton size="sm" variant="outline" onclick={() => exportPackagesCsv(currentPackages.filter((pkg) => selectedPackageIds.has(pkg.id)), 'rekap-paket-soal-selected.csv')}>Export Terpilih</LoadingButton>
+							<LoadingButton size="sm" onclick={() => void bulkLockSelected()} loading={bulkBusy} loadingLabel="Lock...">Bulk Lock Ready</LoadingButton>
+							<LoadingButton size="sm" variant="outline" onclick={() => void bulkSetActive(true)} loading={bulkBusy}>Aktifkan</LoadingButton>
+							<LoadingButton size="sm" variant="outline" onclick={() => void bulkSetActive(false)} loading={bulkBusy}>Nonaktifkan</LoadingButton>
+						</div>
+					</div>
 				{/if}
 			</Card.Header>
 			<Card.Content class="p-0">
@@ -880,10 +1145,13 @@
 				<Table.Root>
 					<Table.Header>
 						<Table.Row>
+							<Table.Head class="w-10"></Table.Head>
 							<Table.Head>Nama Paket</Table.Head>
 							<Table.Head>Mapel</Table.Head>
 							<Table.Head>Durasi</Table.Head>
 							<Table.Head>Jml Soal</Table.Head>
+							<Table.Head>Progress</Table.Head>
+							<Table.Head>Readiness</Table.Head>
 							<Table.Head>Mutu Paket</Table.Head>
 							<Table.Head>Acak</Table.Head>
 							<Table.Head>Status</Table.Head>
@@ -891,9 +1159,12 @@
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
-						{#each currentPackages as p (p.id)}
+						{#each filteredPackages as p (p.id)}
 							{@const quality = packageQualitySummary(p.id)}
+							{@const progress = packageProgress(p, quality)}
+							{@const readiness = packageReadinessStatus(p, quality)}
 							<Table.Row>
+								<Table.Cell><input type="checkbox" class="rounded" checked={selectedPackageIds.has(p.id)} onchange={() => togglePackageSelection(p.id)} /></Table.Cell>
 								<Table.Cell class="font-medium">{p.title}</Table.Cell>
 								<Table.Cell>
 									<Badge variant="outline" class="text-xs">{p.subject_code}</Badge>
@@ -905,6 +1176,10 @@
 										<span class="ml-1 text-xs text-muted-foreground">/{quality.totalPoints} poin</span>
 									{/if}
 								</Table.Cell>
+								<Table.Cell>
+									<div class="min-w-28"><div class="h-2 rounded-full bg-muted"><div class="h-2 rounded-full bg-primary" style={`width: ${Math.min(100, progress.percent)}%`}></div></div><p class="mt-1 text-xs text-muted-foreground">{progress.pgCount}/{packageTargets(p).pg} PG · {progress.essayCount}/{packageTargets(p).essay} Essay</p></div>
+								</Table.Cell>
+								<Table.Cell><Badge class={`text-xs ${readinessBadgeClass(readiness)}`}>{readinessLabel(readiness)}</Badge>{#if Number(p.session_count ?? 0) > 0}<p class="mt-1 text-[11px] text-muted-foreground">{p.session_count} sesi</p>{/if}</Table.Cell>
 								<Table.Cell>
 									{#if quality.questions.length === 0}
 										<span class="text-xs text-muted-foreground">Belum ada rincian</span>
@@ -942,6 +1217,9 @@
 					>
 						Detail/Edit
 					</a>
+					<a href={`${resolve('/asesmen/paket')}/${p.id}#soal`} class="mr-2 inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">Isi Soal</a>
+					<a href={`${resolve('/asesmen/paket')}/${p.id}#blueprint`} class="mr-2 inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">Blueprint</a>
+					{#if readiness === 'ready'}<LoadingButton size="xs" variant="outline" onclick={() => { selectedPackageIds.clear(); selectedPackageIds.add(p.id); void bulkLockSelected(); }} loading={bulkBusy}>Lock</LoadingButton>{/if}
 					<LoadingButton
 						variant="destructive"
 						size="xs"
@@ -956,7 +1234,7 @@
 							</Table.Row>
 						{:else}
 							<Table.Row>
-								<Table.Cell colspan={8} class="text-center text-muted-foreground py-8">Belum ada paket ujian</Table.Cell>
+								<Table.Cell colspan={10} class="text-center text-muted-foreground py-8">Tidak ada paket sesuai filter</Table.Cell>
 							</Table.Row>
 						{/each}
 					</Table.Body>
@@ -964,11 +1242,14 @@
 				</div>
 
 				<div class="grid gap-3 p-4 lg:hidden">
-					{#each currentPackages as p (p.id)}
+					{#each filteredPackages as p (p.id)}
 						{@const quality = packageQualitySummary(p.id)}
+						{@const progress = packageProgress(p, quality)}
+						{@const readiness = packageReadinessStatus(p, quality)}
 						<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
-								<div class="min-w-0">
+								<input type="checkbox" class="mt-1 rounded" checked={selectedPackageIds.has(p.id)} onchange={() => togglePackageSelection(p.id)} />
+								<div class="min-w-0 flex-1">
 									<p class="text-sm font-semibold text-foreground">{p.title}</p>
 									<p class="mt-1 text-xs text-muted-foreground">{p.subject_name} ({p.subject_code})</p>
 								</div>
@@ -987,7 +1268,10 @@
 								{#if p.randomize_questions}
 									<Badge class="bg-primary/10 text-primary border-primary/20 text-xs">Acak</Badge>
 								{/if}
+								<Badge class={`text-xs ${readinessBadgeClass(readiness)}`}>{readinessLabel(readiness)}</Badge>
+								{#if Number(p.session_count ?? 0) > 0}<Badge variant="outline" class="text-xs">{p.session_count} sesi</Badge>{/if}
 							</div>
+							{#if showUtsMode}<div class="mt-3"><div class="h-2 rounded-full bg-muted"><div class="h-2 rounded-full bg-primary" style={`width: ${Math.min(100, progress.percent)}%`}></div></div><p class="mt-1 text-xs text-muted-foreground">{progress.pgCount}/{packageTargets(p).pg} PG · {progress.essayCount}/{packageTargets(p).essay} Essay</p></div>{/if}
 							<details class="mt-3 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
 								<summary class="cursor-pointer font-medium text-foreground">Mutu paket</summary>
 								<div class="mt-2 flex flex-wrap items-center gap-1.5">
@@ -1022,6 +1306,7 @@
 								>
 									Detail/Edit
 								</a>
+								<a href={`${resolve('/asesmen/paket')}/${p.id}#soal`} class="inline-flex flex-1 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-semibold hover:bg-muted">Isi Soal</a>
 								<LoadingButton
 									variant="destructive"
 									size="sm"
@@ -1037,7 +1322,7 @@
 						</div>
 					{:else}
 						<div class="rounded-2xl border border-dashed border-border bg-muted/50 px-4 py-10 text-center text-sm text-muted-foreground">
-							Belum ada paket ujian
+							Tidak ada paket sesuai filter
 						</div>
 					{/each}
 				</div>
