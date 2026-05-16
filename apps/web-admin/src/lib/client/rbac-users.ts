@@ -47,6 +47,7 @@ export type RBACPermissionInput = {
 	description?: string;
 };
 
+export type AccountGenerationStatus = 'ready' | 'created' | 'skipped' | 'failed';
 
 export type EmployeeAccountGenerationItem = {
 	employee_id: string;
@@ -57,7 +58,7 @@ export type EmployeeAccountGenerationItem = {
 	username: string;
 	password?: string;
 	role: string;
-	status: 'ready' | 'created' | 'skipped' | 'failed';
+	status: AccountGenerationStatus;
 	message: string;
 	existing_user_id?: string;
 	username_user_id?: string;
@@ -73,6 +74,56 @@ export type EmployeeAccountGenerationResult = {
 	skipped: number;
 	failed: number;
 	items: EmployeeAccountGenerationItem[];
+};
+
+export type StudentAccountGenerationCandidate = {
+	student_id: string;
+	nis: string;
+	nisn: string;
+	nama: string;
+	generated_username?: string;
+	temporary_password?: string;
+	role: string;
+	status: AccountGenerationStatus;
+	reason?: string;
+	user_id?: string;
+	existing_user_id?: string;
+};
+
+export type StudentAccountGenerationResult = {
+	role: string;
+	total: number;
+	ready: number;
+	created: number;
+	skipped: number;
+	failed: number;
+	candidates: StudentAccountGenerationCandidate[];
+};
+
+export type ParentAccountGenerationCandidate = {
+	parent_id: string;
+	nama: string;
+	phone?: string;
+	child_count: number;
+	basis_student_id?: string;
+	basis_student_nisn?: string;
+	generated_username?: string;
+	temporary_password?: string;
+	role: string;
+	status: AccountGenerationStatus;
+	reason?: string;
+	user_id?: string;
+	existing_user_id?: string;
+};
+
+export type ParentAccountGenerationResult = {
+	role: string;
+	total: number;
+	ready: number;
+	created: number;
+	skipped: number;
+	failed: number;
+	candidates: ParentAccountGenerationCandidate[];
 };
 
 export type UserProfileCandidateChild = {
@@ -238,9 +289,33 @@ export async function generateEmployeeAccounts(fetcher: FetchLike = fetch) {
 	return readClientApiData<EmployeeAccountGenerationResult>(res, 'Gagal generate akun pegawai.');
 }
 
+export async function previewStudentAccounts(fetcher: FetchLike = fetch) {
+	const res = await fetcher('/api/users/student-accounts/preview');
+	return readClientApiData<StudentAccountGenerationResult>(res, 'Gagal memuat preview akun siswa.');
+}
+
+export async function generateStudentAccounts(fetcher: FetchLike = fetch) {
+	const res = await fetcher('/api/users/student-accounts/generate', { method: 'POST' });
+	return readClientApiData<StudentAccountGenerationResult>(res, 'Gagal generate akun siswa.');
+}
+
+export async function previewParentAccounts(fetcher: FetchLike = fetch) {
+	const res = await fetcher('/api/users/parent-accounts/preview');
+	return readClientApiData<ParentAccountGenerationResult>(res, 'Gagal memuat preview akun orang tua.');
+}
+
+export async function generateParentAccounts(fetcher: FetchLike = fetch) {
+	const res = await fetcher('/api/users/parent-accounts/generate', { method: 'POST' });
+	return readClientApiData<ParentAccountGenerationResult>(res, 'Gagal generate akun orang tua.');
+}
+
+function csvFromRows(headers: string[], rows: unknown[][]) {
+	const escape = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+	return [headers, ...rows].map((row) => row.map(escape).join(',')).join('\n');
+}
+
 export function employeeAccountGenerationCSV(result: EmployeeAccountGenerationResult) {
 	const headers = ['nama', 'nip', 'tanggal_lahir', 'username', 'password_awal', 'role', 'status', 'keterangan'];
-	const escape = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
 	const rows = result.items.map((item) => [
 		item.nama,
 		item.nip,
@@ -251,5 +326,36 @@ export function employeeAccountGenerationCSV(result: EmployeeAccountGenerationRe
 		item.status,
 		item.message
 	]);
-	return [headers, ...rows].map((row) => row.map(escape).join(',')).join('\n');
+	return csvFromRows(headers, rows);
+}
+
+export function studentAccountGenerationCSV(result: StudentAccountGenerationResult) {
+	const headers = ['nama', 'nis', 'nisn', 'username', 'password_awal', 'role', 'status', 'keterangan'];
+	const rows = result.candidates.map((item) => [
+		item.nama,
+		item.nis,
+		item.nisn,
+		item.generated_username ?? '',
+		item.temporary_password ?? '',
+		item.role,
+		item.status,
+		item.reason ?? ''
+	]);
+	return csvFromRows(headers, rows);
+}
+
+export function parentAccountGenerationCSV(result: ParentAccountGenerationResult) {
+	const headers = ['nama', 'telepon', 'jumlah_anak', 'nisn_anak_basis', 'username', 'password_awal', 'role', 'status', 'keterangan'];
+	const rows = result.candidates.map((item) => [
+		item.nama,
+		item.phone ?? '',
+		item.child_count,
+		item.basis_student_nisn ?? '',
+		item.generated_username ?? '',
+		item.temporary_password ?? '',
+		item.role,
+		item.status,
+		item.reason ?? ''
+	]);
+	return csvFromRows(headers, rows);
 }

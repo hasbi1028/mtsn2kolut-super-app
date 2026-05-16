@@ -6,9 +6,9 @@ export const PATCH = async (event: RequestEvent) => {
 	try {
 		const id = requiredRouteParam(event.params.id, 'id');
 		const body = await readRequestJson<Record<string, unknown>>(event.request);
-		const data = await proxy(event).patch(apiPath`/api/users/${id}/status`, body);
-		return json(data);
+		const res = await proxy(event).patch(apiPath`/api/users/${id}/status`, body);
+		return json(res ?? { ok: true });
 	} catch (e) {
-		return handleRouteError(e, 'users/[id]/status PATCH');
+		return handleRouteError(e, 'users status PATCH');
 	}
 };

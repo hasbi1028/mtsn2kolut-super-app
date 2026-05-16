@@ -160,6 +160,8 @@ function usersPermission(pathname: string, method: string): string[] | undefined
 	if (matchesPathSegment(pathname, '/api/users/profile-candidates')) return ['users.create'];
 	if (matchesPathSegment(pathname, '/api/users/change-requests')) return ['profile_changes.review'];
 	if (matchesPathSegment(pathname, '/api/users') && pathname.endsWith('/reset-password')) return ['users.reset_password'];
+	if (matchesPathSegment(pathname, '/api/users') && pathname.endsWith('/force-password-change')) return ['users.reset_password'];
+	if (matchesPathSegment(pathname, '/api/users') && pathname.endsWith('/status')) return ['users.deactivate'];
 	if (matchesPathSegment(pathname, '/api/users') && pathname.endsWith('/profile-link')) return ['users.update'];
 	if (matchesPathSegment(pathname, '/api/users') && pathname.endsWith('/roles')) return ['users.manage_roles'];
 	if (matchesPathSegment(pathname, '/settings/user-change-requests')) return ['profile_changes.review'];

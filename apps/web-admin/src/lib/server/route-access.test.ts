@@ -336,6 +336,8 @@ describe('route access helpers', () => {
 		expect(requiredPermissionsForPath('/api/users/change-requests/export', 'GET')).toEqual(['profile_changes.review']);
 		expect(requiredPermissionsForPath('/api/users/change-requests/request-1', 'PATCH')).toEqual(['profile_changes.review']);
 		expect(requiredPermissionsForPath('/api/users/user-1/reset-password', 'POST')).toEqual(['users.reset_password']);
+		expect(requiredPermissionsForPath('/api/users/user-1/force-password-change', 'POST')).toEqual(['users.reset_password']);
+		expect(requiredPermissionsForPath('/api/users/user-1/status', 'PATCH')).toEqual(['users.deactivate']);
 		expect(requiredPermissionsForPath('/api/users/user-1/profile-link', 'PATCH')).toEqual(['users.update']);
 		expect(requiredPermissionsForPath('/bank-soal/tambah', 'GET')).toEqual(['bank_soal.create']);
 		expect(requiredPermissionsForPath('/bank-soal/verifikasi', 'GET')).toEqual(['bank_soal.review']);
