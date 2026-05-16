@@ -377,3 +377,76 @@ Proceed with this order:
 8. Verify and report.
 
 This is safer than directly deleting duplicates first, because it closes the source of duplication before touching existing data.
+
+---
+
+## Completion Notes — 2026-05-16
+
+Execution completed according to this recommended plan.
+
+### Validation
+
+- `npm --prefix apps/web-admin run check`: PASS (`svelte-check found 0 errors and 0 warnings`).
+- `sqlc generate`: PASS.
+- `go test ./internal/service ./internal/handler ./internal/repository/postgres`: PASS.
+- `go build -o /tmp/core-api-bank-soal-duplicate-workflow-review-fix ./cmd/api`: PASS.
+- `git diff --check`: PASS.
+
+### Commit
+
+Code hardening commit:
+
+```text
+21c99a4 fix(bank-soal): harden duplicate draft workflow guard
+```
+
+### Deploy
+
+- `mtsn2kolut-core-api` restarted with the hardened binary.
+- Backend health check returned `status: ok` and `db: connected`.
+- Smoke tests:
+  - `/login` → 200.
+  - `/bank-soal/daftar` without login → 302, expected because protected route.
+
+Backend binary backup before replace:
+
+```text
+services/core-api/bin/api.backup-bank-soal-duplicate-workflow-20260516-130443
+```
+
+### Database Backup Before Cleanup
+
+Backup path:
+
+```text
+/home/servermtsn2kolut/backups/mtsn2kolut-super-app/postgresql/pre-bank-soal-duplicate-cleanup-20260516-130557.dump
+```
+
+SHA256:
+
+```text
+ffa0c56264036402fb689e7022db36d31d488c095b8ce2cc33dcc94fb837f373
+```
+
+### Duplicate Audit and Cleanup
+
+Audit before cleanup:
+
+- Duplicate groups: 6.
+- Duplicate draft rows total: 16.
+- Safe delete candidates: 10.
+
+Cleanup executed only for safe unused duplicate draft rows:
+
+- Deleted rows: 10.
+
+Verification after cleanup:
+
+- Duplicate groups after cleanup: 0.
+- Duplicate rows after cleanup: 0.
+
+### Final Safety Notes
+
+- Only draft duplicate rows matching the conservative fingerprint and unused by package/snapshot/student answers were deleted.
+- Guard source is now closed at backend with advisory lock + expanded fingerprint.
+- Submit-review is idempotent for existing `submitted`/`review` states.
