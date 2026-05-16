@@ -5,34 +5,60 @@
 ALTER TABLE cbt_questions
   ADD COLUMN IF NOT EXISTS target_level TEXT;
 
-UPDATE cbt_questions
-SET target_level = CASE grade_level
-  WHEN 7 THEN 'VII'
-  WHEN 8 THEN 'VIII'
-  WHEN 9 THEN 'IX'
-  ELSE NULL
-END
-WHERE NULLIF(btrim(COALESCE(target_level, '')), '') IS NULL
-  AND grade_level IN (7, 8, 9);
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'cbt_questions'
+      AND column_name = 'grade_level'
+  ) THEN
+    EXECUTE $sync_from_grade_level$
+      UPDATE cbt_questions
+      SET target_level = CASE grade_level
+        WHEN 7 THEN 'VII'
+        WHEN 8 THEN 'VIII'
+        WHEN 9 THEN 'IX'
+        ELSE NULL
+      END
+      WHERE NULLIF(btrim(COALESCE(target_level, '')), '') IS NULL
+        AND grade_level IN (7, 8, 9)
+    $sync_from_grade_level$;
+  END IF;
+END $$;
 
 UPDATE cbt_questions
 SET target_level = UPPER(btrim(target_level))
 WHERE target_level IS NOT NULL
   AND target_level <> UPPER(btrim(target_level));
 
-UPDATE cbt_questions
-SET grade_level = CASE target_level
-  WHEN 'VII' THEN 7
-  WHEN 'VIII' THEN 8
-  WHEN 'IX' THEN 9
-  ELSE NULL
-END
-WHERE target_level IN ('VII', 'VIII', 'IX')
-  AND grade_level IS DISTINCT FROM CASE target_level
-    WHEN 'VII' THEN 7
-    WHEN 'VIII' THEN 8
-    WHEN 'IX' THEN 9
-  END;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'cbt_questions'
+      AND column_name = 'grade_level'
+  ) THEN
+    EXECUTE $sync_to_grade_level$
+      UPDATE cbt_questions
+      SET grade_level = CASE target_level
+        WHEN 'VII' THEN 7
+        WHEN 'VIII' THEN 8
+        WHEN 'IX' THEN 9
+        ELSE NULL
+      END
+      WHERE target_level IN ('VII', 'VIII', 'IX')
+        AND grade_level IS DISTINCT FROM CASE target_level
+          WHEN 'VII' THEN 7
+          WHEN 'VIII' THEN 8
+          WHEN 'IX' THEN 9
+        END
+    $sync_to_grade_level$;
+  END IF;
+END $$;
 
 ALTER TABLE cbt_questions
   DROP CONSTRAINT IF EXISTS chk_cbt_questions_target_level;
