@@ -35,7 +35,7 @@ type cbtPackageSnapshotStore interface {
 type cbtPackageCreateStore interface {
 	CreateCbtPackage(ctx context.Context, arg db.CreateCbtPackageParams) (db.CbtPackage, error)
 	GetCbtQuestion(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error)
-	AddCbtPackageQuestion(ctx context.Context, arg db.AddCbtPackageQuestionParams) error
+	AddCbtPackageQuestion(ctx context.Context, arg db.AddCbtPackageQuestionParams) (int64, error)
 }
 
 type cbtPackageDetailStore interface {
@@ -52,7 +52,7 @@ type cbtPackageEditStore interface {
 	UpdateCbtPackageMetadata(ctx context.Context, arg db.UpdateCbtPackageMetadataParams) (db.CbtPackage, error)
 	GetCbtQuestion(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error)
 	DeleteCbtPackageQuestions(ctx context.Context, packageID pgtype.UUID) (int64, error)
-	AddCbtPackageQuestion(ctx context.Context, arg db.AddCbtPackageQuestionParams) error
+	AddCbtPackageQuestion(ctx context.Context, arg db.AddCbtPackageQuestionParams) (int64, error)
 	CloneCbtPackage(ctx context.Context, arg db.CloneCbtPackageParams) (db.CbtPackage, error)
 	CloneCbtPackageQuestions(ctx context.Context, arg db.CloneCbtPackageQuestionsParams) (int64, error)
 }
@@ -241,7 +241,7 @@ func createCbtPackage(ctx context.Context, q cbtPackageCreateStore, input Create
 		return db.CbtPackage{}, err
 	}
 	for i, selection := range selections {
-		if err := q.AddCbtPackageQuestion(ctx, db.AddCbtPackageQuestionParams{
+		if err := addCbtPackageQuestion(ctx, q, db.AddCbtPackageQuestionParams{
 			PackageID:  pkg.ID,
 			QuestionID: selection.QuestionID,
 			Position:   int32(i + 1),
@@ -335,7 +335,7 @@ func replaceCbtPackageQuestions(ctx context.Context, q cbtPackageEditStore, inpu
 		return err
 	}
 	for i, selection := range selections {
-		if err := q.AddCbtPackageQuestion(ctx, db.AddCbtPackageQuestionParams{
+		if err := addCbtPackageQuestion(ctx, q, db.AddCbtPackageQuestionParams{
 			PackageID:  input.PackageID,
 			QuestionID: selection.QuestionID,
 			Position:   int32(i + 1),
@@ -392,8 +392,8 @@ func validateCbtPackageQuestionSelection(ctx context.Context, q interface {
 		if question.SubjectID != subjectID {
 			return nil, fmt.Errorf("semua soal harus dari mapel yang sama")
 		}
-		if question.Status != db.CbtQuestionStatusEnumPublished {
-			return nil, fmt.Errorf("semua soal paket harus berstatus terbit")
+		if !cbtQuestionCanBeAssignedToOfficialPackage(question) {
+			return nil, cbtPackageQuestionWorkflowError()
 		}
 		switch {
 		case eventID.Valid && question.EventID.Valid && !sameUUID(question.EventID, eventID):
@@ -413,6 +413,35 @@ func validateCbtPackageQuestionSelection(ctx context.Context, q interface {
 		selections = append(selections, cbtPackageQuestionSelection{QuestionID: questionID, Points: points})
 	}
 	return selections, nil
+}
+
+func addCbtPackageQuestion(ctx context.Context, q interface {
+	AddCbtPackageQuestion(ctx context.Context, arg db.AddCbtPackageQuestionParams) (int64, error)
+}, arg db.AddCbtPackageQuestionParams) error {
+	rows, err := q.AddCbtPackageQuestion(ctx, arg)
+	if err != nil {
+		return err
+	}
+	if rows != 1 {
+		return cbtPackageQuestionWorkflowError()
+	}
+	return nil
+}
+
+func cbtPackageQuestionWorkflowError() error {
+	return fmt.Errorf("%w: soal draft/submitted/revision_needed/rejected/archived tidak boleh digunakan dalam paket resmi; pilih soal approved/published atau soal berstatus terbit", domain.ErrConflict)
+}
+
+func cbtQuestionCanBeAssignedToOfficialPackage(question db.GetCbtQuestionRow) bool {
+	if question.Status == db.CbtQuestionStatusEnumArchived {
+		return false
+	}
+	switch normalizeWorkflowStatus(question.WorkflowStatus) {
+	case "approved", "published":
+		return true
+	default:
+		return question.Status == db.CbtQuestionStatusEnumPublished
+	}
 }
 
 func cbtPackageReadinessStatusFromQuestions(questions []db.ListCbtPackageQuestionsByPackageRow, sessionCount int32, locked bool) CbtPackageReadinessStatus {

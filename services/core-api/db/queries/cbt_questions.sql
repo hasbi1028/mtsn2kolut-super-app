@@ -16,8 +16,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
              SELECT 1 FROM bank_soal_reviewer_scopes rs
              WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
                AND (
-                 (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-                 OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
                )
                AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
                AND (
@@ -28,7 +28,31 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
          THEN q.answer_key ELSE '' END AS answer_key,
        q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
-       q.explanation_html, q.rubric_html,
+       q.explanation_html,
+       CASE
+         WHEN sqlc.arg(is_admin)::bool
+           OR q.author_username = sqlc.arg(actor_username)::text
+           OR EXISTS (
+             SELECT 1 FROM cbt_event_members m
+             WHERE m.event_id = q.event_id
+               AND m.user_id = sqlc.arg(actor_user_id)::uuid
+               AND m.role IN ('reviewer', 'panitia')
+               AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+           )
+           OR EXISTS (
+             SELECT 1 FROM bank_soal_reviewer_scopes rs
+             WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
+               AND (
+                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+               )
+               AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+               AND (
+                 rs.grade_level IS NULL
+                 OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+               )
+           )
+         THEN q.rubric_html ELSE '' END AS rubric_html,
        q.academic_phase, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
@@ -79,10 +103,47 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
                AND m.role IN ('reviewer', 'panitia')
                AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
            )
+           OR EXISTS (
+             SELECT 1 FROM bank_soal_reviewer_scopes rs
+             WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
+               AND (
+                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+               )
+               AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+               AND (
+                 rs.grade_level IS NULL
+                 OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+               )
+           )
          THEN q.answer_key ELSE '' END AS answer_key,
        q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
-       q.explanation_html, q.rubric_html,
+       q.explanation_html,
+       CASE
+         WHEN sqlc.arg(is_admin)::bool
+           OR q.author_username = sqlc.arg(actor_username)::text
+           OR EXISTS (
+             SELECT 1 FROM cbt_event_members m
+             WHERE m.event_id = q.event_id
+               AND m.user_id = sqlc.arg(actor_user_id)::uuid
+               AND m.role IN ('reviewer', 'panitia')
+               AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+           )
+           OR EXISTS (
+             SELECT 1 FROM bank_soal_reviewer_scopes rs
+             WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
+               AND (
+                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+               )
+               AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+               AND (
+                 rs.grade_level IS NULL
+                 OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+               )
+           )
+         THEN q.rubric_html ELSE '' END AS rubric_html,
        q.academic_phase, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
@@ -241,10 +302,47 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
                AND m.role IN ('reviewer', 'panitia')
                AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
            )
+           OR EXISTS (
+             SELECT 1 FROM bank_soal_reviewer_scopes rs
+             WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
+               AND (
+                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+               )
+               AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+               AND (
+                 rs.grade_level IS NULL
+                 OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+               )
+           )
          THEN q.answer_key ELSE '' END AS answer_key,
        q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
-       q.explanation_html, q.rubric_html,
+       q.explanation_html,
+       CASE
+         WHEN sqlc.arg(is_admin)::bool
+           OR q.author_username = sqlc.arg(actor_username)::text
+           OR EXISTS (
+             SELECT 1 FROM cbt_event_members m
+             WHERE m.event_id = q.event_id
+               AND m.user_id = sqlc.arg(actor_user_id)::uuid
+               AND m.role IN ('reviewer', 'panitia')
+               AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+           )
+           OR EXISTS (
+             SELECT 1 FROM bank_soal_reviewer_scopes rs
+             WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
+               AND (
+                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+               )
+               AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+               AND (
+                 rs.grade_level IS NULL
+                 OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+               )
+           )
+         THEN q.rubric_html ELSE '' END AS rubric_html,
        q.academic_phase, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,

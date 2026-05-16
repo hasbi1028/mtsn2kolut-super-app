@@ -95,15 +95,20 @@ LEFT JOIN cbt_exam_sessions s ON s.package_id = p.id
 WHERE p.id = $1
 GROUP BY p.id;
 
--- name: AddCbtPackageQuestion :exec
+-- name: AddCbtPackageQuestion :execrows
 INSERT INTO cbt_package_questions (package_id, question_id, position, points)
-SELECT $1, $2, $3, $4
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM cbt_packages p
-  WHERE p.id = $1
-    AND p.locked_at IS NOT NULL
-);
+SELECT sqlc.arg(package_id), sqlc.arg(question_id), sqlc.arg(position), sqlc.arg(points)
+FROM cbt_packages p
+JOIN cbt_questions q ON q.id = sqlc.arg(question_id)
+WHERE p.id = sqlc.arg(package_id)
+  AND p.locked_at IS NULL
+  AND q.subject_id = p.subject_id
+  AND q.status <> 'archived'
+  AND (q.workflow_status IN ('approved', 'published') OR q.status = 'published')
+  AND (
+    (p.event_id IS NULL AND q.event_id IS NULL)
+    OR (p.event_id IS NOT NULL AND (q.event_id IS NULL OR q.event_id = p.event_id))
+  );
 
 -- name: DeleteCbtPackageQuestions :execrows
 DELETE FROM cbt_package_questions

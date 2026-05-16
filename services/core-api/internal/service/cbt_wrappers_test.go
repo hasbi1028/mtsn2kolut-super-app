@@ -435,9 +435,12 @@ func (f *fakeCbtPackageStore) GetCbtQuestion(ctx context.Context, id pgtype.UUID
 	return db.GetCbtQuestionRow{ID: id, EventID: f.createArg.EventID, SubjectID: f.createArg.SubjectID, Status: db.CbtQuestionStatusEnumPublished}, f.questionErr
 }
 
-func (f *fakeCbtPackageStore) AddCbtPackageQuestion(ctx context.Context, arg db.AddCbtPackageQuestionParams) error {
+func (f *fakeCbtPackageStore) AddCbtPackageQuestion(ctx context.Context, arg db.AddCbtPackageQuestionParams) (int64, error) {
 	f.addArgs = append(f.addArgs, arg)
-	return f.addErr
+	if f.addErr != nil {
+		return 0, f.addErr
+	}
+	return 1, nil
 }
 
 func (f *fakeCbtPackageStore) WithTx(tx pgx.Tx) *db.Queries {

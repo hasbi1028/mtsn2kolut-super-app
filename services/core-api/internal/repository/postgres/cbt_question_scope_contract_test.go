@@ -78,14 +78,33 @@ func TestCBTQuestionFilteredQuerySupportsReusableAndEventPoolScopes(t *testing.T
 		}
 	}
 
-	generatedRequired := []string{
-		"$4::text = 'global' and q.event_id is null",
-		"$4::text = 'event_pool'",
-		"q.event_id is null or ($5::uuid is not null and q.event_id = $5::uuid)",
+	generatedAlternatives := [][]string{
+		{
+			"$4::text = 'global' and q.event_id is null",
+			"$4::text = 'event_pool'",
+			"q.event_id is null or ($5::uuid is not null and q.event_id = $5::uuid)",
+		},
+		{
+			"$6::text = 'global' and q.event_id is null",
+			"$6::text = 'event_pool'",
+			"q.event_id is null or ($7::uuid is not null and q.event_id = $7::uuid)",
+		},
 	}
-	for _, needle := range generatedRequired {
-		if !strings.Contains(generated, needle) {
-			t.Fatalf("ListCbtQuestionsFiltered generated query missing scope clause %q", needle)
+	matched := false
+	for _, requiredGroup := range generatedAlternatives {
+		groupMatched := true
+		for _, needle := range requiredGroup {
+			if !strings.Contains(generated, needle) {
+				groupMatched = false
+				break
+			}
 		}
+		if groupMatched {
+			matched = true
+			break
+		}
+	}
+	if !matched {
+		t.Fatalf("ListCbtQuestionsFiltered generated query missing reusable/event-pool scope clauses")
 	}
 }

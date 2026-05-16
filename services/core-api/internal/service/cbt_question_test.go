@@ -834,26 +834,61 @@ func TestCbtQuestionCreateAllowsGuruReusableAndRejectsNonGuru(t *testing.T) {
 
 func TestCbtQuestionGetDetailScopesAndRedactsAnswerKey(t *testing.T) {
 	questionID := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
+	subjectID := pgtype.UUID{Bytes: [16]byte{2}, Valid: true}
 	store := &fakeQuestionStore{detail: db.GetCbtQuestionDetailRow{
 		ID:             questionID,
-		SubjectID:      pgtype.UUID{Bytes: [16]byte{2}, Valid: true},
+		SubjectID:      subjectID,
 		Status:         db.CbtQuestionStatusEnumPublished,
 		AuthorUsername: "author",
 		AnswerKey:      "A",
+		RubricHtml:     "<p>Rubrik</p>",
 	}}
 	svc := &CbtQuestion{q: store}
 	row, err := svc.GetDetail(context.Background(), questionID, CbtQuestionActor{Username: "guru.lain", Roles: []string{"guru"}})
 	if err != nil {
 		t.Fatalf("GetDetail(published) error = %v", err)
 	}
-	if row.AnswerKey != "" {
-		t.Fatalf("GetDetail(published unauthorized) answer_key = %q, want redacted", row.AnswerKey)
+	if row.AnswerKey != "" || row.RubricHtml != "" {
+		t.Fatalf("GetDetail(published unauthorized) answer/rubric = %q/%q, want redacted", row.AnswerKey, row.RubricHtml)
 	}
 
 	store.detail.Status = db.CbtQuestionStatusEnumDraft
+	store.detail.WorkflowStatus = "submitted"
 	_, err = svc.GetDetail(context.Background(), questionID, CbtQuestionActor{Username: "guru.lain", Roles: []string{"guru"}})
 	if !errors.Is(err, domain.ErrForbidden) {
-		t.Fatalf("GetDetail(private unauthorized) error = %v, want ErrForbidden", err)
+		t.Fatalf("GetDetail(submitted other author) error = %v, want ErrForbidden", err)
+	}
+
+	store.canReview = true
+	reviewerID := pgtype.UUID{Bytes: [16]byte{3}, Valid: true}
+	row, err = svc.GetDetail(context.Background(), questionID, CbtQuestionActor{
+		UserID:      reviewerID,
+		Username:    "reviewer.ipa",
+		Roles:       []string{"guru"},
+		Permissions: []string{"bank_soal.review"},
+	})
+	if err != nil {
+		t.Fatalf("GetDetail(scoped reviewer) error = %v", err)
+	}
+	if row.AnswerKey != "A" || row.RubricHtml != "<p>Rubrik</p>" {
+		t.Fatalf("GetDetail(scoped reviewer) answer/rubric = %q/%q, want visible", row.AnswerKey, row.RubricHtml)
+	}
+
+	store.canReview = false
+	store.canApprove = true
+	store.detail.WorkflowStatus = "reviewed"
+	approverID := pgtype.UUID{Bytes: [16]byte{4}, Valid: true}
+	row, err = svc.GetDetail(context.Background(), questionID, CbtQuestionActor{
+		UserID:      approverID,
+		Username:    "approver.ipa",
+		Roles:       []string{"guru"},
+		Permissions: []string{"bank_soal.approve"},
+	})
+	if err != nil {
+		t.Fatalf("GetDetail(scoped approver) error = %v", err)
+	}
+	if row.AnswerKey != "A" || row.RubricHtml != "<p>Rubrik</p>" {
+		t.Fatalf("GetDetail(scoped approver) answer/rubric = %q/%q, want visible", row.AnswerKey, row.RubricHtml)
 	}
 }
 

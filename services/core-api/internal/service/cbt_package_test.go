@@ -55,16 +55,21 @@ func (f *fakeCbtPackageCreateStore) GetCbtQuestion(_ context.Context, id pgtype.
 	return f.questions[id], nil
 }
 
-func (f *fakeCbtPackageCreateStore) AddCbtPackageQuestion(_ context.Context, arg db.AddCbtPackageQuestionParams) error {
+func (f *fakeCbtPackageCreateStore) AddCbtPackageQuestion(_ context.Context, arg db.AddCbtPackageQuestionParams) (int64, error) {
 	f.addParams = append(f.addParams, arg)
-	return f.addErr
+	if f.addErr != nil {
+		return 0, f.addErr
+	}
+	return 1, nil
 }
 
-func TestCreateCbtPackageRequiresPublishedQuestions(t *testing.T) {
+func TestCreateCbtPackageRequiresEligibleOfficialQuestions(t *testing.T) {
 	subjectID := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
 	packageID := pgtype.UUID{Bytes: [16]byte{2}, Valid: true}
 	publishedQuestionID := pgtype.UUID{Bytes: [16]byte{3}, Valid: true}
 	draftQuestionID := pgtype.UUID{Bytes: [16]byte{4}, Valid: true}
+	approvedQuestionID := pgtype.UUID{Bytes: [16]byte{5}, Valid: true}
+	workflowPublishedQuestionID := pgtype.UUID{Bytes: [16]byte{6}, Valid: true}
 
 	t.Run("accepts published questions", func(t *testing.T) {
 		store := &fakeCbtPackageCreateStore{
@@ -91,6 +96,69 @@ func TestCreateCbtPackageRequiresPublishedQuestions(t *testing.T) {
 		}
 	})
 
+	t.Run("accepts approved workflow questions before publish", func(t *testing.T) {
+		store := &fakeCbtPackageCreateStore{
+			createRow: db.CbtPackage{ID: packageID, SubjectID: subjectID},
+			questions: map[pgtype.UUID]db.GetCbtQuestionRow{
+				approvedQuestionID: {
+					ID:             approvedQuestionID,
+					SubjectID:      subjectID,
+					Status:         db.CbtQuestionStatusEnumDraft,
+					WorkflowStatus: "approved",
+				},
+				workflowPublishedQuestionID: {
+					ID:             workflowPublishedQuestionID,
+					SubjectID:      subjectID,
+					Status:         db.CbtQuestionStatusEnumDraft,
+					WorkflowStatus: "published",
+				},
+			},
+		}
+
+		_, err := createCbtPackage(context.Background(), store, CreateCbtPackageInput{
+			SubjectID:   subjectID,
+			Title:       "PAT IPA",
+			QuestionIDs: []pgtype.UUID{approvedQuestionID, workflowPublishedQuestionID},
+		})
+		if err != nil {
+			t.Fatalf("createCbtPackage() error = %v", err)
+		}
+		if len(store.addParams) != 2 || store.addParams[0].QuestionID != approvedQuestionID || store.addParams[1].QuestionID != workflowPublishedQuestionID {
+			t.Fatalf("AddCbtPackageQuestion() params = %+v, want approved/published workflow questions added", store.addParams)
+		}
+	})
+
+	t.Run("rejects unsafe workflow questions", func(t *testing.T) {
+		unsafeStatuses := []string{"draft", "submitted", "revision_needed", "rejected", "archived"}
+		for _, workflowStatus := range unsafeStatuses {
+			t.Run(workflowStatus, func(t *testing.T) {
+				store := &fakeCbtPackageCreateStore{
+					createRow: db.CbtPackage{ID: packageID, SubjectID: subjectID},
+					questions: map[pgtype.UUID]db.GetCbtQuestionRow{
+						draftQuestionID: {
+							ID:             draftQuestionID,
+							SubjectID:      subjectID,
+							Status:         db.CbtQuestionStatusEnumDraft,
+							WorkflowStatus: workflowStatus,
+						},
+					},
+				}
+
+				_, err := createCbtPackage(context.Background(), store, CreateCbtPackageInput{
+					SubjectID:   subjectID,
+					Title:       "PAT IPA",
+					QuestionIDs: []pgtype.UUID{draftQuestionID},
+				})
+				if err == nil || !strings.Contains(err.Error(), "draft/submitted/revision_needed/rejected") {
+					t.Fatalf("createCbtPackage() error = %v, want unsafe workflow rejection", err)
+				}
+				if len(store.addParams) != 0 {
+					t.Fatalf("AddCbtPackageQuestion() calls = %d, want 0", len(store.addParams))
+				}
+			})
+		}
+	})
+
 	t.Run("rejects draft questions", func(t *testing.T) {
 		store := &fakeCbtPackageCreateStore{
 			createRow: db.CbtPackage{ID: packageID, SubjectID: subjectID},
@@ -108,7 +176,7 @@ func TestCreateCbtPackageRequiresPublishedQuestions(t *testing.T) {
 			Title:       "PAT IPA",
 			QuestionIDs: []pgtype.UUID{draftQuestionID},
 		})
-		if err == nil || !strings.Contains(err.Error(), "terbit") {
+		if err == nil || !strings.Contains(err.Error(), "approved/published") {
 			t.Fatalf("createCbtPackage() error = %v, want unpublished question rejection", err)
 		}
 		if len(store.addParams) != 0 {

@@ -11,15 +11,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const addCbtPackageQuestion = `-- name: AddCbtPackageQuestion :exec
+const addCbtPackageQuestion = `-- name: AddCbtPackageQuestion :execrows
 INSERT INTO cbt_package_questions (package_id, question_id, position, points)
 SELECT $1, $2, $3, $4
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM cbt_packages p
-  WHERE p.id = $1
-    AND p.locked_at IS NOT NULL
-)
+FROM cbt_packages p
+JOIN cbt_questions q ON q.id = $2
+WHERE p.id = $1
+  AND p.locked_at IS NULL
+  AND q.subject_id = p.subject_id
+  AND q.status <> 'archived'
+  AND (q.workflow_status IN ('approved', 'published') OR q.status = 'published')
+  AND (
+    (p.event_id IS NULL AND q.event_id IS NULL)
+    OR (p.event_id IS NOT NULL AND (q.event_id IS NULL OR q.event_id = p.event_id))
+  )
 `
 
 type AddCbtPackageQuestionParams struct {
@@ -29,14 +34,17 @@ type AddCbtPackageQuestionParams struct {
 	Points     int32       `json:"points"`
 }
 
-func (q *Queries) AddCbtPackageQuestion(ctx context.Context, arg AddCbtPackageQuestionParams) error {
-	_, err := q.db.Exec(ctx, addCbtPackageQuestion,
+func (q *Queries) AddCbtPackageQuestion(ctx context.Context, arg AddCbtPackageQuestionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addCbtPackageQuestion,
 		arg.PackageID,
 		arg.QuestionID,
 		arg.Position,
 		arg.Points,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const cloneCbtPackage = `-- name: CloneCbtPackage :one

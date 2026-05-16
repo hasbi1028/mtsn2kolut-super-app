@@ -175,6 +175,7 @@ func (f *fakeCbtQuestionService) GetDetail(_ context.Context, id pgtype.UUID, ac
 	row := f.getDetailRow
 	if !actor.IsAdmin() && strings.TrimSpace(actor.Username) != strings.TrimSpace(row.AuthorUsername) {
 		row.AnswerKey = ""
+		row.RubricHtml = ""
 	}
 	return row, nil
 }
@@ -888,9 +889,10 @@ func TestCbtQuestionGetAnswerKeyVisibility(t *testing.T) {
 		QuestionText:   "Energi",
 		QuestionType:   "multiple_choice",
 		AnswerKey:      "A",
+		RubricHtml:     "<p>Rubrik</p>",
 		Difficulty:     db.CbtQuestionDifficultyEnumEasy,
 		Status:         db.CbtQuestionStatusEnumDraft,
-		WorkflowStatus: "draft",
+		WorkflowStatus: "submitted",
 		AuthorUsername: "guru.ipa",
 	}
 
@@ -915,11 +917,17 @@ func TestCbtQuestionGetAnswerKeyVisibility(t *testing.T) {
 	if got := run(t, jwt.MapClaims{"roles": []any{"guru"}, "usr": "guru.lain"})["answer_key"]; got != "" {
 		t.Fatalf("Get(non-author guru) answer_key = %#v, want redacted empty string", got)
 	}
+	if got := run(t, jwt.MapClaims{"roles": []any{"guru"}, "usr": "guru.lain"})["rubric_html"]; got != "" {
+		t.Fatalf("Get(non-author guru) rubric_html = %#v, want redacted empty string", got)
+	}
 	if got := run(t, jwt.MapClaims{"roles": []any{"guru"}, "usr": "guru.ipa"})["answer_key"]; got != "A" {
 		t.Fatalf("Get(author guru) answer_key = %#v, want A", got)
 	}
 	if got := run(t, jwt.MapClaims{"roles": []any{"admin"}, "usr": "admin"})["answer_key"]; got != "A" {
 		t.Fatalf("Get(admin) answer_key = %#v, want A", got)
+	}
+	if got := run(t, jwt.MapClaims{"roles": []any{"admin"}, "usr": "admin"})["rubric_html"]; got != "<p>Rubrik</p>" {
+		t.Fatalf("Get(admin) rubric_html = %#v, want visible rubric", got)
 	}
 }
 

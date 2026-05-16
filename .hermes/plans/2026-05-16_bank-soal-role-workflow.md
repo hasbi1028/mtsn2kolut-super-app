@@ -890,6 +890,31 @@ Jika diminta deploy ke production/semi-production:
 
 ---
 
+## Implementation notes
+
+### Sprint 4 completed
+
+- Backend package assignment hardened for new package question inserts/replacements:
+  - `AddCbtPackageQuestion` now refuses locked packages, subject mismatch, archived questions, unsafe event scope, and questions that are not `approved`/`published` by workflow or already `published` by legacy status.
+  - Service validation now rejects `draft`, `submitted`, `revision_needed`, `rejected`, and `archived` workflow questions before package rows are replaced, preserving existing package rows unless a user explicitly edits a package.
+  - Existing package rows are not deleted or migrated in this sprint; this keeps rollout report-first/backward-compatible for historical packages.
+- Answer key/rubric visibility hardened:
+  - Detail endpoint redacts both `answer_key` and `rubric_html` unless actor is admin/read-all, author, event reviewer/panitia, or scoped reviewer/approver with matching Bank Soal permission and scope.
+  - List/filter queries also redact `answer_key` and `rubric_html` using actor permission/scope flags.
+- Tests added/updated for:
+  - rejecting unsafe workflow questions in official package creation,
+  - accepting approved/published workflow questions,
+  - redacting answer/rubric for plain guru on other author questions,
+  - allowing scoped reviewer/approver to view answer/rubric in review/approval statuses.
+- Validation PASS:
+  - `npm --prefix apps/web-admin run check`
+  - `cd services/core-api && /home/servermtsn2kolut/go/bin/sqlc generate -f db/sqlc.yaml`
+  - `go test ./internal/handler ./internal/service ./internal/repository/postgres`
+  - `go build -o /tmp/core-api-bank-soal-workflow-sprint4 ./cmd/api`
+- No deploy/restart PM2 was performed.
+
+---
+
 ## Acceptance criteria
 
 - Guru tidak bisa melihat draft/submitted guru lain kecuali dia reviewer/approver scope terkait.

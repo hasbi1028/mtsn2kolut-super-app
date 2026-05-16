@@ -1297,8 +1297,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
              SELECT 1 FROM bank_soal_reviewer_scopes rs
              WHERE rs.user_id = $3::uuid
                AND (
-                 (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-                 OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
                )
                AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
                AND (
@@ -1309,7 +1309,31 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
          THEN q.answer_key ELSE '' END AS answer_key,
        q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
-       q.explanation_html, q.rubric_html,
+       q.explanation_html,
+       CASE
+         WHEN $1::bool
+           OR q.author_username = $2::text
+           OR EXISTS (
+             SELECT 1 FROM cbt_event_members m
+             WHERE m.event_id = q.event_id
+               AND m.user_id = $3::uuid
+               AND m.role IN ('reviewer', 'panitia')
+               AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+           )
+           OR EXISTS (
+             SELECT 1 FROM bank_soal_reviewer_scopes rs
+             WHERE rs.user_id = $3::uuid
+               AND (
+                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+               )
+               AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+               AND (
+                 rs.grade_level IS NULL
+                 OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+               )
+           )
+         THEN q.rubric_html ELSE '' END AS rubric_html,
        q.academic_phase, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
@@ -1348,9 +1372,11 @@ ORDER BY q.created_at DESC
 `
 
 type ListCbtQuestionsParams struct {
-	IsAdmin       bool        `json:"is_admin"`
-	ActorUsername string      `json:"actor_username"`
-	ActorUserID   pgtype.UUID `json:"actor_user_id"`
+	IsAdmin          bool        `json:"is_admin"`
+	ActorUsername    string      `json:"actor_username"`
+	ActorUserID      pgtype.UUID `json:"actor_user_id"`
+	CanReviewAnswer  bool        `json:"can_review_answer"`
+	CanApproveAnswer bool        `json:"can_approve_answer"`
 }
 
 type ListCbtQuestionsRow struct {
@@ -1413,7 +1439,13 @@ type ListCbtQuestionsRow struct {
 }
 
 func (q *Queries) ListCbtQuestions(ctx context.Context, arg ListCbtQuestionsParams) ([]ListCbtQuestionsRow, error) {
-	rows, err := q.db.Query(ctx, listCbtQuestions, arg.IsAdmin, arg.ActorUsername, arg.ActorUserID)
+	rows, err := q.db.Query(ctx, listCbtQuestions,
+		arg.IsAdmin,
+		arg.ActorUsername,
+		arg.ActorUserID,
+		arg.CanReviewAnswer,
+		arg.CanApproveAnswer,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1503,10 +1535,47 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
                AND m.role IN ('reviewer', 'panitia')
                AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
            )
+           OR EXISTS (
+             SELECT 1 FROM bank_soal_reviewer_scopes rs
+             WHERE rs.user_id = $3::uuid
+               AND (
+                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+               )
+               AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+               AND (
+                 rs.grade_level IS NULL
+                 OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+               )
+           )
          THEN q.answer_key ELSE '' END AS answer_key,
        q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
-       q.explanation_html, q.rubric_html,
+       q.explanation_html,
+       CASE
+         WHEN $1::bool
+           OR q.author_username = $2::text
+           OR EXISTS (
+             SELECT 1 FROM cbt_event_members m
+             WHERE m.event_id = q.event_id
+               AND m.user_id = $3::uuid
+               AND m.role IN ('reviewer', 'panitia')
+               AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+           )
+           OR EXISTS (
+             SELECT 1 FROM bank_soal_reviewer_scopes rs
+             WHERE rs.user_id = $3::uuid
+               AND (
+                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+               )
+               AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+               AND (
+                 rs.grade_level IS NULL
+                 OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+               )
+           )
+         THEN q.rubric_html ELSE '' END AS rubric_html,
        q.academic_phase, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
@@ -1542,41 +1611,41 @@ LEFT JOIN LATERAL (
   WHERE sa.question_id = q.id
 ) answer_usage ON TRUE
 WHERE (
-    ($4::text = 'global' AND q.event_id IS NULL)
+    ($6::text = 'global' AND q.event_id IS NULL)
     OR (
-      $4::text = 'event_pool'
-      AND (q.event_id IS NULL OR ($5::uuid IS NOT NULL AND q.event_id = $5::uuid))
+      $6::text = 'event_pool'
+      AND (q.event_id IS NULL OR ($7::uuid IS NOT NULL AND q.event_id = $7::uuid))
     )
     OR (
-      $4::text NOT IN ('global', 'event_pool')
-      AND ($5::uuid IS NULL OR q.event_id = $5::uuid)
+      $6::text NOT IN ('global', 'event_pool')
+      AND ($7::uuid IS NULL OR q.event_id = $7::uuid)
     )
   )
-  AND ($6::uuid IS NULL OR q.subject_id = $6::uuid)
-  AND ($7::text = '' OR q.author_username = $7::text)
+  AND ($8::uuid IS NULL OR q.subject_id = $8::uuid)
+  AND ($9::text = '' OR q.author_username = $9::text)
   AND (
-    $8::text = ''
-    OR q.workflow_status = $8::text
-    OR ($8::text = 'submitted' AND q.workflow_status = 'review')
-    OR ($8::text = 'review' AND q.workflow_status = 'submitted')
+    $10::text = ''
+    OR q.workflow_status = $10::text
+    OR ($10::text = 'submitted' AND q.workflow_status = 'review')
+    OR ($10::text = 'review' AND q.workflow_status = 'submitted')
   )
-  AND ($9::text = '' OR q.status = $9::cbt_question_status_enum)
-  AND ($10::text = '' OR q.question_type = $10::text)
-  AND ($11::text = '' OR q.target_level = $11::text)
-  AND ($12::text = '' OR q.difficulty = $12::cbt_question_difficulty_enum)
-  AND ($13::text = '' OR q.cognitive_level = $13::text)
-  AND ($14::text = '' OR q.material_topic ILIKE '%' || $14::text || '%')
+  AND ($11::text = '' OR q.status = $11::cbt_question_status_enum)
+  AND ($12::text = '' OR q.question_type = $12::text)
+  AND ($13::text = '' OR q.target_level = $13::text)
+  AND ($14::text = '' OR q.difficulty = $14::cbt_question_difficulty_enum)
+  AND ($15::text = '' OR q.cognitive_level = $15::text)
+  AND ($16::text = '' OR q.material_topic ILIKE '%' || $16::text || '%')
   AND (
-    $15::text = ''
+    $17::text = ''
     OR (
-      $15::text = 'complete'
+      $17::text = 'complete'
       AND NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NOT NULL
       AND NULLIF(btrim(q.cp_ref), '') IS NOT NULL
       AND (NULLIF(btrim(q.tp_ref), '') IS NOT NULL OR NULLIF(btrim(q.kd_ref), '') IS NOT NULL)
       AND NULLIF(btrim(q.cognitive_level), '') IS NOT NULL
     )
     OR (
-      $15::text = 'gap'
+      $17::text = 'gap'
       AND (
         NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NULL
         OR NULLIF(btrim(q.cp_ref), '') IS NULL
@@ -1585,11 +1654,11 @@ WHERE (
       )
     )
   )
-  AND ($16::text = '' OR ($16::text = 'yes' AND q.hots_flag = TRUE) OR ($16::text = 'no' AND q.hots_flag = FALSE))
+  AND ($18::text = '' OR ($18::text = 'yes' AND q.hots_flag = TRUE) OR ($18::text = 'no' AND q.hots_flag = FALSE))
   AND (
     $1::bool
     OR q.status = 'published'
-    OR ($17::bool AND q.workflow_status IN ('approved', 'published'))
+    OR ($19::bool AND q.workflow_status IN ('approved', 'published'))
     OR q.author_username = $2::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -1613,49 +1682,51 @@ WHERE (
     )
   )
   AND (
-    $18::text = ''
+    $20::text = ''
     OR (
-      $18::text = 'item_analysis'
+      $20::text = 'item_analysis'
       AND q.workflow_status = 'rejected'
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
-      $18::text = 'reviewer'
+      $20::text = 'reviewer'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
-      $18::text = 'workflow'
+      $20::text = 'workflow'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
   )
   AND (
-    $19::text = ''
-    OR q.code ILIKE '%' || $19::text || '%'
-    OR q.question_text ILIKE '%' || $19::text || '%'
-    OR q.material_topic ILIKE '%' || $19::text || '%'
-    OR q.cp_ref ILIKE '%' || $19::text || '%'
-    OR q.tp_ref ILIKE '%' || $19::text || '%'
-    OR q.kd_ref ILIKE '%' || $19::text || '%'
-    OR q.indicator_ref ILIKE '%' || $19::text || '%'
+    $21::text = ''
+    OR q.code ILIKE '%' || $21::text || '%'
+    OR q.question_text ILIKE '%' || $21::text || '%'
+    OR q.material_topic ILIKE '%' || $21::text || '%'
+    OR q.cp_ref ILIKE '%' || $21::text || '%'
+    OR q.tp_ref ILIKE '%' || $21::text || '%'
+    OR q.kd_ref ILIKE '%' || $21::text || '%'
+    OR q.indicator_ref ILIKE '%' || $21::text || '%'
   )
 ORDER BY
-  CASE WHEN $20::text = 'code_asc' THEN q.code END ASC,
-  CASE WHEN $20::text = 'updated_desc' THEN q.updated_at END DESC,
-  CASE WHEN $20::text = 'created_asc' THEN q.created_at END ASC,
-  CASE WHEN $20::text = 'difficulty_asc' THEN q.difficulty::text END ASC,
-  CASE WHEN $20::text = 'type_asc' THEN q.question_type END ASC,
+  CASE WHEN $22::text = 'code_asc' THEN q.code END ASC,
+  CASE WHEN $22::text = 'updated_desc' THEN q.updated_at END DESC,
+  CASE WHEN $22::text = 'created_asc' THEN q.created_at END ASC,
+  CASE WHEN $22::text = 'difficulty_asc' THEN q.difficulty::text END ASC,
+  CASE WHEN $22::text = 'type_asc' THEN q.question_type END ASC,
   q.created_at DESC
-LIMIT $22 OFFSET $21
+LIMIT $24 OFFSET $23
 `
 
 type ListCbtQuestionsFilteredParams struct {
 	IsAdmin          bool        `json:"is_admin"`
 	ActorUsername    string      `json:"actor_username"`
 	ActorUserID      pgtype.UUID `json:"actor_user_id"`
+	CanReviewAnswer  bool        `json:"can_review_answer"`
+	CanApproveAnswer bool        `json:"can_approve_answer"`
 	ScopeFilter      string      `json:"scope_filter"`
 	EventID          pgtype.UUID `json:"event_id"`
 	SubjectID        pgtype.UUID `json:"subject_id"`
@@ -1741,6 +1812,8 @@ func (q *Queries) ListCbtQuestionsFiltered(ctx context.Context, arg ListCbtQuest
 		arg.IsAdmin,
 		arg.ActorUsername,
 		arg.ActorUserID,
+		arg.CanReviewAnswer,
+		arg.CanApproveAnswer,
 		arg.ScopeFilter,
 		arg.EventID,
 		arg.SubjectID,
@@ -1850,10 +1923,47 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
                AND m.role IN ('reviewer', 'panitia')
                AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
            )
+           OR EXISTS (
+             SELECT 1 FROM bank_soal_reviewer_scopes rs
+             WHERE rs.user_id = $3::uuid
+               AND (
+                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+               )
+               AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+               AND (
+                 rs.grade_level IS NULL
+                 OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+               )
+           )
          THEN q.answer_key ELSE '' END AS answer_key,
        q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
-       q.explanation_html, q.rubric_html,
+       q.explanation_html,
+       CASE
+         WHEN $1::bool
+           OR q.author_username = $2::text
+           OR EXISTS (
+             SELECT 1 FROM cbt_event_members m
+             WHERE m.event_id = q.event_id
+               AND m.user_id = $3::uuid
+               AND m.role IN ('reviewer', 'panitia')
+               AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+           )
+           OR EXISTS (
+             SELECT 1 FROM bank_soal_reviewer_scopes rs
+             WHERE rs.user_id = $3::uuid
+               AND (
+                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+               )
+               AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+               AND (
+                 rs.grade_level IS NULL
+                 OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+               )
+           )
+         THEN q.rubric_html ELSE '' END AS rubric_html,
        q.academic_phase, q.target_level,
        q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
        q.material_topic, q.cognitive_level, q.hots_flag,
@@ -1889,41 +1999,41 @@ LEFT JOIN LATERAL (
   WHERE sa.question_id = q.id
 ) answer_usage ON TRUE
 WHERE (
-    ($4::text = 'global' AND q.event_id IS NULL)
+    ($6::text = 'global' AND q.event_id IS NULL)
     OR (
-      $4::text = 'event_pool'
-      AND (q.event_id IS NULL OR ($5::uuid IS NOT NULL AND q.event_id = $5::uuid))
+      $6::text = 'event_pool'
+      AND (q.event_id IS NULL OR ($7::uuid IS NOT NULL AND q.event_id = $7::uuid))
     )
     OR (
-      $4::text NOT IN ('global', 'event_pool')
-      AND ($5::uuid IS NULL OR q.event_id = $5::uuid)
+      $6::text NOT IN ('global', 'event_pool')
+      AND ($7::uuid IS NULL OR q.event_id = $7::uuid)
     )
   )
-  AND ($6::uuid IS NULL OR q.subject_id = $6::uuid)
-  AND ($7::text = '' OR q.author_username = $7::text)
+  AND ($8::uuid IS NULL OR q.subject_id = $8::uuid)
+  AND ($9::text = '' OR q.author_username = $9::text)
   AND (
-    $8::text = ''
-    OR q.workflow_status = $8::text
-    OR ($8::text = 'submitted' AND q.workflow_status = 'review')
-    OR ($8::text = 'review' AND q.workflow_status = 'submitted')
+    $10::text = ''
+    OR q.workflow_status = $10::text
+    OR ($10::text = 'submitted' AND q.workflow_status = 'review')
+    OR ($10::text = 'review' AND q.workflow_status = 'submitted')
   )
-  AND ($9::text = '' OR q.status = $9::cbt_question_status_enum)
-  AND ($10::text = '' OR q.question_type = $10::text)
-  AND ($11::text = '' OR q.target_level = $11::text)
-  AND ($12::text = '' OR q.difficulty = $12::cbt_question_difficulty_enum)
-  AND ($13::text = '' OR q.cognitive_level = $13::text)
-  AND ($14::text = '' OR q.material_topic ILIKE '%' || $14::text || '%')
+  AND ($11::text = '' OR q.status = $11::cbt_question_status_enum)
+  AND ($12::text = '' OR q.question_type = $12::text)
+  AND ($13::text = '' OR q.target_level = $13::text)
+  AND ($14::text = '' OR q.difficulty = $14::cbt_question_difficulty_enum)
+  AND ($15::text = '' OR q.cognitive_level = $15::text)
+  AND ($16::text = '' OR q.material_topic ILIKE '%' || $16::text || '%')
   AND (
-    $15::text = ''
+    $17::text = ''
     OR (
-      $15::text = 'complete'
+      $17::text = 'complete'
       AND NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NOT NULL
       AND NULLIF(btrim(q.cp_ref), '') IS NOT NULL
       AND (NULLIF(btrim(q.tp_ref), '') IS NOT NULL OR NULLIF(btrim(q.kd_ref), '') IS NOT NULL)
       AND NULLIF(btrim(q.cognitive_level), '') IS NOT NULL
     )
     OR (
-      $15::text = 'gap'
+      $17::text = 'gap'
       AND (
         NULLIF(btrim(COALESCE(q.target_level, '')), '') IS NULL
         OR NULLIF(btrim(q.cp_ref), '') IS NULL
@@ -1932,11 +2042,11 @@ WHERE (
       )
     )
   )
-  AND ($16::text = '' OR ($16::text = 'yes' AND q.hots_flag = TRUE) OR ($16::text = 'no' AND q.hots_flag = FALSE))
+  AND ($18::text = '' OR ($18::text = 'yes' AND q.hots_flag = TRUE) OR ($18::text = 'no' AND q.hots_flag = FALSE))
   AND (
     $1::bool
     OR q.status = 'published'
-    OR ($17::bool AND q.workflow_status IN ('approved', 'published'))
+    OR ($19::bool AND q.workflow_status IN ('approved', 'published'))
     OR q.author_username = $2::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -1960,49 +2070,51 @@ WHERE (
     )
   )
   AND (
-    $18::text = ''
+    $20::text = ''
     OR (
-      $18::text = 'item_analysis'
+      $20::text = 'item_analysis'
       AND q.workflow_status = 'rejected'
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
-      $18::text = 'reviewer'
+      $20::text = 'reviewer'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
-      $18::text = 'workflow'
+      $20::text = 'workflow'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
   )
   AND (
-    $19::text = ''
-    OR q.code ILIKE '%' || $19::text || '%'
-    OR q.question_text ILIKE '%' || $19::text || '%'
-    OR q.material_topic ILIKE '%' || $19::text || '%'
-    OR q.cp_ref ILIKE '%' || $19::text || '%'
-    OR q.tp_ref ILIKE '%' || $19::text || '%'
-    OR q.kd_ref ILIKE '%' || $19::text || '%'
-    OR q.indicator_ref ILIKE '%' || $19::text || '%'
+    $21::text = ''
+    OR q.code ILIKE '%' || $21::text || '%'
+    OR q.question_text ILIKE '%' || $21::text || '%'
+    OR q.material_topic ILIKE '%' || $21::text || '%'
+    OR q.cp_ref ILIKE '%' || $21::text || '%'
+    OR q.tp_ref ILIKE '%' || $21::text || '%'
+    OR q.kd_ref ILIKE '%' || $21::text || '%'
+    OR q.indicator_ref ILIKE '%' || $21::text || '%'
   )
 ORDER BY
-  CASE WHEN $20::text = 'code_asc' THEN q.code END ASC,
-  CASE WHEN $20::text = 'updated_desc' THEN q.updated_at END DESC,
-  CASE WHEN $20::text = 'created_asc' THEN q.created_at END ASC,
-  CASE WHEN $20::text = 'difficulty_asc' THEN q.difficulty::text END ASC,
-  CASE WHEN $20::text = 'type_asc' THEN q.question_type END ASC,
+  CASE WHEN $22::text = 'code_asc' THEN q.code END ASC,
+  CASE WHEN $22::text = 'updated_desc' THEN q.updated_at END DESC,
+  CASE WHEN $22::text = 'created_asc' THEN q.created_at END ASC,
+  CASE WHEN $22::text = 'difficulty_asc' THEN q.difficulty::text END ASC,
+  CASE WHEN $22::text = 'type_asc' THEN q.question_type END ASC,
   q.created_at DESC
-LIMIT $22 OFFSET $21
+LIMIT $24 OFFSET $23
 `
 
 type ListCbtQuestionsScopedParams struct {
 	IsAdmin          bool        `json:"is_admin"`
 	ActorUsername    string      `json:"actor_username"`
 	ActorUserID      pgtype.UUID `json:"actor_user_id"`
+	CanReviewAnswer  bool        `json:"can_review_answer"`
+	CanApproveAnswer bool        `json:"can_approve_answer"`
 	ScopeFilter      string      `json:"scope_filter"`
 	EventID          pgtype.UUID `json:"event_id"`
 	SubjectID        pgtype.UUID `json:"subject_id"`
@@ -2088,6 +2200,8 @@ func (q *Queries) ListCbtQuestionsScoped(ctx context.Context, arg ListCbtQuestio
 		arg.IsAdmin,
 		arg.ActorUsername,
 		arg.ActorUserID,
+		arg.CanReviewAnswer,
+		arg.CanApproveAnswer,
 		arg.ScopeFilter,
 		arg.EventID,
 		arg.SubjectID,

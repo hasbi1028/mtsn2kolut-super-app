@@ -38,6 +38,7 @@ func (s *CbtQuestion) GetDetail(ctx context.Context, id pgtype.UUID, actor CbtQu
 	}
 	if !canSeeAnswerKey {
 		row.AnswerKey = ""
+		row.RubricHtml = ""
 	}
 	return row, nil
 }
@@ -336,10 +337,17 @@ func (s *CbtQuestion) requireWorkflowRole(ctx context.Context, username string, 
 }
 
 func (s *CbtQuestion) questionDetailAccess(ctx context.Context, actor CbtQuestionActor, row db.GetCbtQuestionDetailRow) (bool, bool, error) {
-	if actor.IsAdmin() {
+	if actor.CanReadAllBankSoal() {
 		return true, true, nil
 	}
 	if strings.TrimSpace(row.AuthorUsername) != "" && row.AuthorUsername == actor.Username {
+		return true, true, nil
+	}
+	canReviewScoped, err := s.actorCanSeeBankSoalAnswerMaterial(ctx, actor, row.SubjectID, row.TargetLevel, row.WorkflowStatus)
+	if err != nil {
+		return false, false, err
+	}
+	if canReviewScoped {
 		return true, true, nil
 	}
 	member, err := s.actorHasEventQuestionRole(ctx, actor, row.EventID, row.SubjectID, db.CbtEventMemberRoleReviewer, db.CbtEventMemberRolePanitia)
@@ -353,6 +361,28 @@ func (s *CbtQuestion) questionDetailAccess(ctx context.Context, actor CbtQuestio
 		return true, false, nil
 	}
 	return false, false, nil
+}
+
+func (s *CbtQuestion) actorCanSeeBankSoalAnswerMaterial(ctx context.Context, actor CbtQuestionActor, subjectID pgtype.UUID, targetLevel pgtype.Text, workflowStatus string) (bool, error) {
+	if !actor.UserID.Valid {
+		return false, nil
+	}
+	workflowStatus = normalizeWorkflowStatus(workflowStatus)
+	if actor.HasPermission("bank_soal.review") && workflowStatusIn(workflowStatus, "submitted", "review", "revision_needed", "reviewed") {
+		return s.q.CanBankSoalUserReview(ctx, db.CanBankSoalUserReviewParams{
+			UserID:     actor.UserID,
+			SubjectID:  subjectID,
+			GradeLevel: workflowScopeGradeLevel(targetLevel),
+		})
+	}
+	if (actor.HasPermission("bank_soal.approve") || actor.HasPermission("bank_soal.publish")) && workflowStatusIn(workflowStatus, "reviewed", "approved", "published") {
+		return s.q.CanBankSoalUserApprove(ctx, db.CanBankSoalUserApproveParams{
+			UserID:     actor.UserID,
+			SubjectID:  subjectID,
+			GradeLevel: workflowScopeGradeLevel(targetLevel),
+		})
+	}
+	return false, nil
 }
 
 func (s *CbtQuestion) requireDuplicateSourceAccess(ctx context.Context, actor CbtQuestionActor, current db.GetCbtQuestionRow) error {

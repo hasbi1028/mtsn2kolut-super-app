@@ -361,6 +361,8 @@ func (s *CbtQuestion) ListFiltered(ctx context.Context, in ListCbtQuestionsInput
 		MetadataFilter:   normalizeQuestionMetadataFilter(in.MetadataFilter),
 		HotsFilter:       strings.TrimSpace(in.HotsFilter),
 		IsAdmin:          actor.CanReadAllBankSoal(),
+		CanReviewAnswer:  actor.HasPermission("bank_soal.review"),
+		CanApproveAnswer: actor.HasPermission("bank_soal.approve") || actor.HasPermission("bank_soal.publish"),
 		CanUseInPackage:  actor.CanUseBankSoalInPackage(),
 		ActorUsername:    actor.Username,
 		ActorUserID:      actor.UserID,
