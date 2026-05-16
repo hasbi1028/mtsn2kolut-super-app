@@ -805,6 +805,27 @@ Notes:
 - No deploy/restart PM2 was performed.
 - Production deployment must run migration `110_bank_soal_workflow_actions.sql` before starting a binary that references `bank_soal_question_workflow_events`.
 
+### Sprint 3 — Review & approval UI
+
+Status: completed locally, not deployed/restarted.
+
+Implemented:
+- Composer/list/detail UI now uses the new workflow action names: `submit_for_review`, `request_revision`, `mark_reviewed`, `reject`, `approve`, `publish`, and `archive` while keeping legacy `review` display compatibility.
+- Review queues and catalog quick filters show clearer status groups for pending review, revision needed, reviewed, approved/published, and archived items.
+- Read-only detail/reviewer panels send `mark_reviewed` for “Tandai Layak” and `request_revision` for “Minta Revisi”, matching Sprint 2 backend semantics.
+- Bulk workflow toolbar supports reviewer/approver actions and skips ineligible selected rows safely.
+- Workflow status labels/classes were expanded for `submitted`, `revision_needed`, `reviewed`, `published`, and `archived`.
+
+Verified:
+- `npm --prefix apps/web-admin run check`: PASS.
+- `cd services/core-api && /home/servermtsn2kolut/go/bin/sqlc generate -f db/sqlc.yaml`: PASS.
+- `go test ./internal/handler ./internal/service ./internal/repository/postgres`: PASS.
+- `go build -o /tmp/core-api-bank-soal-workflow-sprint3 ./cmd/api`: PASS.
+
+Notes:
+- No deploy/restart PM2 was performed.
+- Sprint 3 is UI/BFF-compatible with Sprint 2 backend; production still needs migrations 109 and 110 before deploying the new binaries.
+
 ---
 
 ## Deployment runbook setelah implementasi selesai

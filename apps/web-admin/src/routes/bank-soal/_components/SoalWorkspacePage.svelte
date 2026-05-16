@@ -152,8 +152,8 @@
 	type ComposerIssueHint = { message: string; targetId: string };
 type ComposerStageCard = { label: string; desc: string; status: string; tone: 'green' | 'amber' | 'red' | 'slate'; targetId: string };
 	type RevisionSourceFilter = '' | 'item_analysis' | 'reviewer' | 'workflow';
-	type ReviewDecision = 'approve' | 'reject';
-	type BulkWorkflowAction = 'approve' | 'reject' | 'publish';
+	type ReviewDecision = 'mark_reviewed' | 'request_revision' | 'reject';
+	type BulkWorkflowAction = 'mark_reviewed' | 'request_revision' | 'reject' | 'approve' | 'publish' | 'archive';
 	type ComposerQuestionType = 'multiple_choice' | 'multiple_answer' | 'true_false' | 'agree_disagree' | 'matching' | 'ordering' | 'short_answer' | 'essay';
 	type ComposerSaveIntent = 'draft' | 'review';
 	type Question = {
@@ -227,6 +227,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	};
 	type PageData = {
 		user?: {
+			username?: string;
 			role?: string;
 			roles?: string[];
 			permissions?: string[];
@@ -453,7 +454,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	let workflowBusyId = $state('');
 	let reviewDecisionOpen = $state(false);
 	let reviewDecisionQuestion = $state<Question | null>(null);
-	let reviewDecision = $state<ReviewDecision>('approve');
+	let reviewDecision = $state<ReviewDecision>('mark_reviewed');
 	let reviewDecisionNotes = $state('');
 	let questionPreviewOpen = $state(false);
 	let questionPreview = $state<Question | null>(null);
@@ -552,12 +553,12 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	let exportSuccessMessage = $derived(questionExportSuccessMessage(roles));
 	let hasCatalogQuickFilter = $derived(Boolean(search.trim() || filterWorkflow || filterStatus || filterTargetLevel));
 	let reviewCount = $derived(reviewTotal);
-	let visibleReviewCount = $derived(questions.filter((item) => item.workflow_status === 'review').length);
+	let visibleReviewCount = $derived(questions.filter((item) => item.workflow_status === 'review' || item.workflow_status === 'submitted').length);
 	let approvedCount = $derived(approvedTotal);
-	let visibleApprovedCount = $derived(questions.filter((item) => item.workflow_status === 'approved' && item.status === 'draft').length);
+	let visibleApprovedCount = $derived(questions.filter((item) => item.workflow_status === 'reviewed' && item.status === 'draft').length);
 	let draftCount = $derived(questions.filter((item) => item.workflow_status === 'draft').length);
-	let visibleRevisionCount = $derived(questions.filter((item) => item.workflow_status === 'rejected').length);
-	let publishedCount = $derived(questions.filter((item) => item.status === 'published').length);
+	let visibleRevisionCount = $derived(questions.filter((item) => item.workflow_status === 'rejected' || item.workflow_status === 'revision_needed').length);
+	let publishedCount = $derived(questions.filter((item) => item.status === 'published' || item.workflow_status === 'published').length);
 	let selectedTarget = $derived(questionTargets.find((target) => target.subject_id === filterSubject) ?? null);
 	let eventTargetTotal = $derived(questionTargets.reduce((sum, target) => sum + (target.target_questions || 0), 0));
 	let eventPublishedTotal = $derived(questionTargets.reduce((sum, target) => sum + (target.published || 0), 0));
@@ -574,9 +575,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	let canSyncOfflineQueue = $derived(isOnline && offlineQueueCount > 0 && !offlineSyncBusy);
 	let statusCards = $derived([
 		{ label: 'Draft', value: draftCount, tone: 'slate', helper: 'soal masih disusun', workflowStatus: 'draft', status: '', active: filterWorkflow === 'draft' && !filterStatus },
-		{ label: 'Perlu Revisi', value: revisionTotal, tone: 'red', helper: `${visibleRevisionCount} tampil`, workflowStatus: 'rejected', status: '', active: filterWorkflow === 'rejected' && !filterStatus },
-		{ label: 'Menunggu Review', value: reviewCount, tone: 'amber', helper: `${visibleReviewCount} tampil`, workflowStatus: 'review', status: '', active: filterWorkflow === 'review' && !filterStatus },
-		{ label: 'Disetujui', value: approvedCount, tone: 'green', helper: `${visibleApprovedCount} siap terbit`, workflowStatus: 'approved', status: 'draft', active: filterWorkflow === 'approved' && filterStatus === 'draft' },
+		{ label: 'Perlu Revisi', value: revisionTotal, tone: 'red', helper: `${visibleRevisionCount} tampil`, workflowStatus: 'revision_needed', status: '', active: filterWorkflow === 'revision_needed' && !filterStatus },
+		{ label: 'Menunggu Review', value: reviewCount, tone: 'amber', helper: `${visibleReviewCount} tampil`, workflowStatus: 'submitted', status: '', active: filterWorkflow === 'submitted' && !filterStatus },
+		{ label: 'Layak Review', value: approvedCount, tone: 'green', helper: `${visibleApprovedCount} siap approval`, workflowStatus: 'reviewed', status: 'draft', active: filterWorkflow === 'reviewed' && filterStatus === 'draft' },
 		{ label: 'Terbit', value: publishedCount, tone: 'emerald', helper: 'siap dipakai paket', workflowStatus: '', status: 'published', active: !filterWorkflow && filterStatus === 'published' },
 	]);
 	let selectedSubject = $derived(subjects.find((subject) => subject.id === fSubjectId) ?? null);
@@ -710,7 +711,14 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		return issues;
 	});
 	let canSaveDraft = $derived(draftIssues.length === 0 && !composerBusy && !detailReadOnly);
-	let canSubmitReview = $derived(readinessScore === 100 && !composerBusy && !detailReadOnly);
+	let submitMetadataIssues = $derived.by(() => {
+		const issues: string[] = [];
+		if (!fSubjectId) issues.push('Pilih mata pelajaran');
+		if (!fTargetLevel) issues.push('Pilih tingkat kelas');
+		if (!fDifficulty) issues.push('Pilih tingkat kesulitan');
+		return issues;
+	});
+	let canSubmitReview = $derived(readinessScore === 100 && submitMetadataIssues.length === 0 && !composerBusy && !detailReadOnly);
 
 	let qualitySignals = $derived.by(() => {
 		if (isEssay) {
@@ -852,6 +860,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	let validationIssues = $derived.by(() => {
 		const issues: string[] = [];
 		if (!readinessChecks.subject) issues.push('Pilih mata pelajaran');
+		if (!fTargetLevel) issues.push('Pilih tingkat kelas');
 		if (!readinessChecks.stem) issues.push('Isi soal minimal 5 karakter');
 		if (isMatching && !readinessChecks.options)
 			issues.push('Lengkapi semua pasangan kiri dan kanan');
@@ -869,6 +878,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	});
 	let firstComposerIssue = $derived.by((): ComposerIssueHint | null => {
 		if (!readinessChecks.subject) return { message: 'pilih mata pelajaran', targetId: 'composer-metadata' };
+		if (!fTargetLevel) return { message: 'pilih tingkat kelas', targetId: 'composer-metadata' };
 		if (!readinessChecks.stem) return { message: 'isi pertanyaan', targetId: 'composer-question' };
 		if (!readinessChecks.options) {
 			if (isMatching) return { message: 'lengkapi pasangan', targetId: 'composer-matching' };
@@ -1106,7 +1116,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		if (filterWorkflow) params.set('workflow_status', filterWorkflow);
 		if (filterStatus) params.set('status', filterStatus);
 		if (filterTargetLevel) params.set('target_level', filterTargetLevel);
-		if (filterWorkflow === 'rejected' && revisionSourceFilter) params.set('revision_source', revisionSourceFilter);
+		if ((filterWorkflow === 'rejected' || filterWorkflow === 'revision_needed') && revisionSourceFilter) params.set('revision_source', revisionSourceFilter);
 		return params;
 	}
 
@@ -1115,7 +1125,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		params.set('limit', '6');
 		params.set('offset', '0');
 		applyQuestionScopeParams(params);
-		params.set('workflow_status', 'rejected');
+		params.set('workflow_status', 'revision_needed');
 		if (revisionSourceFilter) params.set('revision_source', revisionSourceFilter);
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
@@ -1127,7 +1137,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		params.set('limit', '6');
 		params.set('offset', '0');
 		applyQuestionScopeParams(params);
-		params.set('workflow_status', 'review');
+		params.set('workflow_status', 'submitted');
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
 		return params;
@@ -1138,7 +1148,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		params.set('limit', '6');
 		params.set('offset', '0');
 		applyQuestionScopeParams(params);
-		params.set('workflow_status', 'approved');
+		params.set('workflow_status', 'reviewed');
 		params.set('status', 'draft');
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
@@ -1530,8 +1540,8 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			return;
 		}
 		const notes = bulkNotes.trim();
-		if (action === 'reject' && notes.length < 8) {
-			toast.warning('Catatan penolakan massal minimal 8 karakter.');
+		if ((action === 'reject' || action === 'request_revision') && notes.length < 8) {
+			toast.warning('Catatan revisi/penolakan massal minimal 8 karakter.');
 			return;
 		}
 		bulkBusy = true;
@@ -1644,7 +1654,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	function showPendingReviews() {
-		filterWorkflow = 'review';
+		filterWorkflow = 'submitted';
 		filterStatus = '';
 		revisionSourceFilter = '';
 		setModuleMode('review');
@@ -1652,7 +1662,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	function showApprovedQuestions() {
-		filterWorkflow = 'approved';
+		filterWorkflow = 'reviewed';
 		filterStatus = 'draft';
 		revisionSourceFilter = '';
 		setModuleMode('review');
@@ -1661,14 +1671,14 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 
 	function setRevisionSourceFilter(source: RevisionSourceFilter) {
 		revisionSourceFilter = source;
-		filterWorkflow = 'rejected';
+		filterWorkflow = 'revision_needed';
 		filterStatus = '';
 		setModuleMode('review');
 		load(1);
 	}
 
 	function onWorkflowFilterChange() {
-		if (filterWorkflow !== 'rejected') revisionSourceFilter = '';
+		if (filterWorkflow !== 'rejected' && filterWorkflow !== 'revision_needed') revisionSourceFilter = '';
 		filterStatus = '';
 		load(1);
 	}
@@ -1800,7 +1810,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	function canDecideReview(q: Question): boolean {
-		return canReviewWorkflow && q.workflow_status === 'review' && q.status === 'draft' && !questionUsageLocked(q);
+		return canReviewWorkflow && (q.workflow_status === 'review' || q.workflow_status === 'submitted') && q.status === 'draft' && !questionUsageLocked(q);
 	}
 
 	function canPublishQuestion(q: Question): boolean {
@@ -1890,8 +1900,10 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		if (!q) return '';
 		if (q.is_latest_version === false) return 'Ini versi lama. Paket dan hasil ujian lama tetap memakai versi ini. Buat revisi baru untuk perubahan berikutnya.';
 		if (q.status === 'published' || questionUsageLocked(q)) return 'Soal sudah terbit/dipakai. Tidak boleh diedit langsung; buat revisi baru agar riwayat ujian tetap valid.';
-		if (q.workflow_status === 'approved') return 'Soal sudah disetujui. Kembalikan ke revisi sebelum mengubah isi soal.';
-		if (q.workflow_status === 'review') return 'Soal sedang direview. Perubahan dinonaktifkan sampai reviewer meminta revisi.';
+		if (q.workflow_status === 'approved' || q.workflow_status === 'published') return 'Soal sudah disetujui/terbit. Kembalikan ke revisi sebelum mengubah isi soal.';
+		if (q.workflow_status === 'reviewed') return 'Soal sudah ditandai layak dan menunggu approval akhir.';
+		if (q.workflow_status === 'revision_needed') return 'Soal membutuhkan revisi. Jika editor belum aktif, buat draft revisi baru agar perubahan tetap aman.';
+		if (q.workflow_status === 'review' || q.workflow_status === 'submitted') return 'Soal sedang direview. Perubahan dinonaktifkan sampai reviewer meminta revisi.';
 		return 'Soal dibuka dalam mode lihat.';
 	}
 
@@ -2370,7 +2382,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	async function saveQuestion(intent: ComposerSaveIntent = 'draft') {
 		const isReview = intent === 'review';
 		if (isReview && !canSubmitReview) {
-			toast.warning(validationIssues[0] ?? 'Lengkapi soal sebelum diajukan review');
+			toast.warning(submitMetadataIssues[0] ?? validationIssues[0] ?? 'Lengkapi soal sebelum diajukan review');
 			return;
 		}
 		if (!isReview && !canSaveDraft) {
@@ -2386,7 +2398,8 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		}
 		composerBusy = true;
 		composerAction = intent;
-		const payload = buildQuestionSavePayload(isReview);
+		const payload = buildQuestionSavePayload(false);
+		const offlinePayload = buildQuestionSavePayload(isReview);
 		let responseReceived = false;
 		let responseStatus: number | undefined;
 		try {
@@ -2397,7 +2410,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				payload,
 			});
 			if (!browserOnline()) {
-				await queueQuestionSave(payload, intent, false);
+				await queueQuestionSave(offlinePayload, intent, false);
 				closeComposer();
 				return;
 			}
@@ -2409,20 +2422,29 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			responseReceived = true;
 			responseStatus = res.status;
 			if (isAuthExpiredSyncStatus(res.status)) {
-				await queueQuestionSave(payload, intent, true);
+				await queueQuestionSave(offlinePayload, intent, true);
 				closeComposer();
 				return;
 			}
-			await readClientJson<unknown>(res);
+			const saved = await readClientJson<Question>(res);
+			const savedId = saved?.id ?? editingId;
+			if (isReview) {
+				if (!savedId) throw new Error('ID soal hasil simpan tidak ditemukan untuk kirim review.');
+				await fetch(clientApiPath`/api/bank-soal/questions/${savedId}/workflow`, {
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ action: 'submit_for_review', notes: '' })
+				}).then((response) => readClientJson<unknown>(response));
+			}
 
 			rememberLastComposerMetadata();
 			await clearDraft();
-			toast.success(isReview ? 'Soal diajukan review' : editingId ? 'Draft soal berhasil diperbarui' : 'Draft soal berhasil dibuat');
+			toast.success(isReview ? 'Soal dikirim ke review' : editingId ? 'Draft soal berhasil diperbarui' : 'Draft soal berhasil dibuat');
 			closeComposer();
 			await refreshOverview(1);
 		} catch (e) {
 			if (shouldQueueBankSoalQuestionSave({ isOnline: browserOnline(), responseReceived, responseStatus })) {
-				await queueQuestionSave(payload, intent, false);
+				await queueQuestionSave(offlinePayload, intent, false);
 				closeComposer();
 				return;
 			}
@@ -2577,7 +2599,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			const res = await fetch(clientApiPath`/api/bank-soal/questions/${q.id}/workflow`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ action: 'submit_review', notes: '' }),
+				body: JSON.stringify({ action: 'submit_for_review', notes: '' }),
 			});
 			await readClientJson<unknown>(res);
 			toast.success('Revisi diajukan review ulang');
@@ -2594,7 +2616,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			toast.warning('Anda belum memiliki izin review soal.');
 			return;
 		}
-		if (q.workflow_status !== 'review' || q.status !== 'draft') {
+		if ((q.workflow_status !== 'review' && q.workflow_status !== 'submitted') || q.status !== 'draft') {
 			toast.warning('Soal ini tidak sedang menunggu review.');
 			return;
 		}
@@ -2622,7 +2644,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		reviewDecisionOpen = false;
 		reviewDecisionQuestion = null;
 		reviewDecisionNotes = '';
-		reviewDecision = 'approve';
+		reviewDecision = 'mark_reviewed';
 		questionTimeline = [];
 	}
 
@@ -2635,7 +2657,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			return;
 		}
 		const notes = reviewDecisionNotes.trim();
-		if (reviewDecision === 'reject' && notes.length < 8) {
+		if ((reviewDecision === 'reject' || reviewDecision === 'request_revision') && notes.length < 8) {
 			toast.warning('Catatan revisi minimal 8 karakter agar guru tahu yang harus diperbaiki.');
 			return;
 		}
@@ -2647,7 +2669,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				body: JSON.stringify({ action: reviewDecision, notes }),
 			});
 			await readClientJson<unknown>(res);
-			toast.success(reviewDecision === 'approve' ? 'Soal disetujui' : 'Soal dikembalikan untuk revisi');
+			toast.success(reviewDecision === 'mark_reviewed' ? 'Soal ditandai layak' : reviewDecision === 'reject' ? 'Soal ditolak' : 'Soal dikembalikan untuk revisi');
 			closeReviewDecision();
 			await refreshOverview(currentPage);
 		} catch (e) {
@@ -3049,9 +3071,13 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			>
 				<option value="">Semua Status</option>
 				<option value="draft">Draft</option>
-				<option value="review">Menunggu Review</option>
-					<option value="approved">Disetujui</option>
-					<option value="rejected">Perlu Revisi</option>
+				<option value="submitted">Menunggu Review</option>
+				<option value="revision_needed">Perlu Revisi</option>
+				<option value="reviewed">Layak Review</option>
+				<option value="approved">Disetujui</option>
+				<option value="published">Published</option>
+				<option value="rejected">Ditolak</option>
+				<option value="archived">Diarsipkan</option>
 				</select>
 				<select
 					id="question-target-level-filter"
@@ -3079,9 +3105,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 							<p class="text-xs text-success">Siap diputuskan: {selectedReviewEligibleCount}; siap diterbitkan: {selectedPublishEligibleCount}. Aksi yang tidak memenuhi syarat otomatis dilewati.</p>
 						</div>
 					<div class="flex flex-wrap gap-2">
-						<Input placeholder="Catatan untuk Setujui/Minta Revisi..." aria-label="Catatan aksi massal review soal" bind:value={bulkNotes} class="h-8 min-w-56 bg-card text-xs" />
-						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('approve')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedReviewEligibleCount === 0} class="h-8 bg-card text-success">Setujui</LoadingButton>
-						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('reject')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedReviewEligibleCount === 0} class="h-8 bg-card text-destructive">Minta Revisi</LoadingButton>
+						<Input placeholder="Catatan untuk Tandai Layak/Minta Revisi..." aria-label="Catatan aksi massal review soal" bind:value={bulkNotes} class="h-8 min-w-56 bg-card text-xs" />
+						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('mark_reviewed')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedReviewEligibleCount === 0} class="h-8 bg-card text-success">Tandai Layak</LoadingButton>
+						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('request_revision')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedReviewEligibleCount === 0} class="h-8 bg-card text-destructive">Minta Revisi</LoadingButton>
 						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('publish')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedPublishEligibleCount === 0} class="h-8 bg-card text-success">Terbitkan</LoadingButton>
 						<Button variant="outline" size="sm" class="h-8 bg-card" onclick={clearSelection}>Bersihkan</Button>
 					</div>
@@ -3195,7 +3221,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 								</span>
 							{/if}
 										</div>
-										{#if q.workflow_status === 'rejected'}
+										{#if q.workflow_status === 'rejected' || q.workflow_status === 'revision_needed'}
 											<div class="mt-1 rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-[11px] leading-relaxed text-destructive">
 												<span class="font-semibold">{revisionSourceLabel(q)}:</span> {revisionReason(q)}
 											</div>
@@ -3221,7 +3247,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 										>
 										{isQuickEditable(q) ? 'Edit' : 'Lihat'}
 										</button>
-										{#if q.workflow_status === 'rejected'}
+										{#if q.workflow_status === 'rejected' || q.workflow_status === 'revision_needed'}
 											<button
 												onclick={(e) => {
 													e.stopPropagation();
@@ -3237,7 +3263,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 											<button
 												onclick={(e) => {
 													e.stopPropagation();
-													openReviewDecision(q, 'approve');
+													openReviewDecision(q, 'mark_reviewed');
 												}}
 												disabled={workflowBusyId !== '' && workflowBusyId !== q.id}
 												class="rounded px-2 py-1 text-xs text-warning transition-colors hover:bg-warning/10 disabled:cursor-not-allowed disabled:opacity-40"
@@ -3336,7 +3362,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			<div>
 				<p class="text-xs font-bold uppercase tracking-wider text-success">Periksa Satu Soal</p>
 				<h2 class="mt-1 text-base font-semibold text-foreground">
-					{reviewDecision === 'approve' ? 'Pilihan saat ini: Setujui Soal' : 'Pilihan saat ini: Minta Revisi Soal'}
+					{reviewDecision === 'mark_reviewed' ? 'Pilihan saat ini: Tandai Layak' : reviewDecision === 'reject' ? 'Pilihan saat ini: Tolak Soal' : 'Pilihan saat ini: Minta Revisi Soal'}
 				</h2>
 				<p class="mt-1 text-xs text-muted-foreground">Baca satu soal ini sampai lengkap, lalu pilih salah satu keputusan yang jelas untuk guru dan admin.</p>
 			</div>
@@ -3349,7 +3375,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 					</div>
 					<div class="rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground">
 						<p class="font-semibold">Aksi aman</p>
-						<p class="mt-0.5">Setujui atau kembalikan revisi.</p>
+						<p class="mt-0.5">Tandai layak, minta revisi, atau tolak.</p>
 					</div>
 					<div class="rounded-md border border-success/20 bg-success/10 px-3 py-2 text-success">
 						<p class="font-semibold">Setelah disetujui</p>
@@ -3420,42 +3446,54 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				</div>
 			{/if}
 
-			<div class="grid grid-cols-2 gap-2">
+			<div class="grid gap-2 sm:grid-cols-3">
 			<button
 				type="button"
-				onclick={() => (reviewDecision = 'approve')}
-				aria-pressed={reviewDecision === 'approve'}
-				aria-label="Pilih keputusan Setujui untuk soal ini"
-				class="rounded-md border px-3 py-2 text-left text-sm transition-colors {reviewDecision === 'approve'
+				onclick={() => (reviewDecision = 'mark_reviewed')}
+				aria-pressed={reviewDecision === 'mark_reviewed'}
+				aria-label="Pilih keputusan Tandai Layak untuk soal ini"
+				class="rounded-md border px-3 py-2 text-left text-sm transition-colors {reviewDecision === 'mark_reviewed'
 						? 'border-success/20 bg-success/10 font-semibold text-success'
 						: 'border-border bg-card text-muted-foreground hover:bg-muted/50'}"
 				>
-					Setujui
-					<span class="mt-0.5 block text-[11px] font-normal text-muted-foreground">Soal masuk status disetujui.</span>
+					Tandai Layak
+					<span class="mt-0.5 block text-[11px] font-normal text-muted-foreground">Soal masuk antrean approval.</span>
 				</button>
 			<button
 				type="button"
-				onclick={() => (reviewDecision = 'reject')}
-				aria-pressed={reviewDecision === 'reject'}
+				onclick={() => (reviewDecision = 'request_revision')}
+				aria-pressed={reviewDecision === 'request_revision'}
 				aria-label="Pilih keputusan Minta Revisi untuk soal ini"
-				class="rounded-md border px-3 py-2 text-left text-sm transition-colors {reviewDecision === 'reject'
+				class="rounded-md border px-3 py-2 text-left text-sm transition-colors {reviewDecision === 'request_revision'
 						? 'border-destructive/30 bg-destructive/10 font-semibold text-destructive'
 						: 'border-border bg-card text-muted-foreground hover:bg-muted/50'}"
 				>
 					Minta Revisi
 					<span class="mt-0.5 block text-[11px] font-normal text-muted-foreground">Kembalikan ke guru dengan catatan.</span>
 				</button>
+			<button
+				type="button"
+				onclick={() => (reviewDecision = 'reject')}
+				aria-pressed={reviewDecision === 'reject'}
+				aria-label="Pilih keputusan Tolak untuk soal ini"
+				class="rounded-md border px-3 py-2 text-left text-sm transition-colors {reviewDecision === 'reject'
+						? 'border-destructive/30 bg-destructive/10 font-semibold text-destructive'
+						: 'border-border bg-card text-muted-foreground hover:bg-muted/50'}"
+				>
+					Tolak
+					<span class="mt-0.5 block text-[11px] font-normal text-muted-foreground">Soal tidak dilanjutkan.</span>
+				</button>
 			</div>
 
 			<div>
 				<label for="review-decision-notes" class="mb-1 block text-xs font-medium text-muted-foreground">
-					Catatan Reviewer {#if reviewDecision === 'reject'}<span class="text-destructive">*</span>{/if}
+					Catatan Reviewer {#if reviewDecision === 'reject' || reviewDecision === 'request_revision'}<span class="text-destructive">*</span>{/if}
 				</label>
 				<Textarea
 					id="review-decision-notes"
 					rows={3}
 					bind:value={reviewDecisionNotes}
-					placeholder={reviewDecision === 'approve' ? 'Opsional: catatan persetujuan.' : 'Tuliskan bagian yang harus diperbaiki guru.'}
+					placeholder={reviewDecision === 'mark_reviewed' ? 'Opsional: catatan kelayakan.' : reviewDecision === 'reject' ? 'Tuliskan alasan penolakan.' : 'Tuliskan bagian yang harus diperbaiki guru.'}
 				/>
 			</div>
 
@@ -3468,9 +3506,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 					loading={workflowBusyId !== ''}
 					loadingLabel="Menyimpan..."
 					disabled={!reviewDecisionQuestion || workflowBusyId !== ''}
-					class={reviewDecision === 'approve' ? 'bg-success text-background hover:bg-success' : 'bg-destructive text-destructive-foreground hover:bg-destructive'}
+					class={reviewDecision === 'mark_reviewed' ? 'bg-success text-background hover:bg-success' : 'bg-destructive text-destructive-foreground hover:bg-destructive'}
 				>
-					{reviewDecision === 'approve' ? 'Setujui Soal' : 'Minta Revisi'}
+					{reviewDecision === 'mark_reviewed' ? 'Tandai Layak' : reviewDecision === 'reject' ? 'Tolak Soal' : 'Minta Revisi'}
 				</LoadingButton>
 			</div>
 		</div>
@@ -3773,6 +3811,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 							<span class="rounded-full border border-primary/20 bg-card px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">{composerScopeLabel}</span>
 							<span class="rounded-full border border-border bg-card px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{questionTypeConfig.label}</span>
 							<span class="rounded-full border border-warning/30 bg-card px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-warning">{composerModeLabel}</span>
+							<span class="rounded-full border border-border bg-card px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide {workflowClass(fWorkflowStatus)}">
+								{WORKFLOW_LABEL[fWorkflowStatus] ?? fWorkflowStatus}
+							</span>
 						</div>
 					</div>
 					<div class="flex flex-wrap gap-2 lg:justify-end">
@@ -4454,7 +4495,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 						loadingLabel="Mengajukan..."
 						class="h-8 bg-success text-xs text-background hover:bg-success disabled:opacity-50"
 					>
-						Ajukan Review
+						Kirim Review
 					</LoadingButton>
 				</div>
 			</div>

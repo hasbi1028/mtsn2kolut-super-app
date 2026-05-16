@@ -52,8 +52,8 @@ export type ComposerStageCard = {
 	targetId: string;
 };
 export type RevisionSourceFilter = '' | 'item_analysis' | 'reviewer' | 'workflow';
-export type ReviewDecision = 'approve' | 'reject';
-export type BulkWorkflowAction = 'approve' | 'reject' | 'publish';
+export type ReviewDecision = 'mark_reviewed' | 'request_revision' | 'reject';
+export type BulkWorkflowAction = 'mark_reviewed' | 'request_revision' | 'reject' | 'approve' | 'publish' | 'archive';
 export type ComposerQuestionType =
 	| 'multiple_choice'
 	| 'multiple_answer'
@@ -396,9 +396,14 @@ export const QUESTION_TYPE_CONFIGS: QuestionTypeConfig[] = [
 ];
 export const WORKFLOW_LABEL: Record<string, string> = {
 	draft: 'Draft',
+	submitted: 'Menunggu Review',
 	review: 'Menunggu Review',
+	revision_needed: 'Perlu Revisi',
+	reviewed: 'Layak Review',
 	approved: 'Disetujui',
-	rejected: 'Perlu Revisi'
+	published: 'Published',
+	rejected: 'Ditolak',
+	archived: 'Diarsipkan'
 };
 export const DIFFICULTY_LABEL: Record<string, string> = { easy: 'Mudah', medium: 'Sedang', hard: 'Sulit' };
 export const revisionSourceOptions: Array<{ id: RevisionSourceFilter; label: string; desc: string }> = [
@@ -449,7 +454,9 @@ export function normalizeAuthoringMode(value: string | undefined): AuthoringMode
 }
 
 export function normalizeWorkflowStatus(value: string | undefined): string {
-	return value === 'review' ? 'review' : 'draft';
+	const normalized = (value ?? '').trim().toLowerCase();
+	if (['draft', 'review', 'submitted', 'revision_needed', 'reviewed', 'approved', 'published', 'rejected', 'archived'].includes(normalized)) return normalized;
+	return 'draft';
 }
 
 export function defaultAnswerKeyForQuestionType(type: ComposerQuestionType): string {
@@ -623,7 +630,7 @@ export function revisionReason(q: Question): string {
 }
 
 export function canSubmitRevisionReview(q: Question): boolean {
-	return q.workflow_status === 'rejected' && q.status === 'draft' && !questionUsageLocked(q);
+	return (q.workflow_status === 'rejected' || q.workflow_status === 'revision_needed') && q.status === 'draft' && !questionUsageLocked(q);
 }
 
 export function isQuickEditable(q: Question): boolean {
@@ -636,6 +643,7 @@ export function isQuickEditable(q: Question): boolean {
 export function explainQuickEditBlocked(q: Question): string {
 	if (questionUsageLocked(q)) return 'Soal sudah dipakai. Gunakan Duplikat untuk membuat revisi draft.';
 	if ((q.workflow_status !== 'draft' && q.workflow_status !== 'rejected') || q.status !== 'draft') {
+		if (q.workflow_status === 'revision_needed') return 'Soal sudah diminta revisi, tetapi editor cepat belum membuka status ini. Gunakan Duplikat atau minta admin mengembalikan lewat alur revisi.';
 		return 'Soal sudah masuk alur review/publikasi. Gunakan Duplikat untuk revisi.';
 	}
 	if (!isComposerQuestionType(q.question_type)) {
@@ -652,9 +660,14 @@ export function stemPreview(q: Question): string {
 export function workflowClass(status: string): string {
 	const map: Record<string, string> = {
 		draft: 'bg-muted text-muted-foreground',
+		submitted: 'bg-warning/15 text-warning',
 		review: 'bg-warning/15 text-warning',
+		revision_needed: 'bg-destructive/15 text-destructive',
+		reviewed: 'bg-primary/15 text-primary',
 		approved: 'bg-success/15 text-success',
-		rejected: 'bg-destructive/15 text-destructive'
+		published: 'bg-success/20 text-success',
+		rejected: 'bg-destructive/15 text-destructive',
+		archived: 'bg-muted text-muted-foreground'
 	};
 	return map[status] ?? 'bg-muted text-muted-foreground';
 }

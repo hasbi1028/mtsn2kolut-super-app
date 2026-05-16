@@ -24,7 +24,7 @@
 		questionVersionLabel,
 	} from './soal-workspace.navigation';
 
-	type ReviewDecision = 'approve' | 'reject';
+	type ReviewDecision = 'mark_reviewed' | 'request_revision' | 'reject';
 
 	let {
 		question,
@@ -285,7 +285,7 @@
 							loading={workflowBusyId === question.id}
 							loadingLabel="Memproses..."
 							disabled={!reviewerChecklistComplete || (workflowBusyId !== '' && workflowBusyId !== question.id)}
-							onclick={() => onReviewDecision(question, 'approve', reviewerNotes)}
+							onclick={() => onReviewDecision(question, 'mark_reviewed', reviewerNotes)}
 						>
 							Setujui
 						</LoadingButton>
@@ -296,7 +296,7 @@
 							loading={workflowBusyId === question.id}
 							loadingLabel="Memproses..."
 							disabled={workflowBusyId !== '' && workflowBusyId !== question.id}
-							onclick={() => onReviewDecision(question, 'reject', reviewerNotes)}
+							onclick={() => onReviewDecision(question, 'request_revision', reviewerNotes)}
 						>
 							Minta Revisi
 						</LoadingButton>

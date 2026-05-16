@@ -109,7 +109,7 @@
 		onShowPendingReviews: () => void;
 		onShowApprovedQuestions: () => void;
 		onOpenQuestion: (question: Question) => void;
-		onOpenReviewDecision: (question: Question, decision: 'approve' | 'reject') => void;
+		onOpenReviewDecision: (question: Question, decision: 'mark_reviewed' | 'request_revision' | 'reject') => void;
 		onSubmitRevisionForReview: (question: Question) => void;
 		onPublishQuestion: (question: Question) => void;
 		difficultyLabel: Record<string, string>;
@@ -169,11 +169,11 @@
 		}
 		return {
 			tone: 'green' as const,
-			title: 'Siap Terbit ke Paket',
-			badge: `${approvedTotal} disetujui`,
-			description: 'Soal sudah lolos review tetapi belum berstatus terbit.',
-			buttonLabel: 'Lihat Semua Disetujui',
-			empty: 'Belum ada soal disetujui yang menunggu terbit.',
+				title: 'Layak Review',
+				badge: `${approvedTotal} menunggu approval`,
+				description: 'Soal sudah ditandai layak reviewer dan menunggu approver/publisher.',
+				buttonLabel: 'Lihat Semua Layak Review',
+				empty: 'Belum ada soal layak review yang menunggu approval.',
 			items: approvedQueue,
 			onShowAll: onShowApprovedQuestions
 		};
@@ -222,7 +222,7 @@
 						</div>
 						<button
 							type="button"
-							onclick={() => (action === 'review' && canReviewWorkflow ? onOpenReviewDecision(q, 'approve') : onOpenQuestion(q))}
+							onclick={() => (action === 'review' && canReviewWorkflow ? onOpenReviewDecision(q, 'mark_reviewed') : onOpenQuestion(q))}
 							class="block w-full text-left"
 						>
 							<p class="line-clamp-2 text-sm font-medium text-foreground hover:text-success">{stemPreview(q)}</p>
@@ -258,12 +258,12 @@
 									loadingLabel="Mengajukan..."
 									disabled={!canSubmitRevisionReview(q) || (workflowBusyId !== '' && workflowBusyId !== q.id)}
 								>
-									Ajukan Ajukan Ulang
+									Ajukan Ulang
 								</LoadingButton>
 							{:else if action === 'review'}
 								{#if canReviewWorkflow}
-									<Button variant="outline" size="sm" class="h-7 border-success/20 bg-success/10 text-xs text-success hover:bg-success/15" onclick={() => onOpenReviewDecision(q, 'approve')} disabled={!canDecideReview(q) || (workflowBusyId !== '' && workflowBusyId !== q.id)}>Setujui</Button>
-									<Button variant="outline" size="sm" class="h-7 border-destructive/30 bg-destructive/10 text-xs text-destructive hover:bg-destructive/15" onclick={() => onOpenReviewDecision(q, 'reject')} disabled={!canDecideReview(q) || (workflowBusyId !== '' && workflowBusyId !== q.id)}>Minta Revisi</Button>
+									<Button variant="outline" size="sm" class="h-7 border-success/20 bg-success/10 text-xs text-success hover:bg-success/15" onclick={() => onOpenReviewDecision(q, 'mark_reviewed')} disabled={!canDecideReview(q) || (workflowBusyId !== '' && workflowBusyId !== q.id)}>Tandai Layak</Button>
+									<Button variant="outline" size="sm" class="h-7 border-destructive/30 bg-destructive/10 text-xs text-destructive hover:bg-destructive/15" onclick={() => onOpenReviewDecision(q, 'request_revision')} disabled={!canDecideReview(q) || (workflowBusyId !== '' && workflowBusyId !== q.id)}>Minta Revisi</Button>
 								{:else}
 									<Button variant="outline" size="sm" class="h-7 bg-card text-xs text-warning" onclick={() => onOpenQuestion(q)}>Periksa</Button>
 								{/if}
