@@ -669,6 +669,27 @@ SELECT question_text, stem_html
 FROM cbt_questions
 WHERE subject_id = $1;
 
+
+-- name: FindRecentCbtQuestionDraftDuplicate :one
+SELECT *
+FROM cbt_questions
+WHERE author_username = sqlc.arg(author_username)::text
+  AND subject_id = sqlc.arg(subject_id)::uuid
+  AND (event_id IS NOT DISTINCT FROM sqlc.narg(event_id)::uuid)
+  AND question_type = sqlc.arg(question_type)::text
+  AND COALESCE(question_text, '') = COALESCE(sqlc.arg(question_text)::text, '')
+  AND COALESCE(stem_html, '') = COALESCE(sqlc.arg(stem_html)::text, '')
+  AND COALESCE(answer_key, '') = COALESCE(sqlc.arg(answer_key)::text, '')
+  AND COALESCE(target_level, '') = COALESCE(sqlc.narg(target_level)::text, '')
+  AND COALESCE(options::text, 'null') = COALESCE(sqlc.arg(options)::jsonb::text, 'null')
+  AND status = 'draft'
+  AND workflow_status IN ('draft', 'review', 'submitted')
+  AND source_question_id IS NULL
+  AND supersedes_question_id IS NULL
+  AND created_at >= NOW() - INTERVAL '15 minutes'
+ORDER BY created_at DESC
+LIMIT 1;
+
 -- name: CreateCbtQuestion :one
 WITH new_question AS (
   SELECT gen_random_uuid() AS id

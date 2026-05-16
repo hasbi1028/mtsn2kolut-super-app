@@ -459,6 +459,106 @@ func (q *Queries) DeleteCbtQuestion(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const findRecentCbtQuestionDraftDuplicate = `-- name: FindRecentCbtQuestionDraftDuplicate :one
+SELECT id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options, stem_html, stem_latex, stimulus_html, stimulus_latex, explanation_html, rubric_html, academic_phase, cp_ref, tp_ref, kd_ref, indicator_ref, material_topic, cognitive_level, hots_flag, media_asset_ids, workflow_status, version, author_username, reviewer_username, reviewed_at, approver_username, approved_at, writer_notes, review_notes, event_id, version_group_id, version_number, source_question_id, supersedes_question_id, is_latest_version, version_note, target_level
+FROM cbt_questions
+WHERE author_username = $1::text
+  AND subject_id = $2::uuid
+  AND (event_id IS NOT DISTINCT FROM $3::uuid)
+  AND question_type = $4::text
+  AND COALESCE(question_text, '') = COALESCE($5::text, '')
+  AND COALESCE(stem_html, '') = COALESCE($6::text, '')
+  AND COALESCE(answer_key, '') = COALESCE($7::text, '')
+  AND COALESCE(target_level, '') = COALESCE($8::text, '')
+  AND COALESCE(options::text, 'null') = COALESCE($9::jsonb::text, 'null')
+  AND status = 'draft'
+  AND workflow_status IN ('draft', 'review', 'submitted')
+  AND source_question_id IS NULL
+  AND supersedes_question_id IS NULL
+  AND created_at >= NOW() - INTERVAL '15 minutes'
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+type FindRecentCbtQuestionDraftDuplicateParams struct {
+	AuthorUsername string      `json:"author_username"`
+	SubjectID      pgtype.UUID `json:"subject_id"`
+	EventID        pgtype.UUID `json:"event_id"`
+	QuestionType   string      `json:"question_type"`
+	QuestionText   string      `json:"question_text"`
+	StemHtml       string      `json:"stem_html"`
+	AnswerKey      string      `json:"answer_key"`
+	TargetLevel    pgtype.Text `json:"target_level"`
+	Options        []byte      `json:"options"`
+}
+
+func (q *Queries) FindRecentCbtQuestionDraftDuplicate(ctx context.Context, arg FindRecentCbtQuestionDraftDuplicateParams) (CbtQuestion, error) {
+	row := q.db.QueryRow(ctx, findRecentCbtQuestionDraftDuplicate,
+		arg.AuthorUsername,
+		arg.SubjectID,
+		arg.EventID,
+		arg.QuestionType,
+		arg.QuestionText,
+		arg.StemHtml,
+		arg.AnswerKey,
+		arg.TargetLevel,
+		arg.Options,
+	)
+	var i CbtQuestion
+	err := row.Scan(
+		&i.ID,
+		&i.SubjectID,
+		&i.Code,
+		&i.QuestionText,
+		&i.OptionA,
+		&i.OptionB,
+		&i.OptionC,
+		&i.OptionD,
+		&i.OptionE,
+		&i.AnswerKey,
+		&i.Explanation,
+		&i.Difficulty,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.QuestionType,
+		&i.Options,
+		&i.StemHtml,
+		&i.StemLatex,
+		&i.StimulusHtml,
+		&i.StimulusLatex,
+		&i.ExplanationHtml,
+		&i.RubricHtml,
+		&i.AcademicPhase,
+		&i.CpRef,
+		&i.TpRef,
+		&i.KdRef,
+		&i.IndicatorRef,
+		&i.MaterialTopic,
+		&i.CognitiveLevel,
+		&i.HotsFlag,
+		&i.MediaAssetIds,
+		&i.WorkflowStatus,
+		&i.Version,
+		&i.AuthorUsername,
+		&i.ReviewerUsername,
+		&i.ReviewedAt,
+		&i.ApproverUsername,
+		&i.ApprovedAt,
+		&i.WriterNotes,
+		&i.ReviewNotes,
+		&i.EventID,
+		&i.VersionGroupID,
+		&i.VersionNumber,
+		&i.SourceQuestionID,
+		&i.SupersedesQuestionID,
+		&i.IsLatestVersion,
+		&i.VersionNote,
+		&i.TargetLevel,
+	)
+	return i, err
+}
+
 const getCbtQuestion = `-- name: GetCbtQuestion :one
 SELECT q.id, q.event_id, q.subject_id, q.code, q.question_text, q.question_type, q.options,
        q.option_a, q.option_b, q.option_c, q.option_d, q.option_e,

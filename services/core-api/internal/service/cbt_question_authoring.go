@@ -63,6 +63,11 @@ func (s *CbtQuestion) createWithAudit(ctx context.Context, input SaveCbtQuestion
 		if err := s.validateMediaAssetIDs(ctx, store, input.MediaAssetIDs, pgtype.UUID{}, actor); err != nil {
 			return db.CbtQuestion{}, err
 		}
+		if duplicate, ok, err := s.findRecentDraftDuplicate(ctx, store, params); err != nil {
+			return db.CbtQuestion{}, err
+		} else if ok {
+			return duplicate, nil
+		}
 		row, err := store.CreateCbtQuestion(ctx, params)
 		if err != nil {
 			return db.CbtQuestion{}, err
@@ -152,6 +157,33 @@ func (s *CbtQuestion) DeleteWithActor(ctx context.Context, id pgtype.UUID, actor
 
 func questionUsageLocked(packageCount, answerCount int32) bool {
 	return packageCount > 0 || answerCount > 0
+}
+
+func (s *CbtQuestion) findRecentDraftDuplicate(ctx context.Context, store cbtQuestionStore, params db.CreateCbtQuestionParams) (db.CbtQuestion, bool, error) {
+	if strings.TrimSpace(params.AuthorUsername) == "" || params.Status != db.CbtQuestionStatusEnumDraft {
+		return db.CbtQuestion{}, false, nil
+	}
+	if params.SourceQuestionID.Valid || params.SupersedesQuestionID.Valid {
+		return db.CbtQuestion{}, false, nil
+	}
+	row, err := store.FindRecentCbtQuestionDraftDuplicate(ctx, db.FindRecentCbtQuestionDraftDuplicateParams{
+		AuthorUsername: params.AuthorUsername,
+		SubjectID:      params.SubjectID,
+		EventID:        params.EventID,
+		QuestionType:   params.QuestionType,
+		QuestionText:   params.QuestionText,
+		StemHtml:       params.StemHtml,
+		AnswerKey:      params.AnswerKey,
+		TargetLevel:    params.TargetLevel,
+		Options:        params.Options,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return db.CbtQuestion{}, false, nil
+		}
+		return db.CbtQuestion{}, false, err
+	}
+	return row, true, nil
 }
 
 func normalizeNoRows(err error) error {

@@ -437,6 +437,7 @@ type TimelineItem = {
 	let questionVersionsLoading = $state(false);
 	let composerBusy = $state(false);
 	let composerAction = $state<ComposerSaveIntent | ''>('');
+	let saveInFlightKey = '';
 	let draftStatus = $state('');
 	let draftSavedAt = $state<string | null>(null);
 	let pendingLocalDraft = $state<DraftPayload | null>(null);
@@ -2425,6 +2426,12 @@ type TimelineItem = {
 				return;
 			}
 		}
+		const saveKey = `${editingId ?? activeDraftKey}:${intent}:${draftSignature}`;
+		if (saveInFlightKey === saveKey) {
+			toast.info('Simpan soal masih diproses. Mohon tunggu sebentar.');
+			return;
+		}
+		saveInFlightKey = saveKey;
 		composerBusy = true;
 		composerAction = intent;
 		const payload = buildQuestionSavePayload(false);
@@ -2479,6 +2486,7 @@ type TimelineItem = {
 			}
 			toast.error(mutationErrorMessage(e, 'Gagal menyimpan soal'));
 		} finally {
+			if (saveInFlightKey === saveKey) saveInFlightKey = '';
 			composerBusy = false;
 			composerAction = '';
 		}

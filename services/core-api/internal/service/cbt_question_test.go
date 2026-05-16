@@ -31,6 +31,8 @@ type fakeQuestionStore struct {
 	createCalls   int
 	createRow     db.CbtQuestion
 	createHistory []db.CreateCbtQuestionParams
+	duplicateRow  db.CbtQuestion
+	duplicateErr  error
 
 	updateParams         db.UpdateCbtQuestionParams
 	updateCalls          int
@@ -123,6 +125,16 @@ func (f *fakeQuestionStore) GetCbtQuestionAsset(ctx context.Context, id pgtype.U
 		}
 	}
 	return db.CbtQuestionAsset{}, pgx.ErrNoRows
+}
+
+func (f *fakeQuestionStore) FindRecentCbtQuestionDraftDuplicate(ctx context.Context, arg db.FindRecentCbtQuestionDraftDuplicateParams) (db.CbtQuestion, error) {
+	if f.duplicateErr != nil {
+		return db.CbtQuestion{}, f.duplicateErr
+	}
+	if f.duplicateRow.ID.Valid {
+		return f.duplicateRow, nil
+	}
+	return db.CbtQuestion{}, pgx.ErrNoRows
 }
 
 func (f *fakeQuestionStore) CreateCbtQuestion(ctx context.Context, arg db.CreateCbtQuestionParams) (db.CbtQuestion, error) {
