@@ -79,6 +79,7 @@ func main() {
 		OffsiteRemoteDir:      getEnv("POSTGRES_BACKUP_OFFSITE_REMOTE_DIR", ""),
 		OffsiteStaleThreshold: time.Duration(int32Env("POSTGRES_BACKUP_OFFSITE_STALE_HOURS", int32(service.DefaultOffsiteBackupStaleHours))) * time.Hour,
 	})
+	systemMaintenanceSvc := service.NewSystemMaintenance(q, systemBackupSvc)
 	pusakaSchedulerSvc := service.NewPusakaScheduler(q, pusakaJobSvc, settSvc, auditSvc)
 	notificationSvc := service.NewNotification(q)
 	librarySvc := service.NewLibrary(q)
@@ -141,6 +142,7 @@ func main() {
 	settH := handler.NewSetting(settSvc)
 	internalAnalyticsH := handler.NewInternalAnalytics(internalAnalyticsSvc)
 	systemBackupH := handler.NewSystemBackup(systemBackupSvc)
+	systemMaintenanceH := handler.NewSystemMaintenance(systemMaintenanceSvc)
 	pusakaSchedulerH := handler.NewPusakaScheduler(pusakaSchedulerSvc)
 	pusakaWorkerH := handler.NewPusakaWorker(pusakaJobSvc, pusakaAttendanceSvc, settSvc)
 	notificationH := handler.NewNotification(notificationSvc)
@@ -195,6 +197,7 @@ func main() {
 	r.Get("/api/website/media/{filename}", websiteMediaH.File)
 	r.Get("/api/branding/file/{filename}", brandingH.Asset)
 	r.With(publicAnalyticsRateLimit, mw.InternalKey(internalAPIKey)).Post("/api/internal-analytics/public-events", internalAnalyticsH.CreatePublicEvent)
+	r.Get("/api/system/maintenance/status", systemMaintenanceH.Status)
 
 	// CBT/Bank Soal asset files are not public-by-obscurity. They may be accessed
 	// either by authenticated admin/guru requests or by active exam participants
@@ -276,6 +279,7 @@ func main() {
 
 	r.Group(func(r chi.Router) {
 		r.Use(mw.JWT(jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession))
+		r.Use(mw.Maintenance(systemMaintenanceSvc, 5*time.Second))
 		r.Use(mw.Audit(q))
 		r.Use(mw.InternalAnalytics(internalAnalyticsSvc))
 		r.Get("/api/auth/account", authH.GetAccount)
@@ -311,6 +315,13 @@ func main() {
 		r.With(requireBackupRestorePlan).Post("/api/system/backups/{id}/validate-restore", systemBackupH.ValidateRestore)
 		r.With(requireBackupRestorePlan).Post("/api/system/backups/{id}/restore-command", systemBackupH.RestoreCommand)
 		r.With(requireBackupDownload).Get("/api/system/backups/{id}/download", systemBackupH.Download)
+		r.With(requireAdmin).Get("/api/system/maintenance/health-summary", systemMaintenanceH.HealthSummary)
+		r.With(requireAdmin).Get("/api/system/maintenance/windows", systemMaintenanceH.ListWindows)
+		r.With(requireAdmin).Post("/api/system/maintenance/windows", systemMaintenanceH.CreateWindow)
+		r.With(requireAdmin).Put("/api/system/maintenance/windows/{id}", systemMaintenanceH.UpdateWindow)
+		r.With(requireAdmin).Post("/api/system/maintenance/windows/{id}/activate", systemMaintenanceH.ActivateWindow)
+		r.With(requireAdmin).Post("/api/system/maintenance/windows/{id}/deactivate", systemMaintenanceH.DeactivateWindow)
+		r.With(requireAdmin).Get("/api/system/maintenance/audit-logs", systemMaintenanceH.ListAuditLogs)
 		r.Get("/api/school-profile", settH.SchoolProfile)
 		r.With(requireSchoolProfileSettings).Put("/api/school-profile", settH.UpdateSchoolProfile)
 		r.With(requireBrandingSettings).Get("/api/branding", brandingH.Get)

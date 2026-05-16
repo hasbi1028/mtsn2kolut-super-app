@@ -3,6 +3,7 @@ const PUBLIC_SITE_PREFIXES = ['/berita/', '/pengumuman/'] as const;
 
 const PUBLIC_API_EXACT_PATHS = [
 	'/api/auth/logout',
+	'/api/system/maintenance/status',
 	'/api/public/analytics/events',
 	'/api/public/branding',
 	'/api/public/register-student',
@@ -19,7 +20,7 @@ const PUBLIC_API_PREFIXES = [
 	'/api/public/site/announcements/'
 ] as const;
 
-const PUBLIC_AUTH_EXACT_PATHS = ['/login', '/manifest.webmanifest'] as const;
+const PUBLIC_AUTH_EXACT_PATHS = ['/login', '/maintenance', '/manifest.webmanifest'] as const;
 
 export function matchesPathSegment(pathname: string, prefix: string) {
 	const normalizedPrefix = prefix === '/' ? '/' : prefix.replace(/\/$/, '');

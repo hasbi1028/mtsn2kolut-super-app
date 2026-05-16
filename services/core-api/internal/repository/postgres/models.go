@@ -2247,6 +2247,34 @@ type Subject struct {
 	IsChoiceSubject     bool               `json:"is_choice_subject"`
 }
 
+type SystemMaintenanceAuditLog struct {
+	ID            pgtype.UUID        `json:"id"`
+	MaintenanceID pgtype.UUID        `json:"maintenance_id"`
+	ActorUserID   pgtype.UUID        `json:"actor_user_id"`
+	Action        string             `json:"action"`
+	Reason        pgtype.Text        `json:"reason"`
+	Metadata      []byte             `json:"metadata"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+type SystemMaintenanceWindow struct {
+	ID               pgtype.UUID        `json:"id"`
+	Title            string             `json:"title"`
+	Message          string             `json:"message"`
+	Mode             string             `json:"mode"`
+	AffectedModules  []string           `json:"affected_modules"`
+	StartsAt         pgtype.Timestamptz `json:"starts_at"`
+	EndsAt           pgtype.Timestamptz `json:"ends_at"`
+	IsActive         bool               `json:"is_active"`
+	AllowAdminBypass bool               `json:"allow_admin_bypass"`
+	BypassRoles      []string           `json:"bypass_roles"`
+	Severity         string             `json:"severity"`
+	CreatedBy        pgtype.UUID        `json:"created_by"`
+	UpdatedBy        pgtype.UUID        `json:"updated_by"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
 type TimetableSlot struct {
 	ID             pgtype.UUID        `json:"id"`
 	AssignmentID   pgtype.UUID        `json:"assignment_id"`

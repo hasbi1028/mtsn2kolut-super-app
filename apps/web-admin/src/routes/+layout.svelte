@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import PublicSiteShell from '$lib/components/PublicSiteShell.svelte';
 	import GlobalConfirmDialog from '$lib/components/GlobalConfirmDialog.svelte';
+	import MaintenanceBanner from '$lib/components/maintenance/MaintenanceBanner.svelte';
 	import RouteProgress from '$lib/components/RouteProgress.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import { Sonner } from '$lib/components/ui/sonner';
@@ -12,6 +13,7 @@
 
 	let { children, data } = $props();
 	let isLogin = $derived(page.url.pathname === '/login');
+	let isMaintenancePage = $derived(page.url.pathname === '/maintenance');
 	let pwaRegistrationStarted = $state(false);
 	let isPublicSite = $derived(isPublicSitePath(page.url.pathname, Boolean(data.user)));
 	let branding = $derived(data.branding ?? defaultBranding);
@@ -59,7 +61,7 @@
 <GlobalConfirmDialog />
 <RouteProgress active={!!navigating.to} />
 
-{#if isLogin}
+{#if isLogin || isMaintenancePage}
 	{@render children()}
 {:else if isPublicSite}
 	<PublicSiteShell user={data.user} branding={branding}>
@@ -76,6 +78,7 @@
 		-->
 		<div class={`flex-1 min-w-0 pt-14 transition-[padding] duration-200 lg:pt-0 ${desktopSidebarExpanded ? 'lg:pl-60' : 'lg:pl-[5.5rem]'}`}>
 			<main class={`w-full px-2.5 py-4 sm:px-4 sm:py-6 lg:px-6 ${desktopSidebarExpanded ? 'lg:mx-auto lg:max-w-[1100px]' : 'lg:max-w-[1380px]'}`}>
+				<MaintenanceBanner status={data.maintenanceStatus} user={data.user} />
 				{@render children()}
 			</main>
 		</div>
