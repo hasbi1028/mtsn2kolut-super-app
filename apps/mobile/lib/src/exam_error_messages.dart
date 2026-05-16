@@ -175,7 +175,7 @@ ExamGuidanceNotice? statusFailureNotice(ExamApiException error) {
       return const ExamGuidanceNotice(
         title: 'Konteks peserta tidak sah',
         message:
-            'Perangkat belum membentuk konteks peserta yang valid. Pengawas sebaiknya memeriksa token, fingerprint, dan status reset akses.',
+            'Perangkat belum membentuk konteks peserta yang valid. Pengawas sebaiknya memeriksa token, penanda perangkat, dan status reset akses.',
         tone: ExamGuidanceTone.danger,
       );
     case 403:

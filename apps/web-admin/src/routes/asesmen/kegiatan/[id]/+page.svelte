@@ -9,7 +9,8 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
-	import { sopStages, sopStatusLabels, type SopReadinessResponse, type SopStageReadiness, type SopStageStatus } from '$lib/asesmen/sop-stages';
+	import { sopStages, sopStatusLabels, type SopReadinessResponse, type SopStageKey, type SopStageReadiness, type SopStageStatus } from '$lib/asesmen/sop-stages';
+	import { assessmentApprovalLabels, createApproval, listApprovals, revokeApproval, type AssessmentApprovalRecord, type AssessmentApprovalType } from '$lib/asesmen/approval-client';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
 	import { csvRow } from '$lib/csv';
 	import { toast } from '$lib/components/ui/sonner';
@@ -67,6 +68,8 @@
 		packages: EventPackage[];
 		questionCompleteness: QuestionCompleteness | null;
 		sopReadiness: SopReadinessResponse | null;
+		approvals: AssessmentApprovalRecord[];
+		approvalsAvailable: boolean;
 	};
 	type ChecklistHref =
 		| `/asesmen/kegiatan/${string}/members`
@@ -92,6 +95,12 @@
 		items: ChecklistItem[];
 	};
 	type NextAction = ChecklistItem & { priority: string };
+	type EventApprovalType = Extract<AssessmentApprovalType, 'package_ready' | 'participants_rooms_ready' | 'tokens_cards_ready' | 'results_verified' | 'final_archive'>;
+	type SopApprovalMilestone = {
+		approvalType: EventApprovalType;
+		stageKey: SopStageKey;
+		helper: string;
+	};
 
 	const eventId = page.params.id ?? '';
 	let info = $state<EventInfo | null>(null);
@@ -117,6 +126,14 @@
 	let targetPg = $state(20);
 	let targetEssay = $state(5);
 	let targetSettingsBusy = $state(false);
+	let approvalBusyType = $state<EventApprovalType | null>(null);
+	let approvalNotes = $state<Record<EventApprovalType, string>>({
+		package_ready: '',
+		participants_rooms_ready: '',
+		tokens_cards_ready: '',
+		results_verified: '',
+		final_archive: '',
+	});
 
 	const statusLabel: Record<string, string> = { draft: 'Konsep', active: 'Aktif', finished: 'Selesai' };
 	const scopeLabel: Record<string, string> = { class: 'Per Kelas', grade: 'Per Tingkat', school: 'Seluruh Sekolah' };
@@ -129,6 +146,13 @@
 		published_only: 'Hanya soal terbit',
 		all_progress: 'Konsep/verifikasi/terbit dihitung',
 	};
+	const sopApprovalMilestones: SopApprovalMilestone[] = [
+		{ approvalType: 'package_ready', stageKey: 'package_ready', helper: 'Paket kegiatan siap dipakai dan isi soal sudah dicek panitia.' },
+		{ approvalType: 'participants_rooms_ready', stageKey: 'participants_rooms_ready', helper: 'Peserta, ruang, nomor meja, dan pengawas sudah siap untuk hari-H.' },
+		{ approvalType: 'tokens_cards_ready', stageKey: 'tokens_cards_ready', helper: 'Token ujian/kartu peserta siap didistribusikan secara terbatas.' },
+		{ approvalType: 'results_verified', stageKey: 'result_verification', helper: 'Rekap hasil sudah diperiksa sebelum masuk laporan akhir.' },
+		{ approvalType: 'final_archive', stageKey: 'final_archive', helper: 'Kegiatan ditutup dan dokumen arsip akhir siap dirujuk kembali.' },
+	];
 
 	function isRecord(value: unknown): value is Record<string, unknown> {
 		return typeof value === 'object' && value !== null;
@@ -180,8 +204,16 @@
 		}
 	}
 
+	async function fetchEventApprovals(): Promise<{ approvals: AssessmentApprovalRecord[]; available: boolean }> {
+		try {
+			return { approvals: await listApprovals('event', eventId), available: true };
+		} catch {
+			return { approvals: [], available: false };
+		}
+	}
+
 	async function fetchDetail(): Promise<EventCommandDetail> {
-		const [nextInfo, nextResults, overviewPayload, sessionPayload, packagePayload, completenessPayload, sopPayload] = await Promise.all([
+		const [nextInfo, nextResults, overviewPayload, sessionPayload, packagePayload, completenessPayload, sopPayload, approvalPayload] = await Promise.all([
 			fetch(clientApiPath`/api/asesmen/events/${eventId}`).then((response) => readClientApiData<EventInfo>(response, 'Gagal memuat kegiatan ujian')),
 			fetch(clientApiPath`/api/asesmen/events/${eventId}/results`).then((response) => readClientApiData<ResultRow[]>(response, 'Gagal memuat rekap nilai kegiatan')),
 			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/overview`, null),
@@ -189,6 +221,7 @@
 			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/packages`, []),
 			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/question-completeness`, null),
 			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/sop-readiness`, null),
+			fetchEventApprovals(),
 		]);
 		const questionCompleteness = isRecord(completenessPayload) ? completenessPayload as QuestionCompleteness : null;
 		syncQuestionRequirementForm(questionCompleteness);
@@ -200,6 +233,8 @@
 			packages: parseArrayPayload<EventPackage>(packagePayload, 'packages'),
 			questionCompleteness,
 			sopReadiness: parseSopReadiness(sopPayload),
+			approvals: approvalPayload.approvals,
+			approvalsAvailable: approvalPayload.available,
 		};
 	}
 
@@ -215,13 +250,13 @@
 		detailPromise = fetchDetail().then((detail) => {
 			if (requestId !== detailRequestId) {
 				if (!info) throw new Error('Permintaan panel kegiatan dibatalkan');
-				return { info, results, overview: null, sessions: [], packages: [], questionCompleteness: null, sopReadiness: null };
+				return { info, results, overview: null, sessions: [], packages: [], questionCompleteness: null, sopReadiness: null, approvals: [], approvalsAvailable: false };
 			}
 			applyDetail(detail);
 			return detail;
 		}).catch((error: unknown) => {
 			if (requestId === detailRequestId || !info) throw error;
-			return { info, results, overview: null, sessions: [], packages: [], questionCompleteness: null, sopReadiness: null };
+			return { info, results, overview: null, sessions: [], packages: [], questionCompleteness: null, sopReadiness: null, approvals: [], approvalsAvailable: false };
 		});
 	}
 
@@ -414,6 +449,81 @@
 		if (status === 'running') return 'border-accent bg-accent/70 text-accent-foreground';
 		if (status === 'warning') return 'border-warning/30 bg-warning/10 text-warning';
 		return 'border-muted bg-muted/60 text-muted-foreground';
+	}
+
+	function approvalRecordFor(approvals: AssessmentApprovalRecord[], approvalType: EventApprovalType) {
+		return approvals.find((record) => record.approval_type === approvalType && record.status === 'approved')
+			?? approvals.find((record) => record.approval_type === approvalType)
+			?? null;
+	}
+
+	function approvalStatusLabel(record: AssessmentApprovalRecord | null) {
+		if (!record) return 'Belum disahkan';
+		if (record.status === 'approved') return 'Disahkan';
+		if (record.status === 'revoked') return 'Dicabut';
+		return record.status || 'Belum disahkan';
+	}
+
+	function approvalStatusClass(record: AssessmentApprovalRecord | null) {
+		if (record?.status === 'approved') return 'border-primary/20 bg-primary/10 text-primary';
+		if (record?.status === 'revoked') return 'border-destructive/20 bg-destructive/10 text-destructive';
+		return 'border-warning/30 bg-warning/10 text-warning';
+	}
+
+	function approvalActor(record: AssessmentApprovalRecord | null) {
+		if (!record) return 'Belum ada aktor';
+		if (record.status === 'revoked') return record.revoked_by_display_name || record.revoked_by_username || record.approved_by_display_name || record.approved_by_username || 'Aktor tidak tercatat';
+		return record.approved_by_display_name || record.approved_by_username || 'Aktor tidak tercatat';
+	}
+
+	function approvalTime(record: AssessmentApprovalRecord | null) {
+		const value = record?.status === 'revoked' ? record.revoked_at ?? record.approved_at : record?.approved_at;
+		if (!value) return 'Waktu belum tercatat';
+		return new Date(value).toLocaleString('id-ID', {
+			timeZone: 'Asia/Makassar',
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+		}) + ' WITA';
+	}
+
+	function approvalStageStatus(timeline: SopStageReadiness[], milestone: SopApprovalMilestone) {
+		return timeline.find((stage) => stage.key === milestone.stageKey)?.status ?? 'blocked';
+	}
+
+	async function approveMilestone(approvalType: EventApprovalType) {
+		approvalBusyType = approvalType;
+		try {
+			await createApproval({
+				entity_type: 'event',
+				entity_id: eventId,
+				approval_type: approvalType,
+				notes: approvalNotes[approvalType].trim() || `${assessmentApprovalLabels[approvalType]} untuk kegiatan asesmen.`,
+			});
+			approvalNotes[approvalType] = '';
+			toast.success('Pengesahan SOP disimpan');
+			loadInitial();
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Gagal menyimpan pengesahan SOP');
+		} finally {
+			approvalBusyType = null;
+		}
+	}
+
+	async function revokeMilestone(record: AssessmentApprovalRecord, approvalType: EventApprovalType) {
+		approvalBusyType = approvalType;
+		try {
+			await revokeApproval(record.id, approvalNotes[approvalType].trim() || `Cabut ${assessmentApprovalLabels[approvalType]}.`);
+			approvalNotes[approvalType] = '';
+			toast.success('Pengesahan SOP dicabut');
+			loadInitial();
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Gagal mencabut pengesahan SOP');
+		} finally {
+			approvalBusyType = null;
+		}
 	}
 
 	function exportCSV() {
@@ -751,6 +861,84 @@
 											{/each}
 										</div>
 									</div>
+								</div>
+							{/each}
+						</div>
+					</Card.Content>
+				</Card.Root>
+			</section>
+
+			<section aria-label="Pengesahan SOP kegiatan asesmen">
+				<Card.Root class="border-primary/20 shadow-sm">
+					<Card.Header class="pb-3">
+						<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+							<div>
+								<Card.Title class="text-base">Pengesahan SOP</Card.Title>
+								<Card.Description>Pengesahan ini mencatat audit formal, belum memblokir alur lama.</Card.Description>
+							</div>
+							<a href={resolve(`/asesmen/kegiatan/${eventId}/archive`)} class="inline-flex rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15">Buka Arsip</a>
+						</div>
+					</Card.Header>
+					<Card.Content class="space-y-4">
+						{#if !detail.approvalsAvailable}
+							<p class="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">Audit pengesahan SOP belum dapat dimuat untuk sesi ini. Pengelolaan pengesahan formal tersedia melalui akses admin.</p>
+						{/if}
+						<div class="grid gap-3 lg:grid-cols-2">
+							{#each sopApprovalMilestones as milestone (milestone.approvalType)}
+								{@const record = approvalRecordFor(detail.approvals, milestone.approvalType)}
+								{@const stageStatus = approvalStageStatus(sopTimeline, milestone)}
+								<div class="rounded-xl border border-border bg-card p-4">
+									<div class="flex flex-wrap items-start justify-between gap-3">
+										<div class="min-w-0">
+											<p class="text-sm font-semibold text-foreground">{assessmentApprovalLabels[milestone.approvalType]}</p>
+											<p class="mt-1 text-xs leading-5 text-muted-foreground">{milestone.helper}</p>
+										</div>
+										<div class="flex flex-wrap gap-2">
+											<Badge variant="outline" class={sopStageClass(stageStatus)}>SOP {sopStatusLabels[stageStatus]}</Badge>
+											<Badge variant="outline" class={approvalStatusClass(record)}>{approvalStatusLabel(record)}</Badge>
+										</div>
+									</div>
+									<div class="mt-3 grid gap-2 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground sm:grid-cols-2">
+										<p><span class="font-semibold text-foreground">Aktor:</span> {approvalActor(record)}</p>
+										<p><span class="font-semibold text-foreground">Waktu:</span> {approvalTime(record)}</p>
+									</div>
+									{#if record?.notes}
+										<p class="mt-3 rounded-lg border border-border bg-muted/30 p-3 text-xs leading-5 text-muted-foreground"><span class="font-semibold text-foreground">Catatan:</span> {record.notes}</p>
+									{/if}
+									{#if detail.approvalsAvailable}
+										<label class="mt-3 block space-y-1 text-xs font-medium text-muted-foreground" for={`approval-note-${milestone.approvalType}`}>
+											Catatan pengesahan/cabut
+											<textarea
+												id={`approval-note-${milestone.approvalType}`}
+												bind:value={approvalNotes[milestone.approvalType]}
+												rows="2"
+												class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+												placeholder="Opsional, misalnya hasil pemeriksaan panitia"
+											></textarea>
+										</label>
+										<div class="mt-3 flex flex-wrap gap-2">
+											{#if record?.status === 'approved'}
+												<LoadingButton
+													variant="destructive"
+													size="sm"
+													onclick={() => revokeMilestone(record, milestone.approvalType)}
+													loading={approvalBusyType === milestone.approvalType}
+													loadingLabel="Mencabut..."
+													disabled={approvalBusyType !== null && approvalBusyType !== milestone.approvalType}
+													label="Cabut pengesahan"
+												/>
+											{:else}
+												<LoadingButton
+													size="sm"
+													onclick={() => approveMilestone(milestone.approvalType)}
+													loading={approvalBusyType === milestone.approvalType}
+													loadingLabel="Mengesahkan..."
+													disabled={approvalBusyType !== null && approvalBusyType !== milestone.approvalType}
+													label="Sahkan"
+												/>
+											{/if}
+										</div>
+									{/if}
 								</div>
 							{/each}
 						</div>

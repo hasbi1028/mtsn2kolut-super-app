@@ -5,6 +5,7 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
@@ -105,6 +106,18 @@
 		participants: ProctoringRow[];
 		events: ProctoringEvent[];
 	};
+	type ProctorViewMode = 'simple' | 'complete';
+	type ParticipantFilter = 'attention' | 'locked' | 'disconnected' | 'not_submitted' | 'submitted' | 'all';
+	type DialogResult = { reason: string; notes: string };
+	type ActionDialogOptions = {
+		title: string;
+		description: string;
+		confirmLabel: string;
+		textLabel: string;
+		defaultText: string;
+		placeholder: string;
+		includeReason?: boolean;
+	};
 	type RoomHandover = {
 		room_id: string;
 		session_id: string;
@@ -153,6 +166,13 @@
 	let refreshBusy = $state(false);
 	let backgroundBusy = $state(false);
 	let actionBusyId = $state('');
+	let proctorViewMode = $state<ProctorViewMode>('simple');
+	let participantFilter = $state<ParticipantFilter>('attention');
+	let actionDialogOpen = $state(false);
+	let actionDialog = $state<ActionDialogOptions | null>(null);
+	let actionDialogReason = $state('verified_device');
+	let actionDialogNotes = $state('');
+	let actionDialogResolver: ((value: DialogResult | null) => void) | null = null;
 	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
 	let interval: ReturnType<typeof setInterval> | undefined;
 	let proctorHeartbeatInterval: ReturnType<typeof setInterval> | undefined;
@@ -184,6 +204,31 @@
 		}
 		return { online, stale, offline, submitted, locked, highRisk };
 	});
+	const participantFilters: Array<{ key: ParticipantFilter; label: string; aria: string }> = [
+		{ key: 'attention', label: 'Butuh Tindakan', aria: 'Filter peserta: Butuh Tindakan' },
+		{ key: 'locked', label: 'Terkunci', aria: 'Filter peserta: Terkunci' },
+		{ key: 'disconnected', label: 'Terputus', aria: 'Filter peserta: Terputus' },
+		{ key: 'not_submitted', label: 'Belum Kirim', aria: 'Filter peserta: Belum Kirim' },
+		{ key: 'submitted', label: 'Sudah Kirim', aria: 'Filter peserta: Sudah Kirim' },
+		{ key: 'all', label: 'Semua', aria: 'Filter peserta: Semua' },
+	];
+	const actionReasonOptions = [
+		{ value: 'verified_device', label: 'Perangkat sudah diverifikasi' },
+		{ value: 'network_issue', label: 'Gangguan jaringan' },
+		{ value: 'accidental_exit', label: 'Salah keluar aplikasi' },
+		{ value: 'approved_device_change', label: 'Ganti perangkat disetujui' },
+		{ value: 'other', label: 'Lainnya' },
+	];
+	let filteredParticipants = $derived.by(() => participants.filter((row) => {
+		if (participantFilter === 'all') return true;
+		if (participantFilter === 'attention') return participantNeedsAttention(row);
+		if (participantFilter === 'locked') return participantLocked(row);
+		if (participantFilter === 'disconnected') return heartbeatState(row) === 'offline' || heartbeatState(row) === 'stale';
+		if (participantFilter === 'not_submitted') return !row.submitted_at;
+		if (participantFilter === 'submitted') return Boolean(row.submitted_at);
+		return true;
+	}));
+	let attentionParticipants = $derived(participants.filter(participantNeedsAttention));
 	let evidenceSummary = $derived.by(() => summarizeProctorEvidence({ participants, events, hasPrintPack: true }));
 
 	onMount(() => {
@@ -436,7 +481,7 @@
 
 	function heartbeatLabel(row: ProctoringRow) {
 		const state = heartbeatState(row);
-		if (state === 'submitted') return 'Kirim';
+		if (state === 'submitted') return 'Sudah kirim';
 		if (state === 'online') return 'Terhubung';
 		if (state === 'stale') return 'Waspada';
 		return 'Terputus';
@@ -451,24 +496,98 @@
 	}
 
 	function riskLabel(row: ProctoringRow) {
-		if (row.locked_at || row.risk_level === 'locked') return 'Terkunci';
+		if (participantLocked(row)) return 'Terkunci';
 		if (row.risk_level === 'high') return 'Bahaya';
 		if (row.risk_level === 'warning') return 'Perlu perhatian';
 		return 'Normal';
 	}
 
 	function riskClass(row: ProctoringRow) {
-		if (row.locked_at || row.risk_level === 'locked') return 'border-destructive/40 bg-destructive/15 text-destructive';
+		if (participantLocked(row)) return 'border-destructive/40 bg-destructive/15 text-destructive';
 		if (row.risk_level === 'high') return 'border-warning/40 bg-warning/15 text-warning';
 		if (row.risk_level === 'warning') return 'border-accent bg-accent/60 text-accent-foreground';
 		return 'border-primary/20 bg-primary/10 text-primary';
 	}
 
 	function rowAttentionClass(row: ProctoringRow) {
-		if (row.locked_at || row.risk_level === 'locked') return 'bg-destructive/15';
+		if (participantLocked(row)) return 'bg-destructive/15';
 		if (row.risk_level === 'high' || row.suspicious_flag) return 'bg-destructive/10';
 		if (row.risk_level === 'warning' || row.app_switch_count >= 3 || row.violation_count > 0) return 'bg-warning/10';
 		return '';
+	}
+
+	function participantLocked(row: ProctoringRow) {
+		return Boolean(row.locked_at || row.risk_level === 'locked');
+	}
+
+	function participantNeedsAttention(row: ProctoringRow) {
+		const state = heartbeatState(row);
+		return Boolean(
+			participantLocked(row) ||
+			row.risk_level === 'high' ||
+			row.risk_level === 'warning' ||
+			row.suspicious_flag ||
+			state === 'offline' ||
+			state === 'stale' ||
+			!row.submitted_at
+		);
+	}
+
+	function participantAttentionLabel(row: ProctoringRow) {
+		if (participantLocked(row)) return 'Terkunci';
+		const state = heartbeatState(row);
+		if (state === 'offline') return 'Terputus';
+		if (state === 'stale') return 'Kontak terlalu lama';
+		if (row.risk_level === 'high') return 'Risiko tinggi';
+		if (row.risk_level === 'warning' || row.suspicious_flag) return 'Perlu perhatian';
+		if (!row.submitted_at) return 'Belum kirim jawaban';
+		return 'Periksa';
+	}
+
+	function participantFilterCount(key: ParticipantFilter) {
+		if (key === 'all') return participants.length;
+		if (key === 'attention') return attentionParticipants.length;
+		if (key === 'locked') return participants.filter(participantLocked).length;
+		if (key === 'disconnected') return participants.filter((row) => {
+			const state = heartbeatState(row);
+			return state === 'offline' || state === 'stale';
+		}).length;
+		if (key === 'not_submitted') return participants.filter((row) => !row.submitted_at).length;
+		if (key === 'submitted') return participants.filter((row) => Boolean(row.submitted_at)).length;
+		return 0;
+	}
+
+	function actionReasonLabel(value: string) {
+		return actionReasonOptions.find((item) => item.value === value)?.label ?? 'Lainnya';
+	}
+
+	function openActionDialog(options: ActionDialogOptions): Promise<DialogResult | null> {
+		actionDialogResolver?.(null);
+		actionDialog = options;
+		actionDialogReason = 'verified_device';
+		actionDialogNotes = options.defaultText;
+		actionDialogOpen = true;
+		return new Promise((resolve) => {
+			actionDialogResolver = resolve;
+		});
+	}
+
+	function closeActionDialog(result: DialogResult | null) {
+		actionDialogOpen = false;
+		const resolver = actionDialogResolver;
+		actionDialogResolver = null;
+		actionDialog = null;
+		resolver?.(result);
+	}
+
+	function confirmActionDialog() {
+		if (!actionDialog) return;
+		closeActionDialog({ reason: actionDialogReason, notes: actionDialogNotes.trim() });
+	}
+
+	function actionNotes(result: DialogResult) {
+		const reason = actionReasonLabel(result.reason);
+		return result.notes ? `${reason}: ${result.notes}` : reason;
 	}
 
 	function evidenceCategoryLabel(category: ProctorEvidenceCategory | null) {
@@ -556,13 +675,17 @@
 
 
 	async function unlockParticipant(row: ProctoringRow) {
-		const notes = window.prompt(`Catatan buka kunci untuk ${row.nama}`, 'Sudah diverifikasi pengawas ruang') ?? '';
-		if (!(await confirmAction({
-			title: 'Buka Kunci Peserta',
-			message: `Buka status terkunci ${row.nama} tanpa menghapus histori pelanggaran.`,
+		const result = await openActionDialog({
+			title: `Buka kunci ${row.nama}`,
+			description: 'Buka akses hanya setelah perangkat dan kondisi peserta diverifikasi pengawas. Histori pelanggaran tetap tersimpan.',
 			confirmLabel: 'Buka Kunci',
-			tone: 'warning',
-		}))) return;
+			textLabel: 'Catatan verifikasi',
+			defaultText: 'Sudah diverifikasi pengawas ruang',
+			placeholder: 'Contoh: jaringan terputus, peserta sudah kembali ke aplikasi.',
+			includeReason: true,
+		});
+		if (!result) return;
+		const notes = actionNotes(result);
 		actionBusyId = `unlock-${row.participant_id}`;
 		try {
 			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/participants/${row.participant_id}/unlock`, {
@@ -583,7 +706,17 @@
 	async function acknowledgeEvent(event: ProctoringEvent) {
 		const row = participants.find((item) => item.participant_id === event.participant_id);
 		if (!row) return;
-		const notes = window.prompt(`Catatan pemeriksaan untuk ${event.nama}`, eventReason(event)) ?? '';
+		const result = await openActionDialog({
+			title: `Tandai diperiksa: ${event.nama}`,
+			description: 'Catat hasil pemeriksaan agar riwayat ruang jelas untuk berita acara.',
+			confirmLabel: 'Tandai Diperiksa',
+			textLabel: 'Catatan pemeriksaan',
+			defaultText: eventReason(event),
+			placeholder: 'Tuliskan temuan pengawas atau tindak lanjut.',
+			includeReason: true,
+		});
+		if (!result) return;
+		const notes = actionNotes(result);
 		actionBusyId = `ack-${event.id}`;
 		try {
 			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/participants/${event.participant_id}/acknowledge`, {
@@ -602,7 +735,17 @@
 	}
 
 	async function recordIncidentAction(event: ProctoringEvent, action: 'reviewed' | 'cleared' | 'warning_given' | 'escalated') {
-		const notes = window.prompt(`Catatan ${action.replaceAll('_', ' ')} untuk ${event.nama}`, eventReason(event)) ?? '';
+		const result = await openActionDialog({
+			title: `Catat tindak lanjut ${event.nama}`,
+			description: `Status tindakan: ${action.replaceAll('_', ' ')}. Catatan ini masuk bukti pengawasan ruang.`,
+			confirmLabel: 'Simpan Tindakan',
+			textLabel: 'Catatan tindak lanjut',
+			defaultText: eventReason(event),
+			placeholder: 'Tuliskan keputusan pengawas.',
+			includeReason: true,
+		});
+		if (!result) return;
+		const notes = actionNotes(result);
 		actionBusyId = `incident-${action}-${event.id}`;
 		try {
 			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/participants/${event.participant_id}/incident-action`, {
@@ -622,12 +765,21 @@
 
 	async function sendParticipantCommand(row: ProctoringRow, commandType: 'warning_message' | 'reconnect' | 'unlock_notice') {
 		const defaultMessage = commandType === 'reconnect'
-			? 'Silakan hubungi pengawas untuk login ulang.'
+			? 'Silakan hubungi pengawas untuk masuk ulang.'
 			: commandType === 'unlock_notice'
 				? 'Akses ujian sudah dibuka. Lanjutkan sesuai arahan pengawas.'
 				: 'Tetap di aplikasi ujian dan ikuti arahan pengawas.';
-		const message = window.prompt(`Pesan ke ${row.nama}`, defaultMessage) ?? '';
-		if (!message.trim()) return;
+		const result = await openActionDialog({
+			title: `Kirim instruksi ke ${row.nama}`,
+			description: 'Instruksi akan dibaca siswa saat aplikasi memperbarui status dari server.',
+			confirmLabel: 'Kirim Instruksi',
+			textLabel: 'Isi instruksi',
+			defaultText: defaultMessage,
+			placeholder: 'Instruksi singkat untuk siswa.',
+			includeReason: false,
+		});
+		if (!result || !result.notes.trim()) return;
+		const message = result.notes.trim();
 		actionBusyId = `command-${commandType}-${row.participant_id}`;
 		try {
 			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/participants/${row.participant_id}/command`, {
@@ -743,7 +895,7 @@
 			{/if}
 			<Button variant="outline" onclick={exportEvidenceCSV} disabled={!room}>
 				<FileDownIcon class="mr-2 size-4" />
-				Unduh Bukti CSV (tanpa kode ujian)
+				Unduh Bukti CSV (tanpa token ujian)
 			</Button>
 			<Button variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/proctoring/report`)}>
 				Berita Acara
@@ -764,6 +916,42 @@
 	{#if operationState}
 		<OperationStatusPanel {...operationState} />
 	{/if}
+
+	<div class="flex flex-col gap-3 rounded-2xl border border-border bg-card p-3 shadow-sm md:flex-row md:items-center md:justify-between">
+		<div>
+			<p class="text-sm font-bold text-foreground">Mode Pengawas</p>
+			<p class="text-xs text-muted-foreground">Mode sederhana menampilkan peserta butuh tindakan dan tombol cepat hari-H.</p>
+		</div>
+		<div class="inline-flex w-fit rounded-full border border-slate-200 bg-white p-1 text-xs font-semibold" role="tablist" aria-label="Mode tampilan pengawas">
+			<button type="button" role="tab" class={`rounded-full px-3 py-1.5 transition ${proctorViewMode === 'simple' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`} aria-selected={proctorViewMode === 'simple'} onclick={() => (proctorViewMode = 'simple')}>Mode Sederhana</button>
+			<button type="button" role="tab" class={`rounded-full px-3 py-1.5 transition ${proctorViewMode === 'complete' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`} aria-selected={proctorViewMode === 'complete'} onclick={() => (proctorViewMode = 'complete')}>Mode Lengkap</button>
+		</div>
+	</div>
+
+	<Dialog.Root bind:open={actionDialogOpen}>
+		<Dialog.Content>
+			<Dialog.Header>
+				<Dialog.Title>{actionDialog?.title ?? 'Tindakan Pengawas'}</Dialog.Title>
+				<Dialog.Description>{actionDialog?.description ?? 'Catat tindakan pengawas ruang.'}</Dialog.Description>
+			</Dialog.Header>
+			<div class="space-y-4 py-2">
+				{#if actionDialog?.includeReason}
+					<label class="block text-sm font-semibold text-foreground" for="action-reason">Alasan tindakan</label>
+					<select id="action-reason" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={actionDialogReason}>
+						{#each actionReasonOptions as option}
+							<option value={option.value}>{option.label}</option>
+						{/each}
+					</select>
+				{/if}
+				<label class="block text-sm font-semibold text-foreground" for="action-notes">{actionDialog?.textLabel ?? 'Catatan'}</label>
+				<Textarea id="action-notes" class="min-h-28" bind:value={actionDialogNotes} placeholder={actionDialog?.placeholder ?? 'Tulis catatan pengawas.'} />
+			</div>
+			<Dialog.Footer>
+				<Button variant="outline" onclick={() => closeActionDialog(null)}>Batal</Button>
+				<Button onclick={confirmActionDialog}>{actionDialog?.confirmLabel ?? 'Simpan'}</Button>
+			</Dialog.Footer>
+		</Dialog.Content>
+	</Dialog.Root>
 
 	{#if recentAlertEvents.length > 0}
 		<Card.Root class="border-warning/30 bg-warning/5">
@@ -822,7 +1010,7 @@
 					</Card.Root>
 					<Card.Root class="border-primary/20">
 						<Card.Header class="pb-2">
-							<Card.Title class="text-sm text-muted-foreground">Kirim</Card.Title>
+								<Card.Title class="text-sm text-muted-foreground">Sudah kirim</Card.Title>
 						</Card.Header>
 						<Card.Content>
 							<div class="text-2xl font-bold text-foreground">{participantStats.submitted}</div>
@@ -850,7 +1038,7 @@
 								</Card.Description>
 							</div>
 							<div class="flex flex-wrap items-center gap-2">
-								<Badge variant="outline" class="border-primary/20 text-primary">Kode ruang {room.room_token || '—'}</Badge>
+								<Badge variant="outline" class="border-primary/20 text-primary">Token ruang {room.room_token || '—'}</Badge>
 								<Badge variant="outline">{room.session_status}</Badge>
 							</div>
 						</div>
@@ -876,6 +1064,57 @@
 							<p class="mt-1 text-sm text-foreground">Durasi paket {room.duration_minutes} menit</p>
 							<p class="text-xs text-muted-foreground">{room.is_locked ? 'Ruang dikunci' : 'Ruang masih dapat diperbarui operator'}</p>
 						</div>
+					</Card.Content>
+				</Card.Root>
+
+				<Card.Root class="border-primary/20">
+					<Card.Header class="pb-3">
+						<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+							<div>
+								<Card.Title>Mode Sederhana: Peserta Butuh Tindakan</Card.Title>
+								<Card.Description>Fokus hari-H untuk peserta terkunci, terputus, belum kirim, atau perlu atensi pengawas.</Card.Description>
+							</div>
+							<div class="flex flex-wrap gap-2" role="tablist" aria-label="Filter peserta ruang">
+								{#each participantFilters as filter}
+									<button type="button" role="tab" class={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${participantFilter === filter.key ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-muted-foreground hover:text-foreground'}`} aria-label={filter.aria} aria-selected={participantFilter === filter.key} onclick={() => (participantFilter = filter.key)}>
+										{filter.label} <span class="ml-1 opacity-80">{participantFilterCount(filter.key)}</span>
+									</button>
+								{/each}
+							</div>
+						</div>
+					</Card.Header>
+					<Card.Content>
+						{#if filteredParticipants.length === 0}
+							<div class="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">Tidak ada peserta yang butuh tindakan pada filter ini.</div>
+						{:else}
+							<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+								{#each filteredParticipants as row (row.participant_id)}
+									<div class={`rounded-2xl border p-4 ${participantLocked(row) ? 'border-destructive/30 bg-destructive/5' : participantNeedsAttention(row) ? 'border-warning/30 bg-warning/5' : 'border-border bg-card'}`}>
+										<div class="flex items-start justify-between gap-3">
+											<div>
+												<p class="font-bold text-foreground">{row.nama}</p>
+												<p class="text-xs text-muted-foreground">{row.nis} · Meja {row.seat_no ?? '—'}</p>
+											</div>
+											<Badge variant="outline" class={riskClass(row)}>{participantAttentionLabel(row)}</Badge>
+										</div>
+										<div class="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+											<div class="rounded-lg bg-muted p-2"><p class="font-bold">{heartbeatLabel(row)}</p><p class="text-muted-foreground">Koneksi</p></div>
+											<div class="rounded-lg bg-muted p-2"><p class="font-bold">{row.answered_count}</p><p class="text-muted-foreground">Jawab</p></div>
+											<div class="rounded-lg bg-muted p-2"><p class="font-bold">{row.submitted_at ? 'Ya' : 'Belum'}</p><p class="text-muted-foreground">Sudah kirim</p></div>
+										</div>
+										<div class="mt-3 flex flex-wrap justify-end gap-2">
+											<Button size="sm" variant="outline" onclick={() => void flagParticipant(row, !row.suspicious_flag)}>{row.suspicious_flag ? 'Bersihkan' : 'Periksa'}</Button>
+											<LoadingButton size="sm" variant="outline" onclick={() => void sendParticipantCommand(row, 'warning_message')} loading={actionBusyId === `command-warning_message-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `command-warning_message-${row.participant_id}`} loadingLabel="Mengirim...">Peringatkan</LoadingButton>
+											<LoadingButton size="sm" variant="outline" onclick={() => void sendParticipantCommand(row, 'reconnect')} loading={actionBusyId === `command-reconnect-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `command-reconnect-${row.participant_id}`} loadingLabel="Mengirim...">Instruksi masuk ulang</LoadingButton>
+											{#if participantLocked(row)}
+												<LoadingButton size="sm" onclick={() => void unlockParticipant(row)} loading={actionBusyId === `unlock-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `unlock-${row.participant_id}`} loadingLabel="Membuka...">Buka Kunci</LoadingButton>
+											{/if}
+											<LoadingButton size="sm" variant="outline" onclick={() => void resetAccess(row)} loading={actionBusyId === `reset-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `reset-${row.participant_id}`} loadingLabel="Mengatur...">Atur ulang akses</LoadingButton>
+										</div>
+									</div>
+								{/each}
+							</div>
+						{/if}
 					</Card.Content>
 				</Card.Root>
 
@@ -950,7 +1189,7 @@
 									</label>
 									<label for="handover-token" class="flex min-h-14 items-start gap-3 rounded-lg border border-border bg-card p-3 text-sm text-foreground">
 										<input id="handover-token" type="checkbox" class="mt-0.5 size-4 accent-primary" checked={handover.token_returned_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.token_returned_checked = event.currentTarget.checked)} />
-										<span><span class="font-semibold text-foreground">Kode/berkas</span><br /><span class="text-xs text-muted-foreground">Kode ruang dan berkas pengawas dikembalikan.</span></span>
+										<span><span class="font-semibold text-foreground">Token/berkas</span><br /><span class="text-xs text-muted-foreground">Token ruang dan berkas pengawas dikembalikan.</span></span>
 									</label>
 									<label for="handover-assets" class="flex min-h-14 items-start gap-3 rounded-lg border border-border bg-card p-3 text-sm text-foreground">
 										<input id="handover-assets" type="checkbox" class="mt-0.5 size-4 accent-primary" checked={handover.assets_returned_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.assets_returned_checked = event.currentTarget.checked)} />
@@ -961,7 +1200,7 @@
 									<div class="grid grid-cols-3 gap-2 text-center">
 										<div>
 											<p class="text-lg font-bold text-foreground">{participantStats.submitted}</p>
-											<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Kirim</p>
+											<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Sudah kirim</p>
 										</div>
 										<div>
 											<p class="text-lg font-bold text-destructive">{room.suspicious_count}</p>
@@ -1026,15 +1265,15 @@
 										<Table.Head class="text-center">Meja</Table.Head>
 										<Table.Head>Status</Table.Head>
 										<Table.Head class="text-center">Jawab</Table.Head>
-										<Table.Head class="text-center">Pindah</Table.Head>
-										<Table.Head class="text-center">Tangkapan</Table.Head>
+										<Table.Head class="text-center">Keluar aplikasi</Table.Head>
+										<Table.Head class="text-center">Coba tangkap layar</Table.Head>
 										<Table.Head>Risiko</Table.Head>
 										<Table.Head class="text-center">Skor</Table.Head>
 										<Table.Head class="text-right">Aksi</Table.Head>
 									</Table.Row>
 								</Table.Header>
 								<Table.Body>
-									{#each participants as row (row.participant_id)}
+									{#each (proctorViewMode === 'simple' ? filteredParticipants : participants) as row (row.participant_id)}
 											<Table.Row class={`${rowAttentionClass(row)} ${highlightedParticipantIds.has(row.participant_id) ? 'ring-2 ring-warning/60 bg-warning/15' : ''}`}>
 											<Table.Cell>
 												<div class="font-medium text-foreground">{row.nama}</div>
@@ -1059,16 +1298,21 @@
 														{row.suspicious_flag ? 'Bersihkan' : 'Tandai'}
 													</Button>
 													<LoadingButton size="sm" variant="outline" onclick={() => void resetAccess(row)} loading={actionBusyId === `reset-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `reset-${row.participant_id}`} loadingLabel="Mengatur...">
-														Atur Ulang
+														Atur ulang akses
 													</LoadingButton>
 													<LoadingButton size="sm" variant="outline" onclick={() => void sendParticipantCommand(row, 'warning_message')} loading={actionBusyId === `command-warning_message-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `command-warning_message-${row.participant_id}`} loadingLabel="Kirim...">
 														Peringatkan
 													</LoadingButton>
 													<LoadingButton size="sm" variant="outline" onclick={() => void sendParticipantCommand(row, 'reconnect')} loading={actionBusyId === `command-reconnect-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `command-reconnect-${row.participant_id}`} loadingLabel="Kirim...">
-														Masuk Ulang
+														Instruksi masuk ulang
 													</LoadingButton>
+													{#if participantLocked(row)}
+														<LoadingButton size="sm" variant="outline" onclick={() => void unlockParticipant(row)} loading={actionBusyId === `unlock-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `unlock-${row.participant_id}`} loadingLabel="Membuka...">
+															Buka Kunci
+														</LoadingButton>
+													{/if}
 													<LoadingButton size="sm" onclick={() => void forceSubmit(row)} loading={actionBusyId === `submit-${row.participant_id}`} disabled={!!row.submitted_at || (actionBusyId !== '' && actionBusyId !== `submit-${row.participant_id}`)} loadingLabel="Mengirim...">
-														Kirim
+														Sudah kirim paksa
 													</LoadingButton>
 												</div>
 											</Table.Cell>

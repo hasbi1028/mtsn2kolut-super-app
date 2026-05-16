@@ -52,6 +52,22 @@ Padanan UI:
 - `builder` -> penyusun/editor
 - `proctoring` -> pengawasan ruang
 
+## UI Terminology Cleanup Targets
+
+- Event -> Kegiatan Asesmen
+- Kode Ruang -> Token Ruang
+- Kode Ujian -> Token Ujian
+- Kirim -> Sudah kirim / Jawaban terkirim
+- Pindah -> Keluar aplikasi
+- Tangkapan -> Coba tangkap layar
+- Published -> Terbit
+- Export -> Ekspor
+- Advanced Bank Soal -> Pengelolaan Lanjutan Bank Soal
+- Analisis Butir -> Pemantauan Mutu Soal, unless true item-analysis metrics exist
+- Heartbeat -> Status/koneksi
+- Anti-switch -> Tetap di aplikasi
+- Fingerprint -> Penanda perangkat
+
 ## Tahap SOP Kegiatan Asesmen
 
 | Urutan | Key | Label | Tujuan |

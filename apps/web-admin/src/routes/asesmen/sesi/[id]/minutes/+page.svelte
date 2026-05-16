@@ -8,6 +8,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { fetchSchoolProfile, schoolAddressLine, type SchoolProfile } from '$lib/school-profile';
 	import { readClientApiData } from '$lib/client/api';
+	import { maskAssessmentToken } from '$lib/asesmen/token-display';
 
 	type SessionInfo = {
 		title: string;
@@ -219,6 +220,7 @@
 
 		<section class="rounded-lg border border-primary/20 bg-card p-6 shadow-sm">
 			<h3 class="text-lg font-semibold text-foreground">Daftar Hadir dan Token Ujian</h3>
+			<p class="mt-1 text-xs text-muted-foreground">Token dimasking untuk arsip/BA final. Gunakan Kartu Ujian untuk distribusi token lengkap sebelum pelaksanaan.</p>
 			<div class="mt-4 overflow-x-auto">
 				<table class="min-w-full text-sm">
 					<thead class="bg-primary/10 text-left text-muted-foreground">
@@ -238,7 +240,7 @@
 								<td class="px-3 py-2">{participant.nama}</td>
 								<td class="px-3 py-2">{participant.room_name || '—'}</td>
 								<td class="px-3 py-2">{participant.seat_no ?? '—'}</td>
-								<td class="px-3 py-2 font-mono">{participant.token || '—'}</td>
+								<td class="px-3 py-2 font-mono">{maskAssessmentToken(participant.token)}</td>
 								<td class="px-3 py-2">&nbsp;</td>
 							</tr>
 						{/each}
