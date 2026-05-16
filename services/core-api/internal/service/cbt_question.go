@@ -59,6 +59,7 @@ type cbtQuestionStore interface {
 	GetCbtQuestion(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error)
 	GetCbtQuestionDetail(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionDetailRow, error)
 	GetCbtQuestionAsset(ctx context.Context, id pgtype.UUID) (db.CbtQuestionAsset, error)
+	AcquireCbtQuestionDraftDuplicateLock(ctx context.Context, fingerprint string) error
 	FindRecentCbtQuestionDraftDuplicate(ctx context.Context, arg db.FindRecentCbtQuestionDraftDuplicateParams) (db.CbtQuestion, error)
 	CreateCbtQuestion(ctx context.Context, arg db.CreateCbtQuestionParams) (db.CbtQuestion, error)
 	UpdateCbtQuestion(ctx context.Context, arg db.UpdateCbtQuestionParams) (db.CbtQuestion, error)

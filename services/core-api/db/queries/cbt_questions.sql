@@ -670,6 +670,9 @@ FROM cbt_questions
 WHERE subject_id = $1;
 
 
+-- name: AcquireCbtQuestionDraftDuplicateLock :exec
+SELECT pg_advisory_xact_lock(hashtextextended(sqlc.arg(fingerprint)::text, 0));
+
 -- name: FindRecentCbtQuestionDraftDuplicate :one
 SELECT *
 FROM cbt_questions
@@ -677,12 +680,30 @@ WHERE author_username = sqlc.arg(author_username)::text
   AND subject_id = sqlc.arg(subject_id)::uuid
   AND (event_id IS NOT DISTINCT FROM sqlc.narg(event_id)::uuid)
   AND question_type = sqlc.arg(question_type)::text
+  AND COALESCE(code, '') = COALESCE(sqlc.arg(code)::text, '')
   AND COALESCE(question_text, '') = COALESCE(sqlc.arg(question_text)::text, '')
   AND COALESCE(stem_html, '') = COALESCE(sqlc.arg(stem_html)::text, '')
+  AND COALESCE(stem_latex, '') = COALESCE(sqlc.arg(stem_latex)::text, '')
+  AND COALESCE(stimulus_html, '') = COALESCE(sqlc.arg(stimulus_html)::text, '')
+  AND COALESCE(stimulus_latex, '') = COALESCE(sqlc.arg(stimulus_latex)::text, '')
   AND COALESCE(answer_key, '') = COALESCE(sqlc.arg(answer_key)::text, '')
+  AND COALESCE(explanation, '') = COALESCE(sqlc.arg(explanation)::text, '')
+  AND COALESCE(explanation_html, '') = COALESCE(sqlc.arg(explanation_html)::text, '')
+  AND COALESCE(rubric_html, '') = COALESCE(sqlc.arg(rubric_html)::text, '')
+  AND COALESCE(difficulty, '') = COALESCE(sqlc.arg(difficulty)::text, '')
+  AND COALESCE(academic_phase, '') = COALESCE(sqlc.arg(academic_phase)::text, '')
   AND COALESCE(target_level, '') = COALESCE(sqlc.narg(target_level)::text, '')
+  AND COALESCE(cp_ref, '') = COALESCE(sqlc.arg(cp_ref)::text, '')
+  AND COALESCE(tp_ref, '') = COALESCE(sqlc.arg(tp_ref)::text, '')
+  AND COALESCE(kd_ref, '') = COALESCE(sqlc.arg(kd_ref)::text, '')
+  AND COALESCE(indicator_ref, '') = COALESCE(sqlc.arg(indicator_ref)::text, '')
+  AND COALESCE(material_topic, '') = COALESCE(sqlc.arg(material_topic)::text, '')
+  AND COALESCE(cognitive_level, '') = COALESCE(sqlc.arg(cognitive_level)::text, '')
+  AND hots_flag = sqlc.arg(hots_flag)::bool
   AND COALESCE(options::text, 'null') = COALESCE(sqlc.arg(options)::jsonb::text, 'null')
+  AND COALESCE(media_asset_ids::text, 'null') = COALESCE(sqlc.arg(media_asset_ids)::jsonb::text, 'null')
   AND status = 'draft'
+  AND workflow_status = sqlc.arg(workflow_status)::text
   AND workflow_status IN ('draft', 'review', 'submitted')
   AND source_question_id IS NULL
   AND supersedes_question_id IS NULL

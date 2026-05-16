@@ -63,6 +63,9 @@ func (s *CbtQuestion) createWithAudit(ctx context.Context, input SaveCbtQuestion
 		if err := s.validateMediaAssetIDs(ctx, store, input.MediaAssetIDs, pgtype.UUID{}, actor); err != nil {
 			return db.CbtQuestion{}, err
 		}
+		if err := store.AcquireCbtQuestionDraftDuplicateLock(ctx, draftDuplicateFingerprint(params)); err != nil {
+			return db.CbtQuestion{}, err
+		}
 		if duplicate, ok, err := s.findRecentDraftDuplicate(ctx, store, params); err != nil {
 			return db.CbtQuestion{}, err
 		} else if ok {
@@ -159,6 +162,39 @@ func questionUsageLocked(packageCount, answerCount int32) bool {
 	return packageCount > 0 || answerCount > 0
 }
 
+func draftDuplicateFingerprint(params db.CreateCbtQuestionParams) string {
+	parts := []string{
+		params.AuthorUsername,
+		fmt.Sprintf("%x", params.SubjectID.Bytes),
+		fmt.Sprintf("%t:%x", params.EventID.Valid, params.EventID.Bytes),
+		params.QuestionType,
+		params.Code,
+		params.QuestionText,
+		params.StemHtml,
+		params.StemLatex,
+		params.StimulusHtml,
+		params.StimulusLatex,
+		params.AnswerKey,
+		params.Explanation,
+		params.ExplanationHtml,
+		params.RubricHtml,
+		string(params.Difficulty),
+		params.AcademicPhase,
+		fmt.Sprintf("%t:%s", params.TargetLevel.Valid, params.TargetLevel.String),
+		params.CpRef,
+		params.TpRef,
+		params.KdRef,
+		params.IndicatorRef,
+		params.MaterialTopic,
+		params.CognitiveLevel,
+		fmt.Sprintf("%t", params.HotsFlag),
+		string(params.Options),
+		string(params.MediaAssetIds),
+		params.WorkflowStatus,
+	}
+	return strings.Join(parts, "\x1f")
+}
+
 func (s *CbtQuestion) findRecentDraftDuplicate(ctx context.Context, store cbtQuestionStore, params db.CreateCbtQuestionParams) (db.CbtQuestion, bool, error) {
 	if strings.TrimSpace(params.AuthorUsername) == "" || params.Status != db.CbtQuestionStatusEnumDraft {
 		return db.CbtQuestion{}, false, nil
@@ -167,15 +203,33 @@ func (s *CbtQuestion) findRecentDraftDuplicate(ctx context.Context, store cbtQue
 		return db.CbtQuestion{}, false, nil
 	}
 	row, err := store.FindRecentCbtQuestionDraftDuplicate(ctx, db.FindRecentCbtQuestionDraftDuplicateParams{
-		AuthorUsername: params.AuthorUsername,
-		SubjectID:      params.SubjectID,
-		EventID:        params.EventID,
-		QuestionType:   params.QuestionType,
-		QuestionText:   params.QuestionText,
-		StemHtml:       params.StemHtml,
-		AnswerKey:      params.AnswerKey,
-		TargetLevel:    params.TargetLevel,
-		Options:        params.Options,
+		AuthorUsername:  params.AuthorUsername,
+		SubjectID:       params.SubjectID,
+		EventID:         params.EventID,
+		QuestionType:    params.QuestionType,
+		Code:            params.Code,
+		QuestionText:    params.QuestionText,
+		StemHtml:        params.StemHtml,
+		StemLatex:       params.StemLatex,
+		StimulusHtml:    params.StimulusHtml,
+		StimulusLatex:   params.StimulusLatex,
+		AnswerKey:       params.AnswerKey,
+		Explanation:     params.Explanation,
+		ExplanationHtml: params.ExplanationHtml,
+		RubricHtml:      params.RubricHtml,
+		Difficulty:      string(params.Difficulty),
+		AcademicPhase:   params.AcademicPhase,
+		TargetLevel:     params.TargetLevel,
+		CpRef:           params.CpRef,
+		TpRef:           params.TpRef,
+		KdRef:           params.KdRef,
+		IndicatorRef:    params.IndicatorRef,
+		MaterialTopic:   params.MaterialTopic,
+		CognitiveLevel:  params.CognitiveLevel,
+		HotsFlag:        params.HotsFlag,
+		Options:         params.Options,
+		MediaAssetIds:   params.MediaAssetIds,
+		WorkflowStatus:  params.WorkflowStatus,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -1268,6 +1322,60 @@ func mergeNotes(existing string, incoming string) string {
 		return existing
 	}
 	return incoming
+}
+
+func cbtQuestionFromCurrent(current db.GetCbtQuestionRow) db.CbtQuestion {
+	return db.CbtQuestion{
+		ID:                   current.ID,
+		EventID:              current.EventID,
+		SubjectID:            current.SubjectID,
+		Code:                 current.Code,
+		QuestionText:         current.QuestionText,
+		QuestionType:         current.QuestionType,
+		Options:              current.Options,
+		OptionA:              current.OptionA,
+		OptionB:              current.OptionB,
+		OptionC:              current.OptionC,
+		OptionD:              current.OptionD,
+		OptionE:              current.OptionE,
+		AnswerKey:            current.AnswerKey,
+		Explanation:          current.Explanation,
+		Difficulty:           current.Difficulty,
+		Status:               current.Status,
+		CreatedAt:            current.CreatedAt,
+		UpdatedAt:            current.UpdatedAt,
+		StemHtml:             current.StemHtml,
+		StemLatex:            current.StemLatex,
+		StimulusHtml:         current.StimulusHtml,
+		StimulusLatex:        current.StimulusLatex,
+		ExplanationHtml:      current.ExplanationHtml,
+		RubricHtml:           current.RubricHtml,
+		AcademicPhase:        current.AcademicPhase,
+		TargetLevel:          current.TargetLevel,
+		CpRef:                current.CpRef,
+		TpRef:                current.TpRef,
+		KdRef:                current.KdRef,
+		IndicatorRef:         current.IndicatorRef,
+		MaterialTopic:        current.MaterialTopic,
+		CognitiveLevel:       current.CognitiveLevel,
+		HotsFlag:             current.HotsFlag,
+		MediaAssetIds:        current.MediaAssetIds,
+		WorkflowStatus:       current.WorkflowStatus,
+		Version:              current.Version,
+		VersionGroupID:       current.VersionGroupID,
+		VersionNumber:        current.VersionNumber,
+		SourceQuestionID:     current.SourceQuestionID,
+		SupersedesQuestionID: current.SupersedesQuestionID,
+		IsLatestVersion:      current.IsLatestVersion,
+		VersionNote:          current.VersionNote,
+		AuthorUsername:       current.AuthorUsername,
+		ReviewerUsername:     current.ReviewerUsername,
+		ReviewedAt:           current.ReviewedAt,
+		ApproverUsername:     current.ApproverUsername,
+		ApprovedAt:           current.ApprovedAt,
+		WriterNotes:          current.WriterNotes,
+		ReviewNotes:          current.ReviewNotes,
+	}
 }
 
 func questionInputFromCurrent(current db.GetCbtQuestionRow, username string) SaveCbtQuestionInput {

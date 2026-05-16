@@ -213,7 +213,10 @@ func (s *CbtQuestion) SubmitForReview(ctx context.Context, id pgtype.UUID, actor
 		return db.CbtQuestion{}, normalizeNoRows(err)
 	}
 	fromStatus := strings.TrimSpace(current.WorkflowStatus)
-	if !workflowStatusIn(fromStatus, "draft", "review", "submitted", "revision_needed", "rejected") {
+	if workflowStatusIn(fromStatus, "submitted", "review") {
+		return cbtQuestionFromCurrent(current), nil
+	}
+	if !workflowStatusIn(fromStatus, "draft", "revision_needed", "rejected") {
 		return db.CbtQuestion{}, fmt.Errorf("%w: hanya draft, revision_needed, atau rejected yang dapat diajukan review", domain.ErrConflict)
 	}
 	if !actor.IsAdmin() && (strings.TrimSpace(current.AuthorUsername) == "" || current.AuthorUsername != actor.Username) {

@@ -11,6 +11,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const acquireCbtQuestionDraftDuplicateLock = `-- name: AcquireCbtQuestionDraftDuplicateLock :exec
+SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))
+`
+
+func (q *Queries) AcquireCbtQuestionDraftDuplicateLock(ctx context.Context, fingerprint string) error {
+	_, err := q.db.Exec(ctx, acquireCbtQuestionDraftDuplicateLock, fingerprint)
+	return err
+}
+
 const countCbtQuestionsFiltered = `-- name: CountCbtQuestionsFiltered :one
 SELECT COUNT(*)::bigint
 FROM cbt_questions q
@@ -466,12 +475,30 @@ WHERE author_username = $1::text
   AND subject_id = $2::uuid
   AND (event_id IS NOT DISTINCT FROM $3::uuid)
   AND question_type = $4::text
-  AND COALESCE(question_text, '') = COALESCE($5::text, '')
-  AND COALESCE(stem_html, '') = COALESCE($6::text, '')
-  AND COALESCE(answer_key, '') = COALESCE($7::text, '')
-  AND COALESCE(target_level, '') = COALESCE($8::text, '')
-  AND COALESCE(options::text, 'null') = COALESCE($9::jsonb::text, 'null')
+  AND COALESCE(code, '') = COALESCE($5::text, '')
+  AND COALESCE(question_text, '') = COALESCE($6::text, '')
+  AND COALESCE(stem_html, '') = COALESCE($7::text, '')
+  AND COALESCE(stem_latex, '') = COALESCE($8::text, '')
+  AND COALESCE(stimulus_html, '') = COALESCE($9::text, '')
+  AND COALESCE(stimulus_latex, '') = COALESCE($10::text, '')
+  AND COALESCE(answer_key, '') = COALESCE($11::text, '')
+  AND COALESCE(explanation, '') = COALESCE($12::text, '')
+  AND COALESCE(explanation_html, '') = COALESCE($13::text, '')
+  AND COALESCE(rubric_html, '') = COALESCE($14::text, '')
+  AND COALESCE(difficulty, '') = COALESCE($15::text, '')
+  AND COALESCE(academic_phase, '') = COALESCE($16::text, '')
+  AND COALESCE(target_level, '') = COALESCE($17::text, '')
+  AND COALESCE(cp_ref, '') = COALESCE($18::text, '')
+  AND COALESCE(tp_ref, '') = COALESCE($19::text, '')
+  AND COALESCE(kd_ref, '') = COALESCE($20::text, '')
+  AND COALESCE(indicator_ref, '') = COALESCE($21::text, '')
+  AND COALESCE(material_topic, '') = COALESCE($22::text, '')
+  AND COALESCE(cognitive_level, '') = COALESCE($23::text, '')
+  AND hots_flag = $24::bool
+  AND COALESCE(options::text, 'null') = COALESCE($25::jsonb::text, 'null')
+  AND COALESCE(media_asset_ids::text, 'null') = COALESCE($26::jsonb::text, 'null')
   AND status = 'draft'
+  AND workflow_status = $27::text
   AND workflow_status IN ('draft', 'review', 'submitted')
   AND source_question_id IS NULL
   AND supersedes_question_id IS NULL
@@ -481,15 +508,33 @@ LIMIT 1
 `
 
 type FindRecentCbtQuestionDraftDuplicateParams struct {
-	AuthorUsername string      `json:"author_username"`
-	SubjectID      pgtype.UUID `json:"subject_id"`
-	EventID        pgtype.UUID `json:"event_id"`
-	QuestionType   string      `json:"question_type"`
-	QuestionText   string      `json:"question_text"`
-	StemHtml       string      `json:"stem_html"`
-	AnswerKey      string      `json:"answer_key"`
-	TargetLevel    pgtype.Text `json:"target_level"`
-	Options        []byte      `json:"options"`
+	AuthorUsername  string      `json:"author_username"`
+	SubjectID       pgtype.UUID `json:"subject_id"`
+	EventID         pgtype.UUID `json:"event_id"`
+	QuestionType    string      `json:"question_type"`
+	Code            string      `json:"code"`
+	QuestionText    string      `json:"question_text"`
+	StemHtml        string      `json:"stem_html"`
+	StemLatex       string      `json:"stem_latex"`
+	StimulusHtml    string      `json:"stimulus_html"`
+	StimulusLatex   string      `json:"stimulus_latex"`
+	AnswerKey       string      `json:"answer_key"`
+	Explanation     string      `json:"explanation"`
+	ExplanationHtml string      `json:"explanation_html"`
+	RubricHtml      string      `json:"rubric_html"`
+	Difficulty      string      `json:"difficulty"`
+	AcademicPhase   string      `json:"academic_phase"`
+	TargetLevel     pgtype.Text `json:"target_level"`
+	CpRef           string      `json:"cp_ref"`
+	TpRef           string      `json:"tp_ref"`
+	KdRef           string      `json:"kd_ref"`
+	IndicatorRef    string      `json:"indicator_ref"`
+	MaterialTopic   string      `json:"material_topic"`
+	CognitiveLevel  string      `json:"cognitive_level"`
+	HotsFlag        bool        `json:"hots_flag"`
+	Options         []byte      `json:"options"`
+	MediaAssetIds   []byte      `json:"media_asset_ids"`
+	WorkflowStatus  string      `json:"workflow_status"`
 }
 
 func (q *Queries) FindRecentCbtQuestionDraftDuplicate(ctx context.Context, arg FindRecentCbtQuestionDraftDuplicateParams) (CbtQuestion, error) {
@@ -498,11 +543,29 @@ func (q *Queries) FindRecentCbtQuestionDraftDuplicate(ctx context.Context, arg F
 		arg.SubjectID,
 		arg.EventID,
 		arg.QuestionType,
+		arg.Code,
 		arg.QuestionText,
 		arg.StemHtml,
+		arg.StemLatex,
+		arg.StimulusHtml,
+		arg.StimulusLatex,
 		arg.AnswerKey,
+		arg.Explanation,
+		arg.ExplanationHtml,
+		arg.RubricHtml,
+		arg.Difficulty,
+		arg.AcademicPhase,
 		arg.TargetLevel,
+		arg.CpRef,
+		arg.TpRef,
+		arg.KdRef,
+		arg.IndicatorRef,
+		arg.MaterialTopic,
+		arg.CognitiveLevel,
+		arg.HotsFlag,
 		arg.Options,
+		arg.MediaAssetIds,
+		arg.WorkflowStatus,
 	)
 	var i CbtQuestion
 	err := row.Scan(

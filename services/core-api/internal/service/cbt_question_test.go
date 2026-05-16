@@ -127,6 +127,10 @@ func (f *fakeQuestionStore) GetCbtQuestionAsset(ctx context.Context, id pgtype.U
 	return db.CbtQuestionAsset{}, pgx.ErrNoRows
 }
 
+func (f *fakeQuestionStore) AcquireCbtQuestionDraftDuplicateLock(ctx context.Context, fingerprint string) error {
+	return nil
+}
+
 func (f *fakeQuestionStore) FindRecentCbtQuestionDraftDuplicate(ctx context.Context, arg db.FindRecentCbtQuestionDraftDuplicateParams) (db.CbtQuestion, error) {
 	if f.duplicateErr != nil {
 		return db.CbtQuestion{}, f.duplicateErr
@@ -444,6 +448,64 @@ func TestCbtQuestionCreateAllowsMissingTargetLevel(t *testing.T) {
 	}
 	if store.createParams.TargetLevel.Valid {
 		t.Fatalf("Create(missing target_level) target_level = %+v, want null", store.createParams.TargetLevel)
+	}
+}
+
+func TestCbtQuestionCreateReturnsRecentDuplicateDraftWithoutInsert(t *testing.T) {
+	duplicateID := pgtype.UUID{Bytes: [16]byte{8}, Valid: true}
+	store := &fakeQuestionStore{
+		duplicateRow: db.CbtQuestion{ID: duplicateID, Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "draft"},
+		createRow:    db.CbtQuestion{ID: pgtype.UUID{Bytes: [16]byte{9}, Valid: true}},
+	}
+	svc := &CbtQuestion{q: store}
+
+	row, err := svc.Create(context.Background(), SaveCbtQuestionInput{
+		SubjectID:      pgtype.UUID{Bytes: [16]byte{7}, Valid: true},
+		AuthoringMode:  "beginner",
+		QuestionType:   "multiple_choice",
+		QuestionText:   "Soal sama",
+		OptionA:        "A",
+		OptionB:        "B",
+		OptionC:        "C",
+		OptionD:        "D",
+		AnswerKey:      "A",
+		AuthorUsername: "guru",
+		Actor:          CbtQuestionActor{Username: "guru", Roles: []string{"guru"}},
+	})
+	if err != nil {
+		t.Fatalf("Create(duplicate draft) error = %v", err)
+	}
+	if row.ID != duplicateID {
+		t.Fatalf("Create(duplicate draft) id = %v, want existing duplicate %v", row.ID, duplicateID)
+	}
+	if store.createCalls != 0 {
+		t.Fatalf("Create(duplicate draft) create calls = %d, want 0", store.createCalls)
+	}
+}
+
+func TestCbtQuestionCreateDoesNotCollapseDifferentMetadataDraft(t *testing.T) {
+	store := &fakeQuestionStore{
+		duplicateRow: db.CbtQuestion{},
+		createRow:    db.CbtQuestion{ID: pgtype.UUID{Bytes: [16]byte{9}, Valid: true}},
+	}
+	svc := &CbtQuestion{q: store}
+
+	_, err := svc.Create(context.Background(), SaveCbtQuestionInput{
+		SubjectID:      pgtype.UUID{Bytes: [16]byte{7}, Valid: true},
+		AuthoringMode:  "advance",
+		QuestionType:   "multiple_choice",
+		QuestionText:   "Soal sama tapi metadata berbeda",
+		Options:        []QuestionOption{{Label: "A", Text: "A"}, {Label: "B", Text: "B"}, {Label: "C", Text: "C"}, {Label: "D", Text: "D"}},
+		AnswerKey:      "A",
+		MaterialTopic:  "Topik baru",
+		AuthorUsername: "guru",
+		Actor:          CbtQuestionActor{Username: "guru", Roles: []string{"guru"}},
+	})
+	if err != nil {
+		t.Fatalf("Create(different metadata) error = %v", err)
+	}
+	if store.createCalls != 1 {
+		t.Fatalf("Create(different metadata) create calls = %d, want 1", store.createCalls)
 	}
 }
 
