@@ -756,6 +756,34 @@ git add docs services/core-api apps/web-admin .hermes/plans/2026-05-16_bank-soal
 
 ---
 
+## Implementation notes
+
+### Sprint 1 — RBAC & reviewer scope foundation
+
+Status: completed locally, not deployed/restarted.
+
+Implemented:
+- Additive migration `services/core-api/db/migrations/109_bank_soal_role_workflow_permissions.sql` for new Bank Soal permissions and `bank_soal_reviewer_scopes`.
+- sqlc queries and generated repository for listing/upserting/deleting reviewer scopes plus review/approve scope checks.
+- Go service/handler/routes for `/api/bank-soal/reviewer-scopes` guarded by `bank_soal.assign_reviewer`, `bank_soal.settings`, or admin.
+- SvelteKit BFF proxy `apps/web-admin/src/routes/api/bank-soal/reviewer-scopes/+server.ts`.
+- `/bank-soal/pengaturan` upgraded into governance/settings page with operational summary, SOP workflow, quality rules, integration links, and reviewer scope form/table.
+- Frontend RBAC catalog/access helpers updated with additive permissions only.
+
+Verified:
+- Migration dry-run in transaction: PASS.
+- `npm --prefix apps/web-admin run check`: PASS.
+- `cd services/core-api && /home/servermtsn2kolut/go/bin/sqlc generate -f db/sqlc.yaml`: PASS.
+- `go test ./internal/handler ./internal/service ./internal/repository/postgres`: PASS.
+- `go build -o /tmp/core-api-bank-soal-sprint1 ./cmd/api`: PASS.
+
+Notes:
+- No permission revoke was added.
+- Reviewer scope is a foundation for Sprint 2+; visibility/action hard enforcement is intentionally not enabled yet.
+- Production deploy requires explicit approval plus DB backup before running migration.
+
+---
+
 ## Deployment runbook setelah implementasi selesai
 
 Do not deploy until explicitly requested.

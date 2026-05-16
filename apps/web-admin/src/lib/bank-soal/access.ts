@@ -38,8 +38,12 @@ export function canManageBankSoalSettings(user?: BankSoalAccessUser): boolean {
 	return hasRole(user, 'admin') || hasPermission(user, 'bank_soal.settings');
 }
 
+export function canAssignBankSoalReviewer(user?: BankSoalAccessUser): boolean {
+	return hasRole(user, 'admin') || hasPermission(user, 'bank_soal.assign_reviewer') || hasPermission(user, 'bank_soal.settings');
+}
+
 export function canPublishBankSoal(user?: BankSoalAccessUser): boolean {
-	return hasRole(user, 'admin') || hasPermission(user, 'bank_soal.publish');
+	return hasRole(user, 'admin') || hasPermission(user, 'bank_soal.publish') || hasPermission(user, 'bank_soal.approve');
 }
 
 export function canDeleteBankSoal(user?: BankSoalAccessUser): boolean {

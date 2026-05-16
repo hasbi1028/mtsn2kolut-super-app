@@ -196,6 +196,7 @@ function bankSoalPermission(pathname: string, method: string): string[] | undefi
 		if (matchesPathSegment(pathname, '/bank-soal/analisis-butir')) return ['bank_soal.analytics'];
 		return ['bank_soal.read'];
 	}
+	if (matchesPathSegment(pathname, '/api/bank-soal/reviewer-scopes')) return ['bank_soal.assign_reviewer', 'bank_soal.settings'];
 	if (isReadMethod(method)) return ['bank_soal.read'];
 	if (matchesPathSegment(pathname, '/api/bank-soal/questions/import-legacy')) return ['bank_soal.import'];
 	if (matchesPathSegment(pathname, '/api/bank-soal/questions/bulk-workflow')) return ['bank_soal.update', 'bank_soal.review', 'bank_soal.publish'];
@@ -358,7 +359,12 @@ export function canAccessProtectedRoute(user: AuthUser | undefined, pathname: st
 			'bank_soal.review',
 			'bank_soal.publish',
 			'bank_soal.import',
-			'bank_soal.analytics'
+			'bank_soal.analytics',
+			'bank_soal.update_own',
+			'bank_soal.submit',
+			'bank_soal.approve',
+			'bank_soal.read_all',
+			'bank_soal.use_in_package'
 		])
 	) return true;
 

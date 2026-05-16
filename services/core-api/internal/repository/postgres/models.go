@@ -943,6 +943,18 @@ type AuthSession struct {
 	DeviceLabel      string             `json:"device_label"`
 }
 
+type BankSoalReviewerScope struct {
+	ID         pgtype.UUID        `json:"id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	SubjectID  pgtype.UUID        `json:"subject_id"`
+	GradeLevel pgtype.Int2        `json:"grade_level"`
+	CanReview  bool               `json:"can_review"`
+	CanApprove bool               `json:"can_approve"`
+	AssignedBy pgtype.UUID        `json:"assigned_by"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CbtEventMember struct {
 	ID         pgtype.UUID        `json:"id"`
 	EventID    pgtype.UUID        `json:"event_id"`
