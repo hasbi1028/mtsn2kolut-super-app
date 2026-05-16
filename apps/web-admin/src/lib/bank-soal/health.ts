@@ -107,8 +107,18 @@ export type BankSoalHealthAction = {
 	priority: number;
 };
 
+export type BankSoalRoleWorkflowCard = {
+	key: string;
+	label: string;
+	value: number | null;
+	evidenceLabel: string;
+	helper: string;
+	tone: 'neutral' | 'success' | 'warning' | 'danger';
+};
+
 export type BankSoalHealthModel = {
 	statusCards: BankSoalStatusCard[];
+	roleWorkflowCards: BankSoalRoleWorkflowCard[];
 	subjectCoverage: BankSoalRatioMetric;
 	curriculumCoverage: BankSoalRatioMetric[];
 	metadataQuality: BankSoalRatioMetric[];
@@ -214,6 +224,23 @@ function statusTone(key: BankSoalStatusKey, value: number | null): BankSoalStatu
 	if (key === 'review' || key === 'revision') return value && value > 0 ? 'warning' : 'neutral';
 	if (key === 'archived') return value && value > 0 ? 'danger' : 'neutral';
 	return 'neutral';
+}
+
+function buildRoleWorkflowCards(summary: BankSoalHealthSummary | null | undefined, sampleSize: number): BankSoalRoleWorkflowCard[] {
+	const counts = summary?.counts ?? {};
+	const configs = [
+		{ key: 'my_draft', label: 'Draft saya', helper: 'soal pribadi yang masih bisa dilengkapi', tone: 'neutral' as const },
+		{ key: 'my_review_waiting', label: 'Menunggu review saya', helper: 'antrean review sesuai role/scope', tone: 'warning' as const },
+		{ key: 'revision_needed', label: 'Perlu revisi', helper: 'ditolak/dikembalikan untuk perbaikan', tone: 'warning' as const },
+		{ key: 'approval_waiting', label: 'Menunggu approval', helper: 'sudah direview dan menunggu keputusan akhir', tone: 'warning' as const },
+		{ key: 'package_ready', label: 'Siap paket', helper: 'approved/published dan boleh dipakai paket CBT', tone: 'success' as const },
+		{ key: 'missing_metadata', label: 'Metadata kurang', helper: 'butuh mapel/tingkat/materi/level/CP-TP-KD', tone: 'danger' as const },
+	];
+	return configs.map((config) => ({
+		...config,
+		value: numberValue(counts[config.key]),
+		evidenceLabel: evidenceLabel(summary?.counts ? 'summary' : 'missing', sampleSize),
+	}));
 }
 
 function buildStatusCards(summary: BankSoalHealthSummary | null | undefined, questions: BankSoalHealthQuestion[]) {
@@ -565,6 +592,7 @@ export function buildBankSoalHealthModel(input: BankSoalHealthInput): BankSoalHe
 	const questions = input.questions ?? [];
 	const sampleLimit = input.sampleLimit ?? 50;
 	const statusCards = buildStatusCards(input.summary, questions);
+	const roleWorkflowCards = buildRoleWorkflowCards(input.summary, questions.length);
 	const subjectCoverage = buildSubjectCoverage(input.summary, questions);
 	const curriculumCoverage = buildCurriculumCoverage(questions);
 	const metadataQuality = buildMetadataQuality(questions);
@@ -575,6 +603,7 @@ export function buildBankSoalHealthModel(input: BankSoalHealthInput): BankSoalHe
 
 	return {
 		statusCards,
+		roleWorkflowCards,
 		subjectCoverage,
 		curriculumCoverage,
 		metadataQuality,

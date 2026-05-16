@@ -70,6 +70,7 @@ type cbtQuestionStore interface {
 	CanBankSoalUserReview(ctx context.Context, arg db.CanBankSoalUserReviewParams) (bool, error)
 	CanBankSoalUserApprove(ctx context.Context, arg db.CanBankSoalUserApproveParams) (bool, error)
 	ListCbtQuestionTimeline(ctx context.Context, questionID pgtype.UUID) ([]db.ListCbtQuestionTimelineRow, error)
+	ListBankSoalQuestionWorkflowEvents(ctx context.Context, questionID pgtype.UUID) ([]db.ListBankSoalQuestionWorkflowEventsRow, error)
 	ListCbtQuestionVersions(ctx context.Context, id pgtype.UUID) ([]db.ListCbtQuestionVersionsRow, error)
 }
 
@@ -329,15 +330,30 @@ func (s *CbtQuestion) Summary(ctx context.Context, actor CbtQuestionActor) (CbtQ
 	if err != nil {
 		return CbtQuestionSummary{}, err
 	}
-	bySubject, err := s.q.ListCbtQuestionSummaryBySubject(ctx, db.ListCbtQuestionSummaryBySubjectParams(base))
+	bySubject, err := s.q.ListCbtQuestionSummaryBySubject(ctx, db.ListCbtQuestionSummaryBySubjectParams{
+		IsAdmin:         base.IsAdmin,
+		CanUseInPackage: base.CanUseInPackage,
+		ActorUsername:   base.ActorUsername,
+		ActorUserID:     base.ActorUserID,
+	})
 	if err != nil {
 		return CbtQuestionSummary{}, err
 	}
-	byCognitiveLevel, err := s.q.ListCbtQuestionSummaryByCognitiveLevel(ctx, db.ListCbtQuestionSummaryByCognitiveLevelParams(base))
+	byCognitiveLevel, err := s.q.ListCbtQuestionSummaryByCognitiveLevel(ctx, db.ListCbtQuestionSummaryByCognitiveLevelParams{
+		IsAdmin:         base.IsAdmin,
+		CanUseInPackage: base.CanUseInPackage,
+		ActorUsername:   base.ActorUsername,
+		ActorUserID:     base.ActorUserID,
+	})
 	if err != nil {
 		return CbtQuestionSummary{}, err
 	}
-	recent, err := s.q.ListCbtQuestionSummaryRecent(ctx, db.ListCbtQuestionSummaryRecentParams(base))
+	recent, err := s.q.ListCbtQuestionSummaryRecent(ctx, db.ListCbtQuestionSummaryRecentParams{
+		IsAdmin:         base.IsAdmin,
+		CanUseInPackage: base.CanUseInPackage,
+		ActorUsername:   base.ActorUsername,
+		ActorUserID:     base.ActorUserID,
+	})
 	if err != nil {
 		return CbtQuestionSummary{}, err
 	}

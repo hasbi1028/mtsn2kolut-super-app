@@ -31,6 +31,7 @@ type cbtQuestionService interface {
 	Delete(ctx context.Context, id pgtype.UUID) error
 	DeleteWithActor(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) error
 	Timeline(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) ([]db.ListCbtQuestionTimelineRow, error)
+	WorkflowEvents(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) ([]db.ListBankSoalQuestionWorkflowEventsRow, error)
 	Versions(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) ([]db.ListCbtQuestionVersionsRow, error)
 	BulkWorkflow(ctx context.Context, in service.BulkCbtQuestionWorkflowInput) (service.BulkCbtQuestionWorkflowResult, error)
 	SubmitReview(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error)

@@ -48,6 +48,7 @@ type fakeQuestionStore struct {
 	membersByUsername []db.CbtEventMember
 	auditLogs         []db.CbtQuestionAuditLog
 	workflowEvents    []db.BankSoalQuestionWorkflowEvent
+	workflowEventRows []db.ListBankSoalQuestionWorkflowEventsRow
 	versionRows       []db.ListCbtQuestionVersionsRow
 	auditErr          error
 	auditCalls        int
@@ -135,12 +136,14 @@ func (f *fakeQuestionStore) UpdateCbtQuestion(ctx context.Context, arg db.Update
 	f.updateParams = arg
 	f.updateCalls++
 	return db.CbtQuestion{
-		ID:             arg.ID,
-		QuestionText:   arg.QuestionText,
-		WorkflowStatus: arg.WorkflowStatus,
-		Status:         arg.Status,
-		StemHtml:       arg.StemHtml,
-		StimulusHtml:   arg.StimulusHtml,
+		ID:               arg.ID,
+		QuestionText:     arg.QuestionText,
+		WorkflowStatus:   arg.WorkflowStatus,
+		Status:           arg.Status,
+		StemHtml:         arg.StemHtml,
+		StimulusHtml:     arg.StimulusHtml,
+		ReviewerUsername: arg.ReviewerUsername,
+		ApproverUsername: arg.ApproverUsername,
 	}, nil
 }
 
@@ -222,6 +225,29 @@ func (f *fakeQuestionStore) ListCbtQuestionTimeline(ctx context.Context, questio
 	return rows, nil
 }
 
+func (f *fakeQuestionStore) ListBankSoalQuestionWorkflowEvents(ctx context.Context, questionID pgtype.UUID) ([]db.ListBankSoalQuestionWorkflowEventsRow, error) {
+	if f.workflowEventRows != nil {
+		return f.workflowEventRows, nil
+	}
+	rows := make([]db.ListBankSoalQuestionWorkflowEventsRow, 0, len(f.workflowEvents))
+	for _, event := range f.workflowEvents {
+		rows = append(rows, db.ListBankSoalQuestionWorkflowEventsRow{
+			ID:               event.ID,
+			QuestionID:       event.QuestionID,
+			ActorUserID:      event.ActorUserID,
+			ActorUsername:    event.ActorUsername,
+			ActorDisplayName: event.ActorUsername,
+			FromStatus:       event.FromStatus,
+			ToStatus:         event.ToStatus,
+			Action:           event.Action,
+			Note:             event.Note,
+			Metadata:         event.Metadata,
+			CreatedAt:        event.CreatedAt,
+		})
+	}
+	return rows, nil
+}
+
 func (f *fakeQuestionStore) ListCbtQuestionVersions(ctx context.Context, id pgtype.UUID) ([]db.ListCbtQuestionVersionsRow, error) {
 	return f.versionRows, nil
 }
@@ -276,6 +302,15 @@ func TestNewCbtQuestionAndReadDelegation(t *testing.T) {
 	}
 	if len(versions) != 1 || versions[0].VersionNumber != 1 || !versions[0].IsLatestVersion {
 		t.Fatalf("Versions() = %+v, want one latest v1 row", versions)
+	}
+
+	store.workflowEventRows = []db.ListBankSoalQuestionWorkflowEventsRow{{QuestionID: questionID, Action: "submit_for_review", FromStatus: "draft", ToStatus: "submitted"}}
+	events, err := svc.WorkflowEvents(context.Background(), questionID, CbtQuestionActor{Username: "admin", Roles: []string{"admin"}})
+	if err != nil {
+		t.Fatalf("WorkflowEvents() error = %v", err)
+	}
+	if len(events) != 1 || events[0].Action != "submit_for_review" || events[0].ToStatus != "submitted" {
+		t.Fatalf("WorkflowEvents() = %+v, want submitted workflow event", events)
 	}
 }
 
@@ -1293,6 +1328,16 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		}
 		if !store.updateParams.ReviewedAt.Valid || store.updateParams.ReviewNotes != "siap" {
 			t.Fatalf("Approve() review timestamp/notes = %v/%q, want valid/siap", store.updateParams.ReviewedAt, store.updateParams.ReviewNotes)
+		}
+		if len(store.workflowEvents) != 1 || store.workflowEvents[0].FromStatus != "review" || store.workflowEvents[0].ToStatus != "approved" {
+			t.Fatalf("Approve() workflow events = %+v, want review -> approved", store.workflowEvents)
+		}
+		var metadata map[string]string
+		if err := json.Unmarshal(store.workflowEvents[0].Metadata, &metadata); err != nil {
+			t.Fatalf("Approve() workflow metadata decode error = %v", err)
+		}
+		if metadata["to_approver_username"] != "waka" || metadata["to_publication_status"] != "draft" {
+			t.Fatalf("Approve() workflow metadata = %+v, want approver/status transition", metadata)
 		}
 	})
 

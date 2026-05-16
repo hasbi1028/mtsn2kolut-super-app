@@ -120,17 +120,45 @@ func serializeQuestionSummary(summary service.CbtQuestionSummary) map[string]any
 	}
 	return map[string]any{
 		"counts": map[string]any{
-			"all":           summary.Counts.Total,
-			"draft":         summary.Counts.Draft,
-			"review":        summary.Counts.Review,
-			"rejected":      summary.Counts.Rejected,
-			"approved":      summary.Counts.Approved,
-			"published":     summary.Counts.Published,
-			"package_usage": summary.Counts.PackageUsage,
+			"all":               summary.Counts.Total,
+			"total":             summary.Counts.Total,
+			"draft":             summary.Counts.Draft,
+			"review":            summary.Counts.Review,
+			"rejected":          summary.Counts.Rejected,
+			"revision":          summary.Counts.RevisionNeeded,
+			"approved":          summary.Counts.Approved,
+			"published":         summary.Counts.Published,
+			"package_usage":     summary.Counts.PackageUsage,
+			"my_draft":          summary.Counts.MyDraft,
+			"my_review_waiting": summary.Counts.MyReviewWaiting,
+			"revision_needed":   summary.Counts.RevisionNeeded,
+			"approval_waiting":  summary.Counts.ApprovalWaiting,
+			"package_ready":     summary.Counts.PackageReady,
+			"missing_metadata":  summary.Counts.MissingMetadata,
 		},
 		"by_subject":         bySubject,
 		"by_cognitive_level": byCognitive,
 		"recent":             recent,
+	}
+}
+
+func serializeQuestionWorkflowEventRow(row db.ListBankSoalQuestionWorkflowEventsRow) map[string]any {
+	metadata := decodeJSONBytes(row.Metadata)
+	note := strings.TrimSpace(row.Note)
+	return map[string]any{
+		"id":                 pgUUIDString(row.ID),
+		"question_id":        pgUUIDString(row.QuestionID),
+		"actor_user_id":      pgUUIDString(row.ActorUserID),
+		"actor_username":     row.ActorUsername,
+		"actor_display_name": row.ActorDisplayName,
+		"from_status":        row.FromStatus,
+		"to_status":          row.ToStatus,
+		"status":             row.ToStatus,
+		"action":             row.Action,
+		"note":               note,
+		"notes":              note,
+		"metadata":           metadata,
+		"created_at":         row.CreatedAt,
 	}
 }
 

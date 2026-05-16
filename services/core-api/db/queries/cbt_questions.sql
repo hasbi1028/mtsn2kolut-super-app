@@ -812,6 +812,33 @@ LEFT JOIN employees actor_emp ON actor_emp.id = actor_user.employee_id
 WHERE log.question_id = $1
 ORDER BY log.created_at ASC, log.id ASC;
 
+-- name: ListBankSoalQuestionWorkflowEvents :many
+SELECT ev.id,
+       ev.question_id,
+       ev.actor_user_id,
+       ev.actor_username,
+       COALESCE(
+         NULLIF(btrim(actor_emp.nama), ''),
+         NULLIF(btrim(actor_user_by_id.display_name), ''),
+         NULLIF(btrim(actor_user_by_name.display_name), ''),
+         ev.actor_username
+       ) AS actor_display_name,
+       ev.from_status,
+       ev.to_status,
+       ev.action,
+       ev.note,
+       ev.metadata,
+       ev.created_at
+FROM bank_soal_question_workflow_events ev
+LEFT JOIN users actor_user_by_id ON actor_user_by_id.id = ev.actor_user_id
+LEFT JOIN users actor_user_by_name
+  ON actor_user_by_id.id IS NULL
+ AND actor_user_by_name.username = ev.actor_username
+LEFT JOIN employees actor_emp
+  ON actor_emp.id = COALESCE(actor_user_by_id.employee_id, actor_user_by_name.employee_id)
+WHERE ev.question_id = $1
+ORDER BY ev.created_at ASC, ev.id ASC;
+
 -- name: ListCbtQuestionVersions :many
 SELECT q.id, q.code, q.workflow_status, q.status, q.version_number,
        q.is_latest_version, q.source_question_id, q.supersedes_question_id,
@@ -904,7 +931,72 @@ SELECT
   COUNT(*) FILTER (WHERE q.workflow_status = 'rejected')::bigint AS rejected,
   COUNT(*) FILTER (WHERE q.workflow_status = 'approved')::bigint AS approved,
   COUNT(*) FILTER (WHERE q.status = 'published')::bigint AS published,
-  COALESCE(SUM(pkg_usage.package_count), 0)::bigint AS package_usage
+  COALESCE(SUM(pkg_usage.package_count), 0)::bigint AS package_usage,
+  COUNT(*) FILTER (
+    WHERE q.author_username = sqlc.arg(actor_username)::text
+      AND q.status = 'draft'
+      AND q.workflow_status = 'draft'
+  )::bigint AS my_draft,
+  COUNT(*) FILTER (
+    WHERE q.workflow_status IN ('review', 'submitted')
+      AND (
+        sqlc.arg(is_admin)::bool
+        OR q.author_username = sqlc.arg(actor_username)::text
+        OR EXISTS (
+          SELECT 1 FROM cbt_event_members m
+          WHERE m.event_id = q.event_id
+            AND m.user_id = sqlc.arg(actor_user_id)::uuid
+            AND m.role IN ('reviewer', 'panitia')
+            AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+        )
+        OR EXISTS (
+          SELECT 1 FROM bank_soal_reviewer_scopes rs
+          WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
+            AND rs.can_review = TRUE
+            AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+            AND (
+              rs.grade_level IS NULL
+              OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+            )
+        )
+      )
+  )::bigint AS my_review_waiting,
+  COUNT(*) FILTER (
+    WHERE q.status = 'draft'
+      AND q.workflow_status IN ('revision_needed', 'rejected')
+  )::bigint AS revision_needed,
+  COUNT(*) FILTER (
+    WHERE q.status = 'draft'
+      AND q.workflow_status = 'reviewed'
+      AND (
+        sqlc.arg(is_admin)::bool
+        OR q.author_username = sqlc.arg(actor_username)::text
+        OR EXISTS (
+          SELECT 1 FROM bank_soal_reviewer_scopes rs
+          WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
+            AND rs.can_approve = TRUE
+            AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+            AND (
+              rs.grade_level IS NULL
+              OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+            )
+        )
+      )
+  )::bigint AS approval_waiting,
+  COUNT(*) FILTER (
+    WHERE q.status = 'published'
+       OR q.workflow_status IN ('approved', 'published')
+  )::bigint AS package_ready,
+  COUNT(*) FILTER (
+    WHERE COALESCE(NULLIF(btrim(q.target_level), ''), '') = ''
+       OR COALESCE(NULLIF(btrim(q.material_topic), ''), '') = ''
+       OR COALESCE(NULLIF(btrim(q.cognitive_level), ''), '') = ''
+       OR (
+         COALESCE(NULLIF(btrim(q.cp_ref), ''), '') = ''
+         AND COALESCE(NULLIF(btrim(q.tp_ref), ''), '') = ''
+         AND COALESCE(NULLIF(btrim(q.kd_ref), ''), '') = ''
+       )
+  )::bigint AS missing_metadata
 FROM cbt_questions q
 LEFT JOIN LATERAL (
   SELECT COUNT(*)::bigint AS package_count

@@ -26,6 +26,20 @@ func (s *CbtQuestion) Timeline(ctx context.Context, id pgtype.UUID, actor CbtQue
 	return rows, nil
 }
 
+func (s *CbtQuestion) WorkflowEvents(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor) ([]db.ListBankSoalQuestionWorkflowEventsRow, error) {
+	if _, err := s.GetDetail(ctx, id, actor); err != nil {
+		return nil, err
+	}
+	rows, err := s.q.ListBankSoalQuestionWorkflowEvents(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []db.ListBankSoalQuestionWorkflowEventsRow{}, nil
+	}
+	return rows, nil
+}
+
 func (s *CbtQuestion) Versions(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor) ([]db.ListCbtQuestionVersionsRow, error) {
 	if _, err := s.GetDetail(ctx, id, actor); err != nil {
 		return nil, err
@@ -449,6 +463,26 @@ func workflowScopeGradeLevel(targetLevel pgtype.Text) pgtype.Int2 {
 	}
 }
 
+func enrichWorkflowEventMetadata(metadata map[string]any, current db.GetCbtQuestionRow, row db.CbtQuestion) map[string]any {
+	enriched := map[string]any{}
+	for key, value := range metadata {
+		enriched[key] = value
+	}
+	if strings.TrimSpace(current.ReviewerUsername) != "" || strings.TrimSpace(row.ReviewerUsername) != "" {
+		enriched["from_reviewer_username"] = strings.TrimSpace(current.ReviewerUsername)
+		enriched["to_reviewer_username"] = strings.TrimSpace(row.ReviewerUsername)
+	}
+	if strings.TrimSpace(current.ApproverUsername) != "" || strings.TrimSpace(row.ApproverUsername) != "" {
+		enriched["from_approver_username"] = strings.TrimSpace(current.ApproverUsername)
+		enriched["to_approver_username"] = strings.TrimSpace(row.ApproverUsername)
+	}
+	if strings.TrimSpace(string(current.Status)) != "" || strings.TrimSpace(string(row.Status)) != "" {
+		enriched["from_publication_status"] = strings.TrimSpace(string(current.Status))
+		enriched["to_publication_status"] = strings.TrimSpace(string(row.Status))
+	}
+	return enriched
+}
+
 func (s *CbtQuestion) updateWithWorkflowAudit(ctx context.Context, input SaveCbtQuestionInput, actor CbtQuestionActor, action string, note string, metadata map[string]any, fromStatus string, toStatus string) (db.CbtQuestion, error) {
 	actor = normalizeCbtQuestionActor(actor)
 	mutationActor := normalizeCbtQuestionActor(inputActor(input))
@@ -477,7 +511,8 @@ func (s *CbtQuestion) updateWithWorkflowAudit(ctx context.Context, input SaveCbt
 		if err := logQuestionAudit(ctx, store, row.ID, actor.Username, action, note, metadata); err != nil {
 			return db.CbtQuestion{}, err
 		}
-		if err := logQuestionWorkflowEvent(ctx, store, row.ID, actor, fromStatus, toStatus, action, note, metadata); err != nil {
+		eventMetadata := enrichWorkflowEventMetadata(metadata, current, row)
+		if err := logQuestionWorkflowEvent(ctx, store, row.ID, actor, fromStatus, toStatus, action, note, eventMetadata); err != nil {
 			return db.CbtQuestion{}, err
 		}
 		return row, nil

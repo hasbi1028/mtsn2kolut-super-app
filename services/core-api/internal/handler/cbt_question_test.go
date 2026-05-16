@@ -142,6 +142,9 @@ type fakeCbtQuestionService struct {
 	timelineRows []db.ListCbtQuestionTimelineRow
 	timelineErr  error
 
+	workflowEventRows []db.ListBankSoalQuestionWorkflowEventsRow
+	workflowEventErr  error
+
 	bulkInput  service.BulkCbtQuestionWorkflowInput
 	bulkResult service.BulkCbtQuestionWorkflowResult
 	bulkErr    error
@@ -235,6 +238,13 @@ func (f *fakeCbtQuestionService) Timeline(_ context.Context, _ pgtype.UUID, _ se
 		return nil, f.timelineErr
 	}
 	return f.timelineRows, nil
+}
+
+func (f *fakeCbtQuestionService) WorkflowEvents(_ context.Context, _ pgtype.UUID, _ service.CbtQuestionActor) ([]db.ListBankSoalQuestionWorkflowEventsRow, error) {
+	if f.workflowEventErr != nil {
+		return nil, f.workflowEventErr
+	}
+	return f.workflowEventRows, nil
 }
 
 func (f *fakeCbtQuestionService) Versions(_ context.Context, _ pgtype.UUID, _ service.CbtQuestionActor) ([]db.ListCbtQuestionVersionsRow, error) {
@@ -446,6 +456,22 @@ func TestCbtQuestionDecodeAndInputMapping(t *testing.T) {
 }
 
 func TestCbtQuestionSerializerHelpers(t *testing.T) {
+	summaryMap := serializeQuestionSummary(service.CbtQuestionSummary{
+		Counts: db.GetCbtQuestionSummaryCountsRow{
+			Total:           12,
+			MyDraft:         3,
+			MyReviewWaiting: 2,
+			RevisionNeeded:  1,
+			ApprovalWaiting: 4,
+			PackageReady:    5,
+			MissingMetadata: 6,
+		},
+	})
+	counts := summaryMap["counts"].(map[string]any)
+	if counts["my_draft"] != int64(3) || counts["my_review_waiting"] != int64(2) || counts["approval_waiting"] != int64(4) || counts["missing_metadata"] != int64(6) {
+		t.Fatalf("serializeQuestionSummary() counts = %+v, want Sprint 5 role workflow counters", counts)
+	}
+
 	listRow := db.ListCbtQuestionsFilteredRow{
 		ID:             handlerTestUUID(1),
 		SubjectID:      handlerTestUUID(2),
@@ -708,6 +734,37 @@ func TestCbtQuestionHandlersForwardSuccessPaths(t *testing.T) {
 	}
 	if getFake.getID != questionID {
 		t.Fatalf("GetDetail id = %v, want %v", getFake.getID, questionID)
+	}
+
+	workflowFake := &fakeCbtQuestionService{workflowEventRows: []db.ListBankSoalQuestionWorkflowEventsRow{
+		{
+			ID:               handlerTestUUID(24),
+			QuestionID:       questionID,
+			ActorUsername:    "reviewer.ipa",
+			ActorDisplayName: "Reviewer IPA",
+			FromStatus:       "submitted",
+			ToStatus:         "reviewed",
+			Action:           "mark_reviewed",
+			Note:             "layak",
+			Metadata:         []byte(`{"from_reviewer_username":"","to_reviewer_username":"reviewer.ipa"}`),
+			CreatedAt:        cbtQuestionTestTimestamp(10),
+		},
+	}}
+	rec = httptest.NewRecorder()
+	(&CbtQuestion{svc: workflowFake}).WorkflowEvents(rec, withRouteParam(adminRequest(http.MethodGet, "/api/cbt/questions/"+questionID.String()+"/workflow-events", ""), "id", questionID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("WorkflowEvents() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	var workflowPayload struct {
+		Data struct {
+			Items []map[string]any `json:"items"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &workflowPayload); err != nil {
+		t.Fatalf("WorkflowEvents() decode response: %v body=%s", err, rec.Body.String())
+	}
+	if len(workflowPayload.Data.Items) != 1 || workflowPayload.Data.Items[0]["from_status"] != "submitted" || workflowPayload.Data.Items[0]["to_status"] != "reviewed" || workflowPayload.Data.Items[0]["notes"] != "layak" {
+		t.Fatalf("WorkflowEvents() payload = %+v, want serialized workflow event", workflowPayload.Data.Items)
 	}
 
 	body := `{"subject_id":"` + subjectID.String() + `","question_text":"Apa inti materi?","question_type":"essay","answer_key":"Energi","difficulty":"easy","status":"draft"}`

@@ -777,7 +777,72 @@ SELECT
   COUNT(*) FILTER (WHERE q.workflow_status = 'rejected')::bigint AS rejected,
   COUNT(*) FILTER (WHERE q.workflow_status = 'approved')::bigint AS approved,
   COUNT(*) FILTER (WHERE q.status = 'published')::bigint AS published,
-  COALESCE(SUM(pkg_usage.package_count), 0)::bigint AS package_usage
+  COALESCE(SUM(pkg_usage.package_count), 0)::bigint AS package_usage,
+  COUNT(*) FILTER (
+    WHERE q.author_username = $1::text
+      AND q.status = 'draft'
+      AND q.workflow_status = 'draft'
+  )::bigint AS my_draft,
+  COUNT(*) FILTER (
+    WHERE q.workflow_status IN ('review', 'submitted')
+      AND (
+        $2::bool
+        OR q.author_username = $1::text
+        OR EXISTS (
+          SELECT 1 FROM cbt_event_members m
+          WHERE m.event_id = q.event_id
+            AND m.user_id = $3::uuid
+            AND m.role IN ('reviewer', 'panitia')
+            AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+        )
+        OR EXISTS (
+          SELECT 1 FROM bank_soal_reviewer_scopes rs
+          WHERE rs.user_id = $3::uuid
+            AND rs.can_review = TRUE
+            AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+            AND (
+              rs.grade_level IS NULL
+              OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+            )
+        )
+      )
+  )::bigint AS my_review_waiting,
+  COUNT(*) FILTER (
+    WHERE q.status = 'draft'
+      AND q.workflow_status IN ('revision_needed', 'rejected')
+  )::bigint AS revision_needed,
+  COUNT(*) FILTER (
+    WHERE q.status = 'draft'
+      AND q.workflow_status = 'reviewed'
+      AND (
+        $2::bool
+        OR q.author_username = $1::text
+        OR EXISTS (
+          SELECT 1 FROM bank_soal_reviewer_scopes rs
+          WHERE rs.user_id = $3::uuid
+            AND rs.can_approve = TRUE
+            AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+            AND (
+              rs.grade_level IS NULL
+              OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+            )
+        )
+      )
+  )::bigint AS approval_waiting,
+  COUNT(*) FILTER (
+    WHERE q.status = 'published'
+       OR q.workflow_status IN ('approved', 'published')
+  )::bigint AS package_ready,
+  COUNT(*) FILTER (
+    WHERE COALESCE(NULLIF(btrim(q.target_level), ''), '') = ''
+       OR COALESCE(NULLIF(btrim(q.material_topic), ''), '') = ''
+       OR COALESCE(NULLIF(btrim(q.cognitive_level), ''), '') = ''
+       OR (
+         COALESCE(NULLIF(btrim(q.cp_ref), ''), '') = ''
+         AND COALESCE(NULLIF(btrim(q.tp_ref), ''), '') = ''
+         AND COALESCE(NULLIF(btrim(q.kd_ref), ''), '') = ''
+       )
+  )::bigint AS missing_metadata
 FROM cbt_questions q
 LEFT JOIN LATERAL (
   SELECT COUNT(*)::bigint AS package_count
@@ -786,20 +851,20 @@ LEFT JOIN LATERAL (
 ) pkg_usage ON TRUE
 WHERE TRUE
   AND (
-    $1::bool
+    $2::bool
     OR q.status = 'published'
-    OR ($2::bool AND q.workflow_status IN ('approved', 'published'))
-    OR q.author_username = $3::text
+    OR ($4::bool AND q.workflow_status IN ('approved', 'published'))
+    OR q.author_username = $1::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
       WHERE m.event_id = q.event_id
-        AND m.user_id = $4::uuid
+        AND m.user_id = $3::uuid
         AND m.role IN ('reviewer', 'panitia')
         AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
     )
     OR EXISTS (
       SELECT 1 FROM bank_soal_reviewer_scopes rs
-      WHERE rs.user_id = $4::uuid
+      WHERE rs.user_id = $3::uuid
         AND (
           (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
           OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
@@ -814,28 +879,34 @@ WHERE TRUE
 `
 
 type GetCbtQuestionSummaryCountsParams struct {
-	IsAdmin         bool        `json:"is_admin"`
-	CanUseInPackage bool        `json:"can_use_in_package"`
 	ActorUsername   string      `json:"actor_username"`
+	IsAdmin         bool        `json:"is_admin"`
 	ActorUserID     pgtype.UUID `json:"actor_user_id"`
+	CanUseInPackage bool        `json:"can_use_in_package"`
 }
 
 type GetCbtQuestionSummaryCountsRow struct {
-	Total        int64 `json:"total"`
-	Draft        int64 `json:"draft"`
-	Review       int64 `json:"review"`
-	Rejected     int64 `json:"rejected"`
-	Approved     int64 `json:"approved"`
-	Published    int64 `json:"published"`
-	PackageUsage int64 `json:"package_usage"`
+	Total           int64 `json:"total"`
+	Draft           int64 `json:"draft"`
+	Review          int64 `json:"review"`
+	Rejected        int64 `json:"rejected"`
+	Approved        int64 `json:"approved"`
+	Published       int64 `json:"published"`
+	PackageUsage    int64 `json:"package_usage"`
+	MyDraft         int64 `json:"my_draft"`
+	MyReviewWaiting int64 `json:"my_review_waiting"`
+	RevisionNeeded  int64 `json:"revision_needed"`
+	ApprovalWaiting int64 `json:"approval_waiting"`
+	PackageReady    int64 `json:"package_ready"`
+	MissingMetadata int64 `json:"missing_metadata"`
 }
 
 func (q *Queries) GetCbtQuestionSummaryCounts(ctx context.Context, arg GetCbtQuestionSummaryCountsParams) (GetCbtQuestionSummaryCountsRow, error) {
 	row := q.db.QueryRow(ctx, getCbtQuestionSummaryCounts,
-		arg.IsAdmin,
-		arg.CanUseInPackage,
 		arg.ActorUsername,
+		arg.IsAdmin,
 		arg.ActorUserID,
+		arg.CanUseInPackage,
 	)
 	var i GetCbtQuestionSummaryCountsRow
 	err := row.Scan(
@@ -846,6 +917,12 @@ func (q *Queries) GetCbtQuestionSummaryCounts(ctx context.Context, arg GetCbtQue
 		&i.Approved,
 		&i.Published,
 		&i.PackageUsage,
+		&i.MyDraft,
+		&i.MyReviewWaiting,
+		&i.RevisionNeeded,
+		&i.ApprovalWaiting,
+		&i.PackageReady,
+		&i.MissingMetadata,
 	)
 	return i, err
 }
@@ -861,6 +938,80 @@ func (q *Queries) GetNextCbtQuestionVersionNumber(ctx context.Context, versionGr
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const listBankSoalQuestionWorkflowEvents = `-- name: ListBankSoalQuestionWorkflowEvents :many
+SELECT ev.id,
+       ev.question_id,
+       ev.actor_user_id,
+       ev.actor_username,
+       COALESCE(
+         NULLIF(btrim(actor_emp.nama), ''),
+         NULLIF(btrim(actor_user_by_id.display_name), ''),
+         NULLIF(btrim(actor_user_by_name.display_name), ''),
+         ev.actor_username
+       ) AS actor_display_name,
+       ev.from_status,
+       ev.to_status,
+       ev.action,
+       ev.note,
+       ev.metadata,
+       ev.created_at
+FROM bank_soal_question_workflow_events ev
+LEFT JOIN users actor_user_by_id ON actor_user_by_id.id = ev.actor_user_id
+LEFT JOIN users actor_user_by_name
+  ON actor_user_by_id.id IS NULL
+ AND actor_user_by_name.username = ev.actor_username
+LEFT JOIN employees actor_emp
+  ON actor_emp.id = COALESCE(actor_user_by_id.employee_id, actor_user_by_name.employee_id)
+WHERE ev.question_id = $1
+ORDER BY ev.created_at ASC, ev.id ASC
+`
+
+type ListBankSoalQuestionWorkflowEventsRow struct {
+	ID               pgtype.UUID        `json:"id"`
+	QuestionID       pgtype.UUID        `json:"question_id"`
+	ActorUserID      pgtype.UUID        `json:"actor_user_id"`
+	ActorUsername    string             `json:"actor_username"`
+	ActorDisplayName string             `json:"actor_display_name"`
+	FromStatus       string             `json:"from_status"`
+	ToStatus         string             `json:"to_status"`
+	Action           string             `json:"action"`
+	Note             string             `json:"note"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListBankSoalQuestionWorkflowEvents(ctx context.Context, questionID pgtype.UUID) ([]ListBankSoalQuestionWorkflowEventsRow, error) {
+	rows, err := q.db.Query(ctx, listBankSoalQuestionWorkflowEvents, questionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBankSoalQuestionWorkflowEventsRow{}
+	for rows.Next() {
+		var i ListBankSoalQuestionWorkflowEventsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.QuestionID,
+			&i.ActorUserID,
+			&i.ActorUsername,
+			&i.ActorDisplayName,
+			&i.FromStatus,
+			&i.ToStatus,
+			&i.Action,
+			&i.Note,
+			&i.Metadata,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCbtQuestionStemTextsBySubject = `-- name: ListCbtQuestionStemTextsBySubject :many

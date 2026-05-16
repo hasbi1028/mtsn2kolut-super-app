@@ -331,15 +331,19 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		approved: number;
 		published: number;
 	};
-	type TimelineItem = {
-		id?: string;
-		action?: string;
-		status?: string;
-		notes?: string;
-		actor_username?: string;
+type TimelineItem = {
+	id?: string;
+	action?: string;
+	status?: string;
+	from_status?: string;
+	to_status?: string;
+	note?: string;
+	notes?: string;
+	metadata?: Record<string, unknown>;
+	actor_username?: string;
 	actor_display_name?: string;
-		created_at?: string;
-	};
+	created_at?: string;
+};
 	type BulkWorkflowResult = {
 		question_id?: string;
 		id?: string;
@@ -1838,15 +1842,40 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		}
 	}
 
+	function timelineNote(item: TimelineItem): string {
+		return item.note ?? item.notes ?? '';
+	}
+
+	function timelineTransition(item: TimelineItem): string {
+		if (item.from_status && item.to_status && item.from_status !== item.to_status) return `${WORKFLOW_LABEL[item.from_status] ?? item.from_status} → ${WORKFLOW_LABEL[item.to_status] ?? item.to_status}`;
+		const status = item.to_status ?? item.status ?? '';
+		return status ? (WORKFLOW_LABEL[status] ?? status) : '';
+	}
+
+	function timelineMetadataText(item: TimelineItem): string {
+		const metadata = item.metadata ?? {};
+		const reviewer = typeof metadata.to_reviewer_username === 'string' ? metadata.to_reviewer_username : '';
+		const approver = typeof metadata.to_approver_username === 'string' ? metadata.to_approver_username : '';
+		const publication = typeof metadata.to_publication_status === 'string' ? metadata.to_publication_status : '';
+		return [reviewer ? `Reviewer: ${reviewer}` : '', approver ? `Approver: ${approver}` : '', publication ? `Publikasi: ${publication}` : ''].filter(Boolean).join(' • ');
+	}
+
 	async function loadQuestionTimeline(id: string) {
 		questionTimelineLoading = true;
 		try {
-			const payload = await fetch(clientApiPath`/api/bank-soal/questions/${id}/timeline`).then((response) =>
-				readClientApiData<TimelineItem[] | { items?: TimelineItem[] }>(response, 'Gagal memuat timeline soal')
+			const payload = await fetch(clientApiPath`/api/bank-soal/questions/${id}/workflow-events`).then((response) =>
+				readClientApiData<TimelineItem[] | { items?: TimelineItem[] }>(response, 'Gagal memuat timeline workflow soal')
 			);
 			questionTimeline = Array.isArray(payload) ? payload : payload.items ?? [];
 		} catch {
-			questionTimeline = [];
+			try {
+				const payload = await fetch(clientApiPath`/api/bank-soal/questions/${id}/timeline`).then((response) =>
+					readClientApiData<TimelineItem[] | { items?: TimelineItem[] }>(response, 'Gagal memuat timeline soal')
+				);
+				questionTimeline = Array.isArray(payload) ? payload : payload.items ?? [];
+			} catch {
+				questionTimeline = [];
+			}
 		} finally {
 			questionTimelineLoading = false;
 		}
@@ -3602,13 +3631,18 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		{#if questionTimeline.length > 0}
 			<div class="space-y-2">
 				{#each questionTimeline.slice(0, 8) as item, index (`timeline-${item.id ?? index}`)}
+					{@const transition = timelineTransition(item)}
+					{@const note = timelineNote(item)}
+					{@const metadataText = timelineMetadataText(item)}
 					<div class="rounded border border-border bg-muted/50 px-2 py-1.5">
 						<div class="flex flex-wrap items-center gap-1.5">
-							<span class="font-semibold text-success">{item.action ?? item.status ?? 'Perubahan'}</span>
+							<span class="font-semibold text-success">{item.action ?? (transition || 'Perubahan')}</span>
+							{#if transition}<span class="rounded-full border border-border bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground">{transition}</span>{/if}
 							{#if item.actor_username || item.actor_display_name}<span class="text-muted-foreground">oleh {displayName({ display_name: item.actor_display_name, username: item.actor_username }, 'Pengguna')}</span>{/if}
 							{#if item.created_at}<span class="text-muted-foreground">{new Date(item.created_at).toLocaleString('id-ID')}</span>{/if}
 						</div>
-						{#if item.notes}<p class="mt-1 text-muted-foreground">{item.notes}</p>{/if}
+						{#if note}<p class="mt-1 text-muted-foreground">{note}</p>{/if}
+						{#if metadataText}<p class="mt-1 text-[10px] text-muted-foreground">{metadataText}</p>{/if}
 					</div>
 				{/each}
 			</div>

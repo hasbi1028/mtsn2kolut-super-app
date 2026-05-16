@@ -913,6 +913,29 @@ Jika diminta deploy ke production/semi-production:
   - `go build -o /tmp/core-api-bank-soal-workflow-sprint4 ./cmd/api`
 - No deploy/restart PM2 was performed.
 
+### Sprint 5 completed
+
+- Backend summary endpoint expanded with role-workflow counters:
+  - `my_draft`
+  - `my_review_waiting`
+  - `revision_needed`
+  - `approval_waiting`
+  - `package_ready`
+  - `missing_metadata`
+- Workflow event timeline endpoint added for detail soal:
+  - backend `GET /api/cbt/questions/{id}/workflow-events`
+  - SvelteKit BFF `/api/bank-soal/questions/[id]/workflow-events`
+  - detail/preview timeline now shows action, status transition, actor, note, reviewer/approver metadata, and timestamp.
+- Dashboard health model exposes role-workflow cards for Bank Soal operational reporting.
+- Version-safe edit policy integrated with the existing detail flow: published/used/old-version questions remain read-only and create revision flow is preserved.
+- SOP/contract documented in `docs/contracts/bank-soal-role-workflow.md`.
+- Validation PASS:
+  - `npm --prefix apps/web-admin run check`
+  - `cd services/core-api && /home/servermtsn2kolut/go/bin/sqlc generate -f db/sqlc.yaml`
+  - `go test ./internal/handler ./internal/service ./internal/repository/postgres`
+  - `go build -o /tmp/core-api-bank-soal-sprint5 ./cmd/api`
+- No deploy/restart PM2 was performed.
+
 ---
 
 ## Acceptance criteria
