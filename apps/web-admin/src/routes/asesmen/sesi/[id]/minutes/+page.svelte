@@ -218,7 +218,7 @@
 		</section>
 
 		<section class="rounded-lg border border-primary/20 bg-card p-6 shadow-sm">
-			<h3 class="text-lg font-semibold text-foreground">Daftar Hadir dan Kode Ujian</h3>
+			<h3 class="text-lg font-semibold text-foreground">Daftar Hadir dan Token Ujian</h3>
 			<div class="mt-4 overflow-x-auto">
 				<table class="min-w-full text-sm">
 					<thead class="bg-primary/10 text-left text-muted-foreground">
@@ -227,7 +227,7 @@
 							<th class="px-3 py-2">Nama</th>
 							<th class="px-3 py-2">Ruangan</th>
 							<th class="px-3 py-2">No Meja</th>
-							<th class="px-3 py-2">Kode Ujian</th>
+							<th class="px-3 py-2">Token Ujian</th>
 							<th class="px-3 py-2">Paraf</th>
 						</tr>
 					</thead>

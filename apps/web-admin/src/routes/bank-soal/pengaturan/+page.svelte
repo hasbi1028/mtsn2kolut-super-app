@@ -47,13 +47,13 @@
 
 	const workflowSteps = [
 		{ label: 'Draft', desc: 'Guru menyusun metadata, naskah, opsi/kunci, dan pembahasan sebelum diajukan.' },
-		{ label: 'Review', desc: 'Reviewer memeriksa substansi, konstruksi, bahasa, kunci/rubrik, dan kesesuaian KD/CP/TP.' },
+		{ label: 'Verifikasi', desc: 'Reviewer memeriksa substansi, konstruksi, bahasa, kunci/rubrik, dan kesesuaian KD/CP/TP.' },
 		{ label: 'Revisi', desc: 'Soal dikembalikan jika perlu perbaikan. Catatan reviewer wajib jelas dan bisa ditindaklanjuti.' },
-		{ label: 'Approved', desc: 'Soal lolos review dan siap dipakai untuk paket asesmen internal.' },
+		{ label: 'Disetujui', desc: 'Soal lolos verifikasi dan siap dipakai untuk paket asesmen internal.' },
 		{ label: 'Terbit', desc: 'Soal tersedia untuk pemakaian paket dan menjadi bagian bank soal pakai ulang.' }
 	];
 	const qualityRules = [
-		'Isi metadata mapel, kelas/fase, KD/CP/TP, materi, level kognitif, dan kesulitan sebelum review.',
+		'Isi metadata mapel, kelas/fase, KD/CP/TP, materi, level kognitif, dan kesulitan sebelum verifikasi.',
 		'Naskah soal wajib jelas, bebas ambigu, dan tidak bergantung pada informasi di luar stimulus.',
 		'Soal pilihan wajib memiliki kunci benar; essay/isian wajib memiliki rubrik atau jawaban acuan.',
 		'Pembahasan dianjurkan untuk semua tipe soal agar bank soal bisa dipakai ulang untuk remedial/pengayaan.',
@@ -63,8 +63,8 @@
 	const integrations = [
 		{ name: 'Daftar Soal', path: resolve('/bank-soal/daftar'), desc: 'Pencarian, filter, pagination, dan aksi per soal.', required: 'read' },
 		{ name: 'Penyusun soal', path: resolve('/bank-soal/tambah'), desc: 'Pembuatan/edit soal dengan pratinjau siswa.', required: 'create' },
-		{ name: 'Review', path: resolve('/bank-soal/verifikasi'), desc: 'Antrean verifikasi, catatan reviewer, approve/revisi.', required: 'review' },
-		{ name: 'Import', path: resolve('/bank-soal/impor'), desc: 'Pratinjau cek data dan impor final.', required: 'import' },
+		{ name: 'Verifikasi', path: resolve('/bank-soal/verifikasi'), desc: 'Antrean verifikasi, catatan reviewer, setujui/revisi.', required: 'review' },
+		{ name: 'Impor', path: resolve('/bank-soal/impor'), desc: 'Pratinjau cek data dan impor final.', required: 'import' },
 		{ name: 'Asesmen Paket', path: resolve('/asesmen/paket'), desc: 'Pemakaian soal terbit ke paket asesmen.', required: 'read' }
 	] as const;
 
@@ -91,9 +91,9 @@
 	let cognitiveCoverage = $derived(summary.by_cognitive_level?.filter((item) => (item.total ?? 0) > 0).length ?? 0);
 	let reviewerUserOptions = $derived(users.filter((user) => user.is_active !== false && (user.employee_id || user.roles?.includes('guru') || user.roles?.includes('admin'))));
 	let operationalStatus = $derived([
-		{ label: 'Kesiapan Bank Soal', value: `${completionRate}%`, desc: `${readyQuestions} dari ${totalQuestions} soal approved/published` },
+		{ label: 'Kesiapan Bank Soal', value: `${completionRate}%`, desc: `${readyQuestions} dari ${totalQuestions} soal disetujui/terbit` },
 		{ label: 'Antrean Verifikasi', value: pendingReview, desc: 'Soal menunggu keputusan reviewer' },
-		{ label: 'Scope Reviewer', value: scopes.length, desc: 'Scope review/approve manual aktif' },
+		{ label: 'Cakupan Reviewer', value: scopes.length, desc: 'Cakupan verifikasi/persetujuan manual aktif' },
 		{ label: 'Coverage Mapel', value: subjectCoverage, desc: 'Mapel muncul pada ringkasan/sumber akademik' },
 		{ label: 'Level Kognitif', value: cognitiveCoverage, desc: 'Kategori Bloom/C-level berisi soal' }
 	]);

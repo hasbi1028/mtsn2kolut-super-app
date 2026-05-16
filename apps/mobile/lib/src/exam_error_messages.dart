@@ -35,8 +35,12 @@ String loginFailureMessage(ExamApiException error) {
       return 'Sesi ujian belum aktif atau sudah berakhir. Hubungi pengawas untuk memastikan jadwal sesi.';
     case 409:
       return 'Token ini sudah terhubung dengan perangkat lain. Gunakan perangkat yang sama atau minta bantuan pengawas.';
+    case 423:
+      return 'Akses ujian sedang dikunci oleh pengawas atau sistem keamanan. Tetap di tempat dan tunggu pengawas membuka akses kembali.';
     default:
-      return error.message;
+      return error.message.isNotEmpty
+          ? error.message
+          : 'Login belum berhasil. Tunjukkan layar ini kepada pengawas agar dapat diperiksa.';
   }
 }
 
@@ -65,6 +69,13 @@ ExamGuidanceNotice? loginFailureNotice(ExamApiException error) {
             'Jangan terus mencoba login dari perangkat ini. Gunakan perangkat yang sama seperti sebelumnya atau minta pengawas memverifikasi token.',
         tone: ExamGuidanceTone.danger,
       );
+    case 423:
+      return const ExamGuidanceNotice(
+        title: 'Akses dikunci pengawas',
+        message:
+            'Peserta tidak perlu mencoba berulang-ulang. Pengawas perlu memeriksa panel ruang dan membuka akses jika sudah dinyatakan aman.',
+        tone: ExamGuidanceTone.danger,
+      );
     default:
       return null;
   }
@@ -82,6 +93,8 @@ String restoreFailureMessage(ExamApiException error) {
       return 'Sesi lama tidak bisa dipulihkan karena ujian belum aktif lagi atau sudah ditutup. Periksa status sesi dengan pengawas.';
     case 409:
       return 'Sesi lama terikat ke perangkat lain. Gunakan perangkat yang sama seperti sebelumnya atau minta bantuan pengawas.';
+    case 423:
+      return 'Sesi lama belum bisa dipulihkan karena akses peserta sedang dikunci. Minta pengawas memeriksa status peserta di panel ruang.';
     default:
       return 'Sesi lama tidak bisa dipulihkan. ${error.message}';
   }
@@ -112,6 +125,13 @@ ExamGuidanceNotice? restoreFailureNotice(ExamApiException error) {
             'Peserta tidak perlu terus mencoba restore di perangkat ini. Pengawas sebaiknya mengarahkan peserta kembali ke perangkat awal atau memeriksa status token.',
         tone: ExamGuidanceTone.danger,
       );
+    case 423:
+      return const ExamGuidanceNotice(
+        title: 'Restore ditahan karena akses terkunci',
+        message:
+            'Pengawas perlu memeriksa alasan penguncian terlebih dahulu sebelum peserta mencoba masuk kembali.',
+        tone: ExamGuidanceTone.danger,
+      );
     default:
       return null;
   }
@@ -133,6 +153,8 @@ String statusFailureMessage(ExamApiException error) {
       return 'Sesi ujian tidak lagi aktif menurut server. Tunggu arahan pengawas sebelum melanjutkan.';
     case 409:
       return 'Token sesi ini terdeteksi aktif di perangkat lain. Jangan lanjutkan dari perangkat ini sebelum pengawas memverifikasi.';
+    case 423:
+      return 'Akses peserta sedang dikunci. Tetap di layar ini dan tunggu pengawas memeriksa status ruang.';
     default:
       return 'Status server belum bisa diperbarui. ${error.message}';
   }
@@ -170,6 +192,13 @@ ExamGuidanceNotice? statusFailureNotice(ExamApiException error) {
             'Jangan lanjutkan ujian dari perangkat ini sebelum pengawas memastikan apakah token perlu direset atau peserta kembali ke perangkat awal.',
         tone: ExamGuidanceTone.danger,
       );
+    case 423:
+      return const ExamGuidanceNotice(
+        title: 'Peserta terkunci',
+        message:
+            'Server menahan akses peserta. Pengawas perlu membuka kunci dari panel ruang jika peserta boleh melanjutkan.',
+        tone: ExamGuidanceTone.danger,
+      );
     default:
       return null;
   }
@@ -187,6 +216,8 @@ String answerFailureMessage(ExamApiException error) {
       return 'Waktu ujian sudah berakhir. Jawaban tetap disimpan di perangkat ini, tetapi pengawas perlu memastikan apakah sesi masih bisa dipulihkan.';
     case 409:
       return 'Ujian ini sudah dinyatakan selesai di server. Jawaban baru tidak bisa dikirim lagi.';
+    case 423:
+      return 'Jawaban belum dikirim karena akses peserta sedang dikunci. Jawaban tetap tersimpan lokal sampai pengawas membuka akses.';
     default:
       return '${error.message} Jawaban tetap disimpan di perangkat dan akan dicoba sinkron ulang.';
   }
@@ -224,6 +255,13 @@ ExamGuidanceNotice? answerFailureNotice(ExamApiException error) {
             'Perangkat ini tidak dapat mengirim jawaban baru lagi. Pengawas sebaiknya mengecek apakah submit sebelumnya sudah final.',
         tone: ExamGuidanceTone.danger,
       );
+    case 423:
+      return const ExamGuidanceNotice(
+        title: 'Sinkron jawaban ditahan',
+        message:
+            'Jawaban lokal tetap aman. Pengawas perlu menyelesaikan status penguncian sebelum perangkat mencoba sinkron ulang.',
+        tone: ExamGuidanceTone.danger,
+      );
     default:
       return null;
   }
@@ -248,8 +286,14 @@ String submitFailureMessage(
           : 'Waktu ujian sudah berakhir menurut server. Hubungi pengawas untuk memastikan status kirim ujian.';
     case 409:
       return 'Ujian ini sudah tercatat selesai di server. Tidak perlu menekan kirim lagi.';
+    case 423:
+      return autoSubmit
+          ? 'Submit otomatis ditahan karena akses peserta sedang dikunci. Segera minta pengawas memeriksa panel ruang.'
+          : 'Submit belum bisa dikirim karena akses peserta sedang dikunci. Tunggu pengawas membuka akses atau memberi instruksi.';
     default:
-      return error.message;
+      return error.message.isNotEmpty
+          ? error.message
+          : 'Submit belum bisa dikirim. Tunjukkan layar ini kepada pengawas untuk diperiksa.';
   }
 }
 
@@ -293,6 +337,13 @@ ExamGuidanceNotice? submitFailureNotice(
         message:
             'Server sudah menganggap ujian ini selesai. Pengawas cukup memverifikasi status akhir, tidak perlu mengirim ulang.',
         tone: ExamGuidanceTone.info,
+      );
+    case 423:
+      return const ExamGuidanceNotice(
+        title: 'Submit ditahan karena akses terkunci',
+        message:
+            'Pengawas perlu membuka kunci peserta atau menutup sesi secara resmi sebelum peserta meninggalkan ruang.',
+        tone: ExamGuidanceTone.danger,
       );
     default:
       return null;

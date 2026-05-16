@@ -111,6 +111,34 @@ type CbtEventReadiness struct {
 	ResultsReady   bool `json:"results_ready"`
 }
 
+type CbtSopStageStatus string
+
+const (
+	CbtSopStageReady   CbtSopStageStatus = "ready"
+	CbtSopStageWarning CbtSopStageStatus = "warning"
+	CbtSopStageBlocked CbtSopStageStatus = "blocked"
+	CbtSopStageRunning CbtSopStageStatus = "running"
+)
+
+type CbtSopNextAction struct {
+	Label string `json:"label"`
+	Href  string `json:"href"`
+}
+
+type CbtSopStageReadiness struct {
+	Key           string             `json:"key"`
+	Label         string             `json:"label"`
+	Status        CbtSopStageStatus  `json:"status"`
+	BlockingCount int32              `json:"blocking_count"`
+	WarningCount  int32              `json:"warning_count"`
+	NextActions   []CbtSopNextAction `json:"next_actions"`
+}
+
+type CbtSopReadiness struct {
+	EventID string                 `json:"event_id"`
+	Stages  []CbtSopStageReadiness `json:"stages"`
+}
+
 func (s *CbtEvent) Overview(ctx context.Context, id pgtype.UUID) (CbtEventOverview, error) {
 	summary, err := s.q.GetCbtEventOverviewSummary(ctx, id)
 	if err != nil {
@@ -147,6 +175,14 @@ func (s *CbtEvent) Overview(ctx context.Context, id pgtype.UUID) (CbtEventOvervi
 		Readiness:       readiness,
 		BlockingReasons: blockers,
 	}, nil
+}
+
+func (s *CbtEvent) SopReadiness(ctx context.Context, id pgtype.UUID) (CbtSopReadiness, error) {
+	overview, err := s.Overview(ctx, id)
+	if err != nil {
+		return CbtSopReadiness{}, err
+	}
+	return buildCbtSopReadiness(overview), nil
 }
 
 func (s *CbtEvent) ListPackages(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventPackagesRow, error) {
@@ -484,6 +520,94 @@ func buildCbtEventReadiness(summary db.GetCbtEventOverviewSummaryRow, matrix []d
 		blockers = append(blockers, fmt.Sprintf("%d token peserta belum siap", summary.ParticipantCount-summary.TokenReadyCount))
 	}
 	return readiness, blockers
+}
+
+func buildCbtSopReadiness(overview CbtEventOverview) CbtSopReadiness {
+	summary := overview.Event
+	readiness := overview.Readiness
+	eventID := uuidString(summary.ID)
+	action := func(label, href string) CbtSopNextAction {
+		return CbtSopNextAction{Label: label, Href: href}
+	}
+	stage := func(key, label string, status CbtSopStageStatus, blocking, warning int32, actions ...CbtSopNextAction) CbtSopStageReadiness {
+		if actions == nil {
+			actions = []CbtSopNextAction{}
+		}
+		return CbtSopStageReadiness{
+			Key:           key,
+			Label:         label,
+			Status:        status,
+			BlockingCount: blocking,
+			WarningCount:  warning,
+			NextActions:   actions,
+		}
+	}
+	statusFor := func(ready bool, warning bool) CbtSopStageStatus {
+		if ready {
+			return CbtSopStageReady
+		}
+		if warning {
+			return CbtSopStageWarning
+		}
+		return CbtSopStageBlocked
+	}
+
+	authoringWarning := summary.PublishedQuestions > 0 || summary.TotalQuestions > 0
+	verificationReady := summary.TargetQuestionCount > 0 && summary.PublishedQuestions >= summary.TargetQuestionCount && summary.ReviewQuestions == 0
+	verificationWarning := summary.ReviewQuestions > 0 || summary.ApprovedQuestions > 0 || summary.PublishedQuestions > 0
+	packageWarning := summary.PackageCount > 0
+	roomWarning := summary.SessionCount > 0 || summary.ParticipantCount > 0 || summary.RoomCount > 0
+	tokenWarning := summary.TokenReadyCount > 0 || summary.ParticipantCount > 0
+	executionStatus := CbtSopStageBlocked
+	if summary.ActiveSessionCount > 0 || readiness.RuntimeStarted {
+		executionStatus = CbtSopStageRunning
+	} else if summary.FinishedSessionCount > 0 {
+		executionStatus = CbtSopStageReady
+	} else if summary.ScheduledSessionCount > 0 {
+		executionStatus = CbtSopStageWarning
+	}
+	gradingStatus := statusFor(readiness.ResultsReady, summary.SubmittedCount > 0 || summary.ScoredCount > 0)
+	resultStatus := statusFor(readiness.ResultsReady && summary.Status == "finished", readiness.ResultsReady || summary.ScoredCount > 0)
+	archiveStatus := statusFor(summary.Status == "finished", readiness.ResultsReady || summary.SubmittedCount > 0)
+
+	return CbtSopReadiness{
+		EventID: eventID,
+		Stages: []CbtSopStageReadiness{
+			stage("draft", "Draft", CbtSopStageReady, 0, 0,
+				action("Cek identitas kegiatan", fmt.Sprintf("/asesmen/kegiatan/%s", eventID)),
+			),
+			stage("question_authoring", "Pengisian Soal", statusFor(readiness.AuthoringReady, authoringWarning), maxInt32(summary.TargetQuestionCount-summary.PublishedQuestions, 0), summary.ReviewQuestions,
+				action("Lengkapi soal sesuai target", fmt.Sprintf("/bank-soal/tambah?event_id=%s", eventID)),
+				action("Cek kelengkapan soal", fmt.Sprintf("/asesmen/kegiatan/%s", eventID)),
+			),
+			stage("question_verification", "Telaah/Verifikasi Soal", statusFor(verificationReady, verificationWarning), summary.ReviewQuestions, summary.ApprovedQuestions,
+				action("Buka antrean verifikasi", "/bank-soal/verifikasi"),
+				action("Cek target soal kegiatan", fmt.Sprintf("/asesmen/kegiatan/%s", eventID)),
+			),
+			stage("package_ready", "Paket Siap", statusFor(readiness.PackageReady, packageWarning), summary.EmptyPackageCount, summary.PackageCount-summary.ActivePackageCount,
+				action("Kelola paket kegiatan", fmt.Sprintf("/asesmen/paket?event_id=%s", eventID)),
+			),
+			stage("participants_rooms_ready", "Peserta & Ruang Siap", statusFor(readiness.RoomReady, roomWarning), summary.UnassignedParticipantCount+summary.MissingSeatCount+summary.RoomsWithoutProctor, summary.RoomCount,
+				action("Cek sesi dan ruang", fmt.Sprintf("/asesmen/sesi?event_id=%s&readiness=not_ready", eventID)),
+			),
+			stage("tokens_cards_ready", "Token & Kartu Siap", statusFor(readiness.TokenReady && readiness.CardReady, tokenWarning), maxInt32(summary.ParticipantCount-summary.TokenReadyCount, 0), summary.MissingSeatCount,
+				action("Cetak kartu ujian", fmt.Sprintf("/asesmen/kegiatan/%s/exam-cards", eventID)),
+			),
+			stage("execution", "Pelaksanaan", executionStatus, 0, summary.ScheduledSessionCount,
+				action("Buka pengawasan ruang", "/asesmen/pengawasan"),
+				action("Buka sesi kegiatan", fmt.Sprintf("/asesmen/sesi?event_id=%s", eventID)),
+			),
+			stage("grading", "Koreksi", gradingStatus, maxInt32(summary.SubmittedCount-summary.ScoredCount, 0), summary.SubmittedCount,
+				action("Cek hasil kegiatan", fmt.Sprintf("/asesmen/kegiatan/%s#hasil", eventID)),
+			),
+			stage("result_verification", "Verifikasi Hasil", resultStatus, 0, summary.ScoredCount,
+				action("Verifikasi rekap hasil", fmt.Sprintf("/asesmen/kegiatan/%s#hasil", eventID)),
+			),
+			stage("final_archive", "Final & Arsip", archiveStatus, 0, summary.FinishedSessionCount,
+				action("Buka checklist arsip", fmt.Sprintf("/asesmen/kegiatan/%s/archive", eventID)),
+			),
+		},
+	}
 }
 
 func (s *CbtEvent) Update(ctx context.Context, id pgtype.UUID, in CreateCbtEventInput) (db.CbtExamEvent, error) {

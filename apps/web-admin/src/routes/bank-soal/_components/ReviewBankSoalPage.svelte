@@ -169,25 +169,25 @@
 	});
 </script>
 
-	<svelte:head><title>Review Bank Soal</title></svelte:head>
+	<svelte:head><title>Verifikasi Bank Soal</title></svelte:head>
 
 <div class="space-y-5 p-4 md:p-6">
 	<div class="overflow-hidden rounded-2xl border border-primary/20 bg-card shadow-sm">
 		<div class="bg-gradient-to-r from-primary/10 via-card to-warning/10 p-4 md:p-5">
 			<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 				<div class="min-w-0">
-					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Ruang Review Fokus</p>
+					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Ruang Verifikasi Fokus</p>
 					<h1 class="mt-1 text-2xl font-black uppercase italic tracking-tight text-foreground">Periksa Bank Soal</h1>
 					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Reviewer memeriksa naskah, opsi/kunci, rubrik, pembahasan, dan timeline sebelum menyetujui atau mengembalikan soal dengan catatan revisi.</p>
 					<div class="mt-3 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-wide">
 						<span class="rounded-full border border-primary/20 bg-card px-2.5 py-1 text-primary">{queue.length} antrean aktif</span>
 						<span class="rounded-full border border-warning/30 bg-card px-2.5 py-1 text-warning">Checklist {reviewReadyCount}/{reviewChecklist.length}</span>
-						{#if eventId}<span class="rounded-full border border-border bg-card px-2.5 py-1 text-muted-foreground">Event scoped</span>{/if}
+						{#if eventId}<span class="rounded-full border border-border bg-card px-2.5 py-1 text-muted-foreground">Kegiatan terkait</span>{/if}
 					</div>
 				</div>
 				<div class="flex flex-wrap gap-2">
 					{#if eventId}
-						<a href={resolve(`/asesmen/kegiatan/${eventId}`)} class="inline-flex rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Kembali ke Event</a>
+						<a href={resolve(`/asesmen/kegiatan/${eventId}`)} class="inline-flex rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Kembali ke Kegiatan</a>
 					{/if}
 					<a href={resolve('/bank-soal/daftar')} class="inline-flex rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">Daftar Soal</a>
 					<a href={resolve('/bank-soal')} class="inline-flex rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">Dashboard</a>
@@ -198,8 +198,8 @@
 
 	{#if eventId}
 		<div class="rounded-xl border border-success/20 bg-success/10 p-4 text-sm text-success">
-			<p class="font-semibold">Konteks event terbaca: {eventContext?.title ?? eventId}</p>
-			<p class="mt-1 text-success">Antrean review dibatasi ke soal yang terkait kegiatan ini. Reviewer mapel hanya dapat memutuskan soal sesuai scope event yang ditetapkan panitia.</p>
+			<p class="font-semibold">Konteks kegiatan terbaca: {eventContext?.title ?? eventId}</p>
+			<p class="mt-1 text-success">Antrean verifikasi dibatasi ke soal yang terkait kegiatan ini. Reviewer mapel hanya dapat memutuskan soal sesuai cakupan kegiatan yang ditetapkan panitia.</p>
 		</div>
 	{/if}
 
@@ -208,11 +208,11 @@
 			<Skeleton class="h-96 w-full" />
 		{/snippet}
 		{#snippet failed(error, reset)}
-			<RecoveryPanel title="Antrean Verifikasi Belum Tersaji" message={errorMessage(error, 'Gagal memuat antrean review.')} onRetry={() => { reset?.(); loadQueue(); }} />
+			<RecoveryPanel title="Antrean Verifikasi Belum Tersaji" message={errorMessage(error, 'Gagal memuat antrean verifikasi.')} onRetry={() => { reset?.(); loadQueue(); }} />
 		{/snippet}
 		{#snippet children()}
 			{#if !activeQuestion}
-				<div class="rounded-xl border border-success/20 bg-success/10 p-6 text-center text-success">Tidak ada soal yang menunggu review.</div>
+				<div class="rounded-xl border border-success/20 bg-success/10 p-6 text-center text-success">Tidak ada soal yang menunggu verifikasi.</div>
 			{:else}
 				<section class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
 					<article class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
@@ -245,12 +245,12 @@
 						<div class="border-t border-border bg-card p-4">
 							{#if canReview}
 								<label for="review-notes" class="mb-1 block text-sm font-medium text-foreground">Catatan keputusan</label>
-								<Textarea id="review-notes" rows={3} bind:value={notes} placeholder="Wajib untuk reject, opsional untuk approve." />
+								<Textarea id="review-notes" rows={3} bind:value={notes} placeholder="Wajib untuk revisi/tolak, opsional untuk setuju." />
 								<p class="mt-1 text-xs text-muted-foreground">{reviewerDecisionHint}</p>
 							{:else}
 								<div class="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
-									<p class="font-semibold">Mode baca antrean review</p>
-									<p class="mt-1 text-xs">Keputusan approve/reject membutuhkan permission reviewer Bank Soal.</p>
+									<p class="font-semibold">Mode baca antrean verifikasi</p>
+									<p class="mt-1 text-xs">Keputusan setuju/tolak membutuhkan permission reviewer Bank Soal.</p>
 								</div>
 							{/if}
 							<div class="mt-4 flex flex-wrap justify-between gap-2 border-t border-border pt-4">
@@ -262,9 +262,9 @@
 						</div>
 					</article>
 					<aside class="space-y-3">
-						<div class="rounded-xl border border-success/20 bg-success/10 p-4 text-success"><p class="text-sm font-semibold">Posisi Review</p><p class="mt-1 text-2xl font-bold">{activeIndex + 1}/{queue.length}</p><p class="mt-1 text-xs text-success">Gunakan tombol berikutnya/sebelumnya atau pilih antrean di bawah.</p></div>
+						<div class="rounded-xl border border-success/20 bg-success/10 p-4 text-success"><p class="text-sm font-semibold">Posisi Verifikasi</p><p class="mt-1 text-2xl font-bold">{activeIndex + 1}/{queue.length}</p><p class="mt-1 text-xs text-success">Gunakan tombol berikutnya/sebelumnya atau pilih antrean di bawah.</p></div>
 						<div class="rounded-xl border border-border bg-card p-4">
-							<p class="mb-2 text-sm font-semibold text-foreground">Checklist Reviewer</p>
+							<p class="mb-2 text-sm font-semibold text-foreground">Checklist Verifikasi</p>
 							<div class="space-y-2">{#each reviewChecklist as item (item.label)}<div class="rounded-lg border px-3 py-2 text-xs {item.ok ? 'border-primary/20 bg-primary/10 text-primary' : 'border-warning/30 bg-warning/10 text-warning'}"><div class="flex items-center justify-between gap-2"><span class="font-semibold">{item.label}</span><span>{item.ok ? 'OK' : 'Cek'}</span></div><p class="mt-1 opacity-80">{item.desc}</p></div>{/each}</div>
 						</div>
 						<div class="rounded-xl border border-border bg-card p-4"><p class="mb-2 text-sm font-semibold text-foreground">Timeline</p>{#if timeline.length > 0}<div class="space-y-2">{#each timeline.slice(0, 8) as item, index (`timeline-${item.id ?? index}`)}<div class="rounded border border-border bg-muted/50 px-2 py-1.5 text-xs"><div class="flex flex-wrap items-center gap-1"><p class="font-semibold text-success">{item.action ?? item.status ?? 'Perubahan'}</p>{#if item.actor_username || item.actor_display_name}<span class="text-muted-foreground">oleh {displayName({ display_name: item.actor_display_name, username: item.actor_username }, 'Pengguna')}</span>{/if}</div>{#if item.notes}<p class="mt-1 text-muted-foreground">{item.notes}</p>{/if}{#if item.created_at}<p class="mt-1 text-muted-foreground">{new Date(item.created_at).toLocaleString('id-ID')}</p>{/if}</div>{/each}</div>{:else}<p class="text-xs text-muted-foreground">Timeline belum tersedia.</p>{/if}</div>

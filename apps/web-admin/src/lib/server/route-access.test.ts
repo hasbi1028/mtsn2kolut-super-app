@@ -39,6 +39,8 @@ describe('route access helpers', () => {
 		expect(isAdminOnlyPath('/asesmen/kegiatan/event-1')).toBe(true);
 		expect(isAdminOnlyPath('/api/asesmen/events')).toBe(true);
 		expect(isAdminOnlyPath('/api/asesmen/events/event-1')).toBe(true);
+		expect(isAdminOnlyPath('/api/asesmen/approvals')).toBe(true);
+		expect(isAdminOnlyPath('/api/asesmen/approvals/approval-1/revoke')).toBe(true);
 		expect(isAdminOnlyPath('/asesmen/paket')).toBe(true);
 		expect(isAdminOnlyPath('/asesmen/sesi')).toBe(true);
 		expect(isAdminOnlyPath('/api/asesmen/packages')).toBe(true);

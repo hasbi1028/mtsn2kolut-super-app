@@ -31,21 +31,21 @@
 		{
 			step: '01',
 			title: 'Manajemen Paket',
-			description: 'Pilih soal siap pakai, atur komposisi, dan siapkan paket untuk kegiatan ujian.',
+			description: 'Pilih soal siap pakai, atur komposisi, dan siapkan Paket Soal untuk Kegiatan Asesmen.',
 			href: '/asesmen/paket',
 			cta: 'Kelola Paket'
 		},
 		{
 			step: '02',
-			title: 'Buat Kegiatan',
-			description: 'Daftarkan kegiatan ujian agar sesi, peserta, dan kartu ujian punya konteks yang jelas.',
+			title: 'Buat Kegiatan Asesmen',
+			description: 'Daftarkan Kegiatan Asesmen agar sesi, peserta, dan kartu ujian punya konteks yang jelas.',
 			href: '/asesmen/kegiatan/new',
 			cta: 'Buat Kegiatan'
 		},
 		{
 			step: '03',
-			title: 'Atur Sesi/Kode Ujian',
-			description: 'Tetapkan jadwal, ruang, peserta, dan kode ujian sebelum ujian masuk hari pelaksanaan.',
+			title: 'Atur Sesi/Token Ujian',
+			description: 'Tetapkan jadwal, ruang, peserta, dan token ujian sebelum ujian masuk hari pelaksanaan.',
 			href: '/asesmen/sesi/new',
 			cta: 'Atur Sesi'
 		},
@@ -79,7 +79,7 @@
 </script>
 
 <svelte:head>
-	<title>Persiapan Asesmen — MTsN 2 Kolaka Utara</title>
+	<title>Persiapan Asesmen CBT — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 {#if canAccess}
@@ -91,9 +91,9 @@
 					<Badge class="border-primary/20 bg-card text-primary" variant="outline">Asesmen · Fase Persiapan</Badge>
 					<Badge class="border-border bg-card text-muted-foreground" variant="outline">Tanpa perubahan data</Badge>
 				</div>
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Persiapan Asesmen</h1>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Persiapan Asesmen CBT</h1>
 				<p class="max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
-					Mulai dari pekerjaan operasional sebelum hari ujian: paket, kegiatan, sesi, kode ujian, lalu pelaksanaan.
+					Mulai dari pekerjaan operasional sebelum hari ujian: paket, kegiatan, sesi, token ujian, lalu pelaksanaan.
 					Penyusunan soal berada di modul Bank Soal, sementara CBT memakai soal terbit untuk paket dan sesi ujian.
 				</p>
 			</div>
@@ -137,7 +137,7 @@
 			<Card.Description>
 				{#if userRoles.includes('admin')}
 					Bank Soal berdiri sebagai modul terpisah. Di sini fokuskan pekerjaan pada paket, kegiatan, sesi,
-					ruang, peserta, kode ujian, dan kesiapan masuk hari-H.
+					ruang, peserta, token ujian, dan kesiapan masuk hari-H.
 				{:else}
 					Untuk guru, penyusunan dan verifikasi soal ada di modul Bank Soal. Halaman ini dipakai untuk membaca paket,
 					hasil, dan akses pelaksanaan jika ditugaskan.

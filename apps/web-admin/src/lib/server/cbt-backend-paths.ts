@@ -8,7 +8,7 @@ const BANK_SOAL_PREFIX = `${BACKEND_API_ROOT}/${BANK_SOAL_SEGMENT}`;
 
 // Top-level segments owned by Bank Soal in the Go backend.
 const BANK_SOAL_TOP_SEGMENTS = new Set(['questions', 'assets', 'soal-support']);
-const ASESMEN_TOP_SEGMENTS = new Set(['events', 'packages', 'sessions', 'non-test-assessments', 'proctoring', 'readiness']);
+const ASESMEN_TOP_SEGMENTS = new Set(['events', 'packages', 'sessions', 'non-test-assessments', 'proctoring', 'readiness', 'approvals']);
 
 function normalizeInternalPath(path: string): string {
 	if (path.includes('?') || path.includes('#') || path.includes('\\')) {

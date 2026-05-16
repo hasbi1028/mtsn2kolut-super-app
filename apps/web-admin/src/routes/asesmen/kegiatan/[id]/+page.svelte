@@ -9,6 +9,7 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { sopStages, sopStatusLabels, type SopReadinessResponse, type SopStageReadiness, type SopStageStatus } from '$lib/asesmen/sop-stages';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
 	import { csvRow } from '$lib/csv';
 	import { toast } from '$lib/components/ui/sonner';
@@ -65,6 +66,7 @@
 		sessions: EventSession[];
 		packages: EventPackage[];
 		questionCompleteness: QuestionCompleteness | null;
+		sopReadiness: SopReadinessResponse | null;
 	};
 	type ChecklistHref =
 		| `/asesmen/kegiatan/${string}/members`
@@ -77,7 +79,8 @@
 		| `/asesmen/sesi?event_id=${string}&readiness=needs_rooms`
 		| `/asesmen/sesi?event_id=${string}&readiness=needs_proctors`
 		| `/asesmen/kegiatan/${string}/exam-cards`
-		| `/asesmen/kegiatan/${string}#hasil`;
+		| `/asesmen/kegiatan/${string}#hasil`
+		| `/asesmen/kegiatan/${string}/archive`;
 	type ChecklistItem = {
 		label: string; helper: string; count: number | null; href: ChecklistHref; tone: 'success' | 'warning' | 'info'; action: string;
 	};
@@ -137,6 +140,28 @@
 		return [];
 	}
 
+	function isSopStageStatus(value: unknown): value is SopStageStatus {
+		return value === 'ready' || value === 'warning' || value === 'blocked' || value === 'running';
+	}
+
+	function parseSopReadiness(payload: unknown): SopReadinessResponse | null {
+		if (!isRecord(payload) || typeof payload.event_id !== 'string' || !Array.isArray(payload.stages)) return null;
+		const stages: SopStageReadiness[] = payload.stages
+			.filter((stage): stage is Record<string, unknown> => isRecord(stage) && typeof stage.key === 'string' && isSopStageStatus(stage.status))
+			.map((stage) => ({
+				key: stage.key as SopStageReadiness['key'],
+				label: typeof stage.label === 'string' ? stage.label : String(stage.key),
+				owner: typeof stage.owner === 'string' ? stage.owner : 'Panitia',
+				description: typeof stage.description === 'string' ? stage.description : 'Tahap SOP kegiatan asesmen.',
+				status: stage.status as SopStageStatus,
+				blocking_count: Number(stage.blocking_count ?? 0),
+				warning_count: Number(stage.warning_count ?? 0),
+				next_actions: parseArrayPayload<{ label: string; href: string }>(stage.next_actions, 'next_actions')
+					.filter((action) => typeof action.label === 'string' && typeof action.href === 'string'),
+			}));
+		return { event_id: payload.event_id, stages };
+	}
+
 	function syncQuestionRequirementForm(completeness: QuestionCompleteness | null) {
 		const requirements = completeness?.requirements;
 		if (!requirements) return;
@@ -156,13 +181,14 @@
 	}
 
 	async function fetchDetail(): Promise<EventCommandDetail> {
-		const [nextInfo, nextResults, overviewPayload, sessionPayload, packagePayload, completenessPayload] = await Promise.all([
+		const [nextInfo, nextResults, overviewPayload, sessionPayload, packagePayload, completenessPayload, sopPayload] = await Promise.all([
 			fetch(clientApiPath`/api/asesmen/events/${eventId}`).then((response) => readClientApiData<EventInfo>(response, 'Gagal memuat kegiatan ujian')),
 			fetch(clientApiPath`/api/asesmen/events/${eventId}/results`).then((response) => readClientApiData<ResultRow[]>(response, 'Gagal memuat rekap nilai kegiatan')),
 			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/overview`, null),
 			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/sessions`, []),
 			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/packages`, []),
 			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/question-completeness`, null),
+			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/sop-readiness`, null),
 		]);
 		const questionCompleteness = isRecord(completenessPayload) ? completenessPayload as QuestionCompleteness : null;
 		syncQuestionRequirementForm(questionCompleteness);
@@ -173,6 +199,7 @@
 			sessions: parseArrayPayload<EventSession>(sessionPayload, 'sessions'),
 			packages: parseArrayPayload<EventPackage>(packagePayload, 'packages'),
 			questionCompleteness,
+			sopReadiness: parseSopReadiness(sopPayload),
 		};
 	}
 
@@ -188,13 +215,13 @@
 		detailPromise = fetchDetail().then((detail) => {
 			if (requestId !== detailRequestId) {
 				if (!info) throw new Error('Permintaan panel kegiatan dibatalkan');
-				return { info, results, overview: null, sessions: [], packages: [], questionCompleteness: null };
+				return { info, results, overview: null, sessions: [], packages: [], questionCompleteness: null, sopReadiness: null };
 			}
 			applyDetail(detail);
 			return detail;
 		}).catch((error: unknown) => {
 			if (requestId === detailRequestId || !info) throw error;
-			return { info, results, overview: null, sessions: [], packages: [], questionCompleteness: null };
+			return { info, results, overview: null, sessions: [], packages: [], questionCompleteness: null, sopReadiness: null };
 		});
 	}
 
@@ -253,13 +280,14 @@
 		const proctorIssues = detail.sessions.filter((session) => (session.rooms_without_proctor ?? 0) > 0).length;
 		const items: Array<Omit<ChecklistItem, 'tone'>> = [
 			{ label: 'Penugasan', helper: 'Guru pembuat soal dan reviewer kegiatan', count: countFrom(overview?.member_count, null), href: `/asesmen/kegiatan/${eventId}/members`, action: 'Atur penugasan' },
-			{ label: 'Kebutuhan Soal', helper: 'Target kebutuhan event; Bank Soal tetap repositori mandiri sebelum dipakai paket', count: countFrom(overview?.published_question_count ?? overview?.question_count, null), href: `/bank-soal/tambah?event_id=${eventId}`, action: 'Cek target kebutuhan' },
-			{ label: 'Review Repositori', helper: 'Antrean review dari Bank Soal sebelum soal diterbitkan dan masuk paket', count: countFrom(overview?.review_count, null), href: '/bank-soal/verifikasi', action: 'Review repositori' },
-			{ label: 'Paket Kegiatan', helper: 'Prioritas persiapan: paket yang tertaut event agar sesi ujian bisa memakai paket yang tepat', count: countFrom(overview?.package_count, packageFallback), href: `/asesmen/paket?event_id=${eventId}`, action: 'Kelola paket event' },
+		{ label: 'Kebutuhan Soal', helper: 'Target kebutuhan kegiatan; Bank Soal tetap repositori mandiri sebelum dipakai paket', count: countFrom(overview?.published_question_count ?? overview?.question_count, null), href: `/bank-soal/tambah?event_id=${eventId}`, action: 'Cek target kebutuhan' },
+			{ label: 'Verifikasi Repositori', helper: 'Antrean verifikasi dari Bank Soal sebelum soal diterbitkan dan masuk paket', count: countFrom(overview?.review_count, null), href: '/bank-soal/verifikasi', action: 'Verifikasi repositori' },
+			{ label: 'Paket Kegiatan', helper: 'Prioritas persiapan: paket yang tertaut kegiatan agar sesi ujian bisa memakai paket yang tepat', count: countFrom(overview?.package_count, packageFallback), href: `/asesmen/paket?event_id=${eventId}`, action: 'Kelola paket kegiatan' },
 			{ label: 'Sesi/Jadwal', helper: 'Sesi, status, dan jadwal operasional', count: countFrom(overview?.session_count, sessionFallback), href: `/asesmen/sesi?event_id=${eventId}`, action: 'Kelola sesi' },
 			{ label: 'Ruang/Pengawas/Kursi', helper: roomIssues > 0 ? `${roomIssues} sesi masih perlu dirapikan${proctorIssues > 0 ? `, ${proctorIssues} butuh pengawas` : ''}` : 'Cek ruang, pengawas, kapasitas, dan nomor meja', count: countFrom(overview?.room_count, detail.sessions.length > 0 ? detail.sessions.reduce((sum, session) => sum + (session.room_count ?? 0), 0) : null), href: `/asesmen/sesi?event_id=${eventId}&readiness=not_ready`, action: 'Cek ruang' },
-			{ label: 'Token/Kartu', helper: 'Kode ujian peserta dan kartu ujian siap cetak', count: countFrom(overview?.token_count ?? overview?.card_count, null), href: `/asesmen/kegiatan/${eventId}/exam-cards`, action: 'Cetak kartu' },
+			{ label: 'Token/Kartu', helper: 'Token ujian peserta dan kartu ujian siap cetak', count: countFrom(overview?.token_count ?? overview?.card_count, null), href: `/asesmen/kegiatan/${eventId}/exam-cards`, action: 'Cetak kartu' },
 			{ label: 'Hasil', helper: 'Rekap nilai gabungan tersedia di tab Hasil', count: countFrom(overview?.result_count, detail.results.length), href: `/asesmen/kegiatan/${eventId}#hasil`, action: 'Buka tab hasil' },
+			{ label: 'Arsip', helper: 'Checklist kartu, daftar hadir, berita acara, hasil, insiden, dan audit ringkas', count: null, href: `/asesmen/kegiatan/${eventId}/archive`, action: 'Buka checklist arsip' },
 		];
 		return items.map((item) => ({ ...item, tone: item.label === 'Ruang/Pengawas/Kursi' && roomIssues > 0 ? 'warning' : checklistTone(item.count) }));
 	}
@@ -282,13 +310,13 @@
 			{
 				id: 'persiapan',
 				title: 'Paket Soal',
-				description: 'Tim, kebutuhan soal, review, dan paket yang akan dipakai sesi.',
-				items: ['Penugasan', 'Kebutuhan Soal', 'Review Repositori', 'Paket Kegiatan'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
+				description: 'Tim, kebutuhan soal, verifikasi, dan paket yang akan dipakai sesi.',
+				items: ['Penugasan', 'Kebutuhan Soal', 'Verifikasi Repositori', 'Paket Kegiatan'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
 			},
 			{
 				id: 'operasional',
 				title: 'Kegiatan & Sesi',
-				description: 'Jadwal, ruang, pengawas, kursi, kode ujian, dan kartu ujian.',
+				description: 'Jadwal, ruang, pengawas, kursi, token ujian, dan kartu ujian.',
 				items: ['Sesi/Jadwal', 'Token/Kartu'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
 			},
 			{
@@ -300,8 +328,8 @@
 			{
 				id: 'hasil',
 				title: 'Hasil',
-				description: 'Rekap nilai gabungan dan ekspor saat data sudah masuk.',
-				items: ['Hasil'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
+				description: 'Rekap nilai gabungan, ekspor, dan arsip saat data sudah masuk.',
+				items: ['Hasil', 'Arsip'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
 			},
 		];
 	}
@@ -314,6 +342,78 @@
 		const preferred = preferredLabels.map((label) => checklist.find((item) => item.label === label)).filter((item): item is ChecklistItem => Boolean(item));
 		const ordered = [...needsAttention, ...preferred, ...checklist].filter((item, index, source) => source.findIndex((candidate) => candidate.label === item.label) === index);
 		return ordered.slice(0, 3).map((item, index) => ({ ...item, priority: index === 0 ? 'Utama' : `Langkah ${index + 1}` }));
+	}
+
+	function buildSopTimeline(detail: EventCommandDetail, checklist: ChecklistItem[]): SopStageReadiness[] {
+		const definitions = new Map(sopStages.map((stage) => [stage.key, stage]));
+		if (detail.sopReadiness?.stages.length) {
+			return detail.sopReadiness.stages.map((stage) => ({
+				...definitions.get(stage.key),
+				...stage,
+				label: definitions.get(stage.key)?.label ?? stage.label,
+				owner: definitions.get(stage.key)?.owner,
+				description: definitions.get(stage.key)?.description,
+			}));
+		}
+
+		const byLabel = new Map(checklist.map((item) => [item.label, item]));
+		const statusFrom = (item: ChecklistItem | undefined, running = false): SopStageStatus => {
+			if (running) return 'running';
+			if (!item) return 'blocked';
+			if (item.tone === 'success') return 'ready';
+			if (item.tone === 'warning') return 'warning';
+			return 'blocked';
+		};
+		const actionFrom = (item: ChecklistItem | undefined) => item ? [{ label: item.action, href: item.href }] : [];
+		const packageItem = byLabel.get('Paket Kegiatan');
+		const roomItem = byLabel.get('Ruang/Pengawas/Kursi');
+		const tokenItem = byLabel.get('Token/Kartu');
+		const resultItem = byLabel.get('Hasil');
+		const archiveItem = byLabel.get('Arsip');
+		return sopStages.map((definition) => {
+			const status = definition.key === 'draft'
+				? 'ready'
+				: definition.key === 'question_authoring'
+					? statusFrom(byLabel.get('Kebutuhan Soal'))
+					: definition.key === 'question_verification'
+						? statusFrom(byLabel.get('Verifikasi Repositori'))
+						: definition.key === 'package_ready'
+							? statusFrom(packageItem)
+							: definition.key === 'participants_rooms_ready'
+								? statusFrom(roomItem)
+								: definition.key === 'tokens_cards_ready'
+									? statusFrom(tokenItem)
+									: definition.key === 'execution'
+										? statusFrom(byLabel.get('Sesi/Jadwal'), detail.sessions.some((session) => session.status === 'active'))
+										: definition.key === 'grading' || definition.key === 'result_verification'
+											? statusFrom(resultItem)
+											: statusFrom(archiveItem);
+			const actions = definition.key === 'draft'
+				? [{ label: 'Cek identitas kegiatan', href: `/asesmen/kegiatan/${eventId}` }]
+				: definition.key === 'question_authoring'
+					? actionFrom(byLabel.get('Kebutuhan Soal'))
+					: definition.key === 'question_verification'
+						? actionFrom(byLabel.get('Verifikasi Repositori'))
+						: definition.key === 'package_ready'
+							? actionFrom(packageItem)
+							: definition.key === 'participants_rooms_ready'
+								? actionFrom(roomItem)
+								: definition.key === 'tokens_cards_ready'
+									? actionFrom(tokenItem)
+									: definition.key === 'execution'
+										? actionFrom(byLabel.get('Sesi/Jadwal'))
+										: definition.key === 'grading' || definition.key === 'result_verification'
+											? actionFrom(resultItem)
+											: actionFrom(archiveItem);
+			return { ...definition, status, blocking_count: status === 'blocked' ? 1 : 0, warning_count: status === 'warning' ? 1 : 0, next_actions: actions };
+		});
+	}
+
+	function sopStageClass(status: SopStageStatus) {
+		if (status === 'ready') return 'border-primary/20 bg-primary/10 text-primary';
+		if (status === 'running') return 'border-accent bg-accent/70 text-accent-foreground';
+		if (status === 'warning') return 'border-warning/30 bg-warning/10 text-warning';
+		return 'border-muted bg-muted/60 text-muted-foreground';
 	}
 
 	function exportCSV() {
@@ -487,13 +587,13 @@
 	});
 </script>
 
-<svelte:head><title>Wizard Kesiapan Event — {info?.title ?? 'Kegiatan Ujian'}</title></svelte:head>
+<svelte:head><title>Pusat Kegiatan Asesmen — {info?.title ?? 'Kegiatan Asesmen'}</title></svelte:head>
 
 <svelte:window onhashchange={handleHashChange} />
 
 <div class="space-y-6 p-6">
 	<div class="flex items-center gap-2 text-sm text-muted-foreground">
-		<a href={resolve('/asesmen/kegiatan')} class="hover:text-foreground">Kegiatan & Sesi Ujian</a>
+		<a href={resolve('/asesmen/kegiatan')} class="hover:text-foreground">Kegiatan Asesmen & Sesi Ujian</a>
 		<span>/</span>
 		<span class="text-foreground font-medium truncate max-w-xs">{info?.title ?? 'Pusat Kendali'}</span>
 	</div>
@@ -520,13 +620,14 @@
 			{@const checklist = buildChecklist(detail)}
 			{@const readinessGroups = buildReadinessGroups(checklist)}
 			{@const nextActions = buildNextActions(detail, checklist)}
+			{@const sopTimeline = buildSopTimeline(detail, checklist)}
 			<section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
 				<div class="flex flex-wrap items-start justify-between gap-4">
 					<div class="max-w-3xl p-5">
-						<p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Wizard Kesiapan CBT</p>
+						<p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Pusat Kegiatan Asesmen</p>
 						<h1 class="mt-1 text-2xl font-semibold text-foreground">{currentInfo.title}</h1>
 						<p class="mt-2 text-sm text-muted-foreground">{currentInfo.academic_year_name} · <span class="capitalize">{currentInfo.exam_type}</span> · {scopeLabel[currentInfo.scope] ?? currentInfo.scope}</p>
-						<p class="mt-2 text-sm text-muted-foreground">Ikuti langkah kesiapan dari paket soal, sesi, monitoring, sampai hasil tanpa membuka banyak kartu modul yang setara.</p>
+						<p class="mt-2 text-sm text-muted-foreground">Ikuti langkah kesiapan dari Paket Soal, Sesi Ujian, Pengawasan Ruang, sampai Hasil Asesmen tanpa membuka banyak halaman setara.</p>
 					</div>
 					<div class="flex flex-wrap items-center gap-2 p-5 lg:justify-end">
 						<Badge class={statusClass(currentInfo.status)}>{statusLabel[currentInfo.status] ?? currentInfo.status}</Badge>
@@ -607,10 +708,60 @@
 				</Card.Root>
 			</section>
 
+			<section aria-label="Timeline SOP kegiatan asesmen">
+				<Card.Root class="border-primary/20 shadow-sm">
+					<Card.Header class="pb-3">
+						<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+							<div>
+								<Card.Title class="text-base">Timeline SOP Kegiatan</Card.Title>
+								<Card.Description>Sepuluh tahap formal dari persiapan soal sampai arsip akhir. Status bersifat panduan baca, belum mengunci alur kerja.</Card.Description>
+							</div>
+							<Badge variant="outline" class={detail.sopReadiness ? 'border-primary/20 bg-primary/10 text-primary' : 'border-warning/30 bg-warning/10 text-warning'}>
+								{detail.sopReadiness ? 'Readiness backend' : 'Fallback halaman'}
+							</Badge>
+						</div>
+					</Card.Header>
+					<Card.Content>
+						<div class="grid gap-3 lg:grid-cols-2">
+							{#each sopTimeline as stage, index (stage.key)}
+								<div class="flex gap-3 rounded-xl border border-border bg-card p-4">
+									<div class="flex flex-col items-center">
+										<div class={`flex size-8 items-center justify-center rounded-full border text-xs font-bold ${sopStageClass(stage.status)}`}>{index + 1}</div>
+										{#if index < sopTimeline.length - 1}
+											<div class="mt-2 h-full min-h-10 w-px bg-border"></div>
+										{/if}
+									</div>
+									<div class="min-w-0 flex-1 space-y-2">
+										<div class="flex flex-wrap items-start justify-between gap-2">
+											<div>
+												<p class="text-sm font-semibold text-foreground">{stage.label}</p>
+												<p class="text-xs text-muted-foreground">{stage.owner ?? 'Panitia'} · {stage.description ?? 'Tahap SOP kegiatan asesmen.'}</p>
+											</div>
+											<Badge variant="outline" class={sopStageClass(stage.status)}>{sopStatusLabels[stage.status]}</Badge>
+										</div>
+										<div class="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+											<span>{stage.blocking_count} penghambat</span>
+											<span>{stage.warning_count} perhatian</span>
+										</div>
+										<div class="flex flex-wrap gap-2">
+											{#each stage.next_actions.slice(0, 3) as action (action.href + action.label)}
+												<a href={action.href} class="rounded-md border border-border px-2.5 py-1 text-xs font-semibold text-primary hover:border-primary/30 hover:bg-primary/10">{action.label}</a>
+											{:else}
+												<span class="text-xs text-muted-foreground">Tidak ada tindakan lanjutan dari data aktif.</span>
+											{/each}
+										</div>
+									</div>
+								</div>
+							{/each}
+						</div>
+					</Card.Content>
+				</Card.Root>
+			</section>
+
 			{#if activeSection === 'ringkasan'}
 				<section>
 					<Card.Root>
-						<Card.Header class="pb-2"><Card.Title class="text-base">Kelengkapan data</Card.Title><Card.Description>Angka praktis dari paket, sesi, dan hasil yang sudah terbaca.</Card.Description></Card.Header>
+				<Card.Header class="pb-2"><Card.Title class="text-base">Kelengkapan data</Card.Title><Card.Description>Angka praktis dari paket, sesi, dan hasil yang sudah terbaca.</Card.Description></Card.Header>
 						<Card.Content class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
 							<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Paket</p><p class="text-lg font-semibold text-foreground">{detail.packages.length}</p></div>
 							<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Sesi</p><p class="text-lg font-semibold text-foreground">{detail.sessions.length}</p></div>
@@ -644,7 +795,7 @@
 								<div class="flex flex-wrap items-start justify-between gap-3">
 									<div>
 										<p class="text-sm font-semibold text-foreground">Pengaturan Target</p>
-										<p class="text-xs text-muted-foreground">Atur cara monitoring dan target minimal soal yang dihitung untuk event ini.</p>
+										<p class="text-xs text-muted-foreground">Atur cara pemantauan dan target minimal soal yang dihitung untuk kegiatan ini.</p>
 									</div>
 									<LoadingButton onclick={saveQuestionRequirements} loading={targetSettingsBusy} loadingLabel="Menyimpan..." label="Simpan Target" />
 								</div>
@@ -653,13 +804,13 @@
 										<select bind:value={targetScopeMode} class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground">
 											<option value="per_rombel">Per rombel + mapel + guru</option>
 											<option value="per_level">Per tingkat + mapel + guru</option>
-											<option value="pool_level_subject">Pool tingkat + mapel</option>
+											<option value="pool_level_subject">Kumpulan tingkat + mapel</option>
 										</select>
 									</label>
 									<label class="space-y-1 text-xs font-medium text-muted-foreground">Filter soal
 										<select bind:value={targetStatusFilter} class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground">
 											<option value="published_only">Hanya soal terbit</option>
-											<option value="all_progress">Draft/review/terbit dihitung</option>
+											<option value="all_progress">Draft/verifikasi/terbit dihitung</option>
 										</select>
 									</label>
 									<label class="space-y-1 text-xs font-medium text-muted-foreground">Target PG

@@ -968,6 +968,21 @@ type BankSoalReviewerScope struct {
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
+type CbtApprovalRecord struct {
+	ID           pgtype.UUID        `json:"id"`
+	EntityType   string             `json:"entity_type"`
+	EntityID     pgtype.UUID        `json:"entity_id"`
+	ApprovalType string             `json:"approval_type"`
+	Status       string             `json:"status"`
+	ApprovedBy   pgtype.UUID        `json:"approved_by"`
+	ApprovedAt   pgtype.Timestamptz `json:"approved_at"`
+	RevokedBy    pgtype.UUID        `json:"revoked_by"`
+	RevokedAt    pgtype.Timestamptz `json:"revoked_at"`
+	Notes        string             `json:"notes"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CbtEventMember struct {
 	ID         pgtype.UUID        `json:"id"`
 	EventID    pgtype.UUID        `json:"event_id"`

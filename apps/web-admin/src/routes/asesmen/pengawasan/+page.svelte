@@ -190,7 +190,7 @@
 </script>
 
 <svelte:head>
-	<title>Ruang Pengawas CBT — MTsN 2 Kolut</title>
+	<title>Pengawasan Ruang — MTsN 2 Kolut</title>
 </svelte:head>
 
 <AsyncContent promise={roomsPromise} onerror={handleRenderError}>
@@ -228,8 +228,8 @@
 		<div class="space-y-5 p-4 md:p-6">
 			<section class="flex flex-col gap-4 border-b border-primary/20 pb-5 lg:flex-row lg:items-end lg:justify-between">
 				<div class="max-w-3xl space-y-2">
-					<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">CBT / Pengawas Ruang</p>
-					<h1 class="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Ruang Pengawas CBT</h1>
+					<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Asesmen CBT / Pengawasan Ruang</p>
+					<h1 class="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Pengawasan Ruang</h1>
 					<p class="text-sm leading-6 text-muted-foreground">
 						Satu layar untuk menemukan ruang ujian yang perlu dipantau, membuka panel langsung, dan kembali ke Panduan BYOD saat butuh panduan status.
 					</p>

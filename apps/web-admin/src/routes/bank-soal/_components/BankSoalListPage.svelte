@@ -200,7 +200,7 @@
 	const workflowOptions: Array<{ value: WorkflowFilter; label: string }> = [
 		{ value: '', label: 'Semua alur' },
 		{ value: 'draft', label: 'Draft' },
-		{ value: 'review', label: 'Menunggu review' },
+		{ value: 'review', label: 'Menunggu verifikasi' },
 		{ value: 'approved', label: 'Disetujui' },
 		{ value: 'rejected', label: 'Perlu revisi' }
 	];
@@ -230,7 +230,7 @@
 
 	const workflowLabels: Record<string, string> = {
 		draft: 'Draft',
-		review: 'Review',
+		review: 'Verifikasi',
 		approved: 'Disetujui',
 		rejected: 'Perlu Revisi'
 	};
@@ -360,7 +360,7 @@
 		},
 		{
 			key: 'review',
-			label: 'Review',
+			label: 'Verifikasi',
 			helper: 'menunggu keputusan',
 			value: counts.review,
 			tone: 'amber',
@@ -963,7 +963,7 @@
 					<div>
 						<h1 class="text-2xl font-semibold tracking-tight md:text-3xl">Dashboard Bank Soal</h1>
 						<p class="mt-2 max-w-2xl text-sm leading-6 text-emerald-50/85">
-							Ringkasan koleksi soal MTsN 2 Kolaka Utara: tulis, review, impor, dan siapkan butir terbaik untuk paket asesmen.
+							Ringkasan koleksi soal MTsN 2 Kolaka Utara: tulis, verifikasi, impor, dan siapkan butir terbaik untuk paket asesmen.
 						</p>
 					</div>
 					<div class="flex flex-wrap gap-2 text-xs text-emerald-50/80">
@@ -976,7 +976,7 @@
 					{#if canReview}
 						<Button href={reviewRouteHref} variant="outline" class="border-white/30 bg-white/10 text-white hover:bg-white/20">
 							<ClipboardCheckIcon class="size-4" />
-							Review
+							Verifikasi
 						</Button>
 					{/if}
 					{#if canImport}
@@ -1007,7 +1007,7 @@
 		</button>
 		<button type="button" class={summaryCardClass(summaryCards[4])} aria-pressed={summaryCards[4].active} onclick={() => setSummaryFilter('approved')}>
 			<div class="flex items-center justify-between gap-3">
-				<span class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Telah Direview</span>
+				<span class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Telah Diverifikasi</span>
 				<BookOpenCheckIcon class="size-5 text-primary" />
 			</div>
 			<span class={`mt-2 block text-3xl font-semibold ${summaryValueClass(summaryCards[4])}`}>{counts.approved + counts.published}</span>
@@ -1023,7 +1023,7 @@
 		</a>
 		<button type="button" class={summaryCardClass(summaryCards[2])} aria-pressed={summaryCards[2].active} onclick={() => setSummaryFilter('review')}>
 			<div class="flex items-center justify-between gap-3">
-				<span class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Menunggu Review</span>
+				<span class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Menunggu Verifikasi</span>
 				<ClipboardCheckIcon class="size-5 text-warning" />
 			</div>
 			<span class={`mt-2 block text-3xl font-semibold ${summaryValueClass(summaryCards[2])}`}>{counts.review}</span>
@@ -1139,7 +1139,7 @@
 				{#if canReview}
 					<a href={reviewRouteHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
 						<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-destructive/15 text-destructive"><ClipboardCheckIcon class="size-5" /></span>
-						<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Review antrean</span><span class="block text-xs text-muted-foreground">Setujui atau kembalikan untuk revisi</span></span>
+						<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Verifikasi antrean</span><span class="block text-xs text-muted-foreground">Setujui atau kembalikan untuk revisi</span></span>
 					</a>
 				{/if}
 				<a href={analysisHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">

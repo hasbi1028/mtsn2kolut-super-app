@@ -91,7 +91,7 @@
 	let cognitiveBuckets = $derived((summary.by_cognitive_level ?? []).filter((item) => item.total && item.total > 0));
 	let insights = $derived<Insight[]>([
 		{ label: 'Total bank soal', value: totalQuestions, desc: `${filteredQuestions.length} soal masuk sampel analisis`, tone: 'emerald' },
-		{ label: 'Lolos review', value: reviewedQuestions, desc: 'Approved + published', tone: 'green' },
+		{ label: 'Lolos verifikasi', value: reviewedQuestions, desc: 'Disetujui + terbit', tone: 'green' },
 		{ label: 'Dipakai paket/jawaban', value: usedQuestions, desc: 'Soal yang sudah punya jejak pemakaian', tone: 'amber' },
 		{ label: 'Perlu revisi', value: revisionQuestions.length, desc: 'Prioritas perbaikan guru/reviewer', tone: 'rose' }
 	]);
@@ -109,7 +109,7 @@
 				<div>
 					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Advanced Bank Soal</p>
 					<h1 class="mt-1 text-2xl font-black uppercase italic tracking-tight text-foreground">Analisis Butir</h1>
-					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Pantau kesiapan kualitas soal dari data yang sudah tersedia: status review, pemakaian paket, level kognitif, tipe soal, dan antrean prioritas revisi.</p>
+					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Pantau kesiapan kualitas soal dari data yang sudah tersedia: status verifikasi, pemakaian paket, level kognitif, tipe soal, dan antrean prioritas revisi.</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
 					<a href={resolve('/bank-soal')} class="rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted/50">Dashboard</a>
@@ -162,7 +162,7 @@
 
 					<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
 						<h2 class="text-base font-bold text-foreground">Prioritas Tindak Lanjut</h2>
-						<p class="mt-1 text-xs text-muted-foreground">Revisi dan soal lolos review yang belum terlihat pemakaiannya.</p>
+						<p class="mt-1 text-xs text-muted-foreground">Revisi dan soal lolos verifikasi yang belum terlihat pemakaiannya.</p>
 						<div class="mt-4 divide-y divide-border">
 							{#each priorityItems as question (question.id)}
 								<a href={resolve(`/bank-soal/tambah?question_id=${question.id}`)} class="block py-3 hover:bg-muted/50">

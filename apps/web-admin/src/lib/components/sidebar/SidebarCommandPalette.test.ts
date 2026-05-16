@@ -8,7 +8,7 @@ const paletteItems = [
 	{ href: '/grades', label: 'Nilai', group: 'Akademik', pinned: true },
 	{ href: '/bank-soal', label: 'Daftar Soal', group: 'Bank Soal', pinned: false },
 	{ href: '/bank-soal/tambah', label: 'Tambah Soal', group: 'Bank Soal', pinned: false },
-	{ href: '/bank-soal/verifikasi', label: 'Review Soal', group: 'Bank Soal', pinned: false },
+	{ href: '/bank-soal/verifikasi', label: 'Verifikasi Soal', group: 'Bank Soal', pinned: false },
 	{ href: '/library/loans', label: 'Peminjaman', group: 'Perpustakaan', pinned: false },
 	{ href: '/inventory/items', label: 'Daftar Barang', group: 'Inventaris', pinned: false }
 ];

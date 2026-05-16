@@ -108,7 +108,7 @@
 				<div>
 					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Advanced Bank Soal</p>
 					<h1 class="mt-1 text-2xl font-black uppercase italic tracking-tight text-foreground">Mapel & KD Coverage</h1>
-					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Pantau pemerataan bank soal berdasarkan mapel, kelas/fase, KD/CP/TP, materi, dan status review agar repositori soal siap dipakai lintas asesmen.</p>
+					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Pantau pemerataan bank soal berdasarkan mapel, kelas/fase, KD/CP/TP, materi, dan status verifikasi agar repositori soal siap dipakai lintas asesmen.</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
 					<a href={resolve('/bank-soal')} class="rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted/50">Dashboard</a>
@@ -143,7 +143,7 @@
 					</div>
 					<div class="mt-4 overflow-hidden rounded-lg border border-border">
 						<div class="grid grid-cols-[minmax(10rem,1.5fr)_repeat(4,minmax(5rem,0.7fr))] bg-muted/50 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-							<span>Mapel</span><span>Soal</span><span>Review</span><span>KD</span><span>Belum KD</span>
+							<span>Mapel</span><span>Soal</span><span>Terverifikasi</span><span>KD</span><span>Belum KD</span>
 						</div>
 						{#each filteredRows as row (row.key)}
 							<div class="grid grid-cols-[minmax(10rem,1.5fr)_repeat(4,minmax(5rem,0.7fr))] items-center border-t border-border px-3 py-3 text-sm">

@@ -23,7 +23,7 @@
 	const adminDayTasks: DayTask[] = [
 		{
 			title: 'Pantau Sesi Hari Ini',
-			description: 'Buka daftar sesi dengan fokus jadwal hari ini untuk memastikan ujian aktif dan kode ujian terkendali.',
+			description: 'Buka daftar sesi dengan fokus jadwal hari ini untuk memastikan ujian aktif dan token ujian terkendali.',
 			href: '/asesmen/sesi',
 			query: '?schedule=today',
 			cta: 'Pantau Sesi',
@@ -93,7 +93,7 @@
 </script>
 
 <svelte:head>
-	<title>Pelaksanaan CBT — MTsN 2 Kolaka Utara</title>
+	<title>Pelaksanaan Ujian CBT — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 {#if canAccess}
@@ -105,10 +105,10 @@
 					<Badge class="border-primary/20 bg-card text-primary" variant="outline">CBT · Hari-H</Badge>
 					<Badge class="border-border bg-card text-muted-foreground" variant="outline">Tanpa perubahan data</Badge>
 				</div>
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Pelaksanaan CBT</h1>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Pelaksanaan Ujian CBT</h1>
 				<p class="max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
 					Fokus hari ujian dibuat ringkas: pantau sesi aktif, buka panel ruang, baca panduan BYOD, dan cetak kartu dari
-					kegiatan bila diperlukan.
+					Kegiatan Asesmen bila diperlukan.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-3">
@@ -160,7 +160,7 @@
 			</Card.Description>
 			</Card.Header>
 			<Card.Footer>
-				<Button href={resolve('/asesmen')} variant="outline" class="w-full border-primary/20 text-primary hover:bg-primary/10">Beranda Ujian</Button>
+				<Button href={resolve('/asesmen')} variant="outline" class="w-full border-primary/20 text-primary hover:bg-primary/10">Beranda Asesmen CBT</Button>
 			</Card.Footer>
 		</Card.Root>
 	</section>
@@ -170,10 +170,10 @@
 		<div class="max-w-lg rounded-2xl border border-border bg-card p-8 shadow-sm">
 			<h2 class="text-xl font-semibold text-foreground">Akses terbatas</h2>
 			<p class="mt-3 text-sm leading-6 text-muted-foreground">
-				Fase pelaksanaan CBT hanya tersedia untuk admin, guru, dan staf. Silakan kembali ke Beranda Ujian.
+				Fase pelaksanaan CBT hanya tersedia untuk admin, guru, dan staf. Silakan kembali ke Beranda Asesmen CBT.
 			</p>
 			<div class="mt-6">
-				<Button href={resolve('/asesmen')} variant="outline">Kembali ke Beranda Ujian</Button>
+				<Button href={resolve('/asesmen')} variant="outline">Kembali ke Beranda Asesmen CBT</Button>
 			</div>
 		</div>
 	</div>

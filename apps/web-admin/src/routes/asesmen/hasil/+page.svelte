@@ -55,24 +55,24 @@
 </script>
 
 <svelte:head>
-	<title>Hasil CBT — MTsN 2 Kolaka Utara</title>
+	<title>Hasil Asesmen CBT — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 {#if canAccess}
 	<div class="mx-auto max-w-5xl space-y-6">
 		<section class="space-y-4">
 			<div class="space-y-2">
-				<p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">CBT · Hasil</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Hasil CBT</h1>
+				<p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Asesmen CBT · Hasil</p>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Hasil Asesmen CBT</h1>
 				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
 					{#if userRoles.includes('admin')}
 						Pilih pekerjaan hasil yang ingin dibuka. Rekap kegiatan, hasil sesi, dan analisis soal tetap berada di halaman detail yang sudah tersedia.
 					{:else}
-						Untuk guru, halaman ini menjadi pintu informasi hasil. Rekap detail dibuka melalui alur yang disediakan admin atau dari beranda CBT.
+						Untuk guru, halaman ini menjadi pintu informasi hasil. Rekap detail dibuka melalui alur yang disediakan admin atau dari Beranda Asesmen CBT.
 					{/if}
 				</p>
 			</div>
-			<Button href={resolve('/asesmen')} variant="outline">Kembali ke Beranda Ujian</Button>
+			<Button href={resolve('/asesmen')} variant="outline">Kembali ke Beranda Asesmen CBT</Button>
 		</section>
 
 		<section class="grid gap-4 lg:grid-cols-3" aria-label="Pilihan Hasil CBT">

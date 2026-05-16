@@ -25,6 +25,7 @@ type cbtEventService interface {
 	ListForUser(ctx context.Context, userID pgtype.UUID) ([]db.ListCbtExamEventsRow, error)
 	Get(ctx context.Context, id pgtype.UUID) (db.GetCbtExamEventRow, error)
 	Overview(ctx context.Context, id pgtype.UUID) (service.CbtEventOverview, error)
+	SopReadiness(ctx context.Context, id pgtype.UUID) (service.CbtSopReadiness, error)
 	ListPackages(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventPackagesRow, error)
 	ListSessions(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventSessionsReadinessRow, error)
 	QuestionCompleteness(ctx context.Context, eventID pgtype.UUID) (service.CbtQuestionCompleteness, error)
@@ -114,6 +115,27 @@ func (h *CbtEvent) Overview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	row, err := h.svc.Overview(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *CbtEvent) SopReadiness(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID data tidak valid")
+		return
+	}
+	if !h.requireEventReadAccess(w, r, id) {
+		return
+	}
+	row, err := h.svc.SopReadiness(r.Context(), id)
 	if err != nil {
 		api.Internal(w, err)
 		return

@@ -396,10 +396,10 @@ export const QUESTION_TYPE_CONFIGS: QuestionTypeConfig[] = [
 ];
 export const WORKFLOW_LABEL: Record<string, string> = {
 	draft: 'Draft',
-	submitted: 'Menunggu Review',
-	review: 'Menunggu Review',
+	submitted: 'Menunggu Verifikasi',
+	review: 'Menunggu Verifikasi',
 	revision_needed: 'Perlu Revisi',
-	reviewed: 'Layak Review',
+	reviewed: 'Layak Verifikasi',
 	approved: 'Disetujui',
 	published: 'Published',
 	rejected: 'Ditolak',
@@ -644,7 +644,7 @@ export function explainQuickEditBlocked(q: Question): string {
 	if (questionUsageLocked(q)) return 'Soal sudah dipakai. Gunakan Duplikat untuk membuat revisi draft.';
 	if ((q.workflow_status !== 'draft' && q.workflow_status !== 'rejected') || q.status !== 'draft') {
 		if (q.workflow_status === 'revision_needed') return 'Soal sudah diminta revisi, tetapi editor cepat belum membuka status ini. Gunakan Duplikat atau minta admin mengembalikan lewat alur revisi.';
-		return 'Soal sudah masuk alur review/publikasi. Gunakan Duplikat untuk revisi.';
+		return 'Soal sudah masuk alur verifikasi/publikasi. Gunakan Duplikat untuk revisi.';
 	}
 	if (!isComposerQuestionType(q.question_type)) {
 		return 'Tipe soal ini belum masuk komposer utama. Gunakan Duplikat setelah tipe ini dimigrasikan.';

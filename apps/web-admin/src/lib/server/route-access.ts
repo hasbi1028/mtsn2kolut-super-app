@@ -30,6 +30,7 @@ const ADMIN_ONLY_PREFIXES = [
 	'/api/system/backups',
 	'/api/system/maintenance',
 	'/api/asesmen/events',
+	'/api/asesmen/approvals',
 	'/api/asesmen/packages',
 	'/api/asesmen/sessions',
 	'/api/scheduler/tick'
@@ -257,6 +258,9 @@ function asesmenPermission(pathname: string, method: string): string[] | undefin
 	}
 	if (matchesPathSegment(pathname, '/asesmen/aplikasi-siswa')) return ['asesmen.read'];
 	if (matchesPathSegment(pathname, '/api/asesmen/proctoring')) return ['asesmen.proctor'];
+	if (matchesPathSegment(pathname, '/api/asesmen/approvals')) {
+		return [];
+	}
 	if (matchesPathSegment(pathname, '/asesmen/paket') || matchesPathSegment(pathname, '/api/asesmen/packages')) {
 		return isReadMethod(method) ? ['asesmen.read'] : ['asesmen.package_manage'];
 	}

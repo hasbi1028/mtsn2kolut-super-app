@@ -25,6 +25,7 @@ describe('cbt backend path dispatch', () => {
 			'/api/asesmen/non-test-assessments/nta-1/sync-grade'
 		);
 		expect(cbtBackendPath('/proctoring/my-rooms')).toBe('/api/asesmen/proctoring/my-rooms');
+		expect(cbtBackendPath('/approvals')).toBe('/api/asesmen/approvals');
 	});
 
 	it('rejects unsafe or unsupported backend paths before dispatching', () => {
@@ -66,7 +67,8 @@ describe('cbt backend path dispatch', () => {
 			'/sessions/session-1/results',
 			'/sessions/session-1/rooms/readiness',
 			'/proctoring/my-rooms',
-			'/non-test-assessments'
+			'/non-test-assessments',
+			'/approvals'
 		];
 
 		for (const path of activeWorkflowPaths) {

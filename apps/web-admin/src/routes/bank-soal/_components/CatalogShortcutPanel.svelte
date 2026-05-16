@@ -42,8 +42,8 @@
 			<Button onclick={onCreate} class="bg-primary text-primary-foreground hover:bg-primary/90">Buat Soal</Button>
 			<Button variant="outline" onclick={onImport} class="bg-card">Unggah CSV</Button>
 			<Button variant="outline" onclick={onRevision} class="bg-card text-destructive hover:bg-destructive/10">Perlu Revisi</Button>
-			<Button variant="outline" onclick={onPendingReviews} disabled={!canUseReviewerTools} class="bg-card text-warning hover:bg-warning/10 disabled:opacity-50">Antrian Review</Button>
-			<a href={resolve(reviewHref)} class="inline-flex rounded-md border border-input bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/50">Review Fokus</a>
+			<Button variant="outline" onclick={onPendingReviews} disabled={!canUseReviewerTools} class="bg-card text-warning hover:bg-warning/10 disabled:opacity-50">Antrean Verifikasi</Button>
+			<a href={resolve(reviewHref)} class="inline-flex rounded-md border border-input bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/50">Verifikasi Fokus</a>
 			{#if isAdminRole}
 				<a href={resolve(membersHref)} class="inline-flex rounded-md border border-input bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/50">Penugasan Event</a>
 				<Button variant="outline" onclick={onApproved} class="bg-card text-success hover:bg-success/10">Siap Terbit</Button>
