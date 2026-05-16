@@ -223,7 +223,7 @@ func main() {
 	requireBankSoalRead := mw.RequirePermission("bank_soal.read")
 	requireBankSoalCreate := mw.RequirePermission("bank_soal.create")
 	requireBankSoalUpdate := mw.RequirePermission("bank_soal.update")
-	requireBankSoalReviewWorkflow := mw.RequireAnyPermission("bank_soal.update", "bank_soal.review", "bank_soal.publish")
+	requireBankSoalReviewWorkflow := mw.RequireAnyPermission("bank_soal.update", "bank_soal.update_own", "bank_soal.submit", "bank_soal.review", "bank_soal.approve", "bank_soal.publish")
 	requireBankSoalImport := mw.RequirePermission("bank_soal.import")
 	requireBankSoalDelete := mw.RequirePermission("bank_soal.delete")
 	requireBankSoalAssetUpload := mw.RequireAnyPermission("bank_soal.create", "bank_soal.update")

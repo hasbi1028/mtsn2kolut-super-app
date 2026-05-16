@@ -943,6 +943,19 @@ type AuthSession struct {
 	DeviceLabel      string             `json:"device_label"`
 }
 
+type BankSoalQuestionWorkflowEvent struct {
+	ID            pgtype.UUID        `json:"id"`
+	QuestionID    pgtype.UUID        `json:"question_id"`
+	ActorUserID   pgtype.UUID        `json:"actor_user_id"`
+	ActorUsername string             `json:"actor_username"`
+	FromStatus    string             `json:"from_status"`
+	ToStatus      string             `json:"to_status"`
+	Action        string             `json:"action"`
+	Note          string             `json:"note"`
+	Metadata      []byte             `json:"metadata"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
 type BankSoalReviewerScope struct {
 	ID         pgtype.UUID        `json:"id"`
 	UserID     pgtype.UUID        `json:"user_id"`

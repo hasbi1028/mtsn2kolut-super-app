@@ -12,6 +12,19 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
                AND m.role IN ('reviewer', 'panitia')
                AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
            )
+           OR EXISTS (
+             SELECT 1 FROM bank_soal_reviewer_scopes rs
+             WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
+               AND (
+                 (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+                 OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+               )
+               AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+               AND (
+                 rs.grade_level IS NULL
+                 OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+               )
+           )
          THEN q.answer_key ELSE '' END AS answer_key,
        q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
@@ -117,7 +130,12 @@ WHERE (
   )
   AND (sqlc.arg(subject_id)::uuid IS NULL OR q.subject_id = sqlc.arg(subject_id)::uuid)
   AND (sqlc.arg(author_username)::text = '' OR q.author_username = sqlc.arg(author_username)::text)
-  AND (sqlc.arg(workflow_status)::text = '' OR q.workflow_status = sqlc.arg(workflow_status)::text)
+  AND (
+    sqlc.arg(workflow_status)::text = ''
+    OR q.workflow_status = sqlc.arg(workflow_status)::text
+    OR (sqlc.arg(workflow_status)::text = 'submitted' AND q.workflow_status = 'review')
+    OR (sqlc.arg(workflow_status)::text = 'review' AND q.workflow_status = 'submitted')
+  )
   AND (sqlc.arg(status_filter)::text = '' OR q.status = sqlc.arg(status_filter)::cbt_question_status_enum)
   AND (sqlc.arg(question_type)::text = '' OR q.question_type = sqlc.arg(question_type)::text)
   AND (sqlc.arg(target_level)::text = '' OR q.target_level = sqlc.arg(target_level)::text)
@@ -147,6 +165,7 @@ WHERE (
   AND (
     sqlc.arg(is_admin)::bool
     OR q.status = 'published'
+    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('approved', 'published'))
     OR q.author_username = sqlc.arg(actor_username)::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -154,6 +173,19 @@ WHERE (
         AND m.user_id = sqlc.arg(actor_user_id)::uuid
         AND m.role IN ('reviewer', 'panitia')
         AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+    OR EXISTS (
+      SELECT 1 FROM bank_soal_reviewer_scopes rs
+      WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
+        AND (
+          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+        )
+        AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+        AND (
+          rs.grade_level IS NULL
+          OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+        )
     )
   )
   AND (
@@ -260,7 +292,12 @@ WHERE (
   )
   AND (sqlc.arg(subject_id)::uuid IS NULL OR q.subject_id = sqlc.arg(subject_id)::uuid)
   AND (sqlc.arg(author_username)::text = '' OR q.author_username = sqlc.arg(author_username)::text)
-  AND (sqlc.arg(workflow_status)::text = '' OR q.workflow_status = sqlc.arg(workflow_status)::text)
+  AND (
+    sqlc.arg(workflow_status)::text = ''
+    OR q.workflow_status = sqlc.arg(workflow_status)::text
+    OR (sqlc.arg(workflow_status)::text = 'submitted' AND q.workflow_status = 'review')
+    OR (sqlc.arg(workflow_status)::text = 'review' AND q.workflow_status = 'submitted')
+  )
   AND (sqlc.arg(status_filter)::text = '' OR q.status = sqlc.arg(status_filter)::cbt_question_status_enum)
   AND (sqlc.arg(question_type)::text = '' OR q.question_type = sqlc.arg(question_type)::text)
   AND (sqlc.arg(target_level)::text = '' OR q.target_level = sqlc.arg(target_level)::text)
@@ -290,6 +327,7 @@ WHERE (
   AND (
     sqlc.arg(is_admin)::bool
     OR q.status = 'published'
+    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('approved', 'published'))
     OR q.author_username = sqlc.arg(actor_username)::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -297,6 +335,19 @@ WHERE (
         AND m.user_id = sqlc.arg(actor_user_id)::uuid
         AND m.role IN ('reviewer', 'panitia')
         AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+    OR EXISTS (
+      SELECT 1 FROM bank_soal_reviewer_scopes rs
+      WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
+        AND (
+          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+        )
+        AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+        AND (
+          rs.grade_level IS NULL
+          OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+        )
     )
   )
   AND (
@@ -354,7 +405,12 @@ WHERE (
   )
   AND (sqlc.arg(subject_id)::uuid IS NULL OR q.subject_id = sqlc.arg(subject_id)::uuid)
   AND (sqlc.arg(author_username)::text = '' OR q.author_username = sqlc.arg(author_username)::text)
-  AND (sqlc.arg(workflow_status)::text = '' OR q.workflow_status = sqlc.arg(workflow_status)::text)
+  AND (
+    sqlc.arg(workflow_status)::text = ''
+    OR q.workflow_status = sqlc.arg(workflow_status)::text
+    OR (sqlc.arg(workflow_status)::text = 'submitted' AND q.workflow_status = 'review')
+    OR (sqlc.arg(workflow_status)::text = 'review' AND q.workflow_status = 'submitted')
+  )
   AND (sqlc.arg(status_filter)::text = '' OR q.status = sqlc.arg(status_filter)::cbt_question_status_enum)
   AND (sqlc.arg(question_type)::text = '' OR q.question_type = sqlc.arg(question_type)::text)
   AND (sqlc.arg(target_level)::text = '' OR q.target_level = sqlc.arg(target_level)::text)
@@ -384,6 +440,7 @@ WHERE (
   AND (
     sqlc.arg(is_admin)::bool
     OR q.status = 'published'
+    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('approved', 'published'))
     OR q.author_username = sqlc.arg(actor_username)::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -391,6 +448,19 @@ WHERE (
         AND m.user_id = sqlc.arg(actor_user_id)::uuid
         AND m.role IN ('reviewer', 'panitia')
         AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+    OR EXISTS (
+      SELECT 1 FROM bank_soal_reviewer_scopes rs
+      WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
+        AND (
+          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+        )
+        AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+        AND (
+          rs.grade_level IS NULL
+          OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+        )
     )
   )
   AND (
@@ -606,6 +676,29 @@ INSERT INTO cbt_question_audit_logs (question_id, actor_username, action, note, 
 VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
+-- name: CreateBankSoalQuestionWorkflowEvent :one
+INSERT INTO bank_soal_question_workflow_events (
+  question_id,
+  actor_user_id,
+  actor_username,
+  from_status,
+  to_status,
+  action,
+  note,
+  metadata
+)
+VALUES (
+  sqlc.arg(question_id),
+  sqlc.narg(actor_user_id),
+  sqlc.arg(actor_username),
+  sqlc.arg(from_status),
+  sqlc.arg(to_status),
+  sqlc.arg(action),
+  sqlc.arg(note),
+  sqlc.arg(metadata)
+)
+RETURNING *;
+
 -- name: ListCbtQuestionTimeline :many
 SELECT log.id,
        log.question_id,
@@ -709,7 +802,7 @@ ORDER BY q.code, s.nama;
 SELECT
   COUNT(*)::bigint AS total,
   COUNT(*) FILTER (WHERE q.status = 'draft')::bigint AS draft,
-  COUNT(*) FILTER (WHERE q.workflow_status = 'review')::bigint AS review,
+  COUNT(*) FILTER (WHERE q.workflow_status IN ('review', 'submitted'))::bigint AS review,
   COUNT(*) FILTER (WHERE q.workflow_status = 'rejected')::bigint AS rejected,
   COUNT(*) FILTER (WHERE q.workflow_status = 'approved')::bigint AS approved,
   COUNT(*) FILTER (WHERE q.status = 'published')::bigint AS published,
@@ -724,6 +817,7 @@ WHERE TRUE
   AND (
     sqlc.arg(is_admin)::bool
     OR q.status = 'published'
+    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('approved', 'published'))
     OR q.author_username = sqlc.arg(actor_username)::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -731,6 +825,19 @@ WHERE TRUE
         AND m.user_id = sqlc.arg(actor_user_id)::uuid
         AND m.role IN ('reviewer', 'panitia')
         AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+    OR EXISTS (
+      SELECT 1 FROM bank_soal_reviewer_scopes rs
+      WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
+        AND (
+          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+        )
+        AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+        AND (
+          rs.grade_level IS NULL
+          OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+        )
     )
   );
 
@@ -742,6 +849,7 @@ WHERE TRUE
   AND (
     sqlc.arg(is_admin)::bool
     OR q.status = 'published'
+    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('approved', 'published'))
     OR q.author_username = sqlc.arg(actor_username)::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -749,6 +857,19 @@ WHERE TRUE
         AND m.user_id = sqlc.arg(actor_user_id)::uuid
         AND m.role IN ('reviewer', 'panitia')
         AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+    OR EXISTS (
+      SELECT 1 FROM bank_soal_reviewer_scopes rs
+      WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
+        AND (
+          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+        )
+        AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+        AND (
+          rs.grade_level IS NULL
+          OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+        )
     )
   )
 GROUP BY q.subject_id, s.name, s.code
@@ -762,6 +883,7 @@ WHERE TRUE
   AND (
     sqlc.arg(is_admin)::bool
     OR q.status = 'published'
+    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('approved', 'published'))
     OR q.author_username = sqlc.arg(actor_username)::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -769,6 +891,19 @@ WHERE TRUE
         AND m.user_id = sqlc.arg(actor_user_id)::uuid
         AND m.role IN ('reviewer', 'panitia')
         AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+    OR EXISTS (
+      SELECT 1 FROM bank_soal_reviewer_scopes rs
+      WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
+        AND (
+          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+        )
+        AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+        AND (
+          rs.grade_level IS NULL
+          OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+        )
     )
   )
 GROUP BY COALESCE(NULLIF(btrim(q.cognitive_level), ''), 'Belum diisi')
@@ -784,6 +919,7 @@ WHERE TRUE
   AND (
     sqlc.arg(is_admin)::bool
     OR q.status = 'published'
+    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('approved', 'published'))
     OR q.author_username = sqlc.arg(actor_username)::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -791,6 +927,19 @@ WHERE TRUE
         AND m.user_id = sqlc.arg(actor_user_id)::uuid
         AND m.role IN ('reviewer', 'panitia')
         AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+    OR EXISTS (
+      SELECT 1 FROM bank_soal_reviewer_scopes rs
+      WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
+        AND (
+          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+        )
+        AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+        AND (
+          rs.grade_level IS NULL
+          OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+        )
     )
   )
 ORDER BY q.updated_at DESC, q.created_at DESC

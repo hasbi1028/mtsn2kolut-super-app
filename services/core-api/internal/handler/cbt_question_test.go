@@ -258,6 +258,24 @@ func (f *fakeCbtQuestionService) SubmitReview(_ context.Context, id pgtype.UUID,
 	return f.submitReviewRow, nil
 }
 
+func (f *fakeCbtQuestionService) SubmitForReview(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
+	return f.SubmitReview(ctx, id, actor, reviewNotes)
+}
+
+func (f *fakeCbtQuestionService) RequestRevision(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
+	return f.ReturnToRevision(ctx, id, actor, reviewNotes)
+}
+
+func (f *fakeCbtQuestionService) MarkReviewed(_ context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
+	f.approveID = id
+	f.approveUser = actor.Username
+	f.approveNotes = reviewNotes
+	if f.approveErr != nil {
+		return db.CbtQuestion{}, f.approveErr
+	}
+	return f.approveRow, nil
+}
+
 func (f *fakeCbtQuestionService) Approve(_ context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
 	f.approveID = id
 	f.approveUser = actor.Username

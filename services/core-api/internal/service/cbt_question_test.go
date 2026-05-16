@@ -47,9 +47,12 @@ type fakeQuestionStore struct {
 	membersByUser     []db.CbtEventMember
 	membersByUsername []db.CbtEventMember
 	auditLogs         []db.CbtQuestionAuditLog
+	workflowEvents    []db.BankSoalQuestionWorkflowEvent
 	versionRows       []db.ListCbtQuestionVersionsRow
 	auditErr          error
 	auditCalls        int
+	canReview         bool
+	canApprove        bool
 	summaryCounts     db.GetCbtQuestionSummaryCountsRow
 	summarySubjects   []db.ListCbtQuestionSummaryBySubjectRow
 	summaryCognitive  []db.ListCbtQuestionSummaryByCognitiveLevelRow
@@ -177,6 +180,29 @@ func (f *fakeQuestionStore) CreateCbtQuestionAuditLog(ctx context.Context, arg d
 	row := db.CbtQuestionAuditLog{QuestionID: arg.QuestionID, ActorUsername: arg.ActorUsername, Action: arg.Action, Note: arg.Note, Metadata: arg.Metadata}
 	f.auditLogs = append(f.auditLogs, row)
 	return row, nil
+}
+
+func (f *fakeQuestionStore) CreateBankSoalQuestionWorkflowEvent(ctx context.Context, arg db.CreateBankSoalQuestionWorkflowEventParams) (db.BankSoalQuestionWorkflowEvent, error) {
+	row := db.BankSoalQuestionWorkflowEvent{
+		QuestionID:    arg.QuestionID,
+		ActorUserID:   arg.ActorUserID,
+		ActorUsername: arg.ActorUsername,
+		FromStatus:    arg.FromStatus,
+		ToStatus:      arg.ToStatus,
+		Action:        arg.Action,
+		Note:          arg.Note,
+		Metadata:      arg.Metadata,
+	}
+	f.workflowEvents = append(f.workflowEvents, row)
+	return row, nil
+}
+
+func (f *fakeQuestionStore) CanBankSoalUserReview(ctx context.Context, arg db.CanBankSoalUserReviewParams) (bool, error) {
+	return f.canReview, nil
+}
+
+func (f *fakeQuestionStore) CanBankSoalUserApprove(ctx context.Context, arg db.CanBankSoalUserApproveParams) (bool, error) {
+	return f.canApprove, nil
 }
 
 func (f *fakeQuestionStore) ListCbtQuestionTimeline(ctx context.Context, questionID pgtype.UUID) ([]db.ListCbtQuestionTimelineRow, error) {
@@ -841,10 +867,11 @@ func TestCbtQuestionReviewerCanApproveAssignedEventQuestion(t *testing.T) {
 			Options:   []byte(`[{"label":"A","text":"A"},{"label":"B","text":"B"},{"label":"C","text":"C"},{"label":"D","text":"D"}]`),
 			AnswerKey: "A", Difficulty: db.CbtQuestionDifficultyEnumMedium, Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "review",
 		},
-		membersByUsername: []db.CbtEventMember{{EventID: eventID, SubjectID: subjectID, Role: db.CbtEventMemberRoleReviewer}},
+		canApprove: true,
 	}
 	svc := &CbtQuestion{q: store}
-	_, err := svc.Approve(context.Background(), questionID, CbtQuestionActor{Username: "reviewer", Roles: []string{"guru"}}, "siap")
+	actorID := pgtype.UUID{Bytes: [16]byte{7}, Valid: true}
+	_, err := svc.Approve(context.Background(), questionID, CbtQuestionActor{UserID: actorID, Username: "reviewer", Roles: []string{"guru"}, Permissions: []string{"bank_soal.approve"}}, "siap")
 	if err != nil {
 		t.Fatalf("Approve(reviewer) error = %v", err)
 	}
@@ -853,8 +880,8 @@ func TestCbtQuestionReviewerCanApproveAssignedEventQuestion(t *testing.T) {
 	}
 
 	store.updateParams = db.UpdateCbtQuestionParams{}
-	store.membersByUsername = nil
-	_, err = svc.Reject(context.Background(), questionID, CbtQuestionActor{Username: "bukan-reviewer", Roles: []string{"guru"}}, "tolak")
+	store.canReview = false
+	_, err = svc.Reject(context.Background(), questionID, CbtQuestionActor{UserID: actorID, Username: "bukan-reviewer", Roles: []string{"guru"}, Permissions: []string{"bank_soal.review"}}, "tolak")
 	if !errors.Is(err, domain.ErrForbidden) {
 		t.Fatalf("Reject(unauthorized) error = %v, want ErrForbidden", err)
 	}
@@ -1185,11 +1212,11 @@ func TestSubmitReviewUpdatesWorkflowAndReviewer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SubmitReview() error = %v", err)
 	}
-	if store.updateParams.WorkflowStatus != "review" {
-		t.Fatalf("WorkflowStatus = %q, want review", store.updateParams.WorkflowStatus)
+	if store.updateParams.WorkflowStatus != "submitted" {
+		t.Fatalf("WorkflowStatus = %q, want submitted", store.updateParams.WorkflowStatus)
 	}
-	if store.updateParams.ReviewerUsername != "reviewer1" {
-		t.Fatalf("ReviewerUsername = %q, want reviewer1", store.updateParams.ReviewerUsername)
+	if store.updateParams.ReviewerUsername != "" {
+		t.Fatalf("ReviewerUsername = %q, want empty until reviewer action", store.updateParams.ReviewerUsername)
 	}
 }
 
@@ -1263,8 +1290,8 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Publish() error = %v", err)
 		}
-		if store.updateParams.Status != db.CbtQuestionStatusEnumPublished || store.updateParams.WorkflowStatus != "approved" {
-			t.Fatalf("Publish() params = %+v, want published approved", store.updateParams)
+		if store.updateParams.Status != db.CbtQuestionStatusEnumPublished || store.updateParams.WorkflowStatus != "published" {
+			t.Fatalf("Publish() params = %+v, want published workflow", store.updateParams)
 		}
 		if store.updateParams.ApproverUsername != "kepala" || !store.updateParams.ApprovedAt.Valid {
 			t.Fatalf("Publish() approver = %q/%v, want kepala with timestamp", store.updateParams.ApproverUsername, store.updateParams.ApprovedAt)
@@ -1274,10 +1301,11 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 	t.Run("publish allows granular permission without admin role", func(t *testing.T) {
 		approved := current
 		approved.WorkflowStatus = "approved"
-		store := &fakeQuestionStore{current: approved}
+		store := &fakeQuestionStore{current: approved, canApprove: true}
 		svc := &CbtQuestion{q: store}
+		publisherID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
 
-		_, err := svc.Publish(context.Background(), questionID, CbtQuestionActor{Username: "publisher", Permissions: []string{"bank_soal.publish"}})
+		_, err := svc.Publish(context.Background(), questionID, CbtQuestionActor{UserID: publisherID, Username: "publisher", Permissions: []string{"bank_soal.publish"}})
 		if err != nil {
 			t.Fatalf("Publish(permission) error = %v", err)
 		}
@@ -1299,7 +1327,9 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 	})
 
 	t.Run("archive sets archived status", func(t *testing.T) {
-		store := &fakeQuestionStore{current: current}
+		approved := current
+		approved.WorkflowStatus = "approved"
+		store := &fakeQuestionStore{current: approved}
 		svc := &CbtQuestion{q: store}
 
 		_, err := svc.Archive(context.Background(), questionID, CbtQuestionActor{Username: "admin", Roles: []string{"admin"}})
@@ -1812,8 +1842,8 @@ func TestCbtQuestionNormalizeAndEncodingHelpers(t *testing.T) {
 	if got := normalizeWorkflowStatus("approved"); got != "approved" {
 		t.Fatalf("normalizeWorkflowStatus(approved) = %q, want approved", got)
 	}
-	if got := normalizeWorkflowStatus("published"); got != "draft" {
-		t.Fatalf("normalizeWorkflowStatus(invalid) = %q, want draft", got)
+	if got := normalizeWorkflowStatus("published"); got != "published" {
+		t.Fatalf("normalizeWorkflowStatus(published) = %q, want published", got)
 	}
 
 	sixOptions, err := normalizeQuestionInput(SaveCbtQuestionInput{

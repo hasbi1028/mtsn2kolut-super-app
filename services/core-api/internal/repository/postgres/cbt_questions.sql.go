@@ -27,7 +27,12 @@ WHERE (
   )
   AND ($3::uuid IS NULL OR q.subject_id = $3::uuid)
   AND ($4::text = '' OR q.author_username = $4::text)
-  AND ($5::text = '' OR q.workflow_status = $5::text)
+  AND (
+    $5::text = ''
+    OR q.workflow_status = $5::text
+    OR ($5::text = 'submitted' AND q.workflow_status = 'review')
+    OR ($5::text = 'review' AND q.workflow_status = 'submitted')
+  )
   AND ($6::text = '' OR q.status = $6::cbt_question_status_enum)
   AND ($7::text = '' OR q.question_type = $7::text)
   AND ($8::text = '' OR q.target_level = $8::text)
@@ -57,44 +62,58 @@ WHERE (
   AND (
     $14::bool
     OR q.status = 'published'
-    OR q.author_username = $15::text
+    OR ($15::bool AND q.workflow_status IN ('approved', 'published'))
+    OR q.author_username = $16::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
       WHERE m.event_id = q.event_id
-        AND m.user_id = $16::uuid
+        AND m.user_id = $17::uuid
         AND m.role IN ('reviewer', 'panitia')
         AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
     )
+    OR EXISTS (
+      SELECT 1 FROM bank_soal_reviewer_scopes rs
+      WHERE rs.user_id = $17::uuid
+        AND (
+          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+        )
+        AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+        AND (
+          rs.grade_level IS NULL
+          OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+        )
+    )
   )
   AND (
-    $17::text = ''
+    $18::text = ''
     OR (
-      $17::text = 'item_analysis'
+      $18::text = 'item_analysis'
       AND q.workflow_status = 'rejected'
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
-      $17::text = 'reviewer'
+      $18::text = 'reviewer'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
-      $17::text = 'workflow'
+      $18::text = 'workflow'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
   )
   AND (
-    $18::text = ''
-    OR q.code ILIKE '%' || $18::text || '%'
-    OR q.question_text ILIKE '%' || $18::text || '%'
-    OR q.material_topic ILIKE '%' || $18::text || '%'
-    OR q.cp_ref ILIKE '%' || $18::text || '%'
-    OR q.tp_ref ILIKE '%' || $18::text || '%'
-    OR q.kd_ref ILIKE '%' || $18::text || '%'
-    OR q.indicator_ref ILIKE '%' || $18::text || '%'
+    $19::text = ''
+    OR q.code ILIKE '%' || $19::text || '%'
+    OR q.question_text ILIKE '%' || $19::text || '%'
+    OR q.material_topic ILIKE '%' || $19::text || '%'
+    OR q.cp_ref ILIKE '%' || $19::text || '%'
+    OR q.tp_ref ILIKE '%' || $19::text || '%'
+    OR q.kd_ref ILIKE '%' || $19::text || '%'
+    OR q.indicator_ref ILIKE '%' || $19::text || '%'
   )
 `
 
@@ -113,6 +132,7 @@ type CountCbtQuestionsFilteredParams struct {
 	MetadataFilter   string      `json:"metadata_filter"`
 	HotsFilter       string      `json:"hots_filter"`
 	IsAdmin          bool        `json:"is_admin"`
+	CanUseInPackage  bool        `json:"can_use_in_package"`
 	ActorUsername    string      `json:"actor_username"`
 	ActorUserID      pgtype.UUID `json:"actor_user_id"`
 	RevisionSource   string      `json:"revision_source"`
@@ -135,6 +155,7 @@ func (q *Queries) CountCbtQuestionsFiltered(ctx context.Context, arg CountCbtQue
 		arg.MetadataFilter,
 		arg.HotsFilter,
 		arg.IsAdmin,
+		arg.CanUseInPackage,
 		arg.ActorUsername,
 		arg.ActorUserID,
 		arg.RevisionSource,
@@ -143,6 +164,68 @@ func (q *Queries) CountCbtQuestionsFiltered(ctx context.Context, arg CountCbtQue
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const createBankSoalQuestionWorkflowEvent = `-- name: CreateBankSoalQuestionWorkflowEvent :one
+INSERT INTO bank_soal_question_workflow_events (
+  question_id,
+  actor_user_id,
+  actor_username,
+  from_status,
+  to_status,
+  action,
+  note,
+  metadata
+)
+VALUES (
+  $1,
+  $2,
+  $3,
+  $4,
+  $5,
+  $6,
+  $7,
+  $8
+)
+RETURNING id, question_id, actor_user_id, actor_username, from_status, to_status, action, note, metadata, created_at
+`
+
+type CreateBankSoalQuestionWorkflowEventParams struct {
+	QuestionID    pgtype.UUID `json:"question_id"`
+	ActorUserID   pgtype.UUID `json:"actor_user_id"`
+	ActorUsername string      `json:"actor_username"`
+	FromStatus    string      `json:"from_status"`
+	ToStatus      string      `json:"to_status"`
+	Action        string      `json:"action"`
+	Note          string      `json:"note"`
+	Metadata      []byte      `json:"metadata"`
+}
+
+func (q *Queries) CreateBankSoalQuestionWorkflowEvent(ctx context.Context, arg CreateBankSoalQuestionWorkflowEventParams) (BankSoalQuestionWorkflowEvent, error) {
+	row := q.db.QueryRow(ctx, createBankSoalQuestionWorkflowEvent,
+		arg.QuestionID,
+		arg.ActorUserID,
+		arg.ActorUsername,
+		arg.FromStatus,
+		arg.ToStatus,
+		arg.Action,
+		arg.Note,
+		arg.Metadata,
+	)
+	var i BankSoalQuestionWorkflowEvent
+	err := row.Scan(
+		&i.ID,
+		&i.QuestionID,
+		&i.ActorUserID,
+		&i.ActorUsername,
+		&i.FromStatus,
+		&i.ToStatus,
+		&i.Action,
+		&i.Note,
+		&i.Metadata,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const createCbtQuestion = `-- name: CreateCbtQuestion :one
@@ -690,7 +773,7 @@ const getCbtQuestionSummaryCounts = `-- name: GetCbtQuestionSummaryCounts :one
 SELECT
   COUNT(*)::bigint AS total,
   COUNT(*) FILTER (WHERE q.status = 'draft')::bigint AS draft,
-  COUNT(*) FILTER (WHERE q.workflow_status = 'review')::bigint AS review,
+  COUNT(*) FILTER (WHERE q.workflow_status IN ('review', 'submitted'))::bigint AS review,
   COUNT(*) FILTER (WHERE q.workflow_status = 'rejected')::bigint AS rejected,
   COUNT(*) FILTER (WHERE q.workflow_status = 'approved')::bigint AS approved,
   COUNT(*) FILTER (WHERE q.status = 'published')::bigint AS published,
@@ -705,21 +788,36 @@ WHERE TRUE
   AND (
     $1::bool
     OR q.status = 'published'
-    OR q.author_username = $2::text
+    OR ($2::bool AND q.workflow_status IN ('approved', 'published'))
+    OR q.author_username = $3::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
       WHERE m.event_id = q.event_id
-        AND m.user_id = $3::uuid
+        AND m.user_id = $4::uuid
         AND m.role IN ('reviewer', 'panitia')
         AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+    OR EXISTS (
+      SELECT 1 FROM bank_soal_reviewer_scopes rs
+      WHERE rs.user_id = $4::uuid
+        AND (
+          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+        )
+        AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+        AND (
+          rs.grade_level IS NULL
+          OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+        )
     )
   )
 `
 
 type GetCbtQuestionSummaryCountsParams struct {
-	IsAdmin       bool        `json:"is_admin"`
-	ActorUsername string      `json:"actor_username"`
-	ActorUserID   pgtype.UUID `json:"actor_user_id"`
+	IsAdmin         bool        `json:"is_admin"`
+	CanUseInPackage bool        `json:"can_use_in_package"`
+	ActorUsername   string      `json:"actor_username"`
+	ActorUserID     pgtype.UUID `json:"actor_user_id"`
 }
 
 type GetCbtQuestionSummaryCountsRow struct {
@@ -733,7 +831,12 @@ type GetCbtQuestionSummaryCountsRow struct {
 }
 
 func (q *Queries) GetCbtQuestionSummaryCounts(ctx context.Context, arg GetCbtQuestionSummaryCountsParams) (GetCbtQuestionSummaryCountsRow, error) {
-	row := q.db.QueryRow(ctx, getCbtQuestionSummaryCounts, arg.IsAdmin, arg.ActorUsername, arg.ActorUserID)
+	row := q.db.QueryRow(ctx, getCbtQuestionSummaryCounts,
+		arg.IsAdmin,
+		arg.CanUseInPackage,
+		arg.ActorUsername,
+		arg.ActorUserID,
+	)
 	var i GetCbtQuestionSummaryCountsRow
 	err := row.Scan(
 		&i.Total,
@@ -798,13 +901,27 @@ WHERE TRUE
   AND (
     $1::bool
     OR q.status = 'published'
-    OR q.author_username = $2::text
+    OR ($2::bool AND q.workflow_status IN ('approved', 'published'))
+    OR q.author_username = $3::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
       WHERE m.event_id = q.event_id
-        AND m.user_id = $3::uuid
+        AND m.user_id = $4::uuid
         AND m.role IN ('reviewer', 'panitia')
         AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+    OR EXISTS (
+      SELECT 1 FROM bank_soal_reviewer_scopes rs
+      WHERE rs.user_id = $4::uuid
+        AND (
+          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+        )
+        AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+        AND (
+          rs.grade_level IS NULL
+          OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+        )
     )
   )
 GROUP BY COALESCE(NULLIF(btrim(q.cognitive_level), ''), 'Belum diisi')
@@ -812,9 +929,10 @@ ORDER BY total DESC, cognitive_level ASC
 `
 
 type ListCbtQuestionSummaryByCognitiveLevelParams struct {
-	IsAdmin       bool        `json:"is_admin"`
-	ActorUsername string      `json:"actor_username"`
-	ActorUserID   pgtype.UUID `json:"actor_user_id"`
+	IsAdmin         bool        `json:"is_admin"`
+	CanUseInPackage bool        `json:"can_use_in_package"`
+	ActorUsername   string      `json:"actor_username"`
+	ActorUserID     pgtype.UUID `json:"actor_user_id"`
 }
 
 type ListCbtQuestionSummaryByCognitiveLevelRow struct {
@@ -823,7 +941,12 @@ type ListCbtQuestionSummaryByCognitiveLevelRow struct {
 }
 
 func (q *Queries) ListCbtQuestionSummaryByCognitiveLevel(ctx context.Context, arg ListCbtQuestionSummaryByCognitiveLevelParams) ([]ListCbtQuestionSummaryByCognitiveLevelRow, error) {
-	rows, err := q.db.Query(ctx, listCbtQuestionSummaryByCognitiveLevel, arg.IsAdmin, arg.ActorUsername, arg.ActorUserID)
+	rows, err := q.db.Query(ctx, listCbtQuestionSummaryByCognitiveLevel,
+		arg.IsAdmin,
+		arg.CanUseInPackage,
+		arg.ActorUsername,
+		arg.ActorUserID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -850,13 +973,27 @@ WHERE TRUE
   AND (
     $1::bool
     OR q.status = 'published'
-    OR q.author_username = $2::text
+    OR ($2::bool AND q.workflow_status IN ('approved', 'published'))
+    OR q.author_username = $3::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
       WHERE m.event_id = q.event_id
-        AND m.user_id = $3::uuid
+        AND m.user_id = $4::uuid
         AND m.role IN ('reviewer', 'panitia')
         AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+    OR EXISTS (
+      SELECT 1 FROM bank_soal_reviewer_scopes rs
+      WHERE rs.user_id = $4::uuid
+        AND (
+          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+        )
+        AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+        AND (
+          rs.grade_level IS NULL
+          OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+        )
     )
   )
 GROUP BY q.subject_id, s.name, s.code
@@ -865,9 +1002,10 @@ LIMIT 8
 `
 
 type ListCbtQuestionSummaryBySubjectParams struct {
-	IsAdmin       bool        `json:"is_admin"`
-	ActorUsername string      `json:"actor_username"`
-	ActorUserID   pgtype.UUID `json:"actor_user_id"`
+	IsAdmin         bool        `json:"is_admin"`
+	CanUseInPackage bool        `json:"can_use_in_package"`
+	ActorUsername   string      `json:"actor_username"`
+	ActorUserID     pgtype.UUID `json:"actor_user_id"`
 }
 
 type ListCbtQuestionSummaryBySubjectRow struct {
@@ -878,7 +1016,12 @@ type ListCbtQuestionSummaryBySubjectRow struct {
 }
 
 func (q *Queries) ListCbtQuestionSummaryBySubject(ctx context.Context, arg ListCbtQuestionSummaryBySubjectParams) ([]ListCbtQuestionSummaryBySubjectRow, error) {
-	rows, err := q.db.Query(ctx, listCbtQuestionSummaryBySubject, arg.IsAdmin, arg.ActorUsername, arg.ActorUserID)
+	rows, err := q.db.Query(ctx, listCbtQuestionSummaryBySubject,
+		arg.IsAdmin,
+		arg.CanUseInPackage,
+		arg.ActorUsername,
+		arg.ActorUserID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -912,13 +1055,27 @@ WHERE TRUE
   AND (
     $1::bool
     OR q.status = 'published'
-    OR q.author_username = $2::text
+    OR ($2::bool AND q.workflow_status IN ('approved', 'published'))
+    OR q.author_username = $3::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
       WHERE m.event_id = q.event_id
-        AND m.user_id = $3::uuid
+        AND m.user_id = $4::uuid
         AND m.role IN ('reviewer', 'panitia')
         AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+    OR EXISTS (
+      SELECT 1 FROM bank_soal_reviewer_scopes rs
+      WHERE rs.user_id = $4::uuid
+        AND (
+          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+        )
+        AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+        AND (
+          rs.grade_level IS NULL
+          OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+        )
     )
   )
 ORDER BY q.updated_at DESC, q.created_at DESC
@@ -926,9 +1083,10 @@ LIMIT 5
 `
 
 type ListCbtQuestionSummaryRecentParams struct {
-	IsAdmin       bool        `json:"is_admin"`
-	ActorUsername string      `json:"actor_username"`
-	ActorUserID   pgtype.UUID `json:"actor_user_id"`
+	IsAdmin         bool        `json:"is_admin"`
+	CanUseInPackage bool        `json:"can_use_in_package"`
+	ActorUsername   string      `json:"actor_username"`
+	ActorUserID     pgtype.UUID `json:"actor_user_id"`
 }
 
 type ListCbtQuestionSummaryRecentRow struct {
@@ -947,7 +1105,12 @@ type ListCbtQuestionSummaryRecentRow struct {
 }
 
 func (q *Queries) ListCbtQuestionSummaryRecent(ctx context.Context, arg ListCbtQuestionSummaryRecentParams) ([]ListCbtQuestionSummaryRecentRow, error) {
-	rows, err := q.db.Query(ctx, listCbtQuestionSummaryRecent, arg.IsAdmin, arg.ActorUsername, arg.ActorUserID)
+	rows, err := q.db.Query(ctx, listCbtQuestionSummaryRecent,
+		arg.IsAdmin,
+		arg.CanUseInPackage,
+		arg.ActorUsername,
+		arg.ActorUserID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1129,6 +1292,19 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
                AND m.user_id = $3::uuid
                AND m.role IN ('reviewer', 'panitia')
                AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+           )
+           OR EXISTS (
+             SELECT 1 FROM bank_soal_reviewer_scopes rs
+             WHERE rs.user_id = $3::uuid
+               AND (
+                 (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+                 OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+               )
+               AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+               AND (
+                 rs.grade_level IS NULL
+                 OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+               )
            )
          THEN q.answer_key ELSE '' END AS answer_key,
        q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
@@ -1378,7 +1554,12 @@ WHERE (
   )
   AND ($6::uuid IS NULL OR q.subject_id = $6::uuid)
   AND ($7::text = '' OR q.author_username = $7::text)
-  AND ($8::text = '' OR q.workflow_status = $8::text)
+  AND (
+    $8::text = ''
+    OR q.workflow_status = $8::text
+    OR ($8::text = 'submitted' AND q.workflow_status = 'review')
+    OR ($8::text = 'review' AND q.workflow_status = 'submitted')
+  )
   AND ($9::text = '' OR q.status = $9::cbt_question_status_enum)
   AND ($10::text = '' OR q.question_type = $10::text)
   AND ($11::text = '' OR q.target_level = $11::text)
@@ -1408,6 +1589,7 @@ WHERE (
   AND (
     $1::bool
     OR q.status = 'published'
+    OR ($17::bool AND q.workflow_status IN ('approved', 'published'))
     OR q.author_username = $2::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -1416,45 +1598,58 @@ WHERE (
         AND m.role IN ('reviewer', 'panitia')
         AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
     )
+    OR EXISTS (
+      SELECT 1 FROM bank_soal_reviewer_scopes rs
+      WHERE rs.user_id = $3::uuid
+        AND (
+          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+        )
+        AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+        AND (
+          rs.grade_level IS NULL
+          OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+        )
+    )
   )
   AND (
-    $17::text = ''
+    $18::text = ''
     OR (
-      $17::text = 'item_analysis'
+      $18::text = 'item_analysis'
       AND q.workflow_status = 'rejected'
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
-      $17::text = 'reviewer'
+      $18::text = 'reviewer'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
-      $17::text = 'workflow'
+      $18::text = 'workflow'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
   )
   AND (
-    $18::text = ''
-    OR q.code ILIKE '%' || $18::text || '%'
-    OR q.question_text ILIKE '%' || $18::text || '%'
-    OR q.material_topic ILIKE '%' || $18::text || '%'
-    OR q.cp_ref ILIKE '%' || $18::text || '%'
-    OR q.tp_ref ILIKE '%' || $18::text || '%'
-    OR q.kd_ref ILIKE '%' || $18::text || '%'
-    OR q.indicator_ref ILIKE '%' || $18::text || '%'
+    $19::text = ''
+    OR q.code ILIKE '%' || $19::text || '%'
+    OR q.question_text ILIKE '%' || $19::text || '%'
+    OR q.material_topic ILIKE '%' || $19::text || '%'
+    OR q.cp_ref ILIKE '%' || $19::text || '%'
+    OR q.tp_ref ILIKE '%' || $19::text || '%'
+    OR q.kd_ref ILIKE '%' || $19::text || '%'
+    OR q.indicator_ref ILIKE '%' || $19::text || '%'
   )
 ORDER BY
-  CASE WHEN $19::text = 'code_asc' THEN q.code END ASC,
-  CASE WHEN $19::text = 'updated_desc' THEN q.updated_at END DESC,
-  CASE WHEN $19::text = 'created_asc' THEN q.created_at END ASC,
-  CASE WHEN $19::text = 'difficulty_asc' THEN q.difficulty::text END ASC,
-  CASE WHEN $19::text = 'type_asc' THEN q.question_type END ASC,
+  CASE WHEN $20::text = 'code_asc' THEN q.code END ASC,
+  CASE WHEN $20::text = 'updated_desc' THEN q.updated_at END DESC,
+  CASE WHEN $20::text = 'created_asc' THEN q.created_at END ASC,
+  CASE WHEN $20::text = 'difficulty_asc' THEN q.difficulty::text END ASC,
+  CASE WHEN $20::text = 'type_asc' THEN q.question_type END ASC,
   q.created_at DESC
-LIMIT $21 OFFSET $20
+LIMIT $22 OFFSET $21
 `
 
 type ListCbtQuestionsFilteredParams struct {
@@ -1474,6 +1669,7 @@ type ListCbtQuestionsFilteredParams struct {
 	MaterialTopic    string      `json:"material_topic"`
 	MetadataFilter   string      `json:"metadata_filter"`
 	HotsFilter       string      `json:"hots_filter"`
+	CanUseInPackage  bool        `json:"can_use_in_package"`
 	RevisionSource   string      `json:"revision_source"`
 	SearchQuery      string      `json:"search_query"`
 	SortOrder        string      `json:"sort_order"`
@@ -1558,6 +1754,7 @@ func (q *Queries) ListCbtQuestionsFiltered(ctx context.Context, arg ListCbtQuest
 		arg.MaterialTopic,
 		arg.MetadataFilter,
 		arg.HotsFilter,
+		arg.CanUseInPackage,
 		arg.RevisionSource,
 		arg.SearchQuery,
 		arg.SortOrder,
@@ -1704,7 +1901,12 @@ WHERE (
   )
   AND ($6::uuid IS NULL OR q.subject_id = $6::uuid)
   AND ($7::text = '' OR q.author_username = $7::text)
-  AND ($8::text = '' OR q.workflow_status = $8::text)
+  AND (
+    $8::text = ''
+    OR q.workflow_status = $8::text
+    OR ($8::text = 'submitted' AND q.workflow_status = 'review')
+    OR ($8::text = 'review' AND q.workflow_status = 'submitted')
+  )
   AND ($9::text = '' OR q.status = $9::cbt_question_status_enum)
   AND ($10::text = '' OR q.question_type = $10::text)
   AND ($11::text = '' OR q.target_level = $11::text)
@@ -1734,6 +1936,7 @@ WHERE (
   AND (
     $1::bool
     OR q.status = 'published'
+    OR ($17::bool AND q.workflow_status IN ('approved', 'published'))
     OR q.author_username = $2::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -1742,45 +1945,58 @@ WHERE (
         AND m.role IN ('reviewer', 'panitia')
         AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
     )
+    OR EXISTS (
+      SELECT 1 FROM bank_soal_reviewer_scopes rs
+      WHERE rs.user_id = $3::uuid
+        AND (
+          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+        )
+        AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
+        AND (
+          rs.grade_level IS NULL
+          OR rs.grade_level = CASE q.target_level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END
+        )
+    )
   )
   AND (
-    $17::text = ''
+    $18::text = ''
     OR (
-      $17::text = 'item_analysis'
+      $18::text = 'item_analysis'
       AND q.workflow_status = 'rejected'
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
-      $17::text = 'reviewer'
+      $18::text = 'reviewer'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
-      $17::text = 'workflow'
+      $18::text = 'workflow'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
   )
   AND (
-    $18::text = ''
-    OR q.code ILIKE '%' || $18::text || '%'
-    OR q.question_text ILIKE '%' || $18::text || '%'
-    OR q.material_topic ILIKE '%' || $18::text || '%'
-    OR q.cp_ref ILIKE '%' || $18::text || '%'
-    OR q.tp_ref ILIKE '%' || $18::text || '%'
-    OR q.kd_ref ILIKE '%' || $18::text || '%'
-    OR q.indicator_ref ILIKE '%' || $18::text || '%'
+    $19::text = ''
+    OR q.code ILIKE '%' || $19::text || '%'
+    OR q.question_text ILIKE '%' || $19::text || '%'
+    OR q.material_topic ILIKE '%' || $19::text || '%'
+    OR q.cp_ref ILIKE '%' || $19::text || '%'
+    OR q.tp_ref ILIKE '%' || $19::text || '%'
+    OR q.kd_ref ILIKE '%' || $19::text || '%'
+    OR q.indicator_ref ILIKE '%' || $19::text || '%'
   )
 ORDER BY
-  CASE WHEN $19::text = 'code_asc' THEN q.code END ASC,
-  CASE WHEN $19::text = 'updated_desc' THEN q.updated_at END DESC,
-  CASE WHEN $19::text = 'created_asc' THEN q.created_at END ASC,
-  CASE WHEN $19::text = 'difficulty_asc' THEN q.difficulty::text END ASC,
-  CASE WHEN $19::text = 'type_asc' THEN q.question_type END ASC,
+  CASE WHEN $20::text = 'code_asc' THEN q.code END ASC,
+  CASE WHEN $20::text = 'updated_desc' THEN q.updated_at END DESC,
+  CASE WHEN $20::text = 'created_asc' THEN q.created_at END ASC,
+  CASE WHEN $20::text = 'difficulty_asc' THEN q.difficulty::text END ASC,
+  CASE WHEN $20::text = 'type_asc' THEN q.question_type END ASC,
   q.created_at DESC
-LIMIT $21 OFFSET $20
+LIMIT $22 OFFSET $21
 `
 
 type ListCbtQuestionsScopedParams struct {
@@ -1800,6 +2016,7 @@ type ListCbtQuestionsScopedParams struct {
 	MaterialTopic    string      `json:"material_topic"`
 	MetadataFilter   string      `json:"metadata_filter"`
 	HotsFilter       string      `json:"hots_filter"`
+	CanUseInPackage  bool        `json:"can_use_in_package"`
 	RevisionSource   string      `json:"revision_source"`
 	SearchQuery      string      `json:"search_query"`
 	SortOrder        string      `json:"sort_order"`
@@ -1884,6 +2101,7 @@ func (q *Queries) ListCbtQuestionsScoped(ctx context.Context, arg ListCbtQuestio
 		arg.MaterialTopic,
 		arg.MetadataFilter,
 		arg.HotsFilter,
+		arg.CanUseInPackage,
 		arg.RevisionSource,
 		arg.SearchQuery,
 		arg.SortOrder,

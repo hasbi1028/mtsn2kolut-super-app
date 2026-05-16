@@ -782,6 +782,29 @@ Notes:
 - Reviewer scope is a foundation for Sprint 2+; visibility/action hard enforcement is intentionally not enabled yet.
 - Production deploy requires explicit approval plus DB backup before running migration.
 
+### Sprint 2 — Backend workflow actions & visibility filter
+
+Status: completed locally, not deployed/restarted.
+
+Implemented:
+- Additive/backward-compatible migration `services/core-api/db/migrations/110_bank_soal_workflow_actions.sql` expands `cbt_questions.workflow_status` to accept `submitted`, `revision_needed`, `reviewed`, `published`, and `archived` while preserving legacy `review`.
+- New `bank_soal_question_workflow_events` audit table plus indexes for question/actor/action timelines.
+- Backend workflow actions now support `submit_for_review`, `request_revision`, `mark_reviewed`, `reject`, `approve`, `publish`, and `archive`; legacy action aliases `submit_review` and `return_revision` remain supported.
+- Service guardrails added: author/admin submit only; reviewer/approver scope checks; reviewer cannot review own question unless admin; author cannot approve/publish own question unless admin; used/published in-place edit guards remain intact.
+- List/summary visibility and answer-key redaction are compatibility-aware for legacy `review` vs new `submitted`, reviewer/approver scopes, and package operators seeing approved/published items.
+- Existing handler/service tests updated for new workflow transition semantics and audit event writes.
+
+Verified:
+- Migration dry-run in transaction: PASS.
+- `npm --prefix apps/web-admin run check`: PASS.
+- `cd services/core-api && /home/servermtsn2kolut/go/bin/sqlc generate -f db/sqlc.yaml`: PASS.
+- `go test ./internal/handler ./internal/service ./internal/repository/postgres`: PASS.
+- `go build -o /tmp/core-api-bank-soal-workflow-sprint2 ./cmd/api`: PASS.
+
+Notes:
+- No deploy/restart PM2 was performed.
+- Production deployment must run migration `110_bank_soal_workflow_actions.sql` before starting a binary that references `bank_soal_question_workflow_events`.
+
 ---
 
 ## Deployment runbook setelah implementasi selesai

@@ -66,6 +66,9 @@ type cbtQuestionStore interface {
 	MarkCbtQuestionVersionGroupNotLatest(ctx context.Context, versionGroupID pgtype.UUID) error
 	DeleteCbtQuestion(ctx context.Context, id pgtype.UUID) error
 	CreateCbtQuestionAuditLog(ctx context.Context, arg db.CreateCbtQuestionAuditLogParams) (db.CbtQuestionAuditLog, error)
+	CreateBankSoalQuestionWorkflowEvent(ctx context.Context, arg db.CreateBankSoalQuestionWorkflowEventParams) (db.BankSoalQuestionWorkflowEvent, error)
+	CanBankSoalUserReview(ctx context.Context, arg db.CanBankSoalUserReviewParams) (bool, error)
+	CanBankSoalUserApprove(ctx context.Context, arg db.CanBankSoalUserApproveParams) (bool, error)
 	ListCbtQuestionTimeline(ctx context.Context, questionID pgtype.UUID) ([]db.ListCbtQuestionTimelineRow, error)
 	ListCbtQuestionVersions(ctx context.Context, id pgtype.UUID) ([]db.ListCbtQuestionVersionsRow, error)
 }
@@ -232,6 +235,14 @@ func (a CbtQuestionActor) CanPublishBankSoal() bool {
 	return a.IsAdmin() || a.HasPermission("bank_soal.publish")
 }
 
+func (a CbtQuestionActor) CanReadAllBankSoal() bool {
+	return a.IsAdmin() || a.HasPermission("bank_soal.read_all")
+}
+
+func (a CbtQuestionActor) CanUseBankSoalInPackage() bool {
+	return a.HasPermission("bank_soal.use_in_package") || a.HasPermission("asesmen.package_manage")
+}
+
 func (a CbtQuestionActor) IsAdmin() bool {
 	return a.HasRole("admin")
 }
@@ -313,7 +324,7 @@ type CbtQuestionSummary struct {
 
 func (s *CbtQuestion) Summary(ctx context.Context, actor CbtQuestionActor) (CbtQuestionSummary, error) {
 	actor = normalizeCbtQuestionActor(actor)
-	base := db.GetCbtQuestionSummaryCountsParams{IsAdmin: actor.IsAdmin(), ActorUsername: actor.Username, ActorUserID: actor.UserID}
+	base := db.GetCbtQuestionSummaryCountsParams{IsAdmin: actor.CanReadAllBankSoal(), CanUseInPackage: actor.CanUseBankSoalInPackage(), ActorUsername: actor.Username, ActorUserID: actor.UserID}
 	counts, err := s.q.GetCbtQuestionSummaryCounts(ctx, base)
 	if err != nil {
 		return CbtQuestionSummary{}, err
@@ -349,7 +360,8 @@ func (s *CbtQuestion) ListFiltered(ctx context.Context, in ListCbtQuestionsInput
 		MaterialTopic:    strings.TrimSpace(in.MaterialTopic),
 		MetadataFilter:   normalizeQuestionMetadataFilter(in.MetadataFilter),
 		HotsFilter:       strings.TrimSpace(in.HotsFilter),
-		IsAdmin:          actor.IsAdmin(),
+		IsAdmin:          actor.CanReadAllBankSoal(),
+		CanUseInPackage:  actor.CanUseBankSoalInPackage(),
 		ActorUsername:    actor.Username,
 		ActorUserID:      actor.UserID,
 		RevisionSource:   normalizeRevisionSource(in.RevisionSource),
@@ -375,7 +387,8 @@ func (s *CbtQuestion) ListFiltered(ctx context.Context, in ListCbtQuestionsInput
 		MaterialTopic:    strings.TrimSpace(in.MaterialTopic),
 		MetadataFilter:   normalizeQuestionMetadataFilter(in.MetadataFilter),
 		HotsFilter:       strings.TrimSpace(in.HotsFilter),
-		IsAdmin:          actor.IsAdmin(),
+		IsAdmin:          actor.CanReadAllBankSoal(),
+		CanUseInPackage:  actor.CanUseBankSoalInPackage(),
 		ActorUsername:    actor.Username,
 		ActorUserID:      actor.UserID,
 		RevisionSource:   normalizeRevisionSource(in.RevisionSource),

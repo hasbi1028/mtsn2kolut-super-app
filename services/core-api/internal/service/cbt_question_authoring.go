@@ -78,7 +78,10 @@ func createInputBypassesWorkflow(input SaveCbtQuestionInput) bool {
 	workflowStatus := normalizeWorkflowStatus(input.WorkflowStatus)
 	return status == string(db.CbtQuestionStatusEnumPublished) ||
 		status == string(db.CbtQuestionStatusEnumArchived) ||
-		workflowStatus == "approved"
+		workflowStatus == "reviewed" ||
+		workflowStatus == "approved" ||
+		workflowStatus == "published" ||
+		workflowStatus == "archived"
 }
 
 func (s *CbtQuestion) Update(ctx context.Context, input SaveCbtQuestionInput) (db.CbtQuestion, error) {
@@ -224,6 +227,32 @@ func logQuestionAudit(ctx context.Context, store cbtQuestionStore, questionID pg
 	_, err = store.CreateCbtQuestionAuditLog(ctx, db.CreateCbtQuestionAuditLogParams{
 		QuestionID:    questionID,
 		ActorUsername: strings.TrimSpace(actorUsername),
+		Action:        action,
+		Note:          strings.TrimSpace(note),
+		Metadata:      raw,
+	})
+	return err
+}
+
+func logQuestionWorkflowEvent(ctx context.Context, store cbtQuestionStore, questionID pgtype.UUID, actor CbtQuestionActor, fromStatus, toStatus string, action string, note string, metadata map[string]any) error {
+	action = strings.TrimSpace(action)
+	toStatus = strings.TrimSpace(toStatus)
+	if !questionID.Valid || action == "" || toStatus == "" {
+		return nil
+	}
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	raw, err := json.Marshal(metadata)
+	if err != nil {
+		return err
+	}
+	_, err = store.CreateBankSoalQuestionWorkflowEvent(ctx, db.CreateBankSoalQuestionWorkflowEventParams{
+		QuestionID:    questionID,
+		ActorUserID:   actor.UserID,
+		ActorUsername: strings.TrimSpace(actor.Username),
+		FromStatus:    strings.TrimSpace(fromStatus),
+		ToStatus:      toStatus,
 		Action:        action,
 		Note:          strings.TrimSpace(note),
 		Metadata:      raw,
@@ -446,14 +475,14 @@ func buildUpdateQuestionParams(current db.GetCbtQuestionRow, input SaveCbtQuesti
 
 	reviewer := current.ReviewerUsername
 	reviewedAt := current.ReviewedAt
-	if normalized.WorkflowStatus == "approved" || normalized.WorkflowStatus == "review" || normalized.WorkflowStatus == "rejected" {
+	if workflowStatusSetsReviewer(normalized.WorkflowStatus) {
 		reviewer = normalized.ReviewerUsername
 		reviewedAt = normalized.reviewedAt()
 	}
 
 	approver := current.ApproverUsername
 	approvedAt := current.ApprovedAt
-	if normalized.Status == db.CbtQuestionStatusEnumPublished {
+	if workflowStatusSetsApprover(normalized.WorkflowStatus) || normalized.Status == db.CbtQuestionStatusEnumPublished {
 		approver = normalized.ApproverUsername
 		approvedAt = normalized.approvedAt()
 	}
@@ -548,7 +577,7 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 	if out.AuthoringMode == "beginner" {
 		out.Difficulty = db.CbtQuestionDifficultyEnumMedium
 		out.Status = db.CbtQuestionStatusEnumDraft
-		if out.WorkflowStatus != "review" {
+		if out.WorkflowStatus != "review" && out.WorkflowStatus != "submitted" {
 			out.WorkflowStatus = "draft"
 			out.ReviewerUsername = ""
 		}
@@ -559,7 +588,7 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 	if out.WorkflowStatus == "draft" {
 		out.ReviewerUsername = ""
 	}
-	if out.Status != db.CbtQuestionStatusEnumPublished {
+	if out.WorkflowStatus != "approved" && out.WorkflowStatus != "published" {
 		out.ApproverUsername = ""
 	}
 	if out.QuestionText == "" && out.StemHTML != "" {
@@ -669,7 +698,7 @@ func validateQuestion(input SaveCbtQuestionInput) error {
 		return fmt.Errorf("question_type tidak didukung")
 	}
 
-	if input.Status == db.CbtQuestionStatusEnumPublished && input.WorkflowStatus != "approved" {
+	if input.Status == db.CbtQuestionStatusEnumPublished && input.WorkflowStatus != "approved" && input.WorkflowStatus != "published" {
 		return fmt.Errorf("soal hanya boleh dipublish jika workflow_status sudah approved")
 	}
 
@@ -973,10 +1002,28 @@ func normalizeWorkflowStatus(value string) string {
 	switch strings.TrimSpace(strings.ToLower(value)) {
 	case "", "draft":
 		return "draft"
-	case "review", "approved", "rejected":
+	case "review", "submitted", "revision_needed", "reviewed", "approved", "published", "rejected", "archived":
 		return strings.TrimSpace(strings.ToLower(value))
 	default:
 		return "draft"
+	}
+}
+
+func workflowStatusSetsReviewer(value string) bool {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "revision_needed", "reviewed", "approved", "rejected":
+		return true
+	default:
+		return false
+	}
+}
+
+func workflowStatusSetsApprover(value string) bool {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "approved", "published":
+		return true
+	default:
+		return false
 	}
 }
 

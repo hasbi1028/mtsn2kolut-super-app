@@ -41,17 +41,40 @@ func (h *CbtQuestion) BulkWorkflowAction(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	action := strings.TrimSpace(body.Action)
-	if action == "publish" && !hasAnyPermission(r, "bank_soal.publish") && !hasAnyRole(r, "admin") {
+	normalizedAction := strings.TrimSpace(strings.ToLower(action))
+	if normalizedAction == "submit_review" {
+		normalizedAction = "submit_for_review"
+	}
+	if normalizedAction == "return_revision" {
+		normalizedAction = "request_revision"
+	}
+	if normalizedAction == "submit_for_review" && !hasAnyPermission(r, "bank_soal.submit", "bank_soal.update", "bank_soal.update_own") && !hasAnyRole(r, "admin", "guru") {
 		api.Forbidden(w)
 		return
 	}
-	if (action == "approve" || action == "reject") && !hasAnyPermission(r, "bank_soal.review") && !hasAnyRole(r, "admin", "guru") {
+	if normalizedAction == "publish" && !hasAnyPermission(r, "bank_soal.publish") && !hasAnyRole(r, "admin") {
+		api.Forbidden(w)
+		return
+	}
+	if normalizedAction == "archive" && !hasAnyPermission(r, "bank_soal.approve", "bank_soal.publish") && !hasAnyRole(r, "admin") {
+		api.Forbidden(w)
+		return
+	}
+	if normalizedAction == "approve" && !hasAnyPermission(r, "bank_soal.approve", "bank_soal.publish") && !hasAnyRole(r, "admin") {
+		api.Forbidden(w)
+		return
+	}
+	if normalizedAction == "request_revision" && !hasAnyPermission(r, "bank_soal.review", "bank_soal.approve", "bank_soal.publish") && !hasAnyRole(r, "admin") {
+		api.Forbidden(w)
+		return
+	}
+	if (normalizedAction == "mark_reviewed" || normalizedAction == "reject") && !hasAnyPermission(r, "bank_soal.review") && !hasAnyRole(r, "admin", "guru") {
 		api.Forbidden(w)
 		return
 	}
 	result, err := h.svc.BulkWorkflow(r.Context(), service.BulkCbtQuestionWorkflowInput{
 		QuestionIDs: ids,
-		Action:      action,
+		Action:      normalizedAction,
 		Notes:       body.Notes,
 		Actor:       cbtQuestionActorFromRequest(r),
 	})
@@ -82,15 +105,15 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 	}
 	actor := cbtQuestionActorFromRequest(r)
 	switch strings.TrimSpace(body.Action) {
-	case "submit_review":
-		if !hasAnyPermission(r, "bank_soal.update", "bank_soal.review") && !hasAnyRole(r, "admin", "guru") {
+	case "submit_review", "submit_for_review":
+		if !hasAnyPermission(r, "bank_soal.submit", "bank_soal.update", "bank_soal.update_own") && !hasAnyRole(r, "admin", "guru") {
 			api.Forbidden(w)
 			return
 		}
 		if !h.requireQuestionAuthorOrAdmin(w, r, id) {
 			return
 		}
-		row, err := h.svc.SubmitReview(r.Context(), id, actor, body.Notes)
+		row, err := h.svc.SubmitForReview(r.Context(), id, actor, body.Notes)
 		if err != nil {
 			writeClientError(w, err, "Aksi workflow soal CBT tidak valid")
 			return
@@ -100,8 +123,42 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 			"review_notes":    body.Notes,
 		})
 		api.OK(w, serializeQuestionModel(row))
-	case "approve":
+	case "request_revision", "return_revision":
+		if !hasAnyPermission(r, "bank_soal.review", "bank_soal.approve", "bank_soal.publish") && !hasAnyRole(r, "admin") {
+			api.Forbidden(w)
+			return
+		}
+		row, err := h.svc.RequestRevision(r.Context(), id, actor, body.Notes)
+		if err != nil {
+			writeClientError(w, err, "Aksi workflow soal CBT tidak valid")
+			return
+		}
+		cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_REQUEST_REVISION", "cbt_question", pgUUIDString(row.ID), map[string]any{
+			"workflow_status": row.WorkflowStatus,
+			"review_notes":    body.Notes,
+		})
+		api.OK(w, serializeQuestionModel(row))
+	case "mark_reviewed":
 		if !hasAnyPermission(r, "bank_soal.review") && !hasAnyRole(r, "admin", "guru") {
+			api.Forbidden(w)
+			return
+		}
+		if !actor.IsAdmin() && !actor.UserID.Valid {
+			api.Forbidden(w)
+			return
+		}
+		row, err := h.svc.MarkReviewed(r.Context(), id, actor, body.Notes)
+		if err != nil {
+			writeClientError(w, err, "Aksi workflow soal CBT tidak valid")
+			return
+		}
+		cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_MARK_REVIEWED", "cbt_question", pgUUIDString(row.ID), map[string]any{
+			"workflow_status": row.WorkflowStatus,
+			"review_notes":    body.Notes,
+		})
+		api.OK(w, serializeQuestionModel(row))
+	case "approve":
+		if !hasAnyPermission(r, "bank_soal.approve", "bank_soal.publish") && !hasAnyRole(r, "admin") {
 			api.Forbidden(w)
 			return
 		}
@@ -138,21 +195,6 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 			"review_notes":    body.Notes,
 		})
 		api.OK(w, serializeQuestionModel(row))
-	case "return_revision":
-		if !hasAnyPermission(r, "bank_soal.review", "bank_soal.publish") && !hasAnyRole(r, "admin") {
-			api.Forbidden(w)
-			return
-		}
-		row, err := h.svc.ReturnToRevision(r.Context(), id, actor, body.Notes)
-		if err != nil {
-			writeClientError(w, err, "Aksi workflow soal CBT tidak valid")
-			return
-		}
-		cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_RETURN_REVISION", "cbt_question", pgUUIDString(row.ID), map[string]any{
-			"workflow_status": row.WorkflowStatus,
-			"review_notes":    body.Notes,
-		})
-		api.OK(w, serializeQuestionModel(row))
 	case "publish":
 		if !hasAnyPermission(r, "bank_soal.publish") && !hasAnyRole(r, "admin") {
 			api.Forbidden(w)
@@ -168,7 +210,7 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		})
 		api.OK(w, serializeQuestionModel(row))
 	case "archive":
-		if !hasAnyPermission(r, "bank_soal.publish") && !hasAnyRole(r, "admin") {
+		if !hasAnyPermission(r, "bank_soal.approve", "bank_soal.publish") && !hasAnyRole(r, "admin") {
 			api.Forbidden(w)
 			return
 		}
