@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -517,6 +519,9 @@ func buildCreateQuestionParams(input SaveCbtQuestionInput) (db.CreateCbtQuestion
 	if err != nil {
 		return db.CreateCbtQuestionParams{}, err
 	}
+	if normalized.Code == "" {
+		normalized.Code = generateCbtQuestionCode()
+	}
 	optionsJSON, err := EncodeQuestionOptions(normalized.Options)
 	if err != nil {
 		return db.CreateCbtQuestionParams{}, err
@@ -579,6 +584,9 @@ func buildUpdateQuestionParams(current db.GetCbtQuestionRow, input SaveCbtQuesti
 	normalized, err := normalizeQuestionInput(input)
 	if err != nil {
 		return db.UpdateCbtQuestionParams{}, err
+	}
+	if normalized.Code == "" {
+		normalized.Code = strings.TrimSpace(current.Code)
 	}
 	optionsJSON, err := EncodeQuestionOptions(normalized.Options)
 	if err != nil {
@@ -644,6 +652,14 @@ func buildUpdateQuestionParams(current db.GetCbtQuestionRow, input SaveCbtQuesti
 		WriterNotes:      normalized.WriterNotes,
 		ReviewNotes:      normalized.ReviewNotes,
 	}, nil
+}
+
+func generateCbtQuestionCode() string {
+	var raw [4]byte
+	if _, err := rand.Read(raw[:]); err == nil {
+		return "SOAL-" + time.Now().Format("20060102-150405") + "-" + strings.ToUpper(hex.EncodeToString(raw[:]))
+	}
+	return fmt.Sprintf("SOAL-%s-%d", time.Now().Format("20060102-150405"), time.Now().UnixNano())
 }
 
 func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, error) {
