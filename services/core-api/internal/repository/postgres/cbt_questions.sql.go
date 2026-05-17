@@ -20,6 +20,28 @@ func (q *Queries) AcquireCbtQuestionDraftDuplicateLock(ctx context.Context, fing
 	return err
 }
 
+const cbtQuestionEventExists = `-- name: CbtQuestionEventExists :one
+SELECT EXISTS(SELECT 1 FROM cbt_exam_events WHERE id = $1)::bool
+`
+
+func (q *Queries) CbtQuestionEventExists(ctx context.Context, id pgtype.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, cbtQuestionEventExists, id)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const cbtQuestionSubjectExists = `-- name: CbtQuestionSubjectExists :one
+SELECT EXISTS(SELECT 1 FROM subjects WHERE id = $1)::bool
+`
+
+func (q *Queries) CbtQuestionSubjectExists(ctx context.Context, id pgtype.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, cbtQuestionSubjectExists, id)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countCbtQuestionsFiltered = `-- name: CountCbtQuestionsFiltered :one
 SELECT COUNT(*)::bigint
 FROM cbt_questions q

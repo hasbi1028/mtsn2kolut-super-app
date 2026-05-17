@@ -27,6 +27,9 @@ type fakeQuestionStore struct {
 	countArg      db.CountCbtQuestionsFilteredParams
 	count         int64
 
+	subjectMissing bool
+	eventMissing   bool
+
 	createParams  db.CreateCbtQuestionParams
 	createCalls   int
 	createRow     db.CbtQuestion
@@ -64,6 +67,14 @@ type fakeQuestionStore struct {
 	summarySubjectArg db.ListCbtQuestionSummaryBySubjectParams
 	summaryCogArg     db.ListCbtQuestionSummaryByCognitiveLevelParams
 	summaryRecentArg  db.ListCbtQuestionSummaryRecentParams
+}
+
+func (f *fakeQuestionStore) CbtQuestionSubjectExists(ctx context.Context, id pgtype.UUID) (bool, error) {
+	return !f.subjectMissing, nil
+}
+
+func (f *fakeQuestionStore) CbtQuestionEventExists(ctx context.Context, id pgtype.UUID) (bool, error) {
+	return !f.eventMissing, nil
 }
 
 func (f *fakeQuestionStore) ListCbtQuestions(ctx context.Context, arg db.ListCbtQuestionsParams) ([]db.ListCbtQuestionsRow, error) {

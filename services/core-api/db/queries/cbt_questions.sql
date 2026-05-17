@@ -1,3 +1,9 @@
+-- name: CbtQuestionSubjectExists :one
+SELECT EXISTS(SELECT 1 FROM subjects WHERE id = $1)::bool;
+
+-- name: CbtQuestionEventExists :one
+SELECT EXISTS(SELECT 1 FROM cbt_exam_events WHERE id = $1)::bool;
+
 -- name: ListCbtQuestions :many
 SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject_code,
        q.code, q.question_text, q.question_type, q.options,

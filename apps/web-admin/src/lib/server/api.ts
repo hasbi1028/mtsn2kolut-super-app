@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import type { RequestEvent } from '@sveltejs/kit';
 import type { AuthUser } from '$lib/server/auth';
+import { getOrCreateRequestId, REQUEST_ID_HEADER } from '$lib/server/request-id';
 
 const BASE = (env.API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 const GENERIC_UPSTREAM_ERROR = 'Layanan backend sedang bermasalah. Silakan coba beberapa saat lagi.';
@@ -298,27 +299,29 @@ export async function apiPublicPostWithFetch<T>(fetcher: Fetcher, path: string, 
 export function createApiClient(event: RequestEvent) {
 	const currentAccessToken = () => event.locals.accessToken ?? event.cookies.get('access_token');
 	requireAuthorizationHeader(currentAccessToken());
+	const requestId = getOrCreateRequestId(event.request);
+	const requestIdHeader = { [REQUEST_ID_HEADER]: requestId };
 
 	return {
-		get: <T>(path: string) => apiRequest<T>(event.fetch, path, {}, requireAuthHeaders(currentAccessToken())),
+		get: <T>(path: string) => apiRequest<T>(event.fetch, path, {}, { ...requireAuthHeaders(currentAccessToken()), ...requestIdHeader }),
 		post: <T>(path: string, body?: unknown) => apiRequest<T>(event.fetch, path, {
 			method: 'POST',
 			body: jsonBody(body),
-		}, requireAuthHeaders(currentAccessToken())),
+		}, { ...requireAuthHeaders(currentAccessToken()), ...requestIdHeader }),
 		put: <T>(path: string, body?: unknown) => apiRequest<T>(event.fetch, path, {
 			method: 'PUT',
 			body: jsonBody(body),
-		}, requireAuthHeaders(currentAccessToken())),
+		}, { ...requireAuthHeaders(currentAccessToken()), ...requestIdHeader }),
 		patch: <T>(path: string, body?: unknown) => apiRequest<T>(event.fetch, path, {
 			method: 'PATCH',
 			body: jsonBody(body),
-		}, requireAuthHeaders(currentAccessToken())),
+		}, { ...requireAuthHeaders(currentAccessToken()), ...requestIdHeader }),
 		del: <T>(path: string, body?: unknown) => apiRequest<T>(event.fetch, path, {
 			method: 'DELETE',
 			body: jsonBody(body),
-		}, requireAuthHeaders(currentAccessToken())),
+		}, { ...requireAuthHeaders(currentAccessToken()), ...requestIdHeader }),
 		fetch: (path: string, init?: RequestInit) => {
-			const headers = requireAuthorizationHeader(currentAccessToken());
+			const headers = { ...requireAuthorizationHeader(currentAccessToken()), ...requestIdHeader };
 			const initHeaders = withoutProxyControlledHeaders(headersToRecord(init?.headers));
 			return event.fetch(`${BASE}${path}`, { ...init, headers: { ...initHeaders, ...headers } });
 		},

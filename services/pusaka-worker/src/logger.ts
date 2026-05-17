@@ -6,16 +6,8 @@ import { LOG_PATH } from './config.js';
 
 export type LogLevel = 'INFO' | 'WARN' | 'ERROR';
 
-const SENSITIVE_KEYS = new Set([
-  'password',
-  'pusaka_password',
-  'token',
-  'cookie',
-  'cookies',
-  'session',
-  'session_state',
-  'storage_state',
-]);
+const SENSITIVE_KEY_PATTERN = /(authorization|cookie|set-cookie|password|passwd|token|secret|api[_-]?key|database[_-]?url|connection[_-]?string|jwt)/i;
+const SENSITIVE_VALUE_PATTERN = /\b(Bearer\s+[A-Za-z0-9._~+\/-]+=*|(?:access_token|refresh_token|token|password|secret|cookie|authorization)\s*[:=]\s*[^\s,;}&]+)/i;
 
 function hashValue(value: unknown): string {
   return crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 12);
@@ -26,6 +18,10 @@ function sanitizeContext(value: unknown): unknown {
     return value.map((item) => sanitizeContext(item));
   }
   if (!value || typeof value !== 'object') {
+    if (typeof value === 'string') {
+      if (SENSITIVE_VALUE_PATTERN.test(value)) return '[REDACTED]';
+      if (value.length > 1000) return `${value.slice(0, 1000)}…[truncated]`;
+    }
     return value;
   }
 
@@ -36,7 +32,7 @@ function sanitizeContext(value: unknown): unknown {
       safe.username_hash = hashValue(entry);
       continue;
     }
-    if (SENSITIVE_KEYS.has(normalizedKey)) {
+    if (SENSITIVE_KEY_PATTERN.test(normalizedKey)) {
       safe[key] = '[REDACTED]';
       continue;
     }
@@ -54,7 +50,14 @@ export function log(
   message: string,
   context: Record<string, unknown> = {},
 ): void {
-  const line = `${new Date().toISOString()} [${level}] ${message} ${JSON.stringify(sanitizeContext(context))}`;
+  const record = {
+    time: new Date().toISOString(),
+    service: 'pusaka-worker',
+    level: level.toLowerCase(),
+    event: message,
+    ...sanitizeContext(context) as Record<string, unknown>,
+  };
+  const line = JSON.stringify(record);
   try {
     fs.appendFileSync(LOG_PATH, `${line}\n`);
   } catch {
@@ -71,3 +74,5 @@ export function log(
   }
   console.log(line);
 }
+
+export const __loggerInternalsForTest = { sanitizeContext };

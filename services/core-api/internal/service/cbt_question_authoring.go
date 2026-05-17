@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	nethtml "golang.org/x/net/html"
 
 	"mtsn2kolut-super-app/backend/internal/domain"
+	"mtsn2kolut-super-app/backend/internal/platform/logging"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
@@ -51,37 +53,96 @@ func (s *CbtQuestion) Create(ctx context.Context, input SaveCbtQuestionInput) (d
 
 func (s *CbtQuestion) createWithAudit(ctx context.Context, input SaveCbtQuestionInput, action string, note string, metadata map[string]any) (db.CbtQuestion, error) {
 	actor := normalizeCbtQuestionActor(inputActor(input))
+	logging.Info(ctx, "cbt_question_create_request_received", questionInputLogAttrs(input, actor)...)
 	if err := s.requireCreateQuestion(ctx, actor, input.EventID, input.SubjectID); err != nil {
+		logging.Warn(ctx, "cbt_question_create_authorization_failed", append(questionInputLogAttrs(input, actor), slog.String("error", err.Error()))...)
 		return db.CbtQuestion{}, err
 	}
 	if createInputBypassesWorkflow(input) {
-		return db.CbtQuestion{}, fmt.Errorf("%w: soal baru hanya boleh dibuat sebagai draft atau diajukan review", domain.ErrBadRequest)
+		err := fmt.Errorf("%w: soal baru hanya boleh dibuat sebagai draft atau diajukan review", domain.ErrBadRequest)
+		logging.Warn(ctx, "cbt_question_create_validation_failed", append(questionInputLogAttrs(input, actor), slog.String("validation_field", "workflow_status"), slog.String("error", err.Error()))...)
+		return db.CbtQuestion{}, err
 	}
 	params, err := buildCreateQuestionParams(input)
 	if err != nil {
+		logging.Warn(ctx, "cbt_question_create_validation_failed", append(questionInputLogAttrs(input, actor), slog.String("error", err.Error()))...)
 		return db.CbtQuestion{}, err
 	}
 	return s.withMutationStore(ctx, func(store cbtQuestionStore) (db.CbtQuestion, error) {
+		if err := s.validateQuestionReferences(ctx, store, input); err != nil {
+			logging.Warn(ctx, "cbt_question_create_reference_invalid", append(questionInputLogAttrs(input, actor), slog.String("error", err.Error()))...)
+			return db.CbtQuestion{}, err
+		}
 		if err := s.validateMediaAssetIDs(ctx, store, input.MediaAssetIDs, pgtype.UUID{}, actor); err != nil {
+			logging.Warn(ctx, "cbt_question_create_validation_failed", append(questionInputLogAttrs(input, actor), slog.String("validation_field", "media_asset_ids"), slog.String("error", err.Error()))...)
 			return db.CbtQuestion{}, err
 		}
 		if err := store.AcquireCbtQuestionDraftDuplicateLock(ctx, draftDuplicateFingerprint(params)); err != nil {
+			logging.Error(ctx, "cbt_question_create_duplicate_lock_failed", err, questionInputLogAttrs(input, actor)...)
 			return db.CbtQuestion{}, err
 		}
 		if duplicate, ok, err := s.findRecentDraftDuplicate(ctx, store, params); err != nil {
+			logging.Error(ctx, "cbt_question_create_duplicate_lookup_failed", err, questionInputLogAttrs(input, actor)...)
 			return db.CbtQuestion{}, err
 		} else if ok {
+			logging.Info(ctx, "cbt_question_create_duplicate_reused", append(questionInputLogAttrs(input, actor), slog.String("question_id", cbtQuestionUUIDString(duplicate.ID)))...)
 			return duplicate, nil
 		}
 		row, err := store.CreateCbtQuestion(ctx, params)
 		if err != nil {
+			logging.Error(ctx, "cbt_question_create_db_failed", err, questionInputLogAttrs(input, actor)...)
 			return db.CbtQuestion{}, err
 		}
 		if err := logQuestionAudit(ctx, store, row.ID, actor.Username, action, note, metadata); err != nil {
+			logging.Error(ctx, "cbt_question_create_audit_failed", err, append(questionInputLogAttrs(input, actor), slog.String("question_id", cbtQuestionUUIDString(row.ID)))...)
 			return db.CbtQuestion{}, err
 		}
+		logging.Info(ctx, "cbt_question_create_success", append(questionInputLogAttrs(input, actor), slog.String("question_id", cbtQuestionUUIDString(row.ID)))...)
 		return row, nil
 	})
+}
+
+func questionInputLogAttrs(input SaveCbtQuestionInput, actor CbtQuestionActor) []slog.Attr {
+	stemLength := len(strings.TrimSpace(input.StemHTML))
+	questionTextLength := len(strings.TrimSpace(input.QuestionText))
+	return []slog.Attr{
+		slog.String("module", "bank-soal"),
+		slog.String("username", actor.Username),
+		slog.String("subject_id", cbtQuestionUUIDString(input.SubjectID)),
+		slog.Bool("event_id_present", input.EventID.Valid),
+		slog.String("event_id", cbtQuestionUUIDString(input.EventID)),
+		slog.String("question_type", strings.TrimSpace(input.QuestionType)),
+		slog.String("target_level", strings.TrimSpace(input.TargetLevel)),
+		slog.String("difficulty", string(input.Difficulty)),
+		slog.String("workflow_status", normalizeWorkflowStatus(input.WorkflowStatus)),
+		slog.String("authoring_mode", strings.TrimSpace(input.AuthoringMode)),
+		slog.Int("options_count", len(input.Options)),
+		slog.Int("stem_length", stemLength),
+		slog.Int("question_text_length", questionTextLength),
+	}
+}
+
+func (s *CbtQuestion) validateQuestionReferences(ctx context.Context, store cbtQuestionStore, input SaveCbtQuestionInput) error {
+	if !input.SubjectID.Valid {
+		return fmt.Errorf("%w: subject_id wajib diisi", domain.ErrBadRequest)
+	}
+	exists, err := store.CbtQuestionSubjectExists(ctx, input.SubjectID)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("%w: subject_id tidak ditemukan. Pilih ulang mapel dari daftar terbaru", domain.ErrBadRequest)
+	}
+	if input.EventID.Valid {
+		exists, err := store.CbtQuestionEventExists(ctx, input.EventID)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return fmt.Errorf("%w: event_id tidak ditemukan. Matikan mode khusus kegiatan atau pilih ulang kegiatan", domain.ErrBadRequest)
+		}
+	}
+	return nil
 }
 
 func createInputBypassesWorkflow(input SaveCbtQuestionInput) bool {
@@ -116,6 +177,10 @@ func (s *CbtQuestion) updateWithAudit(ctx context.Context, input SaveCbtQuestion
 		return db.CbtQuestion{}, err
 	}
 	return s.withMutationStore(ctx, func(store cbtQuestionStore) (db.CbtQuestion, error) {
+		if err := s.validateQuestionReferences(ctx, store, input); err != nil {
+			logging.Warn(ctx, "cbt_question_update_reference_invalid", append(questionInputLogAttrs(input, actor), slog.String("question_id", cbtQuestionUUIDString(input.ID)), slog.String("error", err.Error()))...)
+			return db.CbtQuestion{}, err
+		}
 		if err := s.validateMediaAssetIDs(ctx, store, input.MediaAssetIDs, current.ID, actor); err != nil {
 			return db.CbtQuestion{}, err
 		}

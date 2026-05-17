@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -244,6 +245,50 @@ func TestCbtQuestionCreateAccessAndWorkflowGuards(t *testing.T) {
 	if store.createCalls != 0 {
 		t.Fatalf("Create(published workflow bypass) createCalls = %d, want 0", store.createCalls)
 	}
+}
+
+func TestCbtQuestionCreateRejectsMissingSubjectOrEventBeforeInsert(t *testing.T) {
+	ctx := context.Background()
+	subjectID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000004101")
+	eventID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000004102")
+	baseInput := SaveCbtQuestionInput{
+		SubjectID:      subjectID,
+		EventID:        eventID,
+		QuestionText:   "Apa ibu kota Indonesia?",
+		QuestionType:   "multiple_choice",
+		OptionA:        "Jakarta",
+		OptionB:        "Bandung",
+		AnswerKey:      "A",
+		WorkflowStatus: "draft",
+		AuthorUsername: "guru",
+		Actor:          CbtQuestionActor{Username: "admin", Roles: []string{"admin"}},
+	}
+
+	t.Run("missing subject", func(t *testing.T) {
+		store := &fakeQuestionStore{subjectMissing: true, createRow: db.CbtQuestion{ID: mustQuestionUUID(t, "00000000-0000-0000-0000-000000004103"), SubjectID: subjectID}}
+		svc := NewCbtQuestion(nil)
+		svc.q = store
+		_, err := svc.Create(ctx, baseInput)
+		if !errors.Is(err, domain.ErrBadRequest) || !strings.Contains(err.Error(), "subject_id tidak ditemukan") {
+			t.Fatalf("Create(missing subject) error = %v, want subject bad request", err)
+		}
+		if store.createCalls != 0 {
+			t.Fatalf("Create(missing subject) createCalls = %d, want 0", store.createCalls)
+		}
+	})
+
+	t.Run("missing event", func(t *testing.T) {
+		store := &fakeQuestionStore{eventMissing: true, createRow: db.CbtQuestion{ID: mustQuestionUUID(t, "00000000-0000-0000-0000-000000004104"), SubjectID: subjectID}}
+		svc := NewCbtQuestion(nil)
+		svc.q = store
+		_, err := svc.Create(ctx, baseInput)
+		if !errors.Is(err, domain.ErrBadRequest) || !strings.Contains(err.Error(), "event_id tidak ditemukan") {
+			t.Fatalf("Create(missing event) error = %v, want event bad request", err)
+		}
+		if store.createCalls != 0 {
+			t.Fatalf("Create(missing event) createCalls = %d, want 0", store.createCalls)
+		}
+	})
 }
 
 func TestCbtQuestionDuplicateForRevisionSetsVersionSourceAndAccess(t *testing.T) {
