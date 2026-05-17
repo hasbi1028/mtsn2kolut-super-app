@@ -695,6 +695,7 @@ type fakeCbtSessionStore struct {
 
 	flagArg                db.SetParticipantSuspiciousFlagParams
 	gradeArg               db.GradeStudentEssayParams
+	gradeErr               error
 	ungradedRows           []db.ListUngradedEssaysRow
 	ungradedTeacherRows    []db.ListUngradedEssaysByTeacherRow
 	ungradedTeacherArg     db.ListUngradedEssaysByTeacherParams
@@ -1125,7 +1126,7 @@ func (f *fakeCbtSessionStore) SetParticipantSuspiciousFlag(ctx context.Context, 
 
 func (f *fakeCbtSessionStore) GradeStudentEssay(ctx context.Context, arg db.GradeStudentEssayParams) error {
 	f.gradeArg = arg
-	return nil
+	return f.gradeErr
 }
 
 func (f *fakeCbtSessionStore) ListUngradedEssays(ctx context.Context, sessionID pgtype.UUID) ([]db.ListUngradedEssaysRow, error) {
