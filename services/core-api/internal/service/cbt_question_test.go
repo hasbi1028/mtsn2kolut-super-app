@@ -1064,6 +1064,152 @@ func TestCbtQuestionNonAdminCannotReviewGlobalQuestion(t *testing.T) {
 	}
 }
 
+func workflowQuestionRow(id pgtype.UUID, workflowStatus string) db.GetCbtQuestionRow {
+	return db.GetCbtQuestionRow{
+		ID:             id,
+		SubjectID:      pgtype.UUID{Bytes: [16]byte{55}, Valid: true},
+		Code:           "WF-1",
+		QuestionText:   "Soal workflow",
+		QuestionType:   "multiple_choice",
+		Options:        []byte(`[{"label":"A","text":"A"},{"label":"B","text":"B"},{"label":"C","text":"C"},{"label":"D","text":"D"}]`),
+		AnswerKey:      "A",
+		Difficulty:     db.CbtQuestionDifficultyEnumMedium,
+		Status:         db.CbtQuestionStatusEnumDraft,
+		WorkflowStatus: workflowStatus,
+		AuthorUsername: "author.guru",
+		ReviewNotes:    "catatan awal",
+		TargetLevel:    pgtype.Text{String: "VIII", Valid: true},
+	}
+}
+
+func TestCbtQuestionWorkflowTimelineAndNilRows(t *testing.T) {
+	questionID := pgtype.UUID{Bytes: [16]byte{41}, Valid: true}
+	store := &fakeQuestionStore{detail: db.GetCbtQuestionDetailRow{ID: questionID, Status: db.CbtQuestionStatusEnumPublished}}
+	svc := &CbtQuestion{q: store}
+	actor := CbtQuestionActor{Username: "admin", Roles: []string{"admin"}}
+
+	rows, err := svc.Timeline(context.Background(), questionID, actor)
+	if err != nil {
+		t.Fatalf("Timeline(nil rows) error = %v", err)
+	}
+	if rows == nil || len(rows) != 0 {
+		t.Fatalf("Timeline(nil rows) = %#v, want empty non-nil slice", rows)
+	}
+
+	store.auditLogs = []db.CbtQuestionAuditLog{{QuestionID: questionID, ActorUsername: "admin", Action: "mark_reviewed", Note: "ok"}}
+	rows, err = svc.Timeline(context.Background(), questionID, actor)
+	if err != nil {
+		t.Fatalf("Timeline(log rows) error = %v", err)
+	}
+	if len(rows) != 1 || rows[0].Action != "mark_reviewed" || rows[0].QuestionID != questionID {
+		t.Fatalf("Timeline(log rows) = %+v, want mapped audit row", rows)
+	}
+}
+
+func TestCbtQuestionRequestRevisionAndMarkReviewedWorkflow(t *testing.T) {
+	questionID := pgtype.UUID{Bytes: [16]byte{42}, Valid: true}
+	actor := CbtQuestionActor{Username: "admin", Roles: []string{"admin"}}
+
+	store := &fakeQuestionStore{current: workflowQuestionRow(questionID, "submitted")}
+	svc := &CbtQuestion{q: store}
+	row, err := svc.RequestRevision(context.Background(), questionID, actor, "perbaiki indikator")
+	if err != nil {
+		t.Fatalf("RequestRevision() error = %v", err)
+	}
+	if row.WorkflowStatus != "revision_needed" || row.ReviewerUsername != "admin" || store.updateParams.ApproverUsername != "" {
+		t.Fatalf("RequestRevision() row/update = %+v/%+v, want revision_needed by reviewer and cleared approver", row, store.updateParams)
+	}
+	if len(store.workflowEvents) != 1 || store.workflowEvents[0].FromStatus != "submitted" || store.workflowEvents[0].ToStatus != "revision_needed" || store.workflowEvents[0].Action != "request_revision" {
+		t.Fatalf("RequestRevision() workflow events = %+v, want submitted -> revision_needed", store.workflowEvents)
+	}
+	if store.updateParams.ReviewNotes != "perbaiki indikator" {
+		t.Fatalf("RequestRevision() review notes = %q, want provided revision note", store.updateParams.ReviewNotes)
+	}
+
+	store = &fakeQuestionStore{current: workflowQuestionRow(questionID, "review")}
+	svc = &CbtQuestion{q: store}
+	row, err = svc.MarkReviewed(context.Background(), questionID, actor, "layak")
+	if err != nil {
+		t.Fatalf("MarkReviewed() error = %v", err)
+	}
+	if row.WorkflowStatus != "reviewed" || row.ReviewerUsername != "admin" {
+		t.Fatalf("MarkReviewed() row = %+v, want reviewed by admin", row)
+	}
+	if len(store.workflowEvents) != 1 || store.workflowEvents[0].Action != "mark_reviewed" || store.workflowEvents[0].ToStatus != "reviewed" {
+		t.Fatalf("MarkReviewed() workflow events = %+v, want mark_reviewed event", store.workflowEvents)
+	}
+
+	store = &fakeQuestionStore{current: workflowQuestionRow(questionID, "approved")}
+	svc = &CbtQuestion{q: store}
+	row, err = svc.ReturnToRevision(context.Background(), questionID, actor, "turunkan ke revisi")
+	if err != nil {
+		t.Fatalf("ReturnToRevision() error = %v", err)
+	}
+	if row.WorkflowStatus != "revision_needed" || len(store.workflowEvents) != 1 || store.workflowEvents[0].Action != "request_revision" {
+		t.Fatalf("ReturnToRevision() row/events = %+v/%+v, want RequestRevision alias", row, store.workflowEvents)
+	}
+}
+
+func TestCbtQuestionBulkWorkflowActionNormalizationAndItemResults(t *testing.T) {
+	firstID := pgtype.UUID{Bytes: [16]byte{43}, Valid: true}
+	secondID := pgtype.UUID{Bytes: [16]byte{44}, Valid: true}
+	store := &fakeQuestionStore{current: workflowQuestionRow(firstID, "submitted")}
+	svc := &CbtQuestion{q: store}
+	actor := CbtQuestionActor{Username: "admin", Roles: []string{"admin"}}
+
+	result, err := svc.BulkWorkflow(context.Background(), BulkCbtQuestionWorkflowInput{
+		QuestionIDs: []pgtype.UUID{firstID, secondID},
+		Action:      " RETURN_REVISION ",
+		Notes:       "perlu revisi",
+		Actor:       actor,
+	})
+	if err != nil {
+		t.Fatalf("BulkWorkflow(return revision alias) error = %v", err)
+	}
+	if result.Action != "request_revision" || result.Total != 2 || result.Success != 2 || result.Failed != 0 {
+		t.Fatalf("BulkWorkflow() result = %+v, want normalized action and two successes", result)
+	}
+	if len(result.Items) != 2 || !result.Items[0].OK || result.Items[0].Workflow != "revision_needed" || result.Items[1].QuestionID != secondID {
+		t.Fatalf("BulkWorkflow() items = %+v, want per-question success items", result.Items)
+	}
+	if store.updateCalls != 2 || len(store.workflowEvents) != 2 {
+		t.Fatalf("BulkWorkflow() update/event calls = %d/%d, want 2/2", store.updateCalls, len(store.workflowEvents))
+	}
+
+	_, err = svc.BulkWorkflow(context.Background(), BulkCbtQuestionWorkflowInput{QuestionIDs: []pgtype.UUID{firstID}, Action: "bogus", Actor: actor})
+	if !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("BulkWorkflow(unsupported) error = %v, want ErrBadRequest", err)
+	}
+}
+
+func TestCbtQuestionApplyBulkWorkflowItemDispatchAndUnsupported(t *testing.T) {
+	questionID := pgtype.UUID{Bytes: [16]byte{45}, Valid: true}
+	actor := CbtQuestionActor{Username: "admin", Roles: []string{"admin"}}
+
+	store := &fakeQuestionStore{current: workflowQuestionRow(questionID, "submitted")}
+	svc := &CbtQuestion{q: store}
+	if _, err := svc.applyBulkWorkflowItem(context.Background(), questionID, "mark_reviewed", actor, "ok"); err != nil {
+		t.Fatalf("applyBulkWorkflowItem(mark_reviewed) error = %v", err)
+	}
+	if store.updateParams.WorkflowStatus != "reviewed" || len(store.workflowEvents) != 1 || store.workflowEvents[0].Action != "mark_reviewed" {
+		t.Fatalf("applyBulkWorkflowItem(mark_reviewed) update/events = %+v/%+v", store.updateParams, store.workflowEvents)
+	}
+
+	store = &fakeQuestionStore{current: workflowQuestionRow(questionID, "approved")}
+	svc = &CbtQuestion{q: store}
+	if _, err := svc.applyBulkWorkflowItem(context.Background(), questionID, "publish", actor, "ignored"); err != nil {
+		t.Fatalf("applyBulkWorkflowItem(publish) error = %v", err)
+	}
+	if store.updateParams.WorkflowStatus != "published" || store.updateParams.Status != db.CbtQuestionStatusEnumPublished {
+		t.Fatalf("applyBulkWorkflowItem(publish) update = %+v, want published status", store.updateParams)
+	}
+
+	_, err := svc.applyBulkWorkflowItem(context.Background(), questionID, "unsupported", actor, "")
+	if !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("applyBulkWorkflowItem(unsupported) error = %v, want ErrBadRequest", err)
+	}
+}
+
 func importCSVRow(values ...string) string {
 	return strings.Join(values, ";")
 }

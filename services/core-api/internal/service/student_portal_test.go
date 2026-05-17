@@ -55,6 +55,19 @@ func TestStudentPortalRejectsUsersWithoutLinkedStudent(t *testing.T) {
 	}
 }
 
+func TestStudentPortalPreviewStudentsWrapper(t *testing.T) {
+	store := &fakeStudentPortalStore{}
+	svc := &StudentPortal{q: store}
+
+	rows, err := svc.PreviewStudents(context.Background())
+	if err != nil {
+		t.Fatalf("PreviewStudents() error = %v", err)
+	}
+	if !store.previewStudentsCalled || len(rows) != 0 {
+		t.Fatalf("PreviewStudents() called=%v len=%d, want called empty rows", store.previewStudentsCalled, len(rows))
+	}
+}
+
 func TestStudentPortalCbtScheduleMasksTokensAndComputesStatus(t *testing.T) {
 	userID := testGenerationUUID(36)
 	studentID := testGenerationUUID(37)
@@ -184,11 +197,12 @@ type fakeStudentPortalStore struct {
 	studentIDErr    error
 	studentIDUserID pgtype.UUID
 
-	profileStudentID  pgtype.UUID
-	scheduleStudentID pgtype.UUID
-	resultsStudentID  pgtype.UUID
-	cbtStudentID      pgtype.UUID
-	cbtRows           []db.ListStudentPortalCbtScheduleRow
+	profileStudentID      pgtype.UUID
+	scheduleStudentID     pgtype.UUID
+	resultsStudentID      pgtype.UUID
+	cbtStudentID          pgtype.UUID
+	cbtRows               []db.ListStudentPortalCbtScheduleRow
+	previewStudentsCalled bool
 
 	revealArg       db.GetStudentPortalCbtParticipantParams
 	revealRow       db.GetStudentPortalCbtParticipantRow
@@ -205,6 +219,7 @@ func (f *fakeStudentPortalStore) GetPortalStudentIDByUserID(ctx context.Context,
 }
 
 func (f *fakeStudentPortalStore) ListStudentPortalPreviewStudents(ctx context.Context) ([]db.ListStudentPortalPreviewStudentsRow, error) {
+	f.previewStudentsCalled = true
 	return []db.ListStudentPortalPreviewStudentsRow{}, nil
 }
 

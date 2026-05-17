@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -191,6 +192,19 @@ func TestStudentAccountGenerationGenerateMarksCreateFailuresWithoutLeakingPasswo
 	}
 }
 
+func TestStudentAccountGenerationPasswordHelpers(t *testing.T) {
+	custom := &StudentAccountGenerator{passwordGenerator: fixedAccountPassword("CustomPass123!")}
+	if got, err := custom.generatePassword(); err != nil || got != "CustomPass123!" {
+		t.Fatalf("generatePassword(custom) = %q, %v; want custom password", got, err)
+	}
+
+	generated, err := (&StudentAccountGenerator{}).generatePassword()
+	if err != nil {
+		t.Fatalf("generatePassword(default) error = %v", err)
+	}
+	assertTemporaryPasswordShape(t, generated)
+}
+
 type fakeStudentAccountGenerationStore struct {
 	studentRows []db.ListStudentAccountGenerationCandidatesRow
 	listErr     error
@@ -236,6 +250,19 @@ func (f *fakeStudentAccountGenerationStore) CreateAuditLog(ctx context.Context, 
 
 func fixedAccountPassword(password string) func() (string, error) {
 	return func() (string, error) { return password, nil }
+}
+
+func assertTemporaryPasswordShape(t *testing.T, password string) {
+	t.Helper()
+	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#%?"
+	if len(password) != 12 {
+		t.Fatalf("temporary password length = %d, want 12 (%q)", len(password), password)
+	}
+	for _, char := range password {
+		if !strings.ContainsRune(alphabet, char) {
+			t.Fatalf("temporary password %q contains disallowed rune %q", password, char)
+		}
+	}
 }
 
 func assertStudentCandidate(t *testing.T, got StudentAccountGenerationCandidate, studentID pgtype.UUID, username string, status string, reason string) {

@@ -141,9 +141,11 @@ type fakeCbtQuestionService struct {
 
 	timelineRows []db.ListCbtQuestionTimelineRow
 	timelineErr  error
+	timelineID   pgtype.UUID
 
 	workflowEventRows []db.ListBankSoalQuestionWorkflowEventsRow
 	workflowEventErr  error
+	workflowEventID   pgtype.UUID
 
 	bulkInput  service.BulkCbtQuestionWorkflowInput
 	bulkResult service.BulkCbtQuestionWorkflowResult
@@ -233,14 +235,16 @@ func (f *fakeCbtQuestionService) DeleteWithActor(_ context.Context, id pgtype.UU
 	return f.deleteErr
 }
 
-func (f *fakeCbtQuestionService) Timeline(_ context.Context, _ pgtype.UUID, _ service.CbtQuestionActor) ([]db.ListCbtQuestionTimelineRow, error) {
+func (f *fakeCbtQuestionService) Timeline(_ context.Context, id pgtype.UUID, _ service.CbtQuestionActor) ([]db.ListCbtQuestionTimelineRow, error) {
+	f.timelineID = id
 	if f.timelineErr != nil {
 		return nil, f.timelineErr
 	}
 	return f.timelineRows, nil
 }
 
-func (f *fakeCbtQuestionService) WorkflowEvents(_ context.Context, _ pgtype.UUID, _ service.CbtQuestionActor) ([]db.ListBankSoalQuestionWorkflowEventsRow, error) {
+func (f *fakeCbtQuestionService) WorkflowEvents(_ context.Context, id pgtype.UUID, _ service.CbtQuestionActor) ([]db.ListBankSoalQuestionWorkflowEventsRow, error) {
+	f.workflowEventID = id
 	if f.workflowEventErr != nil {
 		return nil, f.workflowEventErr
 	}
@@ -381,6 +385,115 @@ func cbtQuestionHandlerModel(id, subjectID pgtype.UUID) db.CbtQuestion {
 		WorkflowStatus: "draft",
 		Version:        1,
 		AuthorUsername: "guru.ipa",
+	}
+}
+
+func TestCbtQuestionTimelineAndWorkflowEventsHandlers(t *testing.T) {
+	questionID := handlerTestUUID(81)
+	fake := &fakeCbtQuestionService{
+		timelineRows: []db.ListCbtQuestionTimelineRow{{QuestionID: questionID, Action: "mark_reviewed", Note: "ok"}},
+		workflowEventRows: []db.ListBankSoalQuestionWorkflowEventsRow{{
+			QuestionID: questionID,
+			Action:     "request_revision",
+			FromStatus: "reviewed",
+			ToStatus:   "revision_needed",
+			Note:       "perbaiki",
+		}},
+	}
+	h := &CbtQuestion{svc: fake}
+
+	rec := httptest.NewRecorder()
+	h.Timeline(rec, withRouteParam(adminRequest(http.MethodGet, "/api/cbt/questions/"+questionID.String()+"/timeline", ""), "id", questionID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Timeline status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.timelineID != questionID || !strings.Contains(rec.Body.String(), "mark_reviewed") {
+		t.Fatalf("Timeline id/body = %v/%s, want routed id and action", fake.timelineID, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.WorkflowEvents(rec, withRouteParam(adminRequest(http.MethodGet, "/api/cbt/questions/"+questionID.String()+"/workflow-events", ""), "id", questionID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("WorkflowEvents status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.workflowEventID != questionID || !strings.Contains(rec.Body.String(), "request_revision") || !strings.Contains(rec.Body.String(), "revision_needed") {
+		t.Fatalf("WorkflowEvents id/body = %v/%s, want routed id and serialized workflow event", fake.workflowEventID, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.Timeline(rec, withRouteParam(adminRequest(http.MethodGet, "/api/cbt/questions/bad/timeline", ""), "id", "bad"))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("Timeline(bad id) status = %d, want 400", rec.Code)
+	}
+}
+
+func TestCbtQuestionWorkflowActionRequestRevisionAndMarkReviewed(t *testing.T) {
+	questionID := handlerTestUUID(82)
+	subjectID := handlerTestUUID(83)
+	fake := &fakeCbtQuestionService{
+		returnRevisionRow: cbtQuestionHandlerModel(questionID, subjectID),
+		approveRow:        cbtQuestionHandlerModel(questionID, subjectID),
+	}
+	fake.returnRevisionRow.WorkflowStatus = "revision_needed"
+	fake.approveRow.WorkflowStatus = "reviewed"
+	h := &CbtQuestion{svc: fake}
+
+	rec := httptest.NewRecorder()
+	h.WorkflowAction(rec, withRouteParam(adminRequest(http.MethodPost, "/api/cbt/questions/"+questionID.String()+"/workflow", "{\"action\":\"return_revision\",\"notes\":\"perbaiki\"}"), "id", questionID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("WorkflowAction(return_revision) status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.returnRevisionID != questionID || fake.returnRevisionNotes != "perbaiki" || !strings.Contains(rec.Body.String(), "revision_needed") {
+		t.Fatalf("WorkflowAction(return_revision) fake/body = %+v/%q/%s, want service call and revision response", fake.returnRevisionID, fake.returnRevisionNotes, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.WorkflowAction(rec, withRouteParam(adminRequest(http.MethodPost, "/api/cbt/questions/"+questionID.String()+"/workflow", "{\"action\":\"mark_reviewed\",\"notes\":\"layak\"}"), "id", questionID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("WorkflowAction(mark_reviewed) status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.approveID != questionID || fake.approveNotes != "layak" || !strings.Contains(rec.Body.String(), "reviewed") {
+		t.Fatalf("WorkflowAction(mark_reviewed) fake/body = %+v/%q/%s, want MarkReviewed service call and reviewed response", fake.approveID, fake.approveNotes, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.WorkflowAction(rec, withRouteParam(adminRequest(http.MethodPost, "/api/cbt/questions/"+questionID.String()+"/workflow", "{\"action\":\"unknown\"}"), "id", questionID.String()))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("WorkflowAction(unknown) status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCbtQuestionBulkWorkflowActionHandler(t *testing.T) {
+	firstID := handlerTestUUID(84)
+	secondID := handlerTestUUID(85)
+	fake := &fakeCbtQuestionService{bulkResult: service.BulkCbtQuestionWorkflowResult{
+		Action:  "request_revision",
+		Total:   2,
+		Success: 2,
+		Items: []service.BulkCbtQuestionWorkflowItem{
+			{QuestionID: firstID, OK: true, Workflow: "revision_needed"},
+			{QuestionID: secondID, OK: true, Workflow: "revision_needed"},
+		},
+	}}
+	h := &CbtQuestion{svc: fake}
+	body := "{\"action\":\"return_revision\",\"notes\":\"batch\",\"question_ids\":[\"" + firstID.String() + "\",\"" + secondID.String() + "\"]}"
+
+	rec := httptest.NewRecorder()
+	h.BulkWorkflowAction(rec, adminRequest(http.MethodPost, "/api/cbt/questions/workflow/bulk", body))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("BulkWorkflowAction status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.bulkInput.Action != "request_revision" || fake.bulkInput.Notes != "batch" || len(fake.bulkInput.QuestionIDs) != 2 || fake.bulkInput.QuestionIDs[1] != secondID {
+		t.Fatalf("BulkWorkflowAction input = %+v, want normalized action and two ids", fake.bulkInput)
+	}
+	if !strings.Contains(rec.Body.String(), "revision_needed") {
+		t.Fatalf("BulkWorkflowAction body = %s, want result serialized", rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.BulkWorkflowAction(rec, adminRequest(http.MethodPost, "/api/cbt/questions/workflow/bulk", "{\"action\":\"mark_reviewed\",\"question_ids\":[]}"))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("BulkWorkflowAction(empty ids) status = %d, want 400", rec.Code)
 	}
 }
 

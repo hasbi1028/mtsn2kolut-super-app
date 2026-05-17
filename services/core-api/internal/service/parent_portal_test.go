@@ -58,6 +58,19 @@ func TestParentPortalRejectsUsersWithoutLinkedParent(t *testing.T) {
 	}
 }
 
+func TestParentPortalPreviewParentsWrapper(t *testing.T) {
+	store := &fakeParentPortalStore{}
+	svc := &ParentPortal{q: store}
+
+	rows, err := svc.ListParentPortalPreviewParents(context.Background())
+	if err != nil {
+		t.Fatalf("ListParentPortalPreviewParents() error = %v", err)
+	}
+	if !store.previewParentsCalled || len(rows) != 1 {
+		t.Fatalf("ListParentPortalPreviewParents() called=%v len=%d, want called one row", store.previewParentsCalled, len(rows))
+	}
+}
+
 func TestParentPortalForbidsUnlinkedChildUUIDBeforeReturningEmptyData(t *testing.T) {
 	userID := testGenerationUUID(45)
 	parentID := testGenerationUUID(46)
@@ -104,6 +117,8 @@ type fakeParentPortalStore struct {
 
 	resultsArg    db.ListParentPortalChildExamSessionsParams
 	resultsCalled bool
+
+	previewParentsCalled bool
 }
 
 func (f *fakeParentPortalStore) GetPortalParentIDByUserID(ctx context.Context, userID pgtype.UUID) (pgtype.UUID, error) {
@@ -115,6 +130,7 @@ func (f *fakeParentPortalStore) GetPortalParentIDByUserID(ctx context.Context, u
 }
 
 func (f *fakeParentPortalStore) ListParentPortalPreviewParents(ctx context.Context) ([]db.ListParentPortalPreviewParentsRow, error) {
+	f.previewParentsCalled = true
 	return []db.ListParentPortalPreviewParentsRow{{ID: testGenerationUUID(49), Nama: "Wali A", LinkedStudentCount: 1}}, nil
 }
 

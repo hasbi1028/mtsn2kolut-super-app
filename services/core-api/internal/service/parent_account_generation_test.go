@@ -160,6 +160,26 @@ func TestParentAccountGenerationGenerateRejectsWeakGeneratedPasswordBeforeUserCr
 	}
 }
 
+func TestParentAccountGenerationHelpers(t *testing.T) {
+	custom := &ParentAccountGenerator{passwordGenerator: fixedAccountPassword("ParentPass123!")}
+	if got, err := custom.generatePassword(); err != nil || got != "ParentPass123!" {
+		t.Fatalf("generatePassword(custom) = %q, %v; want custom password", got, err)
+	}
+
+	generated, err := (&ParentAccountGenerator{}).generatePassword()
+	if err != nil {
+		t.Fatalf("generatePassword(default) error = %v", err)
+	}
+	assertTemporaryPasswordShape(t, generated)
+
+	result := ParentAccountGenerationResult{Ready: 1}
+	item := ParentAccountGenerationCandidate{Status: "ready"}
+	markParentAccountGenerationFailed(&result, &item, "parent_id tidak valid")
+	if result.Ready != 0 || result.Failed != 1 || item.Status != "failed" || item.Reason != "parent_id tidak valid" {
+		t.Fatalf("markParentAccountGenerationFailed result=%+v item=%+v, want failed and decremented ready", result, item)
+	}
+}
+
 type fakeParentAccountGenerationStore struct {
 	parentRows []db.ListParentAccountGenerationCandidatesRow
 	listErr    error

@@ -24,10 +24,12 @@ type fakeProfileChangeRequestStore struct {
 	parentErr       error
 	childErr        error
 
-	requests map[pgtype.UUID]db.ProfileChangeRequest
-	audits   []db.CreateAuditLogParams
-	listArg  db.ListProfileChangeRequestsParams
-	countArg db.CountProfileChangeRequestsParams
+	requests    map[pgtype.UUID]db.ProfileChangeRequest
+	audits      []db.CreateAuditLogParams
+	listOwnRows []db.ListOwnProfileChangeRequestsRow
+	listOwnArg  pgtype.UUID
+	listArg     db.ListProfileChangeRequestsParams
+	countArg    db.CountProfileChangeRequestsParams
 
 	employeeName      string
 	employeeBirthdate pgtype.Date
@@ -92,7 +94,8 @@ func (f *fakeProfileChangeRequestStore) CreateProfileChangeRequest(ctx context.C
 }
 
 func (f *fakeProfileChangeRequestStore) ListOwnProfileChangeRequests(ctx context.Context, requesterUserID pgtype.UUID) ([]db.ListOwnProfileChangeRequestsRow, error) {
-	return nil, nil
+	f.listOwnArg = requesterUserID
+	return f.listOwnRows, nil
 }
 
 func (f *fakeProfileChangeRequestStore) ListProfileChangeRequests(ctx context.Context, arg db.ListProfileChangeRequestsParams) ([]db.ListProfileChangeRequestsRow, error) {
@@ -199,6 +202,85 @@ func (f *fakeProfileChangeRequestStore) UpdateParentOfficialNik(ctx context.Cont
 func (f *fakeProfileChangeRequestStore) CreateAuditLog(ctx context.Context, arg db.CreateAuditLogParams) (db.AuditLog, error) {
 	f.audits = append(f.audits, arg)
 	return db.AuditLog{}, nil
+}
+
+func TestProfileChangeRequestListOwnMapsRowsAndLabels(t *testing.T) {
+	requesterID := documentCycleTestUUID(21)
+	reviewerID := documentCycleTestUUID(22)
+	requestID := documentCycleTestUUID(23)
+	studentID := documentCycleTestUUID(24)
+	now := pgtype.Timestamptz{Time: time.Date(2026, 5, 17, 9, 0, 0, 0, time.UTC), Valid: true}
+	store := newFakeProfileChangeRequestStore()
+	store.listOwnRows = []db.ListOwnProfileChangeRequestsRow{{
+		ID:                   requestID,
+		RequesterUserID:      requesterID,
+		ProfileType:          "student",
+		TargetStudentID:      studentID,
+		FieldKey:             "tanggal_lahir",
+		CurrentValue:         "2010-01-01",
+		RequestedValue:       "2010-01-02",
+		Reason:               "dokumen resmi",
+		Status:               db.ProfileChangeRequestStatusApproved,
+		ReviewerUserID:       reviewerID,
+		ReviewNote:           "ok",
+		ReviewedAt:           now,
+		CreatedAt:            now,
+		UpdatedAt:            now,
+		RequesterUsername:    "siswa1",
+		RequesterDisplayName: "Siswa Satu",
+		ReviewerUsername:     pgtype.Text{String: "admin1", Valid: true},
+		ReviewerDisplayName:  "Admin Satu",
+		ProfileNama:          "Siswa Satu",
+	}}
+	svc := &ProfileChangeRequest{q: store}
+
+	items, err := svc.ListOwn(context.Background(), requesterID)
+	if err != nil {
+		t.Fatalf("ListOwn() error = %v", err)
+	}
+	if store.listOwnArg != requesterID || len(items) != 1 {
+		t.Fatalf("ListOwn() arg/len = %s/%d, want %s/1", store.listOwnArg.String(), len(items), requesterID.String())
+	}
+	item := items[0]
+	if item.ID != requestID || item.TargetStudentID != studentID || item.ReviewerUsername != "admin1" || item.FieldLabel != "Tanggal lahir" {
+		t.Fatalf("ListOwn() item = %+v, want mapped ids, reviewer username, and field label", item)
+	}
+}
+
+func TestProfileChangeRequestListItemMappersAndMustDate(t *testing.T) {
+	requestID := documentCycleTestUUID(31)
+	requesterID := documentCycleTestUUID(32)
+	parentID := documentCycleTestUUID(33)
+	now := pgtype.Timestamptz{Time: time.Date(2026, 5, 17, 10, 0, 0, 0, time.UTC), Valid: true}
+
+	adminItem := listItemFromProfileChangeRequestRow(db.ListProfileChangeRequestsRow{
+		ID:                   requestID,
+		RequesterUserID:      requesterID,
+		ProfileType:          "parent",
+		TargetParentID:       parentID,
+		FieldKey:             "nik",
+		CurrentValue:         "1234567890123456",
+		RequestedValue:       "1234567890123457",
+		Reason:               "KTP baru",
+		Status:               db.ProfileChangeRequestStatusPending,
+		CreatedAt:            now,
+		UpdatedAt:            now,
+		RequesterUsername:    "ortu1",
+		RequesterDisplayName: "Ortu Satu",
+		ReviewerUsername:     pgtype.Text{},
+		ProfileNama:          "Ortu Satu",
+	})
+	if adminItem.ID != requestID || adminItem.TargetParentID != parentID || adminItem.ReviewerUsername != "" || adminItem.FieldLabel != "NIK orang tua/wali" {
+		t.Fatalf("listItemFromProfileChangeRequestRow() = %+v, want mapped parent item with empty reviewer and NIK label", adminItem)
+	}
+
+	validDate := mustDate("2026-05-17")
+	if !validDate.Valid || validDate.Time.Format("2006-01-02") != "2026-05-17" {
+		t.Fatalf("mustDate(valid) = %+v, want valid parsed date", validDate)
+	}
+	if invalidDate := mustDate("17-05-2026"); invalidDate.Valid {
+		t.Fatalf("mustDate(invalid) = %+v, want invalid date", invalidDate)
+	}
 }
 
 func TestProfileChangeRequestCreateUsesOwnedProfileAndConservativeAllowlist(t *testing.T) {
