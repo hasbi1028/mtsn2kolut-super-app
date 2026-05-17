@@ -1,5 +1,5 @@
 import { redirect, error } from '@sveltejs/kit';
-import type { Handle, HandleFetch, RequestEvent } from '@sveltejs/kit';
+import type { Handle, HandleFetch, HandleServerError, RequestEvent } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { env } from '$env/dynamic/private';
 import { ApiError, AuthValidationUnavailableError, apiRefreshWithFetch, getVerifiedUserFromAccessToken } from '$lib/server/api';
@@ -245,4 +245,23 @@ export const handleFetch: HandleFetch = async ({ event, request, fetch }) => {
 	}
 
 	return response;
+};
+
+export const handleError: HandleServerError = ({ error, event, status, message }) => {
+	const reference = `WEB-${Date.now().toString(36).toUpperCase()}`;
+	console.error(`[web-admin ${reference}] ${event.request.method} ${event.url.pathname} -> ${status}`, error);
+
+	if (event.url.pathname.startsWith('/api/')) {
+		return {
+			message: status >= 500
+				? `Layanan sistem sedang bermasalah. Kode referensi: ${reference}`
+				: message
+		};
+	}
+
+	return {
+		message: status >= 500
+			? `Halaman sedang bermasalah. Data tetap aman. Kode referensi: ${reference}`
+			: message
+	};
 };
