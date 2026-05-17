@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -9,14 +10,23 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"mtsn2kolut-super-app/backend/internal/api"
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
 type PusakaAttendanceTelegram struct {
-	svc *service.PusakaAttendanceTelegram
+	svc pusakaAttendanceTelegramService
 }
 
-func NewPusakaAttendanceTelegram(svc *service.PusakaAttendanceTelegram) *PusakaAttendanceTelegram {
+type pusakaAttendanceTelegramService interface {
+	GetSettings(ctx context.Context) (service.AttendanceTelegramSettingsResponse, error)
+	UpdateSettings(ctx context.Context, in service.UpdateAttendanceTelegramSettingsInput) (service.AttendanceTelegramSettingsResponse, error)
+	ListLogs(ctx context.Context, limit, offset int32) ([]db.ListPusakaAttendanceTelegramLogsRow, error)
+	SendReport(ctx context.Context, in service.SendAttendanceTelegramReportInput) (service.AttendanceTelegramReportResult, error)
+	RunDue(ctx context.Context, now time.Time) error
+}
+
+func NewPusakaAttendanceTelegram(svc pusakaAttendanceTelegramService) *PusakaAttendanceTelegram {
 	return &PusakaAttendanceTelegram{svc: svc}
 }
 

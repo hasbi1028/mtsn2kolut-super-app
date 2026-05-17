@@ -17,6 +17,143 @@ import (
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
+func TestStudentPortalPreviewStudentsMapsNullableClassAndStatus(t *testing.T) {
+	studentID := handlerTestUUID(237)
+	classID := handlerTestUUID(238)
+	svc := &fakeStudentPortalSelfService{
+		previewRows: []db.ListStudentPortalPreviewStudentsRow{
+			{ID: studentID, Nis: "2001", Nisn: "9988", Nama: "Siswa Preview", ClassID: classID, ClassName: pgtype.Text{String: "VIII B", Valid: true}, ClassCode: pgtype.Text{String: "8B", Valid: true}, Status: db.StudentStatusEnumActive, IsActive: true},
+			{ID: handlerTestUUID(239), Nis: "2002", Nama: "Tanpa Kelas", Status: db.StudentStatusEnumProspective},
+		},
+	}
+	rec := httptest.NewRecorder()
+
+	(&StudentPortal{svc: svc}).PreviewStudents(rec, httptest.NewRequest(http.MethodGet, "/api/portal/student/preview/students", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PreviewStudents() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Data struct {
+			Students []struct {
+				ID        string `json:"id"`
+				NIS       string `json:"nis"`
+				NISN      string `json:"nisn"`
+				Nama      string `json:"nama"`
+				ClassID   string `json:"class_id"`
+				ClassName string `json:"class_name"`
+				ClassCode string `json:"class_code"`
+				Status    string `json:"status"`
+				IsActive  bool   `json:"is_active"`
+			} `json:"students"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("PreviewStudents() json unmarshal failed: %v", err)
+	}
+	if len(payload.Data.Students) != 2 || payload.Data.Students[0].ID != studentID.String() || payload.Data.Students[0].ClassID != classID.String() || payload.Data.Students[0].ClassName != "VIII B" || payload.Data.Students[0].ClassCode != "8B" || payload.Data.Students[0].Status != "active" || !payload.Data.Students[0].IsActive {
+		t.Fatalf("PreviewStudents() first student = %+v, want full mapped DTO", payload.Data.Students)
+	}
+	if payload.Data.Students[1].ClassID != "" || payload.Data.Students[1].ClassName != "" || payload.Data.Students[1].ClassCode != "" || payload.Data.Students[1].Status != "prospective" {
+		t.Fatalf("PreviewStudents() nullable student = %+v, want blank nullable class fields", payload.Data.Students[1])
+	}
+}
+
+func TestStudentPortalPreviewStudentIDValidationAndProfileScope(t *testing.T) {
+	studentID := handlerTestUUID(240)
+	svc := &fakeStudentPortalSelfService{}
+	h := &StudentPortal{svc: svc}
+	req := withRouteParam(httptest.NewRequest(http.MethodGet, "/api/portal/student/preview/students/"+studentID.String()+"/profile", nil), "studentID", "  "+studentID.String()+"  ")
+	rec := httptest.NewRecorder()
+
+	h.PreviewProfile(rec, req)
+
+	if rec.Code != http.StatusOK || svc.profileUserID != studentID {
+		t.Fatalf("PreviewProfile() status/studentID = %d/%s, want 200/%s; body=%s", rec.Code, svc.profileUserID.String(), studentID.String(), rec.Body.String())
+	}
+	var payload struct {
+		Data struct {
+			Preview bool `json:"preview"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("PreviewProfile() json unmarshal failed: %v", err)
+	}
+	if !payload.Data.Preview {
+		t.Fatalf("PreviewProfile() preview flag = false, body=%s", rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.PreviewProfile(rec, withRouteParam(httptest.NewRequest(http.MethodGet, "/api/portal/student/preview/students/bad/profile", nil), "studentID", "bad"))
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "ID siswa tidak valid") {
+		t.Fatalf("PreviewProfile(invalid id) status/body = %d/%s, want 400/student error", rec.Code, rec.Body.String())
+	}
+}
+
+func TestStudentPortalRemainingPreviewEndpointsUseStudentRouteID(t *testing.T) {
+	studentID := handlerTestUUID(248)
+	participantID := handlerTestUUID(249)
+	tokenMasked := "MASK-••••"
+	svc := &fakeStudentPortalSelfService{
+		scheduleRows: []db.ListStudentTimetableRow{{
+			ID:          handlerTestUUID(250),
+			SubjectName: "Matematika",
+			TeacherName: "Guru A",
+		}},
+		resultsRows: []db.ListStudentExamSessionsRow{{
+			SessionID:    handlerTestUUID(251),
+			SessionTitle: "Hasil Preview",
+			Token:        "secret-token",
+		}},
+		cbtScheduleRows: []service.StudentPortalCbtScheduleItem{{
+			ParticipantID:  participantID.String(),
+			SessionTitle:   "CBT Preview",
+			CanRevealToken: true,
+			TokenMasked:    &tokenMasked,
+			PackageTitle:   "Paket CBT",
+			Status:         service.StudentPortalCbtTokenWindow,
+		}},
+	}
+	h := &StudentPortal{svc: svc}
+
+	tests := []struct {
+		name         string
+		handler      func(http.ResponseWriter, *http.Request)
+		path         string
+		wantFragment string
+	}{
+		{name: "schedule", handler: h.PreviewSchedule, path: "/api/portal/student/preview/students/" + studentID.String() + "/schedule", wantFragment: "Matematika"},
+		{name: "results", handler: h.PreviewResults, path: "/api/portal/student/preview/students/" + studentID.String() + "/results", wantFragment: "Hasil Preview"},
+		{name: "cbt schedule", handler: h.PreviewCbtSchedule, path: "/api/portal/student/preview/students/" + studentID.String() + "/cbt", wantFragment: "CBT Preview"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := withRouteParam(httptest.NewRequest(http.MethodGet, tt.path, nil), "studentID", studentID.String())
+			tt.handler(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+			}
+			body := rec.Body.String()
+			if !strings.Contains(body, `"preview":true`) || !strings.Contains(body, tt.wantFragment) {
+				t.Fatalf("body = %s, want preview flag and %q", body, tt.wantFragment)
+			}
+			if strings.Contains(body, "secret-token") || strings.Contains(body, `"token":"`) {
+				t.Fatalf("preview endpoint exposed raw token: %s", body)
+			}
+		})
+	}
+	if svc.scheduleUserID != studentID || svc.resultsUserID != studentID || svc.cbtUserID != studentID {
+		t.Fatalf("preview args schedule/results/cbt = %s/%s/%s, want %s", svc.scheduleUserID.String(), svc.resultsUserID.String(), svc.cbtUserID.String(), studentID.String())
+	}
+
+	rec := httptest.NewRecorder()
+	h.PreviewSchedule(rec, withRouteParam(httptest.NewRequest(http.MethodGet, "/api/portal/student/preview/students/bad/schedule", nil), "studentID", "bad"))
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "ID siswa tidak valid") {
+		t.Fatalf("PreviewSchedule(invalid id) status/body = %d/%s, want 400/student error", rec.Code, rec.Body.String())
+	}
+}
+
 func TestStudentPortalHandlersUseAuthenticatedUserIDAndIgnoreStudentIDQuery(t *testing.T) {
 	userID := handlerTestUUID(210)
 	otherStudentID := handlerTestUUID(211)
@@ -190,6 +327,9 @@ func TestStudentPortalRevealTokenHandlerValidatesRoomTokenAndMapsErrors(t *testi
 }
 
 type fakeStudentPortalSelfService struct {
+	previewRows []db.ListStudentPortalPreviewStudentsRow
+	previewErr  error
+
 	profileUserID pgtype.UUID
 	profileRow    db.GetStudentByIDRow
 	profileErr    error
@@ -215,7 +355,7 @@ type fakeStudentPortalSelfService struct {
 }
 
 func (f *fakeStudentPortalSelfService) PreviewStudents(ctx context.Context) ([]db.ListStudentPortalPreviewStudentsRow, error) {
-	return []db.ListStudentPortalPreviewStudentsRow{}, nil
+	return f.previewRows, f.previewErr
 }
 
 func (f *fakeStudentPortalSelfService) Profile(ctx context.Context, userID pgtype.UUID) (db.GetStudentByIDRow, error) {

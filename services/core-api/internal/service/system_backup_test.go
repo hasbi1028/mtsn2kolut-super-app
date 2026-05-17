@@ -220,6 +220,57 @@ func TestSystemBackupRunManualRejectsConcurrentRun(t *testing.T) {
 	}
 }
 
+func TestSystemBackupJobReturnsStoredManualRunAndNotFound(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "backup.sh")
+	writeBackupFile(t, script, "#!/usr/bin/env bash\n")
+	now := time.Date(2026, 5, 17, 9, 30, 0, 0, time.UTC)
+	svc := NewSystemBackup(SystemBackupConfig{
+		BackupDir:  dir,
+		ScriptPath: script,
+		Now:        func() time.Time { return now },
+		CommandRunner: func(ctx context.Context, name string, args ...string) ([]byte, error) {
+			return []byte("ok"), nil
+		},
+	})
+
+	job, err := svc.RunManual(context.Background(), SystemBackupRunRequest{Reason: "smoke"})
+	if err != nil {
+		t.Fatalf("RunManual() error = %v", err)
+	}
+	got, err := svc.Job(context.Background(), "  "+job.ID+"  ")
+	if err != nil || got.ID != job.ID || got.Reason != "smoke" {
+		t.Fatalf("Job() = %+v, %v; want stored job %+v", got, err, job)
+	}
+	if _, err := svc.Job(context.Background(), "missing"); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("Job(missing) error = %v, want not found", err)
+	}
+}
+
+func TestSystemBackupHelperEdgeCases(t *testing.T) {
+	for input, wantOK := range map[string]bool{
+		systemBackupLatestSymlinkName: true,
+		"pusaka_20260517_010203.dump": true,
+		"../escape.dump":              false,
+		"nested/file.dump":            false,
+		"backup.sql":                  false,
+	} {
+		_, err := cleanBackupID(input)
+		if (err == nil) != wantOK {
+			t.Fatalf("cleanBackupID(%q) err = %v, want ok %v", input, err, wantOK)
+		}
+	}
+	if !pathInside("/tmp/backups", "/tmp/backups/file.dump") || pathInside("/tmp/backups", "/tmp/backups-other/file.dump") {
+		t.Fatalf("pathInside did not enforce directory boundary")
+	}
+	if got := shellQuoteForOperator("/tmp/backup dir/file's.dump"); got != `'/tmp/backup dir/file'\''s.dump'` {
+		t.Fatalf("shellQuoteForOperator = %q", got)
+	}
+	if isSHA256Hex("not-a-hash") || !isSHA256Hex(strings.Repeat("a", 64)) {
+		t.Fatalf("isSHA256Hex validation failed")
+	}
+}
+
 func writeBackupFile(t *testing.T, path string, value string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(value), 0o600); err != nil {

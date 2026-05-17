@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -161,6 +162,32 @@ func TestStudentAccountGenerationGenerateCreatesMustChangePasswordUserAndAudit(t
 	}
 	if metadata["student_id"] != studentID.String() || metadata["username"] != "0011223344" {
 		t.Fatalf("audit metadata = %+v, want student_id and username", metadata)
+	}
+}
+
+func TestStudentAccountGenerationGenerateMarksCreateFailuresWithoutLeakingPassword(t *testing.T) {
+	studentID := testGenerationUUID(41)
+	store := &fakeStudentAccountGenerationStore{
+		studentRows: []db.ListStudentAccountGenerationCandidatesRow{{
+			StudentID:    studentID,
+			Nis:          "301",
+			Nisn:         "9988776655",
+			Nama:         "Hana",
+			BaseUsername: "9988776655",
+		}},
+		createErr: errors.New("duplicate username"),
+	}
+	generator := &StudentAccountGenerator{q: store, role: StudentAccountRole}
+
+	result, err := generator.Generate(context.Background(), testGenerationUUID(97))
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if result.Created != 0 || result.Failed != 1 || result.Ready != 0 || result.Candidates[0].Status != "failed" || result.Candidates[0].Reason != "duplicate username" {
+		t.Fatalf("result = %+v, want failed candidate with safe create error", result)
+	}
+	if result.Candidates[0].TemporaryPassword != "" || len(store.legacyRoles) != 0 || len(store.rbacRoles) != 0 || len(store.auditLogs) != 0 {
+		t.Fatalf("side effects after create failure: candidate=%+v legacy=%d rbac=%d audit=%d; want no password/roles/audit", result.Candidates[0], len(store.legacyRoles), len(store.rbacRoles), len(store.auditLogs))
 	}
 }
 

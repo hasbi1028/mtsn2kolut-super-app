@@ -2,6 +2,7 @@ package service
 
 import (
 	"database/sql"
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -82,5 +83,74 @@ func TestCbtProctoringPolicyTechnicalNeverAutoLocks(t *testing.T) {
 	state := ParticipantRiskState{ViolationCount: 20, RiskScore: 100}
 	if ShouldAutoLock(decision, state) {
 		t.Fatalf("ShouldAutoLock(technical) = true, want false")
+	}
+}
+
+func TestCbtProctoringPolicyNormalizationAndDataDrivenClassification(t *testing.T) {
+	cases := []struct {
+		name      string
+		raw       string
+		data      map[string]any
+		wantType  string
+		severity  ProctorSeverity
+		riskDelta int32
+	}{
+		{name: "trim lower dash alias", raw: " Window-Focus-Lost ", wantType: "focus_lost_short", severity: ProctorSeverityWarning, riskDelta: 5},
+		{name: "background alias", raw: "app background resume", wantType: "background_over_threshold", severity: ProctorSeverityMedium, riskDelta: 30},
+		{name: "screenshot platform callback bool", raw: "screen_capture_attempt", data: map[string]any{"valid_platform_callback": true}, wantType: "screenshot_attempt_valid", severity: ProctorSeverityMedium, riskDelta: 25},
+		{name: "screenshot platform callback string", raw: "screenshot_attempt", data: map[string]any{"valid_platform_callback": "yes"}, wantType: "screenshot_attempt_valid", severity: ProctorSeverityMedium, riskDelta: 25},
+		{name: "app switch json number count", raw: "app_switch_once", data: map[string]any{"count": json.Number("3")}, wantType: "app_switch_repeated", severity: ProctorSeverityMedium, riskDelta: 25},
+		{name: "root emulator local lock alias", raw: "anti_cheat_local_lock", wantType: "root_emulator_strong", severity: ProctorSeverityCritical, riskDelta: 70},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			normalized, ok := NormalizeProctorEventType(tc.raw)
+			if !ok {
+				t.Fatalf("NormalizeProctorEventType(%q) rejected", tc.raw)
+			}
+			decision := ClassifyProctorSeverity(normalized, tc.data)
+			if decision.EventType != tc.wantType || decision.Severity != tc.severity || decision.RiskDelta != tc.riskDelta {
+				t.Fatalf("ClassifyProctorSeverity(%q) = %+v, want type=%s severity=%s risk=%d", tc.raw, decision, tc.wantType, tc.severity, tc.riskDelta)
+			}
+		})
+	}
+}
+
+func TestCbtProctoringPolicyAutoLockRules(t *testing.T) {
+	cases := []struct {
+		name  string
+		event string
+		state ParticipantRiskState
+		want  bool
+	}{
+		{name: "already locked stays locked", event: "focus_lost_short", state: ParticipantRiskState{LockedAt: sql.NullTime{Time: time.Now(), Valid: true}}, want: true},
+		{name: "token reuse immediate", event: "token_reuse_confirmed", state: ParticipantRiskState{RiskScore: 0}, want: true},
+		{name: "root emulator immediate", event: "root_emulator_strong", state: ParticipantRiskState{RiskScore: 0}, want: true},
+		{name: "device mismatch needs corroborating score", event: "device_mismatch_strong", state: ParticipantRiskState{RiskScore: 10}, want: false},
+		{name: "device mismatch corroborated by accumulated score", event: "device_mismatch_strong", state: ParticipantRiskState{RiskScore: 25}, want: true},
+		{name: "lock eligible third violation", event: "split_screen_detected", state: ParticipantRiskState{ViolationCount: 2, RiskScore: 10}, want: true},
+		{name: "non lock eligible still locks at score threshold", event: "screenshot_attempt_valid", state: ParticipantRiskState{ViolationCount: 0, RiskScore: 60}, want: true},
+		{name: "warning below threshold does not lock", event: "focus_lost_short", state: ParticipantRiskState{ViolationCount: 0, RiskScore: 10}, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			decision := ClassifyProctorSeverity(tc.event, nil)
+			if got := ShouldAutoLock(decision, tc.state); got != tc.want {
+				t.Fatalf("ShouldAutoLock(%s, %+v) = %v, want %v", tc.event, tc.state, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCbtProctoringPolicyDedupKeyUsesCorrelationOrEpisode(t *testing.T) {
+	participantID := "participant-1"
+	if got := proctorDedupKey(participantID, "focus_lost_short", map[string]any{"correlation_id": " focus-episode "}); got != "participant-1:focus_lost_short:focus-episode" {
+		t.Fatalf("proctorDedupKey(correlation) = %q", got)
+	}
+	if got := proctorDedupKey(participantID, "focus_lost_short", map[string]any{"episode_id": "episode-2"}); got != "participant-1:focus_lost_short:episode-2" {
+		t.Fatalf("proctorDedupKey(episode) = %q", got)
+	}
+	if got := proctorDedupKey(participantID, "focus_lost_short", nil); got != "participant-1:focus_lost_short" {
+		t.Fatalf("proctorDedupKey(default) = %q", got)
 	}
 }

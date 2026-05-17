@@ -135,6 +135,31 @@ func TestParentAccountGenerationGenerateCreatesMustChangePasswordUserAndAudit(t 
 	}
 }
 
+func TestParentAccountGenerationGenerateRejectsWeakGeneratedPasswordBeforeUserCreate(t *testing.T) {
+	parentID := testGenerationUUID(61)
+	store := &fakeParentAccountGenerationStore{
+		parentRows: []db.ListParentAccountGenerationCandidatesRow{{
+			ParentID:     parentID,
+			Nama:         "Ibu Eka",
+			ChildCount:   1,
+			BaseUsername: "ortu5555666677",
+		}},
+	}
+	generator := &ParentAccountGenerator{
+		q:                 store,
+		role:              ParentAccountRole,
+		passwordGenerator: fixedAccountPassword("short"),
+	}
+
+	result, err := generator.Generate(context.Background(), testGenerationUUID(99))
+	if err == nil {
+		t.Fatalf("Generate(weak password) error = nil, want validation error")
+	}
+	if result.Ready != 1 || result.Created != 0 || store.createArg.Username != "" || len(store.legacyRoles) != 0 || len(store.rbacRoles) != 0 || len(store.auditLogs) != 0 {
+		t.Fatalf("Generate(weak password) result=%+v store=%+v, want validation before any create/role/audit", result, store)
+	}
+}
+
 type fakeParentAccountGenerationStore struct {
 	parentRows []db.ListParentAccountGenerationCandidatesRow
 	listErr    error

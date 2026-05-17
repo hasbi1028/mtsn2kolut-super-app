@@ -17,14 +17,17 @@ import (
 )
 
 type fakeSystemBackupService struct {
-	status     service.SystemBackupStatus
-	list       service.SystemBackupList
-	download   service.SystemBackupDownload
-	job        service.SystemBackupJob
-	validation service.SystemBackupRestoreValidation
-	command    service.SystemBackupRestoreCommand
-	offsite    service.SystemBackupOffsiteStatus
-	err        error
+	status        service.SystemBackupStatus
+	list          service.SystemBackupList
+	download      service.SystemBackupDownload
+	job           service.SystemBackupJob
+	validation    service.SystemBackupRestoreValidation
+	command       service.SystemBackupRestoreCommand
+	offsite       service.SystemBackupOffsiteStatus
+	err           error
+	runReq        service.SystemBackupRunRequest
+	lastJobID     string
+	lastRestoreID string
 }
 
 func (f *fakeSystemBackupService) Status(ctx context.Context) (service.SystemBackupStatus, error) {
@@ -43,13 +46,15 @@ func (f *fakeSystemBackupService) Download(ctx context.Context, id string) (serv
 }
 
 func (f *fakeSystemBackupService) RunManual(ctx context.Context, req service.SystemBackupRunRequest) (service.SystemBackupJob, error) {
+	f.runReq = req
 	if f.err != nil {
-		return service.SystemBackupJob{}, f.err
+		return f.job, f.err
 	}
 	return f.job, nil
 }
 
 func (f *fakeSystemBackupService) Job(ctx context.Context, id string) (service.SystemBackupJob, error) {
+	f.lastJobID = id
 	if f.err != nil {
 		return service.SystemBackupJob{}, f.err
 	}
@@ -57,6 +62,7 @@ func (f *fakeSystemBackupService) Job(ctx context.Context, id string) (service.S
 }
 
 func (f *fakeSystemBackupService) ValidateRestore(ctx context.Context, id string) (service.SystemBackupRestoreValidation, error) {
+	f.lastRestoreID = id
 	if f.err != nil {
 		return service.SystemBackupRestoreValidation{}, f.err
 	}
@@ -64,6 +70,7 @@ func (f *fakeSystemBackupService) ValidateRestore(ctx context.Context, id string
 }
 
 func (f *fakeSystemBackupService) RestoreCommand(ctx context.Context, id string) (service.SystemBackupRestoreCommand, error) {
+	f.lastRestoreID = id
 	if f.err != nil {
 		return service.SystemBackupRestoreCommand{}, f.err
 	}
@@ -118,6 +125,97 @@ func TestSystemBackupHandlerStatusAndList(t *testing.T) {
 	}
 	if !strings.Contains(listRec.Body.String(), "pusaka_20260513_000001.dump") {
 		t.Fatalf("List() body missing backup name: %s", listRec.Body.String())
+	}
+}
+
+func TestSystemBackupActionEndpoints(t *testing.T) {
+	now := time.Date(2026, 5, 17, 20, 0, 0, 0, time.UTC)
+	backupID := "pusaka_20260517_200000.dump"
+	fake := &fakeSystemBackupService{
+		job:        service.SystemBackupJob{ID: "job-1", Status: "running", Reason: "before deploy", StartedAt: now},
+		validation: service.SystemBackupRestoreValidation{BackupID: backupID, Valid: true, ObjectCount: 12, Preview: []string{"public.users"}, CheckedAt: now, Command: "pg_restore --list"},
+		command:    service.SystemBackupRestoreCommand{BackupID: backupID, GeneratedAt: now, SafetyLevel: "manual", Commands: []string{"pg_restore ..."}},
+		offsite:    service.SystemBackupOffsiteStatus{Configured: true, Provider: "rclone", TargetLabel: "school-drive", Source: "status-file", RemoteBackupCount: 3, RemoteSizeBytes: 4096, Health: "ok"},
+	}
+	h := NewSystemBackup(fake)
+
+	rec := httptest.NewRecorder()
+	h.OffsiteStatus(rec, httptest.NewRequest(http.MethodGet, "/api/system/backups/offsite", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "school-drive") {
+		t.Fatalf("OffsiteStatus status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.RunManual(rec, httptest.NewRequest(http.MethodPost, "/api/system/backups/run", strings.NewReader(`{"reason":"before deploy"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("RunManual status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.runReq.Reason != "before deploy" {
+		t.Fatalf("RunManual req = %+v", fake.runReq)
+	}
+
+	rec = httptest.NewRecorder()
+	h.Job(rec, withRouteParam(httptest.NewRequest(http.MethodGet, "/api/system/backups/jobs/job-1", nil), "job_id", "job-1"))
+	if rec.Code != http.StatusOK || fake.lastJobID != "job-1" {
+		t.Fatalf("Job status=%d lastID=%q body=%s", rec.Code, fake.lastJobID, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.ValidateRestore(rec, withRouteParam(httptest.NewRequest(http.MethodPost, "/api/system/backups/"+backupID+"/validate-restore", nil), "id", backupID))
+	if rec.Code != http.StatusOK || fake.lastRestoreID != backupID || !strings.Contains(rec.Body.String(), "public.users") {
+		t.Fatalf("ValidateRestore status=%d id=%q body=%s", rec.Code, fake.lastRestoreID, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.RestoreCommand(rec, withRouteParam(httptest.NewRequest(http.MethodGet, "/api/system/backups/"+backupID+"/restore-command", nil), "id", backupID))
+	if rec.Code != http.StatusOK || fake.lastRestoreID != backupID || !strings.Contains(rec.Body.String(), "pg_restore") {
+		t.Fatalf("RestoreCommand status=%d id=%q body=%s", rec.Code, fake.lastRestoreID, rec.Body.String())
+	}
+}
+
+func TestSystemBackupActionErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		fn   func(*SystemBackup, http.ResponseWriter, *http.Request)
+		err  error
+		want int
+	}{
+		{"run invalid json", (*SystemBackup).RunManual, nil, http.StatusBadRequest},
+		{"run conflict", (*SystemBackup).RunManual, domain.ErrConflict, http.StatusConflict},
+		{"job not found", (*SystemBackup).Job, domain.ErrNotFound, http.StatusNotFound},
+		{"validate bad request", (*SystemBackup).ValidateRestore, domain.ErrBadRequest, http.StatusBadRequest},
+		{"restore forbidden", (*SystemBackup).RestoreCommand, domain.ErrForbidden, http.StatusForbidden},
+		{"offsite internal", (*SystemBackup).OffsiteStatus, errors.New("status read failed"), http.StatusInternalServerError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &fakeSystemBackupService{err: tc.err}
+			h := NewSystemBackup(fake)
+			req := httptest.NewRequest(http.MethodPost, "/api/system/backups/run", strings.NewReader(`{"reason":"x"}`))
+			if strings.Contains(tc.name, "invalid json") {
+				req = httptest.NewRequest(http.MethodPost, "/api/system/backups/run", strings.NewReader(`{`))
+			}
+			if strings.HasPrefix(tc.name, "job") {
+				req = withRouteParam(httptest.NewRequest(http.MethodGet, "/api/system/backups/jobs/missing", nil), "job_id", "missing")
+			}
+			if strings.HasPrefix(tc.name, "validate") || strings.HasPrefix(tc.name, "restore") {
+				req = withRouteParam(httptest.NewRequest(http.MethodGet, "/api/system/backups/x/restore", nil), "id", "x.dump")
+			}
+			if strings.HasPrefix(tc.name, "offsite") {
+				req = httptest.NewRequest(http.MethodGet, "/api/system/backups/offsite", nil)
+			}
+			rec := httptest.NewRecorder()
+			tc.fn(h, rec, req)
+			if rec.Code != tc.want {
+				t.Fatalf("status=%d want=%d body=%s", rec.Code, tc.want, rec.Body.String())
+			}
+		})
+	}
+
+	fake := &fakeSystemBackupService{job: service.SystemBackupJob{ID: "job-2"}, err: errors.New("partial failure")}
+	rec := httptest.NewRecorder()
+	NewSystemBackup(fake).RunManual(rec, httptest.NewRequest(http.MethodPost, "/api/system/backups/run", strings.NewReader(`{}`)))
+	if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "job-2") {
+		t.Fatalf("partial RunManual status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
 

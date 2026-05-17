@@ -12,6 +12,9 @@ func TestHandlerConstructorsReturnHandlers(t *testing.T) {
 	if NewHealth(nil, nil, nil) == nil {
 		t.Fatal("NewHealth() = nil")
 	}
+	if NewInternalAnalytics(nil) == nil {
+		t.Fatal("NewInternalAnalytics() = nil")
+	}
 	if NewLetter(nil) == nil {
 		t.Fatal("NewLetter() = nil")
 	}
@@ -20,5 +23,14 @@ func TestHandlerConstructorsReturnHandlers(t *testing.T) {
 	}
 	if NewNotification(nil) == nil {
 		t.Fatal("NewNotification() = nil")
+	}
+	if NewParentPortal(nil) == nil {
+		t.Fatal("NewParentPortal() = nil")
+	}
+	if NewRBAC(nil) == nil {
+		t.Fatal("NewRBAC() = nil")
+	}
+	if NewStudentPortal(nil) == nil {
+		t.Fatal("NewStudentPortal() = nil")
 	}
 }

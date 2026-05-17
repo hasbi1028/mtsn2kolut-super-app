@@ -24,6 +24,15 @@ type fakeGradeService struct {
 	overviewTeacherID     pgtype.UUID
 	overviewResult        service.GradeOverview
 	overviewErr           error
+	reportSettingsRow     service.ReportSettings
+	reportSettingsErr     error
+	updateSettingsArg     db.UpsertReportSettingsParams
+	updateSettingsRow     service.ReportSettings
+	updateSettingsErr     error
+	descriptionArg        db.UpsertGradeStudentSubjectDescriptionParams
+	descriptionTeacherID  pgtype.UUID
+	descriptionRow        db.GradeStudentSubjectDescription
+	descriptionErr        error
 	createArg             db.CreateGradeComponentParams
 	createTeacherID       pgtype.UUID
 	createRow             db.GradeComponent
@@ -65,6 +74,21 @@ func (f *fakeGradeService) Overview(_ context.Context, assignmentID, componentID
 	f.overviewPublishedOnly = publishedOnly
 	f.overviewTeacherID = teacherEmployeeID
 	return f.overviewResult, f.overviewErr
+}
+
+func (f *fakeGradeService) GetReportSettings(_ context.Context) (service.ReportSettings, error) {
+	return f.reportSettingsRow, f.reportSettingsErr
+}
+
+func (f *fakeGradeService) UpdateReportSettings(_ context.Context, arg db.UpsertReportSettingsParams) (service.ReportSettings, error) {
+	f.updateSettingsArg = arg
+	return f.updateSettingsRow, f.updateSettingsErr
+}
+
+func (f *fakeGradeService) UpsertStudentSubjectDescription(_ context.Context, arg db.UpsertGradeStudentSubjectDescriptionParams, teacherEmployeeID pgtype.UUID) (db.GradeStudentSubjectDescription, error) {
+	f.descriptionArg = arg
+	f.descriptionTeacherID = teacherEmployeeID
+	return f.descriptionRow, f.descriptionErr
 }
 
 func (f *fakeGradeService) CreateComponent(_ context.Context, arg db.CreateGradeComponentParams, teacherEmployeeID pgtype.UUID) (db.GradeComponent, error) {
@@ -131,6 +155,80 @@ func gradeGuruRequest(method, target, body string, teacherID pgtype.UUID) *http.
 
 func gradeComponent(id, assignmentID pgtype.UUID, title string) db.GradeComponent {
 	return db.GradeComponent{ID: id, AssignmentID: assignmentID, Title: title, Category: "daily", Weight: 1, MaxScore: 100, IsPublished: true}
+}
+
+func TestGradeReportSettingsAndDescriptionHandlers(t *testing.T) {
+	academicYearID := handlerTestUUID(144)
+	assignmentID := handlerTestUUID(145)
+	studentID := handlerTestUUID(146)
+	teacherID := handlerTestUUID(147)
+	fake := &fakeGradeService{
+		Grade:             &service.Grade{},
+		reportSettingsRow: service.ReportSettings{AcademicYearID: academicYearID.String(), AcademicYearName: "2026/2027", ShowRankingOnReport: true, RankingMethod: "average", RankingTiePolicy: "same_rank", Notes: "Aktif"},
+		updateSettingsRow: service.ReportSettings{AcademicYearID: academicYearID.String(), ShowRankingOnReport: false, RankingMethod: "weighted", RankingTiePolicy: "dense", Notes: "Revisi"},
+		descriptionRow:    db.GradeStudentSubjectDescription{ID: handlerTestUUID(148), AssignmentID: assignmentID, StudentID: studentID, Description: "Sangat baik"},
+	}
+	h := &Grade{svc: fake}
+
+	rec := httptest.NewRecorder()
+	h.GetReportSettings(rec, gradeGuruRequest(http.MethodGet, "/api/grades/report-settings", "", teacherID))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GetReportSettings status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "2026/2027") {
+		t.Fatalf("GetReportSettings body = %s", rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.UpdateReportSettings(rec, gradeGuruRequest(http.MethodPut, "/api/grades/report-settings", `{"academic_year_id":"`+academicYearID.String()+`","show_ranking_on_report":false,"ranking_method":"weighted","ranking_tie_policy":"dense","notes":"Revisi"}`, teacherID))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("UpdateReportSettings status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.updateSettingsArg.AcademicYearID != academicYearID || fake.updateSettingsArg.ShowRankingOnReport || fake.updateSettingsArg.RankingMethod != "weighted" || fake.updateSettingsArg.RankingTiePolicy != "dense" || fake.updateSettingsArg.Notes != "Revisi" {
+		t.Fatalf("UpdateReportSettings arg = %+v", fake.updateSettingsArg)
+	}
+
+	rec = httptest.NewRecorder()
+	h.UpsertStudentSubjectDescription(rec, withRouteParam(gradeGuruRequest(http.MethodPut, "/api/grades/assignments/"+assignmentID.String()+"/descriptions", `{"student_id":"`+studentID.String()+`","description":"Sangat baik"}`, teacherID), "id", assignmentID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("UpsertStudentSubjectDescription status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.descriptionArg.AssignmentID != assignmentID || fake.descriptionArg.StudentID != studentID || fake.descriptionArg.Description != "Sangat baik" || fake.descriptionTeacherID != teacherID {
+		t.Fatalf("description arg=%+v teacher=%v", fake.descriptionArg, fake.descriptionTeacherID)
+	}
+}
+
+func TestGradeReportSettingsAndDescriptionErrors(t *testing.T) {
+	assignmentID := handlerTestUUID(149)
+	studentID := handlerTestUUID(150)
+	teacherID := handlerTestUUID(151)
+	errDB := errors.New("db down")
+	tests := []struct {
+		name    string
+		handler func(*Grade, http.ResponseWriter, *http.Request)
+		svc     *fakeGradeService
+		req     *http.Request
+		want    int
+	}{
+		{"settings forbidden", (*Grade).GetReportSettings, &fakeGradeService{Grade: &service.Grade{}}, httptest.NewRequest(http.MethodGet, "/api/grades/report-settings", nil), http.StatusForbidden},
+		{"settings internal", (*Grade).GetReportSettings, &fakeGradeService{Grade: &service.Grade{}, reportSettingsErr: errDB}, gradeGuruRequest(http.MethodGet, "/api/grades/report-settings", "", teacherID), http.StatusInternalServerError},
+		{"update invalid json", (*Grade).UpdateReportSettings, &fakeGradeService{Grade: &service.Grade{}}, gradeGuruRequest(http.MethodPut, "/api/grades/report-settings", `{`, teacherID), http.StatusBadRequest},
+		{"update invalid year", (*Grade).UpdateReportSettings, &fakeGradeService{Grade: &service.Grade{}}, gradeGuruRequest(http.MethodPut, "/api/grades/report-settings", `{"academic_year_id":"bad"}`, teacherID), http.StatusBadRequest},
+		{"update service validation", (*Grade).UpdateReportSettings, &fakeGradeService{Grade: &service.Grade{}, updateSettingsErr: errors.New("metode ranking tidak valid")}, gradeGuruRequest(http.MethodPut, "/api/grades/report-settings", `{"academic_year_id":"`+assignmentID.String()+`"}`, teacherID), http.StatusBadRequest},
+		{"description invalid assignment", (*Grade).UpsertStudentSubjectDescription, &fakeGradeService{Grade: &service.Grade{}}, withRouteParam(gradeGuruRequest(http.MethodPut, "/api/grades/assignments/bad/descriptions", `{}`, teacherID), "id", "bad"), http.StatusBadRequest},
+		{"description invalid json", (*Grade).UpsertStudentSubjectDescription, &fakeGradeService{Grade: &service.Grade{}}, withRouteParam(gradeGuruRequest(http.MethodPut, "/api/grades/assignments/"+assignmentID.String()+"/descriptions", `{`, teacherID), "id", assignmentID.String()), http.StatusBadRequest},
+		{"description invalid student", (*Grade).UpsertStudentSubjectDescription, &fakeGradeService{Grade: &service.Grade{}}, withRouteParam(gradeGuruRequest(http.MethodPut, "/api/grades/assignments/"+assignmentID.String()+"/descriptions", `{"student_id":"bad"}`, teacherID), "id", assignmentID.String()), http.StatusBadRequest},
+		{"description service validation", (*Grade).UpsertStudentSubjectDescription, &fakeGradeService{Grade: &service.Grade{}, descriptionErr: errors.New("deskripsi terlalu panjang")}, withRouteParam(gradeGuruRequest(http.MethodPut, "/api/grades/assignments/"+assignmentID.String()+"/descriptions", `{"student_id":"`+studentID.String()+`"}`, teacherID), "id", assignmentID.String()), http.StatusBadRequest},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			tt.handler(&Grade{svc: tt.svc}, rec, tt.req)
+			if rec.Code != tt.want {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.want, rec.Body.String())
+			}
+		})
+	}
 }
 
 func TestGradeSuccessHandlersForwardPayloads(t *testing.T) {

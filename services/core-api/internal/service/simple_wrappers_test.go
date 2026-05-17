@@ -450,71 +450,74 @@ func TestPortalServiceStopsOverviewOnStoreErrors(t *testing.T) {
 }
 
 type fakeAcademicStore struct {
-	years              []db.AcademicYear
-	classes            []db.ListSchoolClassesRow
-	subjects           []db.ListSubjectsRow
-	assignments        []db.ListClassSubjectAssignmentsRow
-	timetableSlots     []db.ListTimetableSlotsRow
-	rolloverStudents   []db.ListYearRolloverStudentsRow
-	rolloverHomerooms  []db.ListYearRolloverHomeroomAssignmentsRow
-	homeroomDetails    []db.ListYearRolloverHomeroomAssignmentDetailsRow
-	homeroomCounts     map[string]int32
-	importStudents     []db.ListAcademicImportStudentsRow
-	importTeachers     []db.ListAcademicImportTeachersRow
-	yearByID           map[string]db.AcademicYear
-	yearNameConflicts  int32
-	deactivateCalled   bool
-	activateYearID     pgtype.UUID
-	activeYear         db.AcademicYear
-	activeYearErr      error
-	weeklyClasses      []db.ListWeeklyTimetableClassesRow
-	weeklyTeachers     []db.ListWeeklyTimetableTeachersRow
-	weeklySubjects     []db.ListWeeklyTimetableSubjectsRow
-	weeklyAssignments  []db.ListWeeklyTimetableAssignmentsRow
-	weeklySlots        []db.ListWeeklyTimetableSlotsRow
-	weeklyConflicts    []db.ListTimetableConflictsRow
-	lessonPeriods      []db.ListLessonPeriodTemplatesRow
-	createLessonArg    db.CreateLessonPeriodTemplateParams
-	updateLessonArg    db.UpdateLessonPeriodTemplateParams
-	deleteLessonID     pgtype.UUID
-	stats              db.GetAcademicStatsRow
-	dashboardSummary   db.GetAcademicDashboardSummaryRow
-	readinessSummary   db.GetAcademicReadinessSummaryRow
-	curriculumProfiles []db.CurriculumProfile
-	activeCurriculum   db.CurriculumProfile
-	curriculumAllocs   []db.ListCurriculumSubjectAllocationsRow
-	curriculumSummary  []db.GetCurriculumSummaryByLevelRow
-	classCurricula     []db.ListClassCurriculumAssignmentsRow
-	createYearArg      db.CreateAcademicYearParams
-	createClassArg     db.CreateSchoolClassParams
-	createClassResult  db.SchoolClass
-	createHomerooms    []db.CreateHomeroomAssignmentParams
-	createSubjectArg   db.CreateSubjectParams
-	createAssignArg    db.CreateClassSubjectAssignmentParams
-	createAssignResult db.ClassSubjectAssignment
-	createSlotArg      db.CreateTimetableSlotParams
-	createSlotArgs     []db.CreateTimetableSlotParams
-	promoteArgs        []db.PromoteYearRolloverStudentParams
-	promoteAffected    map[string]int64
-	getSlotID          pgtype.UUID
-	getSlotErr         error
-	updateSlotArg      db.UpdateTimetableSlotParams
-	deleteYearID       pgtype.UUID
-	deleteClassID      pgtype.UUID
-	deleteSubjectID    pgtype.UUID
-	deleteAssignID     pgtype.UUID
-	deleteSlotID       pgtype.UUID
-	getAssignID        pgtype.UUID
-	getAssignRow       db.GetClassSubjectAssignmentRow
-	getAssignErr       error
-	lockKeys           []string
-	lockErr            error
-	conflictArgs       []db.CountTimetableConflictsParams
-	conflictCount      int32
-	conflictErr        error
-	roomArgs           []db.CountTimetableRoomConflictsParams
-	roomCount          int32
-	roomErr            error
+	years                []db.AcademicYear
+	classes              []db.ListSchoolClassesRow
+	subjects             []db.ListSubjectsRow
+	assignments          []db.ListClassSubjectAssignmentsRow
+	timetableSlots       []db.ListTimetableSlotsRow
+	rolloverStudents     []db.ListYearRolloverStudentsRow
+	rolloverHomerooms    []db.ListYearRolloverHomeroomAssignmentsRow
+	homeroomDetails      []db.ListYearRolloverHomeroomAssignmentDetailsRow
+	homeroomCounts       map[string]int32
+	importStudents       []db.ListAcademicImportStudentsRow
+	importTeachers       []db.ListAcademicImportTeachersRow
+	yearByID             map[string]db.AcademicYear
+	yearNameConflicts    int32
+	deactivateCalled     bool
+	activateYearID       pgtype.UUID
+	activeYear           db.AcademicYear
+	activeYearErr        error
+	weeklyClasses        []db.ListWeeklyTimetableClassesRow
+	weeklyTeachers       []db.ListWeeklyTimetableTeachersRow
+	weeklySubjects       []db.ListWeeklyTimetableSubjectsRow
+	weeklyAssignments    []db.ListWeeklyTimetableAssignmentsRow
+	weeklySlots          []db.ListWeeklyTimetableSlotsRow
+	weeklyConflicts      []db.ListTimetableConflictsRow
+	lessonPeriods        []db.ListLessonPeriodTemplatesRow
+	createLessonArg      db.CreateLessonPeriodTemplateParams
+	updateLessonArg      db.UpdateLessonPeriodTemplateParams
+	deleteLessonID       pgtype.UUID
+	stats                db.GetAcademicStatsRow
+	dashboardSummary     db.GetAcademicDashboardSummaryRow
+	readinessSummary     db.GetAcademicReadinessSummaryRow
+	curriculumProfiles   []db.CurriculumProfile
+	activeCurriculum     db.CurriculumProfile
+	curriculumAllocs     []db.ListCurriculumSubjectAllocationsRow
+	curriculumSummary    []db.GetCurriculumSummaryByLevelRow
+	classCurricula       []db.ListClassCurriculumAssignmentsRow
+	createYearArg        db.CreateAcademicYearParams
+	createClassArg       db.CreateSchoolClassParams
+	createClassResult    db.SchoolClass
+	createHomerooms      []db.CreateHomeroomAssignmentParams
+	createSubjectArg     db.CreateSubjectParams
+	updateSubjectArg     db.UpdateSubjectParams
+	subjectConflictCount int32
+	getSubjectErr        error
+	createAssignArg      db.CreateClassSubjectAssignmentParams
+	createAssignResult   db.ClassSubjectAssignment
+	createSlotArg        db.CreateTimetableSlotParams
+	createSlotArgs       []db.CreateTimetableSlotParams
+	promoteArgs          []db.PromoteYearRolloverStudentParams
+	promoteAffected      map[string]int64
+	getSlotID            pgtype.UUID
+	getSlotErr           error
+	updateSlotArg        db.UpdateTimetableSlotParams
+	deleteYearID         pgtype.UUID
+	deleteClassID        pgtype.UUID
+	deleteSubjectID      pgtype.UUID
+	deleteAssignID       pgtype.UUID
+	deleteSlotID         pgtype.UUID
+	getAssignID          pgtype.UUID
+	getAssignRow         db.GetClassSubjectAssignmentRow
+	getAssignErr         error
+	lockKeys             []string
+	lockErr              error
+	conflictArgs         []db.CountTimetableConflictsParams
+	conflictCount        int32
+	conflictErr          error
+	roomArgs             []db.CountTimetableRoomConflictsParams
+	roomCount            int32
+	roomErr              error
 }
 
 func (f *fakeAcademicStore) ListAcademicYears(ctx context.Context) ([]db.AcademicYear, error) {
@@ -709,14 +712,18 @@ func (f *fakeAcademicStore) CreateSubject(ctx context.Context, arg db.CreateSubj
 }
 
 func (f *fakeAcademicStore) GetSubject(ctx context.Context, id pgtype.UUID) (db.GetSubjectRow, error) {
+	if f.getSubjectErr != nil {
+		return db.GetSubjectRow{}, f.getSubjectErr
+	}
 	return db.GetSubjectRow{ID: id, Code: "MAT", Name: "Matematika", IsActive: true}, nil
 }
 
 func (f *fakeAcademicStore) CountSubjectCodeConflicts(ctx context.Context, arg db.CountSubjectCodeConflictsParams) (int32, error) {
-	return 0, nil
+	return f.subjectConflictCount, nil
 }
 
 func (f *fakeAcademicStore) UpdateSubject(ctx context.Context, arg db.UpdateSubjectParams) (db.Subject, error) {
+	f.updateSubjectArg = arg
 	return db.Subject{ID: arg.ID, Code: arg.Code, Name: arg.Name, IsActive: arg.IsActive}, nil
 }
 
@@ -882,6 +889,9 @@ func TestAcademicServiceForwardsStoreCallsAndChecksTimetableAvailability(t *test
 	}
 	if dashboard, err := svc.GetDashboardSummary(context.Background()); err != nil || dashboard.ActiveAcademicYear != "2026/2027" {
 		t.Fatalf("GetDashboardSummary() = %+v, %v; want active year 2026/2027", dashboard, err)
+	}
+	if readiness, err := svc.GetReadinessSummary(context.Background()); err != nil || readiness.ActiveAcademicYear != "2026/2027" || readiness.TotalClasses != 2 {
+		t.Fatalf("GetReadinessSummary() = %+v, %v; want active year 2026/2027 and 2 classes", readiness, err)
 	}
 	if weekly, err := svc.GetWeeklyTimetable(context.Background()); err != nil || weekly.ActiveAcademicYearName != "2026/2027" || len(weekly.Slots) != 2 || weekly.Slots[0].ConflictStatus != "conflict" || weekly.Slots[1].ConflictCount != 1 {
 		t.Fatalf("GetWeeklyTimetable() = %+v, %v; want active weekly timetable with slot conflict statuses", weekly, err)

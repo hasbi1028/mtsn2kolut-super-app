@@ -19,31 +19,50 @@ import (
 type fakeCbtEventService struct {
 	*service.CbtEvent
 
-	listRows    []db.ListCbtExamEventsRow
-	listErr     error
-	listUserID  pgtype.UUID
-	getID       pgtype.UUID
-	getRow      db.GetCbtExamEventRow
-	getErr      error
-	resultsID   pgtype.UUID
-	resultsRows []db.GetEventResultsRow
-	resultsErr  error
-	cardsID     pgtype.UUID
-	cardsRows   []db.GetEventExamCardsRow
-	cardsErr    error
-	createInput service.CreateCbtEventInput
-	createRow   db.CbtExamEvent
-	createErr   error
-	updateID    pgtype.UUID
-	updateInput service.CreateCbtEventInput
-	updateRow   db.CbtExamEvent
-	updateErr   error
-	statusID    pgtype.UUID
-	statusValue string
-	statusRow   db.CbtExamEvent
-	statusErr   error
-	deleteID    pgtype.UUID
-	deleteErr   error
+	listRows        []db.ListCbtExamEventsRow
+	listErr         error
+	listUserID      pgtype.UUID
+	getID           pgtype.UUID
+	getRow          db.GetCbtExamEventRow
+	getErr          error
+	overviewID      pgtype.UUID
+	overviewRow     service.CbtEventOverview
+	overviewErr     error
+	sopID           pgtype.UUID
+	sopRow          service.CbtSopReadiness
+	sopErr          error
+	packagesID      pgtype.UUID
+	packagesRows    []db.ListCbtEventPackagesRow
+	packagesErr     error
+	sessionsID      pgtype.UUID
+	sessionsRows    []db.ListCbtEventSessionsReadinessRow
+	sessionsErr     error
+	completenessID  pgtype.UUID
+	completenessRow service.CbtQuestionCompleteness
+	completenessErr error
+	canReadAllowed  bool
+	canReadErr      error
+	canReadEventID  pgtype.UUID
+	canReadUserID   pgtype.UUID
+	resultsID       pgtype.UUID
+	resultsRows     []db.GetEventResultsRow
+	resultsErr      error
+	cardsID         pgtype.UUID
+	cardsRows       []db.GetEventExamCardsRow
+	cardsErr        error
+	createInput     service.CreateCbtEventInput
+	createRow       db.CbtExamEvent
+	createErr       error
+	updateID        pgtype.UUID
+	updateInput     service.CreateCbtEventInput
+	updateRow       db.CbtExamEvent
+	updateErr       error
+	statusID        pgtype.UUID
+	statusValue     string
+	statusRow       db.CbtExamEvent
+	statusErr       error
+	deleteID        pgtype.UUID
+	deleteErr       error
 }
 
 func (f *fakeCbtEventService) List(context.Context) ([]db.ListCbtExamEventsRow, error) {
@@ -58,6 +77,37 @@ func (f *fakeCbtEventService) ListForUser(_ context.Context, userID pgtype.UUID)
 func (f *fakeCbtEventService) Get(_ context.Context, id pgtype.UUID) (db.GetCbtExamEventRow, error) {
 	f.getID = id
 	return f.getRow, f.getErr
+}
+
+func (f *fakeCbtEventService) Overview(_ context.Context, id pgtype.UUID) (service.CbtEventOverview, error) {
+	f.overviewID = id
+	return f.overviewRow, f.overviewErr
+}
+
+func (f *fakeCbtEventService) SopReadiness(_ context.Context, id pgtype.UUID) (service.CbtSopReadiness, error) {
+	f.sopID = id
+	return f.sopRow, f.sopErr
+}
+
+func (f *fakeCbtEventService) ListPackages(_ context.Context, eventID pgtype.UUID) ([]db.ListCbtEventPackagesRow, error) {
+	f.packagesID = eventID
+	return f.packagesRows, f.packagesErr
+}
+
+func (f *fakeCbtEventService) ListSessions(_ context.Context, eventID pgtype.UUID) ([]db.ListCbtEventSessionsReadinessRow, error) {
+	f.sessionsID = eventID
+	return f.sessionsRows, f.sessionsErr
+}
+
+func (f *fakeCbtEventService) QuestionCompleteness(_ context.Context, eventID pgtype.UUID) (service.CbtQuestionCompleteness, error) {
+	f.completenessID = eventID
+	return f.completenessRow, f.completenessErr
+}
+
+func (f *fakeCbtEventService) CanRead(_ context.Context, eventID, userID pgtype.UUID) (bool, error) {
+	f.canReadEventID = eventID
+	f.canReadUserID = userID
+	return f.canReadAllowed, f.canReadErr
 }
 
 func (f *fakeCbtEventService) GetResults(_ context.Context, id pgtype.UUID) ([]db.GetEventResultsRow, error) {
@@ -171,6 +221,108 @@ func TestCbtEventReadHandlersForwardIDs(t *testing.T) {
 	h.GetExamCards(rec, withRouteParam(guruRequest(http.MethodGet, "/api/cbt/events/"+eventID.String()+"/exam-cards", ""), "id", eventID.String()))
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("GetExamCards(guru) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCbtEventReadinessAndCoverageHandlers(t *testing.T) {
+	eventID := handlerTestUUID(24)
+	otherID := handlerTestUUID(25)
+	fake := &fakeCbtEventService{
+		CbtEvent: &service.CbtEvent{},
+		listRows: []db.ListCbtExamEventsRow{
+			{ID: otherID, Title: "Selesai", Status: "completed"},
+			{ID: eventID, Title: "Aktif", Status: "active"},
+		},
+		overviewRow:     service.CbtEventOverview{Event: db.GetCbtEventOverviewSummaryRow{ID: eventID, Title: "Aktif"}},
+		sopRow:          service.CbtSopReadiness{EventID: eventID.String(), Stages: []service.CbtSopStageReadiness{{Key: "authoring", Status: service.CbtSopStageReady}}},
+		packagesRows:    []db.ListCbtEventPackagesRow{{ID: handlerTestUUID(26), EventID: eventID, Title: "Paket A"}},
+		sessionsRows:    []db.ListCbtEventSessionsReadinessRow{{ID: handlerTestUUID(27), EventID: eventID, Title: "Sesi 1"}},
+		completenessRow: service.CbtQuestionCompleteness{Summary: service.CbtQuestionCompletenessSummary{TotalRows: 1, CompleteRows: 1}, Rows: []service.CbtQuestionCompletenessRow{{Level: "VII", Complete: true}}},
+	}
+	h := &CbtEvent{svc: fake}
+
+	tests := []struct {
+		name       string
+		handler    func(http.ResponseWriter, *http.Request)
+		path       string
+		routeParam bool
+		check      func(*testing.T)
+	}{
+		{name: "overview", handler: h.Overview, path: "/api/cbt/events/" + eventID.String() + "/overview", routeParam: true, check: func(t *testing.T) {
+			if fake.overviewID != eventID {
+				t.Fatalf("Overview id = %v, want %v", fake.overviewID, eventID)
+			}
+		}},
+		{name: "sop readiness", handler: h.SopReadiness, path: "/api/cbt/events/" + eventID.String() + "/sop-readiness", routeParam: true, check: func(t *testing.T) {
+			if fake.sopID != eventID {
+				t.Fatalf("SopReadiness id = %v, want %v", fake.sopID, eventID)
+			}
+		}},
+		{name: "packages", handler: h.ListPackages, path: "/api/cbt/events/" + eventID.String() + "/packages", routeParam: true, check: func(t *testing.T) {
+			if fake.packagesID != eventID {
+				t.Fatalf("ListPackages id = %v, want %v", fake.packagesID, eventID)
+			}
+		}},
+		{name: "sessions", handler: h.ListSessions, path: "/api/cbt/events/" + eventID.String() + "/sessions", routeParam: true, check: func(t *testing.T) {
+			if fake.sessionsID != eventID {
+				t.Fatalf("ListSessions id = %v, want %v", fake.sessionsID, eventID)
+			}
+		}},
+		{name: "question completeness", handler: h.QuestionCompleteness, path: "/api/cbt/events/" + eventID.String() + "/question-completeness", routeParam: true, check: func(t *testing.T) {
+			if fake.completenessID != eventID {
+				t.Fatalf("QuestionCompleteness id = %v, want %v", fake.completenessID, eventID)
+			}
+		}},
+		{name: "readiness default active", handler: h.Readiness, path: "/api/cbt/readiness", check: func(t *testing.T) {
+			if fake.overviewID != eventID {
+				t.Fatalf("Readiness default overview id = %v, want active %v", fake.overviewID, eventID)
+			}
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := adminRequest(http.MethodGet, tt.path, "")
+			if tt.routeParam {
+				req = withRouteParam(req, "id", eventID.String())
+			}
+			tt.handler(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+			}
+			tt.check(t)
+		})
+	}
+}
+
+func TestCbtEventReadinessForMemberChecksSelectedEventAccess(t *testing.T) {
+	eventID := handlerTestUUID(28)
+	otherID := handlerTestUUID(29)
+	userID := handlerTestUUID(30)
+	fake := &fakeCbtEventService{
+		CbtEvent:       &service.CbtEvent{},
+		listRows:       []db.ListCbtExamEventsRow{{ID: eventID, Title: "Guru Event", Status: "active"}},
+		canReadAllowed: true,
+	}
+	h := &CbtEvent{svc: fake}
+	req := withClaims(httptest.NewRequest(http.MethodGet, "/api/cbt/events/"+eventID.String()+"/overview", nil), jwt.MapClaims{
+		"roles": []any{"guru"}, "role": "guru", "uid": userID.String(),
+	})
+	rec := httptest.NewRecorder()
+	h.Overview(rec, withRouteParam(req, "id", eventID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Overview(guru) status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.canReadEventID != eventID || fake.canReadUserID != userID {
+		t.Fatalf("CanRead args = (%v,%v), want (%v,%v)", fake.canReadEventID, fake.canReadUserID, eventID, userID)
+	}
+
+	rec = httptest.NewRecorder()
+	h.Readiness(rec, withClaims(httptest.NewRequest(http.MethodGet, "/api/cbt/readiness?event_id="+otherID.String(), nil), jwt.MapClaims{
+		"roles": []any{"guru"}, "role": "guru", "uid": userID.String(),
+	}))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("Readiness(guru selecting unlisted event) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
 	}
 }
 

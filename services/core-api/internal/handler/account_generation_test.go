@@ -14,6 +14,59 @@ import (
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
+func TestUserEmployeeAccountGenerationHandlersAuthorizeAndForward(t *testing.T) {
+	actorID := "01000000-0000-0000-0000-000000000122"
+	svc := &fakeEmployeeAccountGenerationService{
+		previewResult: service.EmployeeAccountGenerationResult{
+			Total: 1,
+			Ready: 1,
+			Items: []service.EmployeeAccountGenerationItem{{
+				EmployeeID: "employee-1",
+				Username:   "40406031001",
+				Status:     "ready",
+			}},
+		},
+		generateResult: service.EmployeeAccountGenerationResult{
+			Total:   1,
+			Created: 1,
+			Items: []service.EmployeeAccountGenerationItem{{
+				EmployeeID: "employee-1",
+				Username:   "40406031001",
+				Password:   "40406031001",
+				Status:     "created",
+			}},
+		},
+	}
+	h := &User{generator: svc}
+
+	rec := httptest.NewRecorder()
+	h.PreviewEmployeeAccountGeneration(rec, withClaims(httptest.NewRequest(http.MethodGet, "/api/users/employee-accounts/preview", nil), jwt.MapClaims{"roles": []any{"admin"}, "sub": actorID}))
+	if rec.Code != http.StatusOK || !svc.previewCalled {
+		t.Fatalf("PreviewEmployeeAccountGeneration() status/called = %d/%v; body=%s", rec.Code, svc.previewCalled, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.GenerateEmployeeAccounts(rec, withClaims(httptest.NewRequest(http.MethodPost, "/api/users/employee-accounts/generate", nil), jwt.MapClaims{"roles": []any{"admin"}, "sub": actorID}))
+	if rec.Code != http.StatusOK || svc.generateActorID.String() != actorID {
+		t.Fatalf("GenerateEmployeeAccounts() status/actor = %d/%s; body=%s", rec.Code, svc.generateActorID.String(), rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "password_hash") {
+		t.Fatalf("GenerateEmployeeAccounts() exposed password_hash: %s", rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.PreviewEmployeeAccountGeneration(rec, httptest.NewRequest(http.MethodGet, "/api/users/employee-accounts/preview", nil))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("PreviewEmployeeAccountGeneration(unauthenticated) status = %d, want 403", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	h.GenerateEmployeeAccounts(rec, withClaims(httptest.NewRequest(http.MethodPost, "/api/users/employee-accounts/generate", nil), jwt.MapClaims{"roles": []any{"guru"}, "sub": actorID}))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("GenerateEmployeeAccounts(non-admin) status = %d, want 403", rec.Code)
+	}
+}
+
 func TestUserStudentAccountGenerationHandlersAuthorizeAndForward(t *testing.T) {
 	actorID := "01000000-0000-0000-0000-000000000123"
 	svc := &fakeStudentAccountGenerationService{
@@ -155,6 +208,26 @@ func TestUserForcePasswordChangeAuthorizesAndForwards(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("ForcePasswordChange(service error) status = %d, want 500", rec.Code)
 	}
+}
+
+type fakeEmployeeAccountGenerationService struct {
+	previewCalled bool
+	previewResult service.EmployeeAccountGenerationResult
+	previewErr    error
+
+	generateActorID pgtype.UUID
+	generateResult  service.EmployeeAccountGenerationResult
+	generateErr     error
+}
+
+func (f *fakeEmployeeAccountGenerationService) Preview(ctx context.Context) (service.EmployeeAccountGenerationResult, error) {
+	f.previewCalled = true
+	return f.previewResult, f.previewErr
+}
+
+func (f *fakeEmployeeAccountGenerationService) Generate(ctx context.Context, actorID pgtype.UUID) (service.EmployeeAccountGenerationResult, error) {
+	f.generateActorID = actorID
+	return f.generateResult, f.generateErr
 }
 
 type fakeStudentAccountGenerationService struct {

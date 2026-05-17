@@ -19,7 +19,10 @@ func withClaims(req *http.Request, claims jwt.MapClaims) *http.Request {
 }
 
 func withRouteParam(req *http.Request, key, value string) *http.Request {
-	chiCtx := chi.NewRouteContext()
+	chiCtx := chi.RouteContext(req.Context())
+	if chiCtx == nil {
+		chiCtx = chi.NewRouteContext()
+	}
 	chiCtx.URLParams.Add(key, value)
 	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
 }

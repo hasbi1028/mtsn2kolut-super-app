@@ -54,6 +54,8 @@ type fakeInventoryService struct {
 	roomCreate    db.CreateSchoolRoomParams
 	roomUpdate    db.UpdateSchoolRoomParams
 	roomRow       db.SchoolRoom
+	roomErr       error
+	roomDeleteErr error
 }
 
 func (f *fakeInventoryService) Stats(context.Context) (db.GetInventoryStatsRow, error) {
@@ -103,30 +105,36 @@ func (f *fakeInventoryService) ListSchoolRooms(_ context.Context, search, roomTy
 	f.roomType = roomType
 	f.roomCondition = condition
 	f.roomEligible = examEligible
-	return f.roomRows, nil
+	return f.roomRows, f.roomErr
 }
 
 func (f *fakeInventoryService) GetSchoolRoom(_ context.Context, id pgtype.UUID) (db.SchoolRoom, error) {
 	f.roomID = id
-	return f.roomRow, nil
+	return f.roomRow, f.roomErr
 }
 
 func (f *fakeInventoryService) CreateSchoolRoom(_ context.Context, arg db.CreateSchoolRoomParams) (db.SchoolRoom, error) {
 	f.roomCreate = arg
+	if f.roomErr != nil {
+		return db.SchoolRoom{}, f.roomErr
+	}
 	if f.roomRow.ID.Valid {
 		return f.roomRow, nil
 	}
-	return db.SchoolRoom{ID: handlerTestUUID(150), Code: arg.Code, Name: arg.Name, ExamCapacity: arg.ExamCapacity, Condition: arg.Condition, IsExamEligible: arg.IsExamEligible}, nil
+	return db.SchoolRoom{ID: handlerTestUUID(150), Code: arg.Code, Name: arg.Name, Building: arg.Building, Floor: arg.Floor, RoomType: arg.RoomType, LocationNote: arg.LocationNote, DefaultCapacity: arg.DefaultCapacity, ExamCapacity: arg.ExamCapacity, Condition: arg.Condition, IsExamEligible: arg.IsExamEligible, NetworkReady: arg.NetworkReady, PowerReady: arg.PowerReady, Notes: arg.Notes}, nil
 }
 
 func (f *fakeInventoryService) UpdateSchoolRoom(_ context.Context, arg db.UpdateSchoolRoomParams) (db.SchoolRoom, error) {
 	f.roomUpdate = arg
-	return db.SchoolRoom{ID: arg.ID, Code: arg.Code, Name: arg.Name, ExamCapacity: arg.ExamCapacity, Condition: arg.Condition, IsExamEligible: arg.IsExamEligible}, nil
+	if f.roomErr != nil {
+		return db.SchoolRoom{}, f.roomErr
+	}
+	return db.SchoolRoom{ID: arg.ID, Code: arg.Code, Name: arg.Name, Building: arg.Building, Floor: arg.Floor, RoomType: arg.RoomType, LocationNote: arg.LocationNote, DefaultCapacity: arg.DefaultCapacity, ExamCapacity: arg.ExamCapacity, Condition: arg.Condition, IsExamEligible: arg.IsExamEligible, NetworkReady: arg.NetworkReady, PowerReady: arg.PowerReady, Notes: arg.Notes}, nil
 }
 
 func (f *fakeInventoryService) DeleteSchoolRoom(_ context.Context, id pgtype.UUID) error {
 	f.roomID = id
-	return nil
+	return f.roomDeleteErr
 }
 
 func inventoryTestItem(id pgtype.UUID, nama string) db.InventoryItem {
@@ -219,6 +227,112 @@ func TestInventorySuccessHandlersForwardPayloads(t *testing.T) {
 	}
 	if !fake.deleteActorID.Valid || fake.deleteID != itemID {
 		t.Fatalf("DeleteItem actor=%v id=%v, want actor and item id", fake.deleteActorID, fake.deleteID)
+	}
+}
+
+func TestInventorySchoolRoomHandlersForwardPayloads(t *testing.T) {
+	roomID := handlerTestUUID(151)
+	fake := &fakeInventoryService{
+		Inventory: &service.Inventory{},
+		roomRows:  []db.SchoolRoom{{ID: roomID, Code: "LAB-1", Name: "Lab IPA", RoomType: "lab", Condition: "baik", IsExamEligible: true}},
+		roomRow:   db.SchoolRoom{ID: roomID, Code: "LAB-1", Name: "Lab IPA", RoomType: "lab", Condition: "baik", IsExamEligible: true},
+	}
+	h := &Inventory{svc: fake}
+
+	rec := httptest.NewRecorder()
+	h.ListSchoolRooms(rec, adminRequest(http.MethodGet, "/api/inventory/school-rooms?search=lab&room_type=lab&condition=baik&exam_eligible=true", ""))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ListSchoolRooms status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.roomSearch != "lab" || fake.roomType != "lab" || fake.roomCondition != "baik" || fake.roomEligible != "true" {
+		t.Fatalf("ListSchoolRooms filters = (%q,%q,%q,%q), want query filters", fake.roomSearch, fake.roomType, fake.roomCondition, fake.roomEligible)
+	}
+
+	rec = httptest.NewRecorder()
+	h.GetSchoolRoom(rec, withRouteParam(adminRequest(http.MethodGet, "/api/inventory/school-rooms/"+roomID.String(), ""), "id", roomID.String()))
+	if rec.Code != http.StatusOK || fake.roomID != roomID {
+		t.Fatalf("GetSchoolRoom status/id = %d/%s, want 200/%s; body=%s", rec.Code, fake.roomID.String(), roomID.String(), rec.Body.String())
+	}
+
+	body := `{"code":" LAB-1 ","name":" Lab IPA ","building":" Gedung A ","floor":" 1 ","room_type":" lab ","location_note":" Timur ","default_capacity":32,"exam_capacity":28,"condition":" baik ","is_exam_eligible":false,"network_ready":true,"power_ready":true,"notes":" Siap "}`
+	rec = httptest.NewRecorder()
+	h.CreateSchoolRoom(rec, adminRequest(http.MethodPost, "/api/inventory/school-rooms", body))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("CreateSchoolRoom status = %d, want 201; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.roomCreate.Code != "LAB-1" || fake.roomCreate.Name != "Lab IPA" || fake.roomCreate.Building != "Gedung A" || fake.roomCreate.Floor != "1" || fake.roomCreate.RoomType != "lab" || fake.roomCreate.LocationNote != "Timur" || fake.roomCreate.DefaultCapacity != 32 || fake.roomCreate.ExamCapacity != 28 || fake.roomCreate.Condition != "baik" || fake.roomCreate.IsExamEligible || !fake.roomCreate.NetworkReady || !fake.roomCreate.PowerReady || fake.roomCreate.Notes != "Siap" {
+		t.Fatalf("CreateSchoolRoom arg = %+v, want trimmed mapped payload", fake.roomCreate)
+	}
+
+	body = `{"code":"LAB-2","name":"Lab Komputer","building":"Gedung B","floor":"2","room_type":"lab","location_note":"Barat","default_capacity":36,"exam_capacity":30,"condition":"baik","network_ready":true,"power_ready":false,"notes":"Cadangan"}`
+	rec = httptest.NewRecorder()
+	h.UpdateSchoolRoom(rec, withRouteParam(adminRequest(http.MethodPatch, "/api/inventory/school-rooms/"+roomID.String(), body), "id", roomID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("UpdateSchoolRoom status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.roomUpdate.ID != roomID || fake.roomUpdate.Code != "LAB-2" || fake.roomUpdate.Name != "Lab Komputer" || !fake.roomUpdate.IsExamEligible || !fake.roomUpdate.NetworkReady || fake.roomUpdate.PowerReady {
+		t.Fatalf("UpdateSchoolRoom arg = %+v, want route id and default exam eligibility", fake.roomUpdate)
+	}
+
+	rec = httptest.NewRecorder()
+	h.DeleteSchoolRoom(rec, withRouteParam(adminRequest(http.MethodDelete, "/api/inventory/school-rooms/"+roomID.String(), ""), "id", roomID.String()))
+	if rec.Code != http.StatusNoContent || fake.roomID != roomID {
+		t.Fatalf("DeleteSchoolRoom status/id = %d/%s, want 204/%s", rec.Code, fake.roomID.String(), roomID.String())
+	}
+}
+
+func TestInventorySchoolRoomHandlersWriteAuditEvents(t *testing.T) {
+	roomID := handlerTestUUID(152)
+	fake := &fakeInventoryService{
+		Inventory: &service.Inventory{},
+		roomRow:   db.SchoolRoom{ID: roomID, Code: "LAB-1", Name: "Lab IPA", RoomType: "lab", ExamCapacity: 28, IsExamEligible: true},
+	}
+	audit := &fakeCbtSessionAuditWriter{}
+	h := &Inventory{svc: fake, audit: audit}
+	auditedReq := func(method, target, body string) *http.Request {
+		return withClaims(httptest.NewRequest(method, target, strings.NewReader(body)), jwt.MapClaims{
+			"roles": []any{"staf"},
+			"uid":   "01000000-0000-0000-0000-000000000000",
+			"sub":   "01000000-0000-0000-0000-000000000000",
+			"usr":   "staf.sarpras",
+			"ssid":  "sess-room-1",
+		})
+	}
+	body := `{"code":"LAB-1","name":"Lab IPA","room_type":"lab","exam_capacity":28,"condition":"baik","network_ready":true,"power_ready":true}`
+
+	rec := httptest.NewRecorder()
+	h.CreateSchoolRoom(rec, auditedReq(http.MethodPost, "/api/inventory/school-rooms", body))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("CreateSchoolRoom status = %d, want 201; body=%s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.UpdateSchoolRoom(rec, withRouteParam(auditedReq(http.MethodPatch, "/api/inventory/school-rooms/"+roomID.String(), body), "id", roomID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("UpdateSchoolRoom status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.DeleteSchoolRoom(rec, withRouteParam(auditedReq(http.MethodDelete, "/api/inventory/school-rooms/"+roomID.String(), ""), "id", roomID.String()))
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("DeleteSchoolRoom status = %d, want 204; body=%s", rec.Code, rec.Body.String())
+	}
+
+	if len(audit.entries) != 3 {
+		t.Fatalf("audit entries = %d, want 3", len(audit.entries))
+	}
+	checks := []struct{ action, entityType, entityID string }{
+		{"SCHOOL_ROOM_CREATE", "school_room", roomID.String()},
+		{"SCHOOL_ROOM_UPDATE", "school_room", roomID.String()},
+		{"SCHOOL_ROOM_DELETE", "school_room", roomID.String()},
+	}
+	for i, check := range checks {
+		got := audit.entries[i]
+		if got.Action != check.action || got.EntityType != check.entityType || got.EntityID != check.entityID {
+			t.Fatalf("audit[%d] = %+v, want action/type/id %q/%q/%q", i, got, check.action, check.entityType, check.entityID)
+		}
+	}
+	meta := mustAuditMetadataMap(t, audit.entries[2].Metadata)
+	if meta["deleted_by"] != "staf.sarpras" {
+		t.Fatalf("delete room metadata = %+v, want deleted_by", meta)
 	}
 }
 
