@@ -147,6 +147,10 @@ type fakeCbtQuestionService struct {
 	workflowEventErr  error
 	workflowEventID   pgtype.UUID
 
+	versionRows []db.ListCbtQuestionVersionsRow
+	versionErr  error
+	versionID   pgtype.UUID
+
 	bulkInput  service.BulkCbtQuestionWorkflowInput
 	bulkResult service.BulkCbtQuestionWorkflowResult
 	bulkErr    error
@@ -251,8 +255,12 @@ func (f *fakeCbtQuestionService) WorkflowEvents(_ context.Context, id pgtype.UUI
 	return f.workflowEventRows, nil
 }
 
-func (f *fakeCbtQuestionService) Versions(_ context.Context, _ pgtype.UUID, _ service.CbtQuestionActor) ([]db.ListCbtQuestionVersionsRow, error) {
-	return []db.ListCbtQuestionVersionsRow{}, nil
+func (f *fakeCbtQuestionService) Versions(_ context.Context, id pgtype.UUID, _ service.CbtQuestionActor) ([]db.ListCbtQuestionVersionsRow, error) {
+	f.versionID = id
+	if f.versionErr != nil {
+		return nil, f.versionErr
+	}
+	return f.versionRows, nil
 }
 
 func (f *fakeCbtQuestionService) BulkWorkflow(_ context.Context, in service.BulkCbtQuestionWorkflowInput) (service.BulkCbtQuestionWorkflowResult, error) {
@@ -424,6 +432,44 @@ func TestCbtQuestionTimelineAndWorkflowEventsHandlers(t *testing.T) {
 	h.Timeline(rec, withRouteParam(adminRequest(http.MethodGet, "/api/cbt/questions/bad/timeline", ""), "id", "bad"))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("Timeline(bad id) status = %d, want 400", rec.Code)
+	}
+}
+
+func TestCbtQuestionVersionsHandlerSerializesRowsAndErrors(t *testing.T) {
+	questionID := handlerTestUUID(86)
+	fake := &fakeCbtQuestionService{
+		versionRows: []db.ListCbtQuestionVersionsRow{{
+			ID:              questionID,
+			Code:            "Q-1",
+			VersionNumber:   2,
+			IsLatestVersion: true,
+			WorkflowStatus:  "reviewed",
+			VersionNote:     "rapikan stem",
+			AuthorUsername:  "guru.ipa",
+		}},
+	}
+	h := &CbtQuestion{svc: fake}
+
+	rec := httptest.NewRecorder()
+	h.Versions(rec, withRouteParam(adminRequest(http.MethodGet, "/api/cbt/questions/"+questionID.String()+"/versions", ""), "id", questionID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Versions status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.versionID != questionID || !strings.Contains(rec.Body.String(), "rapikan stem") || !strings.Contains(rec.Body.String(), "is_latest_version") {
+		t.Fatalf("Versions id/body = %v/%s, want routed id and serialized version row", fake.versionID, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.Versions(rec, withRouteParam(adminRequest(http.MethodGet, "/api/cbt/questions/bad/versions", ""), "id", "bad"))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("Versions(bad id) status = %d, want 400", rec.Code)
+	}
+
+	fake.versionErr = domain.ErrForbidden
+	rec = httptest.NewRecorder()
+	h.Versions(rec, withRouteParam(adminRequest(http.MethodGet, "/api/cbt/questions/"+questionID.String()+"/versions", ""), "id", questionID.String()))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("Versions(forbidden) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
 	}
 }
 

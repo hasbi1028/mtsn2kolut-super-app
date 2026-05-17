@@ -189,6 +189,10 @@ func TestCbtQuestionAssetGetListAndHelpers(t *testing.T) {
 	if got, err := svc.Get(context.Background(), assetID); err != nil || got.ID != assetID || store.getID != assetID {
 		t.Fatalf("Get() = %+v/%v id=%v, want asset", got, err, store.getID)
 	}
+	store.questionRow = db.GetCbtQuestionRow{ID: questionID, Code: "Q-ASSET", AuthorUsername: "guru"}
+	if got, err := svc.GetQuestion(context.Background(), questionID); err != nil || got.ID != questionID || got.Code != "Q-ASSET" || store.questionID != questionID {
+		t.Fatalf("GetQuestion() = %+v/%v id=%v, want delegated question row", got, err, store.questionID)
+	}
 	if rows, err := svc.ListByQuestion(context.Background(), questionID); err != nil || len(rows) != 1 || store.listID != questionID {
 		t.Fatalf("ListByQuestion() = %d rows/%v id=%v, want asset list", len(rows), err, store.listID)
 	}

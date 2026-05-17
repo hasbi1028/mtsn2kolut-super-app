@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -197,6 +198,57 @@ func (f *fakeClassJournalStore) GetClassSubjectAssignment(ctx context.Context, i
 		return db.GetClassSubjectAssignmentRow{}, f.assignmentErr
 	}
 	return f.assignmentRow, nil
+}
+
+func TestClassJournalGetSessionByAssignmentDateWithStoreLoadsDetailAndAttendances(t *testing.T) {
+	assignmentID := documentCycleTestUUID(141)
+	sessionID := documentCycleTestUUID(142)
+	teacherID := documentCycleTestUUID(143)
+	studentID := documentCycleTestUUID(144)
+	tanggal := pgtype.Date{Time: time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC), Valid: true}
+	store := &fakeClassJournalStore{
+		sessionByDateID: sessionID,
+		sessionRow: db.GetJournalSessionRow{
+			ID:                sessionID,
+			AssignmentID:      assignmentID,
+			TeacherEmployeeID: teacherID,
+			Materi:            "Pecahan",
+		},
+		attendanceRows: []db.ListJournalAttendancesRow{{SessionID: sessionID, StudentID: studentID, Status: db.JournalAttendanceStatusHadir}},
+	}
+
+	detail, err := getSessionByAssignmentDateWithStore(context.Background(), store, assignmentID, tanggal, teacherID)
+	if err != nil {
+		t.Fatalf("getSessionByAssignmentDateWithStore() error = %v", err)
+	}
+	if store.sessionByDateArg.AssignmentID != assignmentID || !store.sessionByDateArg.Tanggal.Valid || !store.sessionByDateArg.Tanggal.Time.Equal(tanggal.Time) {
+		t.Fatalf("GetJournalSessionIDByAssignmentDate arg = %+v, want assignment/date", store.sessionByDateArg)
+	}
+	if detail.Session.ID != sessionID || len(detail.Attendances) != 1 || detail.Attendances[0].StudentID != studentID {
+		t.Fatalf("detail = %+v, want session and attendance rows", detail)
+	}
+}
+
+func TestClassJournalGetSessionByAssignmentDateWithStorePropagatesLookupAndAccessErrors(t *testing.T) {
+	assignmentID := documentCycleTestUUID(145)
+	sessionID := documentCycleTestUUID(146)
+	teacherID := documentCycleTestUUID(147)
+	otherTeacherID := documentCycleTestUUID(148)
+	tanggal := pgtype.Date{Time: time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC), Valid: true}
+
+	_, err := getSessionByAssignmentDateWithStore(context.Background(), &fakeClassJournalStore{sessionByDateErr: pgx.ErrNoRows}, assignmentID, tanggal, teacherID)
+	if !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("getSessionByAssignmentDateWithStore(no row) error = %v, want pgx.ErrNoRows", err)
+	}
+
+	store := &fakeClassJournalStore{
+		sessionByDateID: sessionID,
+		sessionRow:      db.GetJournalSessionRow{ID: sessionID, AssignmentID: assignmentID, TeacherEmployeeID: otherTeacherID},
+	}
+	_, err = getSessionByAssignmentDateWithStore(context.Background(), store, assignmentID, tanggal, teacherID)
+	if err == nil || !strings.Contains(err.Error(), "akses ditolak") {
+		t.Fatalf("getSessionByAssignmentDateWithStore(wrong teacher) error = %v, want access denied", err)
+	}
 }
 
 func TestClassJournalOverviewFiltersTeacherAndLoadsSelection(t *testing.T) {

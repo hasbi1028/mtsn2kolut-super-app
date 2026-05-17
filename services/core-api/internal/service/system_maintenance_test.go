@@ -21,15 +21,16 @@ type fakeMaintenanceStore struct {
 	windows      []db.SystemMaintenanceWindow
 	auditLogs    []db.SystemMaintenanceAuditLog
 
-	activeErr error
-	windowErr error
-	listErr   error
-	createErr error
-	updateErr error
-	setErr    error
-	auditErr  error
-	dbTimeErr error
-	cbtErr    error
+	activeErr    error
+	windowErr    error
+	listErr      error
+	createErr    error
+	updateErr    error
+	setErr       error
+	auditErr     error
+	auditListErr error
+	dbTimeErr    error
+	cbtErr       error
 
 	dbTime         pgtype.Timestamptz
 	activeSessions int64
@@ -81,7 +82,7 @@ func (f *fakeMaintenanceStore) CreateMaintenanceAuditLog(ctx context.Context, ar
 }
 func (f *fakeMaintenanceStore) ListMaintenanceAuditLogs(ctx context.Context, arg db.ListMaintenanceAuditLogsParams) ([]db.SystemMaintenanceAuditLog, error) {
 	f.auditParams = append(f.auditParams, arg)
-	return f.auditLogs, nil
+	return f.auditLogs, f.auditListErr
 }
 func (f *fakeMaintenanceStore) GetMaintenanceDatabaseTime(context.Context) (pgtype.Timestamptz, error) {
 	return f.dbTime, f.dbTimeErr
@@ -97,6 +98,16 @@ func maintenanceRowFromCreate(arg db.CreateMaintenanceWindowParams) db.SystemMai
 func maintenanceRowFromUpdate(arg db.UpdateMaintenanceWindowParams) db.SystemMaintenanceWindow {
 	now := pgtype.Timestamptz{Time: time.Date(2026, 5, 17, 10, 0, 0, 0, time.UTC), Valid: true}
 	return db.SystemMaintenanceWindow{Title: arg.Title, Message: arg.Message, Mode: arg.Mode, AffectedModules: arg.AffectedModules, StartsAt: arg.StartsAt, EndsAt: arg.EndsAt, IsActive: false, AllowAdminBypass: arg.AllowAdminBypass, BypassRoles: arg.BypassRoles, Severity: arg.Severity, UpdatedBy: arg.ActorUserID, CreatedAt: now, UpdatedAt: now}
+}
+
+func TestSystemMaintenanceConstructorsInitializeService(t *testing.T) {
+	store := &fakeMaintenanceStore{}
+	if svc := NewSystemMaintenanceWithStore(store, nil); svc == nil || svc.q != store || svc.now == nil {
+		t.Fatalf("NewSystemMaintenanceWithStore() = %+v", svc)
+	}
+	if svc := NewSystemMaintenance(nil, nil); svc == nil || svc.now == nil {
+		t.Fatalf("NewSystemMaintenance() = %+v", svc)
+	}
 }
 
 func TestMaintenanceModuleHelpersMatchExactSegments(t *testing.T) {
@@ -169,6 +180,70 @@ func TestSystemMaintenanceCreateWindowNormalizesAndAudits(t *testing.T) {
 	}
 }
 
+func TestSystemMaintenanceListWindowsDefaultsLimitAndMapsViews(t *testing.T) {
+	now := time.Date(2026, 5, 17, 8, 0, 0, 0, time.UTC)
+	store := &fakeMaintenanceStore{windows: []db.SystemMaintenanceWindow{
+		{ID: maintenanceTestUUID(2), Title: "Global", Message: "patch", Mode: MaintenanceModeGlobal, AffectedModules: []string{MaintenanceModuleGlobal}, IsActive: true, AllowAdminBypass: true, BypassRoles: []string{"admin"}, Severity: MaintenanceSeverityInfo, CreatedAt: pgtype.Timestamptz{Time: now.Add(-time.Hour), Valid: true}, UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true}},
+	}}
+	svc := NewSystemMaintenanceWithStore(store, nil)
+	svc.now = func() time.Time { return now }
+
+	views, err := svc.ListWindows(context.Background(), 0, 7)
+	if err != nil {
+		t.Fatalf("ListWindows() error = %v", err)
+	}
+	if len(store.listParams) != 1 || store.listParams[0].LimitCount != 50 || store.listParams[0].OffsetCount != 7 {
+		t.Fatalf("list params = %+v", store.listParams)
+	}
+	if len(views) != 1 || views[0].Title != "Global" || views[0].Status != "active_now" || views[0].CreatedAt.IsZero() {
+		t.Fatalf("views = %+v", views)
+	}
+
+	store.listErr = errors.New("boom")
+	if _, err := svc.ListWindows(context.Background(), 10, 0); err == nil {
+		t.Fatalf("ListWindows() error = nil, want store error")
+	}
+}
+
+func TestSystemMaintenanceUpdateWindowNormalizesAuditsAndMapsNotFound(t *testing.T) {
+	now := time.Date(2026, 5, 17, 8, 0, 0, 0, time.UTC)
+	store := &fakeMaintenanceStore{}
+	svc := NewSystemMaintenanceWithStore(store, nil)
+	svc.now = func() time.Time { return now }
+	start := now.Add(time.Hour)
+	end := start.Add(time.Hour)
+	actor := maintenanceTestUUID(9)
+
+	view, err := svc.UpdateWindow(context.Background(), maintenanceTestUUID(3), MaintenanceWindowInput{
+		Title: "  Update  ", Message: " msg ", Mode: "read_only", AffectedModules: []string{},
+		StartsAt: &start, EndsAt: &end, IsActive: true, Severity: "", ActorUserID: actor, Reason: " change ",
+	})
+	if err != nil {
+		t.Fatalf("UpdateWindow() error = %v", err)
+	}
+	if len(store.updated) != 1 || len(store.audits) != 1 {
+		t.Fatalf("updated/audits = %d/%d, want 1/1", len(store.updated), len(store.audits))
+	}
+	updated := store.updated[0]
+	if updated.Title != "Update" || updated.Message != "msg" || updated.Mode != MaintenanceModeReadOnly || updated.Severity != MaintenanceSeverityInfo {
+		t.Fatalf("updated params not normalized: %+v", updated)
+	}
+	if !reflect.DeepEqual(updated.AffectedModules, []string{MaintenanceModuleGlobal}) || !reflect.DeepEqual(updated.BypassRoles, []string{"superadmin", "admin"}) || !updated.AllowAdminBypass {
+		t.Fatalf("updated defaults = modules %v roles %v allow %v", updated.AffectedModules, updated.BypassRoles, updated.AllowAdminBypass)
+	}
+	if view.IsActive || view.Status != "inactive" || store.audits[0].Action != maintenanceActionUpdate || store.audits[0].Reason.String != "change" {
+		t.Fatalf("view/audit = %+v / %+v", view, store.audits[0])
+	}
+
+	if _, err := svc.UpdateWindow(context.Background(), pgtype.UUID{}, MaintenanceWindowInput{}); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("UpdateWindow(invalid id) error = %v, want bad request", err)
+	}
+	store.updateErr = pgx.ErrNoRows
+	if _, err := svc.UpdateWindow(context.Background(), maintenanceTestUUID(3), MaintenanceWindowInput{Title: "x", Message: "x", Mode: MaintenanceModeGlobal}); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("UpdateWindow(no rows) error = %v, want not found", err)
+	}
+}
+
 func TestSystemMaintenanceValidationRejectsInvalidWindows(t *testing.T) {
 	svc := NewSystemMaintenanceWithStore(&fakeMaintenanceStore{}, nil)
 	now := time.Date(2026, 5, 17, 8, 0, 0, 0, time.UTC)
@@ -229,6 +304,62 @@ func TestSystemMaintenanceStatusAndLifecycleViews(t *testing.T) {
 	}
 }
 
+func TestSystemMaintenanceActivateWindowSetsActiveAndAudits(t *testing.T) {
+	now := time.Date(2026, 5, 17, 8, 0, 0, 0, time.UTC)
+	id := maintenanceTestUUID(4)
+	actor := maintenanceTestUUID(9)
+	store := &fakeMaintenanceStore{window: db.SystemMaintenanceWindow{ID: id, Title: "Patch", Message: "open", Mode: MaintenanceModeModule, AffectedModules: []string{MaintenanceModulePusaka}, EndsAt: pgtype.Timestamptz{Time: now.Add(time.Hour), Valid: true}, AllowAdminBypass: true, BypassRoles: []string{"admin"}, Severity: MaintenanceSeverityWarning, CreatedAt: pgtype.Timestamptz{Time: now.Add(-time.Hour), Valid: true}, UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true}}}
+	svc := NewSystemMaintenanceWithStore(store, nil)
+	svc.now = func() time.Time { return now }
+
+	view, err := svc.ActivateWindow(context.Background(), id, actor, "start")
+	if err != nil {
+		t.Fatalf("ActivateWindow() error = %v", err)
+	}
+	if len(store.setActives) != 1 || !store.setActives[0].IsActive || store.setActives[0].ActorUserID != actor {
+		t.Fatalf("set active params = %+v", store.setActives)
+	}
+	if !view.IsActive || view.Status != "active_now" || len(store.audits) != 1 || store.audits[0].Action != maintenanceActionActivate {
+		t.Fatalf("view/audits = %+v / %+v", view, store.audits)
+	}
+
+	if _, err := svc.ActivateWindow(context.Background(), pgtype.UUID{}, actor, ""); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("ActivateWindow(invalid id) error = %v, want bad request", err)
+	}
+	store.windowErr = pgx.ErrNoRows
+	if _, err := svc.ActivateWindow(context.Background(), id, actor, ""); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("ActivateWindow(no rows) error = %v, want not found", err)
+	}
+}
+
+func TestSystemMaintenanceDeactivateWindowSetsInactiveAndAudits(t *testing.T) {
+	now := time.Date(2026, 5, 17, 8, 0, 0, 0, time.UTC)
+	id := maintenanceTestUUID(5)
+	actor := maintenanceTestUUID(9)
+	store := &fakeMaintenanceStore{window: db.SystemMaintenanceWindow{ID: id, Title: "Patch", Message: "close", Mode: MaintenanceModeGlobal, AffectedModules: []string{MaintenanceModuleGlobal}, IsActive: true, AllowAdminBypass: true, BypassRoles: []string{"admin"}, Severity: MaintenanceSeverityCritical, CreatedAt: pgtype.Timestamptz{Time: now.Add(-time.Hour), Valid: true}, UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true}}}
+	svc := NewSystemMaintenanceWithStore(store, nil)
+	svc.now = func() time.Time { return now }
+
+	view, err := svc.DeactivateWindow(context.Background(), id, actor, "done")
+	if err != nil {
+		t.Fatalf("DeactivateWindow() error = %v", err)
+	}
+	if len(store.setActives) != 1 || store.setActives[0].IsActive || store.setActives[0].ActorUserID != actor {
+		t.Fatalf("set inactive params = %+v", store.setActives)
+	}
+	if view.IsActive || view.Status != "inactive" || len(store.audits) != 1 || store.audits[0].Action != maintenanceActionDeactivate {
+		t.Fatalf("view/audits = %+v / %+v", view, store.audits)
+	}
+
+	if _, err := svc.DeactivateWindow(context.Background(), pgtype.UUID{}, actor, ""); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("DeactivateWindow(invalid id) error = %v, want bad request", err)
+	}
+	store.setErr = pgx.ErrNoRows
+	if _, err := svc.DeactivateWindow(context.Background(), id, actor, ""); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("DeactivateWindow(no rows) error = %v, want not found", err)
+	}
+}
+
 func TestSystemMaintenanceActivateRejectsEndedWindow(t *testing.T) {
 	now := time.Date(2026, 5, 17, 8, 0, 0, 0, time.UTC)
 	store := &fakeMaintenanceStore{window: db.SystemMaintenanceWindow{ID: maintenanceTestUUID(3), Title: "Old", Message: "done", Mode: MaintenanceModeGlobal, EndsAt: pgtype.Timestamptz{Time: now.Add(-time.Second), Valid: true}}}
@@ -277,6 +408,32 @@ type fakeMaintenanceBackupProvider struct {
 
 func (f fakeMaintenanceBackupProvider) Status(context.Context) (SystemBackupStatus, error) {
 	return f.status, f.err
+}
+
+func TestSystemMaintenanceListAuditLogsNormalizesFilterAndMapsRows(t *testing.T) {
+	now := time.Date(2026, 5, 17, 8, 0, 0, 0, time.UTC)
+	from := now.Add(-24 * time.Hour)
+	to := now
+	store := &fakeMaintenanceStore{auditLogs: []db.SystemMaintenanceAuditLog{
+		{ID: maintenanceTestUUID(7), MaintenanceID: maintenanceTestUUID(8), ActorUserID: maintenanceTestUUID(9), Action: maintenanceActionUpdate, Reason: pgtype.Text{String: "checked", Valid: true}, Metadata: []byte(`{"safe":"ok","secret_token":"abc"}`), CreatedAt: pgtype.Timestamptz{Time: now, Valid: true}},
+	}}
+	svc := NewSystemMaintenanceWithStore(store, nil)
+
+	logs, err := svc.ListAuditLogs(context.Background(), MaintenanceAuditFilter{Action: " UPDATE ", FromAt: &from, ToAt: &to, Offset: 3})
+	if err != nil {
+		t.Fatalf("ListAuditLogs() error = %v", err)
+	}
+	if len(store.auditParams) != 1 || store.auditParams[0].ActionFilter != maintenanceActionUpdate || store.auditParams[0].LimitCount != 50 || store.auditParams[0].OffsetCount != 3 || !store.auditParams[0].FromAt.Valid || !store.auditParams[0].ToAt.Valid {
+		t.Fatalf("audit params = %+v", store.auditParams)
+	}
+	if len(logs) != 1 || logs[0].Action != maintenanceActionUpdate || logs[0].Reason != "checked" || logs[0].Metadata["secret_token"] != "[REDACTED]" {
+		t.Fatalf("logs = %+v", logs)
+	}
+
+	store.auditListErr = errors.New("audit list failed")
+	if _, err := svc.ListAuditLogs(context.Background(), MaintenanceAuditFilter{Limit: 10}); err == nil {
+		t.Fatalf("ListAuditLogs() error = nil, want store error")
+	}
 }
 
 func TestMaintenanceAuditLogRedactsNestedSecrets(t *testing.T) {

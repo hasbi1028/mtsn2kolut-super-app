@@ -729,6 +729,18 @@ type fakeCbtSessionStore struct {
 	correctnessErr         error
 	scoresID               pgtype.UUID
 	scoresErr              error
+	finalizeOverdueID      pgtype.UUID
+	finalizeOverdueCount   int32
+	finalizeOverdueErr     error
+	preflightID            pgtype.UUID
+	preflightRow           db.GetCbtSessionGradeSyncPreflightRow
+	preflightErr           error
+	remedialArg            db.ListCbtSessionRemedialCandidatesParams
+	remedialRows           []db.ListCbtSessionRemedialCandidatesRow
+	remedialErr            error
+	itemAnalysisID         pgtype.UUID
+	itemAnalysisRows       []db.GetSessionItemAnalysisRow
+	itemAnalysisErr        error
 }
 
 func (f *fakeCbtSessionStore) ListCbtExamSessions(ctx context.Context) ([]db.ListCbtExamSessionsRow, error) {
@@ -1203,6 +1215,29 @@ func (f *fakeCbtSessionStore) UpdateAnswerCorrectness(ctx context.Context, sessi
 func (f *fakeCbtSessionStore) UpdateParticipantScores(ctx context.Context, sessionID pgtype.UUID) error {
 	f.scoresID = sessionID
 	return f.scoresErr
+}
+
+func (f *fakeCbtSessionStore) FinalizeOverdueParticipants(ctx context.Context, sessionID pgtype.UUID) (int32, error) {
+	f.finalizeOverdueID = sessionID
+	return f.finalizeOverdueCount, f.finalizeOverdueErr
+}
+
+func (f *fakeCbtSessionStore) GetCbtSessionGradeSyncPreflight(ctx context.Context, id pgtype.UUID) (db.GetCbtSessionGradeSyncPreflightRow, error) {
+	f.preflightID = id
+	if f.preflightRow.SessionID.Valid {
+		return f.preflightRow, f.preflightErr
+	}
+	return db.GetCbtSessionGradeSyncPreflightRow{SessionID: id}, f.preflightErr
+}
+
+func (f *fakeCbtSessionStore) ListCbtSessionRemedialCandidates(ctx context.Context, arg db.ListCbtSessionRemedialCandidatesParams) ([]db.ListCbtSessionRemedialCandidatesRow, error) {
+	f.remedialArg = arg
+	return f.remedialRows, f.remedialErr
+}
+
+func (f *fakeCbtSessionStore) GetSessionItemAnalysis(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionItemAnalysisRow, error) {
+	f.itemAnalysisID = sessionID
+	return f.itemAnalysisRows, f.itemAnalysisErr
 }
 
 func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {

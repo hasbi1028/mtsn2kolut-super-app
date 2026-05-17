@@ -356,6 +356,198 @@ func TestCbtSessionRoomWrappersUseFakeStore(t *testing.T) {
 	}
 }
 
+func TestCbtSessionFinalizeOverdueWithFakeStore(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtSessionTestUUID(60)
+	store := &fakeCbtSessionStore{finalizeOverdueCount: 3}
+	svc := &CbtSession{q: store}
+
+	result, err := svc.FinalizeOverdue(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("FinalizeOverdue() error = %v", err)
+	}
+	if result.SessionID != pgUUIDString(sessionID) || result.FinalizedCount != 3 {
+		t.Fatalf("FinalizeOverdue() = %+v, want session id and finalized count", result)
+	}
+	if store.correctnessID != sessionID || store.finalizeOverdueID != sessionID {
+		t.Fatalf("FinalizeOverdue() calls correctness=%v finalize=%v, want %v", store.correctnessID, store.finalizeOverdueID, sessionID)
+	}
+
+	boom := errors.New("correctness failed")
+	store = &fakeCbtSessionStore{correctnessErr: boom, finalizeOverdueCount: 9}
+	if count, err := finalizeOverdueWithStore(ctx, store, sessionID); !errors.Is(err, boom) || count != 0 {
+		t.Fatalf("finalizeOverdueWithStore(correctness error) = %d/%v, want 0/%v", count, err, boom)
+	}
+	if store.finalizeOverdueID.Valid {
+		t.Fatalf("finalizeOverdueWithStore(correctness error) finalized with id %v, want skipped", store.finalizeOverdueID)
+	}
+
+	boom = errors.New("finalize failed")
+	store = &fakeCbtSessionStore{finalizeOverdueErr: boom}
+	if count, err := finalizeOverdueWithStore(ctx, store, sessionID); !errors.Is(err, boom) || count != 0 || store.correctnessID != sessionID || store.finalizeOverdueID != sessionID {
+		t.Fatalf("finalizeOverdueWithStore(finalize error) = %d/%v correctness=%v finalize=%v, want error after correctness", count, err, store.correctnessID, store.finalizeOverdueID)
+	}
+}
+
+func TestCbtSessionResultFollowUpPathsUseFakeStore(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtSessionTestUUID(70)
+	studentID := cbtSessionTestUUID(71)
+	participantID := cbtSessionTestUUID(72)
+	store := &fakeCbtSessionStore{
+		preflightRow: db.GetCbtSessionGradeSyncPreflightRow{
+			SessionID:         sessionID,
+			SessionTitle:      "PAS Fikih",
+			ParticipantCount:  12,
+			SubmittedCount:    10,
+			ScoredCount:       9,
+			MissingScoreCount: 1,
+		},
+		remedialRows: []db.ListCbtSessionRemedialCandidatesRow{{
+			ParticipantID:  participantID,
+			StudentID:      studentID,
+			Nis:            "001",
+			Nama:           "Siswa Remedial",
+			ClassCode:      "9A",
+			Score:          pgNumeric(64.5),
+			QuestionCount:  20,
+			IncorrectCount: 7,
+		}},
+	}
+	svc := &CbtSession{q: store}
+
+	preflight, err := svc.GetGradeSyncPreflight(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("GetGradeSyncPreflight() error = %v", err)
+	}
+	if preflight.SessionID != sessionID || preflight.SessionTitle != "PAS Fikih" || preflight.MissingScoreCount != 1 || store.preflightID != sessionID {
+		t.Fatalf("GetGradeSyncPreflight() = %+v id=%v, want forwarded preflight row", preflight, store.preflightID)
+	}
+
+	rows, err := svc.ListRemedialCandidates(ctx, sessionID, 0)
+	if err != nil {
+		t.Fatalf("ListRemedialCandidates(default threshold) error = %v", err)
+	}
+	if len(rows) != 1 || rows[0].ParticipantID != participantID || testNumericFloat64(t, store.remedialArg.Threshold) != 75 {
+		t.Fatalf("ListRemedialCandidates(default threshold) rows=%+v arg=%+v, want one row threshold 75", rows, store.remedialArg)
+	}
+
+	store.remedialRows = nil
+	rows, err = svc.ListRemedialCandidates(ctx, sessionID, 101)
+	if err != nil {
+		t.Fatalf("ListRemedialCandidates(high threshold) error = %v", err)
+	}
+	if rows == nil || len(rows) != 0 || testNumericFloat64(t, store.remedialArg.Threshold) != 75 {
+		t.Fatalf("ListRemedialCandidates(high threshold) rows=%+v arg=%+v, want empty slice threshold 75", rows, store.remedialArg)
+	}
+
+	store.remedialRows = []db.ListCbtSessionRemedialCandidatesRow{{ParticipantID: participantID}}
+	rows, err = svc.ListRemedialCandidates(ctx, sessionID, 68.25)
+	if err != nil {
+		t.Fatalf("ListRemedialCandidates(custom threshold) error = %v", err)
+	}
+	if len(rows) != 1 || testNumericFloat64(t, store.remedialArg.Threshold) != 68.25 || store.remedialArg.SessionID != sessionID {
+		t.Fatalf("ListRemedialCandidates(custom threshold) rows=%+v arg=%+v, want custom threshold and session", rows, store.remedialArg)
+	}
+}
+
+func TestCbtSessionItemAnalysisUsesFakeStore(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtSessionTestUUID(80)
+	questionID := cbtSessionTestUUID(81)
+	store := &fakeCbtSessionStore{
+		itemAnalysisRows: []db.GetSessionItemAnalysisRow{{
+			Position:            1,
+			QuestionID:          questionID,
+			QuestionCode:        "Q-001",
+			QuestionType:        "multiple_choice",
+			DifficultyIndex:     0.72,
+			DiscriminationIndex: 0.41,
+			AnswerDistribution:  []byte(`{\"A\":3,\"B\":7}`),
+		}},
+	}
+	svc := &CbtSession{q: store}
+
+	rows, err := svc.GetItemAnalysis(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("GetItemAnalysis() error = %v", err)
+	}
+	if len(rows) != 1 || rows[0].QuestionID != questionID || rows[0].QuestionCode != "Q-001" || store.itemAnalysisID != sessionID {
+		t.Fatalf("GetItemAnalysis() rows=%+v id=%v, want forwarded item analysis", rows, store.itemAnalysisID)
+	}
+
+	store.itemAnalysisRows = nil
+	rows, err = svc.GetItemAnalysis(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("GetItemAnalysis(nil rows) error = %v", err)
+	}
+	if rows == nil || len(rows) != 0 {
+		t.Fatalf("GetItemAnalysis(nil rows) = %+v, want empty slice", rows)
+	}
+}
+
+func TestCbtSessionListUngradedEssaysByTeacherUsesFakeStore(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtSessionTestUUID(90)
+	teacherID := cbtSessionTestUUID(91)
+	answerID := cbtSessionTestUUID(92)
+	participantID := cbtSessionTestUUID(93)
+	questionID := cbtSessionTestUUID(94)
+	store := &fakeCbtSessionStore{
+		ungradedTeacherRows: []db.ListUngradedEssaysByTeacherRow{{
+			AnswerID:      answerID,
+			ParticipantID: participantID,
+			QuestionID:    questionID,
+			Answer:        "uraian",
+			QuestionCode:  "ESS-1",
+			Nis:           "009",
+			Nama:          "Siswa Essay",
+			RoomName:      "Lab 1",
+		}},
+	}
+	svc := &CbtSession{q: store}
+
+	rows, err := svc.ListUngradedEssaysByTeacher(ctx, sessionID, teacherID)
+	if err != nil {
+		t.Fatalf("ListUngradedEssaysByTeacher() error = %v", err)
+	}
+	if len(rows) != 1 || rows[0].AnswerID != answerID || rows[0].ParticipantID != participantID || rows[0].QuestionCode != "ESS-1" {
+		t.Fatalf("ListUngradedEssaysByTeacher() rows = %+v, want converted teacher essay row", rows)
+	}
+	if store.ungradedTeacherArg.SessionID != sessionID || store.ungradedTeacherArg.TeacherEmployeeID != teacherID {
+		t.Fatalf("ListUngradedEssaysByTeacher() arg = %+v, want session and teacher", store.ungradedTeacherArg)
+	}
+
+	store.ungradedTeacherRows = nil
+	rows, err = svc.ListUngradedEssaysByTeacher(ctx, sessionID, teacherID)
+	if err != nil {
+		t.Fatalf("ListUngradedEssaysByTeacher(nil rows) error = %v", err)
+	}
+	if rows == nil || len(rows) != 0 {
+		t.Fatalf("ListUngradedEssaysByTeacher(nil rows) = %+v, want empty slice", rows)
+	}
+
+	boom := errors.New("teacher essay list failed")
+	store.ungradedErr = boom
+	if _, err := svc.ListUngradedEssaysByTeacher(ctx, sessionID, teacherID); !errors.Is(err, boom) {
+		t.Fatalf("ListUngradedEssaysByTeacher(error) = %v, want %v", err, boom)
+	}
+}
+
+func testNumericFloat64(t *testing.T, n pgtype.Numeric) float64 {
+	t.Helper()
+	if !n.Valid {
+		t.Fatal("numeric is invalid")
+	}
+	f, _ := n.Int.Float64()
+	scale := new(big.Float).SetInt64(1)
+	for i := int32(0); i < -n.Exp; i++ {
+		scale.Mul(scale, big.NewFloat(10))
+	}
+	divisor, _ := scale.Float64()
+	return f / divisor
+}
+
 func TestCbtSessionUUIDHelpers(t *testing.T) {
 	ids := []pgtype.UUID{cbtSessionTestUUID(1), cbtSessionTestUUID(2), pgtype.UUID{}}
 	jsonBytes, err := UUIDsToJSON(ids)

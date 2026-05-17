@@ -55,6 +55,56 @@ func TestRombelConstructorsAndSimpleWrappers(t *testing.T) {
 	}
 }
 
+func TestRombelStudentAndHomeroomWrappers(t *testing.T) {
+	classID := documentCycleTestUUID(171)
+	studentID := documentCycleTestUUID(172)
+	homeroomID := documentCycleTestUUID(173)
+	employeeID := documentCycleTestUUID(174)
+	store := &fakeRombelWrapperStore{
+		studentsWithParents: []db.ListStudentsByClassWithParentsRow{{StudentID: studentID, StudentName: "Aisyah", ParentNama: "Ibu Aisyah"}},
+		homerooms:           []db.ListHomeroomAssignmentsByClassRow{{ID: homeroomID, ClassID: classID, EmployeeID: employeeID, EmployeeName: "Wali"}},
+		createHomeroomRow:   db.CreateHomeroomAssignmentRow{ID: homeroomID, ClassID: classID, EmployeeID: employeeID, EmployeeName: "Wali"},
+		updateHomeroomRow:   db.UpdateHomeroomAssignmentRow{ID: homeroomID, ClassID: classID, EmployeeID: employeeID, EmployeeName: "Wali Baru"},
+	}
+	svc := &Rombel{q: store}
+
+	students, err := svc.ListStudentsWithParents(context.Background(), classID)
+	if err != nil || len(students) != 1 || students[0].StudentID != studentID || store.studentsClassID != classID {
+		t.Fatalf("ListStudentsWithParents() = %+v, %v; classID=%s", students, err, store.studentsClassID.String())
+	}
+	homerooms, err := svc.ListHomeroomAssignments(context.Background(), classID)
+	if err != nil || len(homerooms) != 1 || homerooms[0].ID != homeroomID || store.homeroomClassID != classID {
+		t.Fatalf("ListHomeroomAssignments() = %+v, %v; classID=%s", homerooms, err, store.homeroomClassID.String())
+	}
+	createArg := db.CreateHomeroomAssignmentParams{ClassID: classID, EmployeeID: employeeID, HomeroomIsActive: true, Notes: "baru"}
+	created, err := svc.CreateHomeroomAssignment(context.Background(), createArg)
+	if err != nil || created.ID != homeroomID || store.createHomeroomArg != createArg {
+		t.Fatalf("CreateHomeroomAssignment() = %+v, %v; arg=%+v", created, err, store.createHomeroomArg)
+	}
+	updateArg := db.UpdateHomeroomAssignmentParams{ID: homeroomID, EmployeeID: employeeID, HomeroomIsActive: true, Notes: "update"}
+	updated, err := svc.UpdateHomeroomAssignment(context.Background(), updateArg)
+	if err != nil || updated.ID != homeroomID || store.updateHomeroomArg != updateArg {
+		t.Fatalf("UpdateHomeroomAssignment() = %+v, %v; arg=%+v", updated, err, store.updateHomeroomArg)
+	}
+	if err := svc.DeleteHomeroomAssignment(context.Background(), homeroomID); err != nil || store.deleteHomeroomID != homeroomID {
+		t.Fatalf("DeleteHomeroomAssignment() error = %v; id=%s", err, store.deleteHomeroomID.String())
+	}
+}
+
+func TestRombelCreateSubjectAssignmentWrapper(t *testing.T) {
+	classID := documentCycleTestUUID(181)
+	subjectID := documentCycleTestUUID(182)
+	teacherID := documentCycleTestUUID(183)
+	assignmentID := documentCycleTestUUID(184)
+	store := &fakeRombelWrapperStore{createAssignmentRow: db.CreateRombelSubjectAssignmentRow{ID: assignmentID, ClassID: classID, SubjectID: subjectID, TeacherEmployeeID: teacherID}}
+	svc := &Rombel{q: store}
+	arg := db.CreateRombelSubjectAssignmentParams{ClassID: classID, SubjectID: subjectID, TeacherEmployeeID: teacherID}
+	row, err := svc.CreateSubjectAssignment(context.Background(), arg)
+	if err != nil || row.ID != assignmentID || store.createAssignmentArg != arg {
+		t.Fatalf("CreateSubjectAssignment() = %+v, %v; arg=%+v", row, err, store.createAssignmentArg)
+	}
+}
+
 func TestRombelSubjectAssignmentMatrixAndCellHelpers(t *testing.T) {
 	yearID := documentCycleTestUUID(221)
 	classID := documentCycleTestUUID(222)
@@ -122,6 +172,69 @@ func TestRombelSubjectAssignmentMatrixCellValidationAndDeletion(t *testing.T) {
 	svc = &Rombel{q: store}
 	if _, err := svc.UpdateSubjectAssignmentMatrixCell(context.Background(), SubjectAssignmentMatrixCellInput{ClassID: classID, SubjectID: subjectID, AdditionalWeeklyHours: &positive}); !errors.Is(err, domain.ErrBadRequest) {
 		t.Fatalf("positive hours without teacher error = %v, want bad request", err)
+	}
+}
+
+func TestRombelUpsertSubjectAllocationOverride(t *testing.T) {
+	classID := documentCycleTestUUID(191)
+	subjectID := documentCycleTestUUID(192)
+	assignmentID := documentCycleTestUUID(193)
+	allocationID := documentCycleTestUUID(194)
+	assignment := db.ClassSubjectAssignment{ID: assignmentID, ClassID: classID, SubjectID: subjectID}
+
+	store := &fakeRombelWrapperStore{}
+	svc := &Rombel{q: store}
+	if err := svc.upsertSubjectAllocationOverride(context.Background(), assignment, SubjectAssignmentMatrixCellInput{ClassID: classID, SubjectID: subjectID}); err != nil {
+		t.Fatalf("no-op upsert error = %v", err)
+	}
+	if store.upsertOverrideCalled {
+		t.Fatal("UpsertClassSubjectAllocationOverride called for empty customization")
+	}
+
+	additional := 1.5
+	store = &fakeRombelWrapperStore{
+		subjects: []db.ListSubjectAssignmentMatrixSubjectsRow{{ID: subjectID, IsChoiceSubject: false}},
+		allocation: db.GetCurriculumAllocationForClassSubjectRow{
+			ID:               allocationID,
+			IntraWeeklyHours: float64ToNumeric(2),
+			KokuWeeklyHours:  float64ToNumeric(1),
+			TotalWeeklyHours: float64ToNumeric(3),
+		},
+		sumAdditional: float64ToNumeric(2),
+	}
+	svc = &Rombel{q: store}
+	if err := svc.upsertSubjectAllocationOverride(context.Background(), assignment, SubjectAssignmentMatrixCellInput{ClassID: classID, SubjectID: subjectID, AdditionalWeeklyHours: &additional, CustomizationNotes: "  extra lab  "}); err != nil {
+		t.Fatalf("customized upsert error = %v", err)
+	}
+	arg := store.upsertOverrideArg
+	if !store.upsertOverrideCalled || arg.AssignmentID != assignmentID || arg.CurriculumAllocationID != allocationID || arg.Notes != "extra lab" || !arg.IsCustomized {
+		t.Fatalf("override arg = %+v called=%v", arg, store.upsertOverrideCalled)
+	}
+	if got := numericToFloat64(arg.TotalWeeklyHours); got != 4.5 {
+		t.Fatalf("total weekly hours = %v, want 4.5", got)
+	}
+}
+
+func TestRombelUpsertSubjectAllocationOverrideRejectsLimits(t *testing.T) {
+	classID := documentCycleTestUUID(198)
+	subjectID := documentCycleTestUUID(199)
+	assignment := db.ClassSubjectAssignment{ID: documentCycleTestUUID(200), ClassID: classID, SubjectID: subjectID}
+	svc := &Rombel{q: &fakeRombelWrapperStore{subjects: []db.ListSubjectAssignmentMatrixSubjectsRow{{ID: subjectID}}}}
+	tooLarge := 6.1
+	if err := svc.upsertSubjectAllocationOverride(context.Background(), assignment, SubjectAssignmentMatrixCellInput{ClassID: classID, SubjectID: subjectID, AdditionalWeeklyHours: &tooLarge}); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("additional > 6 error = %v, want bad request", err)
+	}
+
+	choiceTooLarge := 2.5
+	svc = &Rombel{q: &fakeRombelWrapperStore{subjects: []db.ListSubjectAssignmentMatrixSubjectsRow{{ID: subjectID, IsChoiceSubject: true}}}}
+	if err := svc.upsertSubjectAllocationOverride(context.Background(), assignment, SubjectAssignmentMatrixCellInput{ClassID: classID, SubjectID: subjectID, AdditionalWeeklyHours: &choiceTooLarge}); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("choice additional > 2 error = %v, want bad request", err)
+	}
+
+	wouldExceedClassTotal := 2.0
+	svc = &Rombel{q: &fakeRombelWrapperStore{subjects: []db.ListSubjectAssignmentMatrixSubjectsRow{{ID: subjectID}}, sumAdditional: float64ToNumeric(4.5)}}
+	if err := svc.upsertSubjectAllocationOverride(context.Background(), assignment, SubjectAssignmentMatrixCellInput{ClassID: classID, SubjectID: subjectID, AdditionalWeeklyHours: &wouldExceedClassTotal}); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("class total > 6 error = %v, want bad request", err)
 	}
 }
 
@@ -224,6 +337,16 @@ type fakeRombelWrapperStore struct {
 	detail                 db.GetRombelDetailRow
 	assignments            []db.ListRombelSubjectAssignmentsRow
 	assignment             db.GetRombelSubjectAssignmentRow
+	studentsWithParents    []db.ListStudentsByClassWithParentsRow
+	studentsClassID        pgtype.UUID
+	homerooms              []db.ListHomeroomAssignmentsByClassRow
+	homeroomClassID        pgtype.UUID
+	createHomeroomArg      db.CreateHomeroomAssignmentParams
+	createHomeroomRow      db.CreateHomeroomAssignmentRow
+	updateHomeroomArg      db.UpdateHomeroomAssignmentParams
+	updateHomeroomRow      db.UpdateHomeroomAssignmentRow
+	deleteHomeroomID       pgtype.UUID
+	deleteHomeroomErr      error
 	activeYear             db.AcademicYear
 	activeYearErr          error
 	classes                []db.ListSubjectAssignmentMatrixClassesRow
@@ -235,6 +358,14 @@ type fakeRombelWrapperStore struct {
 	byClassSubjectErr      error
 	upsertAssignment       db.ClassSubjectAssignment
 	upsertCellArg          db.UpsertSubjectAssignmentMatrixCellParams
+	allocation             db.GetCurriculumAllocationForClassSubjectRow
+	allocationErr          error
+	sumAdditional          pgtype.Numeric
+	sumArg                 db.SumClassAdditionalWeeklyHoursExceptAssignmentParams
+	upsertOverrideArg      db.UpsertClassSubjectAllocationOverrideParams
+	upsertOverrideCalled   bool
+	createAssignmentArg    db.CreateRombelSubjectAssignmentParams
+	createAssignmentRow    db.CreateRombelSubjectAssignmentRow
 	deleteAssignmentCalled bool
 	deleteAssignmentArg    db.DeleteRombelSubjectAssignmentParams
 	deleteAssignmentRows   int64
@@ -263,6 +394,26 @@ func (f *fakeRombelWrapperStore) ListRombelSubjectAssignments(context.Context, p
 }
 func (f *fakeRombelWrapperStore) GetRombelSubjectAssignment(context.Context, db.GetRombelSubjectAssignmentParams) (db.GetRombelSubjectAssignmentRow, error) {
 	return f.assignment, nil
+}
+func (f *fakeRombelWrapperStore) ListStudentsByClassWithParents(_ context.Context, classID pgtype.UUID) ([]db.ListStudentsByClassWithParentsRow, error) {
+	f.studentsClassID = classID
+	return f.studentsWithParents, nil
+}
+func (f *fakeRombelWrapperStore) ListHomeroomAssignmentsByClass(_ context.Context, classID pgtype.UUID) ([]db.ListHomeroomAssignmentsByClassRow, error) {
+	f.homeroomClassID = classID
+	return f.homerooms, nil
+}
+func (f *fakeRombelWrapperStore) CreateHomeroomAssignment(_ context.Context, arg db.CreateHomeroomAssignmentParams) (db.CreateHomeroomAssignmentRow, error) {
+	f.createHomeroomArg = arg
+	return f.createHomeroomRow, nil
+}
+func (f *fakeRombelWrapperStore) UpdateHomeroomAssignment(_ context.Context, arg db.UpdateHomeroomAssignmentParams) (db.UpdateHomeroomAssignmentRow, error) {
+	f.updateHomeroomArg = arg
+	return f.updateHomeroomRow, nil
+}
+func (f *fakeRombelWrapperStore) DeleteHomeroomAssignment(_ context.Context, id pgtype.UUID) error {
+	f.deleteHomeroomID = id
+	return f.deleteHomeroomErr
 }
 func (f *fakeRombelWrapperStore) GetActiveAcademicYear(context.Context) (db.AcademicYear, error) {
 	if f.activeYearErr != nil {
@@ -297,6 +448,31 @@ func (f *fakeRombelWrapperStore) GetSubjectAssignmentByClassSubject(context.Cont
 func (f *fakeRombelWrapperStore) UpsertSubjectAssignmentMatrixCell(_ context.Context, arg db.UpsertSubjectAssignmentMatrixCellParams) (db.ClassSubjectAssignment, error) {
 	f.upsertCellArg = arg
 	return f.upsertAssignment, nil
+}
+func (f *fakeRombelWrapperStore) GetCurriculumAllocationForClassSubject(context.Context, db.GetCurriculumAllocationForClassSubjectParams) (db.GetCurriculumAllocationForClassSubjectRow, error) {
+	if f.allocationErr != nil {
+		return db.GetCurriculumAllocationForClassSubjectRow{}, f.allocationErr
+	}
+	if !f.allocation.ID.Valid {
+		return db.GetCurriculumAllocationForClassSubjectRow{}, pgx.ErrNoRows
+	}
+	return f.allocation, nil
+}
+func (f *fakeRombelWrapperStore) SumClassAdditionalWeeklyHoursExceptAssignment(_ context.Context, arg db.SumClassAdditionalWeeklyHoursExceptAssignmentParams) (pgtype.Numeric, error) {
+	f.sumArg = arg
+	if f.sumAdditional.Valid {
+		return f.sumAdditional, nil
+	}
+	return pgtype.Numeric{Valid: true}, nil
+}
+func (f *fakeRombelWrapperStore) UpsertClassSubjectAllocationOverride(_ context.Context, arg db.UpsertClassSubjectAllocationOverrideParams) (db.ClassSubjectAllocationOverride, error) {
+	f.upsertOverrideCalled = true
+	f.upsertOverrideArg = arg
+	return db.ClassSubjectAllocationOverride{AssignmentID: arg.AssignmentID}, nil
+}
+func (f *fakeRombelWrapperStore) CreateRombelSubjectAssignment(_ context.Context, arg db.CreateRombelSubjectAssignmentParams) (db.CreateRombelSubjectAssignmentRow, error) {
+	f.createAssignmentArg = arg
+	return f.createAssignmentRow, nil
 }
 func (f *fakeRombelWrapperStore) CountRombelSubjectAssignmentDependents(context.Context, db.CountRombelSubjectAssignmentDependentsParams) (db.CountRombelSubjectAssignmentDependentsRow, error) {
 	f.countDependentsCalled = true

@@ -2,8 +2,11 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -31,6 +34,101 @@ func TestQuestionAuthoringPlainTextHelpers(t *testing.T) {
 	}
 	if got := derivePlainText(long); len(got) != 500 {
 		t.Fatalf("derivePlainText(long) length = %d, want 500", len(got))
+	}
+}
+
+func TestQuestionAuthoringPlainTextDocumentsCurrentHTMLFlattening(t *testing.T) {
+	input := `<article><h1> Judul </h1><p>Paragraf<br><span>lanjutan</span></p><script>alert(1)</script><style>.x{}</style><svg><text>ikon</text></svg><ul><li>Satu</li><li>Dua</li></ul></article>`
+	got := derivePlainText(input)
+	if strings.Contains(got, "alert") || strings.Contains(got, ".x") {
+		t.Fatalf("derivePlainText() = %q, want script/style text skipped", got)
+	}
+	if got != "Judul ParagraflanjutanikonSatuDua" {
+		t.Fatalf("derivePlainText() = %q, want current flattened HTML text", got)
+	}
+
+	if got := plainTextFromHTML(""); got != "" {
+		t.Fatalf("plainTextFromHTML(blank) = %q, want empty", got)
+	}
+}
+
+func TestCbtQuestionFromCurrentCopiesAuthoringAndVersionFields(t *testing.T) {
+	id := mustQuestionUUID(t, "00000000-0000-0000-0000-000000000701")
+	eventID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000000702")
+	subjectID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000000703")
+	groupID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000000704")
+	sourceID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000000705")
+	supersedesID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000000706")
+	options, err := json.Marshal([]QuestionOption{{Label: "A", Text: "Benar"}})
+	if err != nil {
+		t.Fatalf("Marshal options error = %v", err)
+	}
+	createdAt := pgtype.Timestamptz{Time: time.Date(2026, 5, 1, 8, 0, 0, 0, time.UTC), Valid: true}
+	updatedAt := pgtype.Timestamptz{Time: time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC), Valid: true}
+	reviewedAt := pgtype.Timestamptz{Time: time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC), Valid: true}
+	approvedAt := pgtype.Timestamptz{Time: time.Date(2026, 5, 1, 11, 0, 0, 0, time.UTC), Valid: true}
+
+	current := db.GetCbtQuestionRow{
+		ID:                   id,
+		EventID:              eventID,
+		SubjectID:            subjectID,
+		Code:                 "Q-701",
+		QuestionText:         "Teks soal",
+		QuestionType:         "multiple_choice",
+		Options:              options,
+		OptionA:              "A",
+		OptionB:              "B",
+		AnswerKey:            "A",
+		Explanation:          "Karena A",
+		Difficulty:           db.CbtQuestionDifficultyEnumMedium,
+		Status:               db.CbtQuestionStatusEnumPublished,
+		CreatedAt:            createdAt,
+		UpdatedAt:            updatedAt,
+		StemHtml:             "<p>Stem</p>",
+		StemLatex:            "x^2",
+		StimulusHtml:         "<p>Stimulus</p>",
+		StimulusLatex:        "y^2",
+		ExplanationHtml:      "<p>Expl</p>",
+		RubricHtml:           "<p>Rubric</p>",
+		AcademicPhase:        "D",
+		TargetLevel:          pgtype.Text{String: "8", Valid: true},
+		CpRef:                "CP",
+		TpRef:                "TP",
+		KdRef:                "KD",
+		IndicatorRef:         "IND",
+		MaterialTopic:        "Peluang",
+		CognitiveLevel:       "C4",
+		HotsFlag:             true,
+		MediaAssetIds:        []byte(`["asset-1"]`),
+		WorkflowStatus:       "published",
+		Version:              3,
+		VersionGroupID:       groupID,
+		VersionNumber:        4,
+		SourceQuestionID:     sourceID,
+		SupersedesQuestionID: supersedesID,
+		IsLatestVersion:      true,
+		VersionNote:          "catatan versi",
+		AuthorUsername:       "guru.ipa",
+		ReviewerUsername:     "reviewer",
+		ReviewedAt:           reviewedAt,
+		ApproverUsername:     "approver",
+		ApprovedAt:           approvedAt,
+		WriterNotes:          "catatan penulis",
+		ReviewNotes:          "catatan review",
+	}
+
+	got := cbtQuestionFromCurrent(current)
+	if got.ID != id || got.EventID != eventID || got.SubjectID != subjectID || got.VersionGroupID != groupID || got.SourceQuestionID != sourceID || got.SupersedesQuestionID != supersedesID {
+		t.Fatalf("cbtQuestionFromCurrent() ids = %+v, want copied IDs", got)
+	}
+	if got.Code != current.Code || got.QuestionText != current.QuestionText || got.QuestionType != current.QuestionType || got.AnswerKey != current.AnswerKey || got.WorkflowStatus != current.WorkflowStatus {
+		t.Fatalf("cbtQuestionFromCurrent() core fields = %+v, want copied core fields", got)
+	}
+	if string(got.Options) != string(options) || got.StemHtml != current.StemHtml || got.RubricHtml != current.RubricHtml || string(got.MediaAssetIds) != string(current.MediaAssetIds) {
+		t.Fatalf("cbtQuestionFromCurrent() rich fields = %+v, want copied rich fields", got)
+	}
+	if got.Version != 3 || got.VersionNumber != 4 || !got.IsLatestVersion || got.VersionNote != current.VersionNote || got.AuthorUsername != current.AuthorUsername || got.ReviewedAt != reviewedAt || got.ApprovedAt != approvedAt {
+		t.Fatalf("cbtQuestionFromCurrent() workflow/version fields = %+v, want copied workflow/version fields", got)
 	}
 }
 
