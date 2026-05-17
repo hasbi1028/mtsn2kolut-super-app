@@ -1,12 +1,15 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
@@ -47,6 +50,136 @@ func TestCbtProctoringActionHelpersNormalizeAndClassify(t *testing.T) {
 	}
 	if got := normalizeProctorActionType("approve"); got != "" {
 		t.Fatalf("normalizeProctorActionType(unknown) = %q, want empty", got)
+	}
+}
+
+func TestCbtProctoringStoreFacingScopesAndAcknowledge(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtProctoringActionTestUUID(t, "11111111-1111-1111-1111-111111111111")
+	participantID := cbtProctoringActionTestUUID(t, "22222222-2222-2222-2222-222222222222")
+	eventID := cbtProctoringActionTestUUID(t, "33333333-3333-3333-3333-333333333333")
+	roomID := cbtProctoringActionTestUUID(t, "44444444-4444-4444-4444-444444444444")
+	actorID := cbtProctoringActionTestUUID(t, "55555555-5555-5555-5555-555555555555")
+	actor := CbtProctorActor{UserID: actorID, Username: "proctor-1", RequestID: "req-1", SourceIP: "127.0.0.1"}
+	store := &fakeCbtSessionStore{
+		participantProctorScopeRow: db.GetCbtParticipantProctorScopeRow{ParticipantID: participantID, SessionID: sessionID, RoomID: roomID, Nama: "Siswa"},
+		proctorEventScopeRow:       db.GetCbtProctorEventScopeRow{ID: eventID, ParticipantID: participantID, SessionID: sessionID, RoomID: roomID, Severity: string(ProctorSeverityCritical), RequiresNote: true},
+		ackProctorEventRow:         db.AcknowledgeCbtProctorEventRow{ID: eventID, ParticipantID: participantID},
+	}
+	svc := &CbtSession{q: store}
+
+	if got, err := svc.GetProctorEventScope(ctx, eventID); err != nil || got.ID != eventID || store.proctorEventScopeID != eventID {
+		t.Fatalf("GetProctorEventScope() = %+v/%v id=%v, want event scope", got, err, store.proctorEventScopeID)
+	}
+	if got, err := svc.GetParticipantProctorScope(ctx, sessionID, participantID); err != nil || got.ParticipantID != participantID || store.participantProctorScopeArg.SessionID != sessionID || store.participantProctorScopeArg.ParticipantID != participantID {
+		t.Fatalf("GetParticipantProctorScope() = %+v/%v arg=%+v, want participant scope", got, err, store.participantProctorScopeArg)
+	}
+	if _, err := svc.AcknowledgeProctorEventByID(ctx, eventID, CbtProctorActor{}, "checked"); !errors.Is(err, domain.ErrUnauthorized) {
+		t.Fatalf("AcknowledgeProctorEventByID(no actor) = %v, want ErrUnauthorized", err)
+	}
+	if _, err := svc.AcknowledgeProctorEventByID(ctx, eventID, actor, "   "); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("AcknowledgeProctorEventByID(missing note) = %v, want ErrBadRequest", err)
+	}
+	row, err := svc.AcknowledgeProctorEventByID(ctx, eventID, actor, "  dicek manual  ")
+	if err != nil || row.ID != eventID {
+		t.Fatalf("AcknowledgeProctorEventByID() = %+v/%v, want ack row", row, err)
+	}
+	if store.ackProctorEventArg.ID != eventID || store.ackProctorEventArg.AcknowledgedBy != actorID || store.ackProctorEventArg.AcknowledgeNote != "dicek manual" {
+		t.Fatalf("ack arg = %+v, want trimmed actor ack", store.ackProctorEventArg)
+	}
+	if len(store.proctorEventArgs) != 1 || store.proctorEventArgs[0].EventType != "proctor_acknowledge" || store.proctorEventArgs[0].ParticipantID != participantID || store.proctorEventArgs[0].ActorUsernameSnapshot != "proctor-1" {
+		t.Fatalf("ack audit event args = %+v, want proctor acknowledge event", store.proctorEventArgs)
+	}
+}
+
+func TestCbtProctoringExecuteActionWithFakeStore(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtProctoringActionTestUUID(t, "66666666-6666-6666-6666-666666666666")
+	participantID := cbtProctoringActionTestUUID(t, "77777777-7777-7777-7777-777777777777")
+	eventID := cbtProctoringActionTestUUID(t, "88888888-8888-8888-8888-888888888888")
+	roomID := cbtProctoringActionTestUUID(t, "99999999-9999-9999-9999-999999999999")
+	actorID := cbtProctoringActionTestUUID(t, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	actor := CbtProctorActor{UserID: actorID, Username: "proctor-2", RequestID: "req-2", SourceIP: "10.0.0.1"}
+	input := CbtProctorActionInput{SessionID: sessionID, ParticipantID: participantID, EventID: eventID, ActionType: " unlock-access ", Reason: "  sudah diverifikasi  ", Notes: "  buka lagi  "}
+	store := &fakeCbtSessionStore{
+		participantProctorScopeRow: db.GetCbtParticipantProctorScopeRow{ParticipantID: participantID, SessionID: sessionID, RoomID: roomID},
+		participantRiskRow:         db.GetCbtParticipantRiskForUpdateRow{ID: participantID, RiskLevel: "locked"},
+		proctorActionRow:           db.CbtProctorAction{ID: cbtProctoringActionTestUUID(t, "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")},
+		proctorEventRow:            db.CreateCbtParticipantProctorEventRow{ID: cbtProctoringActionTestUUID(t, "cccccccc-cccc-cccc-cccc-cccccccccccc")},
+	}
+	svc := &CbtSession{q: store}
+
+	if _, err := svc.ExecuteProctorAction(ctx, input, CbtProctorActor{}); !errors.Is(err, domain.ErrUnauthorized) {
+		t.Fatalf("ExecuteProctorAction(no actor) = %v, want ErrUnauthorized", err)
+	}
+	if _, err := svc.ExecuteProctorAction(ctx, CbtProctorActionInput{SessionID: sessionID, ParticipantID: participantID, ActionType: "approve", Reason: "x"}, actor); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("ExecuteProctorAction(invalid action) = %v, want ErrBadRequest", err)
+	}
+	if _, err := svc.ExecuteProctorAction(ctx, CbtProctorActionInput{SessionID: sessionID, ParticipantID: participantID, ActionType: "warn", Reason: "  "}, actor); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("ExecuteProctorAction(missing reason) = %v, want ErrBadRequest", err)
+	}
+	if _, err := svc.ExecuteProctorAction(ctx, CbtProctorActionInput{SessionID: sessionID, ParticipantID: participantID, ActionType: "hold_access", Reason: "x"}, actor); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("ExecuteProctorAction(missing notes) = %v, want ErrBadRequest", err)
+	}
+
+	result, err := svc.ExecuteProctorAction(ctx, input, actor)
+	if err != nil || result.Action.ID != store.proctorActionRow.ID || result.Event == nil || result.Participant == nil {
+		t.Fatalf("ExecuteProctorAction(unlock) = %+v/%v, want action event participant", result, err)
+	}
+	if store.participantProctorScopeArg.SessionID != sessionID || store.participantProctorScopeArg.ParticipantID != participantID || store.participantRiskID != participantID || store.unlockProctorID != participantID {
+		t.Fatalf("unlock store calls scope=%+v risk=%v unlock=%v", store.participantProctorScopeArg, store.participantRiskID, store.unlockProctorID)
+	}
+	if store.proctorActionArg.ActionType != "unlock_access" || store.proctorActionArg.RoomID != roomID || store.proctorActionArg.Reason != "sudah diverifikasi" || store.proctorActionArg.Notes != "buka lagi" || store.proctorActionArg.ActorUserID != actorID {
+		t.Fatalf("proctor action arg = %+v, want normalized trimmed action", store.proctorActionArg)
+	}
+	if len(store.proctorEventArgs) != 1 || store.proctorEventArgs[0].EventType != "proctor_unlock" || store.proctorEventArgs[0].Severity != string(ProctorSeverityInfo) || store.proctorEventArgs[0].Category != "proctor_action" {
+		t.Fatalf("proctor action event args = %+v, want unlock timeline event", store.proctorEventArgs)
+	}
+
+	store = &fakeCbtSessionStore{participantProctorScopeRow: db.GetCbtParticipantProctorScopeRow{ParticipantID: participantID, SessionID: sessionID, RoomID: roomID}, participantRiskRow: db.GetCbtParticipantRiskForUpdateRow{ID: participantID, SyncState: "pending", PendingAnswerCount: 2}}
+	if _, err := (&CbtSession{q: store}).ExecuteProctorAction(ctx, CbtProctorActionInput{SessionID: sessionID, ParticipantID: participantID, ActionType: "force_submit", Reason: "paksa submit", Notes: "jawaban lokal"}, actor); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("ExecuteProctorAction(force pending without sync risk) = %v, want ErrBadRequest", err)
+	}
+	if _, err := (&CbtSession{q: store}).ExecuteProctorAction(ctx, CbtProctorActionInput{SessionID: sessionID, ParticipantID: participantID, ActionType: "force_submit", Reason: "risiko sinkron diterima", Notes: "pending dicatat"}, actor); err != nil {
+		t.Fatalf("ExecuteProctorAction(force submit with sync risk) error = %v", err)
+	}
+	if store.forceSubmitArg.SessionID != sessionID || store.forceSubmitArg.ID != participantID || store.participantCorrectnessID != participantID {
+		t.Fatalf("force submit args = %+v correctness=%v, want participant submit and correctness refresh", store.forceSubmitArg, store.participantCorrectnessID)
+	}
+}
+
+func TestCbtProctoringLiveSummaryAndListActionsUseStoreFilters(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtProctoringActionTestUUID(t, "dddddddd-dddd-dddd-dddd-dddddddddddd")
+	roomID := cbtProctoringActionTestUUID(t, "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
+	participantID := cbtProctoringActionTestUUID(t, "ffffffff-ffff-ffff-ffff-ffffffffffff")
+	studentID := cbtProctoringActionTestUUID(t, "10101010-1010-1010-1010-101010101010")
+	eventID := cbtProctoringActionTestUUID(t, "20202020-2020-2020-2020-202020202020")
+	store := &fakeCbtSessionStore{
+		proctorRows:              []db.GetSessionProctoringStatusRow{{ParticipantID: participantID, StudentID: studentID, Nis: "001", Nama: "Siswa", RoomID: roomID, RoomName: "Lab", RiskLevel: "normal", LastHeartbeat: pgtype.Timestamptz{Time: time.Now(), Valid: true}}},
+		proctorSessionEventsRows: []db.ListCbtProctorEventsBySessionRow{{ID: eventID, ParticipantID: participantID, StudentID: studentID, SessionID: sessionID, RoomID: roomID, Nis: "001", Nama: "Siswa", RoomName: "Lab", EventType: "focus_lost_short", Severity: string(ProctorSeverityWarning), CreatedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}}},
+		proctorRoomEventsRows:    []db.ListCbtProctorEventsByRoomRow{{ID: eventID, ParticipantID: participantID, StudentID: studentID, SessionID: sessionID, RoomID: roomID, Nis: "001", Nama: "Siswa", RoomName: "Lab", EventType: "pending_sync", Severity: string(ProctorSeverityTechnical), CreatedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}}},
+		proctorActionsSession:    []db.CbtProctorAction{{ID: cbtProctoringActionTestUUID(t, "30303030-3030-3030-3030-303030303030"), ActionType: "warn_student"}},
+		proctorActionsRoom:       []db.CbtProctorAction{{ID: cbtProctoringActionTestUUID(t, "40404040-4040-4040-4040-404040404040"), ActionType: "mark_technical_issue"}},
+	}
+	svc := &CbtSession{q: store}
+
+	summary, err := svc.GetProctoringLiveSummary(ctx, sessionID, pgtype.UUID{})
+	if err != nil || len(summary.LatestEvents) != 1 || summary.LatestEvents[0].EventType != "focus_lost_short" || len(summary.Actions) != 1 || summary.Actions[0].ActionType != "warn_student" {
+		t.Fatalf("GetProctoringLiveSummary(session) = %+v/%v, want session events/actions", summary, err)
+	}
+	if store.proctorStatusArg.SessionID != sessionID || store.proctorStatusArg.RoomID.Valid || store.proctorSessionEventsArg.SessionID != sessionID || store.proctorSessionEventsArg.LimitCount != 300 || store.proctorActionsSessionArg.LimitCount != 200 {
+		t.Fatalf("session summary args status=%+v events=%+v actions=%+v", store.proctorStatusArg, store.proctorSessionEventsArg, store.proctorActionsSessionArg)
+	}
+	summary, err = svc.GetProctoringLiveSummary(ctx, sessionID, roomID)
+	if err != nil || summary.RoomID != pgUUIDString(roomID) || len(summary.LatestEvents) != 1 || summary.LatestEvents[0].EventType != "pending_sync" || summary.Actions[0].ActionType != "mark_technical_issue" {
+		t.Fatalf("GetProctoringLiveSummary(room) = %+v/%v, want room events/actions", summary, err)
+	}
+	if store.proctorRoomEventsArg.SessionID != sessionID || store.proctorRoomEventsArg.RoomID != roomID || store.proctorRoomEventsArg.LimitCount != 300 || store.proctorActionsRoomArg.RoomID != roomID || store.proctorActionsRoomArg.LimitCount != 200 {
+		t.Fatalf("room summary args events=%+v actions=%+v", store.proctorRoomEventsArg, store.proctorActionsRoomArg)
+	}
+	if actions, err := listProctorActions(ctx, store, sessionID, roomID, 7); err != nil || len(actions) != 1 || store.proctorActionsRoomArg.LimitCount != 7 {
+		t.Fatalf("listProctorActions(room) = %+v/%v arg=%+v, want room limit", actions, err, store.proctorActionsRoomArg)
 	}
 }
 

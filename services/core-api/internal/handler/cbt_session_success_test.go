@@ -147,6 +147,7 @@ type fakeCbtSessionService struct {
 	roomParticipantRoomID      pgtype.UUID
 	roomParticipantID          pgtype.UUID
 	roomParticipantAllowed     bool
+	roomParticipantErr         error
 	roomProctoringSessionID    pgtype.UUID
 	roomProctoringRoomID       pgtype.UUID
 	roomEventsSessionID        pgtype.UUID
@@ -223,6 +224,18 @@ type fakeCbtSessionService struct {
 
 	participantAnswersID  pgtype.UUID
 	participantAnswersErr error
+
+	finalizeOverdueSessionID pgtype.UUID
+	finalizeOverdueResult    service.CbtFinalizeOverdueResult
+	finalizeOverdueErr       error
+
+	gradeSyncPreflightSessionID pgtype.UUID
+	gradeSyncPreflightRow       db.GetCbtSessionGradeSyncPreflightRow
+	gradeSyncPreflightErr       error
+	remedialSessionID           pgtype.UUID
+	remedialThreshold           float64
+	remedialRows                []db.ListCbtSessionRemedialCandidatesRow
+	remedialErr                 error
 
 	itemAnalysisSessionID pgtype.UUID
 	itemAnalysisRows      []db.GetSessionItemAnalysisRow
@@ -674,6 +687,9 @@ func (f *fakeCbtSessionService) HasRoomParticipant(_ context.Context, sessionID,
 	f.roomParticipantSessionID = sessionID
 	f.roomParticipantRoomID = roomID
 	f.roomParticipantID = participantID
+	if f.roomParticipantErr != nil {
+		return false, f.roomParticipantErr
+	}
 	if f.roomParticipantAllowed {
 		return true, nil
 	}
@@ -815,12 +831,138 @@ func (f *fakeCbtSessionService) GetParticipantAnswers(_ context.Context, partici
 	return []db.GetParticipantAnswersRow{}, nil
 }
 
+func (f *fakeCbtSessionService) FinalizeOverdue(_ context.Context, sessionID pgtype.UUID) (service.CbtFinalizeOverdueResult, error) {
+	f.finalizeOverdueSessionID = sessionID
+	if f.finalizeOverdueErr != nil {
+		return service.CbtFinalizeOverdueResult{}, f.finalizeOverdueErr
+	}
+	if f.finalizeOverdueResult.SessionID != "" || f.finalizeOverdueResult.FinalizedCount != 0 {
+		return f.finalizeOverdueResult, nil
+	}
+	return service.CbtFinalizeOverdueResult{SessionID: pgUUIDString(sessionID), FinalizedCount: 2}, nil
+}
+
+func (f *fakeCbtSessionService) GetGradeSyncPreflight(_ context.Context, sessionID pgtype.UUID) (db.GetCbtSessionGradeSyncPreflightRow, error) {
+	f.gradeSyncPreflightSessionID = sessionID
+	if f.gradeSyncPreflightErr != nil {
+		return db.GetCbtSessionGradeSyncPreflightRow{}, f.gradeSyncPreflightErr
+	}
+	if f.gradeSyncPreflightRow.SessionID.Valid {
+		return f.gradeSyncPreflightRow, nil
+	}
+	return db.GetCbtSessionGradeSyncPreflightRow{SessionID: sessionID, SessionTitle: "Sesi IPA", SessionStatus: db.CbtSessionStatusEnumFinished, ParticipantCount: 3, SubmittedCount: 3, ScoredCount: 2, MissingScoreCount: 1}, nil
+}
+
+func (f *fakeCbtSessionService) ListRemedialCandidates(_ context.Context, sessionID pgtype.UUID, threshold float64) ([]db.ListCbtSessionRemedialCandidatesRow, error) {
+	f.remedialSessionID = sessionID
+	f.remedialThreshold = threshold
+	if f.remedialErr != nil {
+		return nil, f.remedialErr
+	}
+	return f.remedialRows, nil
+}
+
 func (f *fakeCbtSessionService) GetItemAnalysis(_ context.Context, sessionID pgtype.UUID) ([]db.GetSessionItemAnalysisRow, error) {
 	f.itemAnalysisSessionID = sessionID
 	if f.itemAnalysisErr != nil {
 		return nil, f.itemAnalysisErr
 	}
 	return f.itemAnalysisRows, nil
+}
+
+func TestCbtSessionFinalizeGradeSyncRemedialAndItemAnalysisHandlers(t *testing.T) {
+	sessionID := handlerTestUUID(240)
+	teacherID := handlerTestUUID(241)
+	fake := &fakeCbtSessionService{
+		checkAllowed: true,
+		remedialRows: []db.ListCbtSessionRemedialCandidatesRow{{
+			ParticipantID:  handlerTestUUID(242),
+			StudentID:      handlerTestUUID(243),
+			Nis:            "12345",
+			Nama:           "Siswa Remedial",
+			ClassCode:      "VII-A",
+			ClassName:      "VII A",
+			QuestionCount:  10,
+			IncorrectCount: 4,
+			BlankCount:     1,
+			KdGaps:         []byte(`["KD 3.1"]`),
+		}},
+		itemAnalysisRows: []db.GetSessionItemAnalysisRow{{
+			Position:            1,
+			Points:              5,
+			QuestionID:          handlerTestUUID(244),
+			QuestionCode:        "IPA-001",
+			QuestionText:        "Apa fungsi akar?",
+			QuestionType:        "multiple_choice",
+			Difficulty:          db.CbtQuestionDifficultyEnumMedium,
+			AnswerKey:           "A",
+			SubmittedCount:      5,
+			AnsweredCount:       5,
+			CorrectCount:        4,
+			IncorrectCount:      1,
+			DifficultyIndex:     0.8,
+			DiscriminationIndex: 0.4,
+			AnswerDistribution:  []byte(`{"A":4,"B":1}`),
+		}},
+	}
+	h := &CbtSession{svc: fake}
+
+	rec := httptest.NewRecorder()
+	h.FinalizeOverdue(rec, withRouteParam(adminRequest(http.MethodPost, "/api/cbt/sessions/"+sessionID.String()+"/finalize-overdue", ""), "id", sessionID.String()))
+	if rec.Code != http.StatusOK || fake.finalizeOverdueSessionID != sessionID || !strings.Contains(rec.Body.String(), `"finalized_count":2`) {
+		t.Fatalf("FinalizeOverdue status/body/arg = %d/%s/%v, want 200 result for session", rec.Code, rec.Body.String(), fake.finalizeOverdueSessionID)
+	}
+
+	teacherReq := withClaims(httptest.NewRequest(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/grade-sync/preflight", nil), jwt.MapClaims{"roles": []any{"guru"}, "eid": teacherID.String(), "usr": "guru.ipa"})
+	rec = httptest.NewRecorder()
+	h.GetGradeSyncPreflight(rec, withRouteParam(teacherReq, "id", sessionID.String()))
+	if rec.Code != http.StatusOK || fake.gradeSyncPreflightSessionID != sessionID || fake.checkSessionID != sessionID || fake.checkTeacherID != teacherID {
+		t.Fatalf("GetGradeSyncPreflight status/args = %d/%v/%v/%v; body=%s", rec.Code, fake.gradeSyncPreflightSessionID, fake.checkSessionID, fake.checkTeacherID, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Sesi IPA") || !strings.Contains(rec.Body.String(), `"missing_score_count":1`) {
+		t.Fatalf("GetGradeSyncPreflight body = %s, want serialized preflight", rec.Body.String())
+	}
+
+	teacherReq = withClaims(httptest.NewRequest(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/remedial?threshold=68.5", nil), jwt.MapClaims{"roles": []any{"guru"}, "eid": teacherID.String(), "usr": "guru.ipa"})
+	rec = httptest.NewRecorder()
+	h.ListRemedialCandidates(rec, withRouteParam(teacherReq, "id", sessionID.String()))
+	if rec.Code != http.StatusOK || fake.remedialSessionID != sessionID || fake.remedialThreshold != 68.5 {
+		t.Fatalf("ListRemedialCandidates status/args = %d/%v/%v; body=%s", rec.Code, fake.remedialSessionID, fake.remedialThreshold, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Siswa Remedial") || !strings.Contains(rec.Body.String(), `"question_count":10`) {
+		t.Fatalf("ListRemedialCandidates body = %s, want remedial row", rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.ListRemedialCandidates(rec, withRouteParam(adminRequest(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/remedial?threshold=101", ""), "id", sessionID.String()))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("ListRemedialCandidates invalid threshold status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.GetItemAnalysis(rec, withRouteParam(adminRequest(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/item-analysis", ""), "id", sessionID.String()))
+	if rec.Code != http.StatusOK || fake.itemAnalysisSessionID != sessionID {
+		t.Fatalf("GetItemAnalysis status/arg = %d/%v; body=%s", rec.Code, fake.itemAnalysisSessionID, rec.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("GetItemAnalysis json.Unmarshal error = %v; body=%s", err, rec.Body.String())
+	}
+	data, ok := body["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("GetItemAnalysis data = %#v, want object", body["data"])
+	}
+	items := requireAnySlice(t, data["items"], "items")
+	first, ok := items[0].(map[string]any)
+	if !ok || first["answer_key"] != "A" || first["recommendation"] != "Baik" || first["recommendation_tone"] != "success" {
+		t.Fatalf("GetItemAnalysis first item = %#v, want admin answer key and recommendation", items[0])
+	}
+
+	rec = httptest.NewRecorder()
+	h.GetItemAnalysis(rec, withRouteParam(withClaims(httptest.NewRequest(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/item-analysis", nil), jwt.MapClaims{"roles": []any{"guru"}, "eid": teacherID.String()}), "id", sessionID.String()))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("GetItemAnalysis guru status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
 }
 
 func TestCbtSessionAdminLifecycleHandlersForwardValidRequests(t *testing.T) {

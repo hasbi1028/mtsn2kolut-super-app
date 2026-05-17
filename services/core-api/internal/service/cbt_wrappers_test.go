@@ -648,6 +648,34 @@ type fakeCbtSessionStore struct {
 	proctorStatusArg       db.GetSessionProctoringStatusParams
 	proctorErr             error
 
+	participantProctorScopeArg db.GetCbtParticipantProctorScopeParams
+	participantProctorScopeRow db.GetCbtParticipantProctorScopeRow
+	proctorEventScopeID        pgtype.UUID
+	proctorEventScopeRow       db.GetCbtProctorEventScopeRow
+	ackProctorEventArg         db.AcknowledgeCbtProctorEventParams
+	ackProctorEventRow         db.AcknowledgeCbtProctorEventRow
+	proctorEventArgs           []db.CreateCbtParticipantProctorEventParams
+	proctorEventRow            db.CreateCbtParticipantProctorEventRow
+	participantRiskID          pgtype.UUID
+	participantRiskRow         db.GetCbtParticipantRiskForUpdateRow
+	proctorActionArg           db.CreateCbtProctorActionParams
+	proctorActionRow           db.CbtProctorAction
+	unlockProctorID            pgtype.UUID
+	unlockProctorRow           db.UnlockParticipantAccessForProctorRow
+	holdProctorArg             db.HoldParticipantAccessForProctorParams
+	holdProctorRow             db.HoldParticipantAccessForProctorRow
+	resetProctorID             pgtype.UUID
+	resetProctorRow            db.ResetParticipantDeviceBindingForProctorRow
+	proctorCorrectnessID       pgtype.UUID
+	proctorSessionEventsArg    db.ListCbtProctorEventsBySessionParams
+	proctorSessionEventsRows   []db.ListCbtProctorEventsBySessionRow
+	proctorRoomEventsArg       db.ListCbtProctorEventsByRoomParams
+	proctorRoomEventsRows      []db.ListCbtProctorEventsByRoomRow
+	proctorActionsSessionArg   db.ListCbtProctorActionsBySessionParams
+	proctorActionsRoomArg      db.ListCbtProctorActionsByRoomParams
+	proctorActionsSession      []db.CbtProctorAction
+	proctorActionsRoom         []db.CbtProctorAction
+
 	participantEventsArg      db.ListSessionParticipantEventsParams
 	participantEventRows      []db.ListSessionParticipantEventsRow
 	participantEventErr       error
@@ -952,6 +980,98 @@ func (f *fakeCbtSessionStore) ListParticipantsByRoom(ctx context.Context, sessio
 func (f *fakeCbtSessionStore) GetSessionProctoringStatus(ctx context.Context, arg db.GetSessionProctoringStatusParams) ([]db.GetSessionProctoringStatusRow, error) {
 	f.proctorStatusArg = arg
 	return f.proctorRows, f.proctorErr
+}
+
+func (f *fakeCbtSessionStore) GetCbtParticipantProctorScope(ctx context.Context, arg db.GetCbtParticipantProctorScopeParams) (db.GetCbtParticipantProctorScopeRow, error) {
+	f.participantProctorScopeArg = arg
+	if f.participantProctorScopeRow.ParticipantID.Valid {
+		return f.participantProctorScopeRow, nil
+	}
+	return db.GetCbtParticipantProctorScopeRow{ParticipantID: arg.ParticipantID, SessionID: arg.SessionID}, nil
+}
+
+func (f *fakeCbtSessionStore) GetCbtProctorEventScope(ctx context.Context, id pgtype.UUID) (db.GetCbtProctorEventScopeRow, error) {
+	f.proctorEventScopeID = id
+	if f.proctorEventScopeRow.ID.Valid {
+		return f.proctorEventScopeRow, nil
+	}
+	return db.GetCbtProctorEventScopeRow{ID: id}, nil
+}
+
+func (f *fakeCbtSessionStore) AcknowledgeCbtProctorEvent(ctx context.Context, arg db.AcknowledgeCbtProctorEventParams) (db.AcknowledgeCbtProctorEventRow, error) {
+	f.ackProctorEventArg = arg
+	if f.ackProctorEventRow.ID.Valid {
+		return f.ackProctorEventRow, nil
+	}
+	return db.AcknowledgeCbtProctorEventRow{ID: arg.ID, AcknowledgedBy: arg.AcknowledgedBy, AcknowledgeNote: arg.AcknowledgeNote}, nil
+}
+
+func (f *fakeCbtSessionStore) CreateCbtParticipantProctorEvent(ctx context.Context, arg db.CreateCbtParticipantProctorEventParams) (db.CreateCbtParticipantProctorEventRow, error) {
+	f.proctorEventArgs = append(f.proctorEventArgs, arg)
+	if f.proctorEventRow.ID.Valid {
+		return f.proctorEventRow, nil
+	}
+	return db.CreateCbtParticipantProctorEventRow{ParticipantID: arg.ParticipantID, EventType: arg.EventType, Severity: arg.Severity, Category: arg.Category, RiskDelta: arg.RiskDelta, EventData: arg.EventData}, nil
+}
+
+func (f *fakeCbtSessionStore) GetCbtParticipantRiskForUpdate(ctx context.Context, id pgtype.UUID) (db.GetCbtParticipantRiskForUpdateRow, error) {
+	f.participantRiskID = id
+	if f.participantRiskRow.ID.Valid {
+		return f.participantRiskRow, nil
+	}
+	return db.GetCbtParticipantRiskForUpdateRow{ID: id, RiskLevel: "normal"}, nil
+}
+
+func (f *fakeCbtSessionStore) CreateCbtProctorAction(ctx context.Context, arg db.CreateCbtProctorActionParams) (db.CbtProctorAction, error) {
+	f.proctorActionArg = arg
+	if f.proctorActionRow.ID.Valid {
+		return f.proctorActionRow, nil
+	}
+	return db.CbtProctorAction{ID: documentCycleTestUUID(230), SessionID: arg.SessionID, RoomID: arg.RoomID, ParticipantID: arg.ParticipantID, EventID: arg.EventID, ActionType: arg.ActionType, Reason: arg.Reason, Notes: arg.Notes, ActorUserID: arg.ActorUserID, ActorUsernameSnapshot: arg.ActorUsernameSnapshot}, nil
+}
+
+func (f *fakeCbtSessionStore) UnlockParticipantAccessForProctor(ctx context.Context, id pgtype.UUID) (db.UnlockParticipantAccessForProctorRow, error) {
+	f.unlockProctorID = id
+	if f.unlockProctorRow.ID.Valid {
+		return f.unlockProctorRow, nil
+	}
+	return db.UnlockParticipantAccessForProctorRow{ID: id, RiskLevel: "normal"}, nil
+}
+
+func (f *fakeCbtSessionStore) HoldParticipantAccessForProctor(ctx context.Context, arg db.HoldParticipantAccessForProctorParams) (db.HoldParticipantAccessForProctorRow, error) {
+	f.holdProctorArg = arg
+	if f.holdProctorRow.ID.Valid {
+		return f.holdProctorRow, nil
+	}
+	return db.HoldParticipantAccessForProctorRow{ID: arg.ID, RiskLevel: "locked", LockedReason: arg.LockedReason}, nil
+}
+
+func (f *fakeCbtSessionStore) ResetParticipantDeviceBindingForProctor(ctx context.Context, id pgtype.UUID) (db.ResetParticipantDeviceBindingForProctorRow, error) {
+	f.resetProctorID = id
+	if f.resetProctorRow.ID.Valid {
+		return f.resetProctorRow, nil
+	}
+	return db.ResetParticipantDeviceBindingForProctorRow{ID: id, RiskLevel: "normal"}, nil
+}
+
+func (f *fakeCbtSessionStore) ListCbtProctorEventsBySession(ctx context.Context, arg db.ListCbtProctorEventsBySessionParams) ([]db.ListCbtProctorEventsBySessionRow, error) {
+	f.proctorSessionEventsArg = arg
+	return f.proctorSessionEventsRows, nil
+}
+
+func (f *fakeCbtSessionStore) ListCbtProctorEventsByRoom(ctx context.Context, arg db.ListCbtProctorEventsByRoomParams) ([]db.ListCbtProctorEventsByRoomRow, error) {
+	f.proctorRoomEventsArg = arg
+	return f.proctorRoomEventsRows, nil
+}
+
+func (f *fakeCbtSessionStore) ListCbtProctorActionsBySession(ctx context.Context, arg db.ListCbtProctorActionsBySessionParams) ([]db.CbtProctorAction, error) {
+	f.proctorActionsSessionArg = arg
+	return f.proctorActionsSession, nil
+}
+
+func (f *fakeCbtSessionStore) ListCbtProctorActionsByRoom(ctx context.Context, arg db.ListCbtProctorActionsByRoomParams) ([]db.CbtProctorAction, error) {
+	f.proctorActionsRoomArg = arg
+	return f.proctorActionsRoom, nil
 }
 
 func (f *fakeCbtSessionStore) ListSessionParticipantEvents(ctx context.Context, arg db.ListSessionParticipantEventsParams) ([]db.ListSessionParticipantEventsRow, error) {

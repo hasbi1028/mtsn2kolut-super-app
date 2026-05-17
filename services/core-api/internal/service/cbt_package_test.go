@@ -520,6 +520,209 @@ func TestCbtPackageReadinessBuildsOverviewStatuses(t *testing.T) {
 	}
 }
 
+func TestCbtPackageDetailBuildsReadinessAndMapsNotFound(t *testing.T) {
+	packageID := pgtype.UUID{Bytes: [16]byte{71}, Valid: true}
+	lockedAt := pgtype.Timestamptz{Time: time.Unix(1700000000, 0).UTC(), Valid: true}
+	store := &fakeCbtPackageEditStore{
+		detailRow: db.GetCbtPackageDetailRow{
+			ID:            packageID,
+			Title:         "PAT IPA",
+			SubjectName:   "IPA",
+			SubjectCode:   "IPA",
+			LockedAt:      lockedAt,
+			SessionCount:  3,
+			QuestionCount: 2,
+		},
+		detailQuestions: []db.ListCbtPackageQuestionsByPackageRow{
+			{PackageID: packageID, QuestionID: pgtype.UUID{Bytes: [16]byte{72}, Valid: true}, QuestionType: "multiple_choice", Status: db.CbtQuestionStatusEnumPublished, TargetLevel: pgtype.Text{String: "VIII", Valid: true}, CpRef: "CP-1", TpRef: "TP-1", CognitiveLevel: "C2", Points: 2},
+			{PackageID: packageID, QuestionID: pgtype.UUID{Bytes: [16]byte{73}, Valid: true}, QuestionType: "essay", Status: db.CbtQuestionStatusEnumDraft, TargetLevel: pgtype.Text{String: "", Valid: true}, CpRef: "CP-2", CognitiveLevel: "C4", Points: 4},
+		},
+	}
+	svc := &CbtPackage{q: store}
+
+	got, err := svc.Detail(context.Background(), packageID)
+	if err != nil {
+		t.Fatalf("Detail() error = %v", err)
+	}
+	if got.Package.ID != packageID || len(got.Questions) != 2 {
+		t.Fatalf("Detail() = %+v, want package and questions", got)
+	}
+	if got.Readiness.Status != "locked" || !got.Readiness.Locked || got.Readiness.SessionCount != 3 || got.Readiness.TotalPoints != 6 || got.Readiness.UnpublishedCount != 1 || got.Readiness.MetadataGapCount != 1 {
+		t.Fatalf("Detail() readiness = %+v, want locked readiness with question aggregates", got.Readiness)
+	}
+
+	missing := &fakeCbtPackageEditStore{detailErr: pgx.ErrNoRows}
+	_, err = (&CbtPackage{q: missing}).Detail(context.Background(), packageID)
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("Detail(missing) error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestCbtPackageLockAndSnapshotDefaultsReasonAndReturnsSnapshotResult(t *testing.T) {
+	packageID := pgtype.UUID{Bytes: [16]byte{81}, Valid: true}
+	lockedBy := pgtype.UUID{Bytes: [16]byte{82}, Valid: true}
+	lockedAt := time.Unix(1700000000, 0).UTC()
+	store := &fakeCbtPackageSnapshotStore{
+		lockRow: db.LockCbtPackageForSnapshotRow{
+			ID:              packageID,
+			LockedAt:        pgtype.Timestamptz{Time: lockedAt, Valid: true},
+			LockedBy:        lockedBy,
+			LockReason:      "session_scheduled",
+			SnapshotVersion: 2,
+		},
+		snapshotRows: 25,
+	}
+	svc := &CbtPackage{q: store}
+
+	got, err := svc.LockAndSnapshot(context.Background(), packageID, lockedBy, "  ")
+	if err != nil {
+		t.Fatalf("LockAndSnapshot() error = %v", err)
+	}
+	if store.lockArg.PackageID != packageID || store.lockArg.LockedBy != lockedBy || store.lockArg.LockReason != "session_scheduled" {
+		t.Fatalf("LockCbtPackageForSnapshot arg = %+v, want default reason and ids", store.lockArg)
+	}
+	if store.snapshotPackageID != packageID || store.snapshotCalls != 1 {
+		t.Fatalf("CreateCbtPackageQuestionSnapshots package/calls = %v/%d, want package once", store.snapshotPackageID, store.snapshotCalls)
+	}
+	if got.PackageID != pgUUIDString(packageID) || got.LockedAt != "2023-11-14T22:13:20Z" || got.LockReason != "session_scheduled" || got.SnapshotVersion != 2 || got.SnapshotRowsAdded != 25 {
+		t.Fatalf("LockAndSnapshot() = %+v, want formatted snapshot result", got)
+	}
+}
+
+func TestLockCbtPackageSnapshotPropagatesLockAndSnapshotErrors(t *testing.T) {
+	packageID := pgtype.UUID{Bytes: [16]byte{83}, Valid: true}
+	lockedBy := pgtype.UUID{Bytes: [16]byte{84}, Valid: true}
+	lockFailed := errors.New("lock failed")
+	store := &fakeCbtPackageSnapshotStore{lockErr: lockFailed}
+	_, err := lockCbtPackageSnapshot(context.Background(), store, packageID, lockedBy, "manual")
+	if !errors.Is(err, lockFailed) || store.snapshotCalls != 0 {
+		t.Fatalf("lockCbtPackageSnapshot(lock error) err/calls = %v/%d, want lock error and no snapshot", err, store.snapshotCalls)
+	}
+
+	snapshotFailed := errors.New("snapshot failed")
+	store = &fakeCbtPackageSnapshotStore{
+		lockRow:     db.LockCbtPackageForSnapshotRow{ID: packageID, LockReason: "manual", SnapshotVersion: 1},
+		snapshotErr: snapshotFailed,
+	}
+	_, err = lockCbtPackageSnapshot(context.Background(), store, packageID, lockedBy, " manual ")
+	if !errors.Is(err, snapshotFailed) || store.lockArg.LockReason != "manual" || store.snapshotCalls != 1 {
+		t.Fatalf("lockCbtPackageSnapshot(snapshot error) err/reason/calls = %v/%q/%d, want snapshot error after trimmed reason", err, store.lockArg.LockReason, store.snapshotCalls)
+	}
+}
+
+func TestCreateCbtPackageSelectionEdgeCases(t *testing.T) {
+	subjectID := pgtype.UUID{Bytes: [16]byte{91}, Valid: true}
+	packageID := pgtype.UUID{Bytes: [16]byte{92}, Valid: true}
+	questionID := pgtype.UUID{Bytes: [16]byte{93}, Valid: true}
+	baseQuestion := db.GetCbtQuestionRow{ID: questionID, SubjectID: subjectID, Status: db.CbtQuestionStatusEnumPublished}
+
+	t.Run("rejects duplicate question ids", func(t *testing.T) {
+		store := &fakeCbtPackageCreateStore{createRow: db.CbtPackage{ID: packageID, SubjectID: subjectID}, questions: map[pgtype.UUID]db.GetCbtQuestionRow{questionID: baseQuestion}}
+		_, err := createCbtPackage(context.Background(), store, CreateCbtPackageInput{SubjectID: subjectID, Title: "PAT IPA", QuestionIDs: []pgtype.UUID{questionID, questionID}})
+		if err == nil || !errors.Is(err, domain.ErrBadRequest) || !strings.Contains(err.Error(), "duplikat") {
+			t.Fatalf("createCbtPackage(duplicate) error = %v, want duplicate bad request", err)
+		}
+		if len(store.addParams) != 0 {
+			t.Fatalf("AddCbtPackageQuestion calls = %d, want 0 after duplicate validation", len(store.addParams))
+		}
+	})
+
+	t.Run("maps missing question to not found", func(t *testing.T) {
+		store := &fakeCbtPackageCreateStore{createRow: db.CbtPackage{ID: packageID, SubjectID: subjectID}, questionErr: pgx.ErrNoRows}
+		_, err := createCbtPackage(context.Background(), store, CreateCbtPackageInput{SubjectID: subjectID, Title: "PAT IPA", QuestionIDs: []pgtype.UUID{questionID}})
+		if !errors.Is(err, domain.ErrNotFound) {
+			t.Fatalf("createCbtPackage(missing question) error = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("propagates add error", func(t *testing.T) {
+		store := &fakeCbtPackageCreateStore{createRow: db.CbtPackage{ID: packageID, SubjectID: subjectID}, questions: map[pgtype.UUID]db.GetCbtQuestionRow{questionID: baseQuestion}, addErr: pgx.ErrNoRows}
+		_, err := createCbtPackage(context.Background(), store, CreateCbtPackageInput{SubjectID: subjectID, Title: "PAT IPA", QuestionIDs: []pgtype.UUID{questionID}})
+		if !errors.Is(err, pgx.ErrNoRows) {
+			t.Fatalf("createCbtPackage(add error) error = %v, want add error", err)
+		}
+	})
+}
+
+func TestCbtPackageEditAndCloneErrorPaths(t *testing.T) {
+	packageID := pgtype.UUID{Bytes: [16]byte{101}, Valid: true}
+	subjectID := pgtype.UUID{Bytes: [16]byte{102}, Valid: true}
+	questionID := pgtype.UUID{Bytes: [16]byte{103}, Valid: true}
+
+	_, err := (&CbtPackage{q: &fakeCbtPackageEditStore{lockErr: pgx.ErrNoRows}}).UpdateMetadata(context.Background(), UpdateCbtPackageInput{ID: packageID, Title: "PAT IPA", DurationMinutes: 90})
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("UpdateMetadata(lock missing) error = %v, want ErrNotFound", err)
+	}
+
+	_, err = (&CbtPackage{q: &fakeCbtPackageEditStore{lockRow: db.LockCbtPackageForEditRow{ID: packageID}, updateErr: pgx.ErrNoRows}}).UpdateMetadata(context.Background(), UpdateCbtPackageInput{ID: packageID, Title: "PAT IPA", DurationMinutes: 90})
+	if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "terkunci atau tidak ditemukan") {
+		t.Fatalf("UpdateMetadata(update no rows) error = %v, want conflict", err)
+	}
+
+	replaceStore := &fakeCbtPackageEditStore{lockErr: pgx.ErrNoRows}
+	_, err = (&CbtPackage{q: replaceStore}).ReplaceQuestions(context.Background(), ReplaceCbtPackageQuestionsInput{PackageID: packageID, QuestionIDs: []pgtype.UUID{questionID}})
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("ReplaceQuestions(lock missing) error = %v, want ErrNotFound", err)
+	}
+
+	replaceStore = &fakeCbtPackageEditStore{lockRow: db.LockCbtPackageForEditRow{ID: packageID, SubjectID: subjectID}, questions: map[pgtype.UUID]db.GetCbtQuestionRow{questionID: {ID: questionID, SubjectID: subjectID, Status: db.CbtQuestionStatusEnumPublished}}, deleteQuestionErr: errors.New("delete failed")}
+	_, err = (&CbtPackage{q: replaceStore}).ReplaceQuestions(context.Background(), ReplaceCbtPackageQuestionsInput{PackageID: packageID, QuestionIDs: []pgtype.UUID{questionID}})
+	if err == nil || err.Error() != "delete failed" || len(replaceStore.addArgs) != 0 {
+		t.Fatalf("ReplaceQuestions(delete error) err/adds = %v/%d, want delete error before add", err, len(replaceStore.addArgs))
+	}
+
+	_, err = (&CbtPackage{q: &fakeCbtPackageEditStore{cloneErr: pgx.ErrNoRows}}).Clone(context.Background(), CloneCbtPackageInput{SourceID: packageID, Title: "PAT IPA Copy"})
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("Clone(missing source) error = %v, want ErrNotFound", err)
+	}
+
+	cloneQuestionErr := errors.New("clone questions failed")
+	_, err = (&CbtPackage{q: &fakeCbtPackageEditStore{cloneRow: db.CbtPackage{ID: pgtype.UUID{Bytes: [16]byte{104}, Valid: true}}, cloneQuestionsErr: cloneQuestionErr}}).Clone(context.Background(), CloneCbtPackageInput{SourceID: packageID, Title: "PAT IPA Copy"})
+	if !errors.Is(err, cloneQuestionErr) {
+		t.Fatalf("Clone(question copy error) error = %v, want clone question error", err)
+	}
+}
+
+type fakeCbtPackageSnapshotStore struct {
+	lockArg db.LockCbtPackageForSnapshotParams
+	lockRow db.LockCbtPackageForSnapshotRow
+	lockErr error
+
+	snapshotPackageID pgtype.UUID
+	snapshotRows      int64
+	snapshotErr       error
+	snapshotCalls     int
+}
+
+func (f *fakeCbtPackageSnapshotStore) ListCbtPackages(context.Context, pgtype.UUID) ([]db.ListCbtPackagesRow, error) {
+	return nil, nil
+}
+
+func (f *fakeCbtPackageSnapshotStore) ListCbtPackageQuestions(context.Context, pgtype.UUID) ([]db.ListCbtPackageQuestionsRow, error) {
+	return nil, nil
+}
+
+func (f *fakeCbtPackageSnapshotStore) GetCbtPackageUsage(context.Context, pgtype.UUID) (int32, error) {
+	return 0, nil
+}
+
+func (f *fakeCbtPackageSnapshotStore) DeleteCbtPackage(context.Context, pgtype.UUID) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeCbtPackageSnapshotStore) WithTx(pgx.Tx) *db.Queries { return nil }
+
+func (f *fakeCbtPackageSnapshotStore) LockCbtPackageForSnapshot(_ context.Context, arg db.LockCbtPackageForSnapshotParams) (db.LockCbtPackageForSnapshotRow, error) {
+	f.lockArg = arg
+	return f.lockRow, f.lockErr
+}
+
+func (f *fakeCbtPackageSnapshotStore) CreateCbtPackageQuestionSnapshots(_ context.Context, packageID pgtype.UUID) (int64, error) {
+	f.snapshotPackageID = packageID
+	f.snapshotCalls++
+	return f.snapshotRows, f.snapshotErr
+}
+
 type fakeCbtPackageEditStore struct {
 	lockRow db.LockCbtPackageForEditRow
 	lockErr error

@@ -235,6 +235,75 @@ func TestExamLoginIncludesMobileContractFields(t *testing.T) {
 	}
 }
 
+func TestExamCommandWrapperPaths(t *testing.T) {
+	ctx := context.Background()
+	participant := examActiveParticipant(t)
+	commandID := mustUUID(t, "70000000-0000-0000-0000-000000000001")
+	createdAt := mustTimestamp(t, "2026-05-17T10:00:00Z")
+	store := &fakeExamStore{
+		participant: participant,
+		commandRows: []db.ListPendingParticipantCommandsRow{
+			{
+				ID:        commandID,
+				EventType: "proctor_command",
+				CreatedAt: createdAt,
+				EventData: marshalJSON(map[string]any{
+					"command_type": ParticipantCommandUnlockNotice,
+					"message":      "Akses dibuka",
+				}),
+			},
+		},
+	}
+	svc := &Exam{q: store}
+
+	gotParticipant, err := svc.GetParticipantByToken(ctx, " token-raw ")
+	if err != nil {
+		t.Fatalf("GetParticipantByToken() error = %v", err)
+	}
+	if gotParticipant.ID != participant.ID {
+		t.Fatalf("GetParticipantByToken() ID = %v, want %v", gotParticipant.ID, participant.ID)
+	}
+
+	commands, err := svc.ListPendingCommands(ctx, participant.ID)
+	if err != nil {
+		t.Fatalf("ListPendingCommands() error = %v", err)
+	}
+	if store.commandParticipantID != participant.ID || len(commands) != 1 || commands[0].Type != ParticipantCommandUnlockNotice || commands[0].Message != "Akses dibuka" {
+		t.Fatalf("ListPendingCommands() participant %v commands %+v, want unlock_notice", store.commandParticipantID, commands)
+	}
+
+	if err := svc.AcknowledgeCommand(ctx, participant.ID, " 70000000-0000-0000-0000-000000000001 ", " "); err != nil {
+		t.Fatalf("AcknowledgeCommand(default status) error = %v", err)
+	}
+	if len(store.events) != 1 || store.events[0].EventType != "participant_command_ack" || store.events[0].ParticipantID != participant.ID {
+		t.Fatalf("AcknowledgeCommand() events = %+v, want ack event", store.events)
+	}
+	ackData := string(store.events[0].EventData)
+	if !strings.Contains(ackData, `"command_id":"70000000-0000-0000-0000-000000000001"`) || !strings.Contains(ackData, `"status":"seen"`) {
+		t.Fatalf("AcknowledgeCommand() event data = %s, want trimmed command id and default seen", ackData)
+	}
+
+	if err := svc.AcknowledgeCommand(ctx, participant.ID, "", "seen"); err == nil || !strings.Contains(err.Error(), "command id required") {
+		t.Fatalf("AcknowledgeCommand(empty id) error = %v, want command id required", err)
+	}
+	eventErr := errors.New("ack event failed")
+	svc = &Exam{q: &fakeExamStore{eventErr: eventErr}}
+	if err := svc.AcknowledgeCommand(ctx, participant.ID, pgUUIDString(commandID), "handled"); !errors.Is(err, eventErr) {
+		t.Fatalf("AcknowledgeCommand(event error) = %v, want %v", err, eventErr)
+	}
+
+	participantErr := errors.New("participant lookup failed")
+	svc = &Exam{q: &fakeExamStore{participantErr: participantErr}}
+	if _, err := svc.GetParticipantByToken(ctx, "token"); !errors.Is(err, participantErr) {
+		t.Fatalf("GetParticipantByToken(error) = %v, want %v", err, participantErr)
+	}
+	commandErr := errors.New("commands failed")
+	svc = &Exam{q: &fakeExamStore{commandErr: commandErr}}
+	if _, err := svc.ListPendingCommands(ctx, participant.ID); !errors.Is(err, commandErr) {
+		t.Fatalf("ListPendingCommands(error) = %v, want %v", err, commandErr)
+	}
+}
+
 func TestExamStatusIncludesIsSubmitted(t *testing.T) {
 	ctx := context.Background()
 	participantID := mustUUID(t, "77777777-7777-7777-7777-777777777777")

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
@@ -97,6 +98,161 @@ func TestExamOptionRandomizationHelpers(t *testing.T) {
 			t.Fatalf("labelFromIndex(%d) = %q, want %q", tt.idx, got, tt.want)
 		}
 	}
+}
+
+func TestExamApplyQuestionDrawSeparatesObjectiveAndEssay(t *testing.T) {
+	objectiveOne := mustUUID(t, "31000000-0000-0000-0000-000000000001")
+	essayOne := mustUUID(t, "31000000-0000-0000-0000-000000000002")
+	objectiveTwo := mustUUID(t, "31000000-0000-0000-0000-000000000003")
+	essayTwo := mustUUID(t, "31000000-0000-0000-0000-000000000004")
+	otherID := mustUUID(t, "31000000-0000-0000-0000-000000000005")
+	questions := []db.GetExamQuestionsRow{
+		{ID: objectiveOne, Code: "PG-1", QuestionType: "multiple_choice"},
+		{ID: essayOne, Code: "ES-1", QuestionType: "essay"},
+		{ID: objectiveTwo, Code: "PG-2", QuestionType: "true_false"},
+		{ID: essayTwo, Code: "ES-2", QuestionType: "essay"},
+		{ID: otherID, Code: "OT-1", QuestionType: "unsupported"},
+	}
+
+	if got := applyQuestionDraw(questions, 0, 0); !reflect.DeepEqual(got, questions) {
+		t.Fatalf("applyQuestionDraw(no draw) = %#v, want original", got)
+	}
+
+	got := applyQuestionDraw(questions, 1, 1)
+	if len(got) != 2 {
+		t.Fatalf("applyQuestionDraw(1,1) len = %d, want 2", len(got))
+	}
+	var objectiveCount, essayCount int
+	lastPosition := -1
+	positions := map[string]int{}
+	for i, question := range questions {
+		positions[pgUUIDString(question.ID)] = i
+	}
+	for _, question := range got {
+		pos := positions[pgUUIDString(question.ID)]
+		if pos < lastPosition {
+			t.Fatalf("applyQuestionDraw() order = %#v, want original relative order", got)
+		}
+		lastPosition = pos
+		switch question.QuestionType {
+		case "essay":
+			essayCount++
+		case "multiple_choice", "true_false":
+			objectiveCount++
+		default:
+			t.Fatalf("applyQuestionDraw() included unsupported question %#v", question)
+		}
+	}
+	if objectiveCount != 1 || essayCount != 1 {
+		t.Fatalf("applyQuestionDraw(1,1) counts objective/essay = %d/%d, want 1/1", objectiveCount, essayCount)
+	}
+
+	otherOnly := []db.GetExamQuestionsRow{{ID: otherID, Code: "OT-1", QuestionType: "unsupported"}}
+	if got := applyQuestionDraw(otherOnly, 1, 0); !reflect.DeepEqual(got, otherOnly) {
+		t.Fatalf("applyQuestionDraw(other-only) = %#v, want fallback original", got)
+	}
+}
+
+func TestExamOptionOrderHelpersParseEnsureApplyAndCanonicalize(t *testing.T) {
+	firstID := mustUUID(t, "32000000-0000-0000-0000-000000000001")
+	secondID := mustUUID(t, "32000000-0000-0000-0000-000000000002")
+	essayID := mustUUID(t, "32000000-0000-0000-0000-000000000003")
+	singleID := mustUUID(t, "32000000-0000-0000-0000-000000000004")
+	firstKey := pgUUIDString(firstID)
+	secondKey := pgUUIDString(secondID)
+	existingOrder := map[string][]string{firstKey: []string{"C", "A", "B"}}
+	rows := []db.GetExamQuestionsRow{
+		{
+			ID:           firstID,
+			QuestionType: "multiple_choice",
+			Options:      marshalJSON([]QuestionOption{{Label: "A", Text: "Alpha"}, {Label: "B", Text: "Beta"}, {Label: "C", Text: "Gamma"}}),
+			OptionA:      "Alpha",
+			OptionB:      "Beta",
+			OptionC:      "Gamma",
+		},
+		{ID: secondID, QuestionType: "multiple_answer", OptionA: "One", OptionB: "Two", OptionC: "Three"},
+		{ID: essayID, QuestionType: "essay", OptionA: "Ignored", OptionB: "Ignored"},
+		{ID: singleID, QuestionType: "multiple_choice", OptionA: "Only one"},
+	}
+
+	if got := ensureOptionOrder(rows, existingOrder, false); len(got) != 0 {
+		t.Fatalf("ensureOptionOrder(randomize=false) = %#v, want empty map", got)
+	}
+	got := ensureOptionOrder(rows, existingOrder, true)
+	if !reflect.DeepEqual(got[firstKey], []string{"C", "A", "B"}) {
+		t.Fatalf("ensureOptionOrder() existing first = %#v, want preserved C,A,B", got[firstKey])
+	}
+	if labels := got[secondKey]; len(labels) != 3 || !sameStringSet(labels, []string{"A", "B", "C"}) {
+		t.Fatalf("ensureOptionOrder() generated second = %#v, want labels A/B/C", labels)
+	}
+	if _, ok := got[pgUUIDString(essayID)]; ok {
+		t.Fatalf("ensureOptionOrder() generated essay order = %#v", got[pgUUIDString(essayID)])
+	}
+	if _, ok := got[pgUUIDString(singleID)]; ok {
+		t.Fatalf("ensureOptionOrder() generated single-option order = %#v", got[pgUUIDString(singleID)])
+	}
+
+	orderJSON, err := json.Marshal(map[string][]string{firstKey: []string{"C", "A", "B"}})
+	if err != nil {
+		t.Fatalf("marshal option order: %v", err)
+	}
+	if parsed := parseOptionOrder(orderJSON); !reflect.DeepEqual(parsed[firstKey], []string{"C", "A", "B"}) {
+		t.Fatalf("parseOptionOrder(valid) = %#v, want C,A,B", parsed[firstKey])
+	}
+	for _, raw := range [][]byte{nil, []byte("not-json"), []byte("null")} {
+		if parsed := parseOptionOrder(raw); len(parsed) != 0 {
+			t.Fatalf("parseOptionOrder(%q) = %#v, want empty", string(raw), parsed)
+		}
+	}
+
+	applied := applyExamOptionOrder(rows[0], []string{"C", "A", "B"})
+	options := decodeQuestionOptions(applied.Options)
+	if len(options) != 3 || options[0].Label != "A" || options[0].Text != "Gamma" || options[1].Label != "B" || options[1].Text != "Alpha" || options[2].Label != "C" || options[2].Text != "Beta" {
+		t.Fatalf("applyExamOptionOrder(JSON) options = %#v, want relabeled C/A/B text order", options)
+	}
+	if applied.OptionA != "Gamma" || applied.OptionB != "Alpha" || applied.OptionC != "Beta" {
+		t.Fatalf("applyExamOptionOrder(JSON) legacy columns = %q/%q/%q, want Gamma/Alpha/Beta", applied.OptionA, applied.OptionB, applied.OptionC)
+	}
+	legacyApplied := applyExamOptionOrder(rows[1], []string{"C", "A"})
+	legacyOptions := decodeQuestionOptions(legacyApplied.Options)
+	if len(legacyOptions) != 2 || legacyOptions[0].Label != "A" || legacyOptions[0].Text != "Three" || legacyApplied.OptionA != "Three" || legacyApplied.OptionB != "One" {
+		t.Fatalf("applyExamOptionOrder(legacy partial) = options %#v columns %q/%q", legacyOptions, legacyApplied.OptionA, legacyApplied.OptionB)
+	}
+	unchanged := applyExamOptionOrder(rows[2], []string{"B", "A"})
+	if !reflect.DeepEqual(unchanged, rows[2]) {
+		t.Fatalf("applyExamOptionOrder(essay) = %#v, want unchanged", unchanged)
+	}
+	missing := applyExamOptionOrder(rows[0], []string{"Z"})
+	if !reflect.DeepEqual(missing, rows[0]) {
+		t.Fatalf("applyExamOptionOrder(missing labels) = %#v, want unchanged", missing)
+	}
+
+	if answer := canonicalizeRandomizedAnswer(orderJSON, firstID, " A, c , Z "); answer != "C,B,Z" {
+		t.Fatalf("canonicalizeRandomizedAnswer(mapped) = %q, want C,B,Z", answer)
+	}
+	if answer := canonicalizeRandomizedAnswer(orderJSON, firstID, "Z"); answer != "Z" {
+		t.Fatalf("canonicalizeRandomizedAnswer(unchanged) = %q, want Z", answer)
+	}
+	if answer := canonicalizeRandomizedAnswer(nil, firstID, "A"); answer != "A" {
+		t.Fatalf("canonicalizeRandomizedAnswer(no order) = %q, want A", answer)
+	}
+}
+
+func sameStringSet(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	counts := map[string]int{}
+	for _, value := range got {
+		counts[value]++
+	}
+	for _, value := range want {
+		counts[value]--
+		if counts[value] < 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func TestExamParticipantCommandFromEvent(t *testing.T) {

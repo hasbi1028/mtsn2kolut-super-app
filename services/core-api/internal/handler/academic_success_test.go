@@ -708,3 +708,28 @@ func TestAcademicHandlersMapServiceErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestAcademicGetTeacherWorkloadForwardsServiceResult(t *testing.T) {
+	fake := &fakeAcademicService{}
+	h := &Academic{svc: fake}
+	rec := httptest.NewRecorder()
+	h.GetTeacherWorkload(rec, adminRequest(http.MethodGet, "/api/academic/teacher-workload", ""))
+	if rec.Code != http.StatusOK || !fake.workloadCalled {
+		t.Fatalf("GetTeacherWorkload status/called = %d/%v, want 200/true; body=%s", rec.Code, fake.workloadCalled, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"items":[]`) {
+		t.Fatalf("GetTeacherWorkload body = %s, want workload overview", rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.GetTeacherWorkload(rec, httptest.NewRequest(http.MethodGet, "/api/academic/teacher-workload", nil))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("GetTeacherWorkload forbidden status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	(&Academic{svc: &fakeAcademicService{workloadErr: errors.New("db down")}}).GetTeacherWorkload(rec, adminRequest(http.MethodGet, "/api/academic/teacher-workload", ""))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("GetTeacherWorkload error status = %d, want 500; body=%s", rec.Code, rec.Body.String())
+	}
+}
