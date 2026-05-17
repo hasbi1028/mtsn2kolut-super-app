@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -133,6 +134,64 @@ func TestCbtEventQuestionTargetHandlersForwardPayloads(t *testing.T) {
 	}
 	if fake.deleteQuestionTargetEventID != eventID || fake.deleteQuestionTargetSubjectID != subjectID {
 		t.Fatalf("DeleteQuestionTarget ids = (%v,%v), want (%v,%v)", fake.deleteQuestionTargetEventID, fake.deleteQuestionTargetSubjectID, eventID, subjectID)
+	}
+}
+
+func TestCbtEventReadinessCoverageHandlersMapServiceErrors(t *testing.T) {
+	eventID := handlerTestUUID(172)
+	boom := errors.New("db down")
+	tests := []struct {
+		name       string
+		handler    func(*CbtEvent, http.ResponseWriter, *http.Request)
+		svc        *fakeCbtEventService
+		path       string
+		wantStatus int
+	}{
+		{name: "overview", handler: (*CbtEvent).Overview, svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, overviewErr: boom}, path: "/api/cbt/events/" + eventID.String() + "/overview", wantStatus: http.StatusInternalServerError},
+		{name: "sop readiness", handler: (*CbtEvent).SopReadiness, svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, sopErr: boom}, path: "/api/cbt/events/" + eventID.String() + "/sop-readiness", wantStatus: http.StatusInternalServerError},
+		{name: "packages", handler: (*CbtEvent).ListPackages, svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, packagesErr: boom}, path: "/api/cbt/events/" + eventID.String() + "/packages", wantStatus: http.StatusInternalServerError},
+		{name: "sessions", handler: (*CbtEvent).ListSessions, svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, sessionsErr: boom}, path: "/api/cbt/events/" + eventID.String() + "/sessions", wantStatus: http.StatusInternalServerError},
+		{name: "question completeness", handler: (*CbtEvent).QuestionCompleteness, svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, completenessErr: boom}, path: "/api/cbt/events/" + eventID.String() + "/question-completeness", wantStatus: http.StatusInternalServerError},
+		{name: "requirements", handler: (*CbtEvent).GetQuestionRequirements, svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, requirementsErr: boom}, path: "/api/cbt/events/" + eventID.String() + "/question-requirements", wantStatus: http.StatusInternalServerError},
+		{name: "members", handler: (*CbtEvent).ListMembers, svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, membersErr: boom}, path: "/api/cbt/events/" + eventID.String() + "/members", wantStatus: http.StatusBadRequest},
+		{name: "targets", handler: (*CbtEvent).ListQuestionTargets, svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, questionTargetsErr: boom}, path: "/api/cbt/events/" + eventID.String() + "/question-targets", wantStatus: http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			tt.handler(&CbtEvent{svc: tt.svc}, rec, withRouteParam(adminRequest(http.MethodGet, tt.path, ""), "id", eventID.String()))
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestCbtEventReadinessCoverageHandlersRejectInvalidIDs(t *testing.T) {
+	tests := []struct {
+		name    string
+		handler func(*CbtEvent, http.ResponseWriter, *http.Request)
+		path    string
+	}{
+		{name: "overview", handler: (*CbtEvent).Overview, path: "/api/cbt/events/bad/overview"},
+		{name: "sop readiness", handler: (*CbtEvent).SopReadiness, path: "/api/cbt/events/bad/sop-readiness"},
+		{name: "packages", handler: (*CbtEvent).ListPackages, path: "/api/cbt/events/bad/packages"},
+		{name: "sessions", handler: (*CbtEvent).ListSessions, path: "/api/cbt/events/bad/sessions"},
+		{name: "question completeness", handler: (*CbtEvent).QuestionCompleteness, path: "/api/cbt/events/bad/question-completeness"},
+		{name: "requirements", handler: (*CbtEvent).GetQuestionRequirements, path: "/api/cbt/events/bad/question-requirements"},
+		{name: "members", handler: (*CbtEvent).ListMembers, path: "/api/cbt/events/bad/members"},
+		{name: "targets", handler: (*CbtEvent).ListQuestionTargets, path: "/api/cbt/events/bad/question-targets"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			tt.handler(&CbtEvent{svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}}}, rec, withRouteParam(adminRequest(http.MethodGet, tt.path, ""), "id", "bad"))
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+			}
+		})
 	}
 }
 
