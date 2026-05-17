@@ -550,6 +550,7 @@ func (s *CbtPackage) UpdateMetadata(ctx context.Context, input UpdateCbtPackageI
 	if input.SourceMode == "" {
 		input.SourceMode = "teacher_class"
 	}
+	input.DurationMinutes = normalizeCbtPackageDuration(input.DurationMinutes)
 
 	if s.pool == nil {
 		store, ok := s.q.(interface {

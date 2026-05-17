@@ -19,50 +19,82 @@ import (
 type fakeCbtEventService struct {
 	*service.CbtEvent
 
-	listRows        []db.ListCbtExamEventsRow
-	listErr         error
-	listUserID      pgtype.UUID
-	getID           pgtype.UUID
-	getRow          db.GetCbtExamEventRow
-	getErr          error
-	overviewID      pgtype.UUID
-	overviewRow     service.CbtEventOverview
-	overviewErr     error
-	sopID           pgtype.UUID
-	sopRow          service.CbtSopReadiness
-	sopErr          error
-	packagesID      pgtype.UUID
-	packagesRows    []db.ListCbtEventPackagesRow
-	packagesErr     error
-	sessionsID      pgtype.UUID
-	sessionsRows    []db.ListCbtEventSessionsReadinessRow
-	sessionsErr     error
-	completenessID  pgtype.UUID
-	completenessRow service.CbtQuestionCompleteness
-	completenessErr error
-	canReadAllowed  bool
-	canReadErr      error
-	canReadEventID  pgtype.UUID
-	canReadUserID   pgtype.UUID
-	resultsID       pgtype.UUID
-	resultsRows     []db.GetEventResultsRow
-	resultsErr      error
-	cardsID         pgtype.UUID
-	cardsRows       []db.GetEventExamCardsRow
-	cardsErr        error
-	createInput     service.CreateCbtEventInput
-	createRow       db.CbtExamEvent
-	createErr       error
-	updateID        pgtype.UUID
-	updateInput     service.CreateCbtEventInput
-	updateRow       db.CbtExamEvent
-	updateErr       error
-	statusID        pgtype.UUID
-	statusValue     string
-	statusRow       db.CbtExamEvent
-	statusErr       error
-	deleteID        pgtype.UUID
-	deleteErr       error
+	listRows                      []db.ListCbtExamEventsRow
+	listErr                       error
+	listUserID                    pgtype.UUID
+	getID                         pgtype.UUID
+	getRow                        db.GetCbtExamEventRow
+	getErr                        error
+	overviewID                    pgtype.UUID
+	overviewRow                   service.CbtEventOverview
+	overviewErr                   error
+	sopID                         pgtype.UUID
+	sopRow                        service.CbtSopReadiness
+	sopErr                        error
+	packagesID                    pgtype.UUID
+	packagesRows                  []db.ListCbtEventPackagesRow
+	packagesErr                   error
+	sessionsID                    pgtype.UUID
+	sessionsRows                  []db.ListCbtEventSessionsReadinessRow
+	sessionsErr                   error
+	completenessID                pgtype.UUID
+	completenessRow               service.CbtQuestionCompleteness
+	completenessErr               error
+	requirementsID                pgtype.UUID
+	requirementsRow               db.GetCbtEventQuestionRequirementsRow
+	requirementsErr               error
+	upsertRequirementsID          pgtype.UUID
+	upsertRequirementsInput       service.SaveCbtEventQuestionRequirementsInput
+	upsertRequirementsRow         db.UpsertCbtEventQuestionRequirementsRow
+	upsertRequirementsErr         error
+	canReadAllowed                bool
+	canReadErr                    error
+	canReadEventID                pgtype.UUID
+	canReadUserID                 pgtype.UUID
+	resultsID                     pgtype.UUID
+	resultsRows                   []db.GetEventResultsRow
+	resultsErr                    error
+	cardsID                       pgtype.UUID
+	cardsRows                     []db.GetEventExamCardsRow
+	cardsErr                      error
+	createInput                   service.CreateCbtEventInput
+	createRow                     db.CbtExamEvent
+	createErr                     error
+	updateID                      pgtype.UUID
+	updateInput                   service.CreateCbtEventInput
+	updateRow                     db.CbtExamEvent
+	updateErr                     error
+	statusID                      pgtype.UUID
+	statusValue                   string
+	statusRow                     db.CbtExamEvent
+	statusErr                     error
+	deleteID                      pgtype.UUID
+	deleteErr                     error
+	membersID                     pgtype.UUID
+	membersRows                   []db.ListCbtEventMembersRow
+	membersErr                    error
+	createMemberEventID           pgtype.UUID
+	createMemberInput             service.SaveCbtEventMemberInput
+	createMemberRow               db.CbtEventMember
+	createMemberErr               error
+	updateMemberEventID           pgtype.UUID
+	updateMemberID                pgtype.UUID
+	updateMemberInput             service.SaveCbtEventMemberInput
+	updateMemberRow               db.CbtEventMember
+	updateMemberErr               error
+	deleteMemberEventID           pgtype.UUID
+	deleteMemberID                pgtype.UUID
+	deleteMemberErr               error
+	questionTargetsID             pgtype.UUID
+	questionTargetsRows           []db.ListCbtEventSubjectTargetsRow
+	questionTargetsErr            error
+	upsertQuestionTargetEventID   pgtype.UUID
+	upsertQuestionTargetInput     service.SaveCbtEventSubjectTargetInput
+	upsertQuestionTargetRow       db.CbtEventSubjectTarget
+	upsertQuestionTargetErr       error
+	deleteQuestionTargetEventID   pgtype.UUID
+	deleteQuestionTargetSubjectID pgtype.UUID
+	deleteQuestionTargetErr       error
 }
 
 func (f *fakeCbtEventService) List(context.Context) ([]db.ListCbtExamEventsRow, error) {
@@ -104,6 +136,17 @@ func (f *fakeCbtEventService) QuestionCompleteness(_ context.Context, eventID pg
 	return f.completenessRow, f.completenessErr
 }
 
+func (f *fakeCbtEventService) GetQuestionRequirements(_ context.Context, eventID pgtype.UUID) (db.GetCbtEventQuestionRequirementsRow, error) {
+	f.requirementsID = eventID
+	return f.requirementsRow, f.requirementsErr
+}
+
+func (f *fakeCbtEventService) UpsertQuestionRequirements(_ context.Context, eventID pgtype.UUID, in service.SaveCbtEventQuestionRequirementsInput) (db.UpsertCbtEventQuestionRequirementsRow, error) {
+	f.upsertRequirementsID = eventID
+	f.upsertRequirementsInput = in
+	return f.upsertRequirementsRow, f.upsertRequirementsErr
+}
+
 func (f *fakeCbtEventService) CanRead(_ context.Context, eventID, userID pgtype.UUID) (bool, error) {
 	f.canReadEventID = eventID
 	f.canReadUserID = userID
@@ -140,6 +183,47 @@ func (f *fakeCbtEventService) UpdateStatus(_ context.Context, id pgtype.UUID, st
 func (f *fakeCbtEventService) Delete(_ context.Context, id pgtype.UUID) error {
 	f.deleteID = id
 	return f.deleteErr
+}
+
+func (f *fakeCbtEventService) ListMembers(_ context.Context, eventID pgtype.UUID) ([]db.ListCbtEventMembersRow, error) {
+	f.membersID = eventID
+	return f.membersRows, f.membersErr
+}
+
+func (f *fakeCbtEventService) CreateMember(_ context.Context, eventID pgtype.UUID, in service.SaveCbtEventMemberInput) (db.CbtEventMember, error) {
+	f.createMemberEventID = eventID
+	f.createMemberInput = in
+	return f.createMemberRow, f.createMemberErr
+}
+
+func (f *fakeCbtEventService) UpdateMember(_ context.Context, eventID pgtype.UUID, id pgtype.UUID, in service.SaveCbtEventMemberInput) (db.CbtEventMember, error) {
+	f.updateMemberEventID = eventID
+	f.updateMemberID = id
+	f.updateMemberInput = in
+	return f.updateMemberRow, f.updateMemberErr
+}
+
+func (f *fakeCbtEventService) DeleteMember(_ context.Context, eventID pgtype.UUID, id pgtype.UUID) error {
+	f.deleteMemberEventID = eventID
+	f.deleteMemberID = id
+	return f.deleteMemberErr
+}
+
+func (f *fakeCbtEventService) ListQuestionTargets(_ context.Context, eventID pgtype.UUID) ([]db.ListCbtEventSubjectTargetsRow, error) {
+	f.questionTargetsID = eventID
+	return f.questionTargetsRows, f.questionTargetsErr
+}
+
+func (f *fakeCbtEventService) UpsertQuestionTarget(_ context.Context, eventID pgtype.UUID, in service.SaveCbtEventSubjectTargetInput) (db.CbtEventSubjectTarget, error) {
+	f.upsertQuestionTargetEventID = eventID
+	f.upsertQuestionTargetInput = in
+	return f.upsertQuestionTargetRow, f.upsertQuestionTargetErr
+}
+
+func (f *fakeCbtEventService) DeleteQuestionTarget(_ context.Context, eventID pgtype.UUID, subjectID pgtype.UUID) error {
+	f.deleteQuestionTargetEventID = eventID
+	f.deleteQuestionTargetSubjectID = subjectID
+	return f.deleteQuestionTargetErr
 }
 
 func cbtEventModel(id pgtype.UUID, title string) db.CbtExamEvent {
