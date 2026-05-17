@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -120,6 +121,14 @@ type cbtSessionResultFollowUpService interface {
 	ListRemedialCandidates(ctx context.Context, sessionID pgtype.UUID, threshold float64) ([]db.ListCbtSessionRemedialCandidatesRow, error)
 }
 
+type cbtSessionRealtimeProctorService interface {
+	GetProctoringLiveSummary(ctx context.Context, sessionID, roomID pgtype.UUID) (service.CbtProctoringLiveSummary, error)
+	GetParticipantProctorScope(ctx context.Context, sessionID, participantID pgtype.UUID) (db.GetCbtParticipantProctorScopeRow, error)
+	GetProctorEventScope(ctx context.Context, eventID pgtype.UUID) (db.GetCbtProctorEventScopeRow, error)
+	AcknowledgeProctorEventByID(ctx context.Context, eventID pgtype.UUID, actor service.CbtProctorActor, note string) (db.AcknowledgeCbtProctorEventRow, error)
+	ExecuteProctorAction(ctx context.Context, in service.CbtProctorActionInput, actor service.CbtProctorActor) (service.CbtProctorActionResult, error)
+}
+
 func NewCbtSession(svc *service.CbtSession, audit ...cbtSessionAuditWriter) *CbtSession {
 	var writer cbtSessionAuditWriter
 	if len(audit) > 0 {
@@ -166,13 +175,54 @@ func cbtSessionActorUserID(r *http.Request) pgtype.UUID {
 	var uid pgtype.UUID
 	if claims, ok := api.ClaimsFromContext(r.Context()); ok {
 		if raw, ok := claims["uid"].(string); ok {
+			if err := uid.Scan(raw); err == nil && uid.Valid {
+				return uid
+			}
+		}
+		if raw, ok := claims["sub"].(string); ok {
 			_ = uid.Scan(raw)
 		}
 	}
 	return uid
 }
 
+func cbtProctorActorFromRequest(r *http.Request) service.CbtProctorActor {
+	return service.CbtProctorActor{
+		UserID:     cbtSessionActorUserID(r),
+		Username:   currentUsername(r),
+		EmployeeID: cbtSessionEmployeeID(r),
+		RequestID:  strings.TrimSpace(r.Header.Get("X-Request-ID")),
+		SourceIP:   trustedClientIP(r),
+	}
+}
+
 func (h *CbtSession) requireSessionTeacherOrAdmin(w http.ResponseWriter, r *http.Request, sessionID pgtype.UUID) bool {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return false
+	}
+	if cbtSessionHasAnyRole(claims, "admin") {
+		return true
+	}
+	teacherID := cbtSessionTeacherID(r)
+	if !teacherID.Valid {
+		api.Forbidden(w)
+		return false
+	}
+	allowed, err := h.svc.CheckTeacherAccess(r.Context(), sessionID, teacherID)
+	if err != nil {
+		api.Internal(w, err)
+		return false
+	}
+	if !allowed {
+		api.Forbidden(w)
+		return false
+	}
+	return true
+}
+
+func (h *CbtSession) requireSessionProctorSummaryAccess(w http.ResponseWriter, r *http.Request, sessionID pgtype.UUID) bool {
 	claims, ok := api.ClaimsFromContext(r.Context())
 	if !ok {
 		api.Unauthorized(w)
@@ -230,6 +280,54 @@ func (h *CbtSession) requireSessionParticipantForTeacherOrAdmin(w http.ResponseW
 		return false
 	}
 	return true
+}
+
+func (h *CbtSession) requireProctorEventAccess(w http.ResponseWriter, r *http.Request, scope db.GetCbtProctorEventScopeRow) bool {
+	if adminAccessAllowed(r) {
+		return true
+	}
+	if scope.RoomID.Valid {
+		return h.requireSessionRoomProctorOrAdmin(w, r, scope.SessionID, scope.RoomID)
+	}
+	teacherID := cbtSessionTeacherID(r)
+	if !teacherID.Valid {
+		api.Forbidden(w)
+		return false
+	}
+	allowed, err := h.svc.CheckTeacherAccess(r.Context(), scope.SessionID, teacherID)
+	if err != nil {
+		api.Internal(w, err)
+		return false
+	}
+	if !allowed {
+		api.Forbidden(w)
+		return false
+	}
+	return true
+}
+
+func (h *CbtSession) requireParticipantProctorActionAccess(w http.ResponseWriter, r *http.Request, sessionID, participantID pgtype.UUID) (db.GetCbtParticipantProctorScopeRow, bool) {
+	proctorSvc, ok := h.svc.(cbtSessionRealtimeProctorService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt realtime proctor service unavailable"))
+		return db.GetCbtParticipantProctorScopeRow{}, false
+	}
+	scope, err := proctorSvc.GetParticipantProctorScope(r.Context(), sessionID, participantID)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Peserta ujian tidak ditemukan")
+		return db.GetCbtParticipantProctorScopeRow{}, false
+	}
+	if adminAccessAllowed(r) {
+		return scope, true
+	}
+	if !scope.RoomID.Valid {
+		api.Forbidden(w)
+		return db.GetCbtParticipantProctorScopeRow{}, false
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, scope.RoomID) {
+		return db.GetCbtParticipantProctorScopeRow{}, false
+	}
+	return scope, true
 }
 
 func (h *CbtSession) requireSessionAnswerForTeacherOrAdmin(w http.ResponseWriter, r *http.Request, sessionID, answerID pgtype.UUID) bool {
@@ -869,13 +967,18 @@ func (h *CbtSession) ResetParticipantAccess(w http.ResponseWriter, r *http.Reque
 	if !h.requireSessionParticipantForTeacherOrAdmin(w, r, sessionID, pid) {
 		return
 	}
-	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
+	body, ok := decodeOptionalProctorActionBody(w, r)
 	if !ok {
-		api.Internal(w, fmt.Errorf("cbt proctor control service unavailable"))
 		return
 	}
-	if err := proctorSvc.ResetParticipantRuntimeAccess(r.Context(), pid, currentUsername(r)); err != nil {
-		api.Internal(w, err)
+	result, ok := h.executeLegacyProctorAction(w, r, service.CbtProctorActionInput{
+		SessionID:     sessionID,
+		ParticipantID: pid,
+		ActionType:    "reset_device_binding",
+		Reason:        firstNonEmptyString(body.Reason, "Reset akses peserta"),
+		Notes:         firstNonEmptyString(body.Notes, "Tindakan dicatat dari endpoint kompatibilitas; perangkat dan sinkronisasi jawaban wajib diperiksa."),
+	})
+	if !ok {
 		return
 	}
 	h.auditEvent(r.Context(), "CBT_SESSION_PARTICIPANT_RESET_ACCESS", "cbt_session", pgUUIDString(sessionID), map[string]any{
@@ -884,7 +987,7 @@ func (h *CbtSession) ResetParticipantAccess(w http.ResponseWriter, r *http.Reque
 		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
 		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
 	})
-	api.OK(w, map[string]string{"status": "reset"})
+	api.OK(w, result)
 }
 
 func (h *CbtSession) AssignSeat(w http.ResponseWriter, r *http.Request) {
@@ -1216,8 +1319,7 @@ func (h *CbtSession) GetProctoringStatus(w http.ResponseWriter, r *http.Request)
 		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
-	if !adminAccessAllowed(r) {
-		api.Forbidden(w)
+	if !h.requireSessionProctorSummaryAccess(w, r, sessionID) {
 		return
 	}
 	rows, err := h.svc.GetProctoringStatus(r.Context(), sessionID)
@@ -1234,8 +1336,7 @@ func (h *CbtSession) ListParticipantEvents(w http.ResponseWriter, r *http.Reques
 		api.BadRequest(w, "ID sesi ujian tidak valid")
 		return
 	}
-	if !adminAccessAllowed(r) {
-		api.Forbidden(w)
+	if !h.requireSessionProctorSummaryAccess(w, r, sessionID) {
 		return
 	}
 	var participantID pgtype.UUID
@@ -1267,6 +1368,388 @@ func (h *CbtSession) ListParticipantEvents(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	api.OK(w, rows)
+}
+
+func (h *CbtSession) GetProctoringLiveSummary(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID sesi ujian tidak valid")
+		return
+	}
+	if !h.requireSessionProctorSummaryAccess(w, r, sessionID) {
+		return
+	}
+	proctorSvc, ok := h.svc.(cbtSessionRealtimeProctorService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt realtime proctor service unavailable"))
+		return
+	}
+	summary, err := proctorSvc.GetProctoringLiveSummary(r.Context(), sessionID, pgtype.UUID{})
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, summary)
+}
+
+func (h *CbtSession) GetRoomProctoringLiveSummary(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, ok := h.requireSessionRoomParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, roomID) {
+		return
+	}
+	proctorSvc, ok := h.svc.(cbtSessionRealtimeProctorService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt realtime proctor service unavailable"))
+		return
+	}
+	summary, err := proctorSvc.GetProctoringLiveSummary(r.Context(), sessionID, roomID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, summary)
+}
+
+func (h *CbtSession) StreamProctoringLiveSummary(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID sesi ujian tidak valid")
+		return
+	}
+	if !h.requireSessionProctorSummaryAccess(w, r, sessionID) {
+		return
+	}
+	h.streamProctoringLiveSummary(w, r, sessionID, pgtype.UUID{})
+}
+
+func (h *CbtSession) StreamRoomProctoringLiveSummary(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, ok := h.requireSessionRoomParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, roomID) {
+		return
+	}
+	h.streamProctoringLiveSummary(w, r, sessionID, roomID)
+}
+
+func (h *CbtSession) streamProctoringLiveSummary(w http.ResponseWriter, r *http.Request, sessionID, roomID pgtype.UUID) {
+	proctorSvc, ok := h.svc.(cbtSessionRealtimeProctorService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt realtime proctor service unavailable"))
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		api.Err(w, http.StatusInternalServerError, "streaming tidak didukung")
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-transform")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	writeSSE := func(event string, payload any) bool {
+		data, err := json.Marshal(payload)
+		if err != nil {
+			return false
+		}
+		if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, data); err != nil {
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+	if !writeSSE("ready", map[string]any{"mode": "live-summary", "room_id": pgUUIDString(roomID)}) {
+		return
+	}
+	sendSummary := func() bool {
+		summary, err := proctorSvc.GetProctoringLiveSummary(r.Context(), sessionID, roomID)
+		if err != nil {
+			return writeSSE("stream_error", map[string]any{"message": safeClientMessage(err, "Gagal memuat pemantauan langsung")})
+		}
+		return writeSSE("live_summary", summary)
+	}
+	if !sendSummary() {
+		return
+	}
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+	ping := time.NewTicker(24 * time.Second)
+	defer ping.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			if !sendSummary() {
+				return
+			}
+		case <-ping.C:
+			if !writeSSE("ping", map[string]string{"time": time.Now().UTC().Format(time.RFC3339)}) {
+				return
+			}
+		}
+	}
+}
+
+func (h *CbtSession) AcknowledgeProctorEvent(w http.ResponseWriter, r *http.Request) {
+	eventID, err := parseUUID(firstNonEmptyString(chi.URLParam(r, "event_id"), chi.URLParam(r, "eid"), chi.URLParam(r, "id")))
+	if err != nil {
+		api.BadRequest(w, "ID peringatan tidak valid")
+		return
+	}
+	proctorSvc, ok := h.svc.(cbtSessionRealtimeProctorService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt realtime proctor service unavailable"))
+		return
+	}
+	scope, err := proctorSvc.GetProctorEventScope(r.Context(), eventID)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Peringatan pengawas tidak ditemukan")
+		return
+	}
+	if !h.requireProctorEventAccess(w, r, scope) {
+		return
+	}
+	var body struct {
+		Note  string `json:"note"`
+		Notes string `json:"notes"`
+	}
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			api.BadRequest(w, "Data yang dikirim tidak valid")
+			return
+		}
+	}
+	note := firstNonEmptyString(strings.TrimSpace(body.Note), strings.TrimSpace(body.Notes))
+	row, err := proctorSvc.AcknowledgeProctorEventByID(r.Context(), eventID, cbtProctorActorFromRequest(r), note)
+	if err != nil {
+		writeClientError(w, err, "Peringatan belum dapat ditandai sudah dicek")
+		return
+	}
+	api.OK(w, map[string]any{"status": "acknowledged", "event": row})
+}
+
+func (h *CbtSession) ExecuteProctorAction(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID sesi ujian tidak valid")
+		return
+	}
+	participantID, err := parseUUID(firstNonEmptyString(chi.URLParam(r, "pid"), chi.URLParam(r, "participant_id")))
+	if err != nil {
+		api.BadRequest(w, "ID peserta ujian tidak valid")
+		return
+	}
+	if _, ok := h.requireParticipantProctorActionAccess(w, r, sessionID, participantID); !ok {
+		return
+	}
+	var body struct {
+		ActionType string `json:"action_type"`
+		Reason     string `json:"reason"`
+		Notes      string `json:"notes"`
+		EventID    string `json:"event_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "Data yang dikirim tidak valid")
+		return
+	}
+	var eventID pgtype.UUID
+	if strings.TrimSpace(body.EventID) != "" {
+		eventID, err = parseUUID(body.EventID)
+		if err != nil {
+			api.BadRequest(w, "ID peringatan tidak valid")
+			return
+		}
+	}
+	proctorSvc, ok := h.svc.(cbtSessionRealtimeProctorService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt realtime proctor service unavailable"))
+		return
+	}
+	result, err := proctorSvc.ExecuteProctorAction(r.Context(), service.CbtProctorActionInput{
+		SessionID:     sessionID,
+		ParticipantID: participantID,
+		EventID:       eventID,
+		ActionType:    body.ActionType,
+		Reason:        body.Reason,
+		Notes:         body.Notes,
+	}, cbtProctorActorFromRequest(r))
+	if err != nil {
+		writeClientError(w, err, "Tindakan pengawas tidak valid")
+		return
+	}
+	api.OK(w, result)
+}
+
+func (h *CbtSession) GetProctoringReportData(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID sesi ujian tidak valid")
+		return
+	}
+	if !h.requireSessionProctorSummaryAccess(w, r, sessionID) {
+		return
+	}
+	h.writeProctoringReportData(w, r, sessionID, pgtype.UUID{})
+}
+
+func (h *CbtSession) GetRoomProctoringReportData(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, ok := h.requireSessionRoomParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, roomID) {
+		return
+	}
+	h.writeProctoringReportData(w, r, sessionID, roomID)
+}
+
+func (h *CbtSession) writeProctoringReportData(w http.ResponseWriter, r *http.Request, sessionID, roomID pgtype.UUID) {
+	proctorSvc, ok := h.svc.(cbtSessionRealtimeProctorService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt realtime proctor service unavailable"))
+		return
+	}
+	summary, err := proctorSvc.GetProctoringLiveSummary(r.Context(), sessionID, roomID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, buildProctoringReportData(summary))
+}
+
+func buildProctoringReportData(summary service.CbtProctoringLiveSummary) map[string]any {
+	severity := map[string]int{"info": 0, "warning": 0, "medium": 0, "critical": 0, "technical": 0}
+	technical := make([]service.CbtProctoringEventDTO, 0)
+	locked := make([]service.CbtProctoringParticipantDTO, 0)
+	pendingSync := make([]service.CbtProctoringParticipantDTO, 0)
+	unacknowledged := make([]service.CbtProctoringEventDTO, 0)
+	for _, event := range summary.LatestEvents {
+		if _, ok := severity[event.Severity]; ok {
+			severity[event.Severity]++
+		}
+		if event.Severity == "technical" || event.IsMassTechnicalIssue {
+			technical = append(technical, event)
+		}
+		if event.AcknowledgedAt == "" && proctorEventNeedsReportAction(event) {
+			unacknowledged = append(unacknowledged, event)
+		}
+	}
+	submitted := 0
+	notSubmitted := 0
+	for _, participant := range summary.Participants {
+		if participant.ConnectionStatus == "selesai" || proctorAnyTimeValid(participant.SubmittedAt) {
+			submitted++
+		} else {
+			notSubmitted++
+		}
+		if proctorAnyTimeValid(participant.LockedAt) || participant.RiskLevel == "locked" {
+			locked = append(locked, participant)
+		}
+		if participant.SyncStatus == "belum_sinkron" || participant.SyncStatus == "tertahan" || participant.PendingAnswerCount > 0 {
+			pendingSync = append(pendingSync, participant)
+		}
+	}
+	return map[string]any{
+		"generated_at":          time.Now().UTC().Format(time.RFC3339),
+		"session_id":            summary.SessionID,
+		"room_id":               summary.RoomID,
+		"summary":               summary,
+		"severity_summary":      severity,
+		"technical_incidents":   technical,
+		"locked_participants":   locked,
+		"actions":               summary.Actions,
+		"unacknowledged_events": unacknowledged,
+		"submitted_summary": map[string]int{
+			"submitted":     submitted,
+			"not_submitted": notSubmitted,
+		},
+		"sync_anomalies": pendingSync,
+	}
+}
+
+func proctorEventNeedsReportAction(event service.CbtProctoringEventDTO) bool {
+	switch event.Severity {
+	case "medium", "critical", "technical":
+		return true
+	default:
+		return false
+	}
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func proctorAnyTimeValid(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return false
+	case pgtype.Timestamptz:
+		return typed.Valid
+	case *pgtype.Timestamptz:
+		return typed != nil && typed.Valid
+	case string:
+		return strings.TrimSpace(typed) != ""
+	default:
+		return true
+	}
+}
+
+type proctorActionBody struct {
+	ActionType string `json:"action_type"`
+	Action     string `json:"action"`
+	Reason     string `json:"reason"`
+	Notes      string `json:"notes"`
+	EventID    string `json:"event_id"`
+}
+
+func decodeOptionalProctorActionBody(w http.ResponseWriter, r *http.Request) (proctorActionBody, bool) {
+	var body proctorActionBody
+	if r.Body == nil {
+		return body, true
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if errors.Is(err, io.EOF) {
+			return body, true
+		}
+		api.BadRequest(w, "Data yang dikirim tidak valid")
+		return body, false
+	}
+	return body, true
+}
+
+func (h *CbtSession) executeLegacyProctorAction(w http.ResponseWriter, r *http.Request, input service.CbtProctorActionInput) (service.CbtProctorActionResult, bool) {
+	proctorSvc, ok := h.svc.(cbtSessionRealtimeProctorService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt realtime proctor service unavailable"))
+		return service.CbtProctorActionResult{}, false
+	}
+	result, err := proctorSvc.ExecuteProctorAction(r.Context(), input, cbtProctorActorFromRequest(r))
+	if err != nil {
+		writeClientError(w, err, "Tindakan pengawas tidak valid")
+		return service.CbtProctorActionResult{}, false
+	}
+	return result, true
 }
 
 func (h *CbtSession) FlagParticipant(w http.ResponseWriter, r *http.Request) {
@@ -1326,24 +1809,27 @@ func (h *CbtSession) ForceSubmitParticipant(w http.ResponseWriter, r *http.Reque
 	if !h.requireSessionParticipant(w, r, sessionID, pid) {
 		return
 	}
-	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
+	body, ok := decodeOptionalProctorActionBody(w, r)
 	if !ok {
-		api.Internal(w, fmt.Errorf("cbt proctor control service unavailable"))
 		return
 	}
-	row, err := proctorSvc.ForceSubmitParticipant(r.Context(), sessionID, pid, currentUsername(r))
-	if err != nil {
-		api.Internal(w, err)
+	result, ok := h.executeLegacyProctorAction(w, r, service.CbtProctorActionInput{
+		SessionID:     sessionID,
+		ParticipantID: pid,
+		ActionType:    "force_submit",
+		Reason:        firstNonEmptyString(body.Reason, "Kirim paksa jawaban"),
+		Notes:         firstNonEmptyString(body.Notes, "Tindakan dicatat dari endpoint kompatibilitas; risiko sinkronisasi jawaban sudah diperiksa."),
+	})
+	if !ok {
 		return
 	}
 	h.auditEvent(r.Context(), "CBT_SESSION_PARTICIPANT_FORCE_SUBMIT", "cbt_session", pgUUIDString(sessionID), map[string]any{
 		"participant_id":   pgUUIDString(pid),
-		"score":            row.Score,
 		"actor_username":   currentUsername(r),
 		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
 		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
 	})
-	api.OK(w, row)
+	api.OK(w, result)
 }
 
 func (h *CbtSession) GetRoomProctoringDashboard(w http.ResponseWriter, r *http.Request) {
@@ -1657,13 +2143,18 @@ func (h *CbtSession) ResetRoomParticipantAccess(w http.ResponseWriter, r *http.R
 	if !h.requireSessionRoomParticipant(w, r, sessionID, roomID, pid) {
 		return
 	}
-	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
+	body, ok := decodeOptionalProctorActionBody(w, r)
 	if !ok {
-		api.Internal(w, fmt.Errorf("cbt proctor control service unavailable"))
 		return
 	}
-	if err := proctorSvc.ResetParticipantRuntimeAccess(r.Context(), pid, currentUsername(r)); err != nil {
-		api.Internal(w, err)
+	result, ok := h.executeLegacyProctorAction(w, r, service.CbtProctorActionInput{
+		SessionID:     sessionID,
+		ParticipantID: pid,
+		ActionType:    "reset_device_binding",
+		Reason:        firstNonEmptyString(body.Reason, "Reset akses peserta"),
+		Notes:         firstNonEmptyString(body.Notes, "Tindakan dicatat dari endpoint kompatibilitas; perangkat dan sinkronisasi jawaban wajib diperiksa."),
+	})
+	if !ok {
 		return
 	}
 	h.auditEvent(r.Context(), "CBT_SESSION_ROOM_PARTICIPANT_RESET_ACCESS", "cbt_session_room", pgUUIDString(roomID), map[string]any{
@@ -1673,7 +2164,7 @@ func (h *CbtSession) ResetRoomParticipantAccess(w http.ResponseWriter, r *http.R
 		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
 		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
 	})
-	api.OK(w, map[string]string{"status": "reset"})
+	api.OK(w, result)
 }
 
 func (h *CbtSession) UnlockRoomParticipant(w http.ResponseWriter, r *http.Request) {
@@ -1691,19 +2182,20 @@ func (h *CbtSession) UnlockRoomParticipant(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var body struct {
-		Notes string `json:"notes"`
+		Reason string `json:"reason"`
+		Notes  string `json:"notes"`
 	}
 	if r.Body != nil {
 		_ = json.NewDecoder(r.Body).Decode(&body)
 	}
-	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
+	result, ok := h.executeLegacyProctorAction(w, r, service.CbtProctorActionInput{
+		SessionID:     sessionID,
+		ParticipantID: pid,
+		ActionType:    "unlock_access",
+		Reason:        firstNonEmptyString(body.Reason, "Akses dibuka pengawas"),
+		Notes:         firstNonEmptyString(body.Notes, "Peserta sudah diverifikasi pengawas ruang."),
+	})
 	if !ok {
-		api.Internal(w, fmt.Errorf("cbt proctor control service unavailable"))
-		return
-	}
-	row, err := proctorSvc.UnlockParticipantAntiCheat(r.Context(), pid, currentUsername(r), body.Notes)
-	if err != nil {
-		api.Internal(w, err)
 		return
 	}
 	h.auditEvent(r.Context(), "CBT_SESSION_ROOM_PARTICIPANT_UNLOCK", "cbt_session_room", pgUUIDString(roomID), map[string]any{
@@ -1714,7 +2206,7 @@ func (h *CbtSession) UnlockRoomParticipant(w http.ResponseWriter, r *http.Reques
 		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
 		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
 	})
-	api.OK(w, row)
+	api.OK(w, result)
 }
 
 func (h *CbtSession) AcknowledgeRoomParticipantEvent(w http.ResponseWriter, r *http.Request) {
@@ -1739,13 +2231,28 @@ func (h *CbtSession) AcknowledgeRoomParticipantEvent(w http.ResponseWriter, r *h
 		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
-	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
-	if !ok {
-		api.Internal(w, fmt.Errorf("cbt proctor control service unavailable"))
+	eventID, err := parseUUID(body.EventID)
+	if err != nil {
+		api.BadRequest(w, "ID peringatan tidak valid")
 		return
 	}
-	if err := proctorSvc.AcknowledgeProctorEvent(r.Context(), pid, body.EventID, currentUsername(r), body.Notes); err != nil {
-		api.Internal(w, err)
+	proctorSvc, ok := h.svc.(cbtSessionRealtimeProctorService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt realtime proctor service unavailable"))
+		return
+	}
+	scope, err := proctorSvc.GetProctorEventScope(r.Context(), eventID)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Peringatan pengawas tidak ditemukan")
+		return
+	}
+	if pgUUIDString(scope.ParticipantID) != pgUUIDString(pid) {
+		api.Forbidden(w)
+		return
+	}
+	row, err := proctorSvc.AcknowledgeProctorEventByID(r.Context(), eventID, cbtProctorActorFromRequest(r), body.Notes)
+	if err != nil {
+		writeClientError(w, err, "Peringatan belum dapat ditandai sudah dicek")
 		return
 	}
 	h.auditEvent(r.Context(), "CBT_SESSION_ROOM_PARTICIPANT_ACKNOWLEDGE", "cbt_session_room", pgUUIDString(roomID), map[string]any{
@@ -1757,7 +2264,7 @@ func (h *CbtSession) AcknowledgeRoomParticipantEvent(w http.ResponseWriter, r *h
 		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
 		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
 	})
-	api.OK(w, map[string]string{"status": "acknowledged"})
+	api.OK(w, map[string]any{"status": "acknowledged", "event": row})
 }
 
 func (h *CbtSession) RecordRoomParticipantIncidentAction(w http.ResponseWriter, r *http.Request) {
@@ -1783,13 +2290,24 @@ func (h *CbtSession) RecordRoomParticipantIncidentAction(w http.ResponseWriter, 
 		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
-	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
-	if !ok {
-		api.Internal(w, fmt.Errorf("cbt proctor control service unavailable"))
-		return
+	var eventID pgtype.UUID
+	if strings.TrimSpace(body.EventID) != "" {
+		parsedEventID, err := parseUUID(body.EventID)
+		if err != nil {
+			api.BadRequest(w, "ID peringatan tidak valid")
+			return
+		}
+		eventID = parsedEventID
 	}
-	if err := proctorSvc.RecordIncidentAction(r.Context(), pid, body.EventID, body.Action, currentUsername(r), body.Notes); err != nil {
-		writeClientError(w, err, "Tindakan insiden tidak valid")
+	result, ok := h.executeLegacyProctorAction(w, r, service.CbtProctorActionInput{
+		SessionID:     sessionID,
+		ParticipantID: pid,
+		EventID:       eventID,
+		ActionType:    "mark_incident",
+		Reason:        firstNonEmptyString(body.Action, "Tindak lanjut insiden"),
+		Notes:         body.Notes,
+	})
+	if !ok {
 		return
 	}
 	h.auditEvent(r.Context(), "CBT_SESSION_ROOM_PARTICIPANT_INCIDENT_ACTION", "cbt_session_room", pgUUIDString(roomID), map[string]any{
@@ -1802,7 +2320,7 @@ func (h *CbtSession) RecordRoomParticipantIncidentAction(w http.ResponseWriter, 
 		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
 		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
 	})
-	api.OK(w, map[string]string{"status": "recorded"})
+	api.OK(w, result)
 }
 
 func (h *CbtSession) SendRoomParticipantCommand(w http.ResponseWriter, r *http.Request) {
@@ -1885,25 +2403,28 @@ func (h *CbtSession) ForceSubmitRoomParticipant(w http.ResponseWriter, r *http.R
 	if !h.requireSessionRoomParticipant(w, r, sessionID, roomID, pid) {
 		return
 	}
-	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
+	body, ok := decodeOptionalProctorActionBody(w, r)
 	if !ok {
-		api.Internal(w, fmt.Errorf("cbt proctor control service unavailable"))
 		return
 	}
-	row, err := proctorSvc.ForceSubmitParticipant(r.Context(), sessionID, pid, currentUsername(r))
-	if err != nil {
-		api.Internal(w, err)
+	result, ok := h.executeLegacyProctorAction(w, r, service.CbtProctorActionInput{
+		SessionID:     sessionID,
+		ParticipantID: pid,
+		ActionType:    "force_submit",
+		Reason:        firstNonEmptyString(body.Reason, "Kirim paksa jawaban"),
+		Notes:         firstNonEmptyString(body.Notes, "Tindakan dicatat dari endpoint kompatibilitas; risiko sinkronisasi jawaban sudah diperiksa."),
+	})
+	if !ok {
 		return
 	}
 	h.auditEvent(r.Context(), "CBT_SESSION_ROOM_PARTICIPANT_FORCE_SUBMIT", "cbt_session_room", pgUUIDString(roomID), map[string]any{
 		"session_id":       pgUUIDString(sessionID),
 		"participant_id":   pgUUIDString(pid),
-		"score":            row.Score,
 		"actor_username":   currentUsername(r),
 		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
 		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
 	})
-	api.OK(w, row)
+	api.OK(w, result)
 }
 
 func (h *CbtSession) requireRoomParticipantControlParams(w http.ResponseWriter, r *http.Request) (pgtype.UUID, pgtype.UUID, pgtype.UUID, bool) {

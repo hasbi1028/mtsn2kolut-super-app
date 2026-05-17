@@ -1030,35 +1030,39 @@ type CbtExamEvent struct {
 }
 
 type CbtExamParticipant struct {
-	ID                pgtype.UUID        `json:"id"`
-	SessionID         pgtype.UUID        `json:"session_id"`
-	StudentID         pgtype.UUID        `json:"student_id"`
-	Token             string             `json:"token"`
-	JoinedAt          pgtype.Timestamptz `json:"joined_at"`
-	SubmittedAt       pgtype.Timestamptz `json:"submitted_at"`
-	Score             pgtype.Numeric     `json:"score"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	RoomID            pgtype.UUID        `json:"room_id"`
-	DeviceFingerprint pgtype.Text        `json:"device_fingerprint"`
-	QuestionOrder     []byte             `json:"question_order"`
-	LastHeartbeat     pgtype.Timestamptz `json:"last_heartbeat"`
-	AppSwitchCount    int32              `json:"app_switch_count"`
-	ScreenshotAttempt int32              `json:"screenshot_attempt"`
-	LoginIp           pgtype.Text        `json:"login_ip"`
-	SuspiciousFlag    bool               `json:"suspicious_flag"`
-	SeatNo            pgtype.Int4        `json:"seat_no"`
-	ViolationCount    int32              `json:"violation_count"`
-	RiskScore         int32              `json:"risk_score"`
-	RiskLevel         string             `json:"risk_level"`
-	LockedAt          pgtype.Timestamptz `json:"locked_at"`
-	LockedReason      pgtype.Text        `json:"locked_reason"`
-	TokenHash         string             `json:"token_hash"`
-	TokenHashVersion  int32              `json:"token_hash_version"`
-	TokenGeneratedAt  pgtype.Timestamptz `json:"token_generated_at"`
-	TokenRevealedAt   pgtype.Timestamptz `json:"token_revealed_at"`
-	TokenRevokedAt    pgtype.Timestamptz `json:"token_revoked_at"`
-	OptionOrder       []byte             `json:"option_order"`
-	QuestionDrawLog   []byte             `json:"question_draw_log"`
+	ID                 pgtype.UUID        `json:"id"`
+	SessionID          pgtype.UUID        `json:"session_id"`
+	StudentID          pgtype.UUID        `json:"student_id"`
+	Token              string             `json:"token"`
+	JoinedAt           pgtype.Timestamptz `json:"joined_at"`
+	SubmittedAt        pgtype.Timestamptz `json:"submitted_at"`
+	Score              pgtype.Numeric     `json:"score"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	RoomID             pgtype.UUID        `json:"room_id"`
+	DeviceFingerprint  pgtype.Text        `json:"device_fingerprint"`
+	QuestionOrder      []byte             `json:"question_order"`
+	LastHeartbeat      pgtype.Timestamptz `json:"last_heartbeat"`
+	AppSwitchCount     int32              `json:"app_switch_count"`
+	ScreenshotAttempt  int32              `json:"screenshot_attempt"`
+	LoginIp            pgtype.Text        `json:"login_ip"`
+	SuspiciousFlag     bool               `json:"suspicious_flag"`
+	SeatNo             pgtype.Int4        `json:"seat_no"`
+	ViolationCount     int32              `json:"violation_count"`
+	RiskScore          int32              `json:"risk_score"`
+	RiskLevel          string             `json:"risk_level"`
+	LockedAt           pgtype.Timestamptz `json:"locked_at"`
+	LockedReason       pgtype.Text        `json:"locked_reason"`
+	TokenHash          string             `json:"token_hash"`
+	TokenHashVersion   int32              `json:"token_hash_version"`
+	TokenGeneratedAt   pgtype.Timestamptz `json:"token_generated_at"`
+	TokenRevealedAt    pgtype.Timestamptz `json:"token_revealed_at"`
+	TokenRevokedAt     pgtype.Timestamptz `json:"token_revoked_at"`
+	OptionOrder        []byte             `json:"option_order"`
+	QuestionDrawLog    []byte             `json:"question_draw_log"`
+	LastLocalSaveAt    pgtype.Timestamptz `json:"last_local_save_at"`
+	LastSyncedAt       pgtype.Timestamptz `json:"last_synced_at"`
+	PendingAnswerCount int32              `json:"pending_answer_count"`
+	SyncState          string             `json:"sync_state"`
 }
 
 type CbtExamRoom struct {
@@ -1160,11 +1164,43 @@ type CbtPackageQuestionSnapshot struct {
 }
 
 type CbtParticipantEvent struct {
-	ID            pgtype.UUID        `json:"id"`
-	ParticipantID pgtype.UUID        `json:"participant_id"`
-	EventType     string             `json:"event_type"`
-	EventData     []byte             `json:"event_data"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ID                    pgtype.UUID        `json:"id"`
+	ParticipantID         pgtype.UUID        `json:"participant_id"`
+	EventType             string             `json:"event_type"`
+	EventData             []byte             `json:"event_data"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	Severity              string             `json:"severity"`
+	Category              string             `json:"category"`
+	RiskDelta             int32              `json:"risk_delta"`
+	DedupKey              string             `json:"dedup_key"`
+	CorrelationID         string             `json:"correlation_id"`
+	OriginalEventAt       pgtype.Timestamptz `json:"original_event_at"`
+	RequiresNote          bool               `json:"requires_note"`
+	AcknowledgedAt        pgtype.Timestamptz `json:"acknowledged_at"`
+	AcknowledgedBy        pgtype.UUID        `json:"acknowledged_by"`
+	AcknowledgeNote       string             `json:"acknowledge_note"`
+	ActorUserID           pgtype.UUID        `json:"actor_user_id"`
+	ActorUsernameSnapshot string             `json:"actor_username_snapshot"`
+	ActorEmployeeID       pgtype.UUID        `json:"actor_employee_id"`
+	RequestID             string             `json:"request_id"`
+	SourceIp              string             `json:"source_ip"`
+}
+
+type CbtProctorAction struct {
+	ID                    pgtype.UUID        `json:"id"`
+	SessionID             pgtype.UUID        `json:"session_id"`
+	RoomID                pgtype.UUID        `json:"room_id"`
+	ParticipantID         pgtype.UUID        `json:"participant_id"`
+	EventID               pgtype.UUID        `json:"event_id"`
+	ActionType            string             `json:"action_type"`
+	Reason                string             `json:"reason"`
+	Notes                 string             `json:"notes"`
+	ActorUserID           pgtype.UUID        `json:"actor_user_id"`
+	ActorUsernameSnapshot string             `json:"actor_username_snapshot"`
+	ActorEmployeeID       pgtype.UUID        `json:"actor_employee_id"`
+	RequestID             string             `json:"request_id"`
+	SourceIp              string             `json:"source_ip"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 }
 
 type CbtQuestion struct {

@@ -209,6 +209,10 @@ func (h *Exam) RecordEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.RecordClientEvent(r.Context(), p.ID, eventType, body.Data); err != nil {
+		if errors.Is(err, service.ErrExamInvalidTelemetry) {
+			api.BadRequest(w, "event_type tidak didukung")
+			return
+		}
 		api.Internal(w, err)
 		return
 	}

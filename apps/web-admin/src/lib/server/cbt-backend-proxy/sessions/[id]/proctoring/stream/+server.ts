@@ -1,18 +1,14 @@
 import { cbtApiPath } from '$lib/server/cbt-backend-paths';
 import type { RequestEvent } from '@sveltejs/kit';
-import { apiPathWithQuery, handleRouteError, requiredRouteParam } from '$lib/server/api';
-import { extractSessionEvents, proctoringEventStream } from '$lib/server/cbt-backend-proxy/proctoring-stream';
+import { handleRouteError, proxy, requiredRouteParam, streamProxyResponse } from '$lib/server/api';
 
-export const GET = (event: RequestEvent) => {
+export const GET = async (event: RequestEvent) => {
 	try {
 		const id = requiredRouteParam(event.params.id, 'id');
-		const params = new URLSearchParams(event.url.searchParams);
-		if (!params.has('limit')) params.set('limit', '100');
-		return proctoringEventStream(event, {
-			path: apiPathWithQuery(cbtApiPath`/sessions/${id}/proctoring/events`, params),
-			extractEvents: extractSessionEvents,
-			name: 'session-proctoring',
+		const res = await proxy(event).fetch(cbtApiPath`/sessions/${id}/proctoring/stream`, {
+			headers: { Accept: 'text/event-stream' },
 		});
+		return streamProxyResponse(res, { defaultContentType: 'text/event-stream; charset=utf-8' });
 	} catch (e) {
 		return handleRouteError(e, 'cbt/sessions/[id]/proctoring/stream GET');
 	}

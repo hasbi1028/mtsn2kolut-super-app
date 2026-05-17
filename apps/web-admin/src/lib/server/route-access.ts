@@ -236,7 +236,7 @@ function isSensitiveAssessmentReadPath(pathname: string): boolean {
 		|| /^\/api\/asesmen\/sessions\/[^/]+\/score\/?$/.test(cleanPath)
 		|| /^\/api\/asesmen\/sessions\/[^/]+\/answers\/[^/]+\/grade-essay\/?$/.test(cleanPath)
 		|| /^\/api\/asesmen\/sessions\/[^/]+\/proctoring(?:\/.*)?$/.test(cleanPath)
-		|| /^\/api\/asesmen\/sessions\/[^/]+\/rooms\/[^/]+\/proctoring\/?$/.test(cleanPath)
+		|| /^\/api\/asesmen\/sessions\/[^/]+\/rooms\/[^/]+\/proctoring(?:\/.*)?$/.test(cleanPath)
 		|| /^\/api\/asesmen\/sessions\/[^/]+\/audit-logs\/?$/.test(cleanPath);
 }
 
@@ -250,7 +250,7 @@ function asesmenPermission(pathname: string, method: string): string[] | undefin
 	if (/^\/api\/asesmen\/sessions\/[^/]+\/(ungraded-essays|score)\/?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/answers\/[^/]+\/grade-essay\/?$/.test(pathname)) {
 		return ['asesmen.score'];
 	}
-	if (/^\/api\/asesmen\/sessions\/[^/]+\/proctoring(?:\/.*)?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/rooms\/[^/]+\/proctoring\/?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/audit-logs\/?$/.test(pathname)) {
+	if (/^\/api\/asesmen\/sessions\/[^/]+\/proctoring(?:\/.*)?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/rooms\/[^/]+\/proctoring(?:\/.*)?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/audit-logs\/?$/.test(pathname)) {
 		return ['asesmen.proctor'];
 	}
 	if (matchesPathSegment(pathname, '/asesmen/non-tes') || matchesPathSegment(pathname, '/api/asesmen/non-test-assessments')) {

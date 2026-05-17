@@ -49,7 +49,7 @@ type fakeExamStore struct {
 	submitRow              db.SubmitParticipantExamRow
 	submitID               pgtype.UUID
 	submitErr              error
-	commandRows            []db.CbtParticipantEvent
+	commandRows            []db.ListPendingParticipantCommandsRow
 	commandParticipantID   pgtype.UUID
 	commandErr             error
 	assets                 map[string][]db.CbtQuestionAsset
@@ -140,7 +140,7 @@ func (f *fakeExamStore) ListCbtQuestionAssetsByQuestion(ctx context.Context, que
 	return f.assets[pgUUIDString(questionID)], f.assetsErr
 }
 
-func (f *fakeExamStore) ListPendingParticipantCommands(ctx context.Context, participantID pgtype.UUID) ([]db.CbtParticipantEvent, error) {
+func (f *fakeExamStore) ListPendingParticipantCommands(ctx context.Context, participantID pgtype.UUID) ([]db.ListPendingParticipantCommandsRow, error) {
 	f.commandParticipantID = participantID
 	return f.commandRows, f.commandErr
 }
@@ -459,7 +459,7 @@ func TestExamOperationalMethodsHandleErrorsAndEvents(t *testing.T) {
 	}
 
 	svc = &Exam{q: &fakeExamStore{eventErr: eventErr}}
-	if err := svc.RecordClientEvent(ctx, participant.ID, "other", nil); !errors.Is(err, eventErr) {
+	if err := svc.RecordClientEvent(ctx, participant.ID, "focus_lost_short", nil); !errors.Is(err, eventErr) {
 		t.Fatalf("RecordClientEvent(event error) = %v, want %v", err, eventErr)
 	}
 

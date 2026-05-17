@@ -430,7 +430,15 @@ SELECT
   COALESCE(r.room_name, '') AS room_name,
   ev.event_type,
   ev.event_data,
-  ev.created_at
+  ev.created_at,
+  ev.severity,
+  ev.category,
+  ev.risk_delta,
+  ev.dedup_key,
+  ev.acknowledged_at,
+  ev.acknowledged_by,
+  ev.acknowledge_note,
+  ev.requires_note
 FROM cbt_participant_events ev
 JOIN cbt_exam_participants ep ON ep.id = ev.participant_id
 JOIN students s ON s.id = ep.student_id
@@ -460,6 +468,10 @@ SELECT
   ep.risk_level,
   ep.locked_at,
   ep.locked_reason,
+  ep.last_local_save_at,
+  ep.last_synced_at,
+  ep.pending_answer_count,
+  ep.sync_state,
   COALESCE(v.recent_violation_count, 0)::int AS recent_violation_count,
   v.last_violation_at,
   v.last_violation_reason,

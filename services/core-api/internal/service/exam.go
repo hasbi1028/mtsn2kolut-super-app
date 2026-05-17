@@ -4,6 +4,7 @@ import (
 	"context"
 	cryptorand "crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -21,18 +22,19 @@ import (
 )
 
 var (
-	ErrExamNotFound      = errors.New("exam token not found")
-	ErrExamNotActive     = errors.New("exam session is not active")
-	ErrExamAlreadySubmit = errors.New("exam already submitted")
-	ErrExamWindowClosed  = errors.New("exam window has closed")
-	ErrExamNotStarted    = errors.New("exam session has not started")
-	ErrDeviceMismatch    = errors.New("token already bound to another device")
-	ErrDeviceRequired    = errors.New("device fingerprint required")
-	ErrExamRoomRequired  = errors.New("exam room has not been assigned")
-	ErrRoomTokenRequired = errors.New("room token required")
-	ErrRoomTokenMismatch = errors.New("room token mismatch")
-	ErrExamQuestionScope = errors.New("question is not part of participant exam")
-	ErrExamLocked        = errors.New("exam locked by anti-cheat policy")
+	ErrExamNotFound         = errors.New("exam token not found")
+	ErrExamNotActive        = errors.New("exam session is not active")
+	ErrExamAlreadySubmit    = errors.New("exam already submitted")
+	ErrExamWindowClosed     = errors.New("exam window has closed")
+	ErrExamNotStarted       = errors.New("exam session has not started")
+	ErrDeviceMismatch       = errors.New("token already bound to another device")
+	ErrDeviceRequired       = errors.New("device fingerprint required")
+	ErrExamRoomRequired     = errors.New("exam room has not been assigned")
+	ErrRoomTokenRequired    = errors.New("room token required")
+	ErrRoomTokenMismatch    = errors.New("room token mismatch")
+	ErrExamQuestionScope    = errors.New("question is not part of participant exam")
+	ErrExamLocked           = errors.New("exam locked by anti-cheat policy")
+	ErrExamInvalidTelemetry = errors.New("invalid exam telemetry event")
 )
 
 type Exam struct {
@@ -57,7 +59,7 @@ type examStore interface {
 	UpdateParticipantAnswerCorrectness(ctx context.Context, participantID pgtype.UUID) error
 	SubmitParticipantExam(ctx context.Context, id pgtype.UUID) (db.SubmitParticipantExamRow, error)
 	ListCbtQuestionAssetsByQuestion(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAsset, error)
-	ListPendingParticipantCommands(ctx context.Context, participantID pgtype.UUID) ([]db.CbtParticipantEvent, error)
+	ListPendingParticipantCommands(ctx context.Context, participantID pgtype.UUID) ([]db.ListPendingParticipantCommandsRow, error)
 }
 
 type examTxStore interface {
@@ -67,6 +69,13 @@ type examTxStore interface {
 type examRuntimePlanStore interface {
 	SetParticipantRuntimePlanIfEmpty(ctx context.Context, arg db.SetParticipantRuntimePlanIfEmptyParams) (db.SetParticipantRuntimePlanIfEmptyRow, error)
 	SetParticipantOptionOrderIfEmpty(ctx context.Context, arg db.SetParticipantOptionOrderIfEmptyParams) ([]byte, error)
+}
+
+type examProctorTelemetryStore interface {
+	GetCbtParticipantRiskForUpdate(ctx context.Context, id pgtype.UUID) (db.GetCbtParticipantRiskForUpdateRow, error)
+	GetRecentCbtProctorEventByDedupKey(ctx context.Context, arg db.GetRecentCbtProctorEventByDedupKeyParams) (db.GetRecentCbtProctorEventByDedupKeyRow, error)
+	UpdateCbtParticipantProctorRisk(ctx context.Context, arg db.UpdateCbtParticipantProctorRiskParams) (db.UpdateCbtParticipantProctorRiskRow, error)
+	CreateCbtParticipantProctorEvent(ctx context.Context, arg db.CreateCbtParticipantProctorEventParams) (db.CreateCbtParticipantProctorEventRow, error)
 }
 
 func NewExam(pool *pgxpool.Pool) *Exam {
@@ -352,21 +361,255 @@ func (s *Exam) Heartbeat(ctx context.Context, participantID pgtype.UUID) error {
 }
 
 func (s *Exam) RecordClientEvent(ctx context.Context, participantID pgtype.UUID, eventType string, data map[string]any) error {
-	switch eventType {
-	case "app_switch":
+	normalized, ok := NormalizeProctorEventType(eventType)
+	if !ok {
+		return ErrExamInvalidTelemetry
+	}
+	if s.pool != nil {
+		conn, err := s.pool.Acquire(ctx)
+		if err != nil {
+			return err
+		}
+		defer conn.Release()
+
+		tx, err := conn.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx) //nolint:errcheck
+
+		qtxProvider, ok := s.q.(examTxStore)
+		if !ok {
+			return errors.New("exam store does not support transactions")
+		}
+		if err := recordProctorTelemetryWithStore(ctx, qtxProvider.WithTx(tx), participantID, normalized, data, time.Now()); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
+	if q, ok := s.q.(examProctorTelemetryStore); ok {
+		return recordProctorTelemetryWithStore(ctx, q, participantID, normalized, data, time.Now())
+	}
+	decision := ClassifyProctorSeverity(normalized, data)
+	switch normalized {
+	case "app_switch_once", "app_switch_repeated":
 		_ = s.q.IncrementParticipantAppSwitch(ctx, participantID)
-		_ = s.incrementAntiCheatRisk(ctx, participantID, 25, "app_switch")
-	case "screenshot_attempt":
+	case "screenshot_attempt_ambiguous", "screenshot_attempt_valid":
 		_ = s.q.IncrementParticipantScreenshot(ctx, participantID)
-		_ = s.incrementAntiCheatRisk(ctx, participantID, 35, "screenshot_attempt")
-	case "anti_cheat_violation":
-		_ = s.incrementAntiCheatRisk(ctx, participantID, antiCheatRiskWeight(data), antiCheatReason(data))
+	}
+	if decision.RiskDelta > 0 && decision.Severity != ProctorSeverityTechnical {
+		_ = s.incrementAntiCheatRisk(ctx, participantID, decision.RiskDelta, normalized)
 	}
 	return s.q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
 		ParticipantID: participantID,
-		EventType:     eventType,
-		EventData:     marshalJSON(data),
+		EventType:     normalized,
+		EventData:     marshalJSON(proctorEventDataWithDecision(sanitizeProctorEventData(data), decision, false)),
 	})
+}
+
+func recordProctorTelemetryWithStore(ctx context.Context, q examProctorTelemetryStore, participantID pgtype.UUID, eventType string, data map[string]any, now time.Time) error {
+	decision := ClassifyProctorSeverity(eventType, data)
+	if decision.EventType == "" {
+		return ErrExamInvalidTelemetry
+	}
+	state, err := q.GetCbtParticipantRiskForUpdate(ctx, participantID)
+	if err != nil {
+		return err
+	}
+	cleanData := sanitizeProctorEventData(data)
+	eventAt := timestampFromProctorData(cleanData, now)
+	dedupKey := proctorDedupKey(pgUUIDString(participantID), decision.EventType, cleanData)
+	deduped := false
+	if ShouldDedup(decision.EventType) && dedupKey != "" {
+		_, err := q.GetRecentCbtProctorEventByDedupKey(ctx, db.GetRecentCbtProctorEventByDedupKeyParams{
+			ParticipantID: participantID,
+			DedupKey:      dedupKey,
+			SinceAt:       pgtype.Timestamptz{Time: eventAt.Add(-DedupWindow(decision.EventType)), Valid: true},
+		})
+		if err == nil {
+			deduped = true
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+	}
+
+	riskDelta := decision.RiskDelta
+	if deduped || decision.Severity == ProctorSeverityTechnical {
+		riskDelta = 0
+	}
+	violationCount := state.ViolationCount
+	if riskDelta > 0 && decision.Severity != ProctorSeverityTechnical {
+		violationCount += 1
+	}
+	nextScore := state.RiskScore + riskDelta
+	if nextScore > 100 {
+		nextScore = 100
+	}
+	lockedAt := state.LockedAt
+	lockedReason := state.LockedReason
+	shouldLock := ShouldAutoLock(decision, ParticipantRiskState{
+		ViolationCount: state.ViolationCount,
+		RiskScore:      state.RiskScore,
+		RiskLevel:      state.RiskLevel,
+		LockedAt:       sqlNullTimeFromTimestamptz(state.LockedAt),
+	})
+	if riskDelta == 0 && !state.LockedAt.Valid {
+		shouldLock = false
+	}
+	if shouldLock && !lockedAt.Valid {
+		lockedAt = pgtype.Timestamptz{Time: now, Valid: true}
+		lockedReason = pgtype.Text{String: decision.EventType, Valid: true}
+	}
+	riskLevel := RiskLevelFromScore(int(nextScore), int(violationCount), sqlNullTimeFromTimestamptz(lockedAt))
+	if decision.Severity == ProctorSeverityTechnical && !state.LockedAt.Valid {
+		riskLevel = RiskLevelFromScore(int(state.RiskScore), int(state.ViolationCount), sql.NullTime{})
+	}
+	lastLocalSaveAt := state.LastLocalSaveAt
+	if parsed, ok := optionalProctorTimestamp(cleanData, "last_local_save_at"); ok {
+		lastLocalSaveAt = parsed
+	}
+	lastSyncedAt := state.LastSyncedAt
+	if parsed, ok := optionalProctorTimestamp(cleanData, "last_synced_at"); ok {
+		lastSyncedAt = parsed
+	}
+	pendingAnswerCount := state.PendingAnswerCount
+	if rawCount, ok := cleanData["pending_answer_count"]; ok {
+		if count := intFromAny(rawCount); count >= 0 {
+			pendingAnswerCount = int32(count)
+		}
+	}
+	syncState := normalizeSyncState(stringFromAny(cleanData["sync_state"]), pendingAnswerCount, state.SyncState)
+	appSwitchIncrement := int32(0)
+	if decision.Category == "app_switch" && !deduped {
+		appSwitchIncrement = 1
+	}
+	screenshotIncrement := int32(0)
+	if decision.Category == "screenshot" && !deduped {
+		screenshotIncrement = 1
+	}
+	if _, err := q.UpdateCbtParticipantProctorRisk(ctx, db.UpdateCbtParticipantProctorRiskParams{
+		ViolationCount:      violationCount,
+		RiskScore:           nextScore,
+		RiskLevel:           riskLevel,
+		LockedAt:            lockedAt,
+		LockedReason:        lockedReason,
+		SuspiciousFlag:      riskDelta > 0 || decision.Severity == ProctorSeverityCritical || decision.Severity == ProctorSeverityMedium,
+		AppSwitchIncrement:  appSwitchIncrement,
+		ScreenshotIncrement: screenshotIncrement,
+		LastLocalSaveAt:     lastLocalSaveAt,
+		LastSyncedAt:        lastSyncedAt,
+		PendingAnswerCount:  pendingAnswerCount,
+		SyncState:           syncState,
+		ID:                  participantID,
+	}); err != nil {
+		return err
+	}
+	eventData := proctorEventDataWithDecision(cleanData, decision, deduped)
+	eventData["session_id"] = pgUUIDString(state.SessionID)
+	eventData["room_id"] = pgUUIDString(state.RoomID)
+	eventData["risk_level_after"] = riskLevel
+	eventData["risk_score_after"] = nextScore
+	eventData["violation_count_after"] = violationCount
+	_, err = q.CreateCbtParticipantProctorEvent(ctx, db.CreateCbtParticipantProctorEventParams{
+		ParticipantID:         participantID,
+		EventType:             decision.EventType,
+		EventData:             marshalJSON(eventData),
+		Severity:              string(decision.Severity),
+		Category:              decision.Category,
+		RiskDelta:             riskDelta,
+		DedupKey:              dedupKey,
+		CorrelationID:         stringFromAny(cleanData["correlation_id"]),
+		OriginalEventAt:       pgtype.Timestamptz{Time: eventAt, Valid: true},
+		RequiresNote:          decision.RequiresNote,
+		ActorUsernameSnapshot: "",
+		RequestID:             "",
+		SourceIp:              "",
+	})
+	return err
+}
+
+func sanitizeProctorEventData(data map[string]any) map[string]any {
+	if data == nil {
+		return map[string]any{}
+	}
+	var cleaned map[string]any
+	raw, err := json.Marshal(data)
+	if err == nil {
+		_ = json.Unmarshal(raw, &cleaned)
+	}
+	if cleaned == nil {
+		cleaned = map[string]any{}
+	}
+	for _, key := range []string{"severity", "risk_delta", "risk_score", "risk_level", "lock_eligible", "locked_at", "locked_reason"} {
+		delete(cleaned, key)
+	}
+	return cleaned
+}
+
+func proctorEventDataWithDecision(data map[string]any, decision SeverityDecision, deduped bool) map[string]any {
+	payload := map[string]any{}
+	for key, value := range data {
+		payload[key] = value
+	}
+	payload["event_type"] = decision.EventType
+	payload["severity"] = string(decision.Severity)
+	payload["category"] = decision.Category
+	payload["risk_delta"] = decision.RiskDelta
+	payload["label_id"] = decision.LabelID
+	payload["message_id"] = decision.MessageID
+	payload["audio_key"] = decision.AudioKey
+	payload["requires_note"] = decision.RequiresNote
+	payload["deduped"] = deduped
+	return payload
+}
+
+func timestampFromProctorData(data map[string]any, fallback time.Time) time.Time {
+	for _, key := range []string{"original_event_at", "event_at", "created_at"} {
+		if parsed, ok := optionalProctorTimestamp(data, key); ok {
+			return parsed.Time
+		}
+	}
+	return fallback
+}
+
+func optionalProctorTimestamp(data map[string]any, key string) (pgtype.Timestamptz, bool) {
+	raw := strings.TrimSpace(stringFromAny(data[key]))
+	if raw == "" {
+		return pgtype.Timestamptz{}, false
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, raw)
+	if err != nil {
+		return pgtype.Timestamptz{}, false
+	}
+	return pgtype.Timestamptz{Time: parsed, Valid: true}, true
+}
+
+func normalizeSyncState(raw string, pendingAnswerCount int32, fallback string) string {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case "synced", "sinkron":
+		return "synced"
+	case "pending", "belum_sinkron":
+		return "pending"
+	case "failed", "tertahan":
+		return "failed"
+	case "unknown", "":
+		if pendingAnswerCount > 0 {
+			return "pending"
+		}
+		if fallback != "" {
+			return fallback
+		}
+		return "unknown"
+	default:
+		if pendingAnswerCount > 0 {
+			return "pending"
+		}
+		return "unknown"
+	}
+}
+
+func sqlNullTimeFromTimestamptz(value pgtype.Timestamptz) sql.NullTime {
+	return sql.NullTime{Time: value.Time, Valid: value.Valid}
 }
 
 func (s *Exam) SubmitAnswer(ctx context.Context, p db.GetParticipantByTokenRow, questionID pgtype.UUID, answer string) error {
@@ -595,7 +838,7 @@ func antiCheatStateFromParticipant(violationCount, riskScore int32, riskLevel st
 	return state
 }
 
-func participantCommandFromEvent(row db.CbtParticipantEvent) ParticipantCommand {
+func participantCommandFromEvent(row db.ListPendingParticipantCommandsRow) ParticipantCommand {
 	payload := map[string]any{}
 	if len(row.EventData) > 0 {
 		_ = json.Unmarshal(row.EventData, &payload)

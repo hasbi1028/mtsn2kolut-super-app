@@ -950,6 +950,10 @@ SELECT
   ep.risk_level,
   ep.locked_at,
   ep.locked_reason,
+  ep.last_local_save_at,
+  ep.last_synced_at,
+  ep.pending_answer_count,
+  ep.sync_state,
   COALESCE(v.recent_violation_count, 0)::int AS recent_violation_count,
   v.last_violation_at,
   v.last_violation_reason,
@@ -1000,6 +1004,10 @@ type GetSessionProctoringStatusRow struct {
 	RiskLevel            string             `json:"risk_level"`
 	LockedAt             pgtype.Timestamptz `json:"locked_at"`
 	LockedReason         pgtype.Text        `json:"locked_reason"`
+	LastLocalSaveAt      pgtype.Timestamptz `json:"last_local_save_at"`
+	LastSyncedAt         pgtype.Timestamptz `json:"last_synced_at"`
+	PendingAnswerCount   int32              `json:"pending_answer_count"`
+	SyncState            string             `json:"sync_state"`
 	RecentViolationCount int32              `json:"recent_violation_count"`
 	LastViolationAt      interface{}        `json:"last_violation_at"`
 	LastViolationReason  interface{}        `json:"last_violation_reason"`
@@ -1035,6 +1043,10 @@ func (q *Queries) GetSessionProctoringStatus(ctx context.Context, arg GetSession
 			&i.RiskLevel,
 			&i.LockedAt,
 			&i.LockedReason,
+			&i.LastLocalSaveAt,
+			&i.LastSyncedAt,
+			&i.PendingAnswerCount,
+			&i.SyncState,
 			&i.RecentViolationCount,
 			&i.LastViolationAt,
 			&i.LastViolationReason,
@@ -2143,15 +2155,23 @@ ORDER BY created_at DESC
 LIMIT 100
 `
 
-func (q *Queries) ListParticipantEvents(ctx context.Context, participantID pgtype.UUID) ([]CbtParticipantEvent, error) {
+type ListParticipantEventsRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	ParticipantID pgtype.UUID        `json:"participant_id"`
+	EventType     string             `json:"event_type"`
+	EventData     []byte             `json:"event_data"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListParticipantEvents(ctx context.Context, participantID pgtype.UUID) ([]ListParticipantEventsRow, error) {
 	rows, err := q.db.Query(ctx, listParticipantEvents, participantID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []CbtParticipantEvent{}
+	items := []ListParticipantEventsRow{}
 	for rows.Next() {
-		var i CbtParticipantEvent
+		var i ListParticipantEventsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ParticipantID,
@@ -2239,15 +2259,23 @@ ORDER BY ev.created_at ASC
 LIMIT 20
 `
 
-func (q *Queries) ListPendingParticipantCommands(ctx context.Context, participantID pgtype.UUID) ([]CbtParticipantEvent, error) {
+type ListPendingParticipantCommandsRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	ParticipantID pgtype.UUID        `json:"participant_id"`
+	EventType     string             `json:"event_type"`
+	EventData     []byte             `json:"event_data"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListPendingParticipantCommands(ctx context.Context, participantID pgtype.UUID) ([]ListPendingParticipantCommandsRow, error) {
 	rows, err := q.db.Query(ctx, listPendingParticipantCommands, participantID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []CbtParticipantEvent{}
+	items := []ListPendingParticipantCommandsRow{}
 	for rows.Next() {
-		var i CbtParticipantEvent
+		var i ListPendingParticipantCommandsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ParticipantID,
@@ -2276,7 +2304,15 @@ SELECT
   COALESCE(r.room_name, '') AS room_name,
   ev.event_type,
   ev.event_data,
-  ev.created_at
+  ev.created_at,
+  ev.severity,
+  ev.category,
+  ev.risk_delta,
+  ev.dedup_key,
+  ev.acknowledged_at,
+  ev.acknowledged_by,
+  ev.acknowledge_note,
+  ev.requires_note
 FROM cbt_participant_events ev
 JOIN cbt_exam_participants ep ON ep.id = ev.participant_id
 JOIN students s ON s.id = ep.student_id
@@ -2296,16 +2332,24 @@ type ListSessionParticipantEventsParams struct {
 }
 
 type ListSessionParticipantEventsRow struct {
-	ID            pgtype.UUID        `json:"id"`
-	ParticipantID pgtype.UUID        `json:"participant_id"`
-	StudentID     pgtype.UUID        `json:"student_id"`
-	Nis           string             `json:"nis"`
-	Nama          string             `json:"nama"`
-	RoomID        pgtype.UUID        `json:"room_id"`
-	RoomName      string             `json:"room_name"`
-	EventType     string             `json:"event_type"`
-	EventData     []byte             `json:"event_data"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ID              pgtype.UUID        `json:"id"`
+	ParticipantID   pgtype.UUID        `json:"participant_id"`
+	StudentID       pgtype.UUID        `json:"student_id"`
+	Nis             string             `json:"nis"`
+	Nama            string             `json:"nama"`
+	RoomID          pgtype.UUID        `json:"room_id"`
+	RoomName        string             `json:"room_name"`
+	EventType       string             `json:"event_type"`
+	EventData       []byte             `json:"event_data"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	Severity        string             `json:"severity"`
+	Category        string             `json:"category"`
+	RiskDelta       int32              `json:"risk_delta"`
+	DedupKey        string             `json:"dedup_key"`
+	AcknowledgedAt  pgtype.Timestamptz `json:"acknowledged_at"`
+	AcknowledgedBy  pgtype.UUID        `json:"acknowledged_by"`
+	AcknowledgeNote string             `json:"acknowledge_note"`
+	RequiresNote    bool               `json:"requires_note"`
 }
 
 func (q *Queries) ListSessionParticipantEvents(ctx context.Context, arg ListSessionParticipantEventsParams) ([]ListSessionParticipantEventsRow, error) {
@@ -2333,6 +2377,14 @@ func (q *Queries) ListSessionParticipantEvents(ctx context.Context, arg ListSess
 			&i.EventType,
 			&i.EventData,
 			&i.CreatedAt,
+			&i.Severity,
+			&i.Category,
+			&i.RiskDelta,
+			&i.DedupKey,
+			&i.AcknowledgedAt,
+			&i.AcknowledgedBy,
+			&i.AcknowledgeNote,
+			&i.RequiresNote,
 		); err != nil {
 			return nil, err
 		}
