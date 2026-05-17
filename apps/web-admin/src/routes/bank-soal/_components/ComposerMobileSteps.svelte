@@ -31,7 +31,7 @@
 	<div class="flex items-center justify-between gap-3">
 		<div>
 			<p class="text-xs font-black uppercase tracking-[0.18em] text-primary">Langkah {currentIndex + 1}/{steps.length}</p>
-			<p class="mt-0.5 text-sm font-semibold text-foreground">{currentStep?.label ?? 'Metadata'}</p>
+			<p class="mt-0.5 text-sm font-semibold text-foreground">{currentStep?.label ?? 'Identitas Soal'}</p>
 		</div>
 		<div class="flex gap-1">
 			<Button type="button" variant="outline" size="sm" class="h-8 px-2 text-xs" aria-label="Langkah sebelumnya" onclick={onPrevious} disabled={currentIndex <= 0}>

@@ -46,14 +46,14 @@
 	type PageData = { user?: BankSoalAccessUser };
 
 	const workflowSteps = [
-		{ label: 'Draft', desc: 'Guru menyusun metadata, naskah, opsi/kunci, dan pembahasan sebelum diajukan.' },
-		{ label: 'Verifikasi', desc: 'Reviewer memeriksa substansi, konstruksi, bahasa, kunci/rubrik, dan kesesuaian KD/CP/TP.' },
-		{ label: 'Revisi', desc: 'Soal dikembalikan jika perlu perbaikan. Catatan reviewer wajib jelas dan bisa ditindaklanjuti.' },
+		{ label: 'Konsep', desc: 'Guru menyusun identitas soal, naskah, opsi/kunci, dan pembahasan sebelum diajukan.' },
+		{ label: 'Verifikasi', desc: 'Pemeriksa soal menelaah substansi, konstruksi, bahasa, kunci/rubrik, dan kesesuaian KD/CP/TP.' },
+		{ label: 'Revisi', desc: 'Soal dikembalikan jika perlu perbaikan. Catatan pemeriksa soal wajib jelas dan bisa ditindaklanjuti.' },
 		{ label: 'Disetujui', desc: 'Soal lolos verifikasi dan siap dipakai untuk paket asesmen internal.' },
 		{ label: 'Terbit', desc: 'Soal tersedia untuk pemakaian paket dan menjadi bagian bank soal pakai ulang.' }
 	];
 	const qualityRules = [
-		'Isi metadata mapel, kelas/fase, KD/CP/TP, materi, level kognitif, dan kesulitan sebelum verifikasi.',
+		'Isi identitas soal: mapel, kelas/fase, KD/CP/TP, materi, level kognitif, dan kesulitan sebelum verifikasi.',
 		'Naskah soal wajib jelas, bebas ambigu, dan tidak bergantung pada informasi di luar stimulus.',
 		'Soal pilihan wajib memiliki kunci benar; essay/isian wajib memiliki rubrik atau jawaban acuan.',
 		'Pembahasan dianjurkan untuk semua tipe soal agar bank soal bisa dipakai ulang untuk remedial/pengayaan.',
@@ -61,9 +61,9 @@
 		'Soal yang sudah dipakai paket/jawaban tidak diedit sembarang; lakukan duplikasi/revisi versi bila perlu perubahan besar.'
 	];
 	const integrations = [
-		{ name: 'Daftar Soal', path: resolve('/bank-soal/daftar'), desc: 'Pencarian, filter, pagination, dan aksi per soal.', required: 'read' },
+		{ name: 'Daftar Soal', path: resolve('/bank-soal/daftar'), desc: 'Pencarian, filter, halaman daftar, dan aksi per soal.', required: 'read' },
 		{ name: 'Penyusun soal', path: resolve('/bank-soal/tambah'), desc: 'Pembuatan/edit soal dengan pratinjau siswa.', required: 'create' },
-		{ name: 'Verifikasi', path: resolve('/bank-soal/verifikasi'), desc: 'Antrean verifikasi, catatan reviewer, setujui/revisi.', required: 'review' },
+		{ name: 'Verifikasi', path: resolve('/bank-soal/verifikasi'), desc: 'Antrean verifikasi, catatan pemeriksa soal, setujui/revisi.', required: 'review' },
 		{ name: 'Impor', path: resolve('/bank-soal/impor'), desc: 'Pratinjau cek data dan impor final.', required: 'import' },
 		{ name: 'Asesmen Paket', path: resolve('/asesmen/paket'), desc: 'Pemakaian soal terbit ke paket asesmen.', required: 'read' }
 	] as const;
@@ -92,9 +92,9 @@
 	let reviewerUserOptions = $derived(users.filter((user) => user.is_active !== false && (user.employee_id || user.roles?.includes('guru') || user.roles?.includes('admin'))));
 	let operationalStatus = $derived([
 		{ label: 'Kesiapan Bank Soal', value: `${completionRate}%`, desc: `${readyQuestions} dari ${totalQuestions} soal disetujui/terbit` },
-		{ label: 'Antrean Verifikasi', value: pendingReview, desc: 'Soal menunggu keputusan reviewer' },
-		{ label: 'Cakupan Reviewer', value: scopes.length, desc: 'Cakupan verifikasi/persetujuan manual aktif' },
-		{ label: 'Coverage Mapel', value: subjectCoverage, desc: 'Mapel muncul pada ringkasan/sumber akademik' },
+		{ label: 'Antrean Verifikasi', value: pendingReview, desc: 'Soal menunggu keputusan pemeriksa soal' },
+		{ label: 'Cakupan Pemeriksa Soal', value: scopes.length, desc: 'Cakupan verifikasi/persetujuan manual aktif' },
+		{ label: 'Cakupan Mapel', value: subjectCoverage, desc: 'Mapel muncul pada ringkasan atau data akademik' },
 		{ label: 'Level Kognitif', value: cognitiveCoverage, desc: 'Kategori Bloom/C-level berisi soal' }
 	]);
 	let visibleIntegrations = $derived(integrations.filter((item) => {
@@ -133,8 +133,8 @@
 		const [summaryPayload, subjectPayload, scopePayload, userPayload] = await Promise.all([
 			fetch('/api/bank-soal/summary').then((response) => readClientApiData<SummaryResponse>(response, 'Gagal memuat ringkasan Bank Soal')),
 			fetch('/api/bank-soal/soal-support/subjects').then((response) => readClientApiData<SubjectPayload>(response, 'Gagal memuat mapel')),
-			canAssignReviewer ? fetch('/api/bank-soal/reviewer-scopes').then((response) => readClientApiData<ReviewerScopePayload>(response, 'Gagal memuat scope reviewer')) : Promise.resolve({ items: [] }),
-			canAssignReviewer ? fetch('/api/users').then((response) => readClientApiData<UserOption[]>(response, 'Gagal memuat user reviewer')) : Promise.resolve([])
+			canAssignReviewer ? fetch('/api/bank-soal/reviewer-scopes').then((response) => readClientApiData<ReviewerScopePayload>(response, 'Gagal memuat cakupan pemeriksa soal')) : Promise.resolve({ items: [] }),
+			canAssignReviewer ? fetch('/api/users').then((response) => readClientApiData<UserOption[]>(response, 'Gagal memuat daftar guru/pemeriksa soal')) : Promise.resolve([])
 		]);
 		return {
 			summary: summaryPayload ?? {},
@@ -155,7 +155,7 @@
 	}
 	async function saveScope() {
 		if (!selectedUserID) {
-			errorMessage = 'Pilih user/guru reviewer terlebih dahulu.';
+			errorMessage = 'Pilih guru/pemeriksa soal terlebih dahulu.';
 			return;
 		}
 		saving = true;
@@ -172,25 +172,25 @@
 					can_approve: canApprove
 				})
 			});
-			await readClientApiData(response, 'Gagal menyimpan scope reviewer');
+			await readClientApiData(response, 'Gagal menyimpan cakupan pemeriksa soal');
 			resetScopeForm();
 			load();
 		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Gagal menyimpan scope reviewer.';
+			errorMessage = error instanceof Error ? error.message : 'Gagal menyimpan cakupan pemeriksa soal.';
 		} finally {
 			saving = false;
 		}
 	}
 	async function deleteScope(scope: ReviewerScope) {
-		if (!confirm(`Hapus scope ${scope.user_display_name} untuk ${scopeSubjectLabel(scope)}?`)) return;
+		if (!confirm(`Hapus cakupan ${scope.user_display_name} untuk ${scopeSubjectLabel(scope)}?`)) return;
 		saving = true;
 		errorMessage = '';
 		try {
 			const response = await fetch(`/api/bank-soal/reviewer-scopes?id=${encodeURIComponent(scope.id)}`, { method: 'DELETE' });
-			if (!response.ok) await readClientApiData(response, 'Gagal menghapus scope reviewer');
+			if (!response.ok) await readClientApiData(response, 'Gagal menghapus cakupan pemeriksa soal');
 			load();
 		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Gagal menghapus scope reviewer.';
+			errorMessage = error instanceof Error ? error.message : 'Gagal menghapus cakupan pemeriksa soal.';
 		} finally {
 			saving = false;
 		}
@@ -206,9 +206,9 @@
 		<div class="bg-gradient-to-r from-primary/10 via-card to-muted/50 p-4 md:p-5">
 			<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 				<div>
-					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Governance Bank Soal</p>
-					<h1 class="mt-1 text-2xl font-black uppercase italic tracking-tight text-foreground">Pengaturan & Scope Reviewer</h1>
-					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Pusat SOP Bank Soal sekaligus pengaturan reviewer/approver per mapel dan tingkat. Sprint 1 masih additive: belum mencabut permission guru dan belum enforce filtering.</p>
+					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Tata Kelola Bank Soal</p>
+					<h1 class="mt-1 text-2xl font-black uppercase italic tracking-tight text-foreground">Pengaturan & Cakupan Pemeriksa Soal</h1>
+					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Pusat SOP Bank Soal sekaligus pengaturan pemeriksa/penyetuju soal per mapel dan tingkat. Pengaturan ini membantu membagi tugas tanpa mengubah akses guru yang sudah ada.</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
 					<a href={resolve('/bank-soal')} class="rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted/50">Dashboard</a>
@@ -241,15 +241,15 @@
 					<form class="rounded-xl border border-border bg-card p-4 shadow-sm" onsubmit={(event) => { event.preventDefault(); saveScope(); }}>
 						<div class="flex items-start justify-between gap-3">
 							<div>
-								<h2 class="text-base font-bold text-foreground">Tambah / Update Scope Reviewer</h2>
-								<p class="mt-1 text-xs leading-5 text-muted-foreground">Scope kosong berarti semua mapel/tingkat. Data ini belum dipakai untuk hard enforcement sampai Sprint berikutnya.</p>
+								<h2 class="text-base font-bold text-foreground">Tambah / Perbarui Cakupan Pemeriksa Soal</h2>
+								<p class="mt-1 text-xs leading-5 text-muted-foreground">Cakupan kosong berarti semua mapel/tingkat. Data ini dipakai sebagai panduan pembagian tugas pemeriksaan.</p>
 							</div>
 							<button type="button" class="rounded-md border border-border px-3 py-1.5 text-xs font-semibold" onclick={resetScopeForm}>Reset</button>
 						</div>
 						<div class="mt-4 space-y-3">
-							<label for="reviewer-user" class="block text-xs font-bold uppercase tracking-wide text-muted-foreground">User/Guru</label>
+							<label for="reviewer-user" class="block text-xs font-bold uppercase tracking-wide text-muted-foreground">Guru/Pemeriksa Soal</label>
 							<select id="reviewer-user" bind:value={selectedUserID} class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
-								<option value="">Pilih user reviewer</option>
+								<option value="">Pilih guru/pemeriksa soal</option>
 								{#each reviewerUserOptions as user (user.id)}
 									<option value={user.id}>{displayUser(user)} — {user.username}</option>
 								{/each}
@@ -268,36 +268,36 @@
 								<option value="8">VIII</option>
 								<option value="9">IX</option>
 							</select>
-							<label class="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm"><input type="checkbox" bind:checked={canReview} /> Bisa review</label>
-							<label class="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm"><input type="checkbox" bind:checked={canApprove} /> Bisa approve</label>
+							<label class="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm"><input type="checkbox" bind:checked={canReview} /> Bisa memeriksa soal</label>
+							<label class="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm"><input type="checkbox" bind:checked={canApprove} /> Bisa menyetujui soal</label>
 							{#if errorMessage}<p class="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{errorMessage}</p>{/if}
-							<button type="submit" disabled={saving} class="w-full rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground disabled:opacity-60">{saving ? 'Menyimpan…' : 'Simpan Scope'}</button>
+							<button type="submit" disabled={saving} class="w-full rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground disabled:opacity-60">{saving ? 'Menyimpan…' : 'Simpan Cakupan'}</button>
 						</div>
 					</form>
 
 					<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
 						<div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
 							<div>
-								<h2 class="text-base font-bold text-foreground">Daftar Scope Reviewer</h2>
-								<p class="mt-1 text-xs text-muted-foreground">Manual assignment reviewer/approver Bank Soal. Scope masih foundation dan belum mengubah visibilitas soal.</p>
+								<h2 class="text-base font-bold text-foreground">Daftar Cakupan Pemeriksa Soal</h2>
+								<p class="mt-1 text-xs text-muted-foreground">Penugasan pemeriksa/penyetuju Bank Soal. Cakupan ini belum mengubah visibilitas soal.</p>
 							</div>
 							<button type="button" class="rounded-md border border-border px-3 py-2 text-xs font-semibold" onclick={load}>Muat ulang</button>
 						</div>
 						<div class="mt-4 overflow-x-auto">
 							<table class="min-w-full text-left text-sm">
 								<thead class="text-xs uppercase tracking-wide text-muted-foreground">
-									<tr><th class="p-2">Reviewer</th><th class="p-2">Mapel</th><th class="p-2">Tingkat</th><th class="p-2">Hak</th><th class="p-2">Aksi</th></tr>
+									<tr><th class="p-2">Pemeriksa Soal</th><th class="p-2">Mapel</th><th class="p-2">Tingkat</th><th class="p-2">Hak</th><th class="p-2">Aksi</th></tr>
 								</thead>
 								<tbody>
 									{#if scopes.length === 0}
-										<tr><td colspan="5" class="p-4 text-center text-muted-foreground">Belum ada scope reviewer. Tambahkan manual setelah data guru-mapel siap.</td></tr>
+										<tr><td colspan="5" class="p-4 text-center text-muted-foreground">Belum ada cakupan pemeriksa soal. Tambahkan setelah data guru-mapel siap.</td></tr>
 									{:else}
 										{#each scopes as scope (scope.id)}
 											<tr class="border-t border-border align-top">
 												<td class="p-2"><p class="font-semibold text-foreground">{scope.user_display_name}</p><p class="text-xs text-muted-foreground">{scope.username}</p></td>
 												<td class="p-2">{scopeSubjectLabel(scope)}</td>
 												<td class="p-2">{scopeGradeLabel(scope.grade_level)}</td>
-												<td class="p-2"><div class="flex flex-wrap gap-1">{#if scope.can_review}<span class="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700">Review</span>{/if}{#if scope.can_approve}<span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-700">Approve</span>{/if}</div></td>
+												<td class="p-2"><div class="flex flex-wrap gap-1">{#if scope.can_review}<span class="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700">Memeriksa</span>{/if}{#if scope.can_approve}<span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-700">Menyetujui</span>{/if}</div></td>
 												<td class="p-2"><div class="flex gap-2"><button type="button" class="rounded-md border border-border px-2 py-1 text-xs" onclick={() => editScope(scope)}>Edit</button><button type="button" class="rounded-md border border-destructive/30 px-2 py-1 text-xs text-destructive" onclick={() => deleteScope(scope)}>Hapus</button></div></td>
 											</tr>
 										{/each}
@@ -308,7 +308,7 @@
 					</div>
 				</section>
 			{:else}
-				<section class="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm text-warning">Akun ini belum memiliki permission <code>bank_soal.assign_reviewer</code> atau <code>bank_soal.settings</code>, sehingga pengaturan scope reviewer disembunyikan.</section>
+				<section class="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm text-warning">Akun ini belum memiliki izin mengatur Bank Soal, sehingga pengaturan cakupan pemeriksa soal disembunyikan.</section>
 			{/if}
 
 			<section class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
@@ -325,7 +325,7 @@
 				</div>
 				<aside class="space-y-4">
 					<div class="rounded-xl border border-border bg-card p-4 shadow-sm"><h2 class="text-base font-bold text-foreground">Integrasi Modul</h2><div class="mt-3 space-y-2">{#each visibleIntegrations as item (item.path)}<a href={item.path} class="block rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10"><p class="text-sm font-bold text-foreground">{item.name}</p><p class="mt-1 text-xs leading-5 text-muted-foreground">{item.desc}</p></a>{/each}</div></div>
-					<div class="rounded-xl border border-warning/30 bg-warning/10 p-4 text-warning"><p class="text-sm font-bold">Catatan Sprint 1</p><p class="mt-2 text-xs leading-5">Permission dan scope reviewer ditambahkan secara additive. Enforcement visibilitas dan workflow action tetap menunggu Sprint 2+.</p></div>
+					<div class="rounded-xl border border-warning/30 bg-warning/10 p-4 text-warning"><p class="text-sm font-bold">Catatan Sprint 1</p><p class="mt-2 text-xs leading-5">Izin dan cakupan pemeriksa soal ditambahkan bertahap. Penerapan visibilitas dan alur keputusan tetap menunggu tahap berikutnya.</p></div>
 				</aside>
 			</section>
 		{/snippet}

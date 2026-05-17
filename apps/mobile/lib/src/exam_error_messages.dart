@@ -22,19 +22,19 @@ String loginFailureMessage(ExamApiException error) {
   final normalizedMessage = error.message.trim().toLowerCase();
   switch (error.statusCode) {
     case 404:
-      return 'Token ujian tidak ditemukan. Periksa kembali token dari pengawas atau kartu ujian.';
+      return 'Token Ujian tidak ditemukan. Periksa kembali Token Ujian dari kartu peserta atau minta bantuan pengawas.';
     case 400:
       if (normalizedMessage.contains('room token')) {
-        return 'Token ruang wajib diisi. Minta token ruang kepada pengawas.';
+        return 'Token Ruang wajib diisi. Minta Token Ruang kepada pengawas.';
       }
       return error.message;
     case 403:
       if (normalizedMessage.contains('room token')) {
-        return 'Token ruang tidak sesuai. Pastikan Anda berada di ruang ujian yang benar.';
+        return 'Token Ruang tidak sesuai. Pastikan Anda berada di ruang ujian yang benar dan minta pengawas memeriksa Token Ruang.';
       }
       return 'Sesi ujian belum aktif atau sudah berakhir. Hubungi pengawas untuk memastikan jadwal sesi.';
     case 409:
-      return 'Token ini sudah terhubung dengan perangkat lain. Gunakan perangkat yang sama atau minta bantuan pengawas.';
+      return 'Token Ujian ini sudah terhubung dengan perangkat lain. Gunakan perangkat yang sama atau minta bantuan pengawas.';
     case 423:
       return 'Akses ujian sedang dikunci oleh pengawas atau sistem keamanan. Tetap di tempat dan tunggu pengawas membuka akses kembali.';
     default:
@@ -64,9 +64,9 @@ ExamGuidanceNotice? loginFailureNotice(ExamApiException error) {
       );
     case 409:
       return const ExamGuidanceNotice(
-        title: 'Token sudah terikat ke perangkat lain',
+        title: 'Token Ujian terhubung ke perangkat lain',
         message:
-            'Jangan terus mencoba login dari perangkat ini. Gunakan perangkat yang sama seperti sebelumnya atau minta pengawas memverifikasi token.',
+            'Jangan terus mencoba login dari perangkat ini. Gunakan perangkat yang sama seperti sebelumnya atau minta pengawas memeriksa Token Ujian.',
         tone: ExamGuidanceTone.danger,
       );
     case 423:
@@ -88,7 +88,7 @@ String restoreFailureMessage(ExamApiException error) {
 
   switch (error.statusCode) {
     case 404:
-      return 'Token sesi lama sudah tidak ditemukan lagi di server. Login ulang dengan token aktif dari pengawas jika sesi masih berlangsung.';
+      return 'Sesi lama belum ditemukan. Login ulang dengan Token Ujian aktif dari pengawas jika sesi masih berlangsung.';
     case 403:
       return 'Sesi lama tidak bisa dipulihkan karena ujian belum aktif lagi atau sudah ditutup. Periksa status sesi dengan pengawas.';
     case 409:
@@ -103,7 +103,7 @@ String restoreFailureMessage(ExamApiException error) {
 ExamGuidanceNotice? restoreFailureNotice(ExamApiException error) {
   if (error.statusCode == null) {
     return const ExamGuidanceNotice(
-      title: 'Restore tertunda karena koneksi',
+      title: 'Pulihkan sesi tertunda karena koneksi',
       message:
           'Pengawas perlu memastikan perangkat sudah kembali terhubung ke server sebelum peserta mencoba memulihkan sesi lama lagi.',
       tone: ExamGuidanceTone.warning,
@@ -122,12 +122,12 @@ ExamGuidanceNotice? restoreFailureNotice(ExamApiException error) {
       return const ExamGuidanceNotice(
         title: 'Sesi lama aktif di perangkat lain',
         message:
-            'Peserta tidak perlu terus mencoba restore di perangkat ini. Pengawas sebaiknya mengarahkan peserta kembali ke perangkat awal atau memeriksa status token.',
+            'Peserta tidak perlu terus mencoba memulihkan sesi di perangkat ini. Pengawas sebaiknya mengarahkan peserta kembali ke perangkat awal atau memeriksa Token Ujian.',
         tone: ExamGuidanceTone.danger,
       );
     case 423:
       return const ExamGuidanceNotice(
-        title: 'Restore ditahan karena akses terkunci',
+        title: 'Pulihkan sesi ditahan karena akses terkunci',
         message:
             'Pengawas perlu memeriksa alasan penguncian terlebih dahulu sebelum peserta mencoba masuk kembali.',
         tone: ExamGuidanceTone.danger,
@@ -148,11 +148,11 @@ String statusFailureMessage(ExamApiException error) {
 
   switch (error.statusCode) {
     case 401:
-      return 'Konteks sesi perangkat tidak sah. Minta pengawas memeriksa token dan perangkat sebelum melanjutkan.';
+      return 'Sesi perangkat perlu diperiksa. Minta pengawas memeriksa Token Ujian dan perangkat sebelum melanjutkan.';
     case 403:
       return 'Sesi ujian tidak lagi aktif menurut server. Tunggu arahan pengawas sebelum melanjutkan.';
     case 409:
-      return 'Token sesi ini terdeteksi aktif di perangkat lain. Jangan lanjutkan dari perangkat ini sebelum pengawas memverifikasi.';
+      return 'Token Ujian ini terdeteksi aktif di perangkat lain. Jangan lanjutkan dari perangkat ini sebelum pengawas memeriksa.';
     case 423:
       return 'Akses peserta sedang dikunci. Tetap di layar ini dan tunggu pengawas memeriksa status ruang.';
     default:
@@ -175,7 +175,7 @@ ExamGuidanceNotice? statusFailureNotice(ExamApiException error) {
       return const ExamGuidanceNotice(
         title: 'Konteks peserta tidak sah',
         message:
-            'Perangkat belum membentuk konteks peserta yang valid. Pengawas sebaiknya memeriksa token, penanda perangkat, dan status reset akses.',
+            'Data sesi peserta belum cocok. Pengawas sebaiknya memeriksa Token Ujian, perangkat yang dipakai, dan status buka akses.',
         tone: ExamGuidanceTone.danger,
       );
     case 403:
@@ -189,7 +189,7 @@ ExamGuidanceNotice? statusFailureNotice(ExamApiException error) {
       return const ExamGuidanceNotice(
         title: 'Perangkat berbeda terdeteksi',
         message:
-            'Jangan lanjutkan ujian dari perangkat ini sebelum pengawas memastikan apakah token perlu direset atau peserta kembali ke perangkat awal.',
+            'Jangan lanjutkan ujian dari perangkat ini sebelum pengawas memastikan apakah akses perlu dibuka ulang atau peserta kembali ke perangkat awal.',
         tone: ExamGuidanceTone.danger,
       );
     case 423:
@@ -211,13 +211,13 @@ String answerFailureMessage(ExamApiException error) {
 
   switch (error.statusCode) {
     case 401:
-      return 'Sesi perangkat belum sah untuk mengirim jawaban. Jawaban tetap disimpan lokal sambil menunggu pemeriksaan pengawas.';
+      return 'Sesi perangkat perlu diperiksa sebelum mengirim jawaban. Jawaban tetap disimpan di perangkat sambil menunggu pemeriksaan pengawas.';
     case 403:
       return 'Waktu ujian sudah berakhir. Jawaban tetap disimpan di perangkat ini, tetapi pengawas perlu memastikan apakah sesi masih bisa dipulihkan.';
     case 409:
       return 'Ujian ini sudah dinyatakan selesai di server. Jawaban baru tidak bisa dikirim lagi.';
     case 423:
-      return 'Jawaban belum dikirim karena akses peserta sedang dikunci. Jawaban tetap tersimpan lokal sampai pengawas membuka akses.';
+      return 'Jawaban belum dikirim karena akses peserta sedang dikunci. Jawaban tetap tersimpan di perangkat sampai pengawas membuka akses.';
     default:
       return '${error.message} Jawaban tetap disimpan di perangkat dan akan dicoba sinkron ulang.';
   }
@@ -226,7 +226,7 @@ String answerFailureMessage(ExamApiException error) {
 ExamGuidanceNotice? answerFailureNotice(ExamApiException error) {
   if (error.statusCode == null) {
     return const ExamGuidanceNotice(
-      title: 'Jawaban tersimpan lokal',
+      title: 'Jawaban tersimpan di perangkat',
       message:
           'Perangkat belum bisa menjangkau server, tetapi jawaban peserta masih aman di perangkat ini. Pengawas perlu membantu memulihkan koneksi sebelum sinkron ulang.',
       tone: ExamGuidanceTone.warning,
@@ -238,28 +238,28 @@ ExamGuidanceNotice? answerFailureNotice(ExamApiException error) {
       return const ExamGuidanceNotice(
         title: 'Sesi perangkat perlu diverifikasi',
         message:
-            'Jawaban lokal tetap disimpan, tetapi server belum menerima konteks peserta yang sah. Pengawas perlu memeriksa token dan perangkat.',
+            'Jawaban tetap disimpan di perangkat, tetapi data sesi peserta belum cocok. Pengawas perlu memeriksa Token Ujian dan perangkat.',
         tone: ExamGuidanceTone.danger,
       );
     case 403:
       return const ExamGuidanceNotice(
         title: 'Waktu ujian sudah berakhir',
         message:
-            'Jawaban lokal masih aman di perangkat ini, tetapi pengawas perlu memastikan apakah sesi masih bisa dipulihkan atau harus diakhiri.',
+            'Jawaban masih aman di perangkat ini, tetapi pengawas perlu memastikan apakah sesi masih bisa dipulihkan atau harus diakhiri.',
         tone: ExamGuidanceTone.warning,
       );
     case 409:
       return const ExamGuidanceNotice(
         title: 'Ujian sudah selesai di server',
         message:
-            'Perangkat ini tidak dapat mengirim jawaban baru lagi. Pengawas sebaiknya mengecek apakah submit sebelumnya sudah final.',
+            'Perangkat ini tidak dapat mengirim jawaban baru lagi. Pengawas sebaiknya mengecek apakah jawaban akhir sebelumnya sudah tercatat.',
         tone: ExamGuidanceTone.danger,
       );
     case 423:
       return const ExamGuidanceNotice(
         title: 'Sinkron jawaban ditahan',
         message:
-            'Jawaban lokal tetap aman. Pengawas perlu menyelesaikan status penguncian sebelum perangkat mencoba sinkron ulang.',
+            'Jawaban tetap aman di perangkat ini. Pengawas perlu menyelesaikan status penguncian sebelum perangkat mencoba sinkron ulang.',
         tone: ExamGuidanceTone.danger,
       );
     default:
@@ -273,27 +273,27 @@ String submitFailureMessage(
 }) {
   if (error.statusCode == null) {
     return autoSubmit
-        ? 'Submit otomatis belum bisa dikirim karena perangkat kehilangan koneksi ke server ujian. Segera minta pengawas memeriksa jaringan.'
+        ? 'Kirim otomatis belum berhasil karena perangkat kehilangan koneksi ke server ujian. Jawaban tetap aman; segera minta pengawas memeriksa jaringan.'
         : 'Perangkat belum bisa terhubung ke server ujian. Jangan tinggalkan layar ini sebelum pengawas memastikan koneksi kembali.';
   }
 
   switch (error.statusCode) {
     case 401:
-      return 'Sesi perangkat belum sah untuk submit. Tetap di layar ini dan minta pengawas memeriksa token atau reset akses.';
+      return 'Sesi perangkat perlu diperiksa sebelum jawaban akhir dikirim. Tetap di layar ini dan minta pengawas memeriksa Token Ujian atau membuka akses ulang.';
     case 403:
       return autoSubmit
-          ? 'Waktu ujian sudah habis, tetapi server belum menerima submit otomatis. Segera minta pengawas memeriksa koneksi dan status sesi.'
+          ? 'Waktu ujian sudah habis, tetapi server belum menerima kiriman otomatis. Jawaban tetap aman; segera minta pengawas memeriksa koneksi dan status sesi.'
           : 'Waktu ujian sudah berakhir menurut server. Hubungi pengawas untuk memastikan status kirim ujian.';
     case 409:
       return 'Ujian ini sudah tercatat selesai di server. Tidak perlu menekan kirim lagi.';
     case 423:
       return autoSubmit
-          ? 'Submit otomatis ditahan karena akses peserta sedang dikunci. Segera minta pengawas memeriksa panel ruang.'
-          : 'Submit belum bisa dikirim karena akses peserta sedang dikunci. Tunggu pengawas membuka akses atau memberi instruksi.';
+          ? 'Kirim otomatis ditahan karena akses peserta sedang dikunci. Segera minta pengawas memeriksa panel ruang.'
+          : 'Jawaban akhir belum bisa dikirim karena akses peserta sedang dikunci. Tunggu pengawas membuka akses atau memberi instruksi.';
     default:
       return error.message.isNotEmpty
           ? error.message
-          : 'Submit belum bisa dikirim. Tunjukkan layar ini kepada pengawas untuk diperiksa.';
+          : 'Jawaban akhir belum bisa dikirim. Tunjukkan layar ini kepada pengawas untuk diperiksa.';
   }
 }
 
@@ -304,8 +304,8 @@ ExamGuidanceNotice? submitFailureNotice(
   if (error.statusCode == null) {
     return ExamGuidanceNotice(
       title: autoSubmit
-          ? 'Submit otomatis tertunda karena koneksi'
-          : 'Submit belum bisa dikirim',
+          ? 'Kirim otomatis tertunda karena koneksi'
+          : 'Jawaban akhir belum bisa dikirim',
       message: autoSubmit
           ? 'Pengawas perlu segera memeriksa jaringan perangkat dan memastikan server dapat dijangkau sebelum peserta meninggalkan sesi.'
           : 'Koneksi ke server ujian belum tersedia. Pengawas perlu membantu memulihkan jaringan sebelum peserta menekan kirim lagi.',
@@ -316,15 +316,15 @@ ExamGuidanceNotice? submitFailureNotice(
   switch (error.statusCode) {
     case 401:
       return const ExamGuidanceNotice(
-        title: 'Submit ditahan karena konteks peserta',
+        title: 'Kirim jawaban akhir ditahan',
         message:
-            'Server belum menerima konteks peserta yang sah. Pengawas perlu memeriksa token, perangkat, atau reset akses sebelum peserta mencoba lagi.',
+            'Data sesi peserta belum cocok. Pengawas perlu memeriksa Token Ujian, perangkat, atau membuka akses ulang sebelum peserta mencoba lagi.',
         tone: ExamGuidanceTone.danger,
       );
     case 403:
       return ExamGuidanceNotice(
         title: autoSubmit
-            ? 'Submit otomatis belum diterima server'
+            ? 'Kirim otomatis belum diterima server'
             : 'Waktu ujian sudah berakhir',
         message: autoSubmit
             ? 'Pengawas perlu segera memeriksa koneksi perangkat dan memastikan status sesi di server sebelum peserta meninggalkan ujian.'
@@ -333,14 +333,14 @@ ExamGuidanceNotice? submitFailureNotice(
       );
     case 409:
       return const ExamGuidanceNotice(
-        title: 'Submit sudah tercatat',
+        title: 'Jawaban akhir sudah tercatat',
         message:
             'Server sudah menganggap ujian ini selesai. Pengawas cukup memverifikasi status akhir, tidak perlu mengirim ulang.',
         tone: ExamGuidanceTone.info,
       );
     case 423:
       return const ExamGuidanceNotice(
-        title: 'Submit ditahan karena akses terkunci',
+        title: 'Kirim jawaban akhir ditahan karena akses terkunci',
         message:
             'Pengawas perlu membuka kunci peserta atau menutup sesi secara resmi sebelum peserta meninggalkan ruang.',
         tone: ExamGuidanceTone.danger,

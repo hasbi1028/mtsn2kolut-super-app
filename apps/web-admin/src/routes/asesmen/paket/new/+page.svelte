@@ -266,7 +266,7 @@
 		if (question.workflow_status === 'approved') return 'Disetujui';
 		if (question.workflow_status === 'review') return 'Ditinjau';
 		if (question.workflow_status === 'rejected') return 'Revisi';
-		return 'Draft';
+		return 'Konsep';
 	}
 
 	function questionReadinessIssues(question: Question) {
@@ -349,7 +349,7 @@
 			fSelectedIds.add(question.id);
 			fQuestionWeights.set(question.id, 1);
 		}
-		toast.success(`Preview draw siap: ${pg.length} PG, ${essay.length} esai`);
+		toast.success(`Pratinjau pilihan otomatis siap: ${pg.length} PG, ${essay.length} esai`);
 	}
 
 	function seededShuffle<T>(items: T[], seed: string): T[] {
@@ -415,7 +415,7 @@
 			</div>
 			<div class="flex flex-wrap gap-2">
 				{#if eventId}
-					<Button href={resolve(`/asesmen/kegiatan/${eventId}`)} variant="outline">Kembali ke Event</Button>
+					<Button href={resolve(`/asesmen/kegiatan/${eventId}`)} variant="outline">Kembali ke Kegiatan</Button>
 				{/if}
 				<Button href={listHref} variant="outline">Batal</Button>
 			</div>
@@ -425,7 +425,7 @@
 	{#if eventId}
 		<div class="rounded-xl border border-success/20 bg-success/10 p-4 text-sm text-success">
 			<p class="font-semibold">Paket untuk kegiatan: {eventContext?.title ?? eventId}</p>
-			<p class="mt-1 text-success">Payload pembuatan paket membawa <code class="rounded bg-card px-1">event_id</code>. Pool soal memakai soal reusable dan soal khusus kegiatan ini.</p>
+			<p class="mt-1 text-success">Data pembuatan paket otomatis tertaut ke kegiatan ini. Pilihan soal memakai soal yang dapat dipakai ulang dan soal khusus kegiatan ini.</p>
 		</div>
 	{/if}
 
@@ -452,7 +452,7 @@
 			<Card.Root class="border-primary/20 shadow-sm">
 				<Card.Header>
 					<Card.Title class="text-base">Builder Paket</Card.Title>
-					<Card.Description>Form create-only ini memakai endpoint <code>/api/asesmen/packages</code> dan filter soal yang sama dengan builder lama.</Card.Description>
+					<Card.Description>Form pembuatan ini memakai layanan sistem paket dan penyaring soal yang sama dengan pembuat paket lama.</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-4">
 					<div class="grid gap-3 sm:grid-cols-2">
@@ -500,7 +500,7 @@
 							</label>
 							<div class="flex items-end"><Button type="button" variant="outline" onclick={selectQuestionDraw}>Preview Draw</Button></div>
 						</div>
-						<p class="mt-2 text-xs text-muted-foreground">Preview draw hanya memilih soal ke keranjang; sumber soal tidak dimutasi. Komposisi tersimpan di audit/log paket saat disimpan.</p>
+						<p class="mt-2 text-xs text-muted-foreground">Pratinjau pilihan otomatis hanya memilih soal ke keranjang; sumber soal tidak diubah. Komposisi tersimpan di catatan perubahan paket saat disimpan.</p>
 					</div>
 
 					<div>

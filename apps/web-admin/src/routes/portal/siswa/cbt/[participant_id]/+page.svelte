@@ -46,7 +46,7 @@
 			const payload = await revealStudentPortalCbtToken(item.participant_id, roomToken);
 			revealedToken = payload.token;
 		} catch (error) {
-			revealError = error instanceof Error ? error.message : 'Kode ujian belum dapat dibuka.';
+			revealError = error instanceof Error ? error.message : 'Token Ujian belum dapat dibuka. Periksa Token Ruang bersama pengawas.';
 		} finally {
 			revealing = false;
 		}
@@ -64,9 +64,9 @@
 	function statusLabel(status: string) {
 		return {
 			upcoming: 'Belum dibuka',
-			token_window: 'Kode dapat dibuka',
+			token_window: 'Token Ujian dapat dibuka',
 			active: 'Sedang berlangsung',
-			submitted: 'Selesai/submit',
+			submitted: 'Selesai dikirim',
 			closed: 'Ditutup',
 			locked: 'Dikunci pengawas'
 		}[status] ?? status;
@@ -103,26 +103,26 @@
 				</div>
 
 				<div class="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm leading-6">
-					<p class="font-semibold text-warning">Instruksi token</p>
-					<p>Token ruang diberikan oleh pengawas saat peserta sudah berada di ruang ujian. Token siswa hanya dibuka pada waktu yang diizinkan dan jangan dibagikan ke perangkat lain.</p>
-					<p class="mt-2">Token tersamarkan: <span class="font-mono font-semibold">{item.token_masked || 'Belum dibuka'}</span></p>
+					<p class="font-semibold text-warning">Instruksi Token Ujian</p>
+					<p>Token Ruang diberikan oleh pengawas saat peserta sudah berada di ruang ujian. Token Ujian peserta hanya dibuka pada waktu yang diizinkan dan jangan dibagikan ke perangkat lain.</p>
+					<p class="mt-2">Token Ujian tersamarkan: <span class="font-mono font-semibold">{item.token_masked || 'Belum dibuka'}</span></p>
 				</div>
 
 				{#if item.can_reveal_token}
 					<div class="space-y-3 rounded-xl border border-border p-4 print:hidden">
 						<label class="text-sm font-semibold" for="room-token">Masukkan Token Ruang</label>
-						<input id="room-token" class="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm" bind:value={roomToken} placeholder="Token dari pengawas" />
-						<Button onclick={revealToken} disabled={revealing || roomToken.trim().length < 4}>{revealing ? 'Membuka...' : 'Buka Kode Ujian'}</Button>
+						<input id="room-token" class="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm" bind:value={roomToken} placeholder="Token Ruang dari pengawas" />
+						<Button onclick={revealToken} disabled={revealing || roomToken.trim().length < 4}>{revealing ? 'Membuka...' : 'Buka Token Ujian'}</Button>
 						{#if revealError}<p class="text-sm text-destructive">{revealError}</p>{/if}
 						{#if revealedToken}
 							<div class="rounded-lg border border-primary/30 bg-primary/10 p-3">
-								<p class="text-xs font-semibold uppercase tracking-wide text-primary">Token ujian Anda</p>
+								<p class="text-xs font-semibold uppercase tracking-wide text-primary">Token Ujian Anda</p>
 								<p class="mt-1 font-mono text-xl font-bold tracking-wider">{revealedToken}</p>
 							</div>
 						{/if}
 					</div>
 				{:else}
-					<p class="rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">Token belum dapat dibuka. Tunggu arahan pengawas saat ujian dimulai.</p>
+					<p class="rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">Token Ujian belum dapat dibuka. Tunggu arahan pengawas saat ujian dimulai.</p>
 				{/if}
 			</Card.Content>
 		</Card.Root>

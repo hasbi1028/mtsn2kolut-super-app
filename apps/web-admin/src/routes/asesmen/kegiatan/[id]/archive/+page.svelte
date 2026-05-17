@@ -170,8 +170,8 @@
 							{ label: 'Kartu ujian/token distribusi', helper: 'Untuk distribusi terbatas sebelum ujian.', href: `/asesmen/kegiatan/${eventId}/exam-cards`, ready: count(data.overview?.card_count) > 0 },
 							{ label: 'Daftar hadir dan BA sesi', helper: 'Cetak dari masing-masing sesi/ruang.', href: `/asesmen/sesi?event_id=${eventId}`, ready: data.sessions.length > 0 },
 							{ label: 'Rekap hasil', helper: 'Pastikan nilai dan kiriman peserta sudah diperiksa.', href: `/asesmen/kegiatan/${eventId}#hasil`, ready: count(data.overview?.result_count) > 0 },
-							{ label: 'Rekap insiden pengawasan', helper: 'Buka panel pengawasan/report untuk ruang yang punya atensi.', href: '/asesmen/pengawasan', ready: true },
-							{ label: 'Audit pengesahan', helper: 'Pengesahan paket, peserta/ruang, token/kartu, hasil, dan final arsip.', href: `/asesmen/kegiatan/${eventId}`, ready: data.approvals.some((row) => row.status === 'approved') },
+							{ label: 'Rekap insiden pengawasan', helper: 'Buka panel pengawasan/rekap untuk ruang yang punya kejadian perhatian.', href: '/asesmen/pengawasan', ready: true },
+							{ label: 'Riwayat pengesahan', helper: 'Pengesahan paket, peserta/ruang, token/kartu, hasil, dan final arsip.', href: `/asesmen/kegiatan/${eventId}`, ready: data.approvals.some((row) => row.status === 'approved') },
 						]}
 						{#each checklist as item}
 							<a class="flex items-start justify-between gap-4 rounded-2xl border p-4 transition hover:border-primary/40 hover:bg-primary/5" href={item.href}>

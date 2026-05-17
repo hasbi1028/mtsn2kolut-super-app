@@ -277,7 +277,7 @@
 		if (question.workflow_status === 'approved') return 'Disetujui';
 		if (question.workflow_status === 'review') return 'Ditinjau';
 		if (question.workflow_status === 'rejected') return 'Revisi';
-		return 'Draft';
+		return 'Konsep';
 	}
 
 	function questionReadinessIssues(question: Question) {
@@ -380,7 +380,7 @@
 	function readinessLabel(status: string) {
 		return {
 			all: 'Semua', empty: 'Kosong', short: 'Kurang Soal', metadata: 'Metadata Kurang',
-			unpublished: 'Belum Terbit', ready: 'Siap', locked: 'Locked'
+			unpublished: 'Belum Terbit', ready: 'Siap', locked: 'Terkunci'
 		}[status] ?? status;
 	}
 
@@ -491,10 +491,10 @@
 		const selected = packages.filter((pkg) => selectedPackageIds.has(pkg.id));
 		const lockable = selected.filter((pkg) => !pkg.locked_at && packageReadinessStatus(pkg) === 'ready');
 		if (lockable.length === 0) {
-			showError('Tidak ada paket terpilih yang siap dan belum locked.');
+			showError('Tidak ada paket terpilih yang siap dan belum terkunci.');
 			return;
 		}
-		if (!(await confirmPhrase('Bulk Lock Paket', `${lockable.length} paket siap akan dikunci/snapshot. Paket yang sudah locked atau belum siap dilewati.`, 'LOCK'))) return;
+		if (!(await confirmPhrase('Kunci Paket Massal', `${lockable.length} paket siap akan dikunci/disalin kondisinya. Paket yang sudah terkunci atau belum siap dilewati.`, 'LOCK'))) return;
 		bulkBusy = true;
 		try {
 			for (const pkg of lockable) {
@@ -519,7 +519,7 @@
 			showError('Tidak ada paket terpilih yang bisa diubah status aktifnya.');
 			return;
 		}
-		if (!(await confirmPhrase(active ? 'Aktifkan Paket' : 'Nonaktifkan Paket', `${editable.length} paket akan diubah statusnya. Paket locked dilewati.`, active ? 'AKTIF' : 'NONAKTIF'))) return;
+		if (!(await confirmPhrase(active ? 'Aktifkan Paket' : 'Nonaktifkan Paket', `${editable.length} paket akan diubah statusnya. Paket terkunci dilewati.`, active ? 'AKTIF' : 'NONAKTIF'))) return;
 		bulkBusy = true;
 		try {
 			for (const pkg of editable) {
@@ -744,14 +744,14 @@
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-3">
 				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Keranjang Soal CBT</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground">{eventId ? 'Paket Soal Event' : 'Paket Soal'}</h1>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">{eventId ? 'Paket Soal Kegiatan' : 'Paket Soal'}</h1>
 				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
 					Pilih soal terbit dari Bank Soal, masukkan ke paket, lalu pakai paket itu saat membuat sesi event.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
 				{#if eventId}
-					<a href={resolve(`/asesmen/kegiatan/${eventId}`)} class="inline-flex items-center rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Kembali ke Event</a>
+					<a href={resolve(`/asesmen/kegiatan/${eventId}`)} class="inline-flex items-center rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Kembali ke Kegiatan</a>
 				{/if}
 				<a href={resolve('/asesmen')} class="inline-flex items-center rounded-md border border-success/20 bg-card px-3 py-2 text-sm font-semibold text-success hover:bg-success/10">Beranda Ujian</a>
 				<a href={createPackageHref} class="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Buat Paket</a>
@@ -776,8 +776,8 @@
 				href={resolve(eventId ? `/asesmen/kegiatan/${eventId}` : '/asesmen/kegiatan')}
 				class="rounded-2xl border border-primary/20 bg-card/70 p-4 text-sm text-foreground shadow-sm transition hover:border-primary/20 hover:bg-card"
 			>
-				<p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Pakai untuk Event</p>
-				<p class="mt-2 text-lg font-semibold">Buat/Cek Sesi Event</p>
+				<p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Pakai untuk Kegiatan</p>
+				<p class="mt-2 text-lg font-semibold">Buat/Cek Sesi Kegiatan</p>
 				<p class="mt-1 leading-6 text-muted-foreground">Lanjutkan paket ke sesi, ruang, dan token.</p>
 			</a>
 		</div>
@@ -787,13 +787,13 @@
 		<summary class="cursor-pointer font-semibold text-foreground">Catatan penggunaan paket dan cakupan soal</summary>
 		<div class="mt-3 space-y-3 leading-6">
 			{#if eventId}
-				<p><span class="font-semibold text-primary">Paket event:</span> {eventContext?.title ?? eventId}. Sesi event membutuhkan paket yang membawa <code class="rounded bg-muted px-1">event_id</code> event ini.</p>
-				<p>Pilihan soal tetap memakai filter Bank Soal reusable yang sudah ada, ditambah soal khusus event ini saja.</p>
+				<p><span class="font-semibold text-primary">Paket kegiatan:</span> {eventContext?.title ?? eventId}. Sesi kegiatan membutuhkan paket yang tertaut ke kegiatan ini.</p>
+				<p>Pilihan soal tetap memakai penyaring Bank Soal yang dapat dipakai ulang, ditambah soal khusus kegiatan ini saja.</p>
 			{:else}
-				<p><span class="font-semibold text-warning">Paket global:</span> dapat dipakai sebagai template reusable atau paket standalone. Jika bekerja dari Kegiatan Ujian, buka builder paket dari event agar paket otomatis tertaut event.</p>
+				<p><span class="font-semibold text-warning">Paket umum:</span> dapat dipakai sebagai templat yang dapat dipakai ulang atau paket mandiri. Jika bekerja dari Kegiatan Ujian, buka pembuat paket dari kegiatan agar paket otomatis tertaut kegiatan.</p>
 			{/if}
 			{#if hiddenEventPackageCount > 0}
-				<p>{hiddenEventPackageCount} template global atau paket event lain disembunyikan dari daftar event ini.</p>
+				<p>{hiddenEventPackageCount} templat umum atau paket kegiatan lain disembunyikan dari daftar kegiatan ini.</p>
 			{/if}
 			<a href={resolve('/bank-soal')} class="inline-flex rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Buka Bank Soal</a>
 		</div>
@@ -869,7 +869,7 @@
 						</div>
 						{#if questionPool.length === 0}
 							<p class="text-sm text-muted-foreground py-4 text-center border rounded-md">
-								Belum ada soal berstatus "Terbit" untuk mata pelajaran ini dalam cakupan paket ini. Paket global hanya memakai soal reusable; paket event memakai soal reusable dan soal khusus event yang sama.
+								Belum ada soal berstatus "Terbit" untuk mata pelajaran ini dalam cakupan paket ini. Paket umum hanya memakai soal yang dapat dipakai ulang; paket kegiatan memakai soal yang dapat dipakai ulang dan soal khusus kegiatan yang sama.
 							</p>
 							{#if hiddenScopedQuestionCount > 0}
 								<p class="mt-2 rounded-md border border-accent bg-accent/60 px-3 py-2 text-xs text-accent-foreground">
@@ -1075,7 +1075,7 @@
 					</div>
 				</div>
 				{#if hiddenPackages > 0}
-					<Card.Description>{hiddenPackages} template global atau paket event lain disembunyikan dari daftar event ini.</Card.Description>
+					<Card.Description>{hiddenPackages} templat umum atau paket kegiatan lain disembunyikan dari daftar kegiatan ini.</Card.Description>
 				{/if}
 
 				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
@@ -1084,7 +1084,7 @@
 						['Kosong', summary.empty, 'text-muted-foreground'],
 						['Kurang', summary.short, 'text-warning'],
 						['Siap', summary.ready, 'text-success'],
-						['Locked', summary.locked, 'text-primary'],
+						['Terkunci', summary.locked, 'text-primary'],
 						['Dipakai Sesi', summary.used, 'text-foreground']
 					] as item (`summary-${item[0]}`)}
 						<div class="rounded-xl border border-border bg-muted/30 p-3">
@@ -1110,7 +1110,7 @@
 							<option value="all">Semua status</option><option value="active">Aktif</option><option value="inactive">Nonaktif</option>
 						</select>
 						<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={lockFilter}>
-							<option value="all">Semua lock</option><option value="locked">Locked</option><option value="unlocked">Belum locked</option>
+							<option value="all">Semua status kunci</option><option value="locked">Terkunci</option><option value="unlocked">Belum terkunci</option>
 						</select>
 						<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={usageFilter}>
 							<option value="all">Semua sesi</option><option value="used">Dipakai sesi</option><option value="unused">Belum dipakai</option>
@@ -1130,7 +1130,7 @@
 
 				{#if selectedPackageIds.size > 0}
 					<div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary">
-						<p><span class="font-semibold">{selectedPackageIds.size} paket dipilih.</span> Bulk action hanya memproses paket yang aman; paket locked/belum siap otomatis dilewati.</p>
+						<p><span class="font-semibold">{selectedPackageIds.size} paket dipilih.</span> Aksi massal hanya memproses paket yang aman; paket terkunci/belum siap otomatis dilewati.</p>
 						<div class="flex flex-wrap gap-2">
 							<LoadingButton size="sm" variant="outline" onclick={() => exportPackagesCsv(currentPackages.filter((pkg) => selectedPackageIds.has(pkg.id)), 'rekap-paket-soal-selected.csv')}>Export Terpilih</LoadingButton>
 							<LoadingButton size="sm" onclick={() => void bulkLockSelected()} loading={bulkBusy} loadingLabel="Lock...">Bulk Lock Ready</LoadingButton>

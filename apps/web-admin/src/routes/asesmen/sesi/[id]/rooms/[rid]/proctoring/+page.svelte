@@ -880,7 +880,7 @@
 </script>
 
 <svelte:head>
-	<title>Panel Pengawas Ruang | CBT</title>
+	<title>Panel Pengawas Ruang Ujian</title>
 </svelte:head>
 
 <div class="space-y-5">
@@ -915,7 +915,7 @@
 		</div>
 		<div class="inline-flex w-fit rounded-full border border-border bg-muted/50 p-1 text-xs font-semibold" role="tablist" aria-label="Mode tampilan pengawas">
 			<button type="button" role="tab" class={`rounded-full px-3 py-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${proctorViewMode === 'simple' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`} aria-selected={proctorViewMode === 'simple'} onclick={() => (proctorViewMode = 'simple')}>Mode Sederhana</button>
-			<button type="button" role="tab" class={`rounded-full px-3 py-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${proctorViewMode === 'complete' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`} aria-selected={proctorViewMode === 'complete'} onclick={() => (proctorViewMode = 'complete')}>Mode Lengkap</button>
+			<button type="button" role="tab" class={`rounded-full px-3 py-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${proctorViewMode === 'complete' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`} aria-selected={proctorViewMode === 'complete'} onclick={() => (proctorViewMode = 'complete')}>Rincian lengkap</button>
 		</div>
 	</div>
 
@@ -1227,7 +1227,7 @@
 				{#if proctorViewMode === 'complete'}
 				<section class="flex flex-col gap-3 rounded-xl border border-border bg-card p-3 shadow-sm md:flex-row md:items-center md:justify-between">
 					<div>
-						<p class="text-sm font-semibold text-foreground">Mode Lengkap</p>
+						<p class="text-sm font-semibold text-foreground">Rincian lengkap</p>
 						<p class="text-xs text-muted-foreground">Tabel semua peserta, riwayat ruang, ekspor bukti, paket cetak, dan audio peringatan.</p>
 					</div>
 					<div class="flex flex-wrap gap-2">

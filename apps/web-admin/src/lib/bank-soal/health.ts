@@ -84,7 +84,7 @@ export type BankSoalRatioMetric = {
 
 export type BankSoalReadiness = {
 	score: number | null;
-	grade: 'A' | 'B' | 'C' | 'D' | 'Perlu evidence/data';
+	grade: 'A' | 'B' | 'C' | 'D' | 'Data belum tersedia';
 	evidenceLabel: string;
 	drivers: string[];
 };
@@ -135,20 +135,20 @@ const statusLabels: Record<BankSoalStatusKey, string> = {
 	total: 'Total',
 	published: 'Terbit',
 	approved: 'Disetujui',
-	review: 'Review',
-	draft: 'Draft',
+	review: 'Verifikasi',
+	draft: 'Konsep',
 	revision: 'Revisi',
 	archived: 'Arsip',
 };
 
 const statusHelpers: Record<BankSoalStatusKey, string> = {
-	total: 'seluruh stok yang tersedia dari summary atau sampel',
+	total: 'seluruh stok yang tersedia dari ringkasan atau contoh data',
 	published: 'sudah dapat dipakai di paket asesmen',
-	approved: 'lulus review dan menunggu publikasi',
-	review: 'menunggu keputusan reviewer',
+	approved: 'sudah disetujui dan menunggu penerbitan',
+	review: 'menunggu keputusan pemeriksa soal',
 	draft: 'masih disusun atau belum dikirim',
 	revision: 'dikembalikan untuk perbaikan',
-	archived: 'hanya ditampilkan saat evidence tersedia',
+	archived: 'hanya ditampilkan saat data tersedia',
 };
 
 function numberValue(value: unknown): number | null {
@@ -179,9 +179,9 @@ function hasAnyFilledField(item: BankSoalHealthQuestion, keys: string[]): boolea
 }
 
 function evidenceLabel(evidence: BankSoalHealthEvidence, sampleSize: number): string {
-	if (evidence === 'summary') return 'summary';
-	if (evidence === 'sample') return `sampel ${sampleSize} soal`;
-	return 'perlu evidence/data';
+	if (evidence === 'summary') return 'ringkasan';
+	if (evidence === 'sample') return `contoh data ${sampleSize} soal`;
+	return 'data belum tersedia';
 }
 
 function countFromSummary(summary: BankSoalHealthSummary | null | undefined, key: BankSoalStatusKey): number | null {
@@ -229,12 +229,12 @@ function statusTone(key: BankSoalStatusKey, value: number | null): BankSoalStatu
 function buildRoleWorkflowCards(summary: BankSoalHealthSummary | null | undefined, sampleSize: number): BankSoalRoleWorkflowCard[] {
 	const counts = summary?.counts ?? {};
 	const configs = [
-		{ key: 'my_draft', label: 'Draft saya', helper: 'soal pribadi yang masih bisa dilengkapi', tone: 'neutral' as const },
-		{ key: 'my_review_waiting', label: 'Menunggu review saya', helper: 'antrean review sesuai role/scope', tone: 'warning' as const },
+		{ key: 'my_draft', label: 'Konsep saya', helper: 'soal pribadi yang masih bisa dilengkapi', tone: 'neutral' as const },
+		{ key: 'my_review_waiting', label: 'Menunggu verifikasi saya', helper: 'antrean verifikasi sesuai tugas pemeriksa soal', tone: 'warning' as const },
 		{ key: 'revision_needed', label: 'Perlu revisi', helper: 'ditolak/dikembalikan untuk perbaikan', tone: 'warning' as const },
-		{ key: 'approval_waiting', label: 'Menunggu approval', helper: 'sudah direview dan menunggu keputusan akhir', tone: 'warning' as const },
-		{ key: 'package_ready', label: 'Siap paket', helper: 'approved/published dan boleh dipakai paket CBT', tone: 'success' as const },
-		{ key: 'missing_metadata', label: 'Metadata kurang', helper: 'butuh mapel/tingkat/materi/level/CP-TP-KD', tone: 'danger' as const },
+		{ key: 'approval_waiting', label: 'Menunggu persetujuan', helper: 'sudah diperiksa dan menunggu keputusan akhir', tone: 'warning' as const },
+		{ key: 'package_ready', label: 'Siap paket', helper: 'disetujui/terbit dan boleh dipakai paket asesmen', tone: 'success' as const },
+		{ key: 'missing_metadata', label: 'Identitas soal kurang', helper: 'butuh mapel/tingkat/materi/level/CP-TP-KD', tone: 'danger' as const },
 	];
 	return configs.map((config) => ({
 		...config,
@@ -317,7 +317,7 @@ function buildSubjectCoverage(summary: BankSoalHealthSummary | null | undefined,
 			.filter(Boolean)
 	);
 	if (subjectKeys.size > 0) {
-		return ratioMetric('subject', 'Mapel terdeteksi di sampel', subjectKeys.size, null, 'sample', questions.length);
+		return ratioMetric('subject', 'Mapel terdeteksi di contoh data', subjectKeys.size, null, 'sample', questions.length);
 	}
 	return ratioMetric('subject', 'Cakupan mapel', null, null, 'missing', questions.length);
 }
@@ -366,13 +366,13 @@ function buildReviewBacklog(cards: BankSoalStatusCard[], sampleSize: number) {
 	const reviewCard = cards.find((card) => card.key === 'review');
 	const revisionCard = cards.find((card) => card.key === 'revision');
 	if (reviewCard?.evidence === 'missing' && revisionCard?.evidence === 'missing') {
-		return ratioMetric('review_backlog', 'Review backlog', null, null, 'missing', sampleSize);
+		return ratioMetric('review_backlog', 'Antrean Verifikasi', null, null, 'missing', sampleSize);
 	}
 	const review = reviewCard?.value ?? 0;
 	const revision = revisionCard?.value ?? 0;
 	const total = valueFor(cards, 'total');
 	const evidence = reviewCard?.evidence === 'summary' || revisionCard?.evidence === 'summary' ? 'summary' : 'sample';
-	return ratioMetric('review_backlog', 'Review backlog', review + revision, total, evidence, sampleSize);
+	return ratioMetric('review_backlog', 'Antrean Verifikasi', review + revision, total, evidence, sampleSize);
 }
 
 function averagePercent(metrics: BankSoalRatioMetric[]): number | null {
@@ -382,7 +382,7 @@ function averagePercent(metrics: BankSoalRatioMetric[]): number | null {
 }
 
 function readinessGrade(score: number | null): BankSoalReadiness['grade'] {
-	if (score === null) return 'Perlu evidence/data';
+	if (score === null) return 'Data belum tersedia';
 	if (score >= 85) return 'A';
 	if (score >= 70) return 'B';
 	if (score >= 55) return 'C';
@@ -430,11 +430,11 @@ function buildReadiness(
 	return {
 		score,
 		grade: readinessGrade(score),
-		evidenceLabel: evidenceParts.size > 0 ? Array.from(evidenceParts).join(' + ') : 'perlu evidence/data',
+		evidenceLabel: evidenceParts.size > 0 ? Array.from(evidenceParts).join(' + ') : 'data belum tersedia',
 		drivers: [
-			approvalPercent === null ? 'rasio approved/published perlu evidence/data' : `${approvalPercent}% approved/published`,
-			metadataPercent === null ? 'kelengkapan metadata perlu evidence/data' : `${metadataPercent}% rata-rata metadata terisi`,
-			backlogHealth === null ? 'backlog review perlu evidence/data' : `${reviewBacklog.value ?? 0} soal dalam review/revisi`,
+			approvalPercent === null ? 'rasio disetujui/terbit belum tersedia' : `${approvalPercent}% disetujui/terbit`,
+			metadataPercent === null ? 'kelengkapan data soal belum tersedia' : `${metadataPercent}% rata-rata identitas soal terisi`,
+			backlogHealth === null ? 'antrean verifikasi belum tersedia' : `${reviewBacklog.value ?? 0} soal dalam verifikasi/revisi`,
 		],
 	};
 }
@@ -449,8 +449,8 @@ function buildWarnings(
 		const percent = reviewBacklog.percent ?? 0;
 		warnings.push({
 			kind: 'review',
-			label: 'Review backlog',
-			message: `${reviewBacklog.value} soal menunggu review atau revisi.`,
+			label: 'Antrean Verifikasi',
+			message: `${reviewBacklog.value} soal menunggu verifikasi atau revisi.`,
 			severity: percent >= 25 ? 'warning' : 'info',
 			evidenceLabel: reviewBacklog.evidenceLabel,
 		});
@@ -461,9 +461,9 @@ function buildWarnings(
 		warnings.push({
 			kind: 'import',
 			label: 'Import',
-			message: 'Riwayat import belum tersedia di summary atau sampel, jadi kesehatan import belum bisa dinilai.',
+			message: 'Riwayat impor belum tersedia di ringkasan atau contoh data, jadi kesiapan impor belum bisa dinilai.',
 			severity: 'info',
-			evidenceLabel: 'perlu evidence/data',
+			evidenceLabel: 'data belum tersedia',
 		});
 	} else {
 		const importedDrafts = questions.filter((question) => hasAnyFilledField(question, importFields) && publicationOf(question) !== 'published').length;
@@ -471,7 +471,7 @@ function buildWarnings(
 			warnings.push({
 				kind: 'import',
 				label: 'Import',
-				message: `${importedDrafts} soal sampel dari import belum terbit.`,
+				message: `${importedDrafts} soal contoh data dari impor belum terbit.`,
 				severity: 'warning',
 				evidenceLabel: evidenceLabel('sample', questions.length),
 			});
@@ -483,9 +483,9 @@ function buildWarnings(
 		warnings.push({
 			kind: 'asset',
 			label: 'Aset',
-			message: 'Evidence aset belum tersedia, jadi dashboard tidak mengasumsikan risiko media.',
+			message: 'Data pendukung aset belum tersedia, jadi dashboard tidak mengasumsikan risiko media.',
 			severity: 'info',
-			evidenceLabel: 'perlu evidence/data',
+			evidenceLabel: 'data belum tersedia',
 		});
 	} else {
 		const withoutAssetEvidence = questions.filter((question) => !hasAnyFilledField(question, assetFields)).length;
@@ -493,7 +493,7 @@ function buildWarnings(
 			warnings.push({
 				kind: 'asset',
 				label: 'Aset',
-				message: `${withoutAssetEvidence} soal sampel belum punya evidence aset terhubung.`,
+				message: `${withoutAssetEvidence} soal contoh data belum punya data pendukung aset terhubung.`,
 				severity: 'warning',
 				evidenceLabel: evidenceLabel('sample', questions.length),
 			});
@@ -505,9 +505,9 @@ function buildWarnings(
 		warnings.push({
 			kind: 'governance',
 			label: 'Arsip',
-			message: 'Status arsip belum tersedia di summary; jangan simpulkan nol arsip tanpa data.',
+			message: 'Status arsip belum tersedia di ringkasan; jangan simpulkan nol arsip tanpa data.',
 			severity: 'info',
-			evidenceLabel: 'perlu evidence/data',
+			evidenceLabel: 'data belum tersedia',
 		});
 	}
 
@@ -522,7 +522,7 @@ function buildActions(
 	const actions: BankSoalHealthAction[] = [
 		{
 			label: 'Buka daftar soal',
-			description: 'Audit sampel, filter status, dan cek metadata per butir.',
+			description: 'Periksa contoh data, filter status, dan cek identitas tiap soal.',
 			href: '/bank-soal/daftar',
 			capability: 'read',
 			priority: 10,
@@ -530,8 +530,8 @@ function buildActions(
 	];
 	if ((reviewBacklog.value ?? 0) > 0) {
 		actions.push({
-			label: 'Review backlog',
-			description: `${reviewBacklog.value} soal perlu keputusan reviewer.`,
+			label: 'Antrean Verifikasi',
+			description: `${reviewBacklog.value} soal perlu keputusan pemeriksa soal.`,
 			href: '/bank-soal/verifikasi',
 			capability: 'review',
 			priority: 20,
@@ -539,8 +539,8 @@ function buildActions(
 	}
 	if (metadataQuality.some((metric) => (metric.missing ?? 0) > 0)) {
 		actions.push({
-			label: 'Lengkapi metadata',
-			description: 'Prioritaskan KD, level kognitif, kesulitan, dan pembahasan.',
+			label: 'Lengkapi identitas soal',
+			description: 'Prioritaskan KD, level kognitif, tingkat kesulitan, dan pembahasan.',
 			href: '/bank-soal/daftar',
 			capability: 'update',
 			priority: 30,
@@ -548,7 +548,7 @@ function buildActions(
 	}
 	actions.push({
 		label: 'Tambah Soal',
-		description: 'Isi stok baru dengan metadata lengkap sejak awal.',
+		description: 'Isi stok baru dengan identitas soal lengkap sejak awal.',
 		href: '/bank-soal/tambah',
 		capability: 'create',
 		priority: 40,
@@ -556,7 +556,7 @@ function buildActions(
 	if (warnings.some((warning) => warning.kind === 'import')) {
 		actions.push({
 			label: 'Impor',
-			description: 'Validasi hasil import dan mapping metadata sebelum publikasi.',
+			description: 'Validasi hasil impor dan pemetaan identitas soal sebelum penerbitan.',
 			href: '/bank-soal/impor',
 			capability: 'import',
 			priority: 50,

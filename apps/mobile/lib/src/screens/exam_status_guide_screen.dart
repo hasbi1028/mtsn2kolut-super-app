@@ -33,7 +33,7 @@ class ExamStatusGuideScreen extends StatelessWidget {
                   title: 'Aman',
                   subtitle: 'Kondisi stabil',
                   description:
-                      'Perangkat terakhir berhasil terhubung ke server dan tidak ada jawaban lokal yang tertahan.',
+                      'Perangkat terakhir berhasil terhubung ke server dan tidak ada jawaban yang menunggu dikirim.',
                   tone: _GuideTone.good,
                   icon: Icons.cloud_done,
                 ),
@@ -83,7 +83,7 @@ class ExamStatusGuideScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Jika status berubah ke Perlu pengawas, minta siswa tetap berada di layar ujian, tekan tombol sinkron ulang, dan tunggu sampai status kembali Aman atau Perlu sinkron selesai sebelum mengizinkan submit.',
+                        'Jika status berubah ke Perlu pengawas, minta siswa tetap berada di layar ujian, tekan tombol sinkron ulang, dan tunggu sampai status kembali Aman atau Perlu sinkron selesai sebelum mengizinkan kirim jawaban akhir.',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           height: 1.55,
                         ),

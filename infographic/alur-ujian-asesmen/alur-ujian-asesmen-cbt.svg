@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000" flood-opacity="0.12"/>
+    </filter>
+    <pattern id="paper" patternUnits="userSpaceOnUse" width="80" height="80">
+      <rect width="80" height="80" fill="#F5F0E8"/>
+      <circle cx="12" cy="18" r="1.2" fill="#E9DFD1" opacity="0.55"/>
+      <circle cx="44" cy="51" r="1" fill="#E9DFD1" opacity="0.45"/>
+      <circle cx="70" cy="26" r="0.9" fill="#E9DFD1" opacity="0.35"/>
+    </pattern>
+    <style>
+      .title{font-family:'DejaVu Sans',Arial,sans-serif;font-weight:900;fill:#2D2D2D;font-size:54px;letter-spacing:-1px}
+      .subtitle{font-family:'DejaVu Sans',Arial,sans-serif;font-weight:600;fill:#6B6B6B;font-size:24px}
+      .stepnum{font-family:'DejaVu Sans',Arial,sans-serif;font-weight:900;fill:#fff;font-size:30px}
+      .head{font-family:'DejaVu Sans',Arial,sans-serif;font-weight:900;fill:#2D2D2D;font-size:28px}
+      .body{font-family:'DejaVu Sans',Arial,sans-serif;font-weight:500;fill:#2D2D2D;font-size:21px}
+      .small{font-family:'DejaVu Sans',Arial,sans-serif;font-weight:600;fill:#6B6B6B;font-size:18px}
+      .label{font-family:'DejaVu Sans',Arial,sans-serif;font-weight:800;fill:#2D2D2D;font-size:18px}
+      .card{stroke:#2D2D2D;stroke-width:3.2;filter:url(#shadow)}
+      .dash{stroke:#2D2D2D;stroke-width:3;stroke-dasharray:8 8;fill:none;opacity:.55}
+      .arrow{stroke:#2D2D2D;stroke-width:5;fill:none;stroke-linecap:round;stroke-linejoin:round}
+      .doodle{stroke:#E8655A;stroke-width:4;fill:none;stroke-linecap:round}
+    </style>
+    <marker id="arrowhead" markerWidth="13" markerHeight="10" refX="10" refY="5" orient="auto">
+      <path d="M0,0 L12,5 L0,10 z" fill="#2D2D2D"/>
+    </marker>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#paper)"/>
+
+  <!-- Header -->
+  <text x="540" y="88" text-anchor="middle" class="title">ALUR UJIAN ASESMEN CBT</text>
+  <text x="540" y="126" text-anchor="middle" class="subtitle">Dari persiapan data sampai nilai, analisis, dan arsip selesai</text>
+  <path d="M250 145 C360 160, 710 160, 830 145" class="doodle"/>
+
+  <!-- Legend -->
+  <rect x="70" y="168" width="940" height="84" rx="30" fill="#FFF9F0" stroke="#2D2D2D" stroke-width="2.6"/>
+  <circle cx="115" cy="210" r="15" fill="#A8D8EA" stroke="#2D2D2D" stroke-width="2"/><text x="140" y="217" class="small">Admin/Panitia</text>
+  <circle cx="320" cy="210" r="15" fill="#B5E5CF" stroke="#2D2D2D" stroke-width="2"/><text x="345" y="217" class="small">Guru Mapel</text>
+  <circle cx="510" cy="210" r="15" fill="#FFD5C2" stroke="#2D2D2D" stroke-width="2"/><text x="535" y="217" class="small">Proktor/Pengawas</text>
+  <circle cx="765" cy="210" r="15" fill="#D5C6E0" stroke="#2D2D2D" stroke-width="2"/><text x="790" y="217" class="small">Siswa</text>
+
+  <!-- Center Road -->
+  <path d="M540 280 C520 390,560 490,540 600 C520 710,560 810,540 920 C520 1030,560 1130,540 1240 C520 1350,560 1450,540 1560 C530 1640,545 1710,540 1780" class="arrow" marker-end="url(#arrowhead)" opacity="0.65"/>
+
+  <!-- Cards -->
+  <g transform="translate(70,290)">
+    <rect class="card" width="420" height="150" rx="28" fill="#A8D8EA"/>
+    <circle cx="50" cy="50" r="30" fill="#E8655A" stroke="#2D2D2D" stroke-width="3"/><text x="50" y="61" text-anchor="middle" class="stepnum">1</text>
+    <text x="96" y="47" class="head">Setup Akademik</text>
+    <text x="96" y="82" class="body">TA/semester aktif, rombel, siswa,</text>
+    <text x="96" y="111" class="body">guru mapel, dan ruang siap.</text>
+    <text x="96" y="138" class="small">Output: data peserta valid</text>
+  </g>
+  <g transform="translate(590,290)">
+    <rect class="card" width="420" height="150" rx="28" fill="#B5E5CF"/>
+    <circle cx="50" cy="50" r="30" fill="#E8655A" stroke="#2D2D2D" stroke-width="3"/><text x="50" y="61" text-anchor="middle" class="stepnum">2</text>
+    <text x="96" y="47" class="head">Bank Soal</text>
+    <text x="96" y="82" class="body">Guru buat/edit soal, kunci,</text>
+    <text x="96" y="111" class="body">metadata, lalu ajukan review.</text>
+    <text x="96" y="138" class="small">Output: soal approved/published</text>
+  </g>
+
+  <g transform="translate(70,500)">
+    <rect class="card" width="420" height="150" rx="28" fill="#B5E5CF"/>
+    <circle cx="50" cy="50" r="30" fill="#E8655A" stroke="#2D2D2D" stroke-width="3"/><text x="50" y="61" text-anchor="middle" class="stepnum">3</text>
+    <text x="96" y="47" class="head">Review & Validasi</text>
+    <text x="96" y="82" class="body">Reviewer cek kualitas, kunci,</text>
+    <text x="96" y="111" class="body">level, dan kelengkapan soal.</text>
+    <text x="96" y="138" class="small">Revisi bila belum layak</text>
+  </g>
+  <g transform="translate(590,500)">
+    <rect class="card" width="420" height="150" rx="28" fill="#A8D8EA"/>
+    <circle cx="50" cy="50" r="30" fill="#E8655A" stroke="#2D2D2D" stroke-width="3"/><text x="50" y="61" text-anchor="middle" class="stepnum">4</text>
+    <text x="96" y="47" class="head">Paket Soal</text>
+    <text x="96" y="82" class="body">Pilih mapel/rombel, jumlah PG</text>
+    <text x="96" y="111" class="body">+ essay, acak soal/opsi.</text>
+    <text x="96" y="138" class="small">Output: paket siap ujian</text>
+  </g>
+
+  <g transform="translate(70,710)">
+    <rect class="card" width="420" height="150" rx="28" fill="#A8D8EA"/>
+    <circle cx="50" cy="50" r="30" fill="#E8655A" stroke="#2D2D2D" stroke-width="3"/><text x="50" y="61" text-anchor="middle" class="stepnum">5</text>
+    <text x="96" y="47" class="head">Kegiatan Ujian</text>
+    <text x="96" y="82" class="body">Buat event asesmen, jadwal,</text>
+    <text x="96" y="111" class="body">target kelas, sesi, durasi.</text>
+    <text x="96" y="138" class="small">Status awal: draft</text>
+  </g>
+  <g transform="translate(590,710)">
+    <rect class="card" width="420" height="150" rx="28" fill="#FFD5C2"/>
+    <circle cx="50" cy="50" r="30" fill="#E8655A" stroke="#2D2D2D" stroke-width="3"/><text x="50" y="61" text-anchor="middle" class="stepnum">6</text>
+    <text x="96" y="47" class="head">Ruang & Token</text>
+    <text x="96" y="82" class="body">Assign peserta, ruang virtual,</text>
+    <text x="96" y="111" class="body">nomor kursi, token ujian.</text>
+    <text x="96" y="138" class="small">Output: kartu/token siap</text>
+  </g>
+
+  <g transform="translate(70,920)">
+    <rect class="card" width="420" height="150" rx="28" fill="#FFD5C2"/>
+    <circle cx="50" cy="50" r="30" fill="#E8655A" stroke="#2D2D2D" stroke-width="3"/><text x="50" y="61" text-anchor="middle" class="stepnum">7</text>
+    <text x="96" y="47" class="head">Publish & Briefing</text>
+    <text x="96" y="82" class="body">Aktifkan event, cek kesiapan,</text>
+    <text x="96" y="111" class="body">bagikan instruksi ke siswa.</text>
+    <text x="96" y="138" class="small">Guard: token/reveal time</text>
+  </g>
+  <g transform="translate(590,920)">
+    <rect class="card" width="420" height="150" rx="28" fill="#D5C6E0"/>
+    <circle cx="50" cy="50" r="30" fill="#E8655A" stroke="#2D2D2D" stroke-width="3"/><text x="50" y="61" text-anchor="middle" class="stepnum">8</text>
+    <text x="96" y="47" class="head">Siswa Mengerjakan</text>
+    <text x="96" y="82" class="body">Login, masuk sesi, jawab PG</text>
+    <text x="96" y="111" class="body">dan essay, lalu submit.</text>
+    <text x="96" y="138" class="small">Tersimpan per peserta</text>
+  </g>
+
+  <g transform="translate(70,1130)">
+    <rect class="card" width="420" height="150" rx="28" fill="#FFD5C2"/>
+    <circle cx="50" cy="50" r="30" fill="#E8655A" stroke="#2D2D2D" stroke-width="3"/><text x="50" y="61" text-anchor="middle" class="stepnum">9</text>
+    <text x="96" y="47" class="head">Monitoring Proktor</text>
+    <text x="96" y="82" class="body">Pantau hadir, progres, submit,</text>
+    <text x="96" y="111" class="body">kendala perangkat/jaringan.</text>
+    <text x="96" y="138" class="small">Intervensi tercatat</text>
+  </g>
+  <g transform="translate(590,1130)">
+    <rect class="card" width="420" height="150" rx="28" fill="#B5E5CF"/>
+    <circle cx="50" cy="50" r="30" fill="#E8655A" stroke="#2D2D2D" stroke-width="3"/><text x="50" y="61" text-anchor="middle" class="stepnum">10</text>
+    <text x="96" y="47" class="head">Koreksi & Nilai</text>
+    <text x="96" y="82" class="body">PG otomatis, essay dikoreksi,</text>
+    <text x="96" y="111" class="body">nilai dihitung per sesi/paket.</text>
+    <text x="96" y="138" class="small">Output: skor final</text>
+  </g>
+
+  <g transform="translate(70,1340)">
+    <rect class="card" width="420" height="150" rx="28" fill="#A8D8EA"/>
+    <circle cx="50" cy="50" r="30" fill="#E8655A" stroke="#2D2D2D" stroke-width="3"/><text x="50" y="61" text-anchor="middle" class="stepnum">11</text>
+    <text x="96" y="47" class="head">Analisis Hasil</text>
+    <text x="96" y="82" class="body">Rekap nilai, ketuntasan,</text>
+    <text x="96" y="111" class="body">analisis butir, remedial.</text>
+    <text x="96" y="138" class="small">Output: laporan guru/panitia</text>
+  </g>
+  <g transform="translate(590,1340)">
+    <rect class="card" width="420" height="150" rx="28" fill="#D5C6E0"/>
+    <circle cx="50" cy="50" r="30" fill="#E8655A" stroke="#2D2D2D" stroke-width="3"/><text x="50" y="61" text-anchor="middle" class="stepnum">12</text>
+    <text x="96" y="47" class="head">Finalisasi & Arsip</text>
+    <text x="96" y="82" class="body">Kunci hasil, ekspor rekap,</text>
+    <text x="96" y="111" class="body">arsip event dan audit trail.</text>
+    <text x="96" y="138" class="small">Selesai & siap audit</text>
+  </g>
+
+  <!-- Checkpoints -->
+  <rect x="92" y="1550" width="896" height="195" rx="34" fill="#FFF9F0" stroke="#2D2D2D" stroke-width="3"/>
+  <text x="540" y="1602" text-anchor="middle" class="head">CHECKPOINT WAJIB SEBELUM UJIAN DIMULAI</text>
+  <g class="body">
+    <text x="130" y="1650">✓ Siswa target sudah masuk rombel dan akun aktif</text>
+    <text x="130" y="1682">✓ Soal approved/published dan paket memenuhi target</text>
+    <text x="130" y="1714">✓ Sesi, ruang, peserta, token, dan jadwal sudah dicek</text>
+  </g>
+  <g transform="translate(805,1650)">
+    <circle cx="40" cy="34" r="26" fill="#B5E5CF" stroke="#2D2D2D" stroke-width="3"/>
+    <path d="M28 35 L38 45 L56 23" stroke="#2D2D2D" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Footer takeaway -->
+  <rect x="70" y="1782" width="940" height="90" rx="32" fill="#E8655A" stroke="#2D2D2D" stroke-width="3.5"/>
+  <text x="540" y="1813" text-anchor="middle" style="font-family:DejaVu Sans,Arial,sans-serif;font-weight:900;fill:white;font-size:25px">Data valid → soal valid → paket valid → pelaksanaan terkendali</text>
+  <text x="540" y="1844" text-anchor="middle" style="font-family:DejaVu Sans,Arial,sans-serif;font-weight:900;fill:white;font-size:25px">→ hasil siap dipertanggungjawabkan</text>
+  <text x="540" y="1868" text-anchor="middle" style="font-family:DejaVu Sans,Arial,sans-serif;font-weight:700;fill:white;font-size:17px">MTsN 2 Kolaka Utara • Alur operasional asesmen CBT</text>
+
+  <!-- Doodles -->
+  <path d="M72 90 l20 0 m-10 -10 l0 20" class="doodle" opacity=".7"/>
+  <path d="M980 82 c12 -20 32 10 0 24 c-30 -14 -10 -44 0 -24" class="doodle" opacity=".7"/>
+  <path d="M100 1840 c20 -10 40 -10 60 0" class="doodle" opacity=".7"/>
+</svg>

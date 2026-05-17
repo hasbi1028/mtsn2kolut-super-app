@@ -58,7 +58,7 @@
 			description: 'Referensi kontrak layanan ujian dan daftar pemeriksaan kesesuaian data yang dikirim ke aplikasi siswa.'
 		},
 		{
-			title: 'Format Catatan Rilis Data Ujian',
+			title: 'Format Catatan Rilis Ujian',
 			path: 'docs/exam-payload-release-template.md',
 			description: 'Format catatan rilis setiap kali layanan sistem mengubah data ujian yang menyentuh aplikasi siswa.'
 		},

@@ -107,7 +107,7 @@
 	}
 
 	function statusLabel(value?: string) {
-		return { published: 'Terbit', draft: 'Draft', review: 'Review', archived: 'Arsip', rejected: 'Ditolak' }[value ?? ''] ?? (value || 'Belum');
+		return { published: 'Terbit', draft: 'Konsep', review: 'Review', archived: 'Arsip', rejected: 'Ditolak' }[value ?? ''] ?? (value || 'Belum');
 	}
 
 	function userDisplayName(item: Pick<PoolQuestion, 'author_display_name' | 'author_username'>) {
@@ -294,7 +294,7 @@
 			</div>
 
 			<Card.Root>
-				<Card.Header><Card.Title class="text-base">Metadata Paket</Card.Title><Card.Description>{isLocked ? 'Paket terkunci. Buat revisi jika perlu mengubah.' : 'Edit identitas, durasi, randomisasi, dan target blueprint.'}</Card.Description></Card.Header>
+				<Card.Header><Card.Title class="text-base">Identitas Paket</Card.Title><Card.Description>{isLocked ? 'Paket terkunci. Buat revisi jika perlu mengubah.' : 'Edit identitas, durasi, pengacakan, dan target kisi-kisi.'}</Card.Description></Card.Header>
 				<Card.Content class="grid gap-3 md:grid-cols-3">
 					<label class="space-y-1 md:col-span-2"><span class="text-xs text-muted-foreground">Nama Paket</span><Input bind:value={title} disabled={isLocked} /></label>
 					<label class="space-y-1"><span class="text-xs text-muted-foreground">Durasi menit</span><Input type="number" bind:value={duration} min="1" max="360" disabled={isLocked} /></label>
@@ -307,14 +307,14 @@
 						<label><input type="checkbox" bind:checked={active} disabled={isLocked} /> Aktif</label>
 					</div>
 					<div class="md:col-span-3 flex gap-2">
-						<LoadingButton onclick={saveMetadata} loading={busy === 'metadata'} disabled={isLocked}>Simpan Metadata</LoadingButton>
-						<LoadingButton variant="outline" onclick={clonePackage} loading={busy === 'clone'}>Buat Revisi/Clone</LoadingButton>
+						<LoadingButton onclick={saveMetadata} loading={busy === 'metadata'} disabled={isLocked}>Simpan Identitas</LoadingButton>
+						<LoadingButton variant="outline" onclick={clonePackage} loading={busy === 'clone'}>Buat Revisi/Salinan</LoadingButton>
 					</div>
 				</Card.Content>
 			</Card.Root>
 
 			<div class="flex flex-wrap gap-2">
-				{#each [['questions','Soal Dalam Paket'], ['pool','Tambah dari Bank Soal'], ['blueprint','Blueprint/Mutu'], ['lock','Lock/Snapshot']] as tab}
+				{#each [['questions','Soal Dalam Paket'], ['pool','Tambah dari Bank Soal'], ['blueprint','Kisi-kisi & Mutu'], ['lock','Kunci & Salinan']] as tab}
 					<button class={`rounded-md border px-3 py-2 text-sm ${activeTab === tab[0] ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`} onclick={() => activeTab = tab[0] as typeof activeTab}>{tab[1]}</button>
 				{/each}
 			</div>
@@ -343,10 +343,10 @@
 									<option value="all">Semua jenis</option><option value="multiple_choice">Pilihan Ganda</option><option value="essay">Essay</option><option value="true_false">Benar/Salah</option><option value="short_answer">Isian</option>
 								</select>
 								<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={poolStatus}>
-									<option value="published">Terbit saja</option><option value="all">Semua status</option><option value="draft">Draft</option><option value="review">Review</option><option value="archived">Arsip</option>
+									<option value="published">Terbit saja</option><option value="all">Semua status</option><option value="draft">Konsep</option><option value="review">Verifikasi</option><option value="archived">Arsip</option>
 								</select>
 								<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={poolMetadata}>
-									<option value="all">Semua metadata</option><option value="complete">Metadata lengkap</option><option value="gap">Metadata kurang</option>
+									<option value="all">Semua identitas</option><option value="complete">Identitas lengkap</option><option value="gap">Identitas kurang</option>
 								</select>
 								<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={poolCognitive}>
 									<option value="all">Semua level</option><option value="C1">C1</option><option value="C2">C2</option><option value="C3">C3</option><option value="C4">C4</option><option value="C5">C5</option><option value="C6">C6</option>
@@ -368,10 +368,10 @@
 									<option value="all">Semua pemakaian</option><option value="unused">Belum dipakai paket</option><option value="used">Sudah dipakai paket</option>
 								</select>
 								<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={poolSort}>
-									<option value="metadata_first">Metadata lengkap dulu</option><option value="newest">Terbaru dibuat</option><option value="oldest">Terlama dibuat</option><option value="author">Pembuat A-Z</option><option value="unused_first">Belum dipakai dulu</option><option value="hots_first">HOTS dulu</option><option value="difficulty">Kesulitan</option><option value="type">Jenis soal</option><option value="code">Kode A-Z</option>
+									<option value="metadata_first">Identitas lengkap dulu</option><option value="newest">Terbaru dibuat</option><option value="oldest">Terlama dibuat</option><option value="author">Pembuat A-Z</option><option value="unused_first">Belum dipakai dulu</option><option value="hots_first">HOTS dulu</option><option value="difficulty">Kesulitan</option><option value="type">Jenis soal</option><option value="code">Kode A-Z</option>
 								</select>
 							</div>
-							{#if poolStatus !== 'published'}<p class="mt-2 text-xs text-warning">Mode audit: soal belum Terbit bisa dilihat, tetapi backend tetap menolak jika dimasukkan ke paket resmi.</p>{/if}
+							{#if poolStatus !== 'published'}<p class="mt-2 text-xs text-warning">Mode pemeriksaan: soal belum Terbit bisa dilihat, tetapi layanan sistem tetap menolak jika dimasukkan ke paket resmi.</p>{/if}
 						</div>
 						<button class="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50" disabled={isLocked || selectedQuestions.length === 0} onclick={addSelected}>Tambah {selectedQuestions.length} Soal</button>
 						<div class="grid gap-2 md:grid-cols-2">
@@ -391,7 +391,7 @@
 												{#if userDisplayName(q)}<Badge variant="outline">Pembuat: {userDisplayName(q)}</Badge>{/if}
 												{#if q.created_at}<Badge variant="outline">{dateLabel(q.created_at)}</Badge>{/if}
 												{#if Number(q.package_count ?? 0) > 0}<Badge variant="outline">Dipakai {q.package_count} paket</Badge>{:else}<Badge variant="outline">Belum dipakai</Badge>{/if}
-												{#if hasMetadataGap(q)}<Badge class="bg-warning/10 text-warning border-warning/30">Metadata kurang</Badge>{/if}
+												{#if hasMetadataGap(q)}<Badge class="bg-warning/10 text-warning border-warning/30">Identitas kurang</Badge>{/if}
 											</div>
 											{#if q.material_topic}<p class="mt-1 text-xs text-muted-foreground">Materi: {q.material_topic}</p>{/if}
 										</div>
@@ -402,9 +402,9 @@
 					</Card.Content>
 				</Card.Root>
 			{:else if activeTab === 'blueprint'}
-				<Card.Root><Card.Header><Card.Title class="text-base">Blueprint & Mutu</Card.Title></Card.Header><Card.Content class="grid gap-3 md:grid-cols-3"><div class="rounded-xl border p-4"><p class="text-xs text-muted-foreground">Status</p><p class="text-lg font-semibold">{detail.readiness.status}</p></div><div class="rounded-xl border p-4"><p class="text-xs text-muted-foreground">Metadata kurang</p><p class="text-lg font-semibold">{rows.filter(hasMetadataGap).length}</p></div><div class="rounded-xl border p-4"><p class="text-xs text-muted-foreground">HOTS</p><p class="text-lg font-semibold">{rows.filter((r) => r.hots_flag).length}</p></div><div class="md:col-span-3 text-sm text-muted-foreground">Distribusi: PG {countType(rows, 'multiple_choice')}, Essay {countType(rows, 'essay')}. Lengkapi CP/TP/KD dan level kognitif di Bank Soal untuk menutup gap metadata.</div></Card.Content></Card.Root>
+				<Card.Root><Card.Header><Card.Title class="text-base">Kisi-kisi & Mutu</Card.Title></Card.Header><Card.Content class="grid gap-3 md:grid-cols-3"><div class="rounded-xl border p-4"><p class="text-xs text-muted-foreground">Status</p><p class="text-lg font-semibold">{detail.readiness.status}</p></div><div class="rounded-xl border p-4"><p class="text-xs text-muted-foreground">Identitas kurang</p><p class="text-lg font-semibold">{rows.filter(hasMetadataGap).length}</p></div><div class="rounded-xl border p-4"><p class="text-xs text-muted-foreground">HOTS</p><p class="text-lg font-semibold">{rows.filter((r) => r.hots_flag).length}</p></div><div class="md:col-span-3 text-sm text-muted-foreground">Distribusi: PG {countType(rows, 'multiple_choice')}, Essay {countType(rows, 'essay')}. Lengkapi CP/TP/KD dan level kognitif di Bank Soal untuk menutup kekurangan identitas soal.</div></Card.Content></Card.Root>
 			{:else}
-				<Card.Root><Card.Header><Card.Title class="text-base">Lock / Snapshot / Revisi</Card.Title><Card.Description>Paket locked tidak bisa diedit langsung; gunakan clone/revisi untuk perubahan audit-safe.</Card.Description></Card.Header><Card.Content class="space-y-3"><p class="text-sm">Status: {isLocked ? `Terkunci (${detail.package.locked_at})` : 'Belum terkunci'}</p>{#if detail.package.lock_reason}<p class="text-sm text-muted-foreground">Alasan: {detail.package.lock_reason}</p>{/if}<div class="flex gap-2"><LoadingButton onclick={lockPackage} loading={busy === 'lock'} disabled={isLocked}>Kunci + Snapshot</LoadingButton><LoadingButton variant="outline" onclick={clonePackage} loading={busy === 'clone'}>Buat Revisi/Clone</LoadingButton></div></Card.Content></Card.Root>
+				<Card.Root><Card.Header><Card.Title class="text-base">Kunci / Salinan Kondisi / Revisi</Card.Title><Card.Description>Paket terkunci tidak bisa diedit langsung; gunakan salin/revisi agar riwayat perubahan tetap aman.</Card.Description></Card.Header><Card.Content class="space-y-3"><p class="text-sm">Status: {isLocked ? `Terkunci (${detail.package.locked_at})` : 'Belum terkunci'}</p>{#if detail.package.lock_reason}<p class="text-sm text-muted-foreground">Alasan: {detail.package.lock_reason}</p>{/if}<div class="flex gap-2"><LoadingButton onclick={lockPackage} loading={busy === 'lock'} disabled={isLocked}>Kunci + Simpan Salinan Kondisi</LoadingButton><LoadingButton variant="outline" onclick={clonePackage} loading={busy === 'clone'}>Buat Revisi/Salinan</LoadingButton></div></Card.Content></Card.Root>
 			{/if}
 		{/if}
 		{/snippet}

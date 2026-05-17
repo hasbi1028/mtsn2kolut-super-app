@@ -54,7 +54,7 @@
 	let importIntroCopy = $derived(
 		specialEventQuestionMode
 			? 'Berkas data disimpan sebagai soal khusus kegiatan terpilih. Pakai mode ini hanya untuk stok kegiatan yang tidak boleh masuk bank soal pakai ulang.'
-			: 'Berkas data disimpan sebagai konsep Bank Soal pakai ulang tanpa kegiatan khusus, sehingga bisa dipakai ulang lintas paket.'
+			: 'Berkas data disimpan sebagai konsep Bank Soal umum tanpa kegiatan khusus, sehingga bisa dipakai ulang lintas paket.'
 	);
 	let importScopeCopy = $derived(
 		specialEventQuestionMode
@@ -184,7 +184,7 @@
 						</p>
 					{/if}
 					{#if importResult.errors.length > 0}
-						<p class="mt-3 border-t border-success/20 pt-2 text-xs font-semibold text-warning">Error import ditampilkan agar kolom wajib, format tipe, dan encoding bisa diperbaiki sebelum upload ulang.</p>
+						<p class="mt-3 border-t border-success/20 pt-2 text-xs font-semibold text-warning">Masalah impor ditampilkan agar kolom wajib, format tipe, dan encoding bisa diperbaiki sebelum upload ulang.</p>
 					<ul class="mt-3 space-y-1 border-t border-success/20 pt-2 text-xs text-warning">
 						{#each importResult.errors.slice(0, 6) as error (`legacy-import-error-${error}`)}
 							<li>{error}</li>
@@ -202,7 +202,7 @@
 		<div class="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
 			<Button variant="outline" onclick={onBack}>Kembali ke Daftar</Button>
 				<LoadingButton onclick={onDryRun} loading={importBusy} loadingLabel="Pratinjau..." disabled={importBusy || !importSubjectId || !hasImportFile} variant="outline" class="disabled:opacity-50">
-					Pratinjau Dry-run
+					Cek Data
 				</LoadingButton>
 				<LoadingButton onclick={onConfirmImport} loading={importBusy} loadingLabel="Import..." disabled={importBusy || !canConfirmImport} class="bg-success text-background hover:bg-success disabled:opacity-50">
 					Konfirmasi Import

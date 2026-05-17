@@ -86,7 +86,7 @@
 	let approverName = $derived((question.approver_display_name || '').trim());
 	let approverUsername = $derived((question.approver_username || '').trim());
 
-	const reviewItems = [
+	const verifikasiItems = [
 		{ key: 'materi', label: 'Materi benar' },
 		{ key: 'opsi', label: 'Opsi tidak ambigu' },
 		{ key: 'kunci', label: 'Kunci/rubrik benar' },
@@ -112,7 +112,7 @@
 			</h2>
 			<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{lockMessage}</p>
 			<p class="mt-2 rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-sm font-medium text-primary">
-				Mode lihat. Draft lokal tidak digunakan di halaman detail ini.
+				Mode lihat. Konsep tersimpan tidak digunakan di halaman detail ini.
 			</p>
 		</div>
 		<div class="flex flex-wrap gap-2 lg:justify-end">
@@ -130,14 +130,14 @@
 				</Button>
 			{/if}
 			{#if canCreateRevision}
-				<Button type="button" class="h-9" onclick={onCreateRevision} aria-label="Buat draft revisi baru">
+				<Button type="button" class="h-9" onclick={onCreateRevision} aria-label="Buat konsep revisi baru">
 					Buat Revisi Baru
 				</Button>
 			{/if}
 		</div>
 	</header>
 
-	<section class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Metadata ringkas soal">
+	<section class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Identitas soal ringkas">
 		<div class="rounded-lg border border-border bg-muted/50 px-3 py-2">
 			<p class="text-xs font-semibold text-muted-foreground">Mata pelajaran</p>
 			<p class="mt-0.5 text-sm font-bold text-foreground">{question.subject_name || question.subject_code || '-'}</p>
@@ -184,7 +184,7 @@
 		<section class="space-y-4 rounded-xl border border-border bg-muted/40 p-4" aria-label="Isi soal">
 			{#if question.stimulus_html}
 				<div class="rounded-lg border border-border bg-card p-3">
-					<p class="mb-2 text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">Stimulus</p>
+					<p class="mb-2 text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">Bacaan/Gambar Pendukung</p>
 					<RichContent html={question.stimulus_html} class="prose prose-sm max-w-none text-foreground latex-preview" />
 				</div>
 			{/if}
@@ -248,7 +248,7 @@
 				<section class="rounded-xl border border-warning/30 bg-warning/10 p-4 text-warning shadow-sm" aria-label="Panel reviewer">
 					<div class="flex items-start justify-between gap-3">
 						<div>
-							<p class="text-xs font-black uppercase tracking-[0.18em]">Telaah Reviewer</p>
+							<p class="text-xs font-black uppercase tracking-[0.18em]">Telaah Pemeriksa Soal</p>
 							<h3 class="mt-1 text-sm font-bold">Checklist sebelum keputusan</h3>
 						</div>
 						<span class="rounded-full bg-card px-2 py-1 text-xs font-semibold">
@@ -256,7 +256,7 @@
 						</span>
 					</div>
 					<div class="mt-3 space-y-2">
-						{#each reviewItems as item (item.key)}
+						{#each verifikasiItems as item (item.key)}
 							<label class="flex cursor-pointer items-center gap-2 rounded-lg border border-warning/30 bg-card px-3 py-2 text-sm">
 								<input
 									type="checkbox"

@@ -110,11 +110,11 @@ class ExamRestoreFailedScreen extends StatelessWidget {
                                 ),
                                 _RestoreStatusChip(
                                   label:
-                                      '${snapshot.answers.length} jawaban lokal',
+                                      '${snapshot.answers.length} jawaban tersimpan',
                                 ),
                                 _RestoreStatusChip(
                                   label:
-                                      '${snapshot.pendingAnswers.length} belum tersinkron',
+                                      '${snapshot.pendingAnswers.length} perlu dikirim ulang',
                                   warning: snapshot.pendingAnswers.isNotEmpty,
                                 ),
                                 if (snapshot.lastServerContactIso
@@ -142,7 +142,7 @@ class ExamRestoreFailedScreen extends StatelessWidget {
                         width: double.infinity,
                         child: FilledButton(
                           onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('Kembali ke Login Token'),
+                          child: const Text('Kembali ke Login Token Ujian'),
                         ),
                       ),
                     ],

@@ -152,7 +152,7 @@
 	let createSessionHref = $derived(`${resolve('/asesmen/sesi/new')}${eventId ? `?event_id=${encodeURIComponent(eventId)}` : ''}`);
 
 	const statusLabel: Record<string, string> = {
-		draft: 'Draft', scheduled: 'Terjadwal', active: 'Berlangsung',
+		draft: 'Konsep', scheduled: 'Terjadwal', active: 'Berlangsung',
 		finished: 'Selesai', cancelled: 'Dibatalkan',
 	};
 	const readinessFilters: SessionReadinessFilter[] = [
@@ -245,7 +245,7 @@
 	}
 
 	function sessionActionLabel(status: string) {
-		if (status === 'draft') return 'Draft';
+		if (status === 'draft') return 'Konsep';
 		if (status === 'scheduled') return 'Terjadwal';
 		if (status === 'active') return 'Berlangsung';
 		if (status === 'finished') return 'Selesai';
@@ -751,7 +751,7 @@
 			fAllowCrossGrade = false; fIsSpecialEvent = false;
 			fTitle = ''; fStart = ''; fEnd = '';
 			showForm = false;
-			setOperationState('success', 'Sesi Tersimpan Sebagai Draft', 'Sesi baru sudah dibuat. Daftarkan peserta dan cek ruang sebelum menjadwalkan atau memulai sesi.');
+			setOperationState('success', 'Sesi Tersimpan Sebagai Konsep', 'Sesi baru sudah dibuat. Daftarkan peserta dan cek ruang sebelum menjadwalkan atau memulai sesi.');
 			showToast('Sesi ujian berhasil dibuat');
 			await refreshSessions();
 		} catch (error) {
@@ -760,7 +760,7 @@
 	}
 
 	async function deleteSession(id: string, title: string) {
-		if (!(await confirmPhrase('Hapus Sesi Ujian', `Sesi "${title}" hanya boleh dihapus jika masih Draft. Penghapusan akan membuang konfigurasi sesi dari daftar operator.`, 'HAPUS'))) return;
+		if (!(await confirmPhrase('Hapus Sesi Ujian', `Sesi "${title}" hanya boleh dihapus jika masih Konsep. Penghapusan akan membuang konfigurasi sesi dari daftar operator.`, 'HAPUS'))) return;
 		deleteBusyId = id;
 		try {
 			const res = await fetch(sessionLegacyMutationPath(id), { method: 'DELETE' });
@@ -769,7 +769,7 @@
 			showToast('Sesi dihapus');
 			await refreshSessions();
 		} catch (error) {
-			setOperationState('error', 'Sesi Gagal Dihapus', 'Hanya sesi berstatus Draft yang dapat dihapus. Ubah alur kerja sesi atau periksa statusnya terlebih dahulu.');
+			setOperationState('error', 'Sesi Gagal Dihapus', 'Hanya sesi berstatus Konsep yang dapat dihapus. Ubah alur kerja sesi atau periksa statusnya terlebih dahulu.');
 			showToast(mutationErrorMessage(error, 'Gagal menghapus sesi ujian. Periksa koneksi lalu coba lagi.'), false);
 		} finally {
 			deleteBusyId = '';
@@ -907,7 +907,7 @@
 			<div class="flex flex-wrap items-start justify-between gap-3">
 				<div>
 					<p class="font-semibold">Sesi untuk kegiatan: {eventContext?.title ?? eventId}</p>
-					<p class="mt-1 text-success">Daftar sesi dan payload pembuatan sesi membawa <code class="rounded bg-card px-1">event_id</code>. Item global atau event lain disembunyikan agar tidak terbaca sebagai sesi kegiatan ini.</p>
+					<p class="mt-1 text-success">Daftar sesi dan data pembuatan sesi otomatis tertaut ke kegiatan ini. Item umum atau kegiatan lain disembunyikan agar tidak terbaca sebagai sesi kegiatan ini.</p>
 				</div>
 				<a href={resolve(`/asesmen/paket?event_id=${eventId}`)} class="rounded-md border border-success/20 bg-card px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Paket Kegiatan</a>
 			</div>
@@ -920,9 +920,9 @@
 
 	{#if hiddenEventSessionCount > 0 || hiddenEventPackageCount > 0}
 		<div class="rounded-xl border border-accent bg-accent/60 px-4 py-3 text-sm text-accent-foreground">
-			<p class="font-semibold">Item di luar event disembunyikan dari layar ini.</p>
+			<p class="font-semibold">Item di luar kegiatan disembunyikan dari layar ini.</p>
 			<p class="mt-1">
-				{hiddenEventSessionCount} sesi dan {hiddenEventPackageCount} paket global/event lain tidak ditampilkan karena <code class="rounded bg-card px-1">event_id</code> tidak sama dengan kegiatan aktif.
+				{hiddenEventSessionCount} sesi dan {hiddenEventPackageCount} paket umum/kegiatan lain tidak ditampilkan karena penanda kegiatan tidak sama dengan kegiatan aktif.
 			</p>
 		</div>
 	{/if}
@@ -947,7 +947,7 @@
 							{/each}
 						</select>
 						{#if hiddenEventPackageCount > 0}
-							<p class="mt-1 text-[11px] text-accent-foreground">{hiddenEventPackageCount} paket global/event lain disembunyikan dari pilihan sesi event ini.</p>
+							<p class="mt-1 text-[11px] text-accent-foreground">{hiddenEventPackageCount} paket umum/kegiatan lain disembunyikan dari pilihan sesi kegiatan ini.</p>
 						{/if}
 					</div>
 					{#if fPackageId}
@@ -983,7 +983,7 @@
 							{:else if quality.missingCount > 0}
 								<p class="mt-2 text-xs font-medium text-warning">Sesi masih boleh dibuat, tetapi {quality.missingCount} soal belum lengkap CP/TP/KD atau level kognitif.</p>
 							{:else}
-								<p class="mt-2 text-xs font-medium text-primary">Paket siap dipakai untuk draft sesi CBT.</p>
+								<p class="mt-2 text-xs font-medium text-primary">Paket siap dipakai untuk konsep sesi CBT.</p>
 							{/if}
 						</div>
 					{/if}
@@ -1309,7 +1309,7 @@
 					{/if}
 				</div>
 				{#if hiddenSessions > 0}
-					<Card.Description>{hiddenSessions} sesi global atau event lain disembunyikan dari daftar event ini.</Card.Description>
+					<Card.Description>{hiddenSessions} sesi umum atau kegiatan lain disembunyikan dari daftar event ini.</Card.Description>
 				{/if}
 				<div class="flex flex-wrap gap-1.5">
 					{#each readinessFilterOptions as option (option.filter)}

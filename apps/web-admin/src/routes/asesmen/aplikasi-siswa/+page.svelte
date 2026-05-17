@@ -263,7 +263,7 @@
 		<Card.Header>
 			<Card.Title class="text-lg text-foreground">Artefak Operasional</Card.Title>
 			<Card.Description>
-				Gunakan dokumen ini di repositori yang sama untuk uji coba lapangan dan pemeriksaan kesesuaian layanan sistem dengan aplikasi siswa.
+				Gunakan dokumen ini di daftar panduan yang sama untuk uji coba lapangan dan pemeriksaan kesesuaian layanan sistem dengan aplikasi siswa.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="grid gap-4 lg:grid-cols-5">

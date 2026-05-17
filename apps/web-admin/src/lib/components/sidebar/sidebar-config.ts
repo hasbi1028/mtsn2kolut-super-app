@@ -79,11 +79,11 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		]
 	},
 	{
-		group: 'Asesmen / CBT',
+		group: 'Asesmen Ujian',
 		items: [
-			{ href: '/asesmen', label: 'Hari Ini / Dashboard CBT', icon: 'grid', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor', 'asesmen.result_read', 'asesmen.score'] },
+			{ href: '/asesmen', label: 'Hari Ini / Dashboard Ujian', icon: 'grid', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor', 'asesmen.result_read', 'asesmen.score'] },
 			{ href: '/asesmen/persiapan', label: 'Persiapan Ujian', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
-			{ href: '/asesmen/pelaksanaan', label: 'Monitor Ujian', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
+			{ href: '/asesmen/pelaksanaan', label: 'Pemantauan Ujian', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
 			{ href: '/asesmen/hasil', label: 'Hasil & BA', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.result_read'] },
 			{ href: '/asesmen/kegiatan', label: 'Arsip', icon: 'archive', roles: ['admin', 'guru'], permissions: ['asesmen.read', 'asesmen.event_manage'] },
 			{ href: '/asesmen/aplikasi-siswa', label: 'Aplikasi Siswa', icon: 'package', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor'] }

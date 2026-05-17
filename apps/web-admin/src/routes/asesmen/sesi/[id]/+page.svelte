@@ -708,7 +708,7 @@
 		const params = new URLSearchParams({ per_page: '30' });
 		try {
 			const res = await fetch(clientApiPathWithQuery(clientApiPath`/api/asesmen/sessions/${sessionId}/audit-logs`, params));
-			const rows = await readClientApiData<AuditLog[]>(res, 'Gagal memuat audit operasi');
+			const rows = await readClientApiData<AuditLog[]>(res, 'Gagal memuat catatan tindakan');
 			if (requestId !== auditLogsRequestId) return;
 			auditLogs = Array.isArray(rows) ? rows : [];
 		} catch (error) {
@@ -787,9 +787,9 @@
 		if (revisionBusyId) return;
 		const questionLabel = row.question_code || `nomor ${row.position}`;
 		if (!(await confirmAction({
-			title: 'Buat Draft Revisi Soal',
-			message: `Sistem akan menduplikasi butir ${questionLabel} menjadi draft revisi di bank soal. Soal asli tetap aman untuk riwayat ujian.`,
-			confirmLabel: 'Buat Draft Revisi',
+			title: 'Buat Konsep Revisi Soal',
+			message: `Sistem akan menduplikasi butir ${questionLabel} menjadi konsep revisi di bank soal. Soal asli tetap aman untuk riwayat ujian.`,
+			confirmLabel: 'Buat Konsep Revisi',
 			tone: 'warning',
 		}))) return;
 
@@ -802,12 +802,12 @@
 			});
 			const created = await readClientJson<QuestionRevisionResponse>(res);
 			const codeText = created.code ? ` (${created.code})` : '';
-			setOperationState('success', 'Draft Revisi Dibuat', `Butir ${questionLabel} sudah dibuat sebagai draft revisi${codeText}. Buka Bank Soal untuk menyunting isi, opsi, kunci, atau rubriknya.`);
-			toast.success('Draft revisi soal dibuat');
+			setOperationState('success', 'Konsep Revisi Dibuat', `Butir ${questionLabel} sudah dibuat sebagai konsep revisi${codeText}. Buka Bank Soal untuk menyunting isi, opsi, kunci, atau rubriknya.`);
+			toast.success('Konsep revisi soal dibuat');
 			await loadItemAnalysis();
 		} catch (error) {
-			const message = mutationErrorMessage(error, 'Gagal membuat draft revisi soal');
-			setOperationState('error', 'Draft Revisi Gagal', message);
+			const message = mutationErrorMessage(error, 'Gagal membuat konsep revisi soal');
+			setOperationState('error', 'Konsep Revisi Gagal', message);
 			toast.error(message);
 		} finally {
 			revisionBusyId = '';
@@ -1212,7 +1212,7 @@
 
 	function exportOperationalCSV() {
 		if (!session || !operationalRecap) return;
-		const header = csvRow(['Ruang', 'Handover', 'Peserta', 'Login', 'Submit', 'No Show', 'Atensi', 'Paksa Kirim Jawaban', 'Reset Akses', 'App Switch', 'Screenshot', 'Catatan Kejadian', 'Catatan Operator', 'Catatan Serah Terima']);
+		const header = csvRow(['Ruang', 'Handover', 'Peserta', 'Login', 'Submit', 'No Show', 'Atensi', 'Paksa Kirim Jawaban', 'Reset Akses', 'Keluar/Pindah Aplikasi', 'Percobaan Tangkapan Layar', 'Catatan Kejadian', 'Catatan Operator', 'Catatan Serah Terima']);
 		const rows = operationalRooms.map((room) => csvRow([
 			room.room_name,
 			handoverStatusLabel(room),
@@ -1242,7 +1242,7 @@
 			operationalRecap.app_switch_count,
 			operationalRecap.screenshot_attempt_count,
 			`${operationalRecap.incident_room_count} ruang punya catatan`,
-			`${operationalRecap.incident_event_count} event atensi`,
+			`${operationalRecap.incident_event_count} kejadian perhatian`,
 			`Generated ${new Date().toISOString()}`,
 		]);
 		const csv = [header, summary, ...rows].join('\n');
@@ -1370,7 +1370,7 @@
 				title={currentSession.title}
 				subtitle={`${currentSession.package_title} · ${currentSession.duration_minutes} menit · ${fmtDt(currentSession.scheduled_start)}`}
 				context={currentSession.class_code ? `Kelas ${currentSession.class_code}` : 'Lintas peserta'}
-				primaryAction={{ label: 'Buka Command Center', href: resolve(`/asesmen/sesi/${sessionId}/proctoring`) }}
+				primaryAction={{ label: 'Buka Panel Pengawasan', href: resolve(`/asesmen/sesi/${sessionId}/proctoring`) }}
 				secondaryAction={{ label: 'Berita Acara', href: resolve(`/asesmen/sesi/${sessionId}/minutes`) }}
 			>
 				{#snippet meta()}
@@ -1392,7 +1392,7 @@
 			<section class="grid gap-3 md:grid-cols-3" aria-label="Ringkasan sesi ujian">
 				<MetricCard label="Peserta hadir/total" value={operationalRecap ? `${operationalRecap.joined_count}/${operationalRecap.participant_count}` : `${stats.submitted}/${stats.total}`} helper={operationalRecap ? `${operationalRecap.no_show_count} belum hadir` : 'Menggunakan data hasil yang sudah termuat'} tone="success" />
 				<MetricCard label="Progress submit" value={operationalRecap ? `${operationalRecap.submitted_count}/${operationalRecap.participant_count}` : `${stats.submitted}/${stats.total}`} helper="Jawaban terkirim dan siap direkap" />
-				<MetricCard label="Masalah aktif" value={commandCenterIssues.length} helper={commandCenterIssues.length > 0 ? 'Buka Masalah/Insiden untuk tindak lanjut' : 'Belum ada atensi dari snapshot'} tone={commandCenterIssues.length > 0 ? 'warning' : 'success'} />
+				<MetricCard label="Masalah aktif" value={commandCenterIssues.length} helper={commandCenterIssues.length > 0 ? 'Buka masalah/kejadian untuk tindak lanjut' : 'Belum ada perhatian dari pantauan terbaru'} tone={commandCenterIssues.length > 0 ? 'warning' : 'success'} />
 			</section>
 
 			<BlockerPanel
@@ -1430,8 +1430,8 @@
 			{/if}
 
 			<details class="rounded-lg border border-border bg-card p-3 shadow-sm">
-				<summary class="cursor-pointer text-sm font-semibold text-foreground">Mode Lengkap: data teknis sesi</summary>
-				<div class="mt-3 grid gap-3 xl:grid-cols-3" role="tablist" aria-label="Navigasi teknis detail sesi CBT">
+				<summary class="cursor-pointer text-sm font-semibold text-foreground">Rincian lengkap: data sesi</summary>
+				<div class="mt-3 grid gap-3 xl:grid-cols-3" role="tablist" aria-label="Navigasi rincian detail sesi ujian">
 					{#each detailTabGroups as group (group.module)}
 						<section class="rounded-lg border border-border bg-muted/50 p-2">
 							<div class="mb-2 px-1">
@@ -1535,7 +1535,7 @@
 				</div>
 				<div class="flex flex-wrap gap-2">
 					<LoadingButton variant="outline" size="sm" onclick={() => void refreshItemAnalysis()} loading={itemAnalysisRefreshBusy} loadingLabel="Memuat..." disabled={itemAnalysisRefreshBusy}>
-						↻ Refresh
+						↻ Muat ulang
 					</LoadingButton>
 					<Button variant="outline" size="sm" onclick={exportItemAnalysisCSV} disabled={itemAnalysis.length === 0}>
 						↓ CSV Analisis
@@ -1686,7 +1686,7 @@
 													loadingLabel="Membuat..."
 													disabled={revisionBusyId !== '' && revisionBusyId !== row.question_id}
 												>
-													Buat Draft Revisi
+													Buat Konsep Revisi
 												</LoadingButton>
 											{/if}
 										</div>
@@ -1707,7 +1707,7 @@
 			<div id="panel-peserta" role="tabpanel" aria-labelledby="tab-peserta" class="space-y-4">
 			<div class="flex gap-2 flex-wrap">
 				<LoadingButton variant="outline" size="sm" onclick={() => void generateTokens()} loading={tokenBusy} disabled={tokenBusy} loadingLabel="Membuat kode ujian...">Buat Kode Ujian Massal</LoadingButton>
-				<LoadingButton variant="outline" size="sm" onclick={() => void refreshParticipants()} loading={participantRefreshBusy} loadingLabel="Memuat..." disabled={participantRefreshBusy}>↻ Refresh</LoadingButton>
+				<LoadingButton variant="outline" size="sm" onclick={() => void refreshParticipants()} loading={participantRefreshBusy} loadingLabel="Memuat..." disabled={participantRefreshBusy}>↻ Muat ulang</LoadingButton>
 			</div>
 			<OperationStatusPanel
 				tone="warning"
@@ -1725,7 +1725,7 @@
 								<Table.Head>L/P</Table.Head>
 								<Table.Head>Ruangan</Table.Head>
 								<Table.Head>No Meja</Table.Head>
-								<Table.Head>Token Rahasia</Table.Head>
+								<Table.Head>Token Ujian</Table.Head>
 								<Table.Head>Status</Table.Head>
 								<Table.Head class="text-right">Aksi</Table.Head>
 							</Table.Row>
@@ -1932,7 +1932,7 @@
 										<Table.Head>L/P</Table.Head>
 										<Table.Head>Ruangan</Table.Head>
 										<Table.Head>No Meja</Table.Head>
-										<Table.Head>Token Rahasia</Table.Head>
+										<Table.Head>Token Ujian</Table.Head>
 								</Table.Row>
 							</Table.Header>
 							<Table.Body>
@@ -1976,7 +1976,7 @@
 				</div>
 				<div class="flex flex-wrap gap-2">
 					<LoadingButton variant="outline" size="sm" onclick={() => void refreshOperationalRecap()} loading={operationalRefreshBusy} loadingLabel="Memuat..." disabled={operationalRefreshBusy}>
-						↻ Refresh
+						↻ Muat ulang
 					</LoadingButton>
 					<Button variant="outline" size="sm" onclick={exportOperationalCSV} disabled={!operationalRecap || operationalRooms.length === 0}>
 						↓ CSV Rekap
@@ -1994,11 +1994,11 @@
 			{#if operationalRecap}
 				<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
 					{#each [
-						{ label: 'Handover Terkunci', value: `${operationalRecap.handover_locked_count}/${operationalRecap.room_count}`, hint: `${operationalRecap.handover_missing_count} belum ada` },
+						{ label: 'Serah Terima Terkunci', value: `${operationalRecap.handover_locked_count}/${operationalRecap.room_count}`, hint: `${operationalRecap.handover_missing_count} belum ada` },
 						{ label: 'Kirim Jawaban Akhir', value: `${operationalRecap.submitted_count}/${operationalRecap.participant_count}`, hint: `${operationalRecap.no_show_count} belum login/no-show` },
-						{ label: 'Ruang Berinsiden', value: operationalRecap.incident_room_count.toString(), hint: `${operationalRecap.incident_event_count} event atensi` },
+						{ label: 'Ruang Berinsiden', value: operationalRecap.incident_room_count.toString(), hint: `${operationalRecap.incident_event_count} kejadian perhatian` },
 						{ label: 'Paksa Kirim Jawaban', value: operationalRecap.force_submit_count.toString(), hint: `${operationalRecap.reset_access_count} reset akses` },
-						{ label: 'Anti-Cheat', value: `${operationalRecap.app_switch_count}/${operationalRecap.screenshot_attempt_count}`, hint: 'app switch / screenshot' },
+						{ label: 'Anti-Cheat', value: `${operationalRecap.app_switch_count}/${operationalRecap.screenshot_attempt_count}`, hint: 'keluar/pindah aplikasi / percobaan tangkapan layar' },
 					] as item (item.label)}
 						<Card.Root class="border-success/20">
 							<Card.Content class="px-4 pb-3 pt-4">
@@ -2038,7 +2038,7 @@
 										</Table.Cell>
 										<Table.Cell>
 											<Badge variant="outline" class={handoverStatusClass(room)}>{handoverStatusLabel(room)}</Badge>
-											<p class="mt-1 text-[11px] text-muted-foreground">{room.locked_at ? fmtDt(room.locked_at) : room.handover_updated_at ? `Draft ${fmtDt(room.handover_updated_at)}` : 'Belum diisi'}</p>
+											<p class="mt-1 text-[11px] text-muted-foreground">{room.locked_at ? fmtDt(room.locked_at) : room.handover_updated_at ? `Konsep ${fmtDt(room.handover_updated_at)}` : 'Belum diisi'}</p>
 										</Table.Cell>
 										<Table.Cell class="text-center font-mono text-sm">
 											{room.submitted_count}/{room.participant_count}
@@ -2048,7 +2048,7 @@
 											<div class={room.suspicious_count > 0 || room.incident_event_count > 0 ? 'font-semibold text-destructive' : 'text-muted-foreground'}>
 												{room.suspicious_count} / {room.incident_event_count}
 											</div>
-											<div class="text-[11px] text-muted-foreground">flag / event</div>
+											<div class="text-[11px] text-muted-foreground">tanda atensi / kejadian</div>
 										</Table.Cell>
 										<Table.Cell class="text-center font-mono text-sm">{room.force_submit_count}/{room.reset_access_count}</Table.Cell>
 										<Table.Cell class="max-w-sm text-xs text-muted-foreground">
@@ -2092,17 +2092,17 @@
 			{@const selectedEventParticipant = proctoring.find((row) => row.participant_id === eventPanelParticipantId)}
 			<div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
 				<div>
-					<p class="text-sm font-medium text-foreground">Monitoring proctoring live</p>
+					<p class="text-sm font-medium text-foreground">Pemantauan ujian langsung</p>
 					<p class="text-xs text-muted-foreground">Pembaruan otomatis setiap 15 detik</p>
 				</div>
-				<LoadingButton variant="outline" size="sm" onclick={() => void refreshProctoring()} loading={proctoringRefreshBusy} loadingLabel="Memuat..." disabled={proctoringRefreshBusy}>↻ Refresh Sekarang</LoadingButton>
+				<LoadingButton variant="outline" size="sm" onclick={() => void refreshProctoring()} loading={proctoringRefreshBusy} loadingLabel="Memuat..." disabled={proctoringRefreshBusy}>↻ Muat ulang sekarang</LoadingButton>
 			</div>
 			<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 				{#each [
 					{ label: 'Online Aktif', value: proctoringStats.online.toString(), className: 'text-primary' },
 					{ label: 'Lambat / Offline', value: `${proctoringStats.slow + proctoringStats.offline}`, className: 'text-warning' },
 					{ label: 'Perlu Atensi', value: proctoringStats.suspicious.toString(), className: 'text-destructive' },
-					{ label: 'App Switch / Screenshot', value: `${proctoringStats.appSwitches} / ${proctoringStats.screenshots}`, className: 'text-foreground' },
+					{ label: 'Keluar/Pindah Aplikasi / Percobaan Tangkapan Layar', value: `${proctoringStats.appSwitches} / ${proctoringStats.screenshots}`, className: 'text-foreground' },
 				] as item (item.label)}
 					<Card.Root class="border-success/20">
 						<Card.Content class="px-4 pb-3 pt-4">
@@ -2121,10 +2121,10 @@
 								<Table.Head>Ruangan</Table.Head>
 								<Table.Head>Status</Table.Head>
 								<Table.Head class="text-center">Dijawab</Table.Head>
-								<Table.Head class="text-center">App Switch</Table.Head>
-								<Table.Head class="text-center">Screenshot</Table.Head>
+								<Table.Head class="text-center">Keluar/Pindah Aplikasi</Table.Head>
+								<Table.Head class="text-center">Percobaan Tangkapan Layar</Table.Head>
 								<Table.Head>Submit</Table.Head>
-								<Table.Head class="text-right">Aksi Proktor</Table.Head>
+								<Table.Head class="text-right">Aksi Pengawas</Table.Head>
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
@@ -2191,7 +2191,7 @@
 								</Table.Row>
 							{:else}
 								<Table.Row>
-									<Table.Cell colspan={8} class="text-center text-muted-foreground py-8">Belum ada data proctoring</Table.Cell>
+									<Table.Cell colspan={8} class="text-center text-muted-foreground py-8">Belum ada data pengawasan ujian</Table.Cell>
 								</Table.Row>
 							{/each}
 						</Table.Body>
@@ -2225,7 +2225,7 @@
 								</Button>
 							{/if}
 							<LoadingButton variant="outline" size="sm" onclick={() => void refreshProctoringEvents()} loading={eventRefreshBusy} loadingLabel="Memuat..." disabled={eventRefreshBusy}>
-								↻ Refresh Log
+								↻ Muat ulang catatan
 							</LoadingButton>
 						</div>
 					</div>
@@ -2269,11 +2269,11 @@
 		{:else if activeTab === 'audit'}
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<div>
-					<p class="text-sm font-medium text-foreground">Jejak audit operasional sesi</p>
-					<p class="text-xs text-muted-foreground">Mencatat perubahan jadwal, koreksi, proctoring, dan handover yang punya dampak operasional.</p>
+					<p class="text-sm font-medium text-foreground">Catatan tindakan operasional sesi</p>
+					<p class="text-xs text-muted-foreground">Mencatat perubahan jadwal, koreksi, pengawasan ujian, dan serah terima yang punya dampak operasional.</p>
 				</div>
 				<LoadingButton variant="outline" size="sm" onclick={() => void refreshAuditLogs()} loading={auditRefreshBusy} loadingLabel="Memuat..." disabled={auditRefreshBusy}>
-					↻ Refresh Audit
+					↻ Muat ulang catatan tindakan
 				</LoadingButton>
 			</div>
 
@@ -2303,7 +2303,7 @@
 								</Table.Row>
 							{:else}
 								<Table.Row>
-									<Table.Cell colspan={4} class="py-10 text-center text-sm text-muted-foreground">Belum ada audit operasional untuk sesi ini</Table.Cell>
+									<Table.Cell colspan={4} class="py-10 text-center text-sm text-muted-foreground">Belum ada catatan tindakan operasional untuk sesi ini</Table.Cell>
 								</Table.Row>
 							{/each}
 						</Table.Body>

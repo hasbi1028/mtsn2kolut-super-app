@@ -580,8 +580,8 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     setState(() {
       _answeredCount = _calculateAnsweredCount();
       _statusMessage = _pendingAnswers.isEmpty
-          ? 'Semua jawaban lokal berhasil disinkronkan ke server.'
-          : '$syncedCount jawaban lokal berhasil disinkronkan. Sisanya akan dicoba lagi.';
+          ? 'Semua jawaban berhasil dikirim ke server.'
+          : '$syncedCount jawaban berhasil dikirim ke server. Sisanya akan dicoba lagi.';
       if (_pendingAnswers.isEmpty) {
         _isSubmitPendingIntervention = false;
       }
@@ -727,7 +727,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _answers[question.id] = answer;
       }
       _answeredCount = _calculateAnsweredCount();
-      _statusMessage = 'Draft jawaban tersimpan lokal.';
+      _statusMessage = 'Draft jawaban tersimpan di perangkat.';
       _errorMessage = null;
     });
     _textAutosaveTimer?.cancel();
@@ -782,14 +782,14 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         setState(() {
           _isSubmitPendingIntervention = true;
           _errorMessage = autoSubmit
-              ? 'Waktu habis, tetapi masih ada jawaban lokal yang belum diterima server. Tetap di layar ini, minta pengawas memeriksa koneksi, lalu tekan perbarui status atau coba kirim ulang setelah sinkron pulih.'
-              : 'Masih ada jawaban yang belum tersinkron ke server. Jawaban tetap aman di perangkat ini; tunggu koneksi stabil lalu coba kirim lagi.';
+              ? 'Waktu habis, tetapi beberapa jawaban belum diterima server. Jawaban tetap aman di perangkat ini. Tetap di layar ini, minta pengawas memeriksa koneksi, lalu perbarui status atau kirim ulang setelah koneksi pulih.'
+              : 'Beberapa jawaban belum diterima server. Jawaban tetap aman di perangkat ini. Tunggu koneksi stabil, minta pengawas memeriksa perangkat, lalu coba kirim lagi.';
           _serverNotice = ExamGuidanceNotice(
             title: autoSubmit
-                ? 'Submit otomatis ditahan'
-                : 'Submit ditahan sementara',
+                ? 'Kirim otomatis ditahan sementara'
+                : 'Kirim jawaban akhir ditahan sementara',
             message:
-                'Jawaban tetap aman di perangkat ini. Jangan menutup aplikasi sampai pengawas memastikan sinkronisasi pulih atau memberikan instruksi lanjutan.',
+                'Jawaban tetap aman di perangkat ini. Jangan menutup aplikasi sampai pengawas memastikan koneksi pulih atau memberikan instruksi lanjutan.',
             tone: ExamGuidanceTone.danger,
           );
         });
@@ -810,7 +810,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     if (!autoSubmit && _isDegradedMode) {
       setState(() {
         _errorMessage =
-            'Perlu pengawas. Kirim ujian ditahan sampai sinkron pulih.';
+            'Koneksi menurun. Jawaban tetap aman di perangkat ini. Pengawas wajib memeriksa perangkat sebelum jawaban akhir dikirim.';
       });
       await widget.client
           .sendExamEvent(
@@ -843,7 +843,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               ),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Kirim Ujian'),
+                child: const Text('Akhiri Ujian Sekarang'),
               ),
             ],
           );
@@ -859,7 +859,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       _isSubmitting = true;
       _isSubmitPendingIntervention = false;
       _statusMessage = autoSubmit
-          ? 'Waktu habis. Jawaban sedang dikirim otomatis...'
+          ? 'Waktu habis. Jawaban akhir sedang dikirim otomatis...'
           : 'Jawaban akhir sedang dikirim...';
       _errorMessage = null;
     });
@@ -1174,7 +1174,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                                 const SizedBox(height: 10),
                                 Text(
                                   _isResumingExam
-                                      ? 'Sistem sedang memeriksa ulang status peserta dan mencoba menyinkronkan jawaban lokal. Pengawas perlu memastikan siswa boleh melanjutkan setelah status kembali aman.'
+                                      ? 'Aplikasi sedang memeriksa ulang sesi dan mengirim jawaban yang tersimpan di perangkat. Pengawas perlu memastikan siswa boleh melanjutkan setelah status kembali aman.'
                                       : 'Aplikasi mendeteksi perpindahan dari mode ujian. Pengawas perlu memastikan siswa boleh melanjutkan sebelum sesi dibuka lagi.',
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     height: 1.5,
@@ -1183,7 +1183,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                                 if (_pendingAnswers.isNotEmpty) ...[
                                   const SizedBox(height: 12),
                                   Text(
-                                    '${_pendingAnswers.length} jawaban aman di perangkat ini dan perlu sinkron.',
+                                    '${_pendingAnswers.length} jawaban aman di perangkat ini dan perlu dikirim ulang.',
                                     style: theme.textTheme.bodySmall?.copyWith(
                                       color: theme.colorScheme.primary,
                                       fontWeight: FontWeight.w700,
@@ -1343,7 +1343,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Server mengirim sesi ujian tanpa daftar soal. Jangan melakukan submit dari perangkat ini. Minta pengawas memeriksa paket ujian dan coba perbarui status setelah diperbaiki.',
+                        'Daftar soal belum tampil di perangkat ini. Jangan mengakhiri ujian dari perangkat ini. Minta pengawas memeriksa paket ujian, lalu coba perbarui status setelah diperbaiki.',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           height: 1.5,
                         ),
@@ -1529,9 +1529,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               ],
               if (_pendingAnswers.isNotEmpty) ...[
                 StatTile(
-                  label: 'Jawaban lokal',
+                  label: 'Jawaban tersimpan',
                   value:
-                      '${_pendingAnswers.length} jawaban aman, perlu sinkron',
+                      '${_pendingAnswers.length} jawaban aman, perlu dikirim ulang',
                   accent: true,
                 ),
                 const SizedBox(height: 12),
@@ -1544,7 +1544,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                 InlineMessage(
                   tone: BannerTone.error,
                   message:
-                      'Submit final sedang ditahan sampai semua jawaban lokal tersinkron ke server. Jawaban masih aman di perangkat ini.',
+                      'Kirim jawaban akhir sedang ditahan sampai semua jawaban diterima server. Jawaban tetap aman di perangkat ini.',
                 ),
                 const SizedBox(height: 12),
               ],
@@ -1586,10 +1586,10 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                     _isSubmitted
                         ? 'Ujian Terkirim'
                         : _isSubmitPendingIntervention
-                        ? 'Coba kirim ulang setelah sinkron'
+                        ? 'Coba kirim ulang setelah koneksi pulih'
                         : _isDegradedMode
                         ? 'Kirim ditahan saat koneksi menurun'
-                        : 'Kirim Ujian',
+                        : 'Kirim Jawaban Akhir',
                   ),
                 ),
               ),

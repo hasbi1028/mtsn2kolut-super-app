@@ -4,7 +4,7 @@ import { dashboardNavItem, sidebarNavGroups } from './sidebar-config';
 import sidebarIconSource from './SidebarIcon.svelte?raw';
 
 const academicItems = sidebarNavGroups.find((group) => group.group === 'Akademik')?.items ?? [];
-const assessmentItems = sidebarNavGroups.find((group) => group.group === 'Asesmen / CBT')?.items ?? [];
+const assessmentItems = sidebarNavGroups.find((group) => group.group === 'Asesmen Ujian')?.items ?? [];
 const bankSoalItems = sidebarNavGroups.find((group) => group.group === 'Bank Soal')?.items ?? [];
 const portalItems = sidebarNavGroups.find((group) => group.group === 'Portal')?.items ?? [];
 
@@ -23,7 +23,7 @@ describe('sidebar assessment configuration', () => {
 			'Siswa & Orang Tua',
 			'Nilai & Rapor',
 			'Bank Soal',
-			'Asesmen / CBT',
+			'Asesmen Ujian',
 			'Tata Usaha',
 			'Aset & Layanan',
 			'Website',
@@ -48,9 +48,9 @@ describe('sidebar assessment configuration', () => {
 
 	it('keeps assessment navigation aligned to the three-phase workflow', () => {
 		expect(assessmentItems.map((item) => item.label)).toEqual([
-			'Hari Ini / Dashboard CBT',
+			'Hari Ini / Dashboard Ujian',
 			'Persiapan Ujian',
-			'Monitor Ujian',
+			'Pemantauan Ujian',
 			'Hasil & BA',
 			'Arsip',
 			'Aplikasi Siswa'
@@ -87,7 +87,7 @@ describe('sidebar assessment configuration', () => {
 
 	it('separates Bank Soal as a standalone module outside CBT routes', () => {
 		expect(sidebarNavGroups.findIndex((group) => group.group === 'Bank Soal')).toBeLessThan(
-			sidebarNavGroups.findIndex((group) => group.group === 'Asesmen / CBT')
+			sidebarNavGroups.findIndex((group) => group.group === 'Asesmen Ujian')
 		);
 		expect(sidebarNavGroups.some((group) => group.group === 'CBT')).toBe(false);
 		expect(sidebarNavGroups.some((group) => group.group === 'Bank Soal & Asesmen')).toBe(false);

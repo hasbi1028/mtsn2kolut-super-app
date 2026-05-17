@@ -272,12 +272,12 @@
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-2">
 				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Jadwal dan Token CBT</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground">{eventId ? 'Buat Sesi Event' : 'Buat Sesi Ujian'}</h1>
-				<p class="text-sm leading-6 text-muted-foreground">Buat draft sesi dari paket siap pakai, lalu lanjutkan ke peserta, ruang, pengawas, dan token dari daftar sesi.</p>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">{eventId ? 'Buat Sesi Kegiatan' : 'Buat Sesi Ujian'}</h1>
+				<p class="text-sm leading-6 text-muted-foreground">Buat konsep sesi dari paket siap pakai, lalu lanjutkan ke peserta, ruang, pengawas, dan token dari daftar sesi.</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
 				{#if eventId}
-					<Button href={resolve(`/asesmen/kegiatan/${eventId}`)} variant="outline">Kembali ke Event</Button>
+					<Button href={resolve(`/asesmen/kegiatan/${eventId}`)} variant="outline">Kembali ke Kegiatan</Button>
 				{/if}
 				<Button href={listHref} variant="outline">Batal</Button>
 			</div>
@@ -289,7 +289,7 @@
 			<div class="flex flex-wrap items-start justify-between gap-3">
 				<div>
 					<p class="font-semibold">Sesi untuk kegiatan: {eventContext?.title ?? eventId}</p>
-					<p class="mt-1 text-success">Payload pembuatan sesi membawa <code class="rounded bg-card px-1">event_id</code>. Paket global atau event lain disembunyikan dari pilihan sesi ini.</p>
+					<p class="mt-1 text-success">Data pembuatan sesi otomatis tertaut ke kegiatan ini. Paket umum atau kegiatan lain disembunyikan dari pilihan sesi ini.</p>
 				</div>
 				<Button href={resolve(`/asesmen/paket/new?event_id=${eventId}`)} variant="outline" size="sm">Buat Paket Kegiatan</Button>
 			</div>
@@ -322,7 +322,7 @@
 			<Card.Root class="border-border shadow-sm">
 				<Card.Header>
 					<Card.Title class="text-base">Buat Sesi Ujian Baru</Card.Title>
-					<Card.Description>Form create-only ini memakai endpoint <code>/api/asesmen/sessions</code> dan quality gate paket dari daftar sesi lama.</Card.Description>
+					<Card.Description>Form pembuatan ini memakai layanan sistem sesi dan pemeriksaan kelayakan paket dari daftar sesi lama.</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-4">
 					<div class="grid gap-3 sm:grid-cols-2">
@@ -334,7 +334,7 @@
 									<option value={pkg.id}>{pkg.title} ({pkg.subject_code}){pkg.is_active ? '' : ' - nonaktif'}</option>
 								{/each}
 							</select>
-							{#if hiddenEventPackageCount > 0}<p class="mt-1 text-[11px] text-accent-foreground">{hiddenEventPackageCount} paket global/event lain disembunyikan dari pilihan sesi event ini.</p>{/if}
+							{#if hiddenEventPackageCount > 0}<p class="mt-1 text-[11px] text-accent-foreground">{hiddenEventPackageCount} paket umum/kegiatan lain disembunyikan dari pilihan sesi kegiatan ini.</p>{/if}
 						</div>
 						{#if fPackageId}
 							{@const quality = selectedPackageQuality}

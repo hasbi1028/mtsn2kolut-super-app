@@ -395,13 +395,13 @@ export const QUESTION_TYPE_CONFIGS: QuestionTypeConfig[] = [
 	}
 ];
 export const WORKFLOW_LABEL: Record<string, string> = {
-	draft: 'Draft',
+	draft: 'Konsep',
 	submitted: 'Menunggu Verifikasi',
 	review: 'Menunggu Verifikasi',
 	revision_needed: 'Perlu Revisi',
 	reviewed: 'Layak Verifikasi',
 	approved: 'Disetujui',
-	published: 'Published',
+	published: 'Terbit',
 	rejected: 'Ditolak',
 	archived: 'Diarsipkan'
 };
@@ -409,8 +409,8 @@ export const DIFFICULTY_LABEL: Record<string, string> = { easy: 'Mudah', medium:
 export const revisionSourceOptions: Array<{ id: RevisionSourceFilter; label: string; desc: string }> = [
 	{ id: '', label: 'Semua Revisi', desc: 'Semua sumber' },
 	{ id: 'item_analysis', label: 'Mutu Soal', desc: 'Dari hasil ujian' },
-	{ id: 'reviewer', label: 'Reviewer', desc: 'Catatan penelaah' },
-	{ id: 'workflow', label: 'Workflow', desc: 'Tanpa reviewer' }
+	{ id: 'reviewer', label: 'Pemeriksa Soal', desc: 'Catatan penelaah' },
+	{ id: 'workflow', label: 'Alur verifikasi', desc: 'Tanpa pemeriksa soal' }
 ];
 
 export const DRAFT_KEY = (id: string | null, eventId: string) => `mtsn2-soal-komposer:${eventId || 'global'}:${id ?? 'new'}`;
@@ -418,7 +418,7 @@ export const LAST_METADATA_KEY = (eventId: string) => `mtsn2-soal-komposer:last-
 export const EVENT_MEMBER_ROLES: Array<{ value: EventMemberRole; label: string; desc: string }> = [
 	{ value: 'panitia', label: 'Panitia', desc: 'Koordinasi kegiatan' },
 	{ value: 'pembuat_soal', label: 'Pembuat Soal', desc: 'Menyusun bank soal' },
-	{ value: 'reviewer', label: 'Reviewer', desc: 'Menelaah mutu soal' },
+	{ value: 'reviewer', label: 'Pemeriksa Soal', desc: 'Menelaah mutu soal' },
 	{ value: 'proktor', label: 'Proktor', desc: 'Teknis sesi ujian' },
 	{ value: 'pengawas', label: 'Pengawas', desc: 'Pengawasan ruang' },
 	{ value: 'korektor', label: 'Korektor', desc: 'Koreksi uraian' }
@@ -619,7 +619,7 @@ export function questionUsageText(q: Question): string {
 export function revisionSourceLabel(q: Question): string {
 	const note = (q.review_notes ?? '').toLowerCase();
 	if (note.includes('analisis butir') || note.includes('mutu soal')) return 'Mutu Soal';
-	if ((q.reviewer_username ?? '').trim()) return `Reviewer: ${q.reviewer_username}`;
+	if ((q.reviewer_username ?? '').trim()) return `Pemeriksa: ${q.reviewer_username}`;
 	return 'Alur Verifikasi';
 }
 

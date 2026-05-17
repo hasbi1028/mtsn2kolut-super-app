@@ -93,7 +93,7 @@
 </script>
 
 <svelte:head>
-	<title>Kartu Ujian Event</title>
+	<title>Kartu Ujian Kegiatan</title>
 </svelte:head>
 
 <AsyncContent promise={cardsPromise} onerror={handleCardsRenderError}>
@@ -148,11 +148,11 @@
 	<div class="mx-auto max-w-7xl space-y-6 p-6 print:p-0">
 		<div class="flex items-center justify-between print:hidden">
 			<div>
-				<h1 class="text-2xl font-semibold text-foreground">Kartu Ujian Event</h1>
-				<p class="text-sm text-muted-foreground">Cetak per peserta dengan token rahasia, ruangan, dan nomor meja.</p>
+				<h1 class="text-2xl font-semibold text-foreground">Kartu Ujian Kegiatan</h1>
+				<p class="text-sm text-muted-foreground">Cetak per peserta dengan token ujian, ruangan, dan nomor meja.</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
-				<a href={resolve(`/asesmen/kegiatan/${eventId}`)} class="inline-flex items-center rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Kembali ke Event</a>
+				<a href={resolve(`/asesmen/kegiatan/${eventId}`)} class="inline-flex items-center rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Kembali ke Kegiatan</a>
 			<Button onclick={() => window.print()} disabled={printDisabled}>
 				<PrinterIcon class="mr-2 size-4" />
 				Cetak
@@ -163,9 +163,9 @@
 		{#if currentCards.length === 0}
 			<div class="rounded-xl border border-dashed border-warning/30 bg-warning/10 px-4 py-5 text-sm text-warning print:hidden">
 				<p class="font-semibold">Belum ada kartu ujian untuk dicetak.</p>
-				<p class="mt-1">Daftarkan peserta, buat token, lalu lengkapi ruangan dan nomor meja pada sesi event sebelum cetak massal.</p>
+				<p class="mt-1">Daftarkan peserta, buat token, lalu lengkapi ruangan dan nomor meja pada sesi kegiatan sebelum cetak massal.</p>
 				<div class="mt-3 flex flex-wrap gap-2">
-					<a href={resolve(`/asesmen/sesi?event_id=${eventId}&readiness=not_ready`)} class="inline-flex rounded-md border border-warning/30 bg-card px-3 py-2 text-sm font-semibold text-warning hover:bg-warning/15">Cek sesi event</a>
+					<a href={resolve(`/asesmen/sesi?event_id=${eventId}&readiness=not_ready`)} class="inline-flex rounded-md border border-warning/30 bg-card px-3 py-2 text-sm font-semibold text-warning hover:bg-warning/15">Cek sesi kegiatan</a>
 					<a href={resolve(`/asesmen/kegiatan/${eventId}/members`)} class="inline-flex rounded-md border border-warning/30 bg-card px-3 py-2 text-sm font-semibold text-warning hover:bg-warning/15">Cek penugasan/peserta</a>
 				</div>
 			</div>
@@ -177,7 +177,7 @@
 			</div>
 		{:else if currentCards.length > 0}
 			<div class="rounded-xl border border-success/20 bg-success/10 px-4 py-3 text-sm text-success print:hidden">
-				Token rahasia, ruang, dan nomor meja pada data kartu yang termuat sudah lengkap. Cetak hanya saat distribusi kartu siap dan jangan tampilkan token di layar umum.
+				Token ujian, ruang, dan nomor meja pada data kartu yang termuat sudah lengkap. Cetak hanya saat distribusi kartu siap dan jangan tampilkan token di layar umum.
 			</div>
 		{/if}
 

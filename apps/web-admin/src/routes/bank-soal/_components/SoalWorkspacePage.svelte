@@ -541,7 +541,7 @@ type TimelineItem = {
 	let canPublishWorkflow = $derived(canPublishBankSoal(data.user));
 	let canDeleteQuestion = $derived(canDeleteBankSoal(data.user));
 	let selectedEvent = $derived(events.find((event) => event.id === selectedEventId) ?? null);
-	let selectedEventTitle = $derived(selectedEvent?.title ?? 'Bank soal pakai ulang');
+	let selectedEventTitle = $derived(selectedEvent?.title ?? 'Bank Soal umum');
 	let specialEventAttachId = $derived(specialEventQuestionMode && selectedEventId ? selectedEventId : '');
 	let roleLabel = $derived.by(() => {
 		if (roles.includes('admin')) return 'Admin bank soal';
@@ -549,10 +549,10 @@ type TimelineItem = {
 		return roles.length > 0 ? roles.join(', ') : 'Pengguna';
 	});
 	let selectedImportContext = $derived.by(() => {
-		if (!selectedEvent) return 'Bank Soal pakai ulang tanpa kegiatan';
+		if (!selectedEvent) return 'Bank Soal umum tanpa kegiatan';
 		const eventLabel = `${selectedEvent.title}${selectedEvent.status ? ` (${selectedEvent.status})` : ''}`;
 		if (specialEventQuestionMode) return `Soal khusus kegiatan untuk ${eventLabel}`;
-		return `Bank Soal pakai ulang; filter kegiatan aktif: ${eventLabel}. CSV tidak membawa event_id`;
+		return `Bank Soal umum; filter kegiatan aktif: ${eventLabel}. CSV tidak membawa event_id`;
 	});
 	let exportButtonLabel = $derived(questionExportButtonLabel(roles));
 	let exportSuccessMessage = $derived(questionExportSuccessMessage(roles));
@@ -579,26 +579,26 @@ type TimelineItem = {
 	let offlineDraftQueueCount = $derived(offlineQueueItems.filter((item) => item.intent === 'draft').length);
 	let canSyncOfflineQueue = $derived(isOnline && offlineQueueCount > 0 && !offlineSyncBusy);
 	let statusCards = $derived([
-		{ label: 'Draft', value: draftCount, tone: 'slate', helper: 'soal masih disusun', workflowStatus: 'draft', status: '', active: filterWorkflow === 'draft' && !filterStatus },
+		{ label: 'Konsep', value: draftCount, tone: 'slate', helper: 'soal masih disusun', workflowStatus: 'draft', status: '', active: filterWorkflow === 'draft' && !filterStatus },
 		{ label: 'Perlu Revisi', value: revisionTotal, tone: 'red', helper: `${visibleRevisionCount} tampil`, workflowStatus: 'revision_needed', status: '', active: filterWorkflow === 'revision_needed' && !filterStatus },
-		{ label: 'Menunggu Review', value: reviewCount, tone: 'amber', helper: `${visibleReviewCount} tampil`, workflowStatus: 'submitted', status: '', active: filterWorkflow === 'submitted' && !filterStatus },
-		{ label: 'Layak Review', value: approvedCount, tone: 'green', helper: `${visibleApprovedCount} siap approval`, workflowStatus: 'reviewed', status: 'draft', active: filterWorkflow === 'reviewed' && filterStatus === 'draft' },
+		{ label: 'Menunggu Verifikasi', value: reviewCount, tone: 'amber', helper: `${visibleReviewCount} tampil`, workflowStatus: 'submitted', status: '', active: filterWorkflow === 'submitted' && !filterStatus },
+		{ label: 'Layak Verifikasi', value: approvedCount, tone: 'green', helper: `${visibleApprovedCount} siap disetujui`, workflowStatus: 'reviewed', status: 'draft', active: filterWorkflow === 'reviewed' && filterStatus === 'draft' },
 		{ label: 'Terbit', value: publishedCount, tone: 'emerald', helper: 'siap dipakai paket', workflowStatus: '', status: 'published', active: !filterWorkflow && filterStatus === 'published' },
 	]);
 	let selectedSubject = $derived(subjects.find((subject) => subject.id === fSubjectId) ?? null);
 	let isDetailRoute = $derived(Boolean(detailRouteId));
-	let composerModeLabel = $derived(fAuthoringMode === 'advance' ? 'Mode advance' : 'Mode pemula');
-	let composerScopeLabel = $derived(specialEventQuestionMode ? `Khusus ${selectedEventTitle}` : 'Bank soal pakai ulang');
+	let composerModeLabel = $derived(fAuthoringMode === 'advance' ? 'Mode Lengkap' : 'Mode pemula');
+	let composerScopeLabel = $derived(specialEventQuestionMode ? `Khusus ${selectedEventTitle}` : 'Bank Soal umum');
 	let composerStageCards = $derived.by<ComposerStageCard[]>(() => [
 		{
-			label: 'Metadata',
+			label: 'Identitas Soal',
 			desc: selectedSubject ? `${selectedSubject.name} · ${DIFFICULTY_LABEL[fDifficulty] ?? fDifficulty}` : 'Pilih mapel, jenis, kesulitan',
 			status: readinessChecks.subject ? 'Lengkap' : 'Wajib',
 			tone: readinessChecks.subject ? 'green' : 'red',
 			targetId: 'composer-metadata',
 		},
 		{
-			label: isAdvanceMode ? 'Blueprint' : 'Mode Singkat',
+			label: isAdvanceMode ? 'Kisi-kisi' : 'Mode Cepat',
 			desc: isAdvanceMode ? `${fCognitiveLevel.trim() || 'Kognitif belum diisi'} · ${fMaterialTopic.trim() || 'Topik belum diisi'}` : 'CP/TP/KD disembunyikan agar cepat',
 			status: isAdvanceMode ? (fCognitiveLevel.trim() ? 'Terarah' : 'Opsional') : 'Pemula',
 			tone: !isAdvanceMode || fCognitiveLevel.trim() ? 'green' : 'amber',
@@ -684,10 +684,10 @@ type TimelineItem = {
 	let totalChecks = $derived(Object.keys(readinessChecks).length);
 	let readinessScore = $derived(Math.round((passedChecks / totalChecks) * 100));
 	let composerMobileSteps = $derived.by<ComposerMobileStep[]>(() => [
-		{ id: 'metadata', label: 'Metadata', helper: 'Pilih mapel, tipe, tingkat, dan kesulitan.', complete: readinessChecks.subject, targetId: 'composer-metadata' },
-		{ id: 'question', label: 'Soal', helper: 'Tulis stimulus dan pertanyaan utama.', complete: readinessChecks.stem, targetId: 'composer-question' },
+		{ id: 'metadata', label: 'Identitas Soal', helper: 'Pilih mapel, tipe, tingkat, dan kesulitan.', complete: readinessChecks.subject, targetId: 'composer-metadata' },
+		{ id: 'question', label: 'Soal', helper: 'Tulis bacaan/gambar pendukung dan pertanyaan utama.', complete: readinessChecks.stem, targetId: 'composer-question' },
 		{ id: 'answer', label: 'Jawaban', helper: 'Lengkapi opsi/kunci/rubrik sesuai tipe soal.', complete: readinessChecks.options && readinessChecks.answerKey && readinessChecks.rubric, targetId: isMatching ? 'composer-matching' : isEssay ? 'composer-rubric' : 'composer-options' },
-		{ id: 'preview', label: 'Preview', helper: 'Cek tampilan siswa dan sinyal kualitas sebelum kirim review.', complete: readinessScore === 100, targetId: 'composer-preview' },
+		{ id: 'preview', label: 'Preview', helper: 'Cek tampilan siswa dan sinyal kualitas sebelum kirim verifikasi.', complete: readinessScore === 100, targetId: 'composer-preview' },
 	]);
 
 	function selectComposerMobileStep(step: ComposerMobileStep) {
@@ -711,8 +711,8 @@ type TimelineItem = {
 
 	let draftIssues = $derived.by(() => {
 		const issues: string[] = [];
-		if (!readinessChecks.subject) issues.push('Pilih mata pelajaran sebelum menyimpan draft');
-		if (!readinessChecks.stem) issues.push('Isi pertanyaan minimal 5 karakter untuk draft');
+		if (!readinessChecks.subject) issues.push('Pilih mata pelajaran sebelum menyimpan konsep');
+		if (!readinessChecks.stem) issues.push('Isi pertanyaan minimal 5 karakter untuk konsep');
 		return issues;
 	});
 	let canSaveDraft = $derived(draftIssues.length === 0 && !composerBusy && !detailReadOnly);
@@ -739,9 +739,9 @@ type TimelineItem = {
 					desc: rubricProvided ? 'Rubrik/pedoman terisi' : 'Opsional, tetapi disarankan agar koreksi konsisten',
 				},
 				{
-					label: 'Stimulus pendukung',
+					label: 'Bacaan/Gambar Pendukung',
 					status: !isAdvanceMode || stimulusText.length > 0 || hasImage || stemText.length >= 70 ? 'good' : 'warn',
-					desc: isAdvanceMode ? (stimulusText ? 'Stimulus terisi' : `${stimulusText.length} karakter stimulus`) : 'Opsional di mode pemula',
+					desc: isAdvanceMode ? (stimulusText ? 'Bacaan/gambar pendukung terisi' : `${stimulusText.length} karakter bacaan/gambar pendukung`) : 'Opsional di mode pemula',
 				},
 				{
 					label: 'Level kognitif',
@@ -772,12 +772,12 @@ type TimelineItem = {
 					desc: uniqueRight.size < filledRight.length ? 'Ada pasangan kanan yang sama' : 'Semua pasangan kanan berbeda',
 				},
 				{
-					label: 'Distraktor kanan',
+					label: 'Pilihan pengecoh kanan',
 					status: fMatchingDistractors.length === 0 || filledDistractors === fMatchingDistractors.length ? 'good' : 'warn',
-					desc: fMatchingDistractors.length === 0 ? 'Opsional' : `${filledDistractors} / ${fMatchingDistractors.length} distraktor terisi`,
+					desc: fMatchingDistractors.length === 0 ? 'Opsional' : `${filledDistractors} / ${fMatchingDistractors.length} pilihan pengecoh terisi`,
 				},
 				{
-					label: 'Skoring deterministik',
+					label: 'Kunci jawaban jelas',
 					status: matchingPairsReady ? 'good' : 'warn',
 					desc: buildMatchingAnswerKey(fMatchingPairs.length) || 'Belum ada pasangan',
 				},
@@ -801,9 +801,9 @@ type TimelineItem = {
 					desc: `${shortAnswerAliases.length} alias aktif`,
 				},
 				{
-					label: 'Stimulus pendukung',
+					label: 'Bacaan/Gambar Pendukung',
 					status: !isAdvanceMode || stimulusText.length > 0 || hasImage || stemText.length >= 60 ? 'good' : 'warn',
-					desc: isAdvanceMode ? (stimulusText ? 'Stimulus terisi' : `${stimulusText.length} karakter stimulus`) : 'Opsional di mode pemula',
+					desc: isAdvanceMode ? (stimulusText ? 'Bacaan/gambar pendukung terisi' : `${stimulusText.length} karakter bacaan/gambar pendukung`) : 'Opsional di mode pemula',
 				},
 			];
 		}
@@ -843,7 +843,7 @@ type TimelineItem = {
 				desc: `${stemText.length} / 35 karakter minimum`,
 			},
 			{
-				label: isMultipleAnswer ? 'Kunci jawaban ganda' : 'Distraktor bervariasi',
+				label: isMultipleAnswer ? 'Kunci jawaban ganda' : 'Pilihan pengecoh bervariasi',
 				status: isMultipleAnswer ? (selectedAnswerLabels.length >= 2 ? 'good' : 'warn') : (unique.size === filled.length ? 'good' : 'warn'),
 				desc: isMultipleAnswer
 					? `${selectedAnswerLabels.length} kunci dipilih`
@@ -894,7 +894,7 @@ type TimelineItem = {
 			if (isShortAnswer) return { message: 'isi kunci isian', targetId: 'composer-answer' };
 			return { message: 'pilih kunci jawaban', targetId: 'composer-options' };
 		}
-		// Rubrik essay tidak menjadi syarat wajib untuk review.
+		// Rubrik essay tidak menjadi syarat wajib untuk verifikasi.
 		return null;
 	});
 	let qualityWarningCount = $derived(qualitySignals.filter((signal) => signal.status !== 'good').length);
@@ -915,7 +915,7 @@ type TimelineItem = {
 		visibleSelectionCheckbox.indeterminate = selectedVisibleCount > 0 && !allVisibleQuestionsSelected;
 	});
 
-	// ── Draft autosave ─────────────────────────────────────────────────────────
+	// ── Konsep otomatis ─────────────────────────────────────────────────────────
 	function buildComposerMetadataMemory(): ComposerMetadataMemory {
 		return {
 			eventId: selectedEventId,
@@ -942,7 +942,7 @@ type TimelineItem = {
 
 	function applyComposerMetadataMemory(
 		meta: Partial<Omit<ComposerMetadataMemory, 'questionType' | 'authoringMode'>> & { questionType?: string; authoringMode?: string },
-		statusMessage = 'Metadata terakhir dipakai otomatis'
+		statusMessage = 'Identitas soal terakhir dipakai otomatis'
 	) {
 		if (!meta.subjectId) return false;
 		if (!selectedEventId && meta.eventId) selectedEventId = meta.eventId;
@@ -1014,7 +1014,7 @@ type TimelineItem = {
 	}
 
 	function markDraftAutosaved() {
-		draftStatus = 'Draft tersimpan otomatis';
+		draftStatus = 'Konsep tersimpan otomatis';
 		draftSavedAt = new Date().toISOString();
 	}
 
@@ -1074,7 +1074,7 @@ type TimelineItem = {
 				savedAt?: string;
 			}>(activeDraftKey);
 			if (!d) return false;
-			applyComposerMetadataMemory(d, 'Draft lokal dipulihkan');
+			applyComposerMetadataMemory(d, 'Konsep tersimpan dipulihkan');
 			fStem = d.stem ?? '';
 			fStimulus = d.stimulus ?? '';
 			fRubric = d.rubric ?? '';
@@ -1102,7 +1102,7 @@ type TimelineItem = {
 		lastDraftSig = '';
 		draftStatus = '';
 		draftSavedAt = null;
-		toast.success(count > 0 ? `${count} draft lokal Bank Soal dihapus dari perangkat ini` : 'Tidak ada draft lokal Bank Soal di perangkat ini');
+		toast.success(count > 0 ? `${count} konsep tersimpan Bank Soal dihapus dari perangkat ini` : 'Tidak ada konsep tersimpan Bank Soal di perangkat ini');
 	}
 
 	// ── API ────────────────────────────────────────────────────────────────────
@@ -1163,7 +1163,7 @@ type TimelineItem = {
 	async function fetchOverview(page = currentPage): Promise<SoalOverview> {
 		const params = buildQuestionParams(page);
 		const revisionParams = buildRevisionQueueParams();
-		const reviewParams = buildReviewQueueParams();
+		const verifikasiParams = buildReviewQueueParams();
 		const approvedParams = buildApprovedQueueParams();
 		const targetsPromise = selectedEventId
 			? fetch(clientApiPath`/api/asesmen/events/${selectedEventId}/question-targets`).then((response) =>
@@ -1177,8 +1177,8 @@ type TimelineItem = {
 			fetch(clientApiPathWithQuery('/api/bank-soal/questions', revisionParams)).then((response) =>
 				readClientApiData<QuestionListResponse>(response, 'Gagal memuat antrian revisi')
 			),
-			fetch(clientApiPathWithQuery('/api/bank-soal/questions', reviewParams)).then((response) =>
-				readClientApiData<QuestionListResponse>(response, 'Gagal memuat antrian review')
+			fetch(clientApiPathWithQuery('/api/bank-soal/questions', verifikasiParams)).then((response) =>
+				readClientApiData<QuestionListResponse>(response, 'Gagal memuat antrian verifikasi')
 			),
 			fetch(clientApiPathWithQuery('/api/bank-soal/questions', approvedParams)).then((response) =>
 				readClientApiData<QuestionListResponse>(response, 'Gagal memuat antrian siap terbit')
@@ -1536,7 +1536,7 @@ type TimelineItem = {
 	}
 
 	async function runBulkWorkflow(action: BulkWorkflowAction) {
-		if (!requireOnlineAction('Aksi review/publikasi')) return;
+		if (!requireOnlineAction('Aksi verifikasi/publikasi')) return;
 		const ids = action === 'publish'
 			? selectedQuestions.filter(canPublishQuestion).map((question) => question.id)
 			: selectedQuestions.filter(canDecideReview).map((question) => question.id);
@@ -1858,7 +1858,7 @@ type TimelineItem = {
 		const reviewer = typeof metadata.to_reviewer_username === 'string' ? metadata.to_reviewer_username : '';
 		const approver = typeof metadata.to_approver_username === 'string' ? metadata.to_approver_username : '';
 		const publication = typeof metadata.to_publication_status === 'string' ? metadata.to_publication_status : '';
-		return [reviewer ? `Reviewer: ${reviewer}` : '', approver ? `Approver: ${approver}` : '', publication ? `Publikasi: ${publication}` : ''].filter(Boolean).join(' • ');
+		return [reviewer ? `Pemeriksa: ${reviewer}` : '', approver ? `Penyetuju: ${approver}` : '', publication ? `Publikasi: ${publication}` : ''].filter(Boolean).join(' • ');
 	}
 
 	async function loadQuestionTimeline(id: string) {
@@ -1932,8 +1932,8 @@ type TimelineItem = {
 		if (q.status === 'published' || questionUsageLocked(q)) return 'Soal sudah terbit/dipakai. Tidak boleh diedit langsung; buat revisi baru agar riwayat ujian tetap valid.';
 		if (q.workflow_status === 'approved' || q.workflow_status === 'published') return 'Soal sudah disetujui/terbit. Kembalikan ke revisi sebelum mengubah isi soal.';
 		if (q.workflow_status === 'reviewed') return 'Soal sudah ditandai layak dan menunggu approval akhir.';
-		if (q.workflow_status === 'revision_needed') return 'Soal membutuhkan revisi. Jika editor belum aktif, buat draft revisi baru agar perubahan tetap aman.';
-		if (q.workflow_status === 'review' || q.workflow_status === 'submitted') return 'Soal sedang direview. Perubahan dinonaktifkan sampai reviewer meminta revisi.';
+		if (q.workflow_status === 'revision_needed') return 'Soal membutuhkan revisi. Jika editor belum aktif, buat konsep revisi baru agar perubahan tetap aman.';
+		if (q.workflow_status === 'review' || q.workflow_status === 'submitted') return 'Soal sedang diverifikasi. Perubahan dinonaktifkan sampai reviewer meminta revisi.';
 		return 'Soal dibuka dalam mode lihat.';
 	}
 
@@ -1971,7 +1971,7 @@ type TimelineItem = {
 
 	async function createDetailRevision() {
 		if (!detailQuestion?.id) return;
-		const notes = window.prompt('Catatan untuk draft revisi baru:', 'Membuat versi revisi baru agar riwayat paket/ujian lama tetap aman.');
+		const notes = window.prompt('Catatan untuk konsep revisi baru:', 'Membuat versi revisi baru agar riwayat paket/ujian lama tetap aman.');
 		if (notes === null) return;
 		try {
 			const row = await fetch(`/api/bank-soal/questions/${encodeURIComponent(detailQuestion.id)}/revision`, {
@@ -1982,7 +1982,7 @@ type TimelineItem = {
 			toast.success(`Revisi baru ${versionLabel(row)} dibuat.`);
 			window.location.href = questionDetailHref(row.id);
 		} catch (error) {
-			toast.error(mutationErrorMessage(error, 'Draft revisi baru belum dapat dibuat.'));
+			toast.error(mutationErrorMessage(error, 'Konsep revisi baru belum dapat dibuat.'));
 		}
 	}
 
@@ -2146,7 +2146,7 @@ type TimelineItem = {
 			if (!options.allowReadOnly) {
 				setTimeout(() => {
 					void restoreDraft().then((restored) => {
-						if (restored) toast.info('Draft edit lokal dipulihkan otomatis.');
+						if (restored) toast.info('Konsep edit lokal dipulihkan otomatis.');
 					});
 				}, 50);
 			}
@@ -2200,7 +2200,7 @@ type TimelineItem = {
 		if (hasDraftWork && draftStatus) {
 			const confirmed = await confirmAction({
 				title: 'Tutup Penyusun Soal?',
-				message: 'Draft lokal tetap disimpan otomatis. Kembali ke daftar soal dan lanjutkan nanti?',
+				message: 'Konsep tersimpan tetap disimpan otomatis. Kembali ke daftar soal dan lanjutkan nanti?',
 				confirmLabel: 'Tutup',
 				tone: 'warning'
 			});
@@ -2211,9 +2211,9 @@ type TimelineItem = {
 
 	async function discardLocalDraftAndClose() {
 		const confirmed = await confirmAction({
-			title: 'Hapus Draft Lokal?',
-			message: 'Draft autosave pada perangkat ini akan dihapus dan komposer kembali ke daftar soal. Soal yang sudah tersimpan di server tidak ikut dihapus.',
-			confirmLabel: 'Hapus Draft Lokal',
+			title: 'Hapus Konsep Tersimpan?',
+			message: 'Konsep otomatis pada perangkat ini akan dihapus dan komposer kembali ke daftar soal. Soal yang sudah tersimpan di server tidak ikut dihapus.',
+			confirmLabel: 'Hapus Konsep Tersimpan',
 			tone: 'danger'
 		});
 		if (!confirmed) return;
@@ -2241,7 +2241,7 @@ type TimelineItem = {
 			const clock = Number.isNaN(saved.getTime())
 				? ''
 				: saved.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-			return `${draftStatus || 'Draft tersimpan'}${clock ? ` ${clock}` : ''}`;
+			return `${draftStatus || 'Konsep tersimpan'}${clock ? ` ${clock}` : ''}`;
 		}
 		return draftStatus || 'Penyunting lama siap untuk buat/edit soal.';
 	}
@@ -2251,9 +2251,9 @@ type TimelineItem = {
 		if (signal.status === 'good') return 'Sudah aman. Pertahankan pola ini saat menyusun paket.';
 		const label = signal.label.toLowerCase();
 		if (label.includes('stem') || label.includes('pertanyaan') || label.includes('instruksi')) return 'Perjelas perintah soal, tambahkan konteks, dan hindari kalimat terlalu pendek.';
-		if (label.includes('distraktor') || label.includes('opsi')) return 'Samakan kualitas opsi, hindari duplikasi, dan pastikan distraktor masuk akal.';
+		if (label.includes('pilihan pengecoh') || label.includes('opsi')) return 'Samakan kualitas opsi, hindari duplikasi, dan pastikan pilihan pengecoh masuk akal.';
 		if (label.includes('rubrik') || label.includes('pedoman')) return 'Tambahkan poin penilaian agar koreksi essay konsisten.';
-		if (label.includes('kunci')) return 'Cek ulang kunci jawaban sebelum diajukan review.';
+		if (label.includes('kunci')) return 'Cek ulang kunci jawaban sebelum diajukan verifikasi.';
 		if (label.includes('stimulus') || label.includes('media')) return 'Tambahkan stimulus/gambar seperlunya agar soal lebih kontekstual.';
 		if (label.includes('kognitif')) return 'Isi level kognitif agar blueprint asesmen lebih mudah diaudit.';
 		return `Tindak lanjuti: ${signal.desc}`;
@@ -2273,7 +2273,7 @@ type TimelineItem = {
 
 	function focusTitle(editor: FocusedEditor) {
 		if (editor === 'stem') return 'Isi Pertanyaan';
-		if (editor === 'stimulus') return 'Stimulus';
+		if (editor === 'stimulus') return 'Bacaan/Gambar Pendukung';
 		if (editor === 'rubric') return 'Rubrik Penilaian';
 		if (editor === 'explanation') return 'Pembahasan';
 		return `Opsi ${editor}`;
@@ -2404,7 +2404,7 @@ type TimelineItem = {
 			material_topic: fMaterialTopic,
 			cognitive_level: fCognitiveLevel,
 			hots_flag: fHotsFlag,
-			writer_notes: isAdvanceMode ? 'Disusun dari komposer soal mode advance.' : '',
+			writer_notes: isAdvanceMode ? 'Disusun dari komposer soal mode lengkap.' : '',
 			review_notes: '',
 		};
 	}
@@ -2412,7 +2412,7 @@ type TimelineItem = {
 	async function saveQuestion(intent: ComposerSaveIntent = 'draft') {
 		const isReview = intent === 'review';
 		if (isReview && !canSubmitReview) {
-			toast.warning(submitMetadataIssues[0] ?? validationIssues[0] ?? 'Lengkapi soal sebelum diajukan review');
+			toast.warning(submitMetadataIssues[0] ?? validationIssues[0] ?? 'Lengkapi soal sebelum diajukan verifikasi');
 			return;
 		}
 		if (!isReview && !canSaveDraft) {
@@ -2465,7 +2465,7 @@ type TimelineItem = {
 			const saved = await readClientJson<Question>(res);
 			const savedId = saved?.id ?? editingId;
 			if (isReview) {
-				if (!savedId) throw new Error('ID soal hasil simpan tidak ditemukan untuk kirim review.');
+				if (!savedId) throw new Error('ID soal hasil simpan tidak ditemukan untuk kirim verifikasi.');
 				await fetch(clientApiPath`/api/bank-soal/questions/${savedId}/workflow`, {
 					method: 'PATCH',
 					headers: { 'Content-Type': 'application/json' },
@@ -2475,7 +2475,7 @@ type TimelineItem = {
 
 			rememberLastComposerMetadata();
 			await clearDraft();
-			toast.success(isReview ? 'Soal dikirim ke review' : editingId ? 'Draft soal berhasil diperbarui' : 'Draft soal berhasil dibuat');
+			toast.success(isReview ? 'Soal dikirim ke verifikasi' : editingId ? 'Konsep soal berhasil diperbarui' : 'Konsep soal berhasil dibuat');
 			closeComposer();
 			await refreshOverview(1);
 		} catch (e) {
@@ -2620,9 +2620,9 @@ type TimelineItem = {
 	}
 
 	async function submitRevisionForReview(q: Question) {
-		if (!requireOnlineAction('Ajukan review ulang')) return;
+		if (!requireOnlineAction('Ajukan verifikasi ulang')) return;
 		if (!canSubmitRevisionReview(q)) {
-			toast.warning('Revisi ini belum aman diajukan review ulang.');
+			toast.warning('Revisi ini belum aman diajukan verifikasi ulang.');
 			return;
 		}
 		if (!(await confirmAction({
@@ -2639,10 +2639,10 @@ type TimelineItem = {
 				body: JSON.stringify({ action: 'submit_for_review', notes: '' }),
 			});
 			await readClientJson<unknown>(res);
-			toast.success('Revisi diajukan review ulang');
+			toast.success('Revisi diajukan verifikasi ulang');
 			await refreshOverview(currentPage);
 		} catch (e) {
-			toast.error(mutationErrorMessage(e, 'Gagal mengajukan review ulang'));
+			toast.error(mutationErrorMessage(e, 'Gagal mengajukan verifikasi ulang'));
 		} finally {
 			workflowBusyId = '';
 		}
@@ -2650,15 +2650,15 @@ type TimelineItem = {
 
 	function openReviewDecision(q: Question, decision: ReviewDecision) {
 		if (!canReviewWorkflow) {
-			toast.warning('Anda belum memiliki izin review soal.');
+			toast.warning('Anda belum memiliki izin verifikasi soal.');
 			return;
 		}
 		if ((q.workflow_status !== 'review' && q.workflow_status !== 'submitted') || q.status !== 'draft') {
-			toast.warning('Soal ini tidak sedang menunggu review.');
+			toast.warning('Soal ini tidak sedang menunggu verifikasi.');
 			return;
 		}
 		if (questionUsageLocked(q)) {
-			toast.warning('Soal sudah dipakai. Buat revisi baru sebelum mengubah keputusan review.');
+			toast.warning('Soal sudah dipakai. Buat revisi baru sebelum mengubah keputusan verifikasi.');
 			return;
 		}
 		reviewDecisionQuestion = q;
@@ -2690,7 +2690,7 @@ type TimelineItem = {
 		const q = reviewDecisionQuestion;
 		if (!q) return;
 		if (!canDecideReview(q)) {
-			toast.warning('Keputusan review tidak tersedia untuk soal ini.');
+			toast.warning('Keputusan verifikasi tidak tersedia untuk soal ini.');
 			return;
 		}
 		const notes = reviewDecisionNotes.trim();
@@ -2710,7 +2710,7 @@ type TimelineItem = {
 			closeReviewDecision();
 			await refreshOverview(currentPage);
 		} catch (e) {
-			toast.error(mutationErrorMessage(e, 'Gagal menyimpan keputusan review'));
+			toast.error(mutationErrorMessage(e, 'Gagal menyimpan keputusan verifikasi'));
 		} finally {
 			workflowBusyId = '';
 		}
@@ -2748,7 +2748,7 @@ type TimelineItem = {
 	async function deleteQuestion(id: string) {
 		const current = questions.find((item) => item.id === id);
 		if (current && questionUsageLocked(current)) {
-			toast.error('Soal yang sudah dipakai tidak bisa dihapus langsung. Duplikat untuk revisi atau arsipkan lewat alur review.');
+			toast.error('Soal yang sudah dipakai tidak bisa dihapus langsung. Duplikat untuk revisi atau arsipkan lewat alur verifikasi.');
 			return;
 		}
 		if (!(await confirmAction({
@@ -2867,7 +2867,7 @@ type TimelineItem = {
 		};
 		const handleOffline = () => {
 			updateOnlineStatus();
-			offlineStatus = 'Mode offline aktif. Simpan draft masuk antrian lokal.';
+			offlineStatus = 'Mode offline aktif. Simpan konsep masuk antrian lokal.';
 		};
 		const handleVisibility = () => {
 			if (document.visibilityState !== 'visible') return;
@@ -2959,10 +2959,10 @@ type TimelineItem = {
 						{/if}
 					</div>
 					<p class="mt-1 font-semibold">
-						{offlineStatus || (offlineQueueCount > 0 ? 'Perubahan lokal menunggu sinkronisasi.' : 'Penyusun soal siap menyimpan draft lokal.')}
+						{offlineStatus || (offlineQueueCount > 0 ? 'Perubahan sudah tersimpan di perangkat ini dan akan dikirim saat koneksi siap.' : 'Penyusun soal siap menyimpan konsep tersimpan.')}
 					</p>
 					<p class="mt-0.5 text-xs opacity-80">
-						Draft: {offlineDraftQueueCount} · Review: {offlineReviewQueueCount}. Token login tidak disimpan di IndexedDB; sinkronisasi tetap lewat sesi httpOnly.
+						Konsep: {offlineDraftQueueCount} · Verifikasi: {offlineReviewQueueCount}. Token login tidak disimpan di penyimpanan perangkat; sinkronisasi tetap lewat sesi sesi login aman.
 					</p>
 				</div>
 				<div class="flex shrink-0 flex-wrap gap-2">
@@ -2993,12 +2993,12 @@ type TimelineItem = {
 				<div class="min-w-0">
 					<p class="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Cakupan soal</p>
 					<h2 class="mt-1 text-sm font-semibold text-foreground">
-						{specialEventQuestionMode ? `Khusus ${selectedEventTitle}` : 'Bank soal pakai ulang'}
+						{specialEventQuestionMode ? `Khusus ${selectedEventTitle}` : 'Bank Soal umum'}
 					</h2>
 					<p class="mt-1 text-xs leading-5 text-muted-foreground">
 						{specialEventQuestionMode
 							? 'Soal disimpan untuk kegiatan terpilih dan tidak masuk stok pakai ulang lintas kegiatan.'
-							: 'Soal masuk repositori bersama agar bisa dipakai ulang di paket atau kegiatan lain.'}
+							: 'Soal masuk Bank Soal umum agar bisa dipakai ulang di paket atau kegiatan lain.'}
 					</p>
 				</div>
 				<label
@@ -3107,12 +3107,12 @@ type TimelineItem = {
 					class="h-8 rounded-md border border-border bg-card px-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
 			>
 				<option value="">Semua Status</option>
-				<option value="draft">Draft</option>
-				<option value="submitted">Menunggu Review</option>
+				<option value="draft">Konsep</option>
+				<option value="submitted">Menunggu Verifikasi</option>
 				<option value="revision_needed">Perlu Revisi</option>
-				<option value="reviewed">Layak Review</option>
+				<option value="reviewed">Layak Verifikasi</option>
 				<option value="approved">Disetujui</option>
-				<option value="published">Published</option>
+				<option value="published">Terbit</option>
 				<option value="rejected">Ditolak</option>
 				<option value="archived">Diarsipkan</option>
 				</select>
@@ -3142,7 +3142,7 @@ type TimelineItem = {
 							<p class="text-xs text-success">Siap diputuskan: {selectedReviewEligibleCount}; siap diterbitkan: {selectedPublishEligibleCount}. Aksi yang tidak memenuhi syarat otomatis dilewati.</p>
 						</div>
 					<div class="flex flex-wrap gap-2">
-						<Input placeholder="Catatan untuk Tandai Layak/Minta Revisi..." aria-label="Catatan aksi massal review soal" bind:value={bulkNotes} class="h-8 min-w-56 bg-card text-xs" />
+						<Input placeholder="Catatan untuk Tandai Layak/Minta Revisi..." aria-label="Catatan aksi massal verifikasi soal" bind:value={bulkNotes} class="h-8 min-w-56 bg-card text-xs" />
 						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('mark_reviewed')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedReviewEligibleCount === 0} class="h-8 bg-card text-success">Tandai Layak</LoadingButton>
 						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('request_revision')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedReviewEligibleCount === 0} class="h-8 bg-card text-destructive">Minta Revisi</LoadingButton>
 						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('publish')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedPublishEligibleCount === 0} class="h-8 bg-card text-success">Terbitkan</LoadingButton>
@@ -3305,7 +3305,7 @@ type TimelineItem = {
 												disabled={workflowBusyId !== '' && workflowBusyId !== q.id}
 												class="rounded px-2 py-1 text-xs text-warning transition-colors hover:bg-warning/10 disabled:cursor-not-allowed disabled:opacity-40"
 											>
-												Review
+												Verifikasi
 											</button>
 										{/if}
 										{#if canPublishQuestion(q)}
@@ -3429,7 +3429,7 @@ type TimelineItem = {
 					<div class="max-h-64 space-y-3 overflow-auto rounded-md border border-border bg-card p-3 text-sm">
 						{#if reviewDecisionQuestion.stimulus_html}
 							<div class="rounded border border-border bg-muted/50 p-2">
-								<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Stimulus</p>
+								<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Bacaan/Gambar Pendukung</p>
 								<RichContent html={reviewDecisionQuestion.stimulus_html} class="prose prose-sm max-w-none text-foreground latex-preview" />
 							</div>
 						{/if}
@@ -3524,7 +3524,7 @@ type TimelineItem = {
 
 			<div>
 				<label for="review-decision-notes" class="mb-1 block text-xs font-medium text-muted-foreground">
-					Catatan Reviewer {#if reviewDecision === 'reject' || reviewDecision === 'request_revision'}<span class="text-destructive">*</span>{/if}
+					Catatan Pemeriksa Soal {#if reviewDecision === 'reject' || reviewDecision === 'request_revision'}<span class="text-destructive">*</span>{/if}
 				</label>
 				<Textarea
 					id="review-decision-notes"
@@ -3559,7 +3559,7 @@ type TimelineItem = {
 				<div>
 					<p class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Lihat Soal Terkunci</p>
 					<h2 class="mt-1 text-base font-semibold text-foreground">Detail Read-only</h2>
-					<p class="mt-1 text-xs text-muted-foreground">Soal tidak bisa diedit langsung karena sudah dipakai, masuk review/publikasi, atau tipe belum kompatibel dengan editor cepat.</p>
+					<p class="mt-1 text-xs text-muted-foreground">Soal tidak bisa diedit langsung karena sudah dipakai, masuk verifikasi/publikasi, atau tipe belum kompatibel dengan editor cepat.</p>
 				</div>
 				{#if questionPreviewLoading}<span class="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">Memuat detail...</span>{/if}
 			</div>
@@ -3575,7 +3575,7 @@ type TimelineItem = {
 					<div class="max-h-80 space-y-3 overflow-auto rounded-md border border-border bg-card p-3 text-sm">
 						{#if questionPreview.stimulus_html}
 							<div class="rounded border border-border bg-muted/50 p-2">
-								<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Stimulus</p>
+								<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Bacaan/Gambar Pendukung</p>
 								<RichContent html={questionPreview.stimulus_html} class="prose prose-sm max-w-none text-foreground latex-preview" />
 							</div>
 						{/if}
@@ -3663,7 +3663,7 @@ type TimelineItem = {
 {#snippet composerPratinjau()}
 	<div class="mb-4">
 		<div class="mb-1 flex items-center justify-between">
-			<span class="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Kesiapan Review</span>
+			<span class="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Kesiapan Verifikasi</span>
 			<span
 				class="text-sm font-bold {readinessScore === 100
 					? 'text-success'
@@ -3691,7 +3691,7 @@ type TimelineItem = {
 				{/each}
 			</ul>
 		{:else}
-			<p class="mt-1 text-[10px] text-success">Soal siap diajukan review.</p>
+			<p class="mt-1 text-[10px] text-success">Soal siap diajukan verifikasi.</p>
 		{/if}
 	</div>
 
@@ -3708,7 +3708,7 @@ type TimelineItem = {
 		<div class="rounded-lg border border-border bg-card p-3 space-y-3" dir={fIsRtl ? 'rtl' : undefined}>
 			{#if isAdvanceMode && fStimulus}
 				<div class="rounded-md border border-border bg-muted/50 p-2">
-					<p class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Stimulus</p>
+					<p class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Bacaan/Gambar Pendukung</p>
 					<RichContent html={fStimulus} class="prose prose-sm max-w-none text-foreground latex-preview text-sm" />
 				</div>
 			{/if}
@@ -3781,7 +3781,7 @@ type TimelineItem = {
 									{#if richTextHasContent(distractor)}
 										<RichContent html={distractor} class="latex-preview min-w-0 flex-1" />
 									{:else}
-										<span class="italic text-warning">(distraktor kosong)</span>
+										<span class="italic text-warning">(pilihan pengecoh kosong)</span>
 									{/if}
 								</div>
 							{/each}
@@ -3847,7 +3847,7 @@ type TimelineItem = {
 							</h2>
 						</div>
 						<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-							{detailReadOnly ? detailLockMessage(detailQuestion) : 'Susun metadata, naskah, kunci/rubrik, lalu cek preview siswa sebelum diajukan review. Autosave lokal dan Ctrl+S tetap aktif.'}
+							{detailReadOnly ? detailLockMessage(detailQuestion) : 'Susun metadata, naskah, kunci/rubrik, lalu cek preview siswa sebelum diajukan verifikasi. Autosave lokal dan Ctrl+S tetap aktif.'}
 						</p>
 						<div class="mt-3 flex flex-wrap gap-2">
 							<span class="rounded-full border border-primary/20 bg-card px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">{composerScopeLabel}</span>
@@ -3987,7 +3987,7 @@ type TimelineItem = {
 							<p class="text-[10px] font-black uppercase tracking-[0.24em] text-primary">Alur penyusunan</p>
 							<h3 class="text-sm font-black uppercase text-foreground">Klik kartu untuk lompat ke bagian editor</h3>
 						</div>
-						<span class="text-xs font-semibold text-muted-foreground">Kesiapan review {readinessScore}%</span>
+						<span class="text-xs font-semibold text-muted-foreground">Kesiapan verifikasi {readinessScore}%</span>
 					</div>
 					{@render composerStageRail()}
 				</section>
@@ -4009,7 +4009,7 @@ type TimelineItem = {
 							<span class="text-xs font-bold {readinessScore === 100 ? 'text-success' : 'text-destructive'}">{readinessScore}%</span>
 						</div>
 							<span class="rounded-full border px-2 py-1 text-[10px] font-semibold {validationIssues.length === 0 ? 'border-primary/20 bg-card text-primary' : 'border-destructive/30 bg-card text-destructive'}">
-								{validationIssues.length === 0 ? 'Siap review' : `${validationIssues.length} wajib belum lengkap`}
+								{validationIssues.length === 0 ? 'Siap verifikasi' : `${validationIssues.length} wajib belum lengkap`}
 							</span>
 							{#if firstComposerIssue}
 								<button
@@ -4074,7 +4074,7 @@ type TimelineItem = {
 							</div>
 							<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-[8rem_minmax(16rem,1fr)_5.5rem_10rem] 2xl:grid-cols-[8rem_minmax(18rem,1fr)_5.5rem_10rem_8rem_10.5rem] xl:items-end">
 								<div class="self-center md:col-span-2 xl:col-span-1">
-									<h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-foreground">Metadata</h3>
+									<h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-foreground">Identitas Soal</h3>
 									<p class="mt-0.5 text-[10px] text-muted-foreground">Data wajib</p>
 								</div>
 								<div>
@@ -4154,7 +4154,7 @@ type TimelineItem = {
 								<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
 									<div>
 										<h3 class="text-xs font-black uppercase tracking-[0.2em] text-foreground">Detail Advance</h3>
-										<p class="mt-0.5 text-xs text-muted-foreground">Blueprint, kurikulum, dan alur review.</p>
+										<p class="mt-0.5 text-xs text-muted-foreground">Kisi-kisi, kurikulum, dan alur verifikasi.</p>
 									</div>
 									<label for="f-hots" class="flex h-8 cursor-pointer items-center gap-2 rounded-md border border-success/20 bg-success/10 px-2.5">
 										<input id="f-hots" type="checkbox" bind:checked={fHotsFlag} class="rounded accent-green-700" />
@@ -4192,7 +4192,7 @@ type TimelineItem = {
 									</div>
 									<div class="rounded-md border border-border bg-muted/50 px-3 py-2">
 										<p class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Alur</p>
-										<p class="mt-0.5 text-[11px] text-muted-foreground">Draft dan review dikendalikan dari tombol bawah.</p>
+										<p class="mt-0.5 text-[11px] text-muted-foreground">Draft dan verifikasi dikendalikan dari tombol bawah.</p>
 									</div>
 								</div>
 							</section>
@@ -4200,7 +4200,7 @@ type TimelineItem = {
 							<section id="composer-stimulus" class="scroll-mt-4 space-y-2 rounded-xl border border-border bg-card p-4 shadow-sm">
 								<div class="flex flex-wrap items-center justify-between gap-2">
 									<div>
-										<h3 class="text-xs font-black uppercase tracking-[0.2em] text-foreground">Stimulus</h3>
+										<h3 class="text-xs font-black uppercase tracking-[0.2em] text-foreground">Bacaan/Gambar Pendukung</h3>
 										<p class="mt-0.5 text-xs text-muted-foreground">Narasi, data, gambar, atau konteks pendukung.</p>
 									</div>
 									<button type="button" onclick={() => (focusedEditor = 'stimulus')} class="rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/50">Fokus</button>
@@ -4300,11 +4300,11 @@ type TimelineItem = {
 								<div class="rounded-xl border border-dashed border-border bg-muted/50 p-3">
 									<div class="flex flex-wrap items-center justify-between gap-3">
 										<div>
-											<p class="text-xs font-black uppercase tracking-[0.2em] text-foreground">Distraktor Kanan Opsional</p>
+											<p class="text-xs font-black uppercase tracking-[0.2em] text-foreground">Pilihan pengecoh Kanan Opsional</p>
 											<p class="mt-0.5 text-[11px] text-muted-foreground">Tambahkan pilihan kanan ekstra agar siswa tidak hanya mencocokkan satu-ke-satu.</p>
 										</div>
 										<Button type="button" variant="outline" size="sm" class="h-7 px-2 text-[10px]" disabled={fMatchingDistractors.length >= MAX_MATCHING_DISTRACTOR_COUNT} onclick={addMatchingDistractor}>
-											+ Distraktor
+											+ Pilihan pengecoh
 										</Button>
 									</div>
 									{#if fMatchingDistractors.length > 0}
@@ -4312,7 +4312,7 @@ type TimelineItem = {
 											{#each fMatchingDistractors as distractor, i (`matching-distractor-${i}`)}
 												<div class="rounded-lg border border-border bg-card p-3">
 													<div class="mb-2 flex items-center justify-between gap-3">
-														<label for={`matching-distractor-${i}`} class="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Distraktor Kanan {fMatchingPairs.length + i + 1}</label>
+														<label for={`matching-distractor-${i}`} class="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Pilihan pengecoh Kanan {fMatchingPairs.length + i + 1}</label>
 														<button type="button" onclick={() => removeMatchingDistractor(i)} class="rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/50">
 															Hapus
 														</button>
@@ -4326,7 +4326,7 @@ type TimelineItem = {
 														onImageUpload={uploadImageInEditor}
 													/>
 													{#if !richTextHasContent(distractor)}
-														<p class="mt-1 text-[10px] font-semibold text-warning">Isi distraktor atau hapus jika tidak dipakai.</p>
+														<p class="mt-1 text-[10px] font-semibold text-warning">Isi pilihan pengecoh atau hapus jika tidak dipakai.</p>
 													{/if}
 												</div>
 											{/each}
@@ -4447,7 +4447,7 @@ type TimelineItem = {
 										<p class="mt-1 text-[10px] font-semibold text-success">{shortAnswerAliases.length} jawaban diterima: {shortAnswerAliases.join(' / ')}</p>
 									{/if}
 									{#if !readinessChecks.answerKey}
-										<p class="mt-1 text-[10px] font-semibold text-destructive">Kunci isian singkat wajib diisi sebelum review.</p>
+										<p class="mt-1 text-[10px] font-semibold text-destructive">Kunci isian singkat wajib diisi sebelum verifikasi.</p>
 									{/if}
 								</div>
 							</section>
@@ -4479,7 +4479,7 @@ type TimelineItem = {
 								<div class="flex flex-wrap items-center justify-between gap-2">
 									<div>
 										<h3 class="text-xs font-black uppercase tracking-[0.2em] text-foreground">{isEssay ? 'Catatan Pembahasan' : 'Pembahasan'}</h3>
-										<p class="mt-0.5 text-xs text-muted-foreground">{isEssay ? 'Catatan internal untuk guru/reviewer.' : 'Pembahasan yang membantu review dan bank soal.'}</p>
+										<p class="mt-0.5 text-xs text-muted-foreground">{isEssay ? 'Catatan internal untuk guru/reviewer.' : 'Pembahasan yang membantu verifikasi dan bank soal.'}</p>
 									</div>
 									<button type="button" onclick={() => (focusedEditor = 'explanation')} class="rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/50">Fokus</button>
 								</div>
@@ -4505,7 +4505,7 @@ type TimelineItem = {
 				<div class="flex shrink-0 flex-col gap-2 border-t border-success/20 bg-card px-4 py-2.5 md:flex-row md:items-center md:justify-between md:px-6">
 					<div class="min-w-0 text-xs text-muted-foreground">
 						<span class="font-semibold text-success">{draftStatusLabel()}</span>
-						<span class="ml-2 text-muted-foreground">· {draftIssues.length === 0 ? 'Draft bisa disimpan' : draftIssues[0]} · Review {validationIssues.length === 0 ? 'siap' : `${validationIssues.length} wajib belum lengkap`} · Ctrl+S</span>
+						<span class="ml-2 text-muted-foreground">· {draftIssues.length === 0 ? 'Konsep bisa disimpan' : draftIssues[0]} · Verifikasi {validationIssues.length === 0 ? 'siap' : `${validationIssues.length} wajib belum lengkap`} · Ctrl+S</span>
 						{#if firstComposerIssue}
 							<button type="button" class="ml-2 text-destructive underline decoration-red-200 underline-offset-2" onclick={scrollToFirstComposerIssue}>
 								Lengkapi: {firstComposerIssue.message}
@@ -4518,7 +4518,7 @@ type TimelineItem = {
 						class="h-8 text-xs"
 						onclick={() => void discardLocalDraftAndClose()}
 					>
-						Hapus Draft Lokal & Tutup
+						Hapus Konsep Tersimpan & Tutup
 					</Button>
 					<LoadingButton
 						onclick={() => void saveQuestion('draft')}
@@ -4528,7 +4528,7 @@ type TimelineItem = {
 						variant="outline"
 						class="h-8 text-xs disabled:opacity-50"
 					>
-						Simpan Draft
+						Simpan Konsep
 					</LoadingButton>
 					<LoadingButton
 						onclick={() => void saveQuestion('review')}
@@ -4537,7 +4537,7 @@ type TimelineItem = {
 						loadingLabel="Mengajukan..."
 						class="h-8 bg-success text-xs text-background hover:bg-success disabled:opacity-50"
 					>
-						Kirim Review
+						Kirim Verifikasi
 					</LoadingButton>
 				</div>
 			</div>

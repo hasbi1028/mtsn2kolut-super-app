@@ -316,14 +316,14 @@
 		const proctorIssues = detail.sessions.filter((session) => (session.rooms_without_proctor ?? 0) > 0).length;
 		const items: Array<Omit<ChecklistItem, 'tone'>> = [
 			{ label: 'Penugasan', helper: 'Guru pembuat soal dan reviewer kegiatan', count: countFrom(overview?.member_count, null), href: `/asesmen/kegiatan/${eventId}/members`, action: 'Atur penugasan' },
-		{ label: 'Kebutuhan Soal', helper: 'Target kebutuhan kegiatan; Bank Soal tetap repositori mandiri sebelum dipakai paket', count: countFrom(overview?.published_question_count ?? overview?.question_count, null), href: `/bank-soal/tambah?event_id=${eventId}`, action: 'Cek target kebutuhan' },
-			{ label: 'Verifikasi Repositori', helper: 'Antrean verifikasi dari Bank Soal sebelum soal diterbitkan dan masuk paket', count: countFrom(overview?.review_count, null), href: '/bank-soal/verifikasi', action: 'Verifikasi repositori' },
+		{ label: 'Kebutuhan Soal', helper: 'Target kebutuhan kegiatan; Bank Soal tetap menjadi daftar soal mandiri sebelum dipakai paket', count: countFrom(overview?.published_question_count ?? overview?.question_count, null), href: `/bank-soal/tambah?event_id=${eventId}`, action: 'Cek target kebutuhan' },
+			{ label: 'Verifikasi Bank Soal', helper: 'Antrean verifikasi dari Bank Soal sebelum soal diterbitkan dan masuk paket', count: countFrom(overview?.review_count, null), href: '/bank-soal/verifikasi', action: 'Verifikasi Bank Soal' },
 			{ label: 'Paket Kegiatan', helper: 'Prioritas persiapan: paket yang tertaut kegiatan agar sesi ujian bisa memakai paket yang tepat', count: countFrom(overview?.package_count, packageFallback), href: `/asesmen/paket?event_id=${eventId}`, action: 'Kelola paket kegiatan' },
 			{ label: 'Sesi/Jadwal', helper: 'Sesi, status, dan jadwal operasional', count: countFrom(overview?.session_count, sessionFallback), href: `/asesmen/sesi?event_id=${eventId}`, action: 'Kelola sesi' },
 			{ label: 'Ruang/Pengawas/Kursi', helper: roomIssues > 0 ? `${roomIssues} sesi masih perlu dirapikan${proctorIssues > 0 ? `, ${proctorIssues} butuh pengawas` : ''}` : 'Cek ruang, pengawas, kapasitas, dan nomor meja', count: countFrom(overview?.room_count, detail.sessions.length > 0 ? detail.sessions.reduce((sum, session) => sum + (session.room_count ?? 0), 0) : null), href: `/asesmen/sesi?event_id=${eventId}&readiness=not_ready`, action: 'Cek ruang' },
 			{ label: 'Token/Kartu', helper: 'Token ujian peserta dan kartu ujian siap cetak', count: countFrom(overview?.token_count ?? overview?.card_count, null), href: `/asesmen/kegiatan/${eventId}/exam-cards`, action: 'Cetak kartu' },
 			{ label: 'Hasil', helper: 'Rekap nilai gabungan tersedia di tab Hasil', count: countFrom(overview?.result_count, detail.results.length), href: `/asesmen/kegiatan/${eventId}#hasil`, action: 'Buka tab hasil' },
-			{ label: 'Arsip', helper: 'Checklist kartu, daftar hadir, berita acara, hasil, insiden, dan audit ringkas', count: null, href: `/asesmen/kegiatan/${eventId}/archive`, action: 'Buka checklist arsip' },
+			{ label: 'Arsip', helper: 'Checklist kartu, daftar hadir, berita acara, hasil, insiden, dan catatan tindakan ringkas', count: null, href: `/asesmen/kegiatan/${eventId}/archive`, action: 'Buka checklist arsip' },
 		];
 		return items.map((item) => ({ ...item, tone: item.label === 'Ruang/Pengawas/Kursi' && roomIssues > 0 ? 'warning' : checklistTone(item.count) }));
 	}
@@ -347,7 +347,7 @@
 				id: 'persiapan',
 				title: 'Paket Soal',
 				description: 'Tim, kebutuhan soal, verifikasi, dan paket yang akan dipakai sesi.',
-				items: ['Penugasan', 'Kebutuhan Soal', 'Verifikasi Repositori', 'Paket Kegiatan'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
+				items: ['Penugasan', 'Kebutuhan Soal', 'Verifikasi Bank Soal', 'Paket Kegiatan'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
 			},
 			{
 				id: 'pelaksanaan',
@@ -370,7 +370,7 @@
 			{
 				id: 'arsip',
 				title: 'Arsip',
-				description: 'Dokumen final, pengesahan SOP, dan audit ringkas kegiatan.',
+				description: 'Dokumen final, pengesahan SOP, dan catatan tindakan ringkas kegiatan.',
 				items: ['Arsip'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
 			},
 		];
@@ -418,7 +418,7 @@
 				: definition.key === 'question_authoring'
 					? statusFrom(byLabel.get('Kebutuhan Soal'))
 					: definition.key === 'question_verification'
-						? statusFrom(byLabel.get('Verifikasi Repositori'))
+						? statusFrom(byLabel.get('Verifikasi Bank Soal'))
 						: definition.key === 'package_ready'
 							? statusFrom(packageItem)
 							: definition.key === 'participants_rooms_ready'
@@ -435,7 +435,7 @@
 				: definition.key === 'question_authoring'
 					? actionFrom(byLabel.get('Kebutuhan Soal'))
 					: definition.key === 'question_verification'
-						? actionFrom(byLabel.get('Verifikasi Repositori'))
+						? actionFrom(byLabel.get('Verifikasi Bank Soal'))
 						: definition.key === 'package_ready'
 							? actionFrom(packageItem)
 							: definition.key === 'participants_rooms_ready'
@@ -675,7 +675,7 @@
 		}
 		try {
 			await navigator.clipboard.writeText(text);
-			toast.success('Draft reminder per guru disalin');
+			toast.success('Konsep pengingat per guru disalin');
 		} catch {
 			toast.error('Gagal menyalin draft reminder');
 		}
@@ -900,14 +900,14 @@
 						<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
 							<div>
 								<Card.Title class="text-base">Pengesahan SOP</Card.Title>
-								<Card.Description>Pengesahan ini mencatat audit formal, belum memblokir alur lama.</Card.Description>
+								<Card.Description>Pengesahan ini mencatat riwayat formal, belum memblokir alur lama.</Card.Description>
 							</div>
 							<a href={resolve(`/asesmen/kegiatan/${eventId}/archive`)} class="inline-flex rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15">Buka Arsip</a>
 						</div>
 					</Card.Header>
 					<Card.Content class="space-y-4">
 						{#if !detail.approvalsAvailable}
-							<p class="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">Audit pengesahan SOP belum dapat dimuat untuk sesi ini. Pengelolaan pengesahan formal tersedia melalui akses admin.</p>
+							<p class="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">Catatan pengesahan SOP belum dapat dimuat untuk sesi ini. Pengelolaan pengesahan formal tersedia melalui akses admin.</p>
 						{/if}
 						<div class="grid gap-3 lg:grid-cols-2">
 							{#each sopApprovalMilestones as milestone (milestone.approvalType)}
@@ -991,7 +991,7 @@
 				{@const completeness = detail.questionCompleteness}
 				{@const filteredRows = filteredCompletenessRows(detail)}
 				<details class="rounded-xl border border-border bg-card p-4 shadow-sm">
-					<summary class="cursor-pointer text-sm font-semibold text-foreground">Mode Lengkap: target dan kelengkapan soal</summary>
+					<summary class="cursor-pointer text-sm font-semibold text-foreground">Rincian lengkap: target dan kelengkapan soal</summary>
 					<section class="mt-4 space-y-4">
 					<Card.Root>
 						<Card.Header class="pb-2">
@@ -1002,7 +1002,7 @@
 								</div>
 								<div class="flex flex-wrap gap-2">
 						<LoadingButton variant="outline" onclick={() => exportIncompleteByTeacherCSV(detail)} disabled={incompleteCompletenessRows(detail).length === 0} label="Ekspor Kurang per Guru" />
-						<LoadingButton variant="outline" onclick={() => copyReminderDraft(detail)} disabled={incompleteCompletenessRows(detail).length === 0} label="Salin Reminder" />
+						<LoadingButton variant="outline" onclick={() => copyReminderDraft(detail)} disabled={incompleteCompletenessRows(detail).length === 0} label="Salin Pengingat" />
 						<LoadingButton variant="outline" onclick={() => exportCompletenessCSV(detail)} disabled={filteredRows.length === 0} label="Ekspor CSV" />
 					</div>
 							</div>
@@ -1027,7 +1027,7 @@
 									<label class="space-y-1 text-xs font-medium text-muted-foreground">Filter soal
 										<select bind:value={targetStatusFilter} class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground">
 											<option value="published_only">Hanya soal terbit</option>
-											<option value="all_progress">Draft/verifikasi/terbit dihitung</option>
+											<option value="all_progress">Konsep/verifikasi/terbit dihitung</option>
 										</select>
 									</label>
 									<label class="space-y-1 text-xs font-medium text-muted-foreground">Target PG
@@ -1076,7 +1076,7 @@
 									<input bind:value={completenessSearch} class="rounded-lg border border-border bg-background px-3 py-2 text-sm" placeholder="Cari rombel, mapel, atau guru" />
 								</div>
 							{:else}
-								<p class="rounded-xl bg-muted/50 p-4 text-sm text-muted-foreground">Data kelengkapan soal belum tersedia dari API.</p>
+								<p class="rounded-xl bg-muted/50 p-4 text-sm text-muted-foreground">Data kelengkapan soal belum tersedia dari layanan sistem.</p>
 							{/if}
 						</Card.Content>
 					</Card.Root>

@@ -348,7 +348,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
             ),
             const SizedBox(height: 20),
             Text(
-              'Masuk ujian dengan token pengawas.',
+              'Masuk ujian dengan Token Ujian dan Token Ruang.',
               style: theme.textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.w800,
                 color: const Color(0xFF14361D),
@@ -367,18 +367,18 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
               children: const [
                 _InfoBadge(
                   icon: Icons.lock_clock_outlined,
-                  title: 'Heartbeat aktif',
-                  subtitle: 'Status peserta dipantau berkala',
+                  title: 'Status terpantau',
+                  subtitle: 'Koneksi ujian dicek berkala',
                 ),
                 _InfoBadge(
                   icon: Icons.shield_outlined,
-                  title: 'Anti-switch dasar',
-                  subtitle: 'Keluar aplikasi akan tercatat',
+                  title: 'Tetap di layar ujian',
+                  subtitle: 'Perpindahan aplikasi akan dilaporkan',
                 ),
                 _InfoBadge(
                   icon: Icons.save_outlined,
-                  title: 'Simpan bertahap',
-                  subtitle: 'Jawaban dikirim saat dipilih',
+                  title: 'Jawaban aman',
+                  subtitle: 'Jawaban disimpan saat dipilih',
                 ),
               ],
             ),
@@ -406,7 +406,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
             Text(
               _isRestoring
                   ? 'Memeriksa apakah ada sesi ujian yang masih bisa dipulihkan.'
-                  : 'Masukkan token ujian dari kartu peserta atau pengawas.',
+                  : 'Masukkan Token Ujian dari kartu peserta dan Token Ruang dari pengawas.',
               style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 20),
@@ -439,8 +439,8 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
               maxLength: 64,
               textCapitalization: TextCapitalization.characters,
               decoration: const InputDecoration(
-                labelText: 'Token ujian',
-                hintText: 'Contoh: 32 karakter heksadesimal dari kartu ujian',
+                labelText: 'Token Ujian',
+                hintText: 'Masukkan Token Ujian dari kartu peserta',
                 counterText: '',
               ),
             ),
@@ -450,8 +450,8 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
               maxLength: 64,
               textCapitalization: TextCapitalization.characters,
               decoration: const InputDecoration(
-                labelText: 'Token ruang',
-                hintText: 'Minta token ruang kepada pengawas',
+                labelText: 'Token Ruang',
+                hintText: 'Minta Token Ruang kepada pengawas',
                 counterText: '',
               ),
             ),
@@ -480,7 +480,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
                   _isRestoring
                       ? 'Memulihkan sesi...'
                       : _isSubmitting
-                      ? 'Memeriksa token...'
+                      ? 'Memeriksa Token Ujian...'
                       : 'Masuk Ujian',
                 ),
               ),
@@ -493,8 +493,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Penanda perangkat dipakai sebagai petunjuk teknis untuk sinkronisasi dan pemulihan sesi, '
-              'bukan sebagai bukti identitas kuat perangkat.',
+              'Jika ujian terputus, jangan panik. Tetap gunakan perangkat ini dan minta pengawas membantu memulihkan sesi.',
               style: theme.textTheme.bodySmall?.copyWith(
                 height: 1.45,
                 color: theme.colorScheme.onSurfaceVariant,
@@ -534,7 +533,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
                       const SizedBox(height: 4),
                       Text(
                         _showOperatorSettings
-                            ? 'Gunakan HTTPS untuk server produksi. HTTP hanya untuk uji lokal/operator pada emulator, localhost, atau jaringan privat.'
+                            ? 'Hanya ubah alamat server atas arahan operator atau pengawas ruang.'
                             : 'Disembunyikan saat mode siswa biasa agar peserta tidak mudah salah mengubah alamat server.',
                         style: theme.textTheme.bodySmall?.copyWith(
                           height: 1.45,
@@ -565,10 +564,9 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
               TextField(
                 controller: _baseUrlController,
                 decoration: const InputDecoration(
-                  labelText: 'Alamat server API',
-                  hintText: 'Contoh: http://10.0.2.2:8080',
-                  helperText:
-                      'Produksi: https://... • Uji lokal: http://10.0.2.2:8080',
+                  labelText: 'Alamat server ujian',
+                  hintText: 'Masukkan alamat dari operator',
+                  helperText: 'Diisi hanya jika pengawas/operator meminta.',
                 ),
               ),
               const SizedBox(height: 10),
@@ -756,15 +754,15 @@ class _BaseUrlGuidance extends StatelessWidget {
     final isHttps = normalized.startsWith('https://');
     final isHttp = normalized.startsWith('http://');
     final title = isHttps
-        ? 'HTTPS siap untuk server produksi'
+        ? 'Alamat server siap digunakan'
         : isHttp
-        ? 'HTTP hanya untuk uji lokal atau jaringan privat'
-        : 'Gunakan alamat dengan awalan https:// atau http://';
+        ? 'Alamat perlu dicek pengawas/operator'
+        : 'Alamat server belum lengkap';
     final message = isHttps
-        ? 'Alamat ini sesuai untuk sesi produksi selama sertifikat dan domain sekolah sudah benar.'
+        ? 'Lanjutkan hanya jika alamat ini sesuai dengan arahan pengawas atau operator.'
         : isHttp
-        ? 'Jangan pakai HTTP untuk ujian produksi. HTTP dipertahankan hanya untuk operator saat uji emulator, localhost, atau jaringan privat sekolah.'
-        : 'Pengawas/operator perlu memeriksa alamat server sebelum peserta login agar perangkat tidak mencoba server yang salah.';
+        ? 'Pengawas/operator wajib memastikan alamat ini benar sebelum peserta login.'
+        : 'Minta pengawas/operator memeriksa alamat server sebelum peserta login.';
     final color = isHttps
         ? const Color(0xFF1E6B36)
         : isHttp

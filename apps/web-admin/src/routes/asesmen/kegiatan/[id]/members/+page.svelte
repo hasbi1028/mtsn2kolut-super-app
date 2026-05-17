@@ -39,8 +39,8 @@
 	const roles: Array<{ value: EventMemberRole; label: string; desc: string }> = [
 		{ value: 'panitia', label: 'Panitia', desc: 'Koordinasi kegiatan' },
 		{ value: 'pembuat_soal', label: 'Pembuat Soal', desc: 'Menyusun bank soal' },
-		{ value: 'reviewer', label: 'Reviewer', desc: 'Menelaah mutu soal' },
-		{ value: 'proktor', label: 'Proktor', desc: 'Teknis sesi ujian' },
+		{ value: 'reviewer', label: 'Pemeriksa Soal', desc: 'Menelaah mutu soal' },
+		{ value: 'proktor', label: 'Pengawas Teknis', desc: 'Membantu kelancaran sesi ujian' },
 		{ value: 'pengawas', label: 'Pengawas', desc: 'Pengawasan ruang' },
 		{ value: 'korektor', label: 'Korektor', desc: 'Koreksi uraian' }
 	];

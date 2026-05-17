@@ -151,7 +151,7 @@ class ExamShellConnectionViewModel {
     if (pendingAnswerCount > 0) {
       return '$pendingAnswerCount jawaban masih aman di perangkat ini dan perlu sinkron ke server.';
     }
-    return 'Aman. Perangkat terakhir berhasil terhubung ke server tanpa jawaban lokal tertahan.';
+    return 'Aman. Perangkat terakhir berhasil terhubung ke server dan tidak ada jawaban yang menunggu dikirim.';
   }
 
   HealthTone get connectionHealthTone {

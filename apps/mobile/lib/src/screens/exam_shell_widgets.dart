@@ -153,7 +153,7 @@ class QuestionMediaCard extends StatelessWidget {
                   padding: const EdgeInsets.all(18),
                   color: Colors.white,
                   child: Text(
-                    'Media tidak dapat dimuat.\n$url',
+                    'Media soal belum dapat ditampilkan. Tetap di layar ini dan minta pengawas memeriksa koneksi perangkat.',
                     style: theme.textTheme.bodySmall,
                   ),
                 );
@@ -219,7 +219,7 @@ class ConnectionWarningCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Perangkat mengalami $failureCount gangguan sinkron berturut-turut. Terakhir tercatat pukul $lastFailureAt.',
+            'Koneksi menurun: $failureCount kali pengiriman belum berhasil. Jawaban tetap aman di perangkat ini. Minta pengawas memeriksa koneksi, lalu coba sinkron ulang. Terakhir tercatat pukul $lastFailureAt.',
             style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
           ),
           const SizedBox(height: 12),
@@ -344,15 +344,15 @@ class DegradedModeCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             pendingCount > 0
-                ? 'Sinkron gagal $failureCount kali berturut-turut dan masih ada $pendingCount jawaban aman di perangkat ini. Kirim ujian ditahan sampai sinkron pulih dan pengawas memeriksa perangkat.'
-                : 'Sinkron gagal $failureCount kali berturut-turut. Perbarui status bersama pengawas sebelum mengirim ujian.',
+                ? 'Koneksi menurun: $failureCount kali sinkron belum berhasil dan ada $pendingCount jawaban yang tetap aman di perangkat ini. Pengawas wajib memeriksa perangkat sebelum jawaban akhir dikirim.'
+                : 'Koneksi menurun: $failureCount kali sinkron belum berhasil. Pengawas wajib memeriksa perangkat, lalu perbarui status sebelum jawaban akhir dikirim.',
             style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
           ),
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: onRetry,
             icon: const Icon(Icons.sync_problem),
-            label: const Text('Pulihkan Sinkron'),
+            label: const Text('Pulihkan Sesi'),
           ),
         ],
       ),
@@ -392,7 +392,7 @@ class SupervisorAttentionCard extends StatelessWidget {
         ? FilledButton.icon(
             onPressed: onRetry,
             icon: const Icon(Icons.priority_high),
-            label: const Text('Intervensi dan Sinkron Ulang'),
+            label: const Text('Periksa Perangkat dan Sinkron Ulang'),
           )
         : OutlinedButton.icon(
             onPressed: onRetry,
@@ -423,8 +423,8 @@ class SupervisorAttentionCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             escalated
-                ? 'Kontak server terlalu lama tidak diperbarui selama $staleDuration sejak pukul $lastContactAt. Pengawas harus segera memeriksa perangkat, jaringan, dan memastikan sinkron ulang berhasil sebelum peserta melanjutkan.'
-                : 'Kontak server terlalu lama tidak diperbarui selama $staleDuration sejak pukul $lastContactAt. Minta pengawas memeriksa jaringan perangkat lalu lakukan sinkron ulang.',
+                ? 'Koneksi sudah terlalu lama belum tersambung sejak pukul $lastContactAt ($staleDuration). Jawaban tetap aman di perangkat ini. Pengawas wajib segera memeriksa perangkat dan jaringan, lalu sinkron ulang sebelum peserta melanjutkan.'
+                : 'Koneksi belum tersambung sejak pukul $lastContactAt ($staleDuration). Jawaban tetap aman di perangkat ini. Minta pengawas memeriksa jaringan perangkat lalu sinkron ulang.',
             style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
           ),
           const SizedBox(height: 10),
@@ -437,8 +437,8 @@ class SupervisorAttentionCard extends StatelessWidget {
             ),
             child: Text(
               escalated
-                  ? 'Ambang eskalasi keras sudah terlewati setelah $escalationThreshold tanpa kontak server baru.'
-                  : 'Jika kondisi ini bertahan sampai $escalationThreshold tanpa kontak server baru, panel ini akan naik ke mode intervensi keras.',
+                  ? 'Batas waktu pemeriksaan sudah terlewati: pengawas wajib memeriksa perangkat sekarang.'
+                  : 'Jika koneksi belum pulih sampai $escalationThreshold, pengawas wajib memeriksa perangkat sebelum peserta melanjutkan.',
               style: theme.textTheme.bodySmall?.copyWith(
                 height: 1.45,
                 fontWeight: FontWeight.w600,

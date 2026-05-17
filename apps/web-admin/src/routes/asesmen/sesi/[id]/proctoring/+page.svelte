@@ -364,7 +364,7 @@
 </script>
 
 <svelte:head>
-	<title>Panel Pengawasan CBT</title>
+	<title>Panel Pengawasan Ujian</title>
 </svelte:head>
 
 <div class="space-y-5 p-4 md:p-6">

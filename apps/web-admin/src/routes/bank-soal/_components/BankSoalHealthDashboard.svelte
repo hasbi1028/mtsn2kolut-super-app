@@ -153,18 +153,18 @@
 
 <div class="space-y-5">
 	<PageHeader
-		eyebrow="Dashboard Bank Soal"
+		eyebrow="Beranda Bank Soal"
 		title="Bank Soal"
-		subtitle="Kelola stok soal madrasah dari alur sederhana: tulis soal, review dan terbitkan, cek mutu, lalu atur standar."
-		context="Repositori soal MTsN 2 Kolaka Utara"
+		subtitle="Kelola soal madrasah dari alur sederhana: tulis soal, verifikasi dan terbitkan, cek mutu, lalu atur standar."
+		context="Bank Soal MTsN 2 Kolaka Utara"
 		primaryAction={canCreate ? { label: 'Tambah Soal', href: actionHref('/bank-soal/tambah') } : undefined}
 		secondaryAction={{ label: 'Refresh', onclick: loadHealth }}
 	/>
 
 	<ContextStrip
 		items={[
-			{ label: 'Alur', value: 'Kelola → Review → Mutu → Pengaturan', tone: 'success' },
-			{ label: 'Sumber data', value: 'BFF Bank Soal', tone: 'muted' },
+			{ label: 'Alur', value: 'Kelola → Verifikasi → Mutu → Pengaturan', tone: 'success' },
+			{ label: 'Sumber data', value: 'Data Bank Soal', tone: 'muted' },
 			{ label: 'Mode', value: 'Operasional' }
 		]}
 	/>
@@ -189,9 +189,9 @@
 		{#snippet children(value)}
 			{@const model = value as BankSoalHealthModel}
 			<section class="grid gap-3 md:grid-cols-3" aria-label="Ringkasan utama Bank Soal">
-				<MetricCard label="Soal tersedia" value={formatNumber(totalQuestionValue(model))} helper="Total dari summary atau sampel endpoint Bank Soal." tone="success" />
-				<MetricCard label="Menunggu review" value={formatNumber(model.reviewBacklog.value)} helper={model.reviewBacklog.evidenceLabel} tone={model.reviewBacklog.value && model.reviewBacklog.value > 0 ? 'warning' : 'success'} />
-				<MetricCard label="Mutu perlu dicek" value={model.warnings.length} helper="Warning operasional dan kualitas metadata." tone={model.warnings.length > 0 ? 'warning' : 'success'} />
+				<MetricCard label="Soal tersedia" value={formatNumber(totalQuestionValue(model))} helper="Total dari ringkasan atau contoh data Bank Soal." tone="success" />
+				<MetricCard label="Menunggu verifikasi" value={formatNumber(model.reviewBacklog.value)} helper={model.reviewBacklog.evidenceLabel} tone={model.reviewBacklog.value && model.reviewBacklog.value > 0 ? 'warning' : 'success'} />
+				<MetricCard label="Mutu perlu dicek" value={model.warnings.length} helper="Catatan operasional dan kelengkapan data soal." tone={model.warnings.length > 0 ? 'warning' : 'success'} />
 			</section>
 
 			<section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4" aria-label="Workflow Bank Soal">
@@ -203,23 +203,23 @@
 					status="Aktif"
 				/>
 				<WorkflowCard
-					title="Review & Terbitkan"
-					description="Antrean reviewer dan penerbitan soal dipusatkan sebagai satu alur keputusan."
+					title="Verifikasi & Terbitkan"
+					description="Antrean pemeriksa soal dan penerbitan dipusatkan sebagai satu alur keputusan."
 					href={canReview ? actionHref('/bank-soal/verifikasi') : ''}
-					actionLabel={canReview ? 'Buka Review' : 'Perlu izin reviewer'}
+					actionLabel={canReview ? 'Buka Verifikasi' : 'Perlu izin pemeriksa soal'}
 					status={`${formatNumber(model.reviewBacklog.value)} antrean`}
 					tone={model.reviewBacklog.value && model.reviewBacklog.value > 0 ? 'warning' : 'default'}
 				/>
 				<WorkflowCard
 					title="Mutu Soal"
-					description="Cek cakupan mapel, metadata, HOTS, pemakaian paket, dan prioritas revisi."
+					description="Cek cakupan mapel, kelengkapan data soal, HOTS, pemakaian paket, dan prioritas revisi."
 					href={canUseQuality ? actionHref('/bank-soal/analisis-butir') : ''}
 					actionLabel={canUseQuality ? 'Buka Mutu' : 'Perlu izin mutu'}
 					status={`${formatNumber(statusValue(model, 'approved'))} siap`}
 				/>
 				<WorkflowCard
 					title="Pengaturan"
-					description="Standar kualitas, mapel/KD, impor, reviewer, dan SOP ada di area pengaturan."
+					description="Standar kualitas, mapel/KD, impor, pemeriksa soal, dan SOP ada di area pengaturan."
 					href={canSettings ? actionHref('/bank-soal/pengaturan') : ''}
 					actionLabel={canSettings ? 'Buka Pengaturan' : 'Admin'}
 					status="Lanjutan"
@@ -227,7 +227,7 @@
 			</section>
 
 			<details class="rounded-xl border border-border bg-card p-4 shadow-sm">
-				<summary class="cursor-pointer text-sm font-semibold text-foreground">Mode Lengkap: kesehatan dan detail operasional</summary>
+				<summary class="cursor-pointer text-sm font-semibold text-foreground">Rincian lengkap: mutu dan data operasional</summary>
 				<div class="mt-4 space-y-5">
 			<section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-7" aria-label="Indikator status Bank Soal">
 				{#each model.statusCards as card (card.key)}
@@ -252,7 +252,7 @@
 				<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
 					<div class="flex items-start justify-between gap-3">
 						<div>
-							<h2 class="text-base font-semibold text-foreground">Readiness Bank Soal</h2>
+							<h2 class="text-base font-semibold text-foreground">Kesiapan Bank Soal</h2>
 							<p class="mt-1 text-xs text-muted-foreground">{model.readiness.evidenceLabel}</p>
 						</div>
 						<ShieldCheckIcon class="size-5 text-primary" />
@@ -261,7 +261,7 @@
 						<div class="flex size-28 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
 							<div class="text-center">
 								<p class="text-3xl font-semibold text-primary">{model.readiness.score ?? '-'}</p>
-								<p class="text-xs font-medium text-muted-foreground">Grade {model.readiness.grade}</p>
+								<p class="text-xs font-medium text-muted-foreground">Nilai kesiapan {model.readiness.grade}</p>
 							</div>
 						</div>
 						<div class="space-y-2">
@@ -278,7 +278,7 @@
 				<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
 					<div class="flex items-start justify-between gap-3">
 						<div>
-							<h2 class="text-base font-semibold text-foreground">Review Backlog</h2>
+							<h2 class="text-base font-semibold text-foreground">Antrean Verifikasi</h2>
 							<p class="mt-1 text-xs text-muted-foreground">{model.reviewBacklog.evidenceLabel}</p>
 						</div>
 						<ClipboardCheckIcon class="size-5 text-warning" />
@@ -286,9 +286,9 @@
 					<p class="mt-5 text-3xl font-semibold text-foreground">{formatNumber(model.reviewBacklog.value)}</p>
 					<p class="mt-1 text-sm text-muted-foreground">
 						{#if model.reviewBacklog.percent === null}
-							Perlu evidence/data total untuk membaca rasio backlog.
+							Perlu data pendukung total untuk membaca rasio antrean.
 						{:else}
-							{model.reviewBacklog.percent}% dari stok terukur masih review atau revisi.
+							{model.reviewBacklog.percent}% dari stok terukur masih menunggu verifikasi atau revisi.
 						{/if}
 					</p>
 				</div>
@@ -331,7 +331,7 @@
 								</div>
 								<p class="mt-1 text-xs text-muted-foreground">
 									{#if metric.missing === null}
-										perlu evidence/data
+										perlu data pendukung
 									{:else}
 										{metric.missing} tanpa data
 									{/if}
@@ -342,7 +342,7 @@
 				</div>
 
 				<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
-					<h2 class="text-base font-semibold text-foreground">Kualitas Metadata</h2>
+					<h2 class="text-base font-semibold text-foreground">Kelengkapan Data Soal</h2>
 					<div class="mt-4 space-y-3">
 						{#each model.metadataQuality as metric (metric.key)}
 							<div class="rounded-md border border-border bg-muted/40 px-3 py-2">
@@ -361,7 +361,7 @@
 				<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
 					<div class="flex items-start justify-between gap-3">
 						<div>
-							<h2 class="text-base font-semibold text-foreground">Warning Operasional</h2>
+							<h2 class="text-base font-semibold text-foreground">Catatan Operasional</h2>
 							<p class="mt-1 text-xs text-muted-foreground">Impor, aset, dan tata kelola hanya dinilai saat bukti pendukung tersedia.</p>
 						</div>
 						<AlertTriangleIcon class="size-5 text-warning" />
