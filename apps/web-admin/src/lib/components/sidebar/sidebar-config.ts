@@ -72,26 +72,21 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		group: 'Bank Soal',
 		items: [
 			{ href: '/bank-soal', label: 'Dashboard Bank Soal', icon: 'grid', roles: ['admin', 'guru'], permissions: ['bank_soal.read'] },
-			{ href: '/bank-soal/daftar', label: 'Daftar Soal', icon: 'book-open', roles: ['admin', 'guru'], permissions: ['bank_soal.read'] },
-			{ href: '/bank-soal/tambah', label: 'Tambah Soal', icon: 'pen-tool', roles: ['admin', 'guru'], permissions: ['bank_soal.create'] },
-			{ href: '/bank-soal/verifikasi', label: 'Verifikasi Soal', icon: 'clipboard', roles: ['admin'], permissions: ['bank_soal.review'] },
-			{ href: '/bank-soal/penerbitan', label: 'Penerbitan Soal', icon: 'check-circle', roles: ['admin'], permissions: ['bank_soal.publish'] },
-			{ href: '/bank-soal/impor', label: 'Impor Soal', icon: 'file-text', roles: ['admin'], permissions: ['bank_soal.import'] },
-			{ href: '/bank-soal/analisis-butir', label: 'Analisis Butir', icon: 'activity', roles: ['admin', 'guru'], permissions: ['bank_soal.analytics'] },
-			{ href: '/bank-soal/mapel-kd', label: 'Mapel & KD', icon: 'layers', roles: ['admin', 'guru'], permissions: ['bank_soal.read'] },
-			{ href: '/bank-soal/pengaturan', label: 'Pengaturan Bank Soal', icon: 'settings', roles: ['admin'], permissions: ['bank_soal.settings'] }
+			{ href: '/bank-soal/daftar', label: 'Kelola Soal', icon: 'book-open', roles: ['admin', 'guru'], permissions: ['bank_soal.read'] },
+			{ href: '/bank-soal/verifikasi', label: 'Review & Terbitkan', icon: 'clipboard', roles: ['admin'], permissions: ['bank_soal.review', 'bank_soal.publish'] },
+			{ href: '/bank-soal/analisis-butir', label: 'Mutu Soal', icon: 'activity', roles: ['admin', 'guru'], permissions: ['bank_soal.analytics'] },
+			{ href: '/bank-soal/pengaturan', label: 'Pengaturan', icon: 'settings', roles: ['admin'], permissions: ['bank_soal.settings'] }
 		]
 	},
 	{
-		group: 'Asesmen CBT',
+		group: 'Asesmen / CBT',
 		items: [
-			{ href: '/asesmen', label: 'Beranda Asesmen', icon: 'grid', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor', 'asesmen.result_read', 'asesmen.score'] },
-			{ href: '/asesmen/paket', label: 'Paket Soal', icon: 'book-open', roles: ['admin'], permissions: ['asesmen.package_manage'] },
-			{ href: '/asesmen/kegiatan', label: 'Kegiatan Asesmen', icon: 'calendar', roles: ['admin'], permissions: ['asesmen.event_manage'] },
-			{ href: '/asesmen/persiapan', label: 'Persiapan Asesmen', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
-			{ href: '/asesmen/aplikasi-siswa/release', label: 'Aplikasi Siswa CBT', icon: 'package', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor'] },
-			{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan Ujian', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
-			{ href: '/asesmen/hasil', label: 'Hasil Asesmen', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.result_read'] }
+			{ href: '/asesmen', label: 'Hari Ini / Dashboard CBT', icon: 'grid', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor', 'asesmen.result_read', 'asesmen.score'] },
+			{ href: '/asesmen/persiapan', label: 'Persiapan Ujian', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
+			{ href: '/asesmen/pelaksanaan', label: 'Monitor Ujian', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
+			{ href: '/asesmen/hasil', label: 'Hasil & BA', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.result_read'] },
+			{ href: '/asesmen/kegiatan', label: 'Arsip', icon: 'archive', roles: ['admin', 'guru'], permissions: ['asesmen.read', 'asesmen.event_manage'] },
+			{ href: '/asesmen/aplikasi-siswa', label: 'Aplikasi Siswa', icon: 'package', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor'] }
 		]
 	},
 	{

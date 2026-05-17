@@ -212,7 +212,7 @@
 				</div>
 				<div class="flex flex-wrap gap-2">
 					<a href={resolve('/bank-soal')} class="rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted/50">Dashboard</a>
-					<a href={resolve('/bank-soal/analisis-butir')} class="rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15">Analisis</a>
+					<a href={resolve('/bank-soal/analisis-butir')} class="rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15">Mutu Soal</a>
 				</div>
 			</div>
 		</div>

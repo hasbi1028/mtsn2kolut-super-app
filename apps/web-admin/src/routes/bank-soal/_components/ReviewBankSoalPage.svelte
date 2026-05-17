@@ -11,7 +11,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import RichContent from '$lib/components/RichContent.svelte';
 	import { toast } from '$lib/components/ui/sonner';
-	import { canReviewBankSoal, type BankSoalAccessUser } from '$lib/bank-soal/access';
+	import { canPublishBankSoal, canReviewBankSoal, type BankSoalAccessUser } from '$lib/bank-soal/access';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { htmlToPlainText } from '$lib/utils/html-text';
 	import { displayName } from '$lib/utils/display-name';
@@ -56,6 +56,7 @@
 
 	let activeQuestion = $derived(activeDetail ?? queue[activeIndex] ?? null);
 	let canReview = $derived(canReviewBankSoal(data?.user));
+	let canPublish = $derived(canPublishBankSoal(data?.user));
 
 	function errorMessage(error: unknown, fallback: string) {
 		return error instanceof Error && error.message.trim() ? error.message : fallback;
@@ -169,16 +170,16 @@
 	});
 </script>
 
-	<svelte:head><title>Verifikasi Bank Soal</title></svelte:head>
+	<svelte:head><title>Review & Terbitkan Bank Soal</title></svelte:head>
 
 <div class="space-y-5 p-4 md:p-6">
 	<div class="overflow-hidden rounded-2xl border border-primary/20 bg-card shadow-sm">
 		<div class="bg-gradient-to-r from-primary/10 via-card to-warning/10 p-4 md:p-5">
 			<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 				<div class="min-w-0">
-					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Ruang Verifikasi Fokus</p>
-					<h1 class="mt-1 text-2xl font-black uppercase italic tracking-tight text-foreground">Periksa Bank Soal</h1>
-					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Reviewer memeriksa naskah, opsi/kunci, rubrik, pembahasan, dan timeline sebelum menyetujui atau mengembalikan soal dengan catatan revisi.</p>
+					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Queue Bank Soal</p>
+					<h1 class="mt-1 text-2xl font-black uppercase italic tracking-tight text-foreground">Review & Terbitkan</h1>
+					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Reviewer memeriksa naskah, opsi/kunci, rubrik, pembahasan, dan timeline. Soal yang sudah disetujui diteruskan ke antrean terbit.</p>
 					<div class="mt-3 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-wide">
 						<span class="rounded-full border border-primary/20 bg-card px-2.5 py-1 text-primary">{queue.length} antrean aktif</span>
 						<span class="rounded-full border border-warning/30 bg-card px-2.5 py-1 text-warning">Checklist {reviewReadyCount}/{reviewChecklist.length}</span>
@@ -188,6 +189,9 @@
 				<div class="flex flex-wrap gap-2">
 					{#if eventId}
 						<a href={resolve(`/asesmen/kegiatan/${eventId}`)} class="inline-flex rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Kembali ke Kegiatan</a>
+					{/if}
+					{#if canPublish}
+						<a href={resolve('/bank-soal/penerbitan')} class="inline-flex rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Antrean Terbit</a>
 					{/if}
 					<a href={resolve('/bank-soal/daftar')} class="inline-flex rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">Daftar Soal</a>
 					<a href={resolve('/bank-soal')} class="inline-flex rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">Dashboard</a>
@@ -212,7 +216,12 @@
 		{/snippet}
 		{#snippet children()}
 			{#if !activeQuestion}
-				<div class="rounded-xl border border-success/20 bg-success/10 p-6 text-center text-success">Tidak ada soal yang menunggu verifikasi.</div>
+				<div class="rounded-xl border border-success/20 bg-success/10 p-6 text-center text-success">
+					<p class="font-semibold">Tidak ada soal yang menunggu review.</p>
+					{#if canPublish}
+						<a href={resolve('/bank-soal/penerbitan')} class="mt-4 inline-flex h-9 items-center rounded-md border border-success/30 bg-card px-3 text-sm font-semibold text-success hover:bg-success/10">Buka antrean terbit</a>
+					{/if}
+				</div>
 			{:else}
 				<section class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
 					<article class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">

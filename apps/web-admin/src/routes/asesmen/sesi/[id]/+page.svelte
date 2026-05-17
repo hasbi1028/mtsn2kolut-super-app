@@ -14,6 +14,7 @@
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import RichContent from '$lib/components/RichContent.svelte';
+	import { BlockerPanel, ContextStrip, EntityTabs, MetricCard, PageHeader } from '$lib/components/ops';
 	import { confirmAction, confirmChallenge } from '$lib/confirm-dialog';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { cbtRoomSetupErrorMessage, roomReadinessMessage, roomReadinessTone, type CbtRoomReadiness } from '$lib/client/cbt-room-readiness';
@@ -250,8 +251,10 @@
 	const userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
 	const isAdmin = $derived(userRoles.includes('admin'));
 	type ActiveTab = 'hasil' | 'butir' | 'peserta' | 'ruangan' | 'operasional' | 'proctoring' | 'audit' | 'essay';
+	type SessionArea = 'monitor' | 'peserta' | 'insiden' | 'hasil';
 
-	let activeTab = $state<ActiveTab>('hasil');
+	let activeTab = $state<ActiveTab>('proctoring');
+	let activeArea = $state<SessionArea>('monitor');
 	let session = $state<SessionInfo | null>(null);
 	let results = $state<ResultRow[]>([]);
 	let participants = $state<Participant[]>([]);
@@ -311,6 +314,12 @@
 	let proctoringEventsRequestId = 0;
 	let auditLogsRequestId = 0;
 	let essaysRequestId = 0;
+	const sessionAreaTabs: Array<{ id: SessionArea; label: string }> = [
+		{ id: 'monitor', label: 'Monitor' },
+		{ id: 'peserta', label: 'Peserta' },
+		{ id: 'insiden', label: 'Masalah/Insiden' },
+		{ id: 'hasil', label: 'Hasil & BA' },
+	];
 
 	function selectedSchoolRoom() {
 		return schoolRooms.find((room) => room.id === selectedSchoolRoomId) ?? null;
@@ -839,8 +848,29 @@
 		}
 	}
 
+	function areaForTab(tab: ActiveTab): SessionArea {
+		if (tab === 'peserta' || tab === 'ruangan') return 'peserta';
+		if (tab === 'operasional' || tab === 'audit') return 'insiden';
+		if (tab === 'hasil' || tab === 'butir' || tab === 'essay') return 'hasil';
+		return 'monitor';
+	}
+
+	function tabForArea(area: SessionArea): ActiveTab {
+		if (area === 'peserta') return 'peserta';
+		if (area === 'insiden') return 'operasional';
+		if (area === 'hasil') return 'hasil';
+		return 'proctoring';
+	}
+
+	async function setSessionArea(area: string) {
+		const nextArea = area as SessionArea;
+		activeArea = nextArea;
+		await switchTab(tabForArea(nextArea));
+	}
+
 	async function switchTab(tab: ActiveTab) {
 		activeTab = tab;
+		activeArea = areaForTab(tab);
 		try {
 			if (tab === 'peserta') { await loadRooms(); await loadParticipants(); }
 			if (tab === 'ruangan') { await Promise.all([loadRooms(), loadParticipants(), loadSchoolRooms(), loadEmployeeOptions(), loadRoomReadiness()]); }
@@ -1262,6 +1292,8 @@
 		const requestedTab = tabFromQuery(page.url.searchParams.get('tab'));
 		if (requestedTab && requestedTab !== activeTab) {
 			void switchTab(requestedTab);
+		} else {
+			void switchTab(activeTab);
 		}
 	});
 	onDestroy(() => { if (procInterval) clearInterval(procInterval); });
@@ -1333,179 +1365,124 @@
 			{@const currentSession = detail.session}
 			{@const currentResults = detail.results}
 			{@const roomControlsLocked = roomSetupLocked(currentSession.status)}
-		<!-- Session header -->
-		<div class="flex items-start justify-between gap-4 flex-wrap">
-			<div>
-				<h1 class="text-2xl font-semibold text-primary">{currentSession.title}</h1>
-				<div class="flex flex-wrap gap-2 mt-2 text-sm text-muted-foreground">
-					<span>{currentSession.package_title}</span>
-					{#if currentSession.class_code}<span>· Kelas {currentSession.class_code}</span>{/if}
-					<span>· {currentSession.duration_minutes} menit</span>
-					<span>· {fmtDt(currentSession.scheduled_start)}</span>
-				</div>
-			</div>
-				<div class="flex items-center gap-2 flex-wrap">
+			<PageHeader
+				eyebrow="Detail Sesi Ujian"
+				title={currentSession.title}
+				subtitle={`${currentSession.package_title} · ${currentSession.duration_minutes} menit · ${fmtDt(currentSession.scheduled_start)}`}
+				context={currentSession.class_code ? `Kelas ${currentSession.class_code}` : 'Lintas peserta'}
+				primaryAction={{ label: 'Buka Command Center', href: resolve(`/asesmen/sesi/${sessionId}/proctoring`) }}
+				secondaryAction={{ label: 'Berita Acara', href: resolve(`/asesmen/sesi/${sessionId}/minutes`) }}
+			>
+				{#snippet meta()}
 					<Badge class={statusClass(currentSession.status)}>{statusLabel[currentSession.status] ?? currentSession.status}</Badge>
-				{#if isAdmin && (currentSession.status === 'finished' || currentSession.status === 'active')}
-					<LoadingButton size="sm" variant="outline" disabled={scoreBusy} onclick={triggerScoring} loading={scoreBusy} loadingLabel="Menghitung...">
-						⟳ Hitung Skor
-					</LoadingButton>
-				{/if}
-					{#if currentResults.length > 0}
-						<Button size="sm" variant="outline" onclick={exportCSV}>↓ CSV</Button>
-					{/if}
-					<a href={resolve(`/asesmen/sesi/${sessionId}/minutes`)} class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
-						Berita Acara
-					</a>
 					{#if currentSession.event_id}
-						<a href={resolve(`/asesmen/kegiatan/${currentSession.event_id}/exam-cards`)} class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
-							Kartu Ujian Event
-						</a>
+						<Badge variant="outline" class="bg-card">Kegiatan tertaut</Badge>
 					{/if}
-				</div>
-		</div>
+				{/snippet}
+			</PageHeader>
 
-		<!-- Stats -->
-		<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-			{#each [
-				{ label: 'Total Peserta', val: stats.total.toString() },
-				{ label: 'Sudah Kirim Jawaban', val: stats.submitted.toString() },
-				{ label: 'Rata-rata Nilai', val: stats.total > 0 ? stats.avgScore.toFixed(1) : '—' },
-				{ label: 'Lulus (≥75)', val: `${stats.passing} / ${stats.submitted}` },
-			] as s (s.label)}
-				<Card.Root class="border-success/20">
-					<Card.Content class="pt-4 pb-3 px-4">
-						<p class="text-xs text-muted-foreground mb-1">{s.label}</p>
-						<p class="text-2xl font-bold text-primary">{s.val}</p>
+			<ContextStrip
+				items={[
+					{ label: 'Paket', value: currentSession.package_title, tone: 'muted' },
+					{ label: 'Mulai', value: fmtDt(currentSession.scheduled_start) },
+					{ label: 'Status', value: statusLabel[currentSession.status] ?? currentSession.status, tone: currentSession.status === 'active' ? 'success' : currentSession.status === 'finished' ? 'muted' : 'warning' }
+				]}
+			/>
+
+			<section class="grid gap-3 md:grid-cols-3" aria-label="Ringkasan sesi ujian">
+				<MetricCard label="Peserta hadir/total" value={operationalRecap ? `${operationalRecap.joined_count}/${operationalRecap.participant_count}` : `${stats.submitted}/${stats.total}`} helper={operationalRecap ? `${operationalRecap.no_show_count} belum hadir` : 'Menggunakan data hasil yang sudah termuat'} tone="success" />
+				<MetricCard label="Progress submit" value={operationalRecap ? `${operationalRecap.submitted_count}/${operationalRecap.participant_count}` : `${stats.submitted}/${stats.total}`} helper="Jawaban terkirim dan siap direkap" />
+				<MetricCard label="Masalah aktif" value={commandCenterIssues.length} helper={commandCenterIssues.length > 0 ? 'Buka Masalah/Insiden untuk tindak lanjut' : 'Belum ada atensi dari snapshot'} tone={commandCenterIssues.length > 0 ? 'warning' : 'success'} />
+			</section>
+
+			<BlockerPanel
+				title="Masalah yang Perlu Ditangani"
+				blockers={commandCenterIssues.slice(0, 3).map((issue) => ({
+					label: issue.label,
+					description: 'Status operasional tidak hanya ditandai warna; buka area kerja terkait untuk tindak lanjut.',
+					actionLabel: 'Buka',
+					tone: issue.tone === 'danger' ? 'danger' : issue.tone === 'warning' ? 'warning' : 'info'
+				}))}
+			/>
+
+			<EntityTabs tabs={sessionAreaTabs} bind:active={activeArea} label="Area detail sesi" onSelect={setSessionArea} />
+
+			{@const detailNextAction = nextDetailAction(roomReadiness)}
+			{#if activeArea === 'monitor'}
+				<Card.Root class={detailActionPanelClass(detailNextAction.tone)}>
+					<Card.Content class="flex flex-wrap items-center justify-between gap-3 p-4">
+						<div>
+							<p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Aksi Berikutnya</p>
+							<p class="mt-1 text-sm font-semibold text-foreground">{detailNextAction.title}</p>
+							<p class="mt-0.5 text-xs text-muted-foreground">{detailNextAction.message}</p>
+						</div>
+						{#if detailNextAction.run === 'auto_seats'}
+							<LoadingButton size="sm" loading={seatBusy} loadingLabel="Mengatur..." disabled={roomControlsLocked || seatBusy} onclick={autoAssignSeats}>
+								{detailNextAction.label}
+							</LoadingButton>
+						{:else if detailNextAction.tab}
+							<Button size="sm" onclick={() => switchTab(detailNextAction.tab ?? 'hasil')}>
+								{detailNextAction.label}
+							</Button>
+						{/if}
 					</Card.Content>
 				</Card.Root>
-			{/each}
-		</div>
+			{/if}
 
-		<Card.Root class={commandCenterClass()}>
-			<Card.Header class="flex flex-row items-start justify-between gap-3 pb-2">
-				<div>
-					<Card.Title class="text-base">Monitoring Sesi</Card.Title>
-					<p class="mt-1 text-xs text-muted-foreground">
-						Snapshot ringkas untuk operator: ruang, pengawas, submit, koneksi, atensi, dan handover.
-					</p>
-				</div>
-				<div class="flex flex-wrap justify-end gap-2">
-					<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/proctoring`)}>
-						Command Center
-					</Button>
-					<LoadingButton variant="outline" size="sm" loading={commandCenterBusy} loadingLabel="Memuat..." onclick={() => void refreshCommandCenter()}>
-						Refresh
-					</LoadingButton>
-				</div>
-			</Card.Header>
-			<Card.Content class="space-y-3">
-				<div class="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
-					{#each commandCenterMetrics as metric (metric.label)}
-						<button
-							type="button"
-							class="rounded-md border border-border bg-card px-3 py-2 text-left shadow-sm transition hover:border-primary/20 hover:bg-primary/10"
-							onclick={() => switchTab(metric.tab)}
-						>
-							<span class="block text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{metric.label}</span>
-							<span class="mt-1 block text-xl font-bold text-primary">{metric.value}</span>
-							<span class="mt-0.5 block text-[11px] text-muted-foreground">{metric.helper}</span>
-						</button>
+			<details class="rounded-lg border border-border bg-card p-3 shadow-sm">
+				<summary class="cursor-pointer text-sm font-semibold text-foreground">Mode Lengkap: data teknis sesi</summary>
+				<div class="mt-3 grid gap-3 xl:grid-cols-3" role="tablist" aria-label="Navigasi teknis detail sesi CBT">
+					{#each detailTabGroups as group (group.module)}
+						<section class="rounded-lg border border-border bg-muted/50 p-2">
+							<div class="mb-2 px-1">
+								<p class="text-xs font-semibold text-foreground">{group.module}</p>
+								<p class="text-[11px] text-muted-foreground">{group.help}</p>
+							</div>
+							<div class="flex flex-wrap gap-1">
+								{#each group.tabs as tab (tab.id)}
+									<button
+										id={`tab-${tab.id}`}
+										type="button"
+										role="tab"
+										aria-selected={activeTab === tab.id}
+										aria-controls={`panel-${tab.id}`}
+										onclick={() => switchTab(tab.id)}
+										class="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {activeTab === tab.id
+											? 'border-primary bg-primary/10 text-primary'
+											: 'border-border bg-card text-muted-foreground hover:border-border hover:text-foreground'}"
+									>
+										{tab.label}
+									</button>
+								{/each}
+							</div>
+						</section>
 					{/each}
 				</div>
-				<div class="flex flex-wrap items-center gap-2">
-					{#if commandCenterIssues.length === 0}
-						<Badge class="border-primary/20 bg-card text-primary">Operasional terkendali</Badge>
-					{:else}
-						{#each commandCenterIssues.slice(0, 6) as issue (`${issue.tab}-${issue.label}`)}
-							<button
-								type="button"
-								class="rounded-md border px-2.5 py-1 text-xs font-semibold transition hover:bg-muted/50 {commandIssueClass(issue.tone)}"
-								onclick={() => switchTab(issue.tab)}
-							>
-								{issue.label}
-							</button>
-						{/each}
-						{#if commandCenterIssues.length > 6}
-							<Badge variant="outline" class="bg-card text-xs">+{commandCenterIssues.length - 6} atensi lain</Badge>
-						{/if}
-					{/if}
-				</div>
-			</Card.Content>
-		</Card.Root>
-
-		{@const detailNextAction = nextDetailAction(roomReadiness)}
-		<Card.Root class={detailActionPanelClass(detailNextAction.tone)}>
-			<Card.Content class="flex flex-wrap items-center justify-between gap-3 p-4">
-				<div>
-					<p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Aksi Berikutnya</p>
-					<p class="mt-1 text-sm font-semibold text-foreground">{detailNextAction.title}</p>
-					<p class="mt-0.5 text-xs text-muted-foreground">{detailNextAction.message}</p>
-				</div>
-				{#if detailNextAction.run === 'auto_seats'}
-					<LoadingButton size="sm" loading={seatBusy} loadingLabel="Mengatur..." disabled={roomControlsLocked || seatBusy} onclick={autoAssignSeats}>
-						{detailNextAction.label}
-					</LoadingButton>
-				{:else if detailNextAction.tab}
-					<Button size="sm" onclick={() => switchTab(detailNextAction.tab ?? 'hasil')}>
-						{detailNextAction.label}
-					</Button>
-				{/if}
-			</Card.Content>
-		</Card.Root>
-
-		<!-- Tabs -->
-		<div class="space-y-3 rounded-xl border border-success/20 bg-card p-3 shadow-sm">
-			<div class="flex flex-wrap items-center justify-between gap-2">
-				<div>
-					<p class="text-xs font-semibold uppercase tracking-[0.16em] text-success">Alur 5 Modul CBT</p>
-					<p class="mt-0.5 text-sm text-muted-foreground">Detail sesi dikelompokkan ke Kegiatan & Sesi, Monitoring, dan Hasil & Analisis.</p>
-				</div>
-				<div class="flex flex-wrap gap-2">
-					<a href={resolve(`/asesmen/sesi/${sessionId}/minutes`)} class="inline-flex items-center rounded-md border border-input bg-background px-2.5 py-1.5 text-xs font-semibold text-foreground hover:bg-muted">
-						Berita Acara
-					</a>
-					{#if currentSession.event_id}
-						<a href={resolve(`/asesmen/kegiatan/${currentSession.event_id}/exam-cards`)} class="inline-flex items-center rounded-md border border-input bg-background px-2.5 py-1.5 text-xs font-semibold text-foreground hover:bg-muted">
-							Kartu Ujian
-						</a>
-					{/if}
-				</div>
-			</div>
-			<div class="grid gap-3 xl:grid-cols-3" role="tablist" aria-label="Navigasi detail sesi CBT">
-				{#each detailTabGroups as group (group.module)}
-					<section class="rounded-lg border border-border bg-muted/50 p-2">
-						<div class="mb-2 px-1">
-							<p class="text-xs font-semibold text-foreground">{group.module}</p>
-							<p class="text-[11px] text-muted-foreground">{group.help}</p>
-						</div>
-						<div class="flex flex-wrap gap-1">
-							{#each group.tabs as tab (tab.id)}
-								<button
-									id={`tab-${tab.id}`}
-									type="button"
-									role="tab"
-									aria-selected={activeTab === tab.id}
-									aria-controls={`panel-${tab.id}`}
-									onclick={() => switchTab(tab.id)}
-									class="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors {activeTab === tab.id
-										? 'border-primary bg-success/10 text-primary'
-										: 'border-border bg-card text-muted-foreground hover:border-border hover:text-foreground'}"
-								>
-									{tab.label}
-								</button>
-							{/each}
-						</div>
-					</section>
-				{/each}
-			</div>
-		</div>
+			</details>
 
 		<!-- Tab: Hasil -->
 		{#if activeTab === 'hasil'}
 			<Card.Root>
 				<Card.Header class="pb-2">
-				<Card.Title class="text-base">Daftar Nilai ({results.length} peserta)</Card.Title>
+					<div class="flex flex-wrap items-start justify-between gap-3">
+						<div>
+							<Card.Title class="text-base">Hasil & BA ({results.length} peserta)</Card.Title>
+							<p class="mt-1 text-xs text-muted-foreground">Rekap jawaban, nilai, CSV, dan berita acara sesi.</p>
+						</div>
+						<div class="flex flex-wrap gap-2">
+							{#if isAdmin && (currentSession.status === 'finished' || currentSession.status === 'active')}
+								<LoadingButton size="sm" variant="outline" disabled={scoreBusy} onclick={triggerScoring} loading={scoreBusy} loadingLabel="Menghitung...">
+									Hitung Skor
+								</LoadingButton>
+							{/if}
+							{#if currentResults.length > 0}
+								<Button size="sm" variant="outline" onclick={exportCSV}>CSV</Button>
+							{/if}
+							<Button size="sm" variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/minutes`)}>
+								Berita Acara
+							</Button>
+						</div>
+					</div>
 				</Card.Header>
 				<Card.Content class="p-0 overflow-x-auto">
 					<Table.Root>

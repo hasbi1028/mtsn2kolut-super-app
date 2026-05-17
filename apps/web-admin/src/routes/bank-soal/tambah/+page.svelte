@@ -12,7 +12,7 @@
 </script>
 
 <svelte:head>
-	<title>Penyusun soal Soal - MTsN 2 Kolaka Utara</title>
+	<title>Penyusun Soal - MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 <SoalWorkspacePage {data} routeMode="composer" />

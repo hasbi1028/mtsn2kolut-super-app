@@ -90,7 +90,7 @@
 	});
 	let cognitiveBuckets = $derived((summary.by_cognitive_level ?? []).filter((item) => item.total && item.total > 0));
 	let insights = $derived<Insight[]>([
-		{ label: 'Total bank soal', value: totalQuestions, desc: `${filteredQuestions.length} soal masuk sampel analisis`, tone: 'emerald' },
+		{ label: 'Total bank soal', value: totalQuestions, desc: `${filteredQuestions.length} soal masuk sampel mutu`, tone: 'emerald' },
 		{ label: 'Lolos verifikasi', value: reviewedQuestions, desc: 'Disetujui + terbit', tone: 'green' },
 		{ label: 'Dipakai paket/jawaban', value: usedQuestions, desc: 'Soal yang sudah punya jejak pemakaian', tone: 'amber' },
 		{ label: 'Perlu revisi', value: revisionQuestions.length, desc: 'Prioritas perbaikan guru/reviewer', tone: 'rose' }
@@ -100,16 +100,16 @@
 	onMount(load);
 </script>
 
-<svelte:head><title>Analisis Butir - Bank Soal</title></svelte:head>
+<svelte:head><title>Mutu Soal - Bank Soal</title></svelte:head>
 
 <div class="space-y-5 p-4 md:p-6">
 	<section class="overflow-hidden rounded-2xl border border-primary/20 bg-card shadow-sm">
 		<div class="bg-gradient-to-r from-primary/10 via-card to-warning/10 p-4 md:p-5">
 			<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 				<div>
-					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Advanced Bank Soal</p>
-					<h1 class="mt-1 text-2xl font-black uppercase italic tracking-tight text-foreground">Analisis Butir</h1>
-					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Pantau kesiapan kualitas soal dari data yang sudah tersedia: status verifikasi, pemakaian paket, level kognitif, tipe soal, dan antrean prioritas revisi.</p>
+					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Mutu Bank Soal</p>
+					<h1 class="mt-1 text-2xl font-black uppercase italic tracking-tight text-foreground">Mutu Soal</h1>
+					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Pantau sinyal mutu dari data yang sudah tersedia: status verifikasi, pemakaian paket, level kognitif, tipe soal, dan antrean prioritas revisi.</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
 					<a href={resolve('/bank-soal')} class="rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted/50">Dashboard</a>
@@ -124,7 +124,7 @@
 			<Skeleton class="h-96 w-full" />
 		{/snippet}
 		{#snippet failed(error, reset)}
-			<RecoveryPanel title="Analisis belum tersedia" message={error instanceof Error ? error.message : 'Gagal memuat analisis.'} onRetry={() => { reset?.(); load(); }} />
+			<RecoveryPanel title="Mutu Soal belum tersedia" message={error instanceof Error ? error.message : 'Gagal memuat mutu soal.'} onRetry={() => { reset?.(); load(); }} />
 		{/snippet}
 		{#snippet children()}
 			<section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">

@@ -9,6 +9,7 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { BlockerPanel, ContextStrip, EntityTabs, MetricCard, PageHeader } from '$lib/components/ops';
 	import { sopStages, sopStatusLabels, type SopReadinessResponse, type SopStageKey, type SopStageReadiness, type SopStageStatus } from '$lib/asesmen/sop-stages';
 	import { assessmentApprovalLabels, createApproval, listApprovals, revokeApproval, type AssessmentApprovalRecord, type AssessmentApprovalType } from '$lib/asesmen/approval-client';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
@@ -87,7 +88,7 @@
 	type ChecklistItem = {
 		label: string; helper: string; count: number | null; href: ChecklistHref; tone: 'success' | 'warning' | 'info'; action: string;
 	};
-	type EventSection = 'ringkasan' | 'persiapan' | 'kelengkapan-soal' | 'operasional' | 'hasil';
+	type EventSection = 'ringkasan' | 'persiapan' | 'pelaksanaan' | 'hasil' | 'arsip';
 	type ReadinessGroup = {
 		id: EventSection;
 		title: string;
@@ -114,9 +115,9 @@
 	const sectionTabs: Array<{ id: EventSection; label: string }> = [
 		{ id: 'ringkasan', label: 'Ringkasan' },
 		{ id: 'persiapan', label: 'Persiapan' },
-		{ id: 'kelengkapan-soal', label: 'Kelengkapan Soal' },
-		{ id: 'operasional', label: 'Operasional' },
-		{ id: 'hasil', label: 'Hasil' },
+		{ id: 'pelaksanaan', label: 'Pelaksanaan' },
+		{ id: 'hasil', label: 'Hasil & BA' },
+		{ id: 'arsip', label: 'Arsip' },
 	];
 	let completenessLevel = $state('');
 	let completenessStatus = $state('');
@@ -349,22 +350,28 @@
 				items: ['Penugasan', 'Kebutuhan Soal', 'Verifikasi Repositori', 'Paket Kegiatan'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
 			},
 			{
-				id: 'operasional',
+				id: 'pelaksanaan',
 				title: 'Kegiatan & Sesi',
 				description: 'Jadwal, ruang, pengawas, kursi, token ujian, dan kartu ujian.',
 				items: ['Sesi/Jadwal', 'Token/Kartu'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
 			},
 			{
-				id: 'operasional',
+				id: 'pelaksanaan',
 				title: 'Monitoring',
 				description: 'Kesiapan ruang dan pengawasan saat ujian berlangsung.',
 				items: ['Ruang/Pengawas/Kursi'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
 			},
 			{
 				id: 'hasil',
-				title: 'Hasil',
-				description: 'Rekap nilai gabungan, ekspor, dan arsip saat data sudah masuk.',
-				items: ['Hasil', 'Arsip'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
+				title: 'Hasil & BA',
+				description: 'Rekap nilai gabungan, ekspor, dan berita acara saat data sudah masuk.',
+				items: ['Hasil'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
+			},
+			{
+				id: 'arsip',
+				title: 'Arsip',
+				description: 'Dokumen final, pengesahan SOP, dan audit ringkas kegiatan.',
+				items: ['Arsip'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
 			},
 		];
 	}
@@ -701,7 +708,7 @@
 
 <svelte:window onhashchange={handleHashChange} />
 
-<div class="space-y-6 p-6">
+<div class="space-y-5">
 	<div class="flex items-center gap-2 text-sm text-muted-foreground">
 		<a href={resolve('/asesmen/kegiatan')} class="hover:text-foreground">Kegiatan Asesmen & Sesi Ujian</a>
 		<span>/</span>
@@ -731,40 +738,55 @@
 			{@const readinessGroups = buildReadinessGroups(checklist)}
 			{@const nextActions = buildNextActions(detail, checklist)}
 			{@const sopTimeline = buildSopTimeline(detail, checklist)}
-			<section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-				<div class="flex flex-wrap items-start justify-between gap-4">
-					<div class="max-w-3xl p-5">
-						<p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Pusat Kegiatan Asesmen</p>
-						<h1 class="mt-1 text-2xl font-semibold text-foreground">{currentInfo.title}</h1>
-						<p class="mt-2 text-sm text-muted-foreground">{currentInfo.academic_year_name} · <span class="capitalize">{currentInfo.exam_type}</span> · {scopeLabel[currentInfo.scope] ?? currentInfo.scope}</p>
-						<p class="mt-2 text-sm text-muted-foreground">Ikuti langkah kesiapan dari Paket Soal, Sesi Ujian, Pengawasan Ruang, sampai Hasil Asesmen tanpa membuka banyak halaman setara.</p>
-					</div>
-					<div class="flex flex-wrap items-center gap-2 p-5 lg:justify-end">
-						<Badge class={statusClass(currentInfo.status)}>{statusLabel[currentInfo.status] ?? currentInfo.status}</Badge>
-						{#each currentInfo.target_levels ?? [] as level (level)}
-							<Badge variant="outline" class="bg-card">Tingkat {level}</Badge>
-						{/each}
-						{#if !currentInfo.target_levels?.length}
-							<Badge variant="outline" class="bg-card">Target mengikuti cakupan</Badge>
-						{/if}
-					</div>
-				</div>
-				<nav class="flex gap-1 overflow-x-auto border-t border-border bg-muted/50 px-3 py-2" aria-label="Bagian pusat kegiatan">
-					{#each sectionTabs as tab (tab.id)}
-						<button
-							type="button"
-							class={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${activeSection === tab.id ? 'bg-card text-primary shadow-sm ring-1 ring-primary/30' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`}
-							aria-current={activeSection === tab.id ? 'page' : undefined}
-							aria-pressed={activeSection === tab.id}
-							onclick={() => activeSection = tab.id}
-						>
-							{tab.label}
-						</button>
+			{@const blockingItems = checklist.filter((item) => item.tone === 'warning')}
+			{@const readyCount = checklist.filter((item) => item.tone === 'success').length}
+			<PageHeader
+				eyebrow="Kegiatan Asesmen"
+				title={currentInfo.title}
+				subtitle="Kelola kegiatan dari ringkasan, persiapan, pelaksanaan, hasil dan berita acara, sampai arsip final."
+				context={`${currentInfo.academic_year_name} · ${scopeLabel[currentInfo.scope] ?? currentInfo.scope}`}
+				primaryAction={{ label: currentInfo.status === 'finished' ? 'Buka Hasil & BA' : 'Buka Pelaksanaan', onclick: () => (activeSection = currentInfo.status === 'finished' ? 'hasil' : 'pelaksanaan') }}
+				secondaryAction={{ label: 'Daftar Kegiatan', href: resolve('/asesmen/kegiatan') }}
+			>
+				{#snippet meta()}
+					<Badge class={statusClass(currentInfo.status)}>{statusLabel[currentInfo.status] ?? currentInfo.status}</Badge>
+					{#each currentInfo.target_levels ?? [] as level (level)}
+						<Badge variant="outline" class="bg-card">Tingkat {level}</Badge>
 					{/each}
-				</nav>
+					{#if !currentInfo.target_levels?.length}
+						<Badge variant="outline" class="bg-card">Target mengikuti cakupan</Badge>
+					{/if}
+				{/snippet}
+			</PageHeader>
+
+			<ContextStrip
+				items={[
+					{ label: 'Jenis', value: currentInfo.exam_type, tone: 'muted' },
+					{ label: 'Status', value: statusLabel[currentInfo.status] ?? currentInfo.status, tone: currentInfo.status === 'active' ? 'success' : currentInfo.status === 'finished' ? 'muted' : 'warning' },
+					{ label: 'Cakupan', value: scopeLabel[currentInfo.scope] ?? currentInfo.scope }
+				]}
+			/>
+
+			<section class="grid gap-3 md:grid-cols-3" aria-label="Ringkasan kegiatan asesmen">
+				<MetricCard label="Kesiapan" value={`${readyCount}/${checklist.length}`} helper={blockingItems.length > 0 ? `${blockingItems.length} item perlu tindakan` : 'Item utama terbaca siap'} tone={blockingItems.length > 0 ? 'warning' : 'success'} />
+				<MetricCard label="Peserta / Sesi" value={`${detail.overview?.member_count ?? '-'} / ${detail.sessions.length}`} helper={`${detail.sessions.reduce((sum, session) => sum + (session.room_count ?? 0), 0)} ruang terbaca`} />
+				<MetricCard label="Hasil & BA" value={currentResults.length} helper="Baris hasil dari seluruh sesi kegiatan" tone={currentResults.length > 0 ? 'success' : 'muted'} />
 			</section>
 
-			<section class="grid gap-4 lg:grid-cols-[0.82fr_1.18fr]" aria-label="Wizard kesiapan kegiatan">
+			<BlockerPanel
+				blockers={blockingItems.slice(0, 3).map((item) => ({
+					label: item.label,
+					description: item.helper,
+					href: resolve(item.href),
+					actionLabel: item.action,
+					tone: 'warning'
+				}))}
+			/>
+
+			<EntityTabs tabs={sectionTabs} bind:active={activeSection} label="Area kegiatan asesmen" />
+
+			{#if activeSection === 'ringkasan'}
+			<section class="grid gap-4 lg:grid-cols-[0.82fr_1.18fr]" aria-label="Ringkasan langkah kegiatan">
 				<Card.Root class="border-primary/20 bg-primary/10 shadow-sm">
 					<Card.Header class="pb-2">
 						<Card.Title class="text-base">Langkah berikutnya</Card.Title>
@@ -817,7 +839,9 @@
 					</Card.Content>
 				</Card.Root>
 			</section>
+			{/if}
 
+			{#if activeSection === 'persiapan'}
 			<section aria-label="Timeline SOP kegiatan asesmen">
 				<Card.Root class="border-primary/20 shadow-sm">
 					<Card.Header class="pb-3">
@@ -867,7 +891,9 @@
 					</Card.Content>
 				</Card.Root>
 			</section>
+			{/if}
 
+			{#if activeSection === 'arsip'}
 			<section aria-label="Pengesahan SOP kegiatan asesmen">
 				<Card.Root class="border-primary/20 shadow-sm">
 					<Card.Header class="pb-3">
@@ -945,6 +971,7 @@
 					</Card.Content>
 				</Card.Root>
 			</section>
+			{/if}
 
 			{#if activeSection === 'ringkasan'}
 				<section>
@@ -960,10 +987,12 @@
 				</section>
 			{/if}
 
-			{#if activeSection === 'kelengkapan-soal'}
+			{#if activeSection === 'persiapan'}
 				{@const completeness = detail.questionCompleteness}
 				{@const filteredRows = filteredCompletenessRows(detail)}
-				<section class="space-y-4">
+				<details class="rounded-xl border border-border bg-card p-4 shadow-sm">
+					<summary class="cursor-pointer text-sm font-semibold text-foreground">Mode Lengkap: target dan kelengkapan soal</summary>
+					<section class="mt-4 space-y-4">
 					<Card.Root>
 						<Card.Header class="pb-2">
 							<div class="flex flex-wrap items-start justify-between gap-3">
@@ -1074,10 +1103,11 @@
 							</Table.Root>
 						</Card.Content>
 					</Card.Root>
-				</section>
+					</section>
+				</details>
 			{/if}
 
-			{#if activeSection === 'persiapan' || activeSection === 'operasional'}
+			{#if activeSection === 'persiapan' || activeSection === 'pelaksanaan' || activeSection === 'arsip'}
 				{@const activeGroups = readinessGroups.filter((item) => item.id === activeSection)}
 				{#if activeGroups.length > 0}
 					<section class="grid gap-3 md:grid-cols-2">
@@ -1104,8 +1134,11 @@
 			<Card.Root id="hasil" bind:ref={hasilSectionElement} tabindex={-1}>
 				<Card.Header class="pb-2">
 					<div class="flex flex-wrap items-start justify-between gap-3">
-						<div><Card.Title class="text-base">Hasil & Analisis</Card.Title><Card.Description>Rekap nilai gabungan dari seluruh sesi dalam kegiatan ini; gunakan ekspor untuk analisis lanjutan.</Card.Description></div>
-						<LoadingButton variant="outline" onclick={exportCSV} disabled={currentResults.length === 0} label="Ekspor CSV" />
+						<div><Card.Title class="text-base">Hasil & BA</Card.Title><Card.Description>Rekap nilai gabungan, status submit, dan bahan berita acara dari seluruh sesi kegiatan.</Card.Description></div>
+						<div class="flex flex-wrap gap-2">
+							<a href={resolve(`/asesmen/kegiatan/${eventId}/archive`)} class="inline-flex h-8 items-center rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted/50">Arsip BA</a>
+							<LoadingButton variant="outline" onclick={exportCSV} disabled={currentResults.length === 0} label="Ekspor CSV" />
+						</div>
 					</div>
 				</Card.Header>
 				<Card.Content class="p-0 overflow-x-auto">

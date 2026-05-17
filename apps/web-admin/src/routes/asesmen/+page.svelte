@@ -2,8 +2,8 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import type { RouteId } from '$app/types';
-	import * as Card from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
+	import { ContextStrip, MetricCard, PageHeader, WorkflowCard } from '$lib/components/ops';
 	import { trackInternalAnalyticsEvent } from '$lib/analytics/internal-analytics';
 
 	type AppRole = 'admin' | 'guru' | 'staf' | 'kesiswaan' | 'siswa' | 'ortu';
@@ -21,19 +21,14 @@
 	>;
 	type LauncherRole = 'admin' | 'guru' | 'staf';
 
-	type TaskCard = {
-		phase: string;
+	type Workflow = {
 		title: string;
 		description: string;
 		href: CbtRoute;
+		actionLabel: string;
+		status: string;
 		roles: LauncherRole[];
 		priority: Partial<Record<LauncherRole, number>>;
-	};
-
-	type Phase = {
-		number: string;
-		title: string;
-		description: string;
 	};
 
 	type SecondaryLink = {
@@ -66,101 +61,67 @@
 		};
 	} = $props();
 
-	const phases: Phase[] = [
+	const workflows: Workflow[] = [
 		{
-			number: '1',
-			title: 'Siapkan',
-			description: 'Paket, kegiatan, jadwal, peserta, ruang, dan token ujian siap sebelum hari ujian.'
-		},
-		{
-			number: '2',
-			title: 'Jalankan',
-			description: 'Operator memantau sesi, koneksi BYOD, dan kebutuhan pengawas saat ujian berlangsung.'
-		},
-		{
-			number: '3',
-			title: 'Evaluasi',
-			description: 'Guru dan admin membuka hasil untuk pemeriksaan, rekap, dan tindak lanjut.'
-		}
-	];
-
-	const tasks: TaskCard[] = [
-		{
-			phase: 'Evaluasi',
-			title: 'Lihat Hasil',
-			description: 'Buka rekap hasil ujian dan pemeriksaan yang relevan untuk guru.',
-			href: '/asesmen/hasil',
-			roles: ['guru', 'admin'],
-			priority: { guru: 3, admin: 4 }
-		},
-		{
-			phase: 'Siapkan',
-			title: 'Baca Persiapan',
-			description: 'Lihat jalur paket, kegiatan, sesi ujian, dan token ujian yang disiapkan untuk ujian.',
+			title: 'Persiapan Ujian',
+			description: 'Cek kegiatan, paket, peserta, sesi, ruang, token, dan kartu sebelum hari-H.',
 			href: '/asesmen/persiapan',
-			roles: ['guru'],
-			priority: { guru: 1 }
+			actionLabel: 'Buka Persiapan',
+			status: 'Pra ujian',
+			roles: ['admin', 'guru'],
+			priority: { admin: 1, guru: 1 }
 		},
 		{
-			phase: 'Jalankan',
-			title: 'Pantau Pelaksanaan',
-			description: 'Masuk ke ruang pelaksanaan bila ditugaskan membantu ujian hari-H.',
+			title: 'Monitor Ujian',
+			description: 'Pantau sesi aktif, ruang pengawasan, peserta bermasalah, dan insiden.',
 			href: '/asesmen/pelaksanaan',
-			roles: ['guru'],
-			priority: { guru: 2 }
-		},
-		{
-			phase: 'Siapkan',
-			title: 'Siapkan Asesmen',
-			description: 'Mulai dari kegiatan ujian: paket, peserta, jadwal, dan ruang.',
-			href: '/asesmen/persiapan',
-			roles: ['admin'],
-			priority: { admin: 1 }
-		},
-		{
-			phase: 'Siapkan',
-			title: 'Atur Sesi & Token Ujian',
-			description: 'Kelola sesi ujian, kartu ujian, dan token ujian dari pusat Kegiatan Asesmen.',
-			href: '/asesmen/kegiatan',
-			roles: ['admin'],
-			priority: { admin: 2 }
-		},
-		{
-			phase: 'Jalankan',
-			title: 'Pantau Ujian',
-			description: 'Pantau pelaksanaan hari-H dan tindak lanjuti kebutuhan pengawas.',
-			href: '/asesmen/pelaksanaan',
+			actionLabel: 'Buka Monitor',
+			status: 'Hari-H',
 			roles: ['admin', 'staf'],
-			priority: { admin: 3, staf: 1 }
+			priority: { admin: 2, staf: 1 }
 		},
 		{
-			phase: 'Jalankan',
-			title: 'Panduan BYOD',
-			description: 'Baca ringkasan status perangkat, koneksi, dan kesiapan kirim ujian.',
-			href: '/asesmen/aplikasi-siswa',
-			roles: ['staf'],
-			priority: { staf: 2 }
+			title: 'Hasil & BA',
+			description: 'Buka rekap jawaban, koreksi, nilai, berita acara, dan unduhan operasional.',
+			href: '/asesmen/hasil',
+			actionLabel: 'Buka Hasil',
+			status: 'Pasca ujian',
+			roles: ['admin', 'guru'],
+			priority: { admin: 3, guru: 2 }
+		},
+		{
+			title: 'Arsip',
+			description: 'Kunci dokumen final, cek pengesahan, dan simpan bukti kegiatan asesmen.',
+			href: '/asesmen/kegiatan',
+			actionLabel: 'Buka Kegiatan',
+			status: 'Dokumen',
+			roles: ['admin'],
+			priority: { admin: 4 }
 		}
 	];
 
 	const secondaryLinks: SecondaryLink[] = [
-		{ label: 'Paket Soal', href: '/asesmen/paket', roles: ['admin'] },
-		{ label: 'Kegiatan Asesmen', href: '/asesmen/kegiatan', roles: ['admin'] },
+		{ label: 'Buat Kegiatan', href: '/asesmen/kegiatan', roles: ['admin'] },
+		{ label: 'Cek Kesiapan', href: '/asesmen/persiapan', roles: ['admin', 'guru'] },
+		{ label: 'Buka Monitor', href: '/asesmen/pelaksanaan', roles: ['admin', 'guru', 'staf'] },
+		{ label: 'Lihat Hasil', href: '/asesmen/hasil', roles: ['admin', 'guru'] },
 		{ label: 'Panduan BYOD', href: '/asesmen/aplikasi-siswa', roles: ['admin', 'guru'] }
 	];
 
 	const userRoles = $derived<KnownRole[]>(data.user?.roles ?? (data.user?.role ? [data.user.role] : []));
 	const roleSet = $derived(new Set<KnownRole>(userRoles));
 	const launcherRole = $derived<LauncherRole | undefined>(resolveLauncherRole(roleSet));
-	const visibleTasks = $derived.by<TaskCard[]>(() => {
-		return tasks
+	const visibleWorkflows = $derived.by<Workflow[]>(() => {
+		return workflows
 			.filter((task) => task.roles.some((role) => roleSet.has(role)))
-			.toSorted((firstTask, secondTask) => taskPriority(firstTask, launcherRole) - taskPriority(secondTask, launcherRole))
+			.toSorted((firstTask, secondTask) => workflowPriority(firstTask, launcherRole) - workflowPriority(secondTask, launcherRole))
 			.slice(0, 4);
 	});
 	const visibleSecondaryLinks = $derived(secondaryLinks.filter((link) => link.roles.some((role) => roleSet.has(role))));
 	const roleName = $derived(launcherRole ? roleCopy[launcherRole].name : 'Peran ini');
 	const roleDescription = $derived(launcherRole ? roleCopy[launcherRole].description : 'Belum ada pintasan ujian untuk peran aktif ini. Gunakan menu utama sesuai tugas masing-masing.');
+	const primaryHref = $derived(launcherRole === 'admin' ? '/asesmen/kegiatan' : '/asesmen/pelaksanaan');
+	const primaryLabel = $derived(launcherRole === 'admin' ? 'Buat Kegiatan' : 'Buka Monitor');
 
 	function resolveLauncherRole(roleSetValue: ReadonlySet<KnownRole>): LauncherRole | undefined {
 		if (roleSetValue.has('admin')) return 'admin';
@@ -169,7 +130,7 @@
 		return undefined;
 	}
 
-	function taskPriority(task: TaskCard, role: LauncherRole | undefined): number {
+	function workflowPriority(task: Workflow, role: LauncherRole | undefined): number {
 		return role ? (task.priority[role] ?? 99) : 99;
 	}
 
@@ -186,82 +147,65 @@
 	<title>Beranda Asesmen CBT — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
-<div class="space-y-8">
-	<section class="rounded-3xl border border-border bg-card p-6 shadow-sm md:p-8">
-		<div class="max-w-4xl space-y-4">
-			<p class="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Beranda Asesmen CBT</p>
-			<div class="space-y-3">
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Apa yang perlu dikerjakan hari ini?</h1>
-				<p class="max-w-2xl text-base leading-7 text-muted-foreground">
-					{roleName}: {roleDescription}
-				</p>
-			</div>
-		</div>
-	</section>
+<div class="space-y-5">
+	<PageHeader
+		eyebrow="Hari Ini / Dashboard CBT"
+		title="Asesmen CBT"
+		subtitle={`${roleName}: ${roleDescription}`}
+		context="MTsN 2 Kolaka Utara"
+		primaryAction={{ label: primaryLabel, href: primaryHref }}
+		secondaryAction={{ label: 'Aplikasi Siswa', href: resolve('/asesmen/aplikasi-siswa') }}
+	/>
 
-	<section aria-labelledby="cbt-phases-title" class="space-y-4">
-		<div class="space-y-1">
-			<p class="text-sm font-semibold uppercase tracking-[0.18em] text-primary">3 fase besar</p>
-			<h2 id="cbt-phases-title" class="text-2xl font-semibold tracking-tight text-foreground">Alur Asesmen CBT dibuat sederhana</h2>
-		</div>
+	<ContextStrip
+		items={[
+			{ label: 'Fokus', value: 'Hari Ini', tone: 'success' },
+			{ label: 'Alur', value: 'Persiapan → Monitor → Hasil → Arsip' },
+			{ label: 'Peran', value: roleName, tone: 'muted' }
+		]}
+	/>
 
-		<div class="grid gap-3 md:grid-cols-3">
-			{#each phases as phase (phase.number)}
-				<div class="rounded-2xl border border-border bg-card p-5">
-					<div class="flex h-9 w-9 items-center justify-center rounded-full border border-primary/20 text-sm font-semibold text-primary">{phase.number}</div>
-					<h3 class="mt-4 text-lg font-semibold text-foreground">{phase.title}</h3>
-					<p class="mt-2 text-sm leading-6 text-muted-foreground">{phase.description}</p>
-				</div>
-			{/each}
-		</div>
+	<section class="grid gap-3 md:grid-cols-3" aria-label="Ringkasan operasional CBT">
+		<MetricCard label="Ujian hari ini" value="Cek" helper="Buka Monitor untuk melihat sesi aktif atau yang akan berjalan." tone="success" />
+		<MetricCard label="Sesi berjalan" value="Monitor" helper="Pengawas melihat peserta bermasalah lebih dulu pada hari-H." tone="warning" />
+		<MetricCard label="Perlu tindakan" value="Kesiapan" helper="Paket, peserta, ruang, token, BA, dan arsip dibaca per kegiatan." />
 	</section>
 
 	<section aria-labelledby="cbt-tasks-title" class="space-y-4">
 		<div class="flex flex-wrap items-end justify-between gap-3">
 			<div class="space-y-1">
-				<p class="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Pilih tugas</p>
-				<h2 id="cbt-tasks-title" class="text-2xl font-semibold tracking-tight text-foreground">Pintasan sesuai peran</h2>
+				<p class="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Alur kerja</p>
+				<h2 id="cbt-tasks-title" class="text-xl font-semibold tracking-tight text-foreground">Mulai dari kebutuhan operasional</h2>
 			</div>
-			<p class="text-sm text-muted-foreground">Maksimal 4 tugas utama ditampilkan.</p>
+			<p class="text-sm text-muted-foreground">Fitur teknis tetap tersedia dari halaman detail.</p>
 		</div>
 
-		{#if visibleTasks.length > 0}
-			<div class="grid auto-rows-fr gap-4 md:grid-cols-2 xl:grid-cols-4">
-				{#each visibleTasks as task (task.title)}
-					<Card.Root class="flex h-full min-h-[17rem] flex-col border-border bg-card shadow-sm transition hover:border-primary/20 hover:shadow-md">
-						<Card.Header class="flex-1 space-y-4 p-5">
-							<p class="w-fit rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-								{task.phase}
-							</p>
-							<div class="space-y-3">
-								<Card.Title class="min-h-14 text-xl leading-7 text-foreground">{task.title}</Card.Title>
-								<Card.Description class="min-h-20 text-sm leading-6">{task.description}</Card.Description>
-							</div>
-						</Card.Header>
-						<Card.Footer class="mt-auto border-t border-border p-5 pt-4">
-							<Button href={resolve(task.href)} class="w-full">Buka</Button>
-						</Card.Footer>
-					</Card.Root>
+		{#if visibleWorkflows.length > 0}
+			<div class="grid auto-rows-fr gap-3 md:grid-cols-2 xl:grid-cols-4">
+				{#each visibleWorkflows as task (task.title)}
+					<WorkflowCard
+						title={task.title}
+						description={task.description}
+						href={resolve(task.href)}
+						status={task.status}
+						actionLabel={task.actionLabel}
+					/>
 				{/each}
 			</div>
 		{:else}
-			<Card.Root class="border-dashed border-border bg-muted/50 shadow-sm">
-				<Card.Header>
-					<Card.Title class="text-lg text-foreground">Tidak ada tugas CBT untuk peran ini</Card.Title>
-					<Card.Description>Halaman ini tidak membuka modul yang tidak relevan dengan peran aktif.</Card.Description>
-				</Card.Header>
-				<Card.Footer>
-					<Button href={resolve('/')} variant="outline">Kembali ke Beranda</Button>
-				</Card.Footer>
-			</Card.Root>
+			<section class="rounded-lg border border-dashed border-border bg-muted/50 p-5">
+				<h2 class="text-lg font-semibold text-foreground">Tidak ada tugas CBT untuk peran ini</h2>
+				<p class="mt-2 text-sm text-muted-foreground">Halaman ini tidak membuka modul yang tidak relevan dengan peran aktif.</p>
+				<Button href={resolve('/')} variant="outline" class="mt-4">Kembali ke Beranda</Button>
+			</section>
 		{/if}
 	</section>
 
 	{#if visibleSecondaryLinks.length > 0}
-		<nav aria-label="Tautan CBT lainnya" class="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-4 text-sm">
-			<span class="font-medium text-muted-foreground">Tautan lain:</span>
+		<nav aria-label="Aksi cepat CBT" class="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm shadow-sm">
+			<span class="font-medium text-muted-foreground">Aksi cepat:</span>
 			{#each visibleSecondaryLinks as link (link.href)}
-				<a href={resolve(link.href)} class="font-medium text-primary underline-offset-4 hover:underline">{link.label}</a>
+				<a href={resolve(link.href)} class="rounded-md border border-border px-3 py-1.5 font-medium text-foreground hover:border-primary/30 hover:bg-primary/10">{link.label}</a>
 			{/each}
 		</nav>
 	{/if}

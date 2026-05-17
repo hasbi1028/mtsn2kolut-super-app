@@ -71,7 +71,7 @@ describe('/bank-soal health dashboard', () => {
 			},
 		});
 
-		expect(await screen.findByRole('heading', { name: 'Dashboard Kesehatan Bank Soal' })).toBeTruthy();
+		expect(await screen.findByRole('heading', { name: 'Bank Soal' })).toBeTruthy();
 		expect(await screen.findByText('Readiness Bank Soal')).toBeTruthy();
 		expect(screen.getAllByText('perlu evidence/data').length).toBeGreaterThan(0);
 		await waitFor(() => {
@@ -104,8 +104,8 @@ describe('/bank-soal health dashboard', () => {
 			},
 		});
 
-		expect((await screen.findByRole('link', { name: /Review backlog/i })).getAttribute('href')).toBe('/bank-soal/verifikasi');
-		expect(screen.getByRole('link', { name: /Tambah Soal/i }).getAttribute('href')).toBe('/bank-soal/tambah');
+		expect((await screen.findByRole('link', { name: /Buka Review/i })).getAttribute('href')).toBe('/bank-soal/verifikasi');
+		expect(screen.getAllByRole('link', { name: /Tambah Soal/i }).some((link) => link.getAttribute('href') === '/bank-soal/tambah')).toBe(true);
 		expect(screen.getByRole('link', { name: /Impor/i }).getAttribute('href')).toBe('/bank-soal/impor');
 	});
 });

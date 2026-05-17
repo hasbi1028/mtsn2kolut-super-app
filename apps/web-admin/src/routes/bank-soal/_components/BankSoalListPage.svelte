@@ -304,6 +304,7 @@
 	let canDelete = $derived(canDeleteBankSoal(data.user));
 	let canReview = $derived(canReviewBankSoal(data.user));
 	let canSettings = $derived(canManageBankSoalSettings(data.user));
+	let canQuality = $derived(canAccessQuality(data.user));
 	let roleLabel = $derived.by(() => {
 		if (roles.includes('admin')) return 'Admin';
 		if (roles.includes('guru')) return 'Guru';
@@ -936,6 +937,12 @@
 		reset();
 	}
 
+	function canAccessQuality(user: PageData['user']): boolean {
+		const userRoles = user?.roles ?? (user?.role ? [user.role] : []);
+		const permissions = user?.permissions ?? [];
+		return userRoles.includes('admin') || permissions.includes('bank_soal.analytics');
+	}
+
 	onMount(() => {
 		readInitialFilters();
 		load(currentPage);
@@ -946,10 +953,41 @@
 </script>
 
 <svelte:head>
-	<title>Daftar Soal Bank Soal - MTsN 2 Kolaka Utara</title>
+	<title>Kelola Soal - Bank Soal - MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 <div class="space-y-5">
+	{#if showList && !showDashboard}
+		<section class="rounded-xl border border-border bg-card p-4 shadow-sm md:p-5">
+			<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+				<div class="min-w-0">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Kelola Soal</p>
+					<h1 class="mt-1 text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Daftar Bank Soal</h1>
+					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+						Cari, filter, edit, dan cek status soal. Tambah dan impor tetap tersedia sebagai aksi cepat, bukan area kerja terpisah di daftar.
+					</p>
+				</div>
+				<div class="flex shrink-0 flex-wrap gap-2">
+					{#if canQuality}
+						<Button href={analysisHref} variant="outline">Mutu Soal</Button>
+					{/if}
+					{#if canImport}
+						<Button href={importHref} variant="outline">
+							<UploadIcon class="size-4" />
+							Impor
+						</Button>
+					{/if}
+					{#if canCreate}
+						<Button href={composerHref}>
+							<PlusIcon class="size-4" />
+							Tambah Soal
+						</Button>
+					{/if}
+				</div>
+			</div>
+		</section>
+	{/if}
+
 	{#if showDashboard}
 	<section class="overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-emerald-950 via-emerald-900 to-amber-900 text-white shadow-sm">
 		<div class="relative p-5 md:p-6">
@@ -1144,7 +1182,7 @@
 				{/if}
 				<a href={analysisHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
 					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-800"><BarChart3Icon class="size-5" /></span>
-					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Analisis butir</span><span class="block text-xs text-muted-foreground">Pantau kualitas, HOTS, dan pemakaian soal</span></span>
+					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Mutu Soal</span><span class="block text-xs text-muted-foreground">Pantau kualitas, HOTS, dan pemakaian soal</span></span>
 				</a>
 				<a href={mapelKdHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
 					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary"><Layers3Icon class="size-5" /></span>

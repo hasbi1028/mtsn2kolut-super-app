@@ -16,7 +16,9 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { ContextStrip, MetricCard, PageHeader, WorkflowCard } from '$lib/components/ops';
 	import { clientApiPathWithQuery, readClientApiData } from '$lib/client/api';
+	import { canCreateBankSoal, canManageBankSoalSettings, canReviewBankSoal } from '$lib/bank-soal/access';
 	import {
 		buildBankSoalHealthModel,
 		filterBankSoalHealthActions,
@@ -49,6 +51,10 @@
 
 	const sampleLimit = 50;
 	let healthPromise = $state<Promise<BankSoalHealthModel> | null>(null);
+	let canCreate = $derived(canCreateBankSoal(data.user));
+	let canReview = $derived(canReviewBankSoal(data.user));
+	let canSettings = $derived(canManageBankSoalSettings(data.user));
+	let canUseQuality = $derived(canAccessQuality(data.user));
 
 	async function fetchHealth(): Promise<BankSoalHealthModel> {
 		const params = new URLSearchParams({ limit: String(sampleLimit), offset: '0' });
@@ -111,7 +117,24 @@
 		if (href === '/bank-soal/verifikasi') return resolve('/bank-soal/verifikasi');
 		if (href === '/bank-soal/tambah') return resolve('/bank-soal/tambah');
 		if (href === '/bank-soal/impor') return resolve('/bank-soal/impor');
+		if (href === '/bank-soal/analisis-butir') return resolve('/bank-soal/analisis-butir');
+		if (href === '/bank-soal/pengaturan') return resolve('/bank-soal/pengaturan');
+		if (href === '/bank-soal/penerbitan') return resolve('/bank-soal/penerbitan');
 		return href;
+	}
+
+	function statusValue(model: BankSoalHealthModel, key: string): number | null {
+		return model.statusCards.find((card) => card.key === key)?.value ?? null;
+	}
+
+	function totalQuestionValue(model: BankSoalHealthModel): number {
+		return model.totalQuestions ?? model.sampleSize;
+	}
+
+	function canAccessQuality(user: PageData['user']): boolean {
+		const roles = user?.roles ?? (user?.role ? [user.role] : []);
+		const permissions = user?.permissions ?? [];
+		return roles.includes('admin') || permissions.includes('bank_soal.analytics');
 	}
 
 	function handleRenderError(error: unknown, reset: () => void) {
@@ -125,32 +148,26 @@
 </script>
 
 <svelte:head>
-	<title>Dashboard Kesehatan Bank Soal - MTsN 2 Kolaka Utara</title>
+	<title>Bank Soal - MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 <div class="space-y-5">
-	<section class="rounded-xl border border-primary/20 bg-card p-5 shadow-sm md:p-6">
-		<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-			<div class="max-w-3xl">
-				<div class="mb-3 flex flex-wrap items-center gap-2">
-					<span class="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">Bank Soal</span>
-					<span class="rounded-full border border-border bg-muted/60 px-3 py-1 text-xs text-muted-foreground">summary + sampel endpoint existing</span>
-				</div>
-				<h1 class="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Dashboard Kesehatan Bank Soal</h1>
-				<p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-					Pantau stok soal, readiness, cakupan kurikulum, mutu metadata, backlog review, dan warning operasional tanpa membuat analytics yang tidak punya evidence.
-				</p>
-			</div>
-			<button
-				type="button"
-				class="inline-flex w-fit items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground shadow-sm transition hover:border-primary/30 hover:bg-primary/10"
-				onclick={loadHealth}
-			>
-				<RefreshCcwIcon class="size-4" />
-				Refresh
-			</button>
-		</div>
-	</section>
+	<PageHeader
+		eyebrow="Dashboard Bank Soal"
+		title="Bank Soal"
+		subtitle="Kelola stok soal madrasah dari alur sederhana: tulis soal, review dan terbitkan, cek mutu, lalu atur standar."
+		context="Repositori soal MTsN 2 Kolaka Utara"
+		primaryAction={canCreate ? { label: 'Tambah Soal', href: actionHref('/bank-soal/tambah') } : undefined}
+		secondaryAction={{ label: 'Refresh', onclick: loadHealth }}
+	/>
+
+	<ContextStrip
+		items={[
+			{ label: 'Alur', value: 'Kelola → Review → Mutu → Pengaturan', tone: 'success' },
+			{ label: 'Sumber data', value: 'BFF Bank Soal', tone: 'muted' },
+			{ label: 'Mode', value: 'Operasional' }
+		]}
+	/>
 
 	<AsyncContent promise={healthPromise} onerror={handleRenderError}>
 		{#snippet pending()}
@@ -171,6 +188,47 @@
 
 		{#snippet children(value)}
 			{@const model = value as BankSoalHealthModel}
+			<section class="grid gap-3 md:grid-cols-3" aria-label="Ringkasan utama Bank Soal">
+				<MetricCard label="Soal tersedia" value={formatNumber(totalQuestionValue(model))} helper="Total dari summary atau sampel endpoint Bank Soal." tone="success" />
+				<MetricCard label="Menunggu review" value={formatNumber(model.reviewBacklog.value)} helper={model.reviewBacklog.evidenceLabel} tone={model.reviewBacklog.value && model.reviewBacklog.value > 0 ? 'warning' : 'success'} />
+				<MetricCard label="Mutu perlu dicek" value={model.warnings.length} helper="Warning operasional dan kualitas metadata." tone={model.warnings.length > 0 ? 'warning' : 'success'} />
+			</section>
+
+			<section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4" aria-label="Workflow Bank Soal">
+				<WorkflowCard
+					title="Kelola Soal"
+					description="Cari, filter, edit, tambah, atau impor soal tanpa membuka semua fitur teknis."
+					href={actionHref('/bank-soal/daftar')}
+					actionLabel="Buka Kelola"
+					status="Aktif"
+				/>
+				<WorkflowCard
+					title="Review & Terbitkan"
+					description="Antrean reviewer dan penerbitan soal dipusatkan sebagai satu alur keputusan."
+					href={canReview ? actionHref('/bank-soal/verifikasi') : ''}
+					actionLabel={canReview ? 'Buka Review' : 'Perlu izin reviewer'}
+					status={`${formatNumber(model.reviewBacklog.value)} antrean`}
+					tone={model.reviewBacklog.value && model.reviewBacklog.value > 0 ? 'warning' : 'default'}
+				/>
+				<WorkflowCard
+					title="Mutu Soal"
+					description="Cek cakupan mapel, metadata, HOTS, pemakaian paket, dan prioritas revisi."
+					href={canUseQuality ? actionHref('/bank-soal/analisis-butir') : ''}
+					actionLabel={canUseQuality ? 'Buka Mutu' : 'Perlu izin mutu'}
+					status={`${formatNumber(statusValue(model, 'approved'))} siap`}
+				/>
+				<WorkflowCard
+					title="Pengaturan"
+					description="Standar kualitas, mapel/KD, impor, reviewer, dan SOP ada di area pengaturan."
+					href={canSettings ? actionHref('/bank-soal/pengaturan') : ''}
+					actionLabel={canSettings ? 'Buka Pengaturan' : 'Admin'}
+					status="Lanjutan"
+				/>
+			</section>
+
+			<details class="rounded-xl border border-border bg-card p-4 shadow-sm">
+				<summary class="cursor-pointer text-sm font-semibold text-foreground">Mode Lengkap: kesehatan dan detail operasional</summary>
+				<div class="mt-4 space-y-5">
 			<section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-7" aria-label="Indikator status Bank Soal">
 				{#each model.statusCards as card (card.key)}
 					<div class={`rounded-lg border p-4 shadow-sm ${statusCardClass(card)}`}>
@@ -349,6 +407,8 @@
 					</div>
 				</div>
 			</section>
+				</div>
+			</details>
 		{/snippet}
 	</AsyncContent>
 </div>

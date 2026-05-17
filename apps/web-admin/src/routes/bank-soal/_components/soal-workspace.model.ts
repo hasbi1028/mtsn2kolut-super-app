@@ -408,7 +408,7 @@ export const WORKFLOW_LABEL: Record<string, string> = {
 export const DIFFICULTY_LABEL: Record<string, string> = { easy: 'Mudah', medium: 'Sedang', hard: 'Sulit' };
 export const revisionSourceOptions: Array<{ id: RevisionSourceFilter; label: string; desc: string }> = [
 	{ id: '', label: 'Semua Revisi', desc: 'Semua sumber' },
-	{ id: 'item_analysis', label: 'Analisis Butir', desc: 'Dari hasil ujian' },
+	{ id: 'item_analysis', label: 'Mutu Soal', desc: 'Dari hasil ujian' },
 	{ id: 'reviewer', label: 'Reviewer', desc: 'Catatan penelaah' },
 	{ id: 'workflow', label: 'Workflow', desc: 'Tanpa reviewer' }
 ];
@@ -618,7 +618,7 @@ export function questionUsageText(q: Question): string {
 
 export function revisionSourceLabel(q: Question): string {
 	const note = (q.review_notes ?? '').toLowerCase();
-	if (note.includes('analisis butir')) return 'Analisis Butir';
+	if (note.includes('analisis butir') || note.includes('mutu soal')) return 'Mutu Soal';
 	if ((q.reviewer_username ?? '').trim()) return `Reviewer: ${q.reviewer_username}`;
 	return 'Alur Verifikasi';
 }

@@ -48,27 +48,25 @@ describe('sidebar assessment configuration', () => {
 
 	it('keeps assessment navigation aligned to the three-phase workflow', () => {
 		expect(assessmentItems.map((item) => item.label)).toEqual([
-			'Dashboard Asesmen',
-			'Paket Soal',
-			'Kegiatan',
-			'Persiapan',
-			'Aplikasi Siswa CBT',
-			'Pelaksanaan',
-			'Hasil'
+			'Hari Ini / Dashboard CBT',
+			'Persiapan Ujian',
+			'Monitor Ujian',
+			'Hasil & BA',
+			'Arsip',
+			'Aplikasi Siswa'
 		]);
 	});
 
 	it('does not expose Bank Soal authoring links in the assessment group', () => {
 		expect(assessmentItems.map((item) => item.href)).toEqual([
 			'/asesmen',
-			'/asesmen/paket',
-			'/asesmen/kegiatan',
 			'/asesmen/persiapan',
-			'/asesmen/aplikasi-siswa/release',
 			'/asesmen/pelaksanaan',
-			'/asesmen/hasil'
+			'/asesmen/hasil',
+			'/asesmen/kegiatan',
+			'/asesmen/aplikasi-siswa'
 		]);
-		expect(assessmentItems).toHaveLength(7);
+		expect(assessmentItems).toHaveLength(6);
 		expect(new Set(assessmentItems.map((item) => item.href)).size).toBe(assessmentItems.length);
 		expect(assessmentItems.some((item) => item.href === '/cbt/soal')).toBe(false);
 		expect(assessmentItems.some((item) => item.href === '/cbt/bank-soal')).toBe(false);
@@ -79,12 +77,11 @@ describe('sidebar assessment configuration', () => {
 
 	it('keeps assessment phase visibility aligned to role scope', () => {
 		expect(assessmentItems.find((item) => item.href === '/asesmen')?.roles).toEqual(['admin', 'guru', 'staf']);
-		expect(assessmentItems.find((item) => item.href === '/asesmen/paket')?.roles).toEqual(['admin']);
-		expect(assessmentItems.find((item) => item.href === '/asesmen/kegiatan')?.roles).toEqual(['admin']);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/persiapan')?.roles).toEqual(['admin', 'guru']);
-		expect(assessmentItems.find((item) => item.href === '/asesmen/aplikasi-siswa/release')?.roles).toEqual(['admin', 'guru', 'staf']);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/pelaksanaan')?.roles).toEqual(['admin', 'guru', 'staf']);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/hasil')?.roles).toEqual(['admin', 'guru']);
+		expect(assessmentItems.find((item) => item.href === '/asesmen/kegiatan')?.roles).toEqual(['admin', 'guru']);
+		expect(assessmentItems.find((item) => item.href === '/asesmen/aplikasi-siswa')?.roles).toEqual(['admin', 'guru', 'staf']);
 		expect(assessmentItems.flatMap((item) => item.roles ?? [])).not.toContain('reviewer');
 	});
 
@@ -96,39 +93,29 @@ describe('sidebar assessment configuration', () => {
 		expect(sidebarNavGroups.some((group) => group.group === 'Bank Soal & Asesmen')).toBe(false);
 		expect(bankSoalItems.map((item) => item.label)).toEqual([
 			'Dashboard Bank Soal',
-			'Daftar Soal',
-			'Tambah Soal',
-			'Verifikasi Soal',
-			'Impor Soal',
-			'Analisis Butir',
-			'Mapel & KD',
-			'Pengaturan Bank Soal'
+			'Kelola Soal',
+			'Review & Terbitkan',
+			'Mutu Soal',
+			'Pengaturan'
 		]);
 		expect(bankSoalItems.map((item) => item.href)).toEqual([
 			'/bank-soal',
 			'/bank-soal/daftar',
-			'/bank-soal/tambah',
 			'/bank-soal/verifikasi',
-			'/bank-soal/impor',
 			'/bank-soal/analisis-butir',
-			'/bank-soal/mapel-kd',
 			'/bank-soal/pengaturan'
 		]);
 		expect(bankSoalItems.every((item) => !item.href.includes('?mode='))).toBe(true);
 		expect(bankSoalItems.map((item) => item.icon)).toEqual([
 			'grid',
 			'book-open',
-			'pen-tool',
 			'clipboard',
-			'file-text',
 			'activity',
-			'layers',
 			'settings'
 		]);
 		expect(bankSoalItems.find((item) => item.href === '/bank-soal/verifikasi')?.roles).toEqual(['admin']);
-		expect(bankSoalItems.find((item) => item.href === '/bank-soal/impor')?.roles).toEqual(['admin']);
 		expect(bankSoalItems.find((item) => item.href === '/bank-soal/pengaturan')?.roles).toEqual(['admin']);
-		expect(bankSoalItems.filter((item) => !['/bank-soal/verifikasi', '/bank-soal/impor', '/bank-soal/pengaturan'].includes(item.href)).every((item) => item.roles?.includes('admin') && item.roles.includes('guru'))).toBe(true);
+		expect(bankSoalItems.filter((item) => !['/bank-soal/verifikasi', '/bank-soal/pengaturan'].includes(item.href)).every((item) => item.roles?.includes('admin') && item.roles.includes('guru'))).toBe(true);
 		expect(bankSoalItems.every((item) => !item.href.startsWith('/cbt/'))).toBe(true);
 		expect(bankSoalItems.some((item) => item.href === '/cbt/questions')).toBe(false);
 	});
@@ -170,15 +157,12 @@ describe('sidebar assessment configuration', () => {
 			permissions: ['analytics.read']
 		});
 		expect(byHref.get('/settings/school-profile')?.permissions).toEqual(['settings.school_profile']);
-		expect(bankSoalItems.find((item) => item.href === '/bank-soal/tambah')?.permissions).toEqual(['bank_soal.create']);
-		expect(bankSoalItems.find((item) => item.href === '/bank-soal/verifikasi')?.permissions).toEqual(['bank_soal.review']);
-		expect(bankSoalItems.find((item) => item.href === '/bank-soal/impor')?.permissions).toEqual(['bank_soal.import']);
+		expect(bankSoalItems.find((item) => item.href === '/bank-soal/verifikasi')?.permissions).toEqual(['bank_soal.review', 'bank_soal.publish']);
 		expect(bankSoalItems.find((item) => item.href === '/bank-soal/analisis-butir')?.permissions).toEqual(['bank_soal.analytics']);
 		expect(bankSoalItems.find((item) => item.href === '/bank-soal/pengaturan')?.permissions).toEqual(['bank_soal.settings']);
-		expect(bankSoalItems.filter((item) => !['/bank-soal/tambah', '/bank-soal/verifikasi', '/bank-soal/impor', '/bank-soal/analisis-butir', '/bank-soal/pengaturan'].includes(item.href)).every((item) => item.permissions.includes('bank_soal.read'))).toBe(true);
-		expect(assessmentItems.find((item) => item.href === '/asesmen/kegiatan')?.permissions).toEqual(['asesmen.event_manage']);
-		expect(assessmentItems.find((item) => item.href === '/asesmen/paket')?.permissions).toEqual(['asesmen.package_manage']);
-		expect(assessmentItems.find((item) => item.href === '/asesmen/aplikasi-siswa/release')?.permissions).toEqual(['asesmen.read', 'asesmen.proctor']);
+		expect(bankSoalItems.filter((item) => !['/bank-soal/verifikasi', '/bank-soal/analisis-butir', '/bank-soal/pengaturan'].includes(item.href)).every((item) => item.permissions.includes('bank_soal.read'))).toBe(true);
+		expect(assessmentItems.find((item) => item.href === '/asesmen/kegiatan')?.permissions).toEqual(['asesmen.read', 'asesmen.event_manage']);
+		expect(assessmentItems.find((item) => item.href === '/asesmen/aplikasi-siswa')?.permissions).toEqual(['asesmen.read', 'asesmen.proctor']);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/hasil')?.permissions).toEqual(['asesmen.result_read']);
 	});
 
@@ -202,8 +186,6 @@ describe('sidebar assessment configuration', () => {
 		expect(visibleHrefs).toEqual([
 			'/bank-soal',
 			'/bank-soal/daftar',
-			'/bank-soal/tambah',
-			'/bank-soal/mapel-kd',
 			'/settings/account'
 		]);
 	});

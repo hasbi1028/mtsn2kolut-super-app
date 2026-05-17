@@ -872,14 +872,19 @@
 	function handleRenderError(error: unknown) {
 		console.error('Panel pengawasan ruang ujian belum dapat ditampilkan', error);
 	}
+
+	function maskedRoomToken(value: string | null | undefined): string {
+		if (!value) return '—';
+		return `••••${value.slice(-4)}`;
+	}
 </script>
 
 <svelte:head>
 	<title>Panel Pengawas Ruang | CBT</title>
 </svelte:head>
 
-<div class="space-y-5 p-4 md:p-6">
-	<div class="flex flex-col gap-3 border-b border-primary/20 pb-4 md:flex-row md:items-start md:justify-between">
+<div class="space-y-5">
+	<div class="sticky top-0 z-20 -mx-2 flex flex-col gap-3 border-b border-primary/20 bg-background/95 px-2 py-3 backdrop-blur md:flex-row md:items-start md:justify-between">
 		<div>
 			<a href={resolve(`/asesmen/sesi/${sessionId}`)} class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Kembali ke detail sesi</a>
 			<h1 class="mt-2 text-2xl font-bold tracking-tight text-foreground">Panel Pengawas Ruang</h1>
@@ -893,21 +898,7 @@
 			{#if backgroundBusy}
 				<Badge variant="outline" class="border-primary/20 text-primary">Memperbarui</Badge>
 			{/if}
-			<Button variant="outline" onclick={exportEvidenceCSV} disabled={!room}>
-				<FileDownIcon class="mr-2 size-4" />
-				Unduh Bukti CSV (tanpa token ujian)
-			</Button>
-			<Button variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/proctoring/report`)}>
-				Berita Acara
-			</Button>
-			<Button variant={audioAlertsEnabled ? 'default' : 'outline'} onclick={() => audioAlertsEnabled = !audioAlertsEnabled}>
-				Audio {audioAlertsEnabled ? 'ON' : 'OFF'}
-			</Button>
-			<Button variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/print-pack`)}>
-				<PrinterIcon class="mr-2 size-4" />
-				Paket Cetak
-			</Button>
-			<LoadingButton variant="outline" onclick={() => void refreshDashboard()} loading={refreshBusy} loadingLabel="Memuat...">
+			<LoadingButton onclick={() => void refreshDashboard()} loading={refreshBusy} loadingLabel="Memuat...">
 				Muat Ulang
 			</LoadingButton>
 		</div>
@@ -922,9 +913,9 @@
 			<p class="text-sm font-bold text-foreground">Mode Pengawas</p>
 			<p class="text-xs text-muted-foreground">Mode sederhana menampilkan peserta butuh tindakan dan tombol cepat hari-H.</p>
 		</div>
-		<div class="inline-flex w-fit rounded-full border border-slate-200 bg-white p-1 text-xs font-semibold" role="tablist" aria-label="Mode tampilan pengawas">
-			<button type="button" role="tab" class={`rounded-full px-3 py-1.5 transition ${proctorViewMode === 'simple' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`} aria-selected={proctorViewMode === 'simple'} onclick={() => (proctorViewMode = 'simple')}>Mode Sederhana</button>
-			<button type="button" role="tab" class={`rounded-full px-3 py-1.5 transition ${proctorViewMode === 'complete' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`} aria-selected={proctorViewMode === 'complete'} onclick={() => (proctorViewMode = 'complete')}>Mode Lengkap</button>
+		<div class="inline-flex w-fit rounded-full border border-border bg-muted/50 p-1 text-xs font-semibold" role="tablist" aria-label="Mode tampilan pengawas">
+			<button type="button" role="tab" class={`rounded-full px-3 py-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${proctorViewMode === 'simple' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`} aria-selected={proctorViewMode === 'simple'} onclick={() => (proctorViewMode = 'simple')}>Mode Sederhana</button>
+			<button type="button" role="tab" class={`rounded-full px-3 py-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${proctorViewMode === 'complete' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`} aria-selected={proctorViewMode === 'complete'} onclick={() => (proctorViewMode = 'complete')}>Mode Lengkap</button>
 		</div>
 	</div>
 
@@ -980,23 +971,14 @@
 		{/snippet}
 
 		{#if room}
-				<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+				<div class="grid gap-3 md:grid-cols-3">
 					<Card.Root class="border-primary/20">
 						<Card.Header class="pb-2">
-							<Card.Title class="text-sm text-muted-foreground">Peserta</Card.Title>
+							<Card.Title class="text-sm text-muted-foreground">Butuh tindakan</Card.Title>
 						</Card.Header>
 						<Card.Content>
-							<div class="text-2xl font-bold text-foreground">{room.participant_count}</div>
-							<p class="text-xs text-muted-foreground">Kapasitas {room.capacity}</p>
-						</Card.Content>
-					</Card.Root>
-					<Card.Root class="border-primary/20">
-						<Card.Header class="pb-2">
-							<Card.Title class="text-sm text-muted-foreground">Terhubung</Card.Title>
-						</Card.Header>
-						<Card.Content>
-							<div class="text-2xl font-bold text-primary">{participantStats.online}</div>
-							<p class="text-xs text-muted-foreground">Kontak 2 menit terakhir</p>
+							<div class="text-2xl font-bold text-warning">{attentionParticipants.length}</div>
+							<p class="text-xs text-muted-foreground">{participantStats.locked} terkunci, {participantStats.highRisk} risiko tinggi</p>
 						</Card.Content>
 					</Card.Root>
 					<Card.Root class="border-primary/20">
@@ -1017,15 +999,6 @@
 							<p class="text-xs text-muted-foreground">Dari {room.participant_count} peserta</p>
 						</Card.Content>
 					</Card.Root>
-					<Card.Root class="border-primary/20">
-						<Card.Header class="pb-2">
-							<Card.Title class="text-sm text-muted-foreground">Pengawasan</Card.Title>
-						</Card.Header>
-						<Card.Content>
-							<div class="text-2xl font-bold text-destructive">{participantStats.highRisk}</div>
-							<p class="text-xs text-muted-foreground">{participantStats.locked} terkunci di perangkat/layanan sistem</p>
-						</Card.Content>
-					</Card.Root>
 				</div>
 
 				<Card.Root class="border-primary/20">
@@ -1038,7 +1011,7 @@
 								</Card.Description>
 							</div>
 							<div class="flex flex-wrap items-center gap-2">
-								<Badge variant="outline" class="border-primary/20 text-primary">Token ruang {room.room_token || '—'}</Badge>
+								<Badge variant="outline" class="border-primary/20 text-primary">Token ruang {maskedRoomToken(room.room_token)}</Badge>
 								<Badge variant="outline">{room.session_status}</Badge>
 							</div>
 						</div>
@@ -1251,6 +1224,30 @@
 					</Card.Content>
 				</Card.Root>
 
+				{#if proctorViewMode === 'complete'}
+				<section class="flex flex-col gap-3 rounded-xl border border-border bg-card p-3 shadow-sm md:flex-row md:items-center md:justify-between">
+					<div>
+						<p class="text-sm font-semibold text-foreground">Mode Lengkap</p>
+						<p class="text-xs text-muted-foreground">Tabel semua peserta, riwayat ruang, ekspor bukti, paket cetak, dan audio peringatan.</p>
+					</div>
+					<div class="flex flex-wrap gap-2">
+						<Button variant="outline" onclick={exportEvidenceCSV} disabled={!room}>
+							<FileDownIcon class="mr-2 size-4" />
+							CSV Bukti
+						</Button>
+						<Button variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/proctoring/report`)}>
+							Berita Acara
+						</Button>
+						<Button variant={audioAlertsEnabled ? 'default' : 'outline'} onclick={() => audioAlertsEnabled = !audioAlertsEnabled}>
+							Audio {audioAlertsEnabled ? 'ON' : 'OFF'}
+						</Button>
+						<Button variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/print-pack`)}>
+							<PrinterIcon class="mr-2 size-4" />
+							Paket Cetak
+						</Button>
+					</div>
+				</section>
+
 				<div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
 					<Card.Root class="border-primary/20">
 						<Card.Header>
@@ -1273,7 +1270,7 @@
 									</Table.Row>
 								</Table.Header>
 								<Table.Body>
-									{#each (proctorViewMode === 'simple' ? filteredParticipants : participants) as row (row.participant_id)}
+									{#each participants as row (row.participant_id)}
 											<Table.Row class={`${rowAttentionClass(row)} ${highlightedParticipantIds.has(row.participant_id) ? 'ring-2 ring-warning/60 bg-warning/15' : ''}`}>
 											<Table.Cell>
 												<div class="font-medium text-foreground">{row.nama}</div>
@@ -1362,6 +1359,7 @@
 						</Card.Content>
 					</Card.Root>
 				</div>
+				{/if}
 		{/if}
 	</AsyncContent>
 </div>
