@@ -734,3 +734,101 @@ func TestInternalAnalyticsRollupLoopConfigDefaultsToTenMinutesWithSafeMinimum(t 
 		t.Fatalf("bounded lookback/limit = %v/%d, want 24h/10000", cfg.Lookback, cfg.Limit)
 	}
 }
+
+func TestNewInternalAnalyticsConstructorSetsStoreAndClock(t *testing.T) {
+	svc := NewInternalAnalytics(nil)
+	if svc == nil {
+		t.Fatalf("NewInternalAnalytics(nil) returned nil")
+	}
+	if svc.now == nil {
+		t.Fatalf("constructor did not install default clock")
+	}
+	if got := svc.clockNow(); got.IsZero() || got.Location() != time.UTC {
+		t.Fatalf("clockNow() = %v, want non-zero UTC time", got)
+	}
+}
+
+func TestInternalAnalyticsValidationErrorMessageIncludesOptionalField(t *testing.T) {
+	if got := (*InternalAnalyticsValidationError)(nil).Error(); got != "" {
+		t.Fatalf("nil validation error string = %q, want empty", got)
+	}
+	if got := (&InternalAnalyticsValidationError{Code: "invalid"}).Error(); got != "invalid" {
+		t.Fatalf("validation error string = %q, want code only", got)
+	}
+	if got := (&InternalAnalyticsValidationError{Code: "invalid", Field: "field_name"}).Error(); got != "invalid: field_name" {
+		t.Fatalf("validation error string = %q, want code and field", got)
+	}
+}
+
+func TestInternalAnalyticsNullableTimeHandlesSupportedTypes(t *testing.T) {
+	nonUTC := time.Date(2026, 5, 9, 17, 30, 0, 0, time.FixedZone("WITA", 8*60*60))
+	wantUTC := nonUTC.UTC()
+
+	tests := []struct {
+		name      string
+		value     any
+		wantValue *time.Time
+	}{
+		{name: "nil", value: nil},
+		{name: "zero time", value: time.Time{}},
+		{name: "invalid timestamptz", value: pgtype.Timestamptz{Time: nonUTC, Valid: false}},
+		{name: "nil pointer", value: (*time.Time)(nil)},
+		{name: "zero pointer", value: &time.Time{}},
+		{name: "unsupported", value: "2026-05-09"},
+		{name: "time", value: nonUTC, wantValue: &wantUTC},
+		{name: "timestamptz", value: pgtype.Timestamptz{Time: nonUTC, Valid: true}, wantValue: &wantUTC},
+		{name: "time pointer", value: &nonUTC, wantValue: &wantUTC},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := internalAnalyticsNullableTime(tt.value)
+			if tt.wantValue == nil {
+				if got != nil {
+					t.Fatalf("nullable time = %v, want nil", got)
+				}
+				return
+			}
+			if got == nil || !got.Equal(*tt.wantValue) || got.Location() != time.UTC {
+				t.Fatalf("nullable time = %v, want UTC %v", got, *tt.wantValue)
+			}
+		})
+	}
+}
+
+func TestInternalAnalyticsRunRollupLoopOnceUsesConfiguredLookbackAndLimit(t *testing.T) {
+	now := time.Date(2026, 5, 9, 18, 45, 0, 0, time.FixedZone("WITA", 8*60*60))
+	store := &fakeInternalAnalyticsStore{deleted: 2}
+	svc := newTestInternalAnalytics(store)
+
+	svc.runRollupLoopOnce(context.Background(), InternalAnalyticsRollupLoopConfig{
+		Lookback: 36 * time.Hour,
+		Limit:    321,
+	}, now)
+
+	if len(store.rollupCalls) != 1 {
+		t.Fatalf("rollup calls = %d, want 1", len(store.rollupCalls))
+	}
+	call := store.rollupCalls[0]
+	wantEnd := now.UTC()
+	wantStart := internalAnalyticsDateOnly(wantEnd.Add(-36 * time.Hour))
+	if !call.StartAt.Valid || !call.StartAt.Time.Equal(wantStart) || !call.EndAt.Valid || !call.EndAt.Time.Equal(wantEnd) || call.LimitCount != 321 {
+		t.Fatalf("rollup loop call = %+v, want start=%v end=%v limit=321", call, wantStart, wantEnd)
+	}
+	if len(store.deleteCalls) != 1 || !store.deleteCalls[0].Time.Equal(wantEnd) {
+		t.Fatalf("delete calls = %+v, want cutoff %v", store.deleteCalls, wantEnd)
+	}
+}
+
+func TestInternalAnalyticsRunRollupLoopOnceSwallowsRollupError(t *testing.T) {
+	store := &fakeInternalAnalyticsStore{rollupErr: errors.New("rollup failed")}
+	svc := newTestInternalAnalytics(store)
+
+	svc.runRollupLoopOnce(context.Background(), InternalAnalyticsRollupLoopConfig{Lookback: 24 * time.Hour, Limit: 1}, fixedAnalyticsNow())
+
+	if len(store.rollupCalls) != 1 {
+		t.Fatalf("rollup calls = %d, want attempted once", len(store.rollupCalls))
+	}
+	if len(store.deleteCalls) != 0 || len(store.upsertCalls) != 0 {
+		t.Fatalf("delete/upsert calls = %d/%d, want none after rollup read error", len(store.deleteCalls), len(store.upsertCalls))
+	}
+}

@@ -94,6 +94,15 @@ func (f *fakeUserLifecycleStore) CreateAuditLog(ctx context.Context, arg db.Crea
 	return db.AuditLog{}, f.auditErr
 }
 
+func TestUserLifecycleConstructorsInitializeStores(t *testing.T) {
+	if svc := NewUserLifecycle(nil); svc == nil || svc.q == nil || svc.tx != nil {
+		t.Fatalf("NewUserLifecycle(nil) = %+v, want query store and no tx", svc)
+	}
+	if svc := NewUserLifecycleWithPool(nil); svc == nil || svc.q == nil || svc.tx == nil {
+		t.Fatalf("NewUserLifecycleWithPool(nil) = %+v, want query store and tx", svc)
+	}
+}
+
 func TestUserLifecycleDeactivateInvalidatesSessions(t *testing.T) {
 	userID := userLifecycleTestUUID(120)
 	actorID := userLifecycleTestUUID(125)
@@ -201,6 +210,32 @@ func TestUserLifecycleResetPasswordHashesPasswordRevokesSessionsAndAudits(t *tes
 	}
 	if len(store.auditCalls) != 1 || store.auditCalls[0].Action != "USER_PASSWORD_RESET" || store.auditCalls[0].UserID != actorID {
 		t.Fatalf("audit calls = %+v, want password reset audit by actor", store.auditCalls)
+	}
+}
+
+func TestUserLifecycleResetPasswordRejectsInvalidPasswordBeforeMutations(t *testing.T) {
+	userID := userLifecycleTestUUID(142)
+	store := &fakeUserLifecycleStore{userByID: db.GetUserByIDRow{ID: userID, Username: "operator"}}
+	svc := &UserLifecycle{q: store}
+
+	if err := svc.ResetPassword(context.Background(), userID, "short", userLifecycleTestUUID(143)); err == nil {
+		t.Fatal("ResetPassword(short) error = nil, want validation error")
+	}
+	if len(store.passwordCalls) != 0 || len(store.versionCalls) != 0 || len(store.revokeCalls) != 0 || len(store.auditCalls) != 0 {
+		t.Fatalf("mutation calls = password %v version %v revoke %v audit %v, want none", store.passwordCalls, store.versionCalls, store.revokeCalls, store.auditCalls)
+	}
+}
+
+func TestUserLifecycleForcePasswordChangePropagatesLookupErrorBeforeMutations(t *testing.T) {
+	expected := errors.New("missing user")
+	store := &fakeUserLifecycleStore{userErr: expected}
+	svc := &UserLifecycle{q: store}
+
+	if err := svc.ForcePasswordChange(context.Background(), userLifecycleTestUUID(144), userLifecycleTestUUID(145)); !errors.Is(err, expected) {
+		t.Fatalf("ForcePasswordChange() error = %v, want %v", err, expected)
+	}
+	if len(store.mustChangePasswordIDs) != 0 || len(store.versionCalls) != 0 || len(store.revokeCalls) != 0 || len(store.auditCalls) != 0 {
+		t.Fatalf("mutation calls = mustChange %v version %v revoke %v audit %v, want none", store.mustChangePasswordIDs, store.versionCalls, store.revokeCalls, store.auditCalls)
 	}
 }
 

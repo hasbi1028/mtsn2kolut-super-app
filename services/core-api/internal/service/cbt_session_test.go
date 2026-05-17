@@ -356,6 +356,200 @@ func TestCbtSessionRoomWrappersUseFakeStore(t *testing.T) {
 	}
 }
 
+func TestCbtSessionCreateRoomFromSchoolRoomValidatesAndDefaults(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtSessionTestUUID(101)
+	schoolRoomID := cbtSessionTestUUID(102)
+	store := &fakeCbtSessionStore{
+		sessionRow: db.GetCbtExamSessionRow{ID: sessionID, Status: db.CbtSessionStatusEnumDraft},
+		schoolRoomRow: db.SchoolRoom{
+			ID:              schoolRoomID,
+			Name:            " Lab CBT 1 ",
+			DefaultCapacity: 40,
+			ExamCapacity:    28,
+			IsExamEligible:  true,
+			NetworkReady:    true,
+			PowerReady:      true,
+		},
+	}
+	svc := &CbtSession{q: store}
+
+	room, err := svc.CreateRoomFromSchoolRoom(ctx, sessionID, schoolRoomID, "  ", 0)
+	if err != nil {
+		t.Fatalf("CreateRoomFromSchoolRoom() error = %v", err)
+	}
+	if room.SessionID != sessionID || room.RoomName != " Lab CBT 1 " || room.Capacity != 28 {
+		t.Fatalf("CreateRoomFromSchoolRoom() room = %+v, want school room name and exam capacity", room)
+	}
+	if store.createRoomArg.SessionID != sessionID || store.createRoomArg.SchoolRoomID != schoolRoomID || store.createRoomArg.RoomNameSnapshot != " Lab CBT 1 " || store.createRoomArg.Capacity != 28 {
+		t.Fatalf("CreateRoomFromSchoolRoom() create arg = %+v, want school room defaults", store.createRoomArg)
+	}
+
+	store.schoolRoomRow.ExamCapacity = 0
+	store.schoolRoomRow.DefaultCapacity = 24
+	_, err = svc.CreateRoomFromSchoolRoom(ctx, sessionID, schoolRoomID, "  Override Room  ", 12)
+	if err != nil {
+		t.Fatalf("CreateRoomFromSchoolRoom(override) error = %v", err)
+	}
+	if store.createRoomArg.RoomName != "Override Room" || store.createRoomArg.Capacity != 12 {
+		t.Fatalf("CreateRoomFromSchoolRoom(override) arg = %+v, want trimmed override name and capacity", store.createRoomArg)
+	}
+
+	tests := []struct {
+		name string
+		room db.SchoolRoom
+		want string
+	}{
+		{name: "not eligible", room: db.SchoolRoom{ID: schoolRoomID, Name: "R", IsExamEligible: false, NetworkReady: true, PowerReady: true}, want: "belum layak"},
+		{name: "damaged", room: db.SchoolRoom{ID: schoolRoomID, Name: "R", IsExamEligible: true, Condition: "rusak", NetworkReady: true, PowerReady: true}, want: "belum layak"},
+		{name: "network", room: db.SchoolRoom{ID: schoolRoomID, Name: "R", IsExamEligible: true, NetworkReady: false, PowerReady: true}, want: "jaringan"},
+		{name: "power", room: db.SchoolRoom{ID: schoolRoomID, Name: "R", IsExamEligible: true, NetworkReady: true, PowerReady: false}, want: "listrik"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &fakeCbtSessionStore{sessionRow: db.GetCbtExamSessionRow{ID: sessionID, Status: db.CbtSessionStatusEnumScheduled}, schoolRoomRow: tt.room}
+			_, err := (&CbtSession{q: store}).CreateRoomFromSchoolRoom(ctx, sessionID, schoolRoomID, "", 0)
+			if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("CreateRoomFromSchoolRoom(%s) error = %v, want conflict containing %q", tt.name, err, tt.want)
+			}
+			if store.createRoomArg.SessionID.Valid {
+				t.Fatalf("CreateRoomFromSchoolRoom(%s) created room arg = %+v, want no create", tt.name, store.createRoomArg)
+			}
+		})
+	}
+}
+
+func TestCbtSessionShuffleRoomsAssignsOnlyWithinEffectiveCapacity(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtSessionTestUUID(110)
+	roomA := cbtSessionTestUUID(111)
+	roomB := cbtSessionTestUUID(112)
+	participants := []db.ListParticipantsByRoomRow{
+		{ID: cbtSessionTestUUID(113)},
+		{ID: cbtSessionTestUUID(114)},
+		{ID: cbtSessionTestUUID(115)},
+		{ID: cbtSessionTestUUID(116)},
+	}
+	store := &fakeCbtSessionStore{
+		byRoomRows: participants,
+		roomRows: []db.ListCbtExamRoomsRow{
+			{ID: roomA, Capacity: 5, CapacityOverride: pgtype.Int4{Int32: 2, Valid: true}},
+			{ID: roomB, Capacity: 1},
+		},
+	}
+
+	if err := shuffleRooms(ctx, store, sessionID); err != nil {
+		t.Fatalf("shuffleRooms() error = %v", err)
+	}
+	if store.clearRoomID != sessionID {
+		t.Fatalf("shuffleRooms() clear id = %v, want %v", store.clearRoomID, sessionID)
+	}
+	if len(store.assignRoomArgs) != 3 {
+		t.Fatalf("shuffleRooms() assignments = %d, want capacity-limited 3", len(store.assignRoomArgs))
+	}
+	counts := map[pgtype.UUID]int{}
+	assigned := map[pgtype.UUID]bool{}
+	wantParticipants := map[pgtype.UUID]bool{}
+	for _, p := range participants {
+		wantParticipants[p.ID] = true
+	}
+	for _, arg := range store.assignRoomArgs {
+		if !wantParticipants[arg.ID] {
+			t.Fatalf("shuffleRooms() assigned unknown participant %v", arg.ID)
+		}
+		if assigned[arg.ID] {
+			t.Fatalf("shuffleRooms() assigned participant twice: %v", arg.ID)
+		}
+		assigned[arg.ID] = true
+		counts[arg.RoomID]++
+	}
+	if counts[roomA] != 2 || counts[roomB] != 1 {
+		t.Fatalf("shuffleRooms() room counts = %+v, want roomA=2 roomB=1", counts)
+	}
+}
+
+func TestCbtSessionAutoAssignSeatsSortsPerRoomAndSkipsUnassigned(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtSessionTestUUID(120)
+	roomA := cbtSessionTestUUID(121)
+	roomB := cbtSessionTestUUID(122)
+	alfa := cbtSessionTestUUID(123)
+	beta := cbtSessionTestUUID(124)
+	gamma := cbtSessionTestUUID(125)
+	delta := cbtSessionTestUUID(126)
+	unassigned := cbtSessionTestUUID(127)
+	store := &fakeCbtSessionStore{
+		sessionRow: db.GetCbtExamSessionRow{ID: sessionID, Status: db.CbtSessionStatusEnumScheduled},
+		byRoomRows: []db.ListParticipantsByRoomRow{
+			{ID: beta, RoomID: roomA, Nama: "Beta", Nis: "002"},
+			{ID: alfa, RoomID: roomA, Nama: "Alfa", Nis: "003"},
+			{ID: gamma, RoomID: roomA, Nama: "Beta", Nis: "001"},
+			{ID: delta, RoomID: roomB, Nama: "Delta", Nis: "004"},
+			{ID: unassigned, Nama: "No Room", Nis: "999"},
+		},
+	}
+
+	if err := (&CbtSession{q: store}).AutoAssignSeats(ctx, sessionID); err != nil {
+		t.Fatalf("AutoAssignSeats() error = %v", err)
+	}
+	if store.clearSeatID != sessionID {
+		t.Fatalf("AutoAssignSeats() clear id = %v, want %v", store.clearSeatID, sessionID)
+	}
+	seats := map[pgtype.UUID]db.AssignParticipantSeatParams{}
+	for _, arg := range store.assignSeatArgs {
+		seats[arg.ID] = arg
+	}
+	if len(seats) != 4 {
+		t.Fatalf("AutoAssignSeats() assigned %d participants, want 4 assigned room participants", len(seats))
+	}
+	for id, want := range map[pgtype.UUID]int32{alfa: 1, gamma: 2, beta: 3, delta: 1} {
+		got, ok := seats[id]
+		if !ok || got.SeatNo.Int32 != want || !got.SeatNo.Valid {
+			t.Fatalf("AutoAssignSeats() participant %v seat = %+v present=%v, want %d", id, got, ok, want)
+		}
+	}
+	if seats[alfa].RoomID != roomA || seats[delta].RoomID != roomB {
+		t.Fatalf("AutoAssignSeats() room ids = alfa %+v delta %+v, want preserved rooms", seats[alfa], seats[delta])
+	}
+	if _, ok := seats[unassigned]; ok {
+		t.Fatalf("AutoAssignSeats() assigned unassigned participant: %+v", seats[unassigned])
+	}
+
+	store = &fakeCbtSessionStore{sessionRow: db.GetCbtExamSessionRow{ID: sessionID, Status: db.CbtSessionStatusEnumActive}}
+	if err := (&CbtSession{q: store}).AutoAssignSeats(ctx, sessionID); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("AutoAssignSeats(active session) error = %v, want ErrConflict", err)
+	}
+}
+
+func TestCbtSessionReplaceRoomProctorsValidatesBeforeTransaction(t *testing.T) {
+	ctx := context.Background()
+	roomID := cbtSessionTestUUID(130)
+	sessionID := cbtSessionTestUUID(131)
+	primary := cbtSessionTestUUID(132)
+	backup := cbtSessionTestUUID(133)
+	store := &fakeCbtSessionStore{
+		roomSetupRow: db.GetCbtExamRoomSetupContextRow{ID: roomID, SessionID: sessionID, SessionStatus: db.CbtSessionStatusEnumActive},
+	}
+	_, err := (&CbtSession{q: store}).ReplaceRoomProctors(ctx, roomID, cbtSessionTestUUID(134), primary, []pgtype.UUID{backup})
+	if !errors.Is(err, domain.ErrConflict) || store.proctorOverlapArg.EmployeeID.Valid {
+		t.Fatalf("ReplaceRoomProctors(active) error=%v overlapArg=%+v, want conflict before overlap checks", err, store.proctorOverlapArg)
+	}
+
+	store = &fakeCbtSessionStore{
+		roomSetupRow:   db.GetCbtExamRoomSetupContextRow{ID: roomID, SessionID: sessionID, SessionStatus: db.CbtSessionStatusEnumScheduled},
+		proctorOverlap: true,
+	}
+	_, err = (&CbtSession{q: store}).ReplaceRoomProctors(ctx, roomID, cbtSessionTestUUID(134), primary, []pgtype.UUID{backup})
+	if !errors.Is(err, domain.ErrConflict) || store.proctorOverlapArg.SessionID != sessionID || store.proctorOverlapArg.EmployeeID != primary || store.proctorOverlapArg.ExamRoomID != roomID {
+		t.Fatalf("ReplaceRoomProctors(overlap) error=%v overlapArg=%+v, want primary overlap conflict", err, store.proctorOverlapArg)
+	}
+
+	ordered := normalizeRoomProctorIDs(primary, []pgtype.UUID{backup, primary, pgtype.UUID{}, backup})
+	if len(ordered) != 2 || ordered[0] != primary || ordered[1] != backup {
+		t.Fatalf("normalizeRoomProctorIDs() = %+v, want primary then unique backups", ordered)
+	}
+}
+
 func TestCbtSessionFinalizeOverdueWithFakeStore(t *testing.T) {
 	ctx := context.Background()
 	sessionID := cbtSessionTestUUID(60)

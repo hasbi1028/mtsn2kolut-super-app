@@ -407,3 +407,136 @@ func TestInternalAnalyticsHandlerExportsAggregateCSV(t *testing.T) {
 		}
 	}
 }
+
+func TestNewInternalAnalyticsHandlerConstructorAcceptsNilService(t *testing.T) {
+	h := NewInternalAnalytics(nil)
+	if h == nil {
+		t.Fatalf("NewInternalAnalytics(nil) returned nil")
+	}
+	svc, ok := h.svc.(*service.InternalAnalytics)
+	if !ok {
+		t.Fatalf("constructor service type = %T, want *service.InternalAnalytics", h.svc)
+	}
+	if svc != nil {
+		t.Fatalf("constructor service = %#v, want nil pointer passed through", svc)
+	}
+}
+
+func TestInternalAnalyticsHandlerForwardsRetentionExpiresAt(t *testing.T) {
+	fake := &fakeInternalAnalyticsService{}
+	h := &InternalAnalytics{svc: fake}
+	rec := httptest.NewRecorder()
+	body := `{"event_name":"dashboard.view","event_group":"dashboard","source_surface":"web_admin","retention_expires_at":"2026-06-01T12:00:00+08:00","metadata":{"route_group":"dashboard"}}`
+
+	h.CreateEvent(rec, analyticsRequest(body))
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.input.RetentionExpiresAt == nil {
+		t.Fatalf("retention_expires_at was not forwarded")
+	}
+	want := time.Date(2026, 6, 1, 12, 0, 0, 0, time.FixedZone("", 8*60*60))
+	if !fake.input.RetentionExpiresAt.Equal(want) {
+		t.Fatalf("retention_expires_at = %v, want %v", fake.input.RetentionExpiresAt, want)
+	}
+}
+
+func TestInternalAnalyticsActorRolePrefersFirstNonEmptyRole(t *testing.T) {
+	tests := []struct {
+		name   string
+		claims jwt.MapClaims
+		want   string
+	}{
+		{name: "roles any skips blanks", claims: jwt.MapClaims{"roles": []any{" ", "staf", "admin"}, "role": "guru"}, want: "staf"},
+		{name: "roles string fallback", claims: jwt.MapClaims{"roles": []string{"", " kesiswaan "}, "role": "guru"}, want: "kesiswaan"},
+		{name: "single role fallback", claims: jwt.MapClaims{"role": " admin "}, want: "admin"},
+		{name: "missing role", claims: jwt.MapClaims{}, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := internalAnalyticsActorRole(tt.claims); got != tt.want {
+				t.Fatalf("actor role = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestInternalAnalyticsActorUserIDUsesSubThenUID(t *testing.T) {
+	if got := internalAnalyticsActorUserID(jwt.MapClaims{"sub": "not-a-uuid", "uid": "01000000-0000-0000-0000-000000000002"}); !got.Valid || got.String() != "01000000-0000-0000-0000-000000000002" {
+		t.Fatalf("actor user id = %v, want uid fallback", got)
+	}
+	if got := internalAnalyticsActorUserID(jwt.MapClaims{"sub": "01000000-0000-0000-0000-000000000003", "uid": "01000000-0000-0000-0000-000000000002"}); !got.Valid || got.String() != "01000000-0000-0000-0000-000000000003" {
+		t.Fatalf("actor user id = %v, want sub", got)
+	}
+	if got := internalAnalyticsActorUserID(jwt.MapClaims{"sub": "not-a-uuid"}); got.Valid {
+		t.Fatalf("actor user id = %v, want invalid empty uuid", got)
+	}
+}
+
+func TestInternalAnalyticsValidationMessagesCoverKnownCodes(t *testing.T) {
+	tests := map[string]string{
+		service.InternalAnalyticsErrEventNotAllowlisted:  "not allowlisted",
+		service.InternalAnalyticsErrGroupMismatch:        "does not match",
+		service.InternalAnalyticsErrForbiddenMetadataKey: "forbidden sensitive key",
+		service.InternalAnalyticsErrMetadataTooLarge:     "too large",
+		service.InternalAnalyticsErrInvalidSourceSurface: "source_surface is invalid",
+		service.InternalAnalyticsErrInvalidRetention:     "retention_expires_at is invalid",
+		"unknown": "payload is invalid",
+	}
+	for code, wantFragment := range tests {
+		t.Run(code, func(t *testing.T) {
+			if got := internalAnalyticsValidationMessage(code); !strings.Contains(got, wantFragment) {
+				t.Fatalf("validation message = %q, want fragment %q", got, wantFragment)
+			}
+		})
+	}
+}
+
+func TestInternalAnalyticsParseNonNegativeInt(t *testing.T) {
+	tests := []struct {
+		name       string
+		query      string
+		fallback   int
+		max        int
+		want       int
+		wantOK     bool
+		wantStatus int
+	}{
+		{name: "missing uses fallback", query: "", fallback: 7, max: 100, want: 7, wantOK: true, wantStatus: http.StatusOK},
+		{name: "zero allowed", query: "?offset=0", fallback: 7, max: 100, want: 0, wantOK: true, wantStatus: http.StatusOK},
+		{name: "positive allowed", query: "?offset=42", fallback: 7, max: 100, want: 42, wantOK: true, wantStatus: http.StatusOK},
+		{name: "negative rejected", query: "?offset=-1", fallback: 7, max: 100, wantOK: false, wantStatus: http.StatusBadRequest},
+		{name: "above max rejected", query: "?offset=101", fallback: 7, max: 100, wantOK: false, wantStatus: http.StatusBadRequest},
+		{name: "non numeric rejected", query: "?offset=abc", fallback: 7, max: 100, wantOK: false, wantStatus: http.StatusBadRequest},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/internal-analytics/daily"+tt.query, nil)
+			rec := httptest.NewRecorder()
+			got, ok := parseInternalAnalyticsNonNegativeInt(rec, req, "offset", tt.fallback, tt.max)
+			if ok != tt.wantOK || got != tt.want {
+				t.Fatalf("parse result = (%d,%v), want (%d,%v); body=%s", got, ok, tt.want, tt.wantOK, rec.Body.String())
+			}
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+			if !tt.wantOK && !strings.Contains(rec.Body.String(), "offset tidak valid") {
+				t.Fatalf("error body = %s, want offset validation message", rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestInternalAnalyticsParseDailyQueryIncludesOffsetAndTrimmedFilters(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/internal-analytics/daily?days=5&limit=10&offset=3&event_group=%20dashboard%20&event_name=%20dashboard.view%20&source_surface=%20web_admin%20&role=%20admin%20&result=%20success%20", nil)
+	rec := httptest.NewRecorder()
+
+	query, ok := parseInternalAnalyticsDailyQuery(rec, req)
+	if !ok {
+		t.Fatalf("parse daily query failed: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if query.Days != 5 || query.Limit != 10 || query.Offset != 3 || query.EventGroup != "dashboard" || query.EventName != "dashboard.view" || query.SourceSurface != "web_admin" || query.Role != "admin" || query.Result != "success" {
+		t.Fatalf("daily query = %+v, want parsed positive/non-negative ints and trimmed filters", query)
+	}
+}

@@ -325,6 +325,74 @@ func TestRBACCreateRoleNormalizesAndAudits(t *testing.T) {
 	}
 }
 
+func TestRBACConstructorsInitializeStores(t *testing.T) {
+	if svc := NewRBAC(nil); svc == nil || svc.q == nil || svc.tx != nil {
+		t.Fatalf("NewRBAC(nil) = %+v, want query store and no tx starter", svc)
+	}
+	if svc := NewRBACWithPool(nil); svc == nil || svc.q == nil || svc.tx == nil {
+		t.Fatalf("NewRBACWithPool(nil) = %+v, want query store and tx starter", svc)
+	}
+}
+
+func TestRBACUpdateRoleSucceedsAndAudits(t *testing.T) {
+	actorID := rbacTestUUID(25)
+	store := &fakeRBACStore{roles: []db.RbacRole{{Code: "operator", Name: "Operator", IsActive: true}}}
+	svc := &RBAC{q: store}
+
+	role, err := svc.UpdateRole(context.Background(), " Operator ", RBACRoleInput{Name: " Operator CBT ", Description: " Kelola CBT "}, actorID)
+	if err != nil {
+		t.Fatalf("UpdateRole() error = %v", err)
+	}
+	if role.Code != "operator" || role.Name != "Operator CBT" || role.Description != "Kelola CBT" {
+		t.Fatalf("UpdateRole() = %+v, want normalized updated role", role)
+	}
+	if len(store.updatedRoles) != 1 || store.updatedRoles[0].Code != "operator" || store.updatedRoles[0].Name != "Operator CBT" {
+		t.Fatalf("updated roles = %+v, want normalized update params", store.updatedRoles)
+	}
+	if !reflect.DeepEqual(store.auditActions, []string{"RBAC_ROLE_UPDATED"}) {
+		t.Fatalf("audit actions = %v, want role updated audit", store.auditActions)
+	}
+}
+
+func TestRBACSetRoleActiveSucceedsInvalidatesUniqueAffectedUsersAndAudits(t *testing.T) {
+	actorID := rbacTestUUID(26)
+	userID := rbacTestUUID(27)
+	store := &fakeRBACStore{
+		roles:       []db.RbacRole{{Code: "operator", IsActive: false}},
+		usersByRole: map[string][]pgtype.UUID{"operator": {userID, userID, {}}},
+	}
+	svc := &RBAC{q: store}
+
+	if err := svc.SetRoleActive(context.Background(), " Operator ", true, actorID); err != nil {
+		t.Fatalf("SetRoleActive(true) error = %v", err)
+	}
+	if len(store.setRoleActiveParams) != 1 || store.setRoleActiveParams[0].Code != "operator" || !store.setRoleActiveParams[0].IsActive {
+		t.Fatalf("set active params = %+v, want normalized active update", store.setRoleActiveParams)
+	}
+	if len(store.versionedUsers) != 1 || store.versionedUsers[0] != userID || len(store.revokedUsers) != 1 || store.revokedUsers[0] != userID {
+		t.Fatalf("invalidation = versioned %v revoked %v, want unique valid affected user", store.versionedUsers, store.revokedUsers)
+	}
+	if !reflect.DeepEqual(store.auditActions, []string{"RBAC_ROLE_STATUS_UPDATED"}) {
+		t.Fatalf("audit actions = %v, want role status audit", store.auditActions)
+	}
+}
+
+func TestRBACValidationRejectsBlankRoleAndMalformedPermission(t *testing.T) {
+	svc := &RBAC{q: &fakeRBACStore{}}
+	if _, err := svc.CreateRole(context.Background(), RBACRoleInput{Code: "valid_role", Name: "  "}, rbacTestUUID(28)); err == nil {
+		t.Fatal("CreateRole(blank name) error = nil, want validation error")
+	}
+	if _, err := svc.CreatePermission(context.Background(), RBACPermissionInput{Code: "invalid", Module: "reports", Action: "view"}, rbacTestUUID(29)); err == nil {
+		t.Fatal("CreatePermission(malformed code) error = nil, want validation error")
+	}
+	if _, err := svc.CreatePermission(context.Background(), RBACPermissionInput{Code: "reports.view", Module: "bad module", Action: "view"}, rbacTestUUID(30)); err == nil {
+		t.Fatal("CreatePermission(malformed module) error = nil, want validation error")
+	}
+	if _, err := svc.UpdatePermission(context.Background(), "reports.view", RBACPermissionInput{Module: "reports", Action: "bad action"}, rbacTestUUID(31)); err == nil {
+		t.Fatal("UpdatePermission(malformed action) error = nil, want validation error")
+	}
+}
+
 func TestRBACRoleMutationGuardsSystemAndAssignedRoles(t *testing.T) {
 	actorID := rbacTestUUID(21)
 	store := &fakeRBACStore{
