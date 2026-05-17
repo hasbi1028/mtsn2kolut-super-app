@@ -759,6 +759,31 @@ func TestKesiswaanCreateStudentTransferRequiresPoolAfterValidation(t *testing.T)
 	}
 }
 
+func TestKesiswaanCreateStudentTransferValidationErrorsBeforePool(t *testing.T) {
+	svc := &Kesiswaan{q: &fakeKesiswaanStore{}, photoDir: t.TempDir()}
+	studentID := kesiswaanTestUUID(44)
+	validDate := kesiswaanTestDate()
+
+	tests := []struct {
+		name    string
+		arg     db.CreateStudentTransferParams
+		wantErr string
+	}{
+		{name: "missing student", arg: db.CreateStudentTransferParams{TransferDate: validDate, TransferType: "out", DestinationSchool: "MTs Baru"}, wantErr: "siswa wajib dipilih"},
+		{name: "invalid type", arg: db.CreateStudentTransferParams{StudentID: studentID, TransferDate: validDate, TransferType: "stay"}, wantErr: "jenis mutasi tidak valid"},
+		{name: "out missing destination after trim", arg: db.CreateStudentTransferParams{StudentID: studentID, TransferDate: validDate, TransferType: " OUT ", DestinationSchool: "   "}, wantErr: "sekolah tujuan wajib diisi untuk mutasi keluar"},
+		{name: "in missing previous school after trim", arg: db.CreateStudentTransferParams{StudentID: studentID, TransferDate: validDate, TransferType: " IN ", PreviousSchool: "   "}, wantErr: "sekolah asal wajib diisi untuk mutasi masuk"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := svc.CreateStudentTransfer(context.Background(), tt.arg)
+			if err == nil || err.Error() != tt.wantErr {
+				t.Fatalf("CreateStudentTransfer() error = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestCreateStudentTransferUpdatesStudentLifecycle(t *testing.T) {
 	studentID := kesiswaanTestUUID(42)
 	validDate := kesiswaanTestDate()

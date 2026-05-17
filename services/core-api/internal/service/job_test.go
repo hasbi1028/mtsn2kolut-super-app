@@ -40,6 +40,9 @@ type fakeJobStore struct {
 	completeRows    int64
 	completeErr     error
 	failArg         db.FailJobParams
+	failRows        int64
+	failRowsSet     bool
+	failErr         error
 	getID           pgtype.UUID
 	getRow          db.GetJobRow
 	getErr          error
@@ -116,6 +119,12 @@ func (f *fakeJobStore) CompleteJob(ctx context.Context, arg db.CompleteJobParams
 
 func (f *fakeJobStore) FailJob(ctx context.Context, arg db.FailJobParams) (int64, error) {
 	f.failArg = arg
+	if f.failErr != nil {
+		return 0, f.failErr
+	}
+	if f.failRowsSet {
+		return f.failRows, nil
+	}
 	return 1, nil
 }
 
@@ -466,5 +475,95 @@ func TestJobCompleteWithAttendanceMapsMissingRunningJobToConflictOrIdempotentSuc
 	err = svc.CompleteWithAttendance(context.Background(), jobID, "worker-1", &PusakaJobAttendanceInput{Tanggal: pgtype.Date{Valid: true}})
 	if err != nil {
 		t.Fatalf("CompleteWithAttendance(already success) error = %v, want nil", err)
+	}
+}
+
+type completionlessJobStore struct {
+	inner *fakeJobStore
+}
+
+func (s completionlessJobStore) ListJobsByStatus(ctx context.Context, arg db.ListJobsByStatusParams) ([]db.ListJobsByStatusRow, error) {
+	return s.inner.ListJobsByStatus(ctx, arg)
+}
+func (s completionlessJobStore) CountJobsByStatus(ctx context.Context, status db.JobStatusEnum) (int64, error) {
+	return s.inner.CountJobsByStatus(ctx, status)
+}
+func (s completionlessJobStore) ListJobs(ctx context.Context, arg db.ListJobsParams) ([]db.ListJobsRow, error) {
+	return s.inner.ListJobs(ctx, arg)
+}
+func (s completionlessJobStore) CountJobs(ctx context.Context) (int64, error) {
+	return s.inner.CountJobs(ctx)
+}
+func (s completionlessJobStore) CreateJobIfAbsent(ctx context.Context, arg db.CreateJobIfAbsentParams) (db.Job, error) {
+	return s.inner.CreateJobIfAbsent(ctx, arg)
+}
+func (s completionlessJobStore) GetJobStats(ctx context.Context) (db.GetJobStatsRow, error) {
+	return s.inner.GetJobStats(ctx)
+}
+func (s completionlessJobStore) ClaimJob(ctx context.Context, workerID string) (db.ClaimJobRow, error) {
+	return s.inner.ClaimJob(ctx, workerID)
+}
+func (s completionlessJobStore) RecoverStaleRunningJobs(ctx context.Context, staleAfterSeconds int32) (int64, error) {
+	return s.inner.RecoverStaleRunningJobs(ctx, staleAfterSeconds)
+}
+func (s completionlessJobStore) CompleteJob(ctx context.Context, arg db.CompleteJobParams) (int64, error) {
+	return s.inner.CompleteJob(ctx, arg)
+}
+func (s completionlessJobStore) FailJob(ctx context.Context, arg db.FailJobParams) (int64, error) {
+	return s.inner.FailJob(ctx, arg)
+}
+func (s completionlessJobStore) GetJob(ctx context.Context, id pgtype.UUID) (db.GetJobRow, error) {
+	return s.inner.GetJob(ctx, id)
+}
+func (s completionlessJobStore) ListActiveEmployees(ctx context.Context) ([]db.ListActiveEmployeesRow, error) {
+	return s.inner.ListActiveEmployees(ctx)
+}
+func (s completionlessJobStore) CancelEmployeeJobs(ctx context.Context, employeeID pgtype.UUID) (int64, error) {
+	return s.inner.CancelEmployeeJobs(ctx, employeeID)
+}
+func (s completionlessJobStore) CancelAllJobs(ctx context.Context) (int64, error) {
+	return s.inner.CancelAllJobs(ctx)
+}
+
+func TestJobCompleteWithAttendanceRequiresCompletionStoreWhenNoTx(t *testing.T) {
+	svc := &PusakaJob{q: completionlessJobStore{inner: &fakeJobStore{}}}
+
+	err := svc.CompleteWithAttendance(context.Background(), pgtype.UUID{Bytes: [16]byte{15}, Valid: true}, "worker-1", &PusakaJobAttendanceInput{Tanggal: pgtype.Date{Valid: true}})
+	if err == nil || err.Error() != "job store does not support attendance completion" {
+		t.Fatalf("CompleteWithAttendance(completionless store) error = %v, want unsupported completion store", err)
+	}
+}
+
+func TestJobFailMapsAffectedRowsAndStoreErrors(t *testing.T) {
+	jobID := pgtype.UUID{Bytes: [16]byte{16}, Valid: true}
+	retryAfter := pgtype.Text{String: "30", Valid: true}
+
+	store := &fakeJobStore{failErr: errors.New("fail update failed")}
+	svc := &PusakaJob{q: store}
+	if err := svc.Fail(context.Background(), jobID, "worker-1", "timeout", retryAfter); err == nil || err.Error() != "fail update failed" {
+		t.Fatalf("Fail(store error) error = %v, want fail update failed", err)
+	}
+
+	for _, status := range []db.JobStatusEnum{db.JobStatusEnumSuccess, db.JobStatusEnumFailed} {
+		store = &fakeJobStore{failRowsSet: true, getRow: db.GetJobRow{ID: jobID, Status: status}}
+		svc = &PusakaJob{q: store}
+		if err := svc.Fail(context.Background(), jobID, "worker-1", "timeout", retryAfter); err != nil {
+			t.Fatalf("Fail(already terminal %s) error = %v, want nil", status, err)
+		}
+		if store.getID != jobID {
+			t.Fatalf("Fail(already terminal %s) GetJob id = %v, want %v", status, store.getID, jobID)
+		}
+	}
+
+	store = &fakeJobStore{failRowsSet: true, getRow: db.GetJobRow{ID: jobID, Status: db.JobStatusEnumRunning}}
+	svc = &PusakaJob{q: store}
+	if err := svc.Fail(context.Background(), jobID, "worker-1", "timeout", retryAfter); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("Fail(non-terminal affected 0) error = %v, want ErrConflict", err)
+	}
+
+	store = &fakeJobStore{failRowsSet: true, getErr: pgx.ErrNoRows}
+	svc = &PusakaJob{q: store}
+	if err := svc.Fail(context.Background(), jobID, "worker-1", "timeout", retryAfter); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("Fail(missing job affected 0) error = %v, want ErrConflict", err)
 	}
 }

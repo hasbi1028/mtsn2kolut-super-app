@@ -319,6 +319,30 @@ func TestStudentCertificateCreateValidatesInputBeforeTransaction(t *testing.T) {
 	}
 }
 
+func TestStudentCertificateCreateValidationErrorsBeforePool(t *testing.T) {
+	svc := &StudentCertificate{}
+	templateID := "00000000-0000-0000-0000-000000000001"
+	studentID := "00000000-0000-0000-0000-000000000002"
+
+	tests := []struct {
+		name    string
+		input   CreateStudentCertificateInput
+		wantErr string
+	}{
+		{name: "invalid student", input: CreateStudentCertificateInput{TemplateID: templateID, StudentID: "bad"}, wantErr: "student_id tidak valid"},
+		{name: "invalid date", input: CreateStudentCertificateInput{TemplateID: templateID, StudentID: studentID, TanggalSurat: "2026/05/01"}, wantErr: "format tanggal surat tidak valid"},
+		{name: "blank purpose", input: CreateStudentCertificateInput{TemplateID: templateID, StudentID: studentID, TanggalSurat: "2026-05-01", Purpose: "   "}, wantErr: "keperluan surat wajib diisi"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := svc.Create(context.Background(), tt.input)
+			if err == nil || err.Error() != tt.wantErr {
+				t.Fatalf("Create() error = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestStudentCertificateCreateRequiresPoolAfterValidation(t *testing.T) {
 	svc := &StudentCertificate{}
 	_, err := svc.Create(context.Background(), CreateStudentCertificateInput{

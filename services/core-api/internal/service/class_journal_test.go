@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/domain"
@@ -33,9 +34,10 @@ type fakeClassJournalStore struct {
 	sessionByDateID  pgtype.UUID
 	sessionByDateErr error
 
-	sessionBySlotArg db.GetJournalSessionIDByTimetableSlotDateParams
-	sessionBySlotID  pgtype.UUID
-	sessionBySlotErr error
+	sessionBySlotArg  db.GetJournalSessionIDByTimetableSlotDateParams
+	sessionBySlotID   pgtype.UUID
+	sessionBySlotErr  error
+	sessionBySlotErrs []error
 
 	timetableArg db.GetRombelTimetableSlotParams
 	timetableRow db.GetRombelTimetableSlotRow
@@ -120,6 +122,13 @@ func (f *fakeClassJournalStore) GetJournalSessionIDByAssignmentDate(ctx context.
 
 func (f *fakeClassJournalStore) GetJournalSessionIDByTimetableSlotDate(ctx context.Context, arg db.GetJournalSessionIDByTimetableSlotDateParams) (pgtype.UUID, error) {
 	f.sessionBySlotArg = arg
+	if len(f.sessionBySlotErrs) > 0 {
+		err := f.sessionBySlotErrs[0]
+		f.sessionBySlotErrs = f.sessionBySlotErrs[1:]
+		if err != nil {
+			return pgtype.UUID{}, err
+		}
+	}
 	if f.sessionBySlotErr != nil {
 		return pgtype.UUID{}, f.sessionBySlotErr
 	}
@@ -199,6 +208,59 @@ func (f *fakeClassJournalStore) GetClassSubjectAssignment(ctx context.Context, i
 	}
 	return f.assignmentRow, nil
 }
+
+type fakeClassJournalTxStarter struct {
+	tx       *fakeClassJournalTx
+	beginErr error
+	begins   int
+}
+
+func (f *fakeClassJournalTxStarter) Begin(ctx context.Context) (pgx.Tx, error) {
+	f.begins++
+	if f.beginErr != nil {
+		return nil, f.beginErr
+	}
+	if f.tx == nil {
+		f.tx = &fakeClassJournalTx{}
+	}
+	return f.tx, nil
+}
+
+type fakeClassJournalTx struct {
+	commitErr error
+	commits   int
+	rollbacks int
+}
+
+func (f *fakeClassJournalTx) Begin(ctx context.Context) (pgx.Tx, error) { return f, nil }
+func (f *fakeClassJournalTx) Commit(ctx context.Context) error {
+	f.commits++
+	return f.commitErr
+}
+func (f *fakeClassJournalTx) Rollback(ctx context.Context) error {
+	f.rollbacks++
+	return nil
+}
+func (f *fakeClassJournalTx) CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error) {
+	return 0, errors.New("not implemented")
+}
+func (f *fakeClassJournalTx) SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults {
+	return nil
+}
+func (f *fakeClassJournalTx) LargeObjects() pgx.LargeObjects { return pgx.LargeObjects{} }
+func (f *fakeClassJournalTx) Prepare(ctx context.Context, name, sql string) (*pgconn.StatementDescription, error) {
+	return nil, errors.New("not implemented")
+}
+func (f *fakeClassJournalTx) Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
+	return pgconn.CommandTag{}, errors.New("not implemented")
+}
+func (f *fakeClassJournalTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	return nil, errors.New("not implemented")
+}
+func (f *fakeClassJournalTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	return nil
+}
+func (f *fakeClassJournalTx) Conn() *pgx.Conn { return nil }
 
 func TestClassJournalGetSessionByAssignmentDateWithStoreLoadsDetailAndAttendances(t *testing.T) {
 	assignmentID := documentCycleTestUUID(141)
@@ -829,5 +891,119 @@ func TestClassJournalMutationErrorBranches(t *testing.T) {
 	storeUpserts := svc.q.(*fakeClassJournalStore).upsertArgs
 	if len(storeUpserts) != 1 || storeUpserts[0].Status != db.JournalAttendanceStatusIzin {
 		t.Fatalf("upsert args = %+v, want izin status", storeUpserts)
+	}
+}
+
+func TestClassJournalSessionLookupMethodWrappers(t *testing.T) {
+	assignmentID := documentCycleTestUUID(149)
+	slotID := documentCycleTestUUID(150)
+	sessionID := documentCycleTestUUID(151)
+	teacherID := documentCycleTestUUID(152)
+	studentID := documentCycleTestUUID(153)
+	tanggal := documentCycleTestDate(2026, 5, 11)
+	store := &fakeClassJournalStore{
+		sessionByDateID: sessionID,
+		sessionBySlotID: sessionID,
+		sessionRow:      db.GetJournalSessionRow{ID: sessionID, AssignmentID: assignmentID, TeacherEmployeeID: teacherID},
+		attendanceRows:  []db.ListJournalAttendancesRow{{SessionID: sessionID, StudentID: studentID, Status: db.JournalAttendanceStatusHadir}},
+	}
+	svc := &ClassJournal{q: store}
+
+	detail, err := svc.getSessionByAssignmentDate(context.Background(), assignmentID, tanggal, teacherID)
+	if err != nil {
+		t.Fatalf("getSessionByAssignmentDate() error = %v", err)
+	}
+	if detail.Session.ID != sessionID || store.sessionByDateArg.AssignmentID != assignmentID {
+		t.Fatalf("assignment-date lookup detail=%+v arg=%+v, want session and assignment arg", detail, store.sessionByDateArg)
+	}
+
+	detail, err = svc.getSessionByTimetableSlotDate(context.Background(), slotID, tanggal, teacherID)
+	if err != nil {
+		t.Fatalf("getSessionByTimetableSlotDate() error = %v", err)
+	}
+	if detail.Session.ID != sessionID || store.sessionBySlotArg.TimetableSlotID != slotID {
+		t.Fatalf("slot-date lookup detail=%+v arg=%+v, want session and slot arg", detail, store.sessionBySlotArg)
+	}
+}
+
+func TestClassJournalOpenSessionFromTimetableSlotMapsSlotAndDuplicateFallback(t *testing.T) {
+	ctx := context.Background()
+	classID := documentCycleTestUUID(154)
+	slotID := documentCycleTestUUID(155)
+	assignmentID := documentCycleTestUUID(156)
+	sessionID := documentCycleTestUUID(157)
+	teacherID := documentCycleTestUUID(158)
+	tanggal := documentCycleTestDate(2026, 5, 12)
+	expectedErr := errors.New("lookup failed")
+
+	svc := &ClassJournal{q: &fakeClassJournalStore{timetableErr: pgx.ErrNoRows}}
+	if _, err := svc.OpenSessionFromTimetableSlot(ctx, classID, slotID, tanggal, "", "", "", true, teacherID); !errors.Is(err, domain.ErrNotFound) || !strings.Contains(err.Error(), "slot jadwal") {
+		t.Fatalf("OpenSessionFromTimetableSlot(no slot) error = %v, want ErrNotFound slot", err)
+	}
+
+	svc = &ClassJournal{q: &fakeClassJournalStore{timetableErr: expectedErr}}
+	if _, err := svc.OpenSessionFromTimetableSlot(ctx, classID, slotID, tanggal, "", "", "", true, teacherID); !errors.Is(err, expectedErr) {
+		t.Fatalf("OpenSessionFromTimetableSlot(slot lookup error) = %v, want %v", err, expectedErr)
+	}
+
+	store := &fakeClassJournalStore{
+		timetableRow:      db.GetRombelTimetableSlotRow{ID: slotID, ClassID: classID, AssignmentID: assignmentID, TeacherEmployeeID: teacherID, DayOfWeek: 2},
+		sessionBySlotID:   sessionID,
+		sessionBySlotErrs: []error{pgx.ErrNoRows, nil},
+		createErr:         errors.New("duplicate key value violates unique constraint uq_journal_session_date"),
+		sessionRow:        db.GetJournalSessionRow{ID: sessionID, AssignmentID: assignmentID, TeacherEmployeeID: teacherID, Materi: "Existing"},
+		attendanceRows:    []db.ListJournalAttendancesRow{{SessionID: sessionID, StudentID: documentCycleTestUUID(159), Status: db.JournalAttendanceStatusHadir}},
+	}
+	svc = &ClassJournal{q: store}
+	result, err := svc.OpenSessionFromTimetableSlot(ctx, classID, slotID, tanggal, "Materi", "", "", true, teacherID)
+	if err != nil {
+		t.Fatalf("OpenSessionFromTimetableSlot(duplicate fallback) error = %v", err)
+	}
+	if result.Created || result.Session.ID != sessionID || len(result.Attendances) != 1 {
+		t.Fatalf("duplicate fallback result = %+v, want existing session detail", result)
+	}
+	if len(store.sessionBySlotErrs) != 0 {
+		t.Fatalf("sessionBySlotErrs remaining = %d, want both initial and fallback lookups consumed", len(store.sessionBySlotErrs))
+	}
+}
+
+func TestClassJournalWithStoreTransactionBranches(t *testing.T) {
+	ctx := context.Background()
+	store := &fakeClassJournalStore{}
+	expectedErr := errors.New("boom")
+	svc := &ClassJournal{q: store, tx: &fakeClassJournalTxStarter{beginErr: expectedErr}}
+	if err := svc.withClassJournalStore(ctx, func(classJournalStore) error { return nil }); !errors.Is(err, expectedErr) {
+		t.Fatalf("withClassJournalStore(begin error) = %v, want %v", err, expectedErr)
+	}
+
+	tx := &fakeClassJournalTx{}
+	starter := &fakeClassJournalTxStarter{tx: tx}
+	svc = &ClassJournal{q: store, tx: starter}
+	if err := svc.withClassJournalStore(ctx, func(classJournalStore) error { return expectedErr }); !errors.Is(err, expectedErr) {
+		t.Fatalf("withClassJournalStore(fn error) = %v, want %v", err, expectedErr)
+	}
+	if starter.begins != 1 || tx.commits != 0 || tx.rollbacks != 1 {
+		t.Fatalf("fn error tx counts begins=%d commits=%d rollbacks=%d, want 1/0/1", starter.begins, tx.commits, tx.rollbacks)
+	}
+
+	tx = &fakeClassJournalTx{commitErr: expectedErr}
+	svc = &ClassJournal{q: store, tx: &fakeClassJournalTxStarter{tx: tx}}
+	if err := svc.withClassJournalStore(ctx, func(classJournalStore) error { return nil }); !errors.Is(err, expectedErr) {
+		t.Fatalf("withClassJournalStore(commit error) = %v, want %v", err, expectedErr)
+	}
+	if tx.commits != 1 || tx.rollbacks != 1 {
+		t.Fatalf("commit error tx counts commits=%d rollbacks=%d, want 1/1", tx.commits, tx.rollbacks)
+	}
+}
+
+func TestClassJournalValidationHelpersAdditionalBranches(t *testing.T) {
+	if err := validateJournalDateMatchesTimetableSlot(pgtype.Date{}, 1); !errors.Is(err, domain.ErrBadRequest) || !strings.Contains(err.Error(), "wajib valid") {
+		t.Fatalf("validate invalid date error = %v, want ErrBadRequest valid-date message", err)
+	}
+	if isJournalDuplicateDateError(nil) {
+		t.Fatal("isJournalDuplicateDateError(nil) = true, want false")
+	}
+	if isJournalDuplicateDateError(errors.New("plain store error")) {
+		t.Fatal("isJournalDuplicateDateError(plain) = true, want false")
 	}
 }

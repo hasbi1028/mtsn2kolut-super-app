@@ -202,6 +202,54 @@ func TestProfileChangeRequestSelfRoutesMapUnauthorizedAndCancel(t *testing.T) {
 	}
 }
 
+func TestProfileChangeRequestListOwnSuccessAndInternalError(t *testing.T) {
+	userID := "11111111-1111-1111-1111-111111111111"
+	requestID := mustUUID(t, "22222222-2222-2222-2222-222222222222")
+	svc := &fakeProfileChangeRequestService{
+		listOwnResult: []service.ProfileChangeRequestListItem{{
+			ID:                   requestID,
+			RequesterUserID:      mustUUID(t, userID),
+			RequesterUsername:    "siswa1",
+			RequesterDisplayName: "Siswa Satu",
+			ProfileType:          "student",
+			TargetStudentID:      mustUUID(t, "33333333-3333-3333-3333-333333333333"),
+			ProfileNama:          "Siswa Satu",
+			FieldKey:             "alamat",
+			FieldLabel:           "Alamat siswa",
+			CurrentValue:         "Alamat lama",
+			RequestedValue:       "Alamat baru",
+			Reason:               "KK terbaru",
+			Status:               db.ProfileChangeRequestStatusPending,
+		}},
+	}
+	h := NewProfileChangeRequest(svc)
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/account/change-requests", nil)
+	req = req.WithContext(withAuthClaims(req.Context(), userID))
+	rec := httptest.NewRecorder()
+
+	h.ListOwn(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ListOwn() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if svc.listOwnUserID != mustUUID(t, userID) {
+		t.Fatalf("ListOwn() user id = %v, want JWT user", svc.listOwnUserID)
+	}
+	for _, expected := range []string{requestID.String(), `"field_label":"Alamat siswa"`, `"requester_username":"siswa1"`, `"status":"pending"`} {
+		if !strings.Contains(rec.Body.String(), expected) {
+			t.Fatalf("body = %s, want %q", rec.Body.String(), expected)
+		}
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/auth/account/change-requests", nil)
+	req = req.WithContext(withAuthClaims(req.Context(), userID))
+	rec = httptest.NewRecorder()
+	NewProfileChangeRequest(&fakeProfileChangeRequestService{listOwnErr: errors.New("db down")}).ListOwn(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("ListOwn(error) status = %d, want 500; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestProfileChangeRequestListSelfRequestableFields(t *testing.T) {
 	userID := "11111111-1111-1111-1111-111111111111"
 	svc := &fakeProfileChangeRequestService{

@@ -216,6 +216,37 @@ func TestStudentPortalHandlersRequireAuthenticatedClaims(t *testing.T) {
 	}
 }
 
+func TestStudentPortalScheduleSuccessForbiddenAndInternalError(t *testing.T) {
+	userID := handlerTestUUID(254)
+	scheduleID := handlerTestUUID(255)
+	svc := &fakeStudentPortalSelfService{
+		scheduleRows: []db.ListStudentTimetableRow{{ID: scheduleID, SubjectName: "Bahasa Indonesia", TeacherName: "Guru B"}},
+	}
+	req := withClaims(httptest.NewRequest(http.MethodGet, "/api/portal/student/schedule", nil), jwt.MapClaims{"roles": []any{"siswa"}, "sub": userID.String()})
+	rec := httptest.NewRecorder()
+
+	(&StudentPortal{svc: svc}).Schedule(rec, req)
+
+	if rec.Code != http.StatusOK || svc.scheduleUserID != userID {
+		t.Fatalf("Schedule() status/user = %d/%s, want 200/%s; body=%s", rec.Code, svc.scheduleUserID.String(), userID.String(), rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), scheduleID.String()) || !strings.Contains(rec.Body.String(), "Bahasa Indonesia") {
+		t.Fatalf("Schedule() body = %s, want schedule row", rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	(&StudentPortal{svc: &fakeStudentPortalSelfService{}}).Schedule(rec, withClaims(httptest.NewRequest(http.MethodGet, "/api/portal/student/schedule", nil), jwt.MapClaims{"roles": []any{"ortu"}, "sub": userID.String()}))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("Schedule(forbidden role) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	(&StudentPortal{svc: &fakeStudentPortalSelfService{scheduleErr: context.DeadlineExceeded}}).Schedule(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("Schedule(internal) status = %d, want 500; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestStudentPortalCbtHandlersUseAuthenticatedUserAndRedactScheduleToken(t *testing.T) {
 	userID := handlerTestUUID(215)
 	tokenMasked := "ABCD-••••"

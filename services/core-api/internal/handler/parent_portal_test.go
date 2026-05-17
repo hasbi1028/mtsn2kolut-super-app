@@ -235,6 +235,37 @@ func TestParentPortalHandlersRequireAuthenticatedClaims(t *testing.T) {
 	}
 }
 
+func TestParentPortalChildrenSuccessForbiddenAndInternalError(t *testing.T) {
+	userID := handlerTestUUID(252)
+	childID := handlerTestUUID(253)
+	svc := &fakeParentPortalSelfService{
+		childrenRows: []db.ListParentChildrenRow{{ID: childID, Nis: "4001", Nama: "Anak A", Relationship: "ibu", IsPrimaryContact: true}},
+	}
+	req := withClaims(httptest.NewRequest(http.MethodGet, "/api/portal/parent/children", nil), jwt.MapClaims{"roles": []any{"ortu"}, "sub": userID.String()})
+	rec := httptest.NewRecorder()
+
+	(&ParentPortal{svc: svc}).Children(rec, req)
+
+	if rec.Code != http.StatusOK || svc.childrenUserID != userID {
+		t.Fatalf("Children() status/user = %d/%s, want 200/%s; body=%s", rec.Code, svc.childrenUserID.String(), userID.String(), rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), childID.String()) || !strings.Contains(rec.Body.String(), `"relationship":"ibu"`) {
+		t.Fatalf("Children() body = %s, want child id and relationship", rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	(&ParentPortal{svc: &fakeParentPortalSelfService{}}).Children(rec, withClaims(httptest.NewRequest(http.MethodGet, "/api/portal/parent/children", nil), jwt.MapClaims{"roles": []any{"siswa"}, "sub": userID.String()}))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("Children(forbidden role) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	(&ParentPortal{svc: &fakeParentPortalSelfService{childrenErr: context.DeadlineExceeded}}).Children(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("Children(internal) status = %d, want 500; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 type fakeParentPortalSelfService struct {
 	previewParentRows []db.ListParentPortalPreviewParentsRow
 	previewParentErr  error
