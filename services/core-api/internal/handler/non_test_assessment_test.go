@@ -18,6 +18,33 @@ import (
 )
 
 type fakeNonTestAssessmentHandlerService struct {
+	listInput               service.ListNonTestAssessmentsInput
+	listRows                []db.ListNonTestAssessmentsRow
+	listTotal               int64
+	listErr                 error
+	getID                   pgtype.UUID
+	getRow                  db.GetNonTestAssessmentRow
+	getErr                  error
+	updateInput             service.SaveNonTestAssessmentInput
+	updateRow               db.NonTestAssessment
+	updateErr               error
+	deleteID                pgtype.UUID
+	deleteErr               error
+	listSubmissionsID       pgtype.UUID
+	listSubmissionsRows     []db.ListNonTestSubmissionsRow
+	listSubmissionsErr      error
+	generateAssessmentID    pgtype.UUID
+	generateClassID         pgtype.UUID
+	generateRows            []db.NonTestAssessmentSubmission
+	generateErr             error
+	syncAssessmentID        pgtype.UUID
+	syncTeacherID           pgtype.UUID
+	syncUsername            string
+	syncPublish             bool
+	syncResult              service.SyncNonTestAssessmentToGradeResult
+	syncErr                 error
+	upsertRow               db.NonTestAssessmentSubmission
+	upsertErr               error
 	teacherOwnsClassSubject bool
 	teacherOwnsAssessment   bool
 	teacherOwnsErr          error
@@ -32,32 +59,51 @@ type fakeNonTestAssessmentHandlerService struct {
 	upsertInput             service.SaveNonTestSubmissionInput
 }
 
-func (f *fakeNonTestAssessmentHandlerService) List(context.Context, service.ListNonTestAssessmentsInput) ([]db.ListNonTestAssessmentsRow, int64, error) {
-	return nil, 0, nil
+func (f *fakeNonTestAssessmentHandlerService) List(_ context.Context, input service.ListNonTestAssessmentsInput) ([]db.ListNonTestAssessmentsRow, int64, error) {
+	f.listInput = input
+	return f.listRows, f.listTotal, f.listErr
 }
-func (f *fakeNonTestAssessmentHandlerService) Get(context.Context, pgtype.UUID) (db.GetNonTestAssessmentRow, error) {
-	return db.GetNonTestAssessmentRow{}, nil
+func (f *fakeNonTestAssessmentHandlerService) Get(_ context.Context, id pgtype.UUID) (db.GetNonTestAssessmentRow, error) {
+	f.getID = id
+	return f.getRow, f.getErr
 }
 func (f *fakeNonTestAssessmentHandlerService) Create(context.Context, service.SaveNonTestAssessmentInput) (db.NonTestAssessment, error) {
 	return db.NonTestAssessment{ID: handlerTestUUID(40)}, nil
 }
-func (f *fakeNonTestAssessmentHandlerService) Update(context.Context, service.SaveNonTestAssessmentInput) (db.NonTestAssessment, error) {
-	return db.NonTestAssessment{}, nil
+func (f *fakeNonTestAssessmentHandlerService) Update(_ context.Context, input service.SaveNonTestAssessmentInput) (db.NonTestAssessment, error) {
+	f.updateInput = input
+	if f.updateRow.ID.Valid || f.updateRow.SubjectID.Valid {
+		return f.updateRow, f.updateErr
+	}
+	return db.NonTestAssessment{ID: input.ID, SubjectID: input.SubjectID, ClassID: input.ClassID, Title: input.Title, AssessmentType: input.AssessmentType, Status: input.Status}, f.updateErr
 }
-func (f *fakeNonTestAssessmentHandlerService) Delete(context.Context, pgtype.UUID) error { return nil }
-func (f *fakeNonTestAssessmentHandlerService) ListSubmissions(context.Context, pgtype.UUID) ([]db.ListNonTestSubmissionsRow, error) {
-	return nil, nil
+func (f *fakeNonTestAssessmentHandlerService) Delete(_ context.Context, id pgtype.UUID) error {
+	f.deleteID = id
+	return f.deleteErr
 }
-func (f *fakeNonTestAssessmentHandlerService) GenerateSubmissions(_ context.Context, _ pgtype.UUID, _, teacherID pgtype.UUID) ([]db.NonTestAssessmentSubmission, error) {
+func (f *fakeNonTestAssessmentHandlerService) ListSubmissions(_ context.Context, id pgtype.UUID) ([]db.ListNonTestSubmissionsRow, error) {
+	f.listSubmissionsID = id
+	return f.listSubmissionsRows, f.listSubmissionsErr
+}
+func (f *fakeNonTestAssessmentHandlerService) GenerateSubmissions(_ context.Context, assessmentID pgtype.UUID, classID, teacherID pgtype.UUID) ([]db.NonTestAssessmentSubmission, error) {
+	f.generateAssessmentID = assessmentID
+	f.generateClassID = classID
 	f.generateTeacherID = teacherID
-	return nil, nil
+	return f.generateRows, f.generateErr
 }
 func (f *fakeNonTestAssessmentHandlerService) UpsertSubmission(_ context.Context, input service.SaveNonTestSubmissionInput) (db.NonTestAssessmentSubmission, error) {
 	f.upsertInput = input
-	return db.NonTestAssessmentSubmission{AssessmentID: input.AssessmentID, StudentID: input.StudentID, Status: input.Status}, nil
+	if f.upsertRow.AssessmentID.Valid || f.upsertRow.StudentID.Valid {
+		return f.upsertRow, f.upsertErr
+	}
+	return db.NonTestAssessmentSubmission{AssessmentID: input.AssessmentID, StudentID: input.StudentID, Status: input.Status}, f.upsertErr
 }
-func (f *fakeNonTestAssessmentHandlerService) SyncToGrade(context.Context, pgtype.UUID, pgtype.UUID, string, bool) (service.SyncNonTestAssessmentToGradeResult, error) {
-	return service.SyncNonTestAssessmentToGradeResult{}, nil
+func (f *fakeNonTestAssessmentHandlerService) SyncToGrade(_ context.Context, assessmentID, teacherID pgtype.UUID, username string, publish bool) (service.SyncNonTestAssessmentToGradeResult, error) {
+	f.syncAssessmentID = assessmentID
+	f.syncTeacherID = teacherID
+	f.syncUsername = username
+	f.syncPublish = publish
+	return f.syncResult, f.syncErr
 }
 func (f *fakeNonTestAssessmentHandlerService) TeacherOwnsClassSubject(_ context.Context, classID, subjectID, teacherID pgtype.UUID) (bool, error) {
 	f.classSubjectCalls++
@@ -382,5 +428,228 @@ func TestNonTestAssessmentGuruCreateForbiddenForUnassignedClassSubject(t *testin
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("Create() status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func nonTestAssessmentAdminRequest(method, target, body string) *http.Request {
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
+	return withClaims(req, jwt.MapClaims{"roles": []any{"admin"}, "usr": "admin.test"})
+}
+
+func TestNonTestAssessmentListEndpointSuccessAndError(t *testing.T) {
+	teacherID := "33333333-3333-3333-3333-333333333333"
+	fake := &fakeNonTestAssessmentHandlerService{
+		listRows: []db.ListNonTestAssessmentsRow{{
+			ID:             handlerTestUUID(41),
+			SubjectID:      handlerTestUUID(42),
+			SubjectName:    "Fikih",
+			AssessmentType: "praktik",
+			Title:          "Praktik salat",
+			MaxScore:       nonTestNumeric(100, 0),
+		}},
+		listTotal: 9,
+	}
+	h := &NonTestAssessment{svc: fake}
+	req := httptest.NewRequest(http.MethodGet, "/api/non-test-assessments?status=active&limit=10&offset=2", nil)
+	req = withClaims(req, jwt.MapClaims{"roles": []any{"guru"}, "eid": teacherID})
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("List() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.listInput.Status != "active" || fake.listInput.Limit != 10 || fake.listInput.Offset != 2 || pgUUIDString(fake.listInput.TeacherEmployeeID) != teacherID {
+		t.Fatalf("List input = %+v, want query filters and teacher id", fake.listInput)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "Praktik salat") || !strings.Contains(body, `"total":9`) {
+		t.Fatalf("List body = %s, want item and total", body)
+	}
+
+	rec = httptest.NewRecorder()
+	h.List(rec, nonTestAssessmentAdminRequest(http.MethodGet, "/api/non-test-assessments?subject_id=bad", ""))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("List() invalid filter status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestNonTestAssessmentGetEndpointSuccessAndErrors(t *testing.T) {
+	assessmentID := handlerTestUUID(43)
+	fake := &fakeNonTestAssessmentHandlerService{
+		teacherOwnsAssessment: true,
+		getRow: db.GetNonTestAssessmentRow{
+			ID:             assessmentID,
+			SubjectID:      handlerTestUUID(44),
+			SubjectName:    "Akidah",
+			AssessmentType: "observasi",
+			Title:          "Observasi sikap",
+			MaxScore:       nonTestNumeric(100, 0),
+		},
+	}
+	h := &NonTestAssessment{svc: fake}
+	req := withRouteParam(nonTestAssessmentAdminRequest(http.MethodGet, "/api/non-test-assessments/"+pgUUIDString(assessmentID), ""), "id", pgUUIDString(assessmentID))
+	rec := httptest.NewRecorder()
+
+	h.Get(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Get() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.getID != assessmentID || !strings.Contains(rec.Body.String(), "Observasi sikap") {
+		t.Fatalf("Get forwarded id/body mismatch: id=%v body=%s", fake.getID, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.Get(rec, withRouteParam(nonTestAssessmentAdminRequest(http.MethodGet, "/api/non-test-assessments/bad", ""), "id", "bad"))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("Get() invalid id status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestNonTestAssessmentUpdateAndDeleteEndpointPaths(t *testing.T) {
+	assessmentID := handlerTestUUID(45)
+	subjectID := handlerTestUUID(46)
+	classID := handlerTestUUID(47)
+	fake := &fakeNonTestAssessmentHandlerService{teacherOwnsAssessment: true, teacherOwnsClassSubject: true}
+	h := &NonTestAssessment{svc: fake}
+	body := `{"subject_id":"` + pgUUIDString(subjectID) + `","class_id":"` + pgUUIDString(classID) + `","assessment_type":"proyek","title":" Proyek IPA ","status":"active","checklist":["proposal"]}`
+	req := withRouteParam(nonTestAssessmentAdminRequest(http.MethodPut, "/api/non-test-assessments/"+pgUUIDString(assessmentID), body), "id", pgUUIDString(assessmentID))
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Update() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.updateInput.ID != assessmentID || fake.updateInput.SubjectID != subjectID || fake.updateInput.ClassID != classID || fake.updateInput.Title != " Proyek IPA " {
+		t.Fatalf("Update input = %+v, want body and route id forwarded", fake.updateInput)
+	}
+
+	rec = httptest.NewRecorder()
+	h.Update(rec, withRouteParam(nonTestAssessmentAdminRequest(http.MethodPut, "/api/non-test-assessments/"+pgUUIDString(assessmentID), `{`), "id", pgUUIDString(assessmentID)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("Update() bad json status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.Delete(rec, withRouteParam(nonTestAssessmentAdminRequest(http.MethodDelete, "/api/non-test-assessments/"+pgUUIDString(assessmentID), ""), "id", pgUUIDString(assessmentID)))
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("Delete() status = %d, want 204; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.deleteID != assessmentID {
+		t.Fatalf("Delete id = %v, want %v", fake.deleteID, assessmentID)
+	}
+
+	fake.deleteErr = errors.New("akses ditolak")
+	rec = httptest.NewRecorder()
+	h.Delete(rec, withRouteParam(nonTestAssessmentAdminRequest(http.MethodDelete, "/api/non-test-assessments/"+pgUUIDString(assessmentID), ""), "id", pgUUIDString(assessmentID)))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("Delete() service error status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestNonTestAssessmentSubmissionEndpoints(t *testing.T) {
+	assessmentID := handlerTestUUID(48)
+	classID := handlerTestUUID(49)
+	studentID := handlerTestUUID(50)
+	teacherID := "33333333-3333-3333-3333-333333333333"
+	fake := &fakeNonTestAssessmentHandlerService{
+		teacherOwnsAssessment: true,
+		listSubmissionsRows: []db.ListNonTestSubmissionsRow{{
+			ID:           handlerTestUUID(51),
+			AssessmentID: assessmentID,
+			StudentID:    studentID,
+			StudentName:  "Siswa Non Tes",
+			Status:       "reviewed",
+			Score:        nonTestNumeric(875, -1),
+		}},
+		generateRows: []db.NonTestAssessmentSubmission{{AssessmentID: assessmentID, StudentID: studentID}},
+		syncResult: service.SyncNonTestAssessmentToGradeResult{
+			AssessmentID:     pgUUIDString(assessmentID),
+			GradeComponentID: pgUUIDString(handlerTestUUID(52)),
+			SyncedEntries:    1,
+			IsPublished:      false,
+		},
+	}
+	h := &NonTestAssessment{svc: fake}
+	claims := jwt.MapClaims{"roles": []any{"guru"}, "eid": teacherID, "usr": "guru.non.tes"}
+
+	rec := httptest.NewRecorder()
+	h.ListSubmissions(rec, withRouteParam(withClaims(httptest.NewRequest(http.MethodGet, "/", nil), claims), "id", pgUUIDString(assessmentID)))
+	if rec.Code != http.StatusOK || fake.listSubmissionsID != assessmentID || !strings.Contains(rec.Body.String(), "Siswa Non Tes") {
+		t.Fatalf("ListSubmissions status/id/body = %d/%v/%s", rec.Code, fake.listSubmissionsID, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	generateBody := `{"class_id":"` + pgUUIDString(classID) + `"}`
+	h.GenerateSubmissions(rec, withRouteParam(withClaims(httptest.NewRequest(http.MethodPost, "/", strings.NewReader(generateBody)), claims), "id", pgUUIDString(assessmentID)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GenerateSubmissions status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.generateAssessmentID != assessmentID || fake.generateClassID != classID || pgUUIDString(fake.generateTeacherID) != teacherID || !strings.Contains(rec.Body.String(), `"created_count":1`) {
+		t.Fatalf("GenerateSubmissions forwarded assessment=%v class=%v teacher=%s body=%s", fake.generateAssessmentID, fake.generateClassID, pgUUIDString(fake.generateTeacherID), rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.SyncGrade(rec, withRouteParam(withClaims(httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"is_published":false}`)), claims), "id", pgUUIDString(assessmentID)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("SyncGrade status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.syncAssessmentID != assessmentID || pgUUIDString(fake.syncTeacherID) != teacherID || fake.syncUsername != "guru.non.tes" || fake.syncPublish {
+		t.Fatalf("SyncGrade forwarded assessment=%v teacher=%s user=%q publish=%v", fake.syncAssessmentID, pgUUIDString(fake.syncTeacherID), fake.syncUsername, fake.syncPublish)
+	}
+
+	score := "88.5"
+	upsertBody := `{"student_id":"` + pgUUIDString(studentID) + `","status":"reviewed","score":` + score + `,"feedback":" Mantap "}`
+	rec = httptest.NewRecorder()
+	h.UpsertSubmission(rec, withRouteParam(withClaims(httptest.NewRequest(http.MethodPut, "/", strings.NewReader(upsertBody)), claims), "id", pgUUIDString(assessmentID)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("UpsertSubmission status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.upsertInput.AssessmentID != assessmentID || fake.upsertInput.StudentID != studentID || fake.upsertInput.Score == nil || *fake.upsertInput.Score != 88.5 || !fake.upsertInput.GradedAt.Valid || fake.upsertInput.GradedByUsername != "guru.non.tes" {
+		t.Fatalf("Upsert input = %+v, want reviewed submission with auto graded_at", fake.upsertInput)
+	}
+
+	rec = httptest.NewRecorder()
+	h.UpsertSubmission(rec, withRouteParam(withClaims(httptest.NewRequest(http.MethodPut, "/", strings.NewReader(`{"student_id":"bad"}`)), claims), "id", pgUUIDString(assessmentID)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("UpsertSubmission bad student status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestNonTestAssessmentEndpointServiceErrors(t *testing.T) {
+	assessmentID := handlerTestUUID(53)
+	tests := []struct {
+		name string
+		run  func(*NonTestAssessment, *httptest.ResponseRecorder)
+	}{
+		{name: "list submissions", run: func(h *NonTestAssessment, rec *httptest.ResponseRecorder) {
+			h.ListSubmissions(rec, withRouteParam(nonTestAssessmentAdminRequest(http.MethodGet, "/", ""), "id", pgUUIDString(assessmentID)))
+		}},
+		{name: "generate", run: func(h *NonTestAssessment, rec *httptest.ResponseRecorder) {
+			h.GenerateSubmissions(rec, withRouteParam(nonTestAssessmentAdminRequest(http.MethodPost, "/", "{}"), "id", pgUUIDString(assessmentID)))
+		}},
+		{name: "sync", run: func(h *NonTestAssessment, rec *httptest.ResponseRecorder) {
+			h.SyncGrade(rec, withRouteParam(nonTestAssessmentAdminRequest(http.MethodPost, "/", "{}"), "id", pgUUIDString(assessmentID)))
+		}},
+		{name: "upsert", run: func(h *NonTestAssessment, rec *httptest.ResponseRecorder) {
+			h.UpsertSubmission(rec, withRouteParam(nonTestAssessmentAdminRequest(http.MethodPut, "/", `{"student_id":"`+pgUUIDString(handlerTestUUID(54))+`"}`), "id", pgUUIDString(assessmentID)))
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeNonTestAssessmentHandlerService{
+				listSubmissionsErr: errors.New("akses ditolak"),
+				generateErr:        errors.New("akses ditolak"),
+				syncErr:            errors.New("akses ditolak"),
+				upsertErr:          errors.New("akses ditolak"),
+			}
+			h := &NonTestAssessment{svc: fake}
+			rec := httptest.NewRecorder()
+			tt.run(h, rec)
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("%s status = %d, want 403; body=%s", tt.name, rec.Code, rec.Body.String())
+			}
+		})
 	}
 }

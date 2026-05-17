@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -238,6 +239,127 @@ func TestValidateTimetableImportRowPlansAddUpdateAndErrors(t *testing.T) {
 	_, errs = validateTimetableImportRow(6, []string{"VII-A", "MTK", "1970", "", "Minggu", "bad", "08:00"}, header, refs, map[string]int{})
 	if !academicImportErrorsContain(errs, "Hari") || !academicImportErrorsContain(errs, "Jam Mulai") {
 		t.Fatalf("validateTimetableImportRow(invalid day/time) errs = %+v, want day/start errors", errs)
+	}
+}
+
+func TestAcademicActivateYearRequiresConfirmationAndSkipsAlreadyActive(t *testing.T) {
+	yearID := documentCycleTestUUID(31)
+	activeYear := db.AcademicYear{ID: yearID, Name: "2026/2027", IsActive: true}
+	svc := &Academic{q: &fakeAcademicStore{yearByID: map[string]db.AcademicYear{pgUUIDString(yearID): activeYear}}}
+	if _, err := svc.ActivateYear(context.Background(), yearID, "salah"); !errors.Is(err, domain.ErrBadRequest) || !strings.Contains(err.Error(), "konfirmasi aktivasi") {
+		t.Fatalf("ActivateYear(bad confirmation) = %v, want bad request confirmation error", err)
+	}
+
+	store := &fakeAcademicStore{yearByID: map[string]db.AcademicYear{pgUUIDString(yearID): activeYear}}
+	svc = &Academic{q: store}
+	got, err := svc.ActivateYear(context.Background(), yearID, " aktifkan ")
+	if err != nil {
+		t.Fatalf("ActivateYear(already active) error = %v", err)
+	}
+	if got != activeYear {
+		t.Fatalf("ActivateYear(already active) = %+v, want current row", got)
+	}
+	if store.deactivateCalled || store.activateYearID.Valid {
+		t.Fatalf("ActivateYear(already active) deactivate=%v activateID=%v, want no writes", store.deactivateCalled, store.activateYearID)
+	}
+}
+
+func TestAcademicActivateYearDeactivatesThenActivatesInactiveYear(t *testing.T) {
+	yearID := documentCycleTestUUID(32)
+	store := &fakeAcademicStore{yearByID: map[string]db.AcademicYear{pgUUIDString(yearID): {ID: yearID, Name: "2026/2027"}}}
+	svc := &Academic{q: store}
+	got, err := svc.ActivateYear(context.Background(), yearID, academicYearActivationChallenge)
+	if err != nil {
+		t.Fatalf("ActivateYear() error = %v", err)
+	}
+	if !got.IsActive || got.ID != yearID {
+		t.Fatalf("ActivateYear() = %+v, want activated target year", got)
+	}
+	if !store.deactivateCalled || store.activateYearID != yearID {
+		t.Fatalf("ActivateYear() deactivate=%v activateID=%v, want deactivate then activate target", store.deactivateCalled, store.activateYearID)
+	}
+}
+
+func TestAcademicPreviewYearRolloverCountsCreatesReusesAndWarnings(t *testing.T) {
+	sourceYearID := documentCycleTestUUID(33)
+	targetYearID := documentCycleTestUUID(34)
+	sourceVIIID := documentCycleTestUUID(35)
+	sourceVIIIID := documentCycleTestUUID(36)
+	sourceIXID := documentCycleTestUUID(37)
+	targetVIIIID := documentCycleTestUUID(38)
+	targetIXInactiveID := documentCycleTestUUID(39)
+	assignmentID := documentCycleTestUUID(40)
+	subjectID := documentCycleTestUUID(41)
+	start, _ := ParseAcademicTimeInput("07:00")
+	end, _ := ParseAcademicTimeInput("07:40")
+	store := &fakeAcademicStore{
+		yearByID: map[string]db.AcademicYear{
+			pgUUIDString(sourceYearID): {ID: sourceYearID, Name: "2025/2026", IsActive: true},
+			pgUUIDString(targetYearID): {ID: targetYearID, Name: "2026/2027"},
+		},
+		classes: []db.ListSchoolClassesRow{
+			{ID: sourceVIIID, AcademicYearID: sourceYearID, Code: "VII-A", Name: "VII A", Level: "VII", IsActive: true},
+			{ID: sourceVIIIID, AcademicYearID: sourceYearID, Code: "VIII-A", Name: "VIII A", Level: "VIII", IsActive: true},
+			{ID: sourceIXID, AcademicYearID: sourceYearID, Code: "IX-A", Name: "IX A", Level: "IX", IsActive: true},
+			{ID: targetVIIIID, AcademicYearID: targetYearID, Code: "VIII-A", Name: "VIII A", Level: "VIII", IsActive: true},
+			{ID: targetIXInactiveID, AcademicYearID: targetYearID, Code: "IX-A", Name: "IX A", Level: "IX", IsActive: false},
+		},
+		rolloverStudents: []db.ListYearRolloverStudentsRow{
+			{ID: documentCycleTestUUID(42), Nis: "001", Nama: "Alya", ClassID: sourceVIIID, ClassCode: "VII-A", ClassLevel: "VII"},
+			{ID: documentCycleTestUUID(43), Nis: "002", Nama: "Bimo", ClassID: sourceVIIIID, ClassCode: "VIII-A", ClassLevel: "VIII"},
+			{ID: documentCycleTestUUID(44), Nis: "003", Nama: "Cici", ClassID: sourceIXID, ClassCode: "IX-A", ClassLevel: "IX"},
+		},
+		rolloverHomerooms: []db.ListYearRolloverHomeroomAssignmentsRow{{ClassID: sourceVIIID, Total: 1}, {ClassID: sourceVIIIID, Total: 1}},
+		assignments:       []db.ListClassSubjectAssignmentsRow{{ID: assignmentID, ClassID: sourceVIIID, SubjectID: subjectID}, {ID: documentCycleTestUUID(45), ClassID: sourceVIIIID, SubjectID: subjectID}},
+		timetableSlots:    []db.ListTimetableSlotsRow{{AssignmentID: assignmentID, DayOfWeek: 1, StartTime: start, EndTime: end}},
+	}
+	svc := &Academic{q: store}
+	preview, err := svc.PreviewYearRollover(context.Background(), YearRolloverPreviewInput{SourceAcademicYearID: sourceYearID, TargetAcademicYearID: targetYearID})
+	if err != nil {
+		t.Fatalf("PreviewYearRollover() error = %v", err)
+	}
+	if preview.Counts.ClassesToCreate != 0 || preview.Counts.StudentsToPromote != 1 || preview.Counts.StudentsWithoutNextClass != 2 {
+		t.Fatalf("PreviewYearRollover() counts = %+v, want 0 creates, 1 promote, 2 without next", preview.Counts)
+	}
+	if preview.Counts.HomeroomAssignmentsCopy != 1 || preview.Counts.SubjectAssignmentsCopy != 1 || preview.Counts.TimetableSlotsCopy != 1 {
+		t.Fatalf("PreviewYearRollover() copy counts = %+v, want reusable target counts only", preview.Counts)
+	}
+	if len(preview.StudentsWithoutNext) != 2 || preview.StudentsWithoutNext[0].Reason != "Rombel tujuan ada tetapi nonaktif" || !strings.Contains(preview.StudentsWithoutNext[1].Reason, "Tingkat akhir") {
+		t.Fatalf("PreviewYearRollover() skipped = %+v, want inactive target and final level warnings", preview.StudentsWithoutNext)
+	}
+}
+
+func TestAcademicDryRunImportReadsCSVReferencesAndSummarizesRows(t *testing.T) {
+	yearID := documentCycleTestUUID(54)
+	classID := documentCycleTestUUID(55)
+	store := &fakeAcademicStore{
+		years:          []db.AcademicYear{{ID: yearID, Name: "2026/2027", IsActive: true}},
+		classes:        []db.ListSchoolClassesRow{{ID: classID, AcademicYearID: yearID, Code: "VII-A", Name: "VII A", Level: "VII", IsActive: true}},
+		importStudents: []db.ListAcademicImportStudentsRow{{ID: documentCycleTestUUID(56), Nis: "1001", Nama: "Existing"}},
+	}
+	svc := &Academic{q: store}
+	raw := "\ufeffNIS,NISN,Nama,Jenis Kelamin,Kode Rombel,Status\n1001,111,Alya,L,VII-A,aktif\n1002,222,Bimo,P,VII-A,aktif\n,,,,,\n1002,333,Cici,X,MISSING,aktif\n"
+	result, err := svc.DryRunAcademicImport(context.Background(), AcademicImportDryRunInput{Kind: "students", CSV: raw})
+	if err != nil {
+		t.Fatalf("DryRunAcademicImport() error = %v", err)
+	}
+	if result.Kind != "siswa" || result.TotalRows != 3 || result.UpdateCount != 1 || result.AddCount != 1 || result.SkipCount != 1 || result.ErrorCount != 1 {
+		t.Fatalf("DryRunAcademicImport() = %+v, want update/add/skip/error summary", result)
+	}
+	if len(result.Rows) != 4 || result.Rows[2].Action != "skip" || result.Rows[3].Action != "needs_review" {
+		t.Fatalf("DryRunAcademicImport() rows = %+v, want blank skip and review row", result.Rows)
+	}
+	if !academicImportErrorsContain(result.RowErrors, "Jenis Kelamin") || !academicImportErrorsContain(result.RowErrors, "Kode Rombel") || !academicImportErrorsContainMessage(result.RowErrors, "duplikat dengan baris 3") {
+		t.Fatalf("DryRunAcademicImport() row errors = %+v, want gender/class/duplicate errors", result.RowErrors)
+	}
+}
+
+func TestReadAcademicCSVRejectsEmptyAndMalformedInput(t *testing.T) {
+	if _, err := readAcademicCSV(" \n\t "); !errors.Is(err, domain.ErrBadRequest) || !strings.Contains(err.Error(), "file impor kosong") {
+		t.Fatalf("readAcademicCSV(empty) = %v, want empty bad request", err)
+	}
+	if _, err := readAcademicCSV("nis,nama\n\"unterminated"); !errors.Is(err, domain.ErrBadRequest) || !strings.Contains(err.Error(), "baris 2") {
+		t.Fatalf("readAcademicCSV(malformed) = %v, want row bad request", err)
 	}
 }
 

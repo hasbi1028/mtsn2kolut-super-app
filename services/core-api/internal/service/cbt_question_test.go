@@ -60,6 +60,10 @@ type fakeQuestionStore struct {
 	summarySubjects   []db.ListCbtQuestionSummaryBySubjectRow
 	summaryCognitive  []db.ListCbtQuestionSummaryByCognitiveLevelRow
 	summaryRecent     []db.ListCbtQuestionSummaryRecentRow
+	summaryCountsArg  db.GetCbtQuestionSummaryCountsParams
+	summarySubjectArg db.ListCbtQuestionSummaryBySubjectParams
+	summaryCogArg     db.ListCbtQuestionSummaryByCognitiveLevelParams
+	summaryRecentArg  db.ListCbtQuestionSummaryRecentParams
 }
 
 func (f *fakeQuestionStore) ListCbtQuestions(ctx context.Context, arg db.ListCbtQuestionsParams) ([]db.ListCbtQuestionsRow, error) {
@@ -85,18 +89,22 @@ func (f *fakeQuestionStore) CountCbtQuestionsFiltered(ctx context.Context, arg d
 }
 
 func (f *fakeQuestionStore) GetCbtQuestionSummaryCounts(ctx context.Context, arg db.GetCbtQuestionSummaryCountsParams) (db.GetCbtQuestionSummaryCountsRow, error) {
+	f.summaryCountsArg = arg
 	return f.summaryCounts, nil
 }
 
 func (f *fakeQuestionStore) ListCbtQuestionSummaryBySubject(ctx context.Context, arg db.ListCbtQuestionSummaryBySubjectParams) ([]db.ListCbtQuestionSummaryBySubjectRow, error) {
+	f.summarySubjectArg = arg
 	return f.summarySubjects, nil
 }
 
 func (f *fakeQuestionStore) ListCbtQuestionSummaryByCognitiveLevel(ctx context.Context, arg db.ListCbtQuestionSummaryByCognitiveLevelParams) ([]db.ListCbtQuestionSummaryByCognitiveLevelRow, error) {
+	f.summaryCogArg = arg
 	return f.summaryCognitive, nil
 }
 
 func (f *fakeQuestionStore) ListCbtQuestionSummaryRecent(ctx context.Context, arg db.ListCbtQuestionSummaryRecentParams) ([]db.ListCbtQuestionSummaryRecentRow, error) {
+	f.summaryRecentArg = arg
 	return f.summaryRecent, nil
 }
 

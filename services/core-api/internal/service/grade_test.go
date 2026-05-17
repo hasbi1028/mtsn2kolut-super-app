@@ -710,3 +710,76 @@ func TestGradeMutationValidationAndStoreErrorBranches(t *testing.T) {
 		t.Fatalf("normalizeGradeCategory(unknown) = %q, want other", got)
 	}
 }
+
+func TestGradeReportSettingsMappingAndRankingNormalization(t *testing.T) {
+	yearID := pgtype.UUID{Bytes: [16]byte{61}, Valid: true}
+	active := reportSettingsFromActive(db.GetActiveReportSettingsRow{
+		AcademicYearID:      yearID,
+		AcademicYearName:    "2026/2027",
+		ShowRankingOnReport: true,
+		RankingMethod:       "weighted_by_jp",
+		RankingTiePolicy:    "dense_rank",
+		Notes:               "Catatan rapor",
+	})
+	if active.AcademicYearID != yearID.String() || active.AcademicYearName != "2026/2027" || !active.ShowRankingOnReport || active.RankingMethod != "weighted_by_jp" || active.RankingTiePolicy != "dense_rank" || active.Notes != "Catatan rapor" {
+		t.Fatalf("reportSettingsFromActive() = %+v, want mapped active settings", active)
+	}
+
+	upsert := reportSettingsFromUpsert(db.UpsertReportSettingsRow{
+		AcademicYearID:      yearID,
+		ShowRankingOnReport: false,
+		RankingMethod:       "report_subject_average",
+		RankingTiePolicy:    "ordinal",
+		Notes:               "Updated",
+	})
+	if upsert.AcademicYearID != yearID.String() || upsert.AcademicYearName != "" || upsert.ShowRankingOnReport || upsert.RankingMethod != "report_subject_average" || upsert.RankingTiePolicy != "ordinal" || upsert.Notes != "Updated" {
+		t.Fatalf("reportSettingsFromUpsert() = %+v, want mapped upsert settings", upsert)
+	}
+
+	methodCases := map[string]string{
+		" weighted_by_jp ":          "weighted_by_jp",
+		"report_subject_average":    "report_subject_average",
+		"INTRAKURIKULER_AVERAGE":    "intrakurikuler_average",
+		"unknown ranking algorithm": "intrakurikuler_average",
+	}
+	for input, want := range methodCases {
+		if got := normalizeRankingMethod(input); got != want {
+			t.Fatalf("normalizeRankingMethod(%q) = %q, want %q", input, got, want)
+		}
+	}
+
+	tieCases := map[string]string{
+		" dense_rank ": "dense_rank",
+		"ordinal":      "ordinal",
+		"SAME_RANK":    "same_rank",
+		"unknown":      "same_rank",
+	}
+	for input, want := range tieCases {
+		if got := normalizeRankingTiePolicy(input); got != want {
+			t.Fatalf("normalizeRankingTiePolicy(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestGradeUpdateReportSettingsNormalizesBeforeUpsert(t *testing.T) {
+	yearID := pgtype.UUID{Bytes: [16]byte{62}, Valid: true}
+	store := &fakeGradeStore{}
+	svc := &Grade{q: store}
+
+	settings, err := svc.UpdateReportSettings(context.Background(), db.UpsertReportSettingsParams{
+		AcademicYearID:      yearID,
+		ShowRankingOnReport: true,
+		RankingMethod:       " unknown ",
+		RankingTiePolicy:    " ordinal ",
+		Notes:               "  tampilkan ranking hanya internal  ",
+	})
+	if err != nil {
+		t.Fatalf("UpdateReportSettings() error = %v", err)
+	}
+	if store.reportSettingsUpsertArg.RankingMethod != "intrakurikuler_average" || store.reportSettingsUpsertArg.RankingTiePolicy != "ordinal" || store.reportSettingsUpsertArg.Notes != "tampilkan ranking hanya internal" {
+		t.Fatalf("UpsertReportSettings() arg = %+v, want normalized ranking/notes", store.reportSettingsUpsertArg)
+	}
+	if settings.RankingMethod != "intrakurikuler_average" || settings.RankingTiePolicy != "ordinal" || settings.Notes != "tampilkan ranking hanya internal" {
+		t.Fatalf("UpdateReportSettings() = %+v, want normalized response", settings)
+	}
+}

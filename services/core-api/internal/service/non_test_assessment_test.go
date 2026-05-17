@@ -471,6 +471,137 @@ func TestNonTestAssessmentSyncToGradeRejectsOtherTeacherAssignment(t *testing.T)
 	}
 }
 
+func TestNonTestAssessmentValidationRejectsBadAssessmentFields(t *testing.T) {
+	subjectID := mustUUIDForNonTest(t, "11111111-1111-1111-1111-111111111111")
+	tests := []struct {
+		name  string
+		input SaveNonTestAssessmentInput
+		want  string
+	}{
+		{name: "invalid type", input: SaveNonTestAssessmentInput{SubjectID: subjectID, AssessmentType: "ujian", Title: "Judul"}, want: "bentuk asesmen"},
+		{name: "missing subject", input: SaveNonTestAssessmentInput{Title: "Judul"}, want: "mata pelajaran"},
+		{name: "blank title", input: SaveNonTestAssessmentInput{SubjectID: subjectID, Title: "   "}, want: "judul asesmen"},
+		{name: "invalid mode", input: SaveNonTestAssessmentInput{SubjectID: subjectID, Title: "Judul", Mode: "expert"}, want: "mode asesmen"},
+		{name: "invalid status", input: SaveNonTestAssessmentInput{SubjectID: subjectID, Title: "Judul", Status: "published"}, want: "status asesmen"},
+		{name: "invalid checklist json", input: SaveNonTestAssessmentInput{SubjectID: subjectID, Title: "Judul", Checklist: []byte(`[`)}, want: "checklist observasi"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := normalizeNonTestAssessmentInput(tt.input)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("normalizeNonTestAssessmentInput() error = %v, want containing %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestNonTestAssessmentSubmissionValidationDefaultsAndRejectsBadFields(t *testing.T) {
+	assessmentID := mustUUIDForNonTest(t, "11111111-1111-1111-1111-111111111111")
+	studentID := mustUUIDForNonTest(t, "33333333-3333-3333-3333-333333333333")
+	normalized, err := normalizeNonTestSubmissionInput(SaveNonTestSubmissionInput{
+		AssessmentID:     assessmentID,
+		StudentID:        studentID,
+		EvidenceURL:      " https://example.test/evidence ",
+		EvidenceNote:     " catatan ",
+		Feedback:         " bagus ",
+		GradedByUsername: " guru ",
+	})
+	if err != nil {
+		t.Fatalf("normalizeNonTestSubmissionInput() error = %v", err)
+	}
+	if normalized.Status != "assigned" || normalized.EvidenceURL != "https://example.test/evidence" || normalized.EvidenceNote != "catatan" || normalized.Feedback != "bagus" || normalized.GradedByUsername != "guru" {
+		t.Fatalf("normalized submission = %+v, want defaults and trimmed text", normalized)
+	}
+
+	negative := -1.0
+	tests := []struct {
+		name  string
+		input SaveNonTestSubmissionInput
+		want  string
+	}{
+		{name: "missing assessment", input: SaveNonTestSubmissionInput{StudentID: studentID}, want: "id asesmen"},
+		{name: "missing student", input: SaveNonTestSubmissionInput{AssessmentID: assessmentID}, want: "siswa wajib"},
+		{name: "invalid status", input: SaveNonTestSubmissionInput{AssessmentID: assessmentID, StudentID: studentID, Status: "done"}, want: "status pengumpulan"},
+		{name: "negative score", input: SaveNonTestSubmissionInput{AssessmentID: assessmentID, StudentID: studentID, Score: &negative}, want: "nilai tidak boleh negatif"},
+		{name: "reviewed without score", input: SaveNonTestSubmissionInput{AssessmentID: assessmentID, StudentID: studentID, Status: "reviewed"}, want: "nilai wajib diisi"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := normalizeNonTestSubmissionInput(tt.input)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("normalizeNonTestSubmissionInput() error = %v, want containing %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestNonTestAssessmentSimpleValidatorsAndHelpers(t *testing.T) {
+	svc := &NonTestAssessment{q: &fakeNonTestAssessmentStore{}}
+	if err := svc.Delete(context.Background(), pgtype.UUID{}); err == nil || !strings.Contains(err.Error(), "id asesmen") {
+		t.Fatalf("Delete(invalid) error = %v, want id validation", err)
+	}
+	if _, err := svc.ListSubmissions(context.Background(), pgtype.UUID{}); err == nil || !strings.Contains(err.Error(), "id asesmen") {
+		t.Fatalf("ListSubmissions(invalid) error = %v, want id validation", err)
+	}
+	if ok, err := svc.TeacherOwnsClassSubject(context.Background(), pgtype.UUID{}, uuidForNonTest("22222222-2222-2222-2222-222222222222"), uuidForNonTest("33333333-3333-3333-3333-333333333333")); err != nil || ok {
+		t.Fatalf("TeacherOwnsClassSubject(invalid) = %v/%v, want false nil", ok, err)
+	}
+	if ok, err := svc.TeacherOwnsAssessment(context.Background(), uuidForNonTest("11111111-1111-1111-1111-111111111111"), pgtype.UUID{}); err != nil || ok {
+		t.Fatalf("TeacherOwnsAssessment(invalid) = %v/%v, want false nil", ok, err)
+	}
+
+	if got := nonTestAssessmentGradeTitle("  Non-Tes: Praktik  "); got != "Non-Tes: Praktik" {
+		t.Fatalf("nonTestAssessmentGradeTitle(existing) = %q", got)
+	}
+	if got := nonTestAssessmentGradeTitle(" "); got != "Non-Tes" {
+		t.Fatalf("nonTestAssessmentGradeTitle(blank) = %q", got)
+	}
+	categories := map[string]string{"praktik": "practice", "portofolio": "project", "proyek": "project", "penugasan": "assignment", "observasi": "attitude", "lainnya": "other"}
+	for in, want := range categories {
+		if got := nonTestAssessmentGradeCategory(in); got != want {
+			t.Fatalf("nonTestAssessmentGradeCategory(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestNonTestAssessmentUpsertSubmissionSuccessForwardsNormalizedParams(t *testing.T) {
+	assessmentID := mustUUIDForNonTest(t, "11111111-1111-1111-1111-111111111111")
+	subjectID := mustUUIDForNonTest(t, "22222222-2222-2222-2222-222222222222")
+	classID := mustUUIDForNonTest(t, "33333333-3333-3333-3333-333333333333")
+	studentID := mustUUIDForNonTest(t, "44444444-4444-4444-4444-444444444444")
+	teacherID := mustUUIDForNonTest(t, "55555555-5555-5555-5555-555555555555")
+	store := &fakeNonTestAssessmentStore{
+		assessmentRow:  db.GetNonTestAssessmentRow{ID: assessmentID, SubjectID: subjectID, ClassID: classID, MaxScore: pgNumeric(100)},
+		studentBelongs: true,
+	}
+	svc := &NonTestAssessment{q: store}
+	score := 88.25
+
+	row, err := svc.UpsertSubmission(context.Background(), SaveNonTestSubmissionInput{
+		AssessmentID:      assessmentID,
+		StudentID:         studentID,
+		Status:            " reviewed ",
+		EvidenceURL:       " https://example.test/bukti ",
+		EvidenceNote:      " lengkap ",
+		Score:             &score,
+		Feedback:          " baik ",
+		GradedByUsername:  " guru ",
+		TeacherEmployeeID: teacherID,
+	})
+	if err != nil {
+		t.Fatalf("UpsertSubmission() error = %v", err)
+	}
+	if row.AssessmentID != assessmentID || row.StudentID != studentID || row.Status != "reviewed" {
+		t.Fatalf("UpsertSubmission() row = %+v, want returned submission ids/status", row)
+	}
+	if store.upsertParams.Status != "reviewed" || store.upsertParams.EvidenceUrl != "https://example.test/bukti" || store.upsertParams.EvidenceNote != "lengkap" || store.upsertParams.Feedback != "baik" || store.upsertParams.GradedByUsername != "guru" {
+		t.Fatalf("Upsert params = %+v, want normalized text forwarded", store.upsertParams)
+	}
+	if got := numericForNonTest(t, store.upsertParams.Score); got != score {
+		t.Fatalf("Upsert score = %v, want %v", got, score)
+	}
+}
+
 func mustUUIDForNonTest(t *testing.T, raw string) pgtype.UUID {
 	t.Helper()
 	var id pgtype.UUID

@@ -135,32 +135,40 @@ type fakeCbtSessionService struct {
 	shuffleSessionID pgtype.UUID
 	shuffleErr       error
 
-	proctoringSessionID      pgtype.UUID
-	roomDashboardID          pgtype.UUID
-	proctorRoomsEmployeeID   pgtype.UUID
-	proctorRoomsIncludeAll   bool
-	roomProctorSessionID     pgtype.UUID
-	roomProctorRoomID        pgtype.UUID
-	roomProctorEmployeeID    pgtype.UUID
-	roomProctorAllowed       bool
-	roomParticipantSessionID pgtype.UUID
-	roomParticipantRoomID    pgtype.UUID
-	roomParticipantID        pgtype.UUID
-	roomParticipantAllowed   bool
-	roomProctoringSessionID  pgtype.UUID
-	roomProctoringRoomID     pgtype.UUID
-	roomEventsSessionID      pgtype.UUID
-	roomEventsRoomID         pgtype.UUID
-	proctoringErr            error
-	handoverRoomID           pgtype.UUID
-	operationalRecapID       pgtype.UUID
-	saveHandoverRoomID       pgtype.UUID
-	saveHandoverUpdatedBy    pgtype.UUID
-	saveHandoverInput        service.SaveCbtRoomHandoverInput
-	saveHandoverErr          error
-	lockHandoverRoomID       pgtype.UUID
-	lockHandoverLockedBy     pgtype.UUID
-	lockHandoverErr          error
+	proctoringSessionID        pgtype.UUID
+	roomDashboardID            pgtype.UUID
+	proctorRoomsEmployeeID     pgtype.UUID
+	proctorRoomsIncludeAll     bool
+	roomProctorSessionID       pgtype.UUID
+	roomProctorRoomID          pgtype.UUID
+	roomProctorEmployeeID      pgtype.UUID
+	roomProctorAllowed         bool
+	roomParticipantSessionID   pgtype.UUID
+	roomParticipantRoomID      pgtype.UUID
+	roomParticipantID          pgtype.UUID
+	roomParticipantAllowed     bool
+	roomProctoringSessionID    pgtype.UUID
+	roomProctoringRoomID       pgtype.UUID
+	roomEventsSessionID        pgtype.UUID
+	roomEventsRoomID           pgtype.UUID
+	roomEventsParticipantID    pgtype.UUID
+	roomEventsLimit            int32
+	proctoringErr              error
+	listRoomProctorsRoomID     pgtype.UUID
+	replaceProctorsRoomID      pgtype.UUID
+	replaceProctorsAssignedBy  pgtype.UUID
+	replaceProctorsPrimaryID   pgtype.UUID
+	replaceProctorsEmployeeIDs []pgtype.UUID
+	roomReadinessSessionID     pgtype.UUID
+	handoverRoomID             pgtype.UUID
+	operationalRecapID         pgtype.UUID
+	saveHandoverRoomID         pgtype.UUID
+	saveHandoverUpdatedBy      pgtype.UUID
+	saveHandoverInput          service.SaveCbtRoomHandoverInput
+	saveHandoverErr            error
+	lockHandoverRoomID         pgtype.UUID
+	lockHandoverLockedBy       pgtype.UUID
+	lockHandoverErr            error
 
 	flagParticipantID pgtype.UUID
 	flagValue         bool
@@ -195,6 +203,10 @@ type fakeCbtSessionService struct {
 
 	participantAnswersID  pgtype.UUID
 	participantAnswersErr error
+
+	itemAnalysisSessionID pgtype.UUID
+	itemAnalysisRows      []db.GetSessionItemAnalysisRow
+	itemAnalysisErr       error
 }
 
 type fakeCbtSessionAuditWriter struct {
@@ -464,6 +476,20 @@ func (f *fakeCbtSessionService) ResetParticipantRuntimeAccess(_ context.Context,
 	return f.resetErr
 }
 
+func (f *fakeCbtSessionService) UnlockParticipantAntiCheat(_ context.Context, participantID pgtype.UUID, actor, notes string) (db.UnlockParticipantAntiCheatRow, error) {
+	f.resetParticipantID = participantID
+	f.resetActor = actor
+	return db.UnlockParticipantAntiCheatRow{ID: participantID}, f.resetErr
+}
+
+func (f *fakeCbtSessionService) AcknowledgeProctorEvent(_ context.Context, participantID pgtype.UUID, eventID, actor, notes string) error {
+	f.incidentParticipantID = participantID
+	f.incidentEventID = eventID
+	f.incidentActor = actor
+	f.incidentNotes = notes
+	return f.incidentErr
+}
+
 func (f *fakeCbtSessionService) RecordIncidentAction(_ context.Context, participantID pgtype.UUID, eventID, action, actor, notes string) error {
 	f.incidentParticipantID = participantID
 	f.incidentEventID = eventID
@@ -483,7 +509,8 @@ func (f *fakeCbtSessionService) SendParticipantCommand(_ context.Context, partic
 
 func (f *fakeCbtSessionService) ListParticipantEvents(_ context.Context, sessionID, participantID pgtype.UUID, limit int32) ([]db.ListSessionParticipantEventsRow, error) {
 	f.roomEventsSessionID = sessionID
-	f.roomParticipantID = participantID
+	f.roomEventsParticipantID = participantID
+	f.roomEventsLimit = limit
 	return []db.ListSessionParticipantEventsRow{}, nil
 }
 
@@ -615,14 +642,20 @@ func (f *fakeCbtSessionService) LockRoomHandover(_ context.Context, roomID, lock
 }
 
 func (f *fakeCbtSessionService) ListRoomProctors(_ context.Context, roomID pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error) {
+	f.listRoomProctorsRoomID = roomID
 	return []db.ListCbtRoomProctorsRow{{ExamRoomID: roomID, Nama: "Pengawas"}}, nil
 }
 
 func (f *fakeCbtSessionService) ReplaceRoomProctors(_ context.Context, roomID, assignedBy, primaryEmployeeID pgtype.UUID, employeeIDs []pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error) {
+	f.replaceProctorsRoomID = roomID
+	f.replaceProctorsAssignedBy = assignedBy
+	f.replaceProctorsPrimaryID = primaryEmployeeID
+	f.replaceProctorsEmployeeIDs = append([]pgtype.UUID(nil), employeeIDs...)
 	return []db.ListCbtRoomProctorsRow{{ExamRoomID: roomID, EmployeeID: primaryEmployeeID}}, nil
 }
 
 func (f *fakeCbtSessionService) RoomReadiness(_ context.Context, sessionID pgtype.UUID) (db.GetCbtSessionRoomReadinessRow, error) {
+	f.roomReadinessSessionID = sessionID
 	return db.GetCbtSessionRoomReadinessRow{RoomCount: 1, ParticipantCount: 1, TotalCapacity: 30}, nil
 }
 
@@ -700,6 +733,14 @@ func (f *fakeCbtSessionService) GetParticipantAnswers(_ context.Context, partici
 		return nil, f.participantAnswersErr
 	}
 	return []db.GetParticipantAnswersRow{}, nil
+}
+
+func (f *fakeCbtSessionService) GetItemAnalysis(_ context.Context, sessionID pgtype.UUID) ([]db.GetSessionItemAnalysisRow, error) {
+	f.itemAnalysisSessionID = sessionID
+	if f.itemAnalysisErr != nil {
+		return nil, f.itemAnalysisErr
+	}
+	return f.itemAnalysisRows, nil
 }
 
 func TestCbtSessionAdminLifecycleHandlersForwardValidRequests(t *testing.T) {
@@ -929,6 +970,210 @@ func TestCbtSessionAdminParticipantResponsesMaskTokens(t *testing.T) {
 	}
 	if regenerated["token_revealed"] != false {
 		t.Fatalf("token_revealed = %#v, want false", regenerated["token_revealed"])
+	}
+}
+
+func TestCbtSessionRoomProctorAndParticipantEventEndpoints(t *testing.T) {
+	sessionID := handlerTestUUID(201)
+	roomID := handlerTestUUID(202)
+	participantID := handlerTestUUID(203)
+	primaryEmployeeID := handlerTestUUID(204)
+	secondaryEmployeeID := handlerTestUUID(205)
+	actorID := handlerTestUUID(206)
+	fake := &fakeCbtSessionService{}
+	audit := &fakeCbtSessionAuditWriter{}
+	h := &CbtSession{svc: fake, audit: audit}
+
+	adminRoute := func(method, target, body string, pairs ...string) *http.Request {
+		return withRouteParams(
+			withClaims(httptest.NewRequest(method, target, strings.NewReader(body)), jwt.MapClaims{
+				"roles": []any{"admin"},
+				"uid":   actorID.String(),
+				"sub":   actorID.String(),
+				"usr":   "admin.cbt",
+				"ssid":  "session-admin-1",
+			}),
+			pairs...,
+		)
+	}
+
+	rec := httptest.NewRecorder()
+	h.GetRoomReadiness(rec, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/rooms/readiness", "", "id", sessionID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GetRoomReadiness status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.roomReadinessSessionID != sessionID {
+		t.Fatalf("RoomReadiness session = %v, want %v", fake.roomReadinessSessionID, sessionID)
+	}
+
+	rec = httptest.NewRecorder()
+	h.ListRoomProctors(rec, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/rooms/"+roomID.String()+"/proctors", "", "id", sessionID.String(), "rid", roomID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ListRoomProctors status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.hasRoomSessionID != sessionID || fake.hasRoomID != roomID || fake.listRoomProctorsRoomID != roomID {
+		t.Fatalf("ListRoomProctors args = hasRoom:%v/%v list:%v, want session/room", fake.hasRoomSessionID, fake.hasRoomID, fake.listRoomProctorsRoomID)
+	}
+
+	rec = httptest.NewRecorder()
+	h.ReplaceRoomProctors(rec, adminRoute(http.MethodPut, "/api/cbt/sessions/"+sessionID.String()+"/rooms/"+roomID.String()+"/proctors", `{"primary_employee_id":"`+primaryEmployeeID.String()+`","employee_ids":["`+primaryEmployeeID.String()+`","","`+secondaryEmployeeID.String()+`"]}`, "id", sessionID.String(), "rid", roomID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ReplaceRoomProctors status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.replaceProctorsRoomID != roomID || fake.replaceProctorsAssignedBy != actorID || fake.replaceProctorsPrimaryID != primaryEmployeeID {
+		t.Fatalf("ReplaceRoomProctors ids = room:%v assigned:%v primary:%v, want room/actor/primary", fake.replaceProctorsRoomID, fake.replaceProctorsAssignedBy, fake.replaceProctorsPrimaryID)
+	}
+	if len(fake.replaceProctorsEmployeeIDs) != 2 || fake.replaceProctorsEmployeeIDs[0] != primaryEmployeeID || fake.replaceProctorsEmployeeIDs[1] != secondaryEmployeeID {
+		t.Fatalf("ReplaceRoomProctors employee ids = %v, want primary and secondary only", fake.replaceProctorsEmployeeIDs)
+	}
+	if len(audit.entries) != 1 || audit.entries[0].Action != "CBT_SESSION_ROOM_PROCTORS_REPLACE" || audit.entries[0].EntityID != pgUUIDString(roomID) {
+		t.Fatalf("ReplaceRoomProctors audit = %+v, want room proctor replacement audit", audit.entries)
+	}
+
+	rec = httptest.NewRecorder()
+	h.ListParticipantEvents(rec, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/proctoring/events?participant_id="+participantID.String()+"&limit=25", "", "id", sessionID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ListParticipantEvents status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.hasParticipantSessionID != sessionID || fake.hasParticipantID != participantID || fake.roomEventsSessionID != sessionID || fake.roomEventsParticipantID != participantID || fake.roomEventsLimit != 25 {
+		t.Fatalf("ListParticipantEvents args = participant check:%v/%v events:%v/%v/%d, want session/participant/limit", fake.hasParticipantSessionID, fake.hasParticipantID, fake.roomEventsSessionID, fake.roomEventsParticipantID, fake.roomEventsLimit)
+	}
+}
+
+func TestCbtSessionProctorActorFromRequestUsesClaimsHeadersAndIP(t *testing.T) {
+	userID := handlerTestUUID(207)
+	employeeID := handlerTestUUID(208)
+	req := withClaims(httptest.NewRequest(http.MethodPost, "/api/cbt/proctoring/actions", nil), jwt.MapClaims{
+		"roles": []any{"guru"},
+		"uid":   userID.String(),
+		"sub":   handlerTestUUID(209).String(),
+		"eid":   "  " + employeeID.String() + "  ",
+		"usr":   "pengawas.ruang",
+	})
+	req.Header.Set("X-Request-ID", "  req-123  ")
+	req.RemoteAddr = "198.51.100.10:4567"
+
+	actor := cbtProctorActorFromRequest(req)
+	if actor.UserID != userID || actor.EmployeeID != employeeID || actor.Username != "pengawas.ruang" {
+		t.Fatalf("actor identity = user:%v employee:%v username:%q, want claims", actor.UserID, actor.EmployeeID, actor.Username)
+	}
+	if actor.RequestID != "req-123" {
+		t.Fatalf("actor request id = %q, want trimmed req-123", actor.RequestID)
+	}
+	if !strings.Contains(actor.SourceIP, "198.51.100.10") {
+		t.Fatalf("actor source ip = %q, want remote address/client IP", actor.SourceIP)
+	}
+}
+
+func TestCbtSessionRequireRoomParticipantControlParams(t *testing.T) {
+	sessionID := handlerTestUUID(210)
+	roomID := handlerTestUUID(211)
+	participantID := handlerTestUUID(212)
+	h := &CbtSession{}
+
+	req := withRouteParams(httptest.NewRequest(http.MethodPost, "/", nil), "id", sessionID.String(), "rid", roomID.String(), "pid", participantID.String())
+	rec := httptest.NewRecorder()
+	gotSession, gotRoom, gotParticipant, ok := h.requireRoomParticipantControlParams(rec, req)
+	if !ok || gotSession != sessionID || gotRoom != roomID || gotParticipant != participantID {
+		t.Fatalf("requireRoomParticipantControlParams valid = %v/%v/%v/%v, want parsed ids", gotSession, gotRoom, gotParticipant, ok)
+	}
+
+	req = withRouteParams(httptest.NewRequest(http.MethodPost, "/", nil), "id", sessionID.String(), "rid", roomID.String(), "pid", "not-a-uuid")
+	rec = httptest.NewRecorder()
+	_, _, _, ok = h.requireRoomParticipantControlParams(rec, req)
+	if ok || rec.Code != http.StatusBadRequest {
+		t.Fatalf("requireRoomParticipantControlParams invalid pid = ok:%v status:%d, want false/400", ok, rec.Code)
+	}
+}
+
+func TestCbtSessionItemAnalysisHelpersAndEndpoint(t *testing.T) {
+	sessionID := handlerTestUUID(213)
+	questionID := handlerTestUUID(214)
+	base := db.GetSessionItemAnalysisRow{
+		Position:            1,
+		Points:              2,
+		QuestionID:          questionID,
+		QuestionCode:        "Q-001",
+		QuestionText:        "Apa jawaban yang benar?",
+		QuestionType:        "multiple_choice",
+		Difficulty:          db.CbtQuestionDifficultyEnumMedium,
+		AnswerKey:           "B",
+		CpRef:               "CP-1",
+		TpRef:               "TP-1",
+		KdRef:               "KD-1",
+		MaterialTopic:       "Bilangan",
+		CognitiveLevel:      "C2",
+		HotsFlag:            true,
+		SubmittedCount:      10,
+		AnsweredCount:       8,
+		BlankCount:          2,
+		CorrectCount:        6,
+		IncorrectCount:      2,
+		DifficultyIndex:     0.60,
+		TopGroupCount:       3,
+		TopCorrectCount:     3,
+		BottomGroupCount:    3,
+		BottomCorrectCount:  1,
+		DiscriminationIndex: 0.35,
+		AnswerDistribution:  []byte(`{"A":2,"B":6}`),
+	}
+
+	cases := []struct {
+		name string
+		row  db.GetSessionItemAnalysisRow
+		want string
+		tone string
+	}{
+		{name: "no submit", row: func() db.GetSessionItemAnalysisRow { r := base; r.SubmittedCount = 0; return r }(), want: "Belum ada submit", tone: "info"},
+		{name: "essay unscored", row: func() db.GetSessionItemAnalysisRow {
+			r := base
+			r.QuestionType = "essay"
+			r.UnscoredCount = 1
+			return r
+		}(), want: "Koreksi uraian belum lengkap", tone: "warning"},
+		{name: "unanswered", row: func() db.GetSessionItemAnalysisRow { r := base; r.AnsweredCount = 0; return r }(), want: "Belum dijawab", tone: "danger"},
+		{name: "negative discrimination", row: func() db.GetSessionItemAnalysisRow { r := base; r.DiscriminationIndex = -0.10; return r }(), want: "Cek kunci/rubrik", tone: "danger"},
+		{name: "too hard", row: func() db.GetSessionItemAnalysisRow { r := base; r.DifficultyIndex = 0.19; return r }(), want: "Terlalu sulit", tone: "warning"},
+		{name: "too easy", row: func() db.GetSessionItemAnalysisRow { r := base; r.DifficultyIndex = 0.91; return r }(), want: "Terlalu mudah", tone: "warning"},
+		{name: "low discrimination", row: func() db.GetSessionItemAnalysisRow { r := base; r.DiscriminationIndex = 0.14; return r }(), want: "Daya pembeda rendah", tone: "warning"},
+		{name: "many blanks", row: func() db.GetSessionItemAnalysisRow { r := base; r.BlankCount = 6; return r }(), want: "Banyak jawaban kosong", tone: "warning"},
+		{name: "good", row: base, want: "Baik", tone: "success"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := sessionItemAnalysisRecommendation(tc.row); got != tc.want {
+				t.Fatalf("recommendation = %q, want %q", got, tc.want)
+			}
+			if got := sessionItemAnalysisTone(tc.row); got != tc.tone {
+				t.Fatalf("tone = %q, want %q", got, tc.tone)
+			}
+		})
+	}
+
+	serialized := serializeSessionItemAnalysisRow(base, false)
+	if serialized["answer_key"] != "" || serialized["question_id"] != questionID.String() || serialized["recommendation"] != "Baik" || serialized["recommendation_tone"] != "success" {
+		t.Fatalf("serialized redacted row = %+v, want redacted answer key and identifiers/recommendation", serialized)
+	}
+	if distribution, ok := serialized["answer_distribution"].(map[string]any); !ok || distribution["B"].(float64) != 6 {
+		t.Fatalf("serialized answer_distribution = %#v, want decoded JSON distribution", serialized["answer_distribution"])
+	}
+	serialized = serializeSessionItemAnalysisRow(base, true)
+	if serialized["answer_key"] != "B" {
+		t.Fatalf("serialized answer_key = %#v, want included key", serialized["answer_key"])
+	}
+
+	fake := &fakeCbtSessionService{itemAnalysisRows: []db.GetSessionItemAnalysisRow{base}}
+	req := withRouteParams(adminRequest(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/item-analysis", ""), "id", sessionID.String())
+	rec := httptest.NewRecorder()
+	(&CbtSession{svc: fake}).GetItemAnalysis(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GetItemAnalysis status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.itemAnalysisSessionID != sessionID {
+		t.Fatalf("GetItemAnalysis session id = %v, want %v", fake.itemAnalysisSessionID, sessionID)
+	}
+	if !strings.Contains(rec.Body.String(), `"answer_key":"B"`) || !strings.Contains(rec.Body.String(), `"recommendation":"Baik"`) {
+		t.Fatalf("GetItemAnalysis body = %s, want serialized item with answer key and recommendation", rec.Body.String())
 	}
 }
 

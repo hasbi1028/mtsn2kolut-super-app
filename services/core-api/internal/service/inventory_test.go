@@ -554,6 +554,88 @@ func TestInventoryBatchUpdateStopsOnStoreError(t *testing.T) {
 	}
 }
 
+func TestInventoryNormalizeSchoolRoomPayloadsAndExamEligibleFilter(t *testing.T) {
+	create, err := normalizeCreateSchoolRoom(db.CreateSchoolRoomParams{
+		Code:            "  LAB-1  ",
+		Name:            "  Lab Komputer  ",
+		Building:        "  Gedung A  ",
+		Floor:           "  2  ",
+		RoomType:        "  ",
+		LocationNote:    "  dekat TU  ",
+		Condition:       "  ",
+		DefaultCapacity: 0,
+		ExamCapacity:    0,
+		IsExamEligible:  true,
+		Notes:           "  Siap ANBK  ",
+	})
+	if err != nil {
+		t.Fatalf("normalizeCreateSchoolRoom() error = %v", err)
+	}
+	if create.Code != "LAB-1" || create.Name != "Lab Komputer" || create.Building != "Gedung A" || create.Floor != "2" || create.LocationNote != "dekat TU" || create.Notes != "Siap ANBK" {
+		t.Fatalf("normalizeCreateSchoolRoom() = %+v, want trimmed text fields", create)
+	}
+	if create.RoomType != "kelas" || create.Condition != "baik" || create.DefaultCapacity != 30 || create.ExamCapacity != 30 || !create.IsExamEligible {
+		t.Fatalf("normalizeCreateSchoolRoom() = %+v, want defaults and exam eligibility preserved", create)
+	}
+
+	roomID := inventoryTestUUID(22)
+	update, err := normalizeUpdateSchoolRoom(db.UpdateSchoolRoomParams{
+		ID:              roomID,
+		Code:            "  R-2 ",
+		Name:            " Ruang 2 ",
+		RoomType:        "laboratorium",
+		Condition:       "perlu-perawatan",
+		DefaultCapacity: 24,
+		ExamCapacity:    12,
+	})
+	if err != nil {
+		t.Fatalf("normalizeUpdateSchoolRoom() error = %v", err)
+	}
+	if update.ID != roomID || update.Code != "R-2" || update.Name != "Ruang 2" || update.RoomType != "laboratorium" || update.Condition != "perlu-perawatan" || update.DefaultCapacity != 24 || update.ExamCapacity != 12 {
+		t.Fatalf("normalizeUpdateSchoolRoom() = %+v, want normalized update payload", update)
+	}
+
+	filterCases := map[string]string{" true ": "true", "1": "true", "YES": "true", "n": "false", "0": "false", "maybe": "", "": ""}
+	for input, want := range filterCases {
+		if got := normalizeSchoolRoomExamEligibleFilter(input); got != want {
+			t.Fatalf("normalizeSchoolRoomExamEligibleFilter(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestValidateSchoolRoomPayload(t *testing.T) {
+	tests := []struct {
+		name    string
+		code    string
+		room    string
+		cond    string
+		cap     int32
+		examCap int32
+		wantErr string
+	}{
+		{name: "valid", code: "R-1", room: "Ruang 1", cond: "baik", cap: 1, examCap: 1},
+		{name: "blank code", room: "Ruang 1", cond: "baik", cap: 1, examCap: 1, wantErr: "kode ruangan wajib diisi"},
+		{name: "blank name", code: "R-1", cond: "baik", cap: 1, examCap: 1, wantErr: "nama ruangan wajib diisi"},
+		{name: "zero default capacity", code: "R-1", room: "Ruang 1", cond: "baik", cap: 0, examCap: 1, wantErr: "kapasitas normal minimal 1"},
+		{name: "zero exam capacity", code: "R-1", room: "Ruang 1", cond: "baik", cap: 1, examCap: 0, wantErr: "kapasitas ujian minimal 1"},
+		{name: "invalid condition", code: "R-1", room: "Ruang 1", cond: "hilang", cap: 1, examCap: 1, wantErr: "kondisi ruangan tidak valid"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateSchoolRoomPayload(tt.code, tt.room, tt.cond, tt.cap, tt.examCap)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("validateSchoolRoomPayload() error = %v", err)
+				}
+				return
+			}
+			if err == nil || err.Error() != tt.wantErr {
+				t.Fatalf("validateSchoolRoomPayload() error = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestInventoryStatsAndEventsDelegateToStore(t *testing.T) {
 	itemID := inventoryTestUUID(13)
 	store := &fakeInventoryStore{
