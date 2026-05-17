@@ -70,6 +70,20 @@ func (f *fakeBrandingService) ResetBrandingAsset(_ context.Context, purpose stri
 	return service.BrandingSettings{AppName: "MTsN 2 Kolut", Version: "reset"}, nil
 }
 
+func TestBrandingGetAliasesPublic(t *testing.T) {
+	fake := &fakeBrandingService{settings: service.BrandingSettings{AppName: "Alias Portal"}}
+	h := NewBranding(fake, "")
+	if h == nil || h.storageDir != "" {
+		t.Fatalf("NewBranding() = %+v, want handler preserving storage dir", h)
+	}
+
+	rec := httptest.NewRecorder()
+	h.Get(rec, httptest.NewRequest(http.MethodGet, "/api/branding", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Alias Portal") {
+		t.Fatalf("Get() status/body = %d/%s, want 200 with settings", rec.Code, rec.Body.String())
+	}
+}
+
 func TestBrandingPublicUpdateResetAndAsset(t *testing.T) {
 	fake := &fakeBrandingService{settings: service.BrandingSettings{AppName: "Madrasah", PrimaryColor: "#155e75"}}
 	h := NewBranding(fake, t.TempDir())

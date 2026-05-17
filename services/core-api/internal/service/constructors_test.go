@@ -3,6 +3,9 @@ package service
 import "testing"
 
 func TestServiceConstructorsReturnUsableInstances(t *testing.T) {
+	if svc := NewAcademicWithPool(nil); svc == nil || svc.q == nil {
+		t.Fatal("NewAcademicWithPool(nil) = nil, want service with query store")
+	}
 	if svc := NewArchive(nil, ""); svc == nil || svc.storageDir != "data/archives" {
 		t.Fatalf("NewArchive(empty) = %+v, want default storage dir", svc)
 	}
@@ -11,6 +14,9 @@ func TestServiceConstructorsReturnUsableInstances(t *testing.T) {
 	}
 	if svc := NewAudit(nil); svc == nil {
 		t.Fatal("NewAudit(nil) = nil, want service")
+	}
+	if svc := NewBankSoalReviewerScope(nil); svc == nil {
+		t.Fatal("NewBankSoalReviewerScope(nil) = nil, want service")
 	}
 	if svc := NewAuth(nil, "secret", "admin-password"); svc == nil || string(svc.jwtSecret) != "secret" || svc.adminPassword != "admin-password" {
 		t.Fatalf("NewAuth() = %+v, want configured auth service", svc)
@@ -23,6 +29,9 @@ func TestServiceConstructorsReturnUsableInstances(t *testing.T) {
 	}
 	if svc := NewDocumentCycle(nil); svc == nil {
 		t.Fatal("NewDocumentCycle(nil) = nil, want service")
+	}
+	if svc := NewGrade(nil); svc == nil {
+		t.Fatal("NewGrade(nil) = nil, want service")
 	}
 	if svc := NewInventory(nil); svc == nil {
 		t.Fatal("NewInventory(nil) = nil, want service")
@@ -51,14 +60,23 @@ func TestServiceConstructorsReturnUsableInstances(t *testing.T) {
 	if svc := NewNotification(nil); svc == nil {
 		t.Fatal("NewNotification(nil) = nil, want service")
 	}
+	if svc := NewNonTestAssessment(nil); svc == nil {
+		t.Fatal("NewNonTestAssessment(nil) = nil, want service")
+	}
 	if svc := NewParent(nil); svc == nil {
 		t.Fatal("NewParent(nil) = nil, want service")
+	}
+	if svc := NewParentPortal(nil); svc == nil {
+		t.Fatal("NewParentPortal(nil) = nil, want service")
 	}
 	if svc := NewPortal(nil); svc == nil {
 		t.Fatal("NewPortal(nil) = nil, want service")
 	}
 	if svc := NewPusakaSchedule(nil); svc == nil {
 		t.Fatal("NewPusakaSchedule(nil) = nil, want service")
+	}
+	if svc := NewRBAC(nil); svc == nil {
+		t.Fatal("NewRBAC(nil) = nil, want service")
 	}
 	if svc := NewSetting(nil); svc == nil {
 		t.Fatal("NewSetting(nil) = nil, want service")

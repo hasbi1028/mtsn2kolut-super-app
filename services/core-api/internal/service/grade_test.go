@@ -49,6 +49,7 @@ type fakeGradeStore struct {
 	reportSettingsErr       error
 	reportSettingsUpsertArg db.UpsertReportSettingsParams
 	descriptionUpsertArg    db.UpsertGradeStudentSubjectDescriptionParams
+	descriptionUpsertErr    error
 }
 
 func (f *fakeGradeStore) GetActiveReportSettings(ctx context.Context) (db.GetActiveReportSettingsRow, error) {
@@ -68,6 +69,9 @@ func (f *fakeGradeStore) UpsertReportSettings(ctx context.Context, arg db.Upsert
 
 func (f *fakeGradeStore) UpsertGradeStudentSubjectDescription(ctx context.Context, arg db.UpsertGradeStudentSubjectDescriptionParams) (db.GradeStudentSubjectDescription, error) {
 	f.descriptionUpsertArg = arg
+	if f.descriptionUpsertErr != nil {
+		return db.GradeStudentSubjectDescription{}, f.descriptionUpsertErr
+	}
 	return db.GradeStudentSubjectDescription{AssignmentID: arg.AssignmentID, StudentID: arg.StudentID, Description: arg.Description}, nil
 }
 
@@ -781,5 +785,89 @@ func TestGradeUpdateReportSettingsNormalizesBeforeUpsert(t *testing.T) {
 	}
 	if settings.RankingMethod != "intrakurikuler_average" || settings.RankingTiePolicy != "ordinal" || settings.Notes != "tampilkan ranking hanya internal" {
 		t.Fatalf("UpdateReportSettings() = %+v, want normalized response", settings)
+	}
+}
+
+func TestGradeGetReportSettingsDelegatesToStore(t *testing.T) {
+	yearID := pgtype.UUID{Bytes: [16]byte{63}, Valid: true}
+	store := &fakeGradeStore{
+		reportSettings: db.GetActiveReportSettingsRow{
+			AcademicYearID:      yearID,
+			AcademicYearName:    "2026/2027",
+			ShowRankingOnReport: true,
+			RankingMethod:       "weighted_by_jp",
+			RankingTiePolicy:    "dense_rank",
+			Notes:               "Aktif",
+		},
+	}
+	svc := &Grade{q: store}
+
+	settings, err := svc.GetReportSettings(context.Background())
+	if err != nil {
+		t.Fatalf("GetReportSettings() error = %v", err)
+	}
+	if settings.AcademicYearID != yearID.String() || settings.AcademicYearName != "2026/2027" || !settings.ShowRankingOnReport || settings.RankingMethod != "weighted_by_jp" || settings.RankingTiePolicy != "dense_rank" || settings.Notes != "Aktif" {
+		t.Fatalf("GetReportSettings() = %+v, want mapped store settings", settings)
+	}
+
+	expectedErr := errors.New("settings lookup failed")
+	store.reportSettingsErr = expectedErr
+	if _, err := svc.GetReportSettings(context.Background()); !errors.Is(err, expectedErr) {
+		t.Fatalf("GetReportSettings(error) = %v, want %v", err, expectedErr)
+	}
+}
+
+func TestGradeUpsertStudentSubjectDescriptionTrimsAndDelegates(t *testing.T) {
+	assignmentID := pgtype.UUID{Bytes: [16]byte{64}, Valid: true}
+	studentID := pgtype.UUID{Bytes: [16]byte{65}, Valid: true}
+	teacherID := pgtype.UUID{Bytes: [16]byte{66}, Valid: true}
+	store := &fakeGradeStore{
+		assignments: []db.ListClassSubjectAssignmentsRow{{ID: assignmentID, TeacherEmployeeID: teacherID}},
+	}
+	svc := &Grade{q: store}
+
+	desc, err := svc.UpsertStudentSubjectDescription(context.Background(), db.UpsertGradeStudentSubjectDescriptionParams{
+		AssignmentID: assignmentID,
+		StudentID:    studentID,
+		Description:  "  Menguasai materi dengan baik  ",
+	}, teacherID)
+	if err != nil {
+		t.Fatalf("UpsertStudentSubjectDescription() error = %v", err)
+	}
+	if store.descriptionUpsertArg.AssignmentID != assignmentID || store.descriptionUpsertArg.StudentID != studentID || store.descriptionUpsertArg.Description != "Menguasai materi dengan baik" {
+		t.Fatalf("UpsertGradeStudentSubjectDescription() arg = %+v, want assignment/student and trimmed description", store.descriptionUpsertArg)
+	}
+	if desc.AssignmentID != assignmentID || desc.StudentID != studentID || desc.Description != "Menguasai materi dengan baik" {
+		t.Fatalf("UpsertStudentSubjectDescription() = %+v, want store result", desc)
+	}
+
+	expectedErr := errors.New("description upsert failed")
+	store.descriptionUpsertErr = expectedErr
+	if _, err := svc.UpsertStudentSubjectDescription(context.Background(), db.UpsertGradeStudentSubjectDescriptionParams{AssignmentID: assignmentID, StudentID: studentID, Description: "ok"}, teacherID); !errors.Is(err, expectedErr) {
+		t.Fatalf("UpsertStudentSubjectDescription(store error) = %v, want %v", err, expectedErr)
+	}
+}
+
+func TestGradeUpsertStudentSubjectDescriptionAccessAndLengthGuards(t *testing.T) {
+	assignmentID := pgtype.UUID{Bytes: [16]byte{67}, Valid: true}
+	studentID := pgtype.UUID{Bytes: [16]byte{68}, Valid: true}
+	teacherID := pgtype.UUID{Bytes: [16]byte{69}, Valid: true}
+	otherTeacherID := pgtype.UUID{Bytes: [16]byte{70}, Valid: true}
+	svc := &Grade{q: &fakeGradeStore{
+		assignments: []db.ListClassSubjectAssignmentsRow{{ID: assignmentID, TeacherEmployeeID: otherTeacherID}},
+	}}
+
+	if _, err := svc.UpsertStudentSubjectDescription(context.Background(), db.UpsertGradeStudentSubjectDescriptionParams{AssignmentID: assignmentID, StudentID: studentID, Description: "baik"}, teacherID); err == nil || !strings.Contains(err.Error(), "akses ditolak") {
+		t.Fatalf("UpsertStudentSubjectDescription(teacher mismatch) = %v, want access denied", err)
+	}
+
+	store := &fakeGradeStore{}
+	svc = &Grade{q: store}
+	tooLong := strings.Repeat("x", 2001)
+	if _, err := svc.UpsertStudentSubjectDescription(context.Background(), db.UpsertGradeStudentSubjectDescriptionParams{AssignmentID: assignmentID, StudentID: studentID, Description: tooLong}, pgtype.UUID{}); err == nil || !strings.Contains(err.Error(), "deskripsi capaian terlalu panjang") {
+		t.Fatalf("UpsertStudentSubjectDescription(long description) = %v, want length validation", err)
+	}
+	if store.descriptionUpsertArg.Description != "" {
+		t.Fatalf("UpsertGradeStudentSubjectDescription() called for too-long description: %+v", store.descriptionUpsertArg)
 	}
 }

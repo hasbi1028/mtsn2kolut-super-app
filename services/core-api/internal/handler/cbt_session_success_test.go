@@ -154,6 +154,26 @@ type fakeCbtSessionService struct {
 	roomEventsParticipantID    pgtype.UUID
 	roomEventsLimit            int32
 	proctoringErr              error
+	liveSummarySessionID       pgtype.UUID
+	liveSummaryRoomID          pgtype.UUID
+	liveSummary                service.CbtProctoringLiveSummary
+	liveSummaryErr             error
+	participantScopeSessionID  pgtype.UUID
+	participantScopeID         pgtype.UUID
+	participantScope           db.GetCbtParticipantProctorScopeRow
+	participantScopeErr        error
+	proctorEventScopeID        pgtype.UUID
+	proctorEventScope          db.GetCbtProctorEventScopeRow
+	proctorEventScopeErr       error
+	ackEventID                 pgtype.UUID
+	ackActor                   service.CbtProctorActor
+	ackNote                    string
+	ackRow                     db.AcknowledgeCbtProctorEventRow
+	ackErr                     error
+	proctorActionInput         service.CbtProctorActionInput
+	proctorActionActor         service.CbtProctorActor
+	proctorActionResult        service.CbtProctorActionResult
+	proctorActionErr           error
 	listRoomProctorsRoomID     pgtype.UUID
 	replaceProctorsRoomID      pgtype.UUID
 	replaceProctorsAssignedBy  pgtype.UUID
@@ -570,6 +590,66 @@ func (f *fakeCbtSessionService) GetProctoringStatus(_ context.Context, sessionID
 		return nil, f.proctoringErr
 	}
 	return []db.GetSessionProctoringStatusRow{}, nil
+}
+
+func (f *fakeCbtSessionService) GetProctoringLiveSummary(_ context.Context, sessionID, roomID pgtype.UUID) (service.CbtProctoringLiveSummary, error) {
+	f.liveSummarySessionID = sessionID
+	f.liveSummaryRoomID = roomID
+	if f.liveSummaryErr != nil {
+		return service.CbtProctoringLiveSummary{}, f.liveSummaryErr
+	}
+	if f.liveSummary.SessionID != "" || f.liveSummary.RoomID != "" || len(f.liveSummary.Participants) > 0 || len(f.liveSummary.LatestEvents) > 0 || len(f.liveSummary.Actions) > 0 {
+		return f.liveSummary, nil
+	}
+	return service.CbtProctoringLiveSummary{SessionID: pgUUIDString(sessionID), RoomID: pgUUIDString(roomID), Counts: map[string]int{"participants": 1}}, nil
+}
+
+func (f *fakeCbtSessionService) GetParticipantProctorScope(_ context.Context, sessionID, participantID pgtype.UUID) (db.GetCbtParticipantProctorScopeRow, error) {
+	f.participantScopeSessionID = sessionID
+	f.participantScopeID = participantID
+	if f.participantScopeErr != nil {
+		return db.GetCbtParticipantProctorScopeRow{}, f.participantScopeErr
+	}
+	if f.participantScope.ParticipantID.Valid {
+		return f.participantScope, nil
+	}
+	return db.GetCbtParticipantProctorScopeRow{ParticipantID: participantID, SessionID: sessionID, RoomID: f.roomProctorRoomID, Nama: "Peserta"}, nil
+}
+
+func (f *fakeCbtSessionService) GetProctorEventScope(_ context.Context, eventID pgtype.UUID) (db.GetCbtProctorEventScopeRow, error) {
+	f.proctorEventScopeID = eventID
+	if f.proctorEventScopeErr != nil {
+		return db.GetCbtProctorEventScopeRow{}, f.proctorEventScopeErr
+	}
+	if f.proctorEventScope.ID.Valid {
+		return f.proctorEventScope, nil
+	}
+	return db.GetCbtProctorEventScopeRow{ID: eventID, ParticipantID: f.participantScopeID, SessionID: f.proctoringSessionID, RoomID: f.roomProctorRoomID, Severity: "warning", Nama: "Peserta"}, nil
+}
+
+func (f *fakeCbtSessionService) AcknowledgeProctorEventByID(_ context.Context, eventID pgtype.UUID, actor service.CbtProctorActor, note string) (db.AcknowledgeCbtProctorEventRow, error) {
+	f.ackEventID = eventID
+	f.ackActor = actor
+	f.ackNote = note
+	if f.ackErr != nil {
+		return db.AcknowledgeCbtProctorEventRow{}, f.ackErr
+	}
+	if f.ackRow.ID.Valid {
+		return f.ackRow, nil
+	}
+	return db.AcknowledgeCbtProctorEventRow{ID: eventID, ParticipantID: f.participantScopeID, AcknowledgedBy: actor.UserID, AcknowledgeNote: note}, nil
+}
+
+func (f *fakeCbtSessionService) ExecuteProctorAction(_ context.Context, in service.CbtProctorActionInput, actor service.CbtProctorActor) (service.CbtProctorActionResult, error) {
+	f.proctorActionInput = in
+	f.proctorActionActor = actor
+	if f.proctorActionErr != nil {
+		return service.CbtProctorActionResult{}, f.proctorActionErr
+	}
+	if f.proctorActionResult.Action.ID.Valid {
+		return f.proctorActionResult, nil
+	}
+	return service.CbtProctorActionResult{Action: db.CbtProctorAction{ID: handlerTestUUID(220), SessionID: in.SessionID, ParticipantID: in.ParticipantID, EventID: in.EventID, ActionType: in.ActionType, Reason: in.Reason, Notes: in.Notes, ActorUserID: actor.UserID, ActorUsernameSnapshot: actor.Username}}, nil
 }
 
 func (f *fakeCbtSessionService) GetRoomProctoringDashboard(_ context.Context, roomID pgtype.UUID) (db.GetCbtRoomProctorDashboardRow, error) {
@@ -1037,6 +1117,135 @@ func TestCbtSessionRoomProctorAndParticipantEventEndpoints(t *testing.T) {
 	}
 	if fake.hasParticipantSessionID != sessionID || fake.hasParticipantID != participantID || fake.roomEventsSessionID != sessionID || fake.roomEventsParticipantID != participantID || fake.roomEventsLimit != 25 {
 		t.Fatalf("ListParticipantEvents args = participant check:%v/%v events:%v/%v/%d, want session/participant/limit", fake.hasParticipantSessionID, fake.hasParticipantID, fake.roomEventsSessionID, fake.roomEventsParticipantID, fake.roomEventsLimit)
+	}
+}
+
+func TestCbtSessionRealtimeProctorLiveActionAndReportEndpoints(t *testing.T) {
+	sessionID := handlerTestUUID(221)
+	roomID := handlerTestUUID(222)
+	participantID := handlerTestUUID(223)
+	eventID := handlerTestUUID(224)
+	actorID := handlerTestUUID(225)
+	fake := &fakeCbtSessionService{
+		liveSummary: service.CbtProctoringLiveSummary{
+			SessionID: sessionID.String(),
+			RoomID:    roomID.String(),
+			Counts:    map[string]int{"participants": 3, "needs_action": 2},
+			Participants: []service.CbtProctoringParticipantDTO{
+				{ParticipantID: participantID.String(), Nama: "Ahmad", ConnectionStatus: "selesai", SyncStatus: "sinkron"},
+				{ParticipantID: handlerTestUUID(226).String(), Nama: "Budi", ConnectionStatus: "online", SyncStatus: "belum_sinkron", PendingAnswerCount: 2},
+				{ParticipantID: handlerTestUUID(227).String(), Nama: "Cici", ConnectionStatus: "online", RiskLevel: "locked", LockedAt: "2026-05-03T08:15:00Z"},
+			},
+			LatestEvents: []service.CbtProctoringEventDTO{
+				{ID: eventID.String(), ParticipantID: participantID.String(), Severity: "technical", IsMassTechnicalIssue: true, AcknowledgedAt: ""},
+				{ID: handlerTestUUID(228).String(), ParticipantID: participantID.String(), Severity: "warning", AcknowledgedAt: "2026-05-03T08:10:00Z"},
+				{ID: handlerTestUUID(229).String(), ParticipantID: participantID.String(), Severity: "critical", AcknowledgedAt: ""},
+			},
+			Actions: []db.CbtProctorAction{{ID: handlerTestUUID(230), SessionID: sessionID, ParticipantID: participantID, ActionType: "unlock_access", Reason: "Validasi pengawas"}},
+		},
+		participantScope:  db.GetCbtParticipantProctorScopeRow{ParticipantID: participantID, SessionID: sessionID, RoomID: roomID, Nama: "Ahmad", RoomName: "Ruang 1"},
+		proctorEventScope: db.GetCbtProctorEventScopeRow{ID: eventID, ParticipantID: participantID, SessionID: sessionID, RoomID: roomID, Severity: "technical", Category: "device", RequiresNote: true, Nama: "Ahmad", RoomName: "Ruang 1"},
+	}
+	audit := &fakeCbtSessionAuditWriter{}
+	h := &CbtSession{svc: fake, audit: audit}
+
+	adminRoute := func(method, target, body string, pairs ...string) *http.Request {
+		return withRouteParams(
+			withClaims(httptest.NewRequest(method, target, strings.NewReader(body)), jwt.MapClaims{
+				"roles": []any{"admin"},
+				"uid":   actorID.String(),
+				"sub":   actorID.String(),
+				"usr":   "proctor.admin",
+				"ssid":  "session-admin-live",
+			}),
+			pairs...,
+		)
+	}
+
+	rec := httptest.NewRecorder()
+	h.GetProctoringLiveSummary(rec, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/proctoring/live", "", "id", sessionID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GetProctoringLiveSummary status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.liveSummarySessionID != sessionID || fake.liveSummaryRoomID.Valid {
+		t.Fatalf("live summary args = %v/%v, want session and empty room", fake.liveSummarySessionID, fake.liveSummaryRoomID)
+	}
+	if !strings.Contains(rec.Body.String(), `"needs_action":2`) {
+		t.Fatalf("live summary body = %s, want returned summary counts", rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.GetRoomProctoringLiveSummary(rec, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/rooms/"+roomID.String()+"/proctoring/live", "", "id", sessionID.String(), "rid", roomID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GetRoomProctoringLiveSummary status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.hasRoomSessionID != sessionID || fake.hasRoomID != roomID || fake.liveSummarySessionID != sessionID || fake.liveSummaryRoomID != roomID {
+		t.Fatalf("room live args = hasRoom:%v/%v live:%v/%v, want session/room", fake.hasRoomSessionID, fake.hasRoomID, fake.liveSummarySessionID, fake.liveSummaryRoomID)
+	}
+
+	rec = httptest.NewRecorder()
+	h.AcknowledgeProctorEvent(rec, adminRoute(http.MethodPost, "/api/cbt/proctoring/events/"+eventID.String()+"/ack", `{"notes":"  sudah dicek  "}`, "event_id", eventID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("AcknowledgeProctorEvent status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.proctorEventScopeID != eventID || fake.ackEventID != eventID || fake.ackActor.UserID != actorID || fake.ackActor.Username != "proctor.admin" || fake.ackNote != "sudah dicek" {
+		t.Fatalf("ack args = scope:%v ack:%v actor:%+v note:%q, want event/actor/trimmed note", fake.proctorEventScopeID, fake.ackEventID, fake.ackActor, fake.ackNote)
+	}
+
+	actionBody := `{"action_type":"unlock_access","event_id":"` + eventID.String() + `","reason":"Peserta sudah diverifikasi","notes":"Izinkan lanjut"}`
+	rec = httptest.NewRecorder()
+	h.ExecuteProctorAction(rec, adminRoute(http.MethodPost, "/api/cbt/sessions/"+sessionID.String()+"/participants/"+participantID.String()+"/proctoring/actions", actionBody, "id", sessionID.String(), "pid", participantID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ExecuteProctorAction status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.participantScopeSessionID != sessionID || fake.participantScopeID != participantID || fake.proctorActionInput.EventID != eventID || fake.proctorActionInput.ActionType != "unlock_access" || fake.proctorActionActor.UserID != actorID {
+		t.Fatalf("proctor action args = scope:%v/%v input:%+v actor:%+v, want participant/event action by actor", fake.participantScopeSessionID, fake.participantScopeID, fake.proctorActionInput, fake.proctorActionActor)
+	}
+
+	rec = httptest.NewRecorder()
+	h.GetProctoringReportData(rec, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/proctoring/report", "", "id", sessionID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GetProctoringReportData status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	var envelope map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("json.Unmarshal(report) error = %v; body=%s", err, rec.Body.String())
+	}
+	report, _ := envelope["data"].(map[string]any)
+	severity, _ := report["severity_summary"].(map[string]any)
+	submitted, _ := report["submitted_summary"].(map[string]any)
+	if severity["technical"] != float64(1) || severity["critical"] != float64(1) || submitted["submitted"] != float64(1) || submitted["not_submitted"] != float64(2) {
+		t.Fatalf("report summaries = severity:%+v submitted:%+v, want technical/critical and submitted counts", severity, submitted)
+	}
+	if got := len(report["technical_incidents"].([]any)); got != 1 {
+		t.Fatalf("technical_incidents len = %d, want 1", got)
+	}
+	if got := len(report["unacknowledged_events"].([]any)); got != 2 {
+		t.Fatalf("unacknowledged_events len = %d, want 2", got)
+	}
+	if got := len(report["sync_anomalies"].([]any)); got != 1 {
+		t.Fatalf("sync_anomalies len = %d, want 1", got)
+	}
+
+	rec = httptest.NewRecorder()
+	h.GetRoomProctoringReportData(rec, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/rooms/"+roomID.String()+"/proctoring/report", "", "id", sessionID.String(), "rid", roomID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GetRoomProctoringReportData status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.liveSummaryRoomID != roomID {
+		t.Fatalf("room report live summary room = %v, want %v", fake.liveSummaryRoomID, roomID)
+	}
+
+	rec = httptest.NewRecorder()
+	h.ForceSubmitParticipant(rec, adminRoute(http.MethodPost, "/api/cbt/sessions/"+sessionID.String()+"/participants/"+participantID.String()+"/force-submit", `{"reason":"Selesai manual"}`, "id", sessionID.String(), "pid", participantID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ForceSubmitParticipant status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.proctorActionInput.ActionType != "force_submit" || fake.proctorActionInput.Reason != "Selesai manual" || fake.proctorActionInput.Notes == "" || fake.proctorActionActor.Username != "proctor.admin" {
+		t.Fatalf("force submit legacy action = input:%+v actor:%+v, want force_submit with default notes", fake.proctorActionInput, fake.proctorActionActor)
+	}
+	if len(audit.entries) != 1 || audit.entries[0].Action != "CBT_SESSION_PARTICIPANT_FORCE_SUBMIT" || audit.entries[0].EntityID != pgUUIDString(sessionID) {
+		t.Fatalf("force submit audit = %+v, want force-submit session audit", audit.entries)
 	}
 }
 

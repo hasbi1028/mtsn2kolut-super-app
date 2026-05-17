@@ -1,11 +1,13 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"math/big"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -139,6 +141,218 @@ func TestValidateCbtSessionActivationReadiness(t *testing.T) {
 				t.Fatalf("validateCbtSessionActivationReadiness() error = %q, want contains %q", err.Error(), tt.wantErr)
 			}
 		})
+	}
+}
+
+func decodeParticipantEventData(t *testing.T, arg db.InsertParticipantEventParams) map[string]string {
+	t.Helper()
+	var got map[string]string
+	if err := json.Unmarshal(arg.EventData, &got); err != nil {
+		t.Fatalf("event data unmarshal error = %v", err)
+	}
+	return got
+}
+
+func TestCbtSessionParticipantEventListingUsesFakeStore(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtSessionTestUUID(10)
+	participantID := cbtSessionTestUUID(11)
+	roomID := cbtSessionTestUUID(12)
+	store := &fakeCbtSessionStore{
+		participantEventRows: []db.ListSessionParticipantEventsRow{{ID: cbtSessionTestUUID(13), EventType: "focus_lost"}},
+	}
+	svc := &CbtSession{q: store}
+
+	rows, err := svc.ListParticipantEvents(ctx, sessionID, participantID, 0)
+	if err != nil {
+		t.Fatalf("ListParticipantEvents() error = %v", err)
+	}
+	if len(rows) != 1 || rows[0].EventType != "focus_lost" {
+		t.Fatalf("ListParticipantEvents() rows = %#v", rows)
+	}
+	if store.participantEventsArg.SessionID != sessionID || store.participantEventsArg.ParticipantID != participantID || store.participantEventsArg.RoomID.Valid || store.participantEventsArg.LimitCount != 100 {
+		t.Fatalf("ListParticipantEvents() params = %#v", store.participantEventsArg)
+	}
+
+	store.participantEventRows = nil
+	rows, err = svc.ListParticipantEventsForRoom(ctx, sessionID, participantID, roomID, 501)
+	if err != nil {
+		t.Fatalf("ListParticipantEventsForRoom() error = %v", err)
+	}
+	if rows == nil || len(rows) != 0 {
+		t.Fatalf("ListParticipantEventsForRoom() nil rows normalized to %#v, want empty slice", rows)
+	}
+	if store.participantEventsArg.RoomID != roomID || store.participantEventsArg.LimitCount != 100 {
+		t.Fatalf("ListParticipantEventsForRoom() params = %#v", store.participantEventsArg)
+	}
+}
+
+func TestCbtSessionParticipantEventActionsUseFakeStore(t *testing.T) {
+	ctx := context.Background()
+	participantID := cbtSessionTestUUID(20)
+	store := &fakeCbtSessionStore{
+		unlockParticipantRow: db.UnlockParticipantAntiCheatRow{ID: participantID, RiskLevel: "low"},
+	}
+	svc := &CbtSession{q: store}
+
+	if err := svc.ResetParticipantRuntimeAccess(ctx, participantID, " proctor-a "); err != nil {
+		t.Fatalf("ResetParticipantRuntimeAccess() error = %v", err)
+	}
+	if store.resetParticipantID != participantID || len(store.insertedEvents) != 1 || store.insertedEvents[0].EventType != "proctor_reset_access" {
+		t.Fatalf("ResetParticipantRuntimeAccess() calls = reset %v events %#v", store.resetParticipantID, store.insertedEvents)
+	}
+	if got := decodeParticipantEventData(t, store.insertedEvents[0]); got["actor"] != " proctor-a " {
+		t.Fatalf("ResetParticipantRuntimeAccess() event data = %#v", got)
+	}
+
+	row, err := svc.UnlockParticipantAntiCheat(ctx, participantID, " proctor-b ", "  verified  ")
+	if err != nil {
+		t.Fatalf("UnlockParticipantAntiCheat() error = %v", err)
+	}
+	if row.ID != participantID || store.unlockParticipantID != participantID || len(store.insertedEvents) != 2 || store.insertedEvents[1].EventType != "proctor_unlock" {
+		t.Fatalf("UnlockParticipantAntiCheat() row/calls = %#v unlock %v events %#v", row, store.unlockParticipantID, store.insertedEvents)
+	}
+	if got := decodeParticipantEventData(t, store.insertedEvents[1]); got["actor"] != " proctor-b " || got["notes"] != "verified" {
+		t.Fatalf("UnlockParticipantAntiCheat() event data = %#v", got)
+	}
+
+	if err := svc.AcknowledgeProctorEvent(ctx, participantID, " event-1 ", "actor-c", " noted "); err != nil {
+		t.Fatalf("AcknowledgeProctorEvent() error = %v", err)
+	}
+	if len(store.insertedEvents) != 3 || store.insertedEvents[2].EventType != "proctor_acknowledge" {
+		t.Fatalf("AcknowledgeProctorEvent() events = %#v", store.insertedEvents)
+	}
+	if got := decodeParticipantEventData(t, store.insertedEvents[2]); got["actor"] != "actor-c" || got["event_id"] != "event-1" || got["notes"] != "noted" {
+		t.Fatalf("AcknowledgeProctorEvent() event data = %#v", got)
+	}
+
+	if err := svc.RecordIncidentAction(ctx, participantID, " event-2 ", " WARNING_GIVEN ", " actor-d ", " ok "); err != nil {
+		t.Fatalf("RecordIncidentAction() error = %v", err)
+	}
+	if len(store.insertedEvents) != 4 || store.insertedEvents[3].EventType != "proctor_incident_action" {
+		t.Fatalf("RecordIncidentAction() events = %#v", store.insertedEvents)
+	}
+	if got := decodeParticipantEventData(t, store.insertedEvents[3]); got["actor"] != "actor-d" || got["event_id"] != "event-2" || got["action"] != "warning_given" || got["notes"] != "ok" {
+		t.Fatalf("RecordIncidentAction() event data = %#v", got)
+	}
+
+	if err := svc.RecordIncidentAction(ctx, participantID, "event-3", "bad", "actor", ""); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("RecordIncidentAction() invalid action error = %v, want ErrBadRequest", err)
+	}
+	if len(store.insertedEvents) != 4 {
+		t.Fatalf("RecordIncidentAction() invalid action inserted event: %#v", store.insertedEvents)
+	}
+
+	if err := svc.SendParticipantCommand(ctx, participantID, " reconnect ", "  ", " actor-e "); err != nil {
+		t.Fatalf("SendParticipantCommand() error = %v", err)
+	}
+	if len(store.insertedEvents) != 5 || store.insertedEvents[4].EventType != "participant_command" {
+		t.Fatalf("SendParticipantCommand() events = %#v", store.insertedEvents)
+	}
+	if got := decodeParticipantEventData(t, store.insertedEvents[4]); got["actor"] != "actor-e" || got["command_type"] != ParticipantCommandReconnect || got["severity"] != "warning" || got["message"] != defaultParticipantCommandMessage(ParticipantCommandReconnect) || got["issued_at"] == "" {
+		t.Fatalf("SendParticipantCommand() event data = %#v", got)
+	} else if _, err := time.Parse(time.RFC3339, got["issued_at"]); err != nil {
+		t.Fatalf("SendParticipantCommand() issued_at = %q, want RFC3339: %v", got["issued_at"], err)
+	}
+
+	if err := svc.SendParticipantCommand(ctx, participantID, "invalid", "msg", "actor"); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("SendParticipantCommand() invalid command error = %v, want ErrBadRequest", err)
+	}
+	if len(store.insertedEvents) != 5 {
+		t.Fatalf("SendParticipantCommand() invalid command inserted event: %#v", store.insertedEvents)
+	}
+}
+
+func TestCbtSessionForceSubmitParticipantUsesFakeStoreWithoutPool(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtSessionTestUUID(30)
+	participantID := cbtSessionTestUUID(31)
+	store := &fakeCbtSessionStore{
+		forceSubmitRow: db.ForceSubmitParticipantRow{ID: participantID, SubmittedAt: pgtype.Timestamptz{Time: time.Unix(100, 0), Valid: true}},
+	}
+	svc := &CbtSession{q: store}
+
+	row, err := svc.ForceSubmitParticipant(ctx, sessionID, participantID, " proctor ")
+	if err != nil {
+		t.Fatalf("ForceSubmitParticipant() error = %v", err)
+	}
+	if row.ID != participantID {
+		t.Fatalf("ForceSubmitParticipant() row = %#v", row)
+	}
+	if got, want := strings.Join(store.forceSubmitCalls, ","), "update_correctness,force_submit"; got != want {
+		t.Fatalf("ForceSubmitParticipant() call order = %q, want %q", got, want)
+	}
+	if store.participantCorrectnessID != participantID || store.forceSubmitArg.SessionID != sessionID || store.forceSubmitArg.ID != participantID {
+		t.Fatalf("ForceSubmitParticipant() params = correctness %v force %#v", store.participantCorrectnessID, store.forceSubmitArg)
+	}
+	if len(store.insertedEvents) != 1 || store.insertedEvents[0].ParticipantID != participantID || store.insertedEvents[0].EventType != "proctor_force_submit" {
+		t.Fatalf("ForceSubmitParticipant() insert events = %#v", store.insertedEvents)
+	}
+	if got := decodeParticipantEventData(t, store.insertedEvents[0]); got["actor"] != " proctor " {
+		t.Fatalf("ForceSubmitParticipant() event data = %#v", got)
+	}
+}
+
+func TestCbtSessionTeacherAccessWrappersUseFakeStore(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtSessionTestUUID(40)
+	participantID := cbtSessionTestUUID(41)
+	answerID := cbtSessionTestUUID(42)
+	teacherID := cbtSessionTestUUID(43)
+	store := &fakeCbtSessionStore{sessionParticipant: true, sessionAnswer: true}
+	svc := &CbtSession{q: store}
+
+	ok, err := svc.HasParticipantByTeacher(ctx, sessionID, participantID, teacherID)
+	if err != nil || !ok {
+		t.Fatalf("HasParticipantByTeacher() = %v, %v; want true, nil", ok, err)
+	}
+	if store.teacherParticipantArg != (db.HasSessionParticipantByTeacherParams{TeacherEmployeeID: teacherID, SessionID: sessionID, ParticipantID: participantID}) {
+		t.Fatalf("HasParticipantByTeacher() params = %#v", store.teacherParticipantArg)
+	}
+
+	ok, err = svc.HasAnswerByTeacher(ctx, sessionID, answerID, teacherID)
+	if err != nil || !ok {
+		t.Fatalf("HasAnswerByTeacher() = %v, %v; want true, nil", ok, err)
+	}
+	if store.teacherAnswerArg != (db.HasSessionAnswerByTeacherParams{TeacherEmployeeID: teacherID, SessionID: sessionID, AnswerID: answerID}) {
+		t.Fatalf("HasAnswerByTeacher() params = %#v", store.teacherAnswerArg)
+	}
+}
+
+func TestCbtSessionRoomWrappersUseFakeStore(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtSessionTestUUID(50)
+	roomID := cbtSessionTestUUID(51)
+	proctorID := cbtSessionTestUUID(52)
+	store := &fakeCbtSessionStore{
+		roomReadinessRow: db.GetCbtSessionRoomReadinessRow{RoomCount: 2, ParticipantCount: 30, TotalCapacity: 60},
+		roomProctorRows:  []db.ListCbtRoomProctorsRow{{ID: proctorID, ExamRoomID: roomID, Role: "utama"}},
+	}
+	svc := &CbtSession{q: store}
+
+	readiness, err := svc.RoomReadiness(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("RoomReadiness() error = %v", err)
+	}
+	if readiness.RoomCount != 2 || store.roomReadinessID != sessionID {
+		t.Fatalf("RoomReadiness() = %#v arg %v", readiness, store.roomReadinessID)
+	}
+
+	proctors, err := svc.ListRoomProctors(ctx, roomID)
+	if err != nil {
+		t.Fatalf("ListRoomProctors() error = %v", err)
+	}
+	if len(proctors) != 1 || proctors[0].ID != proctorID || store.roomProctorListID != roomID {
+		t.Fatalf("ListRoomProctors() = %#v arg %v", proctors, store.roomProctorListID)
+	}
+
+	store.roomProctorRows = nil
+	proctors, err = svc.ListRoomProctors(ctx, roomID)
+	if err != nil {
+		t.Fatalf("ListRoomProctors() nil rows error = %v", err)
+	}
+	if proctors == nil || len(proctors) != 0 {
+		t.Fatalf("ListRoomProctors() nil rows normalized to %#v, want empty slice", proctors)
 	}
 }
 

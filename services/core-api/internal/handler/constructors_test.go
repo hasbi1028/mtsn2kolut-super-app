@@ -3,6 +3,12 @@ package handler
 import "testing"
 
 func TestHandlerConstructorsReturnHandlers(t *testing.T) {
+	if NewBankSoalReviewerScope(nil) == nil {
+		t.Fatal("NewBankSoalReviewerScope() = nil")
+	}
+	if NewCbtApproval(nil) == nil {
+		t.Fatal("NewCbtApproval() = nil")
+	}
 	if NewExam(nil) == nil {
 		t.Fatal("NewExam() = nil")
 	}
@@ -14,6 +20,9 @@ func TestHandlerConstructorsReturnHandlers(t *testing.T) {
 	}
 	if NewInternalAnalytics(nil) == nil {
 		t.Fatal("NewInternalAnalytics() = nil")
+	}
+	if NewNonTestAssessment(nil) == nil {
+		t.Fatal("NewNonTestAssessment() = nil")
 	}
 	if NewLetter(nil) == nil {
 		t.Fatal("NewLetter() = nil")
@@ -30,7 +39,13 @@ func TestHandlerConstructorsReturnHandlers(t *testing.T) {
 	if NewRBAC(nil) == nil {
 		t.Fatal("NewRBAC() = nil")
 	}
+	if NewRombel(nil) == nil {
+		t.Fatal("NewRombel() = nil")
+	}
 	if NewStudentPortal(nil) == nil {
 		t.Fatal("NewStudentPortal() = nil")
+	}
+	if NewUserWithPool(nil) == nil {
+		t.Fatal("NewUserWithPool() = nil")
 	}
 }

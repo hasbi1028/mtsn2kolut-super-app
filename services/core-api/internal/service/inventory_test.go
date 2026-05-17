@@ -34,10 +34,17 @@ type fakeInventoryStore struct {
 	statsErr      error
 	roomRows      []db.SchoolRoom
 	roomArg       db.ListSchoolRoomsParams
+	roomErr       error
 	roomCreate    db.CreateSchoolRoomParams
+	roomCreateErr error
 	roomUpdate    db.UpdateSchoolRoomParams
+	roomUpdateErr error
 	roomID        pgtype.UUID
+	roomGetErr    error
+	roomDeleteErr error
+	linkedCheckID pgtype.UUID
 	linkedCbtRoom bool
+	linkedErr     error
 }
 
 func (f *fakeInventoryStore) ListInventoryItems(ctx context.Context, arg db.ListInventoryItemsParams) ([]db.InventoryItem, error) {
@@ -122,31 +129,41 @@ func (f *fakeInventoryStore) GetInventoryStats(ctx context.Context) (db.GetInven
 
 func (f *fakeInventoryStore) ListSchoolRooms(ctx context.Context, arg db.ListSchoolRoomsParams) ([]db.SchoolRoom, error) {
 	f.roomArg = arg
-	return f.roomRows, nil
+	return f.roomRows, f.roomErr
 }
 
 func (f *fakeInventoryStore) GetSchoolRoom(ctx context.Context, id pgtype.UUID) (db.SchoolRoom, error) {
 	f.roomID = id
+	if f.roomGetErr != nil {
+		return db.SchoolRoom{}, f.roomGetErr
+	}
 	return db.SchoolRoom{ID: id, Code: "LAB-A", Name: "Lab A", DefaultCapacity: 30, ExamCapacity: 30, Condition: "baik", IsExamEligible: true}, nil
 }
 
 func (f *fakeInventoryStore) CreateSchoolRoom(ctx context.Context, arg db.CreateSchoolRoomParams) (db.SchoolRoom, error) {
 	f.roomCreate = arg
+	if f.roomCreateErr != nil {
+		return db.SchoolRoom{}, f.roomCreateErr
+	}
 	return db.SchoolRoom{ID: inventoryTestUUID(21), Code: arg.Code, Name: arg.Name, DefaultCapacity: arg.DefaultCapacity, ExamCapacity: arg.ExamCapacity, Condition: arg.Condition, IsExamEligible: arg.IsExamEligible}, nil
 }
 
 func (f *fakeInventoryStore) UpdateSchoolRoom(ctx context.Context, arg db.UpdateSchoolRoomParams) (db.SchoolRoom, error) {
 	f.roomUpdate = arg
+	if f.roomUpdateErr != nil {
+		return db.SchoolRoom{}, f.roomUpdateErr
+	}
 	return db.SchoolRoom{ID: arg.ID, Code: arg.Code, Name: arg.Name, DefaultCapacity: arg.DefaultCapacity, ExamCapacity: arg.ExamCapacity, Condition: arg.Condition, IsExamEligible: arg.IsExamEligible}, nil
 }
 
 func (f *fakeInventoryStore) DeleteSchoolRoom(ctx context.Context, id pgtype.UUID) error {
 	f.roomID = id
-	return nil
+	return f.roomDeleteErr
 }
 
 func (f *fakeInventoryStore) HasSchoolRoomCbtRooms(ctx context.Context, schoolRoomID pgtype.UUID) (bool, error) {
-	return f.linkedCbtRoom, nil
+	f.linkedCheckID = schoolRoomID
+	return f.linkedCbtRoom, f.linkedErr
 }
 
 func inventoryTestUUID(seed byte) pgtype.UUID {
@@ -658,5 +675,137 @@ func TestInventoryStatsAndEventsDelegateToStore(t *testing.T) {
 	}
 	if store.eventItemID != itemID || len(events) != 1 || events[0].Action != "create" {
 		t.Fatalf("ListItemEvents() = %+v, store item id = %v; want delegated event rows", events, store.eventItemID)
+	}
+}
+
+func TestInventorySchoolRoomWrappersDelegateAndNormalize(t *testing.T) {
+	roomID := inventoryTestUUID(23)
+	store := &fakeInventoryStore{
+		roomRows: []db.SchoolRoom{{ID: roomID, Code: "LAB-1", Name: "Lab Komputer"}},
+	}
+	svc := &Inventory{q: store}
+
+	rooms, err := svc.ListSchoolRooms(context.Background(), "  lab  ", "  laboratorium  ", "  baik  ", " YES ")
+	if err != nil {
+		t.Fatalf("ListSchoolRooms() error = %v", err)
+	}
+	if len(rooms) != 1 || rooms[0].ID != roomID {
+		t.Fatalf("ListSchoolRooms() = %+v, want store rows", rooms)
+	}
+	if store.roomArg.Search != "lab" || store.roomArg.RoomType != "laboratorium" || store.roomArg.Condition != "baik" || store.roomArg.ExamEligible != "true" {
+		t.Fatalf("ListSchoolRooms() arg = %+v, want trimmed filters and normalized exam eligibility", store.roomArg)
+	}
+
+	room, err := svc.GetSchoolRoom(context.Background(), roomID)
+	if err != nil {
+		t.Fatalf("GetSchoolRoom() error = %v", err)
+	}
+	if store.roomID != roomID || room.ID != roomID || room.Code != "LAB-A" {
+		t.Fatalf("GetSchoolRoom() = %+v roomID=%v, want delegated lookup", room, store.roomID)
+	}
+
+	created, err := svc.CreateSchoolRoom(context.Background(), db.CreateSchoolRoomParams{
+		Code:            " R-1 ",
+		Name:            " Ruang 1 ",
+		Building:        " Gedung B ",
+		Floor:           " 1 ",
+		RoomType:        " ",
+		LocationNote:    " dekat lab ",
+		Condition:       " ",
+		DefaultCapacity: 0,
+		ExamCapacity:    0,
+		IsExamEligible:  true,
+		Notes:           " siap ",
+	})
+	if err != nil {
+		t.Fatalf("CreateSchoolRoom() error = %v", err)
+	}
+	if created.Code != "R-1" || created.Name != "Ruang 1" || !created.IsExamEligible {
+		t.Fatalf("CreateSchoolRoom() = %+v, want normalized store result", created)
+	}
+	if store.roomCreate.Code != "R-1" || store.roomCreate.Name != "Ruang 1" || store.roomCreate.Building != "Gedung B" || store.roomCreate.Floor != "1" || store.roomCreate.RoomType != "kelas" || store.roomCreate.LocationNote != "dekat lab" || store.roomCreate.Condition != "baik" || store.roomCreate.DefaultCapacity != 30 || store.roomCreate.ExamCapacity != 30 || store.roomCreate.Notes != "siap" {
+		t.Fatalf("CreateSchoolRoom() arg = %+v, want normalized create payload", store.roomCreate)
+	}
+
+	updated, err := svc.UpdateSchoolRoom(context.Background(), db.UpdateSchoolRoomParams{
+		ID:              roomID,
+		Code:            " LAB-2 ",
+		Name:            " Lab 2 ",
+		Building:        " Gedung C ",
+		Floor:           " 2 ",
+		RoomType:        "laboratorium",
+		LocationNote:    " selatan ",
+		Condition:       "perlu-perawatan",
+		DefaultCapacity: 24,
+		ExamCapacity:    12,
+		IsExamEligible:  true,
+		Notes:           " perbaikan minor ",
+	})
+	if err != nil {
+		t.Fatalf("UpdateSchoolRoom() error = %v", err)
+	}
+	if updated.ID != roomID || updated.Code != "LAB-2" || updated.Name != "Lab 2" || updated.Condition != "perlu-perawatan" {
+		t.Fatalf("UpdateSchoolRoom() = %+v, want normalized store result", updated)
+	}
+	if store.roomUpdate.ID != roomID || store.roomUpdate.Code != "LAB-2" || store.roomUpdate.Name != "Lab 2" || store.roomUpdate.Building != "Gedung C" || store.roomUpdate.Floor != "2" || store.roomUpdate.LocationNote != "selatan" || store.roomUpdate.Notes != "perbaikan minor" {
+		t.Fatalf("UpdateSchoolRoom() arg = %+v, want normalized update payload", store.roomUpdate)
+	}
+}
+
+func TestInventorySchoolRoomWrappersPropagateStoreErrors(t *testing.T) {
+	roomID := inventoryTestUUID(24)
+	expectedErr := errors.New("school room store failed")
+
+	store := &fakeInventoryStore{roomErr: expectedErr}
+	svc := &Inventory{q: store}
+	if _, err := svc.ListSchoolRooms(context.Background(), "", "", "", ""); !errors.Is(err, expectedErr) {
+		t.Fatalf("ListSchoolRooms(error) = %v, want %v", err, expectedErr)
+	}
+
+	store = &fakeInventoryStore{roomGetErr: expectedErr}
+	svc = &Inventory{q: store}
+	if _, err := svc.GetSchoolRoom(context.Background(), roomID); !errors.Is(err, expectedErr) {
+		t.Fatalf("GetSchoolRoom(error) = %v, want %v", err, expectedErr)
+	}
+
+	store = &fakeInventoryStore{roomCreateErr: expectedErr}
+	svc = &Inventory{q: store}
+	if _, err := svc.CreateSchoolRoom(context.Background(), db.CreateSchoolRoomParams{Code: "R-1", Name: "Ruang 1", DefaultCapacity: 1, ExamCapacity: 1}); !errors.Is(err, expectedErr) {
+		t.Fatalf("CreateSchoolRoom(error) = %v, want %v", err, expectedErr)
+	}
+
+	store = &fakeInventoryStore{roomUpdateErr: expectedErr}
+	svc = &Inventory{q: store}
+	if _, err := svc.UpdateSchoolRoom(context.Background(), db.UpdateSchoolRoomParams{ID: roomID, Code: "R-1", Name: "Ruang 1", DefaultCapacity: 1, ExamCapacity: 1}); !errors.Is(err, expectedErr) {
+		t.Fatalf("UpdateSchoolRoom(error) = %v, want %v", err, expectedErr)
+	}
+
+	store = &fakeInventoryStore{linkedErr: expectedErr}
+	svc = &Inventory{q: store}
+	if err := svc.DeleteSchoolRoom(context.Background(), roomID); !errors.Is(err, expectedErr) {
+		t.Fatalf("DeleteSchoolRoom(link check error) = %v, want %v", err, expectedErr)
+	}
+
+	store = &fakeInventoryStore{roomDeleteErr: expectedErr}
+	svc = &Inventory{q: store}
+	if err := svc.DeleteSchoolRoom(context.Background(), roomID); !errors.Is(err, expectedErr) {
+		t.Fatalf("DeleteSchoolRoom(delete error) = %v, want %v", err, expectedErr)
+	}
+	if store.roomID != roomID {
+		t.Fatalf("DeleteSchoolRoom() roomID = %v, want %v", store.roomID, roomID)
+	}
+}
+
+func TestInventoryDeleteSchoolRoomRejectsLinkedCbtRooms(t *testing.T) {
+	roomID := inventoryTestUUID(25)
+	store := &fakeInventoryStore{linkedCbtRoom: true}
+	svc := &Inventory{q: store}
+
+	err := svc.DeleteSchoolRoom(context.Background(), roomID)
+	if err == nil || !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "ruangan fisik masih terhubung") {
+		t.Fatalf("DeleteSchoolRoom(linked) = %v, want conflict", err)
+	}
+	if store.linkedCheckID != roomID {
+		t.Fatalf("HasSchoolRoomCbtRooms() roomID = %v, want %v", store.linkedCheckID, roomID)
 	}
 }

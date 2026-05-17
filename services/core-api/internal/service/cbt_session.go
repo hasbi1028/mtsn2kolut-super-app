@@ -1233,6 +1233,14 @@ func (s *CbtSession) SetSuspiciousFlag(ctx context.Context, participantID pgtype
 }
 
 func (s *CbtSession) ForceSubmitParticipant(ctx context.Context, sessionID, participantID pgtype.UUID, actor string) (db.ForceSubmitParticipantRow, error) {
+	if s.pool == nil {
+		q, ok := s.q.(cbtParticipantForceSubmitStore)
+		if !ok {
+			return db.ForceSubmitParticipantRow{}, fmt.Errorf("cbt participant force submit store unavailable")
+		}
+		return forceSubmitParticipant(ctx, q, sessionID, participantID, actor)
+	}
+
 	conn, err := s.pool.Acquire(ctx)
 	if err != nil {
 		return db.ForceSubmitParticipantRow{}, err

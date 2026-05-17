@@ -610,6 +610,7 @@ type fakeCbtSessionStore struct {
 	roomSetupID            pgtype.UUID
 	schoolRoomRow          db.SchoolRoom
 	roomProctorRows        []db.ListCbtRoomProctorsRow
+	roomProctorListID      pgtype.UUID
 	roomDashboardRow       db.GetCbtRoomProctorDashboardRow
 	roomHandoverRow        db.GetCbtRoomHandoverRow
 	roomHandoverID         pgtype.UUID
@@ -646,6 +647,24 @@ type fakeCbtSessionStore struct {
 	proctorRows            []db.GetSessionProctoringStatusRow
 	proctorStatusArg       db.GetSessionProctoringStatusParams
 	proctorErr             error
+
+	participantEventsArg      db.ListSessionParticipantEventsParams
+	participantEventRows      []db.ListSessionParticipantEventsRow
+	participantEventErr       error
+	insertedEvents            []db.InsertParticipantEventParams
+	insertEventErr            error
+	resetParticipantID        pgtype.UUID
+	resetParticipantErr       error
+	unlockParticipantID       pgtype.UUID
+	unlockParticipantRow      db.UnlockParticipantAntiCheatRow
+	unlockParticipantErr      error
+	participantCorrectnessID  pgtype.UUID
+	participantCorrectnessErr error
+	forceSubmitArg            db.ForceSubmitParticipantParams
+	forceSubmitRow            db.ForceSubmitParticipantRow
+	forceSubmitErr            error
+	forceSubmitCalls          []string
+
 	flagArg                db.SetParticipantSuspiciousFlagParams
 	gradeArg               db.GradeStudentEssayParams
 	ungradedRows           []db.ListUngradedEssaysRow
@@ -874,6 +893,7 @@ func (f *fakeCbtSessionStore) ListCbtProctorRooms(ctx context.Context, arg db.Li
 }
 
 func (f *fakeCbtSessionStore) ListCbtRoomProctors(ctx context.Context, examRoomID pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error) {
+	f.roomProctorListID = examRoomID
 	return f.roomProctorRows, nil
 }
 
@@ -932,6 +952,38 @@ func (f *fakeCbtSessionStore) ListParticipantsByRoom(ctx context.Context, sessio
 func (f *fakeCbtSessionStore) GetSessionProctoringStatus(ctx context.Context, arg db.GetSessionProctoringStatusParams) ([]db.GetSessionProctoringStatusRow, error) {
 	f.proctorStatusArg = arg
 	return f.proctorRows, f.proctorErr
+}
+
+func (f *fakeCbtSessionStore) ListSessionParticipantEvents(ctx context.Context, arg db.ListSessionParticipantEventsParams) ([]db.ListSessionParticipantEventsRow, error) {
+	f.participantEventsArg = arg
+	return f.participantEventRows, f.participantEventErr
+}
+
+func (f *fakeCbtSessionStore) InsertParticipantEvent(ctx context.Context, arg db.InsertParticipantEventParams) error {
+	f.insertedEvents = append(f.insertedEvents, arg)
+	return f.insertEventErr
+}
+
+func (f *fakeCbtSessionStore) ResetParticipantRuntimeAccess(ctx context.Context, id pgtype.UUID) error {
+	f.resetParticipantID = id
+	return f.resetParticipantErr
+}
+
+func (f *fakeCbtSessionStore) UnlockParticipantAntiCheat(ctx context.Context, id pgtype.UUID) (db.UnlockParticipantAntiCheatRow, error) {
+	f.unlockParticipantID = id
+	return f.unlockParticipantRow, f.unlockParticipantErr
+}
+
+func (f *fakeCbtSessionStore) UpdateParticipantAnswerCorrectness(ctx context.Context, participantID pgtype.UUID) error {
+	f.forceSubmitCalls = append(f.forceSubmitCalls, "update_correctness")
+	f.participantCorrectnessID = participantID
+	return f.participantCorrectnessErr
+}
+
+func (f *fakeCbtSessionStore) ForceSubmitParticipant(ctx context.Context, arg db.ForceSubmitParticipantParams) (db.ForceSubmitParticipantRow, error) {
+	f.forceSubmitCalls = append(f.forceSubmitCalls, "force_submit")
+	f.forceSubmitArg = arg
+	return f.forceSubmitRow, f.forceSubmitErr
 }
 
 func (f *fakeCbtSessionStore) SetParticipantSuspiciousFlag(ctx context.Context, arg db.SetParticipantSuspiciousFlagParams) error {
