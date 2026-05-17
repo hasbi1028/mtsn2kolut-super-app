@@ -156,6 +156,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	type BulkWorkflowAction = 'mark_reviewed' | 'request_revision' | 'reject' | 'approve' | 'publish' | 'archive';
 	type ComposerQuestionType = 'multiple_choice' | 'multiple_answer' | 'true_false' | 'agree_disagree' | 'matching' | 'ordering' | 'short_answer' | 'essay';
 	type ComposerSaveIntent = 'draft' | 'review';
+	type ComposerAction = ComposerSaveIntent | 'draft_next' | 'review_next';
 	type Question = {
 		id: string;
 		event_id?: string | null;
@@ -436,7 +437,8 @@ type TimelineItem = {
 	let questionVersions = $state<QuestionVersion[]>([]);
 	let questionVersionsLoading = $state(false);
 	let composerBusy = $state(false);
-	let composerAction = $state<ComposerSaveIntent | ''>('');
+	let composerAction = $state<ComposerAction | ''>('');
+	let keepMetadataForNext = $state(true);
 	let saveInFlightKey = '';
 	let draftStatus = $state('');
 	let draftSavedAt = $state<string | null>(null);
@@ -586,6 +588,17 @@ type TimelineItem = {
 		{ label: 'Terbit', value: publishedCount, tone: 'emerald', helper: 'siap dipakai paket', workflowStatus: '', status: 'published', active: !filterWorkflow && filterStatus === 'published' },
 	]);
 	let selectedSubject = $derived(subjects.find((subject) => subject.id === fSubjectId) ?? null);
+	let composerStickyMetadataLabel = $derived.by(() => {
+		const parts = [
+			selectedSubject ? `${selectedSubject.name}${selectedSubject.code ? ` (${selectedSubject.code})` : ''}` : '',
+			fTargetLevel ? `Kelas ${fTargetLevel}` : '',
+			DIFFICULTY_LABEL[fDifficulty] ?? fDifficulty,
+			questionTypeLabel(fQuestionType),
+			fMaterialTopic ? `Materi: ${fMaterialTopic}` : '',
+			specialEventQuestionMode && selectedEventTitle ? selectedEventTitle : '',
+		].filter(Boolean);
+		return parts.length > 0 ? parts.join(' · ') : 'Belum ada metadata aktif';
+	});
 	let isDetailRoute = $derived(Boolean(detailRouteId));
 	let composerModeLabel = $derived(fAuthoringMode === 'advance' ? 'Mode Lengkap' : 'Mode pemula');
 	let composerScopeLabel = $derived(specialEventQuestionMode ? `Khusus ${selectedEventTitle}` : 'Bank Soal umum');
@@ -970,6 +983,64 @@ type TimelineItem = {
 		draftStatus = statusMessage;
 		draftSavedAt = meta.savedAt ?? null;
 		return true;
+	}
+
+	function resetQuestionBodyForNext(meta: ComposerMetadataMemory) {
+		editingId = null;
+		editingEventId = '';
+		detailReadOnly = false;
+		detailQuestion = null;
+		questionVersions = [];
+		focusedEditor = null;
+		showInspector = false;
+		composerMobilePanel = 'write';
+		composerMobileStepId = 'question';
+		fStem = '';
+		fStimulus = '';
+		fRubric = '';
+		fExplanation = '';
+		applyComposerMetadataMemory(meta, 'Metadata dipertahankan untuk soal berikutnya');
+		fOptions = normalizeOptionCount([], fQuestionType);
+		fMatchingPairs = normalizeMatchingPairs([], fQuestionType);
+		fMatchingDistractors = normalizeMatchingDistractors([], fQuestionType);
+		fAnswerKey = defaultAnswerKeyForQuestionType(fQuestionType);
+		fWorkflowStatus = 'draft';
+		draftSavedAt = null;
+		lastDraftSig = '';
+	}
+
+	function resetComposerMetadataMemory() {
+		if (typeof localStorage !== 'undefined') {
+			try {
+				localStorage.removeItem(LAST_METADATA_KEY(selectedEventId));
+				localStorage.removeItem(LAST_METADATA_KEY(''));
+			} catch {
+				/* ignore storage errors */
+			}
+		}
+		fSubjectId = '';
+		fQuestionType = 'multiple_choice';
+		fAuthoringMode = 'beginner';
+		fWeight = 1;
+		fDifficulty = 'medium';
+		fIsRtl = false;
+		fGradeLevel = 7;
+		fTargetLevel = '';
+		fAcademicPhase = '';
+		fCPRef = '';
+		fTPRef = '';
+		fKDRef = '';
+		fIndicatorRef = '';
+		fMaterialTopic = '';
+		fCognitiveLevel = '';
+		fHotsFlag = false;
+		fOptions = normalizeOptionCount([], fQuestionType);
+		fMatchingPairs = normalizeMatchingPairs([], fQuestionType);
+		fMatchingDistractors = normalizeMatchingDistractors([], fQuestionType);
+		fAnswerKey = defaultAnswerKeyForQuestionType(fQuestionType);
+		draftStatus = 'Metadata direset. Isi identitas baru sebelum membuat soal berikutnya.';
+		draftSavedAt = null;
+		toast.success('Metadata komposer direset');
 	}
 
 	function rememberLastComposerMetadata() {
@@ -2409,7 +2480,7 @@ type TimelineItem = {
 		};
 	}
 
-	async function saveQuestion(intent: ComposerSaveIntent = 'draft') {
+	async function saveQuestion(intent: ComposerSaveIntent = 'draft', createNext = false) {
 		const isReview = intent === 'review';
 		if (isReview && !canSubmitReview) {
 			toast.warning(submitMetadataIssues[0] ?? validationIssues[0] ?? 'Lengkapi soal sebelum diajukan verifikasi');
@@ -2426,16 +2497,17 @@ type TimelineItem = {
 				return;
 			}
 		}
-		const saveKey = `${editingId ?? activeDraftKey}:${intent}:${draftSignature}`;
+		const saveKey = `${editingId ?? activeDraftKey}:${intent}:${createNext ? 'next' : 'close'}:${draftSignature}`;
 		if (saveInFlightKey === saveKey) {
 			toast.info('Simpan soal masih diproses. Mohon tunggu sebentar.');
 			return;
 		}
 		saveInFlightKey = saveKey;
 		composerBusy = true;
-		composerAction = intent;
+		composerAction = createNext ? (intent === 'review' ? 'review_next' : 'draft_next') : intent;
 		const payload = buildQuestionSavePayload(false);
 		const offlinePayload = buildQuestionSavePayload(isReview);
+		const metadataForNext = buildComposerMetadataMemory();
 		let responseReceived = false;
 		let responseStatus: number | undefined;
 		try {
@@ -2473,11 +2545,21 @@ type TimelineItem = {
 				}).then((response) => readClientJson<unknown>(response));
 			}
 
-			rememberLastComposerMetadata();
+			if (keepMetadataForNext) rememberLastComposerMetadata();
 			await clearDraft();
+			await refreshOverview(1);
+			if (createNext) {
+				if (keepMetadataForNext) {
+					resetQuestionBodyForNext(metadataForNext);
+					toast.success(isReview ? 'Soal dikirim ke verifikasi. Metadata siap untuk soal berikutnya.' : 'Konsep soal dibuat. Metadata siap untuk soal berikutnya.');
+				} else {
+					resetForm();
+					toast.success(isReview ? 'Soal dikirim ke verifikasi. Form berikutnya dikosongkan.' : 'Konsep soal dibuat. Form berikutnya dikosongkan.');
+				}
+				return;
+			}
 			toast.success(isReview ? 'Soal dikirim ke verifikasi' : editingId ? 'Konsep soal berhasil diperbarui' : 'Konsep soal berhasil dibuat');
 			closeComposer();
-			await refreshOverview(1);
 		} catch (e) {
 			if (shouldQueueBankSoalQuestionSave({ isOnline: browserOnline(), responseReceived, responseStatus })) {
 				await queueQuestionSave(offlinePayload, intent, false);
@@ -4502,15 +4584,34 @@ type TimelineItem = {
 				</div>
 			</div>
 
-				<div class="flex shrink-0 flex-col gap-2 border-t border-success/20 bg-card px-4 py-2.5 md:flex-row md:items-center md:justify-between md:px-6">
-					<div class="min-w-0 text-xs text-muted-foreground">
-						<span class="font-semibold text-success">{draftStatusLabel()}</span>
-						<span class="ml-2 text-muted-foreground">· {draftIssues.length === 0 ? 'Konsep bisa disimpan' : draftIssues[0]} · Verifikasi {validationIssues.length === 0 ? 'siap' : `${validationIssues.length} wajib belum lengkap`} · Ctrl+S</span>
-						{#if firstComposerIssue}
-							<button type="button" class="ml-2 text-destructive underline decoration-red-200 underline-offset-2" onclick={scrollToFirstComposerIssue}>
-								Lengkapi: {firstComposerIssue.message}
-							</button>
-						{/if}
+				<div class="flex shrink-0 flex-col gap-3 border-t border-success/20 bg-card px-4 py-2.5 md:px-6">
+					<div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+						<div class="min-w-0 text-xs text-muted-foreground">
+							<span class="font-semibold text-success">{draftStatusLabel()}</span>
+							<span class="ml-2 text-muted-foreground">· {draftIssues.length === 0 ? 'Konsep bisa disimpan' : draftIssues[0]} · Verifikasi {validationIssues.length === 0 ? 'siap' : `${validationIssues.length} wajib belum lengkap`} · Ctrl+S</span>
+							{#if firstComposerIssue}
+								<button type="button" class="ml-2 text-destructive underline decoration-red-200 underline-offset-2" onclick={scrollToFirstComposerIssue}>
+									Lengkapi: {firstComposerIssue.message}
+								</button>
+							{/if}
+						</div>
+						<div class="min-w-0 rounded-lg border border-success/20 bg-success/5 px-3 py-2 text-xs text-muted-foreground lg:max-w-[520px]">
+							<label class="flex items-start gap-2 font-semibold text-foreground">
+								<input type="checkbox" bind:checked={keepMetadataForNext} class="mt-0.5 h-4 w-4 rounded border-border accent-emerald-600" />
+								<span>
+									Mode Buat Beruntun
+									<span class="block font-normal text-muted-foreground">{keepMetadataForNext ? `Metadata dipertahankan: ${composerStickyMetadataLabel}` : 'Metadata tidak dipertahankan setelah simpan berikutnya.'}</span>
+								</span>
+							</label>
+							<div class="mt-1 flex flex-wrap gap-2">
+								<button type="button" class="text-[11px] font-semibold text-success underline underline-offset-2 disabled:opacity-50" disabled={!fSubjectId} onclick={() => { rememberLastComposerMetadata(); toast.success('Metadata saat ini disimpan untuk soal berikutnya'); }}>
+									Gunakan metadata ini
+								</button>
+								<button type="button" class="text-[11px] font-semibold text-destructive underline underline-offset-2" onclick={resetComposerMetadataMemory}>
+									Reset Metadata
+								</button>
+							</div>
+						</div>
 					</div>
 				<div class="flex shrink-0 flex-wrap justify-end gap-2">
 					<Button
@@ -4531,6 +4632,16 @@ type TimelineItem = {
 						Simpan Konsep
 					</LoadingButton>
 					<LoadingButton
+						onclick={() => void saveQuestion('draft', true)}
+						disabled={detailReadOnly || !canSaveDraft}
+						loading={composerAction === 'draft_next'}
+						loadingLabel="Menyimpan..."
+						variant="outline"
+						class="h-8 border-success/40 text-xs text-success disabled:opacity-50"
+					>
+						Simpan & Buat Berikutnya
+					</LoadingButton>
+					<LoadingButton
 						onclick={() => void saveQuestion('review')}
 						disabled={detailReadOnly || !canSubmitReview}
 						loading={composerAction === 'review'}
@@ -4538,6 +4649,15 @@ type TimelineItem = {
 						class="h-8 bg-success text-xs text-background hover:bg-success disabled:opacity-50"
 					>
 						Kirim Verifikasi
+					</LoadingButton>
+					<LoadingButton
+						onclick={() => void saveQuestion('review', true)}
+						disabled={detailReadOnly || !canSubmitReview}
+						loading={composerAction === 'review_next'}
+						loadingLabel="Mengajukan..."
+						class="h-8 bg-emerald-700 text-xs text-background hover:bg-emerald-700/90 disabled:opacity-50"
+					>
+						Kirim Verifikasi & Buat Berikutnya
 					</LoadingButton>
 				</div>
 			</div>
