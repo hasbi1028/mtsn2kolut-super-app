@@ -73,6 +73,19 @@ func (s *CbtQuestion) createWithAudit(ctx context.Context, input SaveCbtQuestion
 			logging.Warn(ctx, "cbt_question_create_reference_invalid", append(questionInputLogAttrs(input, actor), slog.String("error", err.Error()))...)
 			return db.CbtQuestion{}, err
 		}
+		if strings.TrimSpace(params.Code) == "" {
+			code, err := store.GenerateCbtQuestionAcademicCode(ctx, db.GenerateCbtQuestionAcademicCodeParams{
+				SubjectID:    params.SubjectID,
+				TargetLevel:  params.TargetLevel.String,
+				QuestionType: params.QuestionType,
+			})
+			if err != nil {
+				logging.Error(ctx, "cbt_question_create_code_generation_failed", err, questionInputLogAttrs(input, actor)...)
+				return db.CbtQuestion{}, err
+			}
+			params.Code = strings.TrimSpace(code)
+			input.Code = params.Code
+		}
 		if err := s.validateMediaAssetIDs(ctx, store, input.MediaAssetIDs, pgtype.UUID{}, actor); err != nil {
 			logging.Warn(ctx, "cbt_question_create_validation_failed", append(questionInputLogAttrs(input, actor), slog.String("validation_field", "media_asset_ids"), slog.String("error", err.Error()))...)
 			return db.CbtQuestion{}, err
@@ -597,7 +610,8 @@ func buildCreateQuestionParams(input SaveCbtQuestionInput) (db.CreateCbtQuestion
 		return db.CreateCbtQuestionParams{}, err
 	}
 	if normalized.Code == "" {
-		normalized.Code = generateCbtQuestionCode()
+		// The service layer fills an academic display code after reference validation,
+		// so code generation can use the canonical subject code from the database.
 	}
 	optionsJSON, err := EncodeQuestionOptions(normalized.Options)
 	if err != nil {

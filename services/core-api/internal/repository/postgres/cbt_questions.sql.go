@@ -644,6 +644,49 @@ func (q *Queries) FindRecentCbtQuestionDraftDuplicate(ctx context.Context, arg F
 	return i, err
 }
 
+const generateCbtQuestionAcademicCode = `-- name: GenerateCbtQuestionAcademicCode :one
+WITH meta AS (
+  SELECT
+    UPPER(COALESCE(NULLIF(regexp_replace(btrim(s.code), '[^A-Za-z0-9]+', '', 'g'), ''), 'MAPEL')) AS subject_code,
+    UPPER(COALESCE(NULLIF(regexp_replace(btrim($1::text), '[^A-Za-z0-9]+', '', 'g'), ''), 'NA')) AS target_level,
+    CASE $2::text
+      WHEN 'multiple_choice' THEN 'PG'
+      WHEN 'multiple_answer' THEN 'PGK'
+      WHEN 'true_false' THEN 'TF'
+      WHEN 'agree_disagree' THEN 'BS'
+      WHEN 'matching' THEN 'JD'
+      WHEN 'ordering' THEN 'UR'
+      WHEN 'short_answer' THEN 'IS'
+      WHEN 'essay' THEN 'ES'
+      ELSE 'SOAL'
+    END AS type_code
+  FROM subjects s
+  WHERE s.id = $3::uuid
+), prefix AS (
+  SELECT subject_code || '-' || target_level || '-' || type_code AS value
+  FROM meta
+), next_number AS (
+  SELECT (COALESCE(MAX(substring(q.code from '[0-9]{4}$')::int), 0) + 1)::int AS value
+  FROM cbt_questions q, prefix p
+  WHERE q.code ~ ('^' || p.value || '-[0-9]{4}$')
+)
+SELECT (p.value || '-' || LPAD(n.value::text, 4, '0'))::text AS code
+FROM prefix p, next_number n
+`
+
+type GenerateCbtQuestionAcademicCodeParams struct {
+	TargetLevel  string      `json:"target_level"`
+	QuestionType string      `json:"question_type"`
+	SubjectID    pgtype.UUID `json:"subject_id"`
+}
+
+func (q *Queries) GenerateCbtQuestionAcademicCode(ctx context.Context, arg GenerateCbtQuestionAcademicCodeParams) (string, error) {
+	row := q.db.QueryRow(ctx, generateCbtQuestionAcademicCode, arg.TargetLevel, arg.QuestionType, arg.SubjectID)
+	var code string
+	err := row.Scan(&code)
+	return code, err
+}
+
 const getCbtQuestion = `-- name: GetCbtQuestion :one
 SELECT q.id, q.event_id, q.subject_id, q.code, q.question_text, q.question_type, q.options,
        q.option_a, q.option_b, q.option_c, q.option_d, q.option_e,

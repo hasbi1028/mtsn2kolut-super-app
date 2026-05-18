@@ -48,6 +48,7 @@ func newBankSoalHTMLPolicy() *bluemonday.Policy {
 type cbtQuestionStore interface {
 	CbtQuestionSubjectExists(ctx context.Context, id pgtype.UUID) (bool, error)
 	CbtQuestionEventExists(ctx context.Context, id pgtype.UUID) (bool, error)
+	GenerateCbtQuestionAcademicCode(ctx context.Context, arg db.GenerateCbtQuestionAcademicCodeParams) (string, error)
 	ListCbtQuestions(ctx context.Context, arg db.ListCbtQuestionsParams) ([]db.ListCbtQuestionsRow, error)
 	ListCbtQuestionsFiltered(ctx context.Context, arg db.ListCbtQuestionsFilteredParams) ([]db.ListCbtQuestionsFilteredRow, error)
 	CountCbtQuestionsFiltered(ctx context.Context, arg db.CountCbtQuestionsFilteredParams) (int64, error)

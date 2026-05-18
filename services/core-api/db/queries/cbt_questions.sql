@@ -4,6 +4,35 @@ SELECT EXISTS(SELECT 1 FROM subjects WHERE id = $1)::bool;
 -- name: CbtQuestionEventExists :one
 SELECT EXISTS(SELECT 1 FROM cbt_exam_events WHERE id = $1)::bool;
 
+-- name: GenerateCbtQuestionAcademicCode :one
+WITH meta AS (
+  SELECT
+    UPPER(COALESCE(NULLIF(regexp_replace(btrim(s.code), '[^A-Za-z0-9]+', '', 'g'), ''), 'MAPEL')) AS subject_code,
+    UPPER(COALESCE(NULLIF(regexp_replace(btrim(sqlc.arg(target_level)::text), '[^A-Za-z0-9]+', '', 'g'), ''), 'NA')) AS target_level,
+    CASE sqlc.arg(question_type)::text
+      WHEN 'multiple_choice' THEN 'PG'
+      WHEN 'multiple_answer' THEN 'PGK'
+      WHEN 'true_false' THEN 'TF'
+      WHEN 'agree_disagree' THEN 'BS'
+      WHEN 'matching' THEN 'JD'
+      WHEN 'ordering' THEN 'UR'
+      WHEN 'short_answer' THEN 'IS'
+      WHEN 'essay' THEN 'ES'
+      ELSE 'SOAL'
+    END AS type_code
+  FROM subjects s
+  WHERE s.id = sqlc.arg(subject_id)::uuid
+), prefix AS (
+  SELECT subject_code || '-' || target_level || '-' || type_code AS value
+  FROM meta
+), next_number AS (
+  SELECT (COALESCE(MAX(substring(q.code from '[0-9]{4}$')::int), 0) + 1)::int AS value
+  FROM cbt_questions q, prefix p
+  WHERE q.code ~ ('^' || p.value || '-[0-9]{4}$')
+)
+SELECT (p.value || '-' || LPAD(n.value::text, 4, '0'))::text AS code
+FROM prefix p, next_number n;
+
 -- name: ListCbtQuestions :many
 SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject_code,
        q.code, q.question_text, q.question_type, q.options,

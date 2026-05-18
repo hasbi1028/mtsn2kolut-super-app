@@ -1,7 +1,7 @@
 package service
 
 import (
-	"strings"
+	"context"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -21,10 +21,11 @@ func validCbtQuestionCodeTestInput() SaveCbtQuestionInput {
 		WorkflowStatus: "draft",
 		TargetLevel:    "VII",
 		AuthorUsername: "teacher",
+		Actor:          CbtQuestionActor{Username: "teacher", Roles: []string{"guru"}},
 	}
 }
 
-func TestBuildCreateQuestionParamsGeneratesCodeWhenComposerOmitsCode(t *testing.T) {
+func TestBuildCreateQuestionParamsLeavesCodeBlankForStoreAcademicCode(t *testing.T) {
 	input := validCbtQuestionCodeTestInput()
 	input.Code = ""
 
@@ -32,11 +33,23 @@ func TestBuildCreateQuestionParamsGeneratesCodeWhenComposerOmitsCode(t *testing.
 	if err != nil {
 		t.Fatalf("buildCreateQuestionParams() error = %v", err)
 	}
-	if !strings.HasPrefix(params.Code, "SOAL-") {
-		t.Fatalf("generated code = %q, want SOAL-*", params.Code)
+	if params.Code != "" {
+		t.Fatalf("buildCreateQuestionParams code = %q, want blank before store academic code generation", params.Code)
 	}
-	if strings.TrimSpace(params.Code) == "" {
-		t.Fatal("generated code must not be blank")
+}
+
+func TestCreateQuestionGeneratesAcademicCodeWhenComposerOmitsCode(t *testing.T) {
+	input := validCbtQuestionCodeTestInput()
+	input.Code = ""
+	store := &fakeQuestionStore{generatedCode: "MTK-VII-PG-0007"}
+	svc := &CbtQuestion{q: store}
+
+	_, err := svc.Create(context.Background(), input)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if store.createParams.Code != "MTK-VII-PG-0007" {
+		t.Fatalf("created code = %q, want academic code", store.createParams.Code)
 	}
 }
 

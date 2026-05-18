@@ -31,6 +31,7 @@ type fakeQuestionStore struct {
 	eventMissing   bool
 
 	createParams  db.CreateCbtQuestionParams
+	generatedCode string
 	createCalls   int
 	createRow     db.CbtQuestion
 	createHistory []db.CreateCbtQuestionParams
@@ -75,6 +76,13 @@ func (f *fakeQuestionStore) CbtQuestionSubjectExists(ctx context.Context, id pgt
 
 func (f *fakeQuestionStore) CbtQuestionEventExists(ctx context.Context, id pgtype.UUID) (bool, error) {
 	return !f.eventMissing, nil
+}
+
+func (f *fakeQuestionStore) GenerateCbtQuestionAcademicCode(ctx context.Context, arg db.GenerateCbtQuestionAcademicCodeParams) (string, error) {
+	if strings.TrimSpace(f.generatedCode) != "" {
+		return f.generatedCode, nil
+	}
+	return "MTK-VII-PG-0001", nil
 }
 
 func (f *fakeQuestionStore) ListCbtQuestions(ctx context.Context, arg db.ListCbtQuestionsParams) ([]db.ListCbtQuestionsRow, error) {
