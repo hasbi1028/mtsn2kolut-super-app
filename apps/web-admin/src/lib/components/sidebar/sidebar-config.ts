@@ -75,6 +75,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 			{ href: '/bank-soal/daftar', label: 'Kelola Soal', icon: 'book-open', roles: ['admin', 'guru'], permissions: ['bank_soal.read'] },
 
 			{ href: '/bank-soal/verifikasi', label: 'Review & Terbitkan', icon: 'clipboard', roles: ['admin'], permissions: ['bank_soal.review', 'bank_soal.publish'] },
+			{ href: '/bank-soal/laporan', label: 'Laporan', icon: 'activity', roles: ['admin', 'guru'], permissions: ['bank_soal.read', 'bank_soal.analytics', 'bank_soal.review'] },
 			{ href: '/bank-soal/analisis-butir', label: 'Mutu Soal', icon: 'activity', roles: ['admin', 'guru'], permissions: ['bank_soal.analytics'] },
 			{ href: '/bank-soal/pengaturan', label: 'Pengaturan', icon: 'settings', roles: ['admin'], permissions: ['bank_soal.settings'] }
 		]
