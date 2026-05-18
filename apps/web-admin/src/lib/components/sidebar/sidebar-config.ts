@@ -73,6 +73,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		items: [
 			{ href: '/bank-soal', label: 'Dashboard Bank Soal', icon: 'grid', roles: ['admin', 'guru'], permissions: ['bank_soal.read'] },
 			{ href: '/bank-soal/daftar', label: 'Kelola Soal', icon: 'book-open', roles: ['admin', 'guru'], permissions: ['bank_soal.read'] },
+
 			{ href: '/bank-soal/verifikasi', label: 'Review & Terbitkan', icon: 'clipboard', roles: ['admin'], permissions: ['bank_soal.review', 'bank_soal.publish'] },
 			{ href: '/bank-soal/analisis-butir', label: 'Mutu Soal', icon: 'activity', roles: ['admin', 'guru'], permissions: ['bank_soal.analytics'] },
 			{ href: '/bank-soal/pengaturan', label: 'Pengaturan', icon: 'settings', roles: ['admin'], permissions: ['bank_soal.settings'] }
@@ -141,12 +142,12 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		items: [
 			{ href: '/settings/account', label: 'Akun Saya', icon: 'user-check', permissions: ['settings.account'], allowAuthenticatedFallback: true },
 			{ href: '/settings/school-profile', label: 'Profil Madrasah', icon: 'settings', roles: ['admin'], permissions: ['settings.school_profile'] },
-			{ href: '/settings/branding', label: 'Logo & Branding', icon: 'settings', roles: ['admin'], permissions: ['settings.branding'] },
+			{ href: '/settings/branding', label: 'Logo & Branding', icon: 'settings', roles: ['admin'], permissions: ['settings.school_profile'] },
 			{ href: '/settings/users', label: 'Pengguna & Hak Akses', icon: 'users', roles: ['admin'], permissions: ['users.read'] },
 			{ href: '/settings/rbac', label: 'Peran & Izin Akses', icon: 'shield', roles: ['admin'], permissions: ['roles.read'] },
 			{ href: '/settings/user-change-requests', label: 'Perubahan Data', icon: 'file-text', roles: ['admin'], permissions: ['profile_changes.review'] },
 			{ href: '/settings/backups', label: 'Backup & Restore', icon: 'server', roles: ['admin'], permissions: ['backup.read'] },
-			{ href: '/settings/maintenance', label: 'Maintenance Center', icon: 'shield', roles: ['admin'], permissions: ['settings.maintenance'] },
+			{ href: '/settings/maintenance', label: 'Maintenance Center', icon: 'shield', roles: ['admin'], permissions: ['roles.manage'] },
 			{ href: '/settings/audit-logs', label: 'Audit Aktivitas', icon: 'file-text', roles: ['admin'], permissions: ['audit.read'] },
 			{ href: '/settings/analytics', label: 'Statistik Penggunaan', icon: 'activity', roles: ['admin'], permissions: ['analytics.read'] },
 			{ href: '/settings', label: 'Pengaturan Sistem', icon: 'settings', roles: ['admin'], permissions: ['settings.account'] }

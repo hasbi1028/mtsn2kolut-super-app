@@ -374,7 +374,7 @@ func (h *CbtQuestion) directQuestionUpdateAllowed(w http.ResponseWriter, r *http
 		return false
 	}
 	if !hasAnyRole(r, "admin") {
-		if currentWorkflow != "" && currentWorkflow != "draft" && currentWorkflow != "rejected" {
+		if currentWorkflow != "" && currentWorkflow != "draft" && currentWorkflow != "rejected" && currentWorkflow != "revision_needed" {
 			api.Conflict(w, "Soal sedang atau sudah masuk alur review. Duplikat soal untuk membuat revisi baru.")
 			return false
 		}

@@ -180,8 +180,8 @@ function hasAnyFilledField(item: BankSoalHealthQuestion, keys: string[]): boolea
 
 function evidenceLabel(evidence: BankSoalHealthEvidence, sampleSize: number): string {
 	if (evidence === 'summary') return 'ringkasan';
-	if (evidence === 'sample') return `contoh data ${sampleSize} soal`;
-	return 'data belum tersedia';
+	if (evidence === 'sample') return `sampel ${sampleSize} soal`;
+	return 'perlu evidence/data';
 }
 
 function countFromSummary(summary: BankSoalHealthSummary | null | undefined, key: BankSoalStatusKey): number | null {
@@ -317,7 +317,7 @@ function buildSubjectCoverage(summary: BankSoalHealthSummary | null | undefined,
 			.filter(Boolean)
 	);
 	if (subjectKeys.size > 0) {
-		return ratioMetric('subject', 'Mapel terdeteksi di contoh data', subjectKeys.size, null, 'sample', questions.length);
+		return ratioMetric('subject', 'Mapel terdeteksi di sampel', subjectKeys.size, null, 'sample', questions.length);
 	}
 	return ratioMetric('subject', 'Cakupan mapel', null, null, 'missing', questions.length);
 }
@@ -463,7 +463,7 @@ function buildWarnings(
 			label: 'Import',
 			message: 'Riwayat impor belum tersedia di ringkasan atau contoh data, jadi kesiapan impor belum bisa dinilai.',
 			severity: 'info',
-			evidenceLabel: 'data belum tersedia',
+			evidenceLabel: 'perlu evidence/data',
 		});
 	} else {
 		const importedDrafts = questions.filter((question) => hasAnyFilledField(question, importFields) && publicationOf(question) !== 'published').length;
@@ -485,7 +485,7 @@ function buildWarnings(
 			label: 'Aset',
 			message: 'Data pendukung aset belum tersedia, jadi dashboard tidak mengasumsikan risiko media.',
 			severity: 'info',
-			evidenceLabel: 'data belum tersedia',
+			evidenceLabel: 'perlu evidence/data',
 		});
 	} else {
 		const withoutAssetEvidence = questions.filter((question) => !hasAnyFilledField(question, assetFields)).length;
@@ -507,7 +507,7 @@ function buildWarnings(
 			label: 'Arsip',
 			message: 'Status arsip belum tersedia di ringkasan; jangan simpulkan nol arsip tanpa data.',
 			severity: 'info',
-			evidenceLabel: 'data belum tersedia',
+			evidenceLabel: 'perlu evidence/data',
 		});
 	}
 

@@ -635,7 +635,7 @@ export function canSubmitRevisionReview(q: Question): boolean {
 
 export function isQuickEditable(q: Question): boolean {
 	return isComposerQuestionType(q.question_type)
-		&& (q.workflow_status === 'draft' || q.workflow_status === 'rejected')
+		&& (q.workflow_status === 'draft' || q.workflow_status === 'rejected' || q.workflow_status === 'revision_needed')
 		&& q.status === 'draft'
 		&& !questionUsageLocked(q);
 }
@@ -643,7 +643,7 @@ export function isQuickEditable(q: Question): boolean {
 export function explainQuickEditBlocked(q: Question): string {
 	if (questionUsageLocked(q)) return 'Soal sudah dipakai. Gunakan Duplikat untuk membuat revisi draft.';
 	if ((q.workflow_status !== 'draft' && q.workflow_status !== 'rejected') || q.status !== 'draft') {
-		if (q.workflow_status === 'revision_needed') return 'Soal sudah diminta revisi, tetapi editor cepat belum membuka status ini. Gunakan Duplikat atau minta admin mengembalikan lewat alur revisi.';
+		if (q.workflow_status === 'revision_needed') return 'Soal sudah diminta revisi. Guru pembuat soal dapat mengedit selama soal masih draft dan belum dipakai.';
 		return 'Soal sudah masuk alur verifikasi/publikasi. Gunakan Duplikat untuk revisi.';
 	}
 	if (!isComposerQuestionType(q.question_type)) {

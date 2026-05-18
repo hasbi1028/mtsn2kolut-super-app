@@ -42,7 +42,33 @@
 	let pool = $state<PoolQuestion[]>([]);
 	let selectedPool = $state(new Set<string>());
 	let busy = $state('');
-	let activeTab = $state<'questions' | 'pool' | 'blueprint' | 'lock'>('questions');
+	type PackageTab = 'questions' | 'pool' | 'blueprint' | 'lock';
+	let activeTab = $state<PackageTab>('questions');
+
+	function tabFromHash(hash: string): PackageTab | null {
+		const value = hash.replace(/^#/, '').toLowerCase();
+		if (value === 'soal' || value === 'questions' || value === 'isi-soal') return 'questions';
+		if (value === 'tambah-soal' || value === 'bank-soal' || value === 'pool') return 'pool';
+		if (value === 'blueprint' || value === 'kisi-kisi' || value === 'mutu') return 'blueprint';
+		if (value === 'lock' || value === 'kunci' || value === 'revisi') return 'lock';
+		return null;
+	}
+
+	function syncTabFromHash() {
+		const tab = tabFromHash(window.location.hash);
+		if (tab) activeTab = tab;
+	}
+
+	function selectTab(tab: PackageTab) {
+		activeTab = tab;
+		const hashByTab: Record<PackageTab, string> = {
+			questions: '#soal',
+			pool: '#tambah-soal',
+			blueprint: '#blueprint',
+			lock: '#kunci',
+		};
+		window.history.replaceState(null, '', hashByTab[tab]);
+	}
 
 	let title = $state('');
 	let description = $state('');
@@ -203,7 +229,12 @@
 		return payload;
 	}
 
-	onMount(() => { void refresh(); });
+	onMount(() => {
+		syncTabFromHash();
+		window.addEventListener('hashchange', syncTabFromHash);
+		void refresh();
+		return () => window.removeEventListener('hashchange', syncTabFromHash);
+	});
 
 	async function saveMetadata() {
 		if (!detail || isLocked) return;
@@ -315,7 +346,7 @@
 
 			<div class="flex flex-wrap gap-2">
 				{#each [['questions','Soal Dalam Paket'], ['pool','Tambah dari Bank Soal'], ['blueprint','Kisi-kisi & Mutu'], ['lock','Kunci & Salinan']] as tab}
-					<button class={`rounded-md border px-3 py-2 text-sm ${activeTab === tab[0] ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`} onclick={() => activeTab = tab[0] as typeof activeTab}>{tab[1]}</button>
+					<button class={`rounded-md border px-3 py-2 text-sm ${activeTab === tab[0] ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`} onclick={() => selectTab(tab[0] as PackageTab)}>{tab[1]}</button>
 				{/each}
 			</div>
 

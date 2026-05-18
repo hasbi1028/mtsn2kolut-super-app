@@ -31,10 +31,21 @@ export function evaluateSidebarItemAccess(item: SidebarNavItem, roles: readonly 
 
 export function buildUIPolicyPreview(roleCode: string, draftPermissions: readonly string[]): UIPolicyPreview {
 	const roles = roleCode ? [roleCode] : [];
-	const menuItems = [
+	const bankSoalDraftItems: SidebarNavItem[] = [
+		{ href: '/bank-soal/tambah', label: 'Tambah Soal', icon: 'file-text', permissions: ['bank_soal.create'], roles: ['admin', 'guru'] },
+		{ href: '/bank-soal/mapel-kd', label: 'Mapel & KD', icon: 'layers', permissions: ['bank_soal.create'], roles: ['admin', 'guru'] }
+	];
+	const baseMenuItems = [
 		{ ...dashboardNavItem, group: 'Akses Cepat' },
 		...sidebarNavGroups.flatMap((group) => group.items.map((item) => ({ ...item, group: group.group })))
-	].map((item) => ({
+	];
+	const insertAfter = baseMenuItems.findIndex((item) => item.href === '/bank-soal/daftar');
+	if (insertAfter >= 0) {
+		baseMenuItems.splice(insertAfter + 1, 0, ...bankSoalDraftItems.map((item) => ({ ...item, group: 'Bank Soal' })));
+	} else {
+		baseMenuItems.push(...bankSoalDraftItems.map((item) => ({ ...item, group: 'Bank Soal' })));
+	}
+	const menuItems = baseMenuItems.map((item) => ({
 		...item,
 		evaluation: evaluateSidebarItemAccess(item, roles, draftPermissions)
 	}));

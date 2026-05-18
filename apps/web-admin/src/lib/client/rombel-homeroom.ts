@@ -41,6 +41,7 @@ export function employmentTypeLabel(value: string | null | undefined) {
 export function employeeOptionSubtitle(option: HomeroomEmployeeOption) {
 	const parts: string[] = [];
 	if (option.nip) parts.push(`NIP ${option.nip}`);
+	else if (option.pegawaiUid) parts.push(`UID ${option.pegawaiUid}`);
 	const employmentLabel = employmentTypeLabel(option.employmentType);
 	if (employmentLabel) parts.push(employmentLabel);
 	if (option.isFallback && parts.length === 0) parts.push('Dari data rombel');

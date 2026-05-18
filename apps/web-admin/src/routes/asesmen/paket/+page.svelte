@@ -1211,16 +1211,16 @@
 									{/if}
 								</Table.Cell>
 								<Table.Cell>
-					<a
-						href={`${resolve('/asesmen/paket')}/${p.id}`}
-						class="mr-2 inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted"
-					>
-						Detail/Edit
-					</a>
-					<a href={`${resolve('/asesmen/paket')}/${p.id}#soal`} class="mr-2 inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">Isi Soal</a>
-					<a href={`${resolve('/asesmen/paket')}/${p.id}#blueprint`} class="mr-2 inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">Blueprint</a>
-					{#if readiness === 'ready'}<LoadingButton size="xs" variant="outline" onclick={() => { selectedPackageIds.clear(); selectedPackageIds.add(p.id); void bulkLockSelected(); }} loading={bulkBusy}>Lock</LoadingButton>{/if}
-					<LoadingButton
+					<div class="flex flex-wrap items-center gap-2">
+						<a
+							href={`${resolve('/asesmen/paket')}/${p.id}`}
+							class="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted"
+							title="Kelola identitas, isi soal, blueprint, dan kunci paket dalam satu halaman"
+						>
+							Kelola
+						</a>
+						{#if readiness === 'ready'}<LoadingButton size="xs" variant="outline" onclick={() => { selectedPackageIds.clear(); selectedPackageIds.add(p.id); void bulkLockSelected(); }} loading={bulkBusy}>Lock</LoadingButton>{/if}
+						<LoadingButton
 						variant="destructive"
 						size="xs"
 						onclick={() => deletePackage(p.id, p.title)}
@@ -1230,6 +1230,7 @@
 									>
 										Hapus
 									</LoadingButton>
+								</div>
 								</Table.Cell>
 							</Table.Row>
 						{:else}
@@ -1299,14 +1300,24 @@
 							{#if p.description}
 								<p class="mt-3 text-sm text-muted-foreground">{p.description}</p>
 							{/if}
-							<div class="mt-4 flex gap-2">
+							<div class="mt-4 flex flex-wrap gap-2">
 								<a
 									href={`${resolve('/asesmen/paket')}/${p.id}`}
 									class="inline-flex flex-1 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-semibold hover:bg-muted"
+									title="Kelola identitas, isi soal, blueprint, dan kunci paket dalam satu halaman"
 								>
-									Detail/Edit
+									Kelola
 								</a>
-								<a href={`${resolve('/asesmen/paket')}/${p.id}#soal`} class="inline-flex flex-1 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-semibold hover:bg-muted">Isi Soal</a>
+								{#if readiness === 'ready'}
+									<LoadingButton
+										size="sm"
+										variant="outline"
+										onclick={() => { selectedPackageIds.clear(); selectedPackageIds.add(p.id); void bulkLockSelected(); }}
+										loading={bulkBusy}
+									>
+										Lock
+									</LoadingButton>
+								{/if}
 								<LoadingButton
 									variant="destructive"
 									size="sm"

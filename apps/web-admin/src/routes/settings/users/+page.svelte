@@ -634,6 +634,10 @@
 	}
 
 	onMount(() => {
+		void trackInternalAnalyticsEvent('users.list_view', {
+			pathname: window.location.pathname,
+			metadata: { page_key: 'users-list' }
+		});
 		void trackInternalAnalyticsEvent('users.workflow_view', { pathname: window.location.pathname, metadata: { page_key: 'users-workflow' } });
 		load();
 	});
@@ -650,7 +654,7 @@
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button variant="outline" href="/settings/user-change-requests">Permintaan Data</Button>
-			<Button variant="outline" href="/settings/rbac">Role & Permission</Button>
+			<Button variant="outline" href="/settings/rbac">Manajemen Hak Akses</Button>
 			<Button onclick={() => openCreate(activeTab === 'siswa' ? 'student' : activeTab === 'ortu' ? 'parent' : activeTab === 'admin' ? 'admin' : 'employee')}>+ Tambah Akun</Button>
 		</div>
 	</div>
@@ -720,8 +724,13 @@
 						{#if candidateMode === 'none'}
 							<p class="text-sm text-muted-foreground">Akun admin murni boleh tanpa profil, tetapi sebaiknya tetap memakai nama tampil yang jelas.</p>
 						{:else}
-							{#if candidateRequiresClass}
-								<select class="w-full rounded-md border bg-background px-3 py-2 text-sm" bind:value={candidateClassId} onchange={() => { clearProfileSelection(); profileCandidates = []; }}>
+						{#if candidateRequiresClass}
+							<p class="text-xs text-muted-foreground">
+								{candidateMode === 'student'
+									? 'Siswa per kelas — Pilih kelas terlebih dahulu untuk menarik siswa'
+									: 'Ortu per kelas anak — Pilih kelas anak untuk menarik orang tua/wali terkait'}
+							</p>
+							<select class="w-full rounded-md border bg-background px-3 py-2 text-sm" bind:value={candidateClassId} onchange={() => { clearProfileSelection(); profileCandidates = []; }}>
 									<option value="">Pilih rombel</option>
 									{#each rombels.filter((item) => item.is_active !== false) as kelas}
 										<option value={kelas.id}>{kelas.name || kelas.code} {kelas.total_students ? `(${kelas.total_students} siswa)` : ''}</option>

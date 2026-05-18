@@ -24,21 +24,18 @@ export const RBAC_PERMISSION_CATALOG = [
 	{ code: 'analytics.export', module: 'analytics', action: 'export', description: 'Mengekspor laporan analytics agregat tanpa event mentah atau metadata sensitif.' },
 	{ code: 'analytics.security_read', module: 'analytics', action: 'security_read', description: 'Melihat sinyal keamanan analytics yang sudah diagregasi.' },
 	{ code: 'bank_soal.analytics', module: 'bank_soal', action: 'analytics', description: 'Melihat analisis Bank Soal.' },
-	{ code: 'bank_soal.approve', module: 'bank_soal', action: 'approve', description: 'Menyetujui soal Bank Soal secara final.' },
-	{ code: 'bank_soal.assign_reviewer', module: 'bank_soal', action: 'assign_reviewer', description: 'Mengelola scope reviewer dan approver Bank Soal.' },
-	{ code: 'bank_soal.audit', module: 'bank_soal', action: 'audit', description: 'Melihat audit dan riwayat workflow Bank Soal.' },
+
 	{ code: 'bank_soal.create', module: 'bank_soal', action: 'create', description: 'Membuat soal Bank Soal.' },
 	{ code: 'bank_soal.delete', module: 'bank_soal', action: 'delete', description: 'Menghapus soal.' },
 	{ code: 'bank_soal.import', module: 'bank_soal', action: 'import', description: 'Impor soal.' },
 	{ code: 'bank_soal.publish', module: 'bank_soal', action: 'publish', description: 'Mempublikasikan soal.' },
 	{ code: 'bank_soal.read', module: 'bank_soal', action: 'read', description: 'Melihat Bank Soal.' },
-	{ code: 'bank_soal.read_all', module: 'bank_soal', action: 'read_all', description: 'Melihat seluruh soal Bank Soal lintas pemilik dan scope.' },
+
 	{ code: 'bank_soal.review', module: 'bank_soal', action: 'review', description: 'Melakukan review/verifikasi soal.' },
 	{ code: 'bank_soal.settings', module: 'bank_soal', action: 'settings', description: 'Melihat/mengelola pengaturan Bank Soal.' },
-	{ code: 'bank_soal.submit', module: 'bank_soal', action: 'submit', description: 'Mengirim soal Bank Soal ke alur review.' },
+
 	{ code: 'bank_soal.update', module: 'bank_soal', action: 'update', description: 'Mengubah soal Bank Soal.' },
-	{ code: 'bank_soal.update_own', module: 'bank_soal', action: 'update_own', description: 'Mengubah soal Bank Soal milik sendiri.' },
-	{ code: 'bank_soal.use_in_package', module: 'bank_soal', action: 'use_in_package', description: 'Menggunakan soal Bank Soal pada paket asesmen.' },
+
 	{ code: 'backup.create', module: 'backup', action: 'create', description: 'Menjalankan backup PostgreSQL manual dari Backup Center.' },
 	{ code: 'backup.download', module: 'backup', action: 'download', description: 'Mengunduh file backup PostgreSQL yang tersedia.' },
 	{ code: 'backup.read', module: 'backup', action: 'read', description: 'Melihat status dan daftar backup PostgreSQL.' },

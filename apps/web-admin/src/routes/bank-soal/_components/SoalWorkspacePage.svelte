@@ -2013,6 +2013,11 @@ type TimelineItem = {
 		return Boolean(q && isQuickEditable(q));
 	}
 
+	function questionEditActionLabel(q: Question | null): string {
+		if (q?.workflow_status === 'revision_needed') return 'Edit Revisi';
+		return 'Edit';
+	}
+
 	function canReturnDetailRevision(q: Question | null): boolean {
 		return Boolean(q && q.workflow_status === 'approved' && q.status !== 'published' && !questionUsageLocked(q) && q.is_latest_version !== false && canReviewWorkflow);
 	}
@@ -2049,7 +2054,7 @@ type TimelineItem = {
 		if (q.status === 'published' || questionUsageLocked(q)) return 'Soal sudah terbit/dipakai. Tidak boleh diedit langsung; buat revisi baru agar riwayat ujian tetap valid.';
 		if (q.workflow_status === 'approved' || q.workflow_status === 'published') return 'Soal sudah disetujui/terbit. Kembalikan ke revisi sebelum mengubah isi soal.';
 		if (q.workflow_status === 'reviewed') return 'Soal sudah ditandai layak dan menunggu approval akhir.';
-		if (q.workflow_status === 'revision_needed') return 'Soal membutuhkan revisi. Jika editor belum aktif, buat konsep revisi baru agar perubahan tetap aman.';
+		if (q.workflow_status === 'revision_needed') return 'Soal membutuhkan revisi. Guru pembuat soal dapat mengedit langsung selama soal masih draft dan belum dipakai.';
 		if (q.workflow_status === 'review' || q.workflow_status === 'submitted') return 'Soal sedang diverifikasi. Perubahan dinonaktifkan sampai reviewer meminta revisi.';
 		return 'Soal dibuka dalam mode lihat.';
 	}
@@ -3417,7 +3422,7 @@ type TimelineItem = {
 											}}
 											class="rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
 										>
-										{isQuickEditable(q) ? 'Edit' : 'Lihat'}
+										{isQuickEditable(q) ? questionEditActionLabel(q) : 'Lihat'}
 										</button>
 										{#if q.workflow_status === 'rejected' || q.workflow_status === 'revision_needed'}
 											<button

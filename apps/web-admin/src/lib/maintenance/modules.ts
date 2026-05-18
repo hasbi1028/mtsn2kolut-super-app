@@ -48,8 +48,8 @@ const routePrefixesByModule: Record<string, string[]> = {
 	dashboard: ['/', '/notifications', '/api/notifications', '/api/internal-analytics'],
 	akademik: ['/akademik', '/academic', '/journal', '/grades', '/jadwal', '/api/academic', '/api/journal', '/api/grades'],
 	students: ['/students', '/parents', '/kesiswaan', '/portal', '/api/students', '/api/parents', '/api/kesiswaan', '/api/portal'],
-	bank_soal: ['/bank-soal', '/api/bank-soal', '/api/cbt/questions', '/api/cbt/assets'],
-	cbt: ['/asesmen', '/cbt', '/api/asesmen', '/api/cbt/packages', '/api/cbt/events', '/api/cbt/sessions', '/api/exam'],
+	bank_soal: ['/bank-soal', '/api/bank-soal'],
+	cbt: ['/asesmen', '/cbt', '/api/asesmen', '/api/exam'],
 	pusaka: ['/pusaka', '/api/pusaka'],
 	backup_restore: ['/settings/backups', '/api/system/backups'],
 	settings: ['/settings', '/api/settings', '/api/users', '/api/rbac', '/api/school-profile', '/api/branding', '/api/system/maintenance']

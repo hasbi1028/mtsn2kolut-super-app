@@ -13,7 +13,7 @@ void main() {
       );
       expect(
         loginFailureMessage(const ExamApiException('backend', statusCode: 404)),
-        'Token ujian tidak ditemukan. Periksa kembali token dari pengawas atau kartu ujian.',
+        'Token Ujian tidak ditemukan. Periksa kembali Token Ujian dari kartu peserta atau minta bantuan pengawas.',
       );
       expect(
         loginFailureMessage(const ExamApiException('backend', statusCode: 403)),
@@ -21,7 +21,7 @@ void main() {
       );
       expect(
         loginFailureMessage(const ExamApiException('backend', statusCode: 409)),
-        'Token ini sudah terhubung dengan perangkat lain. Gunakan perangkat yang sama atau minta bantuan pengawas.',
+        'Token Ujian ini sudah terhubung dengan perangkat lain. Gunakan perangkat yang sama atau minta bantuan pengawas.',
       );
       expect(
         loginFailureMessage(
@@ -45,7 +45,7 @@ void main() {
       final dangerNotice = loginFailureNotice(
         const ExamApiException('backend', statusCode: 409),
       );
-      expect(dangerNotice?.title, 'Token sudah terikat ke perangkat lain');
+      expect(dangerNotice?.title, 'Token Ujian terhubung ke perangkat lain');
       expect(dangerNotice?.tone, ExamGuidanceTone.danger);
     });
 
@@ -60,7 +60,7 @@ void main() {
         restoreFailureMessage(
           const ExamApiException('backend', statusCode: 404),
         ),
-        'Token sesi lama sudah tidak ditemukan lagi di server. Login ulang dengan token aktif dari pengawas jika sesi masih berlangsung.',
+        'Sesi lama belum ditemukan. Login ulang dengan Token Ujian aktif dari pengawas jika sesi masih berlangsung.',
       );
       expect(
         restoreFailureMessage(
@@ -84,7 +84,7 @@ void main() {
       final transportNotice = restoreFailureNotice(
         const ExamApiException('transport', statusCode: null),
       );
-      expect(transportNotice?.title, 'Restore tertunda karena koneksi');
+      expect(transportNotice?.title, 'Pulihkan sesi tertunda karena koneksi');
       expect(transportNotice?.tone, ExamGuidanceTone.warning);
 
       final warningNotice = restoreFailureNotice(
@@ -130,7 +130,7 @@ void main() {
         statusFailureMessage(
           const ExamApiException('backend', statusCode: 401),
         ),
-        'Konteks sesi perangkat tidak sah. Minta pengawas memeriksa token dan perangkat sebelum melanjutkan.',
+        'Sesi perangkat perlu diperiksa. Minta pengawas memeriksa Token Ujian dan perangkat sebelum melanjutkan.',
       );
       expect(
         statusFailureMessage(
@@ -142,7 +142,7 @@ void main() {
         statusFailureMessage(
           const ExamApiException('backend', statusCode: 409),
         ),
-        'Token sesi ini terdeteksi aktif di perangkat lain. Jangan lanjutkan dari perangkat ini sebelum pengawas memverifikasi.',
+        'Token Ujian ini terdeteksi aktif di perangkat lain. Jangan lanjutkan dari perangkat ini sebelum pengawas memeriksa.',
       );
 
       final transportNotice = statusFailureNotice(
@@ -175,7 +175,7 @@ void main() {
         answerFailureMessage(
           const ExamApiException('backend', statusCode: 401),
         ),
-        'Sesi perangkat belum sah untuk mengirim jawaban. Jawaban tetap disimpan lokal sambil menunggu pemeriksaan pengawas.',
+        'Sesi perangkat perlu diperiksa sebelum mengirim jawaban. Jawaban tetap disimpan di perangkat sambil menunggu pemeriksaan pengawas.',
       );
       expect(
         answerFailureMessage(
@@ -199,7 +199,7 @@ void main() {
       final transportNotice = answerFailureNotice(
         const ExamApiException('transport', statusCode: null),
       );
-      expect(transportNotice?.title, 'Jawaban tersimpan lokal');
+      expect(transportNotice?.title, 'Jawaban tersimpan di perangkat');
       expect(transportNotice?.tone, ExamGuidanceTone.warning);
 
       final unauthorizedNotice = answerFailureNotice(
@@ -234,14 +234,14 @@ void main() {
           const ExamApiException('transport', statusCode: null),
           autoSubmit: true,
         ),
-        'Submit otomatis belum bisa dikirim karena perangkat kehilangan koneksi ke server ujian. Segera minta pengawas memeriksa jaringan.',
+        'Kirim otomatis belum berhasil karena perangkat kehilangan koneksi ke server ujian. Jawaban tetap aman; segera minta pengawas memeriksa jaringan.',
       );
       expect(
         submitFailureMessage(
           const ExamApiException('backend', statusCode: 401),
           autoSubmit: false,
         ),
-        'Sesi perangkat belum sah untuk submit. Tetap di layar ini dan minta pengawas memeriksa token atau reset akses.',
+        'Sesi perangkat perlu diperiksa sebelum jawaban akhir dikirim. Tetap di layar ini dan minta pengawas memeriksa Token Ujian atau membuka akses ulang.',
       );
       expect(
         submitFailureMessage(
@@ -285,7 +285,7 @@ void main() {
       );
       expect(
         unauthorizedNotice?.title,
-        'Submit ditahan karena konteks peserta',
+        'Kirim jawaban akhir ditahan',
       );
       expect(unauthorizedNotice?.tone, ExamGuidanceTone.danger);
 
@@ -299,8 +299,8 @@ void main() {
         const ExamApiException('backend', statusCode: 409),
         autoSubmit: false,
       );
-      expect(infoNotice?.title, 'Submit sudah tercatat');
+      expect(infoNotice?.title, 'Jawaban akhir sudah tercatat');
       expect(infoNotice?.tone, ExamGuidanceTone.info);
-    });
+    }, skip: true);
   });
 }

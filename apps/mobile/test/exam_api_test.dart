@@ -168,6 +168,7 @@ void main() {
         final rawBody = await utf8.decoder.bind(request).join();
         expect(jsonDecode(rawBody), <String, dynamic>{
           'token': 'token-1',
+          'room_token': '',
           'device_fingerprint': 'android:test',
         });
 

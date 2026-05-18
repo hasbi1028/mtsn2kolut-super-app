@@ -807,14 +807,19 @@
 
 	function isQuickEditable(question: Question): boolean {
 		return (
-			(question.workflow_status === 'draft' || question.workflow_status === 'rejected') &&
+			(question.workflow_status === 'draft' || question.workflow_status === 'rejected' || question.workflow_status === 'revision_needed') &&
 			(question.status ?? 'draft') === 'draft' &&
 			!questionUsageLocked(question)
 		);
 	}
 
 	function isSafeDeletable(question: Question): boolean {
-		return (question.workflow_status ?? 'draft') === 'draft' && (question.status ?? 'draft') === 'draft' && !questionUsageLocked(question);
+		return ['draft', 'rejected', 'revision_needed'].includes(question.workflow_status ?? 'draft') && (question.status ?? 'draft') === 'draft' && !questionUsageLocked(question);
+	}
+
+	function quickEditLabel(question: Question): string {
+		if (question.workflow_status === 'revision_needed') return 'Edit Revisi';
+		return 'Edit';
 	}
 
 	function canReturnToRevision(question: Question): boolean {
@@ -1467,11 +1472,11 @@
 										</Table.Cell>
 										<Table.Cell class="text-right">
 											<div class="flex justify-end gap-2">
-												<Button href={questionHref(question)} variant="outline" size="sm">
-													{#if isQuickEditable(question)}
-														<PencilIcon class="size-3.5" />
-														Edit
-													{:else}
+							<Button href={questionHref(question)} variant="outline" size="sm">
+								{#if isQuickEditable(question)}
+									<PencilIcon class="size-3.5" />
+									{quickEditLabel(question)}
+								{:else}
 														<EyeIcon class="size-3.5" />
 														Lihat
 													{/if}
@@ -1558,10 +1563,10 @@
 									</div>
 								</dl>
 								<div class="grid gap-2 sm:grid-cols-2">
-									<Button href={questionHref(question)} variant="outline" class="w-full">
-										{#if isQuickEditable(question)}
-											<PencilIcon class="size-4" />
-											Edit di Penyusun soal
+					<Button href={questionHref(question)} variant="outline" class="w-full">
+						{#if isQuickEditable(question)}
+							<PencilIcon class="size-4" />
+							{quickEditLabel(question)} di Penyusun soal
 										{:else}
 											<EyeIcon class="size-4" />
 											Lihat Soal
