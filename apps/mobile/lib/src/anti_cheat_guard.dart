@@ -16,6 +16,9 @@ class AntiCheatWindowState {
     this.isPictureInPicture = false,
     this.hasWindowFocus = true,
     this.secureFlagEnabled = false,
+    this.platform = 'android',
+    this.isFullscreen = true,
+    this.isMinimized = false,
   });
 
   factory AntiCheatWindowState.fromMap(Map<Object?, Object?> map) {
@@ -24,11 +27,19 @@ class AntiCheatWindowState {
       return value is bool ? value : fallback;
     }
 
+    String readString(String key, String fallback) {
+      final value = map[key];
+      return value is String && value.isNotEmpty ? value : fallback;
+    }
+
     return AntiCheatWindowState(
       isMultiWindow: readBool('isMultiWindow', false),
       isPictureInPicture: readBool('isPictureInPicture', false),
       hasWindowFocus: readBool('hasWindowFocus', true),
       secureFlagEnabled: readBool('secureFlagEnabled', false),
+      platform: readString('platform', 'android'),
+      isFullscreen: readBool('isFullscreen', true),
+      isMinimized: readBool('isMinimized', false),
     );
   }
 
@@ -36,12 +47,21 @@ class AntiCheatWindowState {
   final bool isPictureInPicture;
   final bool hasWindowFocus;
   final bool secureFlagEnabled;
+  final String platform;
+  final bool isFullscreen;
+  final bool isMinimized;
+
+  bool get isWindows => platform.toLowerCase() == 'windows';
+  bool get isNotFullscreen => isWindows && !isFullscreen;
 
   Map<String, Object?> toJson() => <String, Object?>{
+    'platform': platform,
     'is_multi_window': isMultiWindow,
     'is_picture_in_picture': isPictureInPicture,
     'has_window_focus': hasWindowFocus,
     'secure_flag_enabled': secureFlagEnabled,
+    'is_fullscreen': isFullscreen,
+    'is_minimized': isMinimized,
   };
 }
 
@@ -61,15 +81,18 @@ class AntiCheatSnapshot {
   final bool locked;
   final int maxViolationsBeforeLock;
 
-  bool get isBackgrounded => lifecycleState != AppLifecycleState.resumed;
+  bool get isBackgrounded =>
+      lifecycleState != AppLifecycleState.resumed || windowState.isMinimized;
   bool get isSplitScreen => windowState.isMultiWindow;
   bool get isPictureInPicture => windowState.isPictureInPicture;
   bool get hasFocusLost => !windowState.hasWindowFocus;
+  bool get isNotFullscreen => windowState.isNotFullscreen;
 
   bool get shouldBlockInteraction =>
       locked ||
       isSplitScreen ||
       isPictureInPicture ||
+      isNotFullscreen ||
       hasFocusLost ||
       isBackgrounded;
 
@@ -77,7 +100,9 @@ class AntiCheatSnapshot {
     if (locked) return 'anti_cheat_local_lock';
     if (isSplitScreen) return 'split_screen_detected';
     if (isPictureInPicture) return 'picture_in_picture_detected';
+    if (windowState.isMinimized) return 'app_minimized';
     if (isBackgrounded) return 'app_backgrounded';
+    if (isNotFullscreen) return 'windows_not_fullscreen';
     if (hasFocusLost) return 'window_focus_lost';
     return 'secure';
   }
@@ -86,7 +111,9 @@ class AntiCheatSnapshot {
     if (locked) return 'Ujian dikunci sementara';
     if (isSplitScreen) return 'Split screen tidak diizinkan';
     if (isPictureInPicture) return 'Picture-in-picture tidak diizinkan';
+    if (windowState.isMinimized) return 'Aplikasi CBT tidak boleh diminimize';
     if (isBackgrounded) return 'Aplikasi ujian harus tetap aktif';
+    if (isNotFullscreen) return 'Aplikasi CBT harus layar penuh';
     if (hasFocusLost) return 'Fokus aplikasi ujian hilang';
     return 'Mode ujian aman';
   }
@@ -101,8 +128,14 @@ class AntiCheatSnapshot {
     if (isPictureInPicture) {
       return 'Tutup mode picture-in-picture dan gunakan aplikasi CBT dalam layar penuh.';
     }
+    if (windowState.isMinimized) {
+      return 'Jangan minimize aplikasi CBT. Kembalikan aplikasi ke layar penuh dan tunggu pengecekan status.';
+    }
     if (isBackgrounded) {
       return 'Jangan membuka aplikasi lain selama ujian. Kembali ke aplikasi CBT dan tunggu pengecekan status.';
+    }
+    if (isNotFullscreen) {
+      return 'Gunakan aplikasi CBT pada mode layar penuh. Jika tidak bisa, hubungi pengawas untuk memeriksa perangkat.';
     }
     if (hasFocusLost) {
       return 'Pastikan tidak ada jendela melayang, pop-up, atau overlay lain di atas aplikasi CBT.';

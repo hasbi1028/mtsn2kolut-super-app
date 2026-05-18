@@ -18,6 +18,22 @@ void main() {
       expect(state.hasWindowFocus, isFalse);
       expect(state.secureFlagEnabled, isTrue);
     });
+
+    test('parses native Windows window state map', () {
+      final state = AntiCheatWindowState.fromMap(const <Object?, Object?>{
+        'platform': 'windows',
+        'isFullscreen': false,
+        'isMinimized': true,
+        'hasWindowFocus': false,
+        'secureFlagEnabled': true,
+      });
+
+      expect(state.platform, 'windows');
+      expect(state.isFullscreen, isFalse);
+      expect(state.isMinimized, isTrue);
+      expect(state.hasWindowFocus, isFalse);
+      expect(state.secureFlagEnabled, isTrue);
+    });
   });
 
   group('AntiCheatSnapshot', () {
@@ -71,6 +87,31 @@ void main() {
 
       expect(snapshot.shouldBlockInteraction, isTrue);
       expect(snapshot.primaryReason, 'app_backgrounded');
+    });
+
+    test('treats Windows non-fullscreen as blocking', () {
+      const snapshot = AntiCheatSnapshot(
+        windowState: AntiCheatWindowState(
+          platform: 'windows',
+          isFullscreen: false,
+        ),
+      );
+
+      expect(snapshot.shouldBlockInteraction, isTrue);
+      expect(snapshot.primaryReason, 'windows_not_fullscreen');
+    });
+
+    test('treats Windows minimized state as backgrounded', () {
+      const snapshot = AntiCheatSnapshot(
+        windowState: AntiCheatWindowState(
+          platform: 'windows',
+          isFullscreen: true,
+          isMinimized: true,
+        ),
+      );
+
+      expect(snapshot.shouldBlockInteraction, isTrue);
+      expect(snapshot.primaryReason, 'app_minimized');
     });
   });
 }

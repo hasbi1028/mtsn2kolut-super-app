@@ -25,6 +25,12 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+
+  anti_cheat_bridge_ = std::make_unique<AntiCheatBridge>(
+      flutter_controller_->engine()->messenger(), GetHandle());
+  anti_cheat_bridge_->Register();
+  anti_cheat_bridge_->ApplyExamWindowPolicy();
+
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -43,6 +49,7 @@ void FlutterWindow::OnDestroy() {
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
+  anti_cheat_bridge_ = nullptr;
 
   Win32Window::OnDestroy();
 }
@@ -65,6 +72,10 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
       break;
+  }
+
+  if (anti_cheat_bridge_) {
+    anti_cheat_bridge_->HandleWindowMessage(message, wparam, lparam);
   }
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);

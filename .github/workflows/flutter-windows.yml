@@ -1,0 +1,147 @@
+name: Flutter Windows CBT Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_name:
+        description: "Optional build name/version override, e.g. 1.0.0"
+        required: false
+        type: string
+      build_number:
+        description: "Optional build number override, e.g. 42"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: apps/mobile
+
+jobs:
+  windows-x64:
+    name: Build Windows x64 CBT app
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Flutter doctor
+        run: flutter doctor -v
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Analyze mobile app
+        run: flutter analyze
+
+      - name: Run Flutter tests
+        run: flutter test
+
+      - name: Build Windows x64 release
+        shell: pwsh
+        run: |
+          $args = @('build', 'windows', '--release', '--dart-define=CBT_WINDOWS_ARCH=x64')
+          if ('${{ inputs.build_name }}') { $args += @('--build-name', '${{ inputs.build_name }}') }
+          if ('${{ inputs.build_number }}') { $args += @('--build-number', '${{ inputs.build_number }}') }
+          flutter @args
+
+      - name: Package Windows x64 zip
+        shell: pwsh
+        run: |
+          $release = 'build/windows/x64/runner/Release'
+          if (!(Test-Path $release)) {
+            Write-Error "Release folder not found: $release"
+          }
+          $zip = 'mtsn2kolut-cbt-windows-x64.zip'
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          Compress-Archive -Path "$release/*" -DestinationPath $zip -Force
+          Get-Item $zip | Format-List Name,Length,FullName
+
+      - name: Upload Windows x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mtsn2kolut-cbt-windows-x64
+          path: apps/mobile/mtsn2kolut-cbt-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  windows-x86-compatibility:
+    name: Prepare Windows x86/32-bit compatibility artifact
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Try Windows x86 release build if Flutter exposes support
+        id: try_x86
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          flutter pub get
+          flutter build windows --release --target-platform windows-x86 --dart-define=CBT_WINDOWS_ARCH=x86 2>&1 | Tee-Object -FilePath x86-build.log
+
+      - name: Package x86 build or compatibility note
+        shell: pwsh
+        run: |
+          $zip = 'mtsn2kolut-cbt-windows-x86.zip'
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+
+          $candidateFolders = @(
+            'build/windows/x86/runner/Release',
+            'build/windows/Win32/runner/Release'
+          )
+          $release = $candidateFolders | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+          if ($release) {
+            Compress-Archive -Path "$release/*" -DestinationPath $zip -Force
+          } else {
+            $note = @"
+          MTsN 2 Kolaka Utara CBT - Windows 32-bit compatibility note
+
+          Build x86/32-bit was requested, but the Flutter Windows toolchain on
+          GitHub Actions did not expose a supported windows-x86 build target.
+
+          This artifact is intentionally uploaded so release operators can see
+          that the x86 path was checked. Use the x64 artifact on supported
+          Windows devices, or build a separate native Windows wrapper if true
+          32-bit compatibility becomes mandatory.
+
+          See x86-build.log in this artifact for the exact Flutter/toolchain
+          output.
+          "@
+            Set-Content -Path 'mtsn2kolut-cbt-windows-x86-unsupported.txt' -Value $note -Encoding UTF8
+            Compress-Archive -Path 'mtsn2kolut-cbt-windows-x86-unsupported.txt','x86-build.log' -DestinationPath $zip -Force
+          }
+          Get-Item $zip | Format-List Name,Length,FullName
+
+      - name: Upload Windows x86 compatibility artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mtsn2kolut-cbt-windows-x86
+          path: apps/mobile/mtsn2kolut-cbt-windows-x86.zip
+          if-no-files-found: error
+          retention-days: 30
