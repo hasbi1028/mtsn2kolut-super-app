@@ -176,6 +176,11 @@ func (s *CbtQuestion) updateWithAudit(ctx context.Context, input SaveCbtQuestion
 	if err != nil {
 		return db.CbtQuestion{}, err
 	}
+	if !actor.IsAdmin() && (!sameOptionalUUID(current.EventID, params.EventID) || !sameUUID(current.SubjectID, params.SubjectID)) {
+		if err := s.requireCreateQuestion(ctx, actor, params.EventID, params.SubjectID); err != nil {
+			return db.CbtQuestion{}, err
+		}
+	}
 	return s.withMutationStore(ctx, func(store cbtQuestionStore) (db.CbtQuestion, error) {
 		if err := s.validateQuestionReferences(ctx, store, input); err != nil {
 			logging.Warn(ctx, "cbt_question_update_reference_invalid", append(questionInputLogAttrs(input, actor), slog.String("question_id", cbtQuestionUUIDString(input.ID)), slog.String("error", err.Error()))...)
@@ -357,6 +362,13 @@ func (s *CbtQuestion) requireModifyQuestion(ctx context.Context, actor CbtQuesti
 
 func sameUUID(a, b pgtype.UUID) bool {
 	return a.Valid && b.Valid && a.Bytes == b.Bytes
+}
+
+func sameOptionalUUID(a, b pgtype.UUID) bool {
+	if !a.Valid || !b.Valid {
+		return a.Valid == b.Valid
+	}
+	return a.Bytes == b.Bytes
 }
 
 func cbtQuestionUUIDString(id pgtype.UUID) string {

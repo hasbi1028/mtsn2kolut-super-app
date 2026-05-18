@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	chimw "github.com/go-chi/chi/v5/middleware"
-
 	"mtsn2kolut-super-app/backend/internal/platform/logging"
 )
 
@@ -37,9 +35,6 @@ func RequestLog(next http.Handler) http.Handler {
 		next.ServeHTTP(rec, r)
 
 		reqID := logging.RequestID(r.Context())
-		if reqID == "" {
-			reqID = chimw.GetReqID(r.Context())
-		}
 		slog.Info("http",
 			"request_id", reqID,
 			"method", r.Method,

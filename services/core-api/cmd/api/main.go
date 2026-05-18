@@ -178,7 +178,6 @@ func main() {
 	publicAnalyticsRateLimit := ratelimit.RateLimitWithTrustedProxies(20, 5, trustedProxies)
 
 	r := chi.NewRouter()
-	r.Use(chimw.RequestID)
 	r.Use(mw.RequestID)
 	r.Use(mw.RequestLog)
 	r.Use(chimw.Recoverer)

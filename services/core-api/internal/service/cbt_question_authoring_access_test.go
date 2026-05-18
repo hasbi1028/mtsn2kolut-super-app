@@ -291,6 +291,72 @@ func TestCbtQuestionCreateRejectsMissingSubjectOrEventBeforeInsert(t *testing.T)
 	})
 }
 
+func TestCbtQuestionUpdateReassignmentRequiresTargetCreateAccess(t *testing.T) {
+	ctx := context.Background()
+	questionID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000004201")
+	oldSubjectID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000004202")
+	newSubjectID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000004203")
+	newEventID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000004204")
+	actorID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000004205")
+
+	baseCurrent := db.GetCbtQuestionRow{
+		ID:             questionID,
+		SubjectID:      oldSubjectID,
+		QuestionText:   "Soal lama",
+		QuestionType:   "multiple_choice",
+		OptionA:        "A",
+		OptionB:        "B",
+		AnswerKey:      "A",
+		Status:         db.CbtQuestionStatusEnumDraft,
+		WorkflowStatus: "draft",
+		AuthorUsername: "guru",
+	}
+	input := SaveCbtQuestionInput{
+		ID:             questionID,
+		EventID:        newEventID,
+		SubjectID:      newSubjectID,
+		QuestionText:   "Soal baru",
+		QuestionType:   "multiple_choice",
+		OptionA:        "A",
+		OptionB:        "B",
+		AnswerKey:      "A",
+		WorkflowStatus: "draft",
+		AuthorUsername: "guru",
+		Actor:          CbtQuestionActor{UserID: actorID, Username: "guru", Roles: []string{"guru"}},
+	}
+
+	t.Run("non admin cannot move own global draft into event without pembuat_soal membership", func(t *testing.T) {
+		store := &fakeQuestionStore{current: baseCurrent}
+		svc := NewCbtQuestion(nil)
+		svc.q = store
+
+		_, err := svc.Update(ctx, input)
+		if !errors.Is(err, domain.ErrForbidden) {
+			t.Fatalf("Update(reassign without membership) error = %v, want ErrForbidden", err)
+		}
+		if store.updateCalls != 0 {
+			t.Fatalf("Update(reassign without membership) updateCalls = %d, want 0", store.updateCalls)
+		}
+	})
+
+	t.Run("non admin can move own draft into event with target pembuat_soal membership", func(t *testing.T) {
+		store := &fakeQuestionStore{
+			current:       baseCurrent,
+			membersByUser: []db.CbtEventMember{{EventID: newEventID, SubjectID: newSubjectID, Role: db.CbtEventMemberRolePembuatSoal}},
+		}
+		svc := NewCbtQuestion(nil)
+		svc.q = store
+
+		_, err := svc.Update(ctx, input)
+		if err != nil {
+			t.Fatalf("Update(reassign with membership) error = %v", err)
+		}
+		if store.updateCalls != 1 {
+			t.Fatalf("Update(reassign with membership) updateCalls = %d, want 1", store.updateCalls)
+		}
+	})
+}
+
 func TestCbtQuestionDuplicateForRevisionSetsVersionSourceAndAccess(t *testing.T) {
 	ctx := context.Background()
 	questionID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000005001")

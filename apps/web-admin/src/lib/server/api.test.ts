@@ -14,6 +14,9 @@ function okResponse<T>(data: T, init?: ResponseInit) {
 function fakeEvent(fetchMock: typeof fetch, accessToken = 'access-token-1') {
 	return {
 		fetch: fetchMock,
+		request: new Request('http://localhost/test', {
+			headers: { 'x-request-id': 'test-request-id' }
+		}),
 		locals: { accessToken },
 		cookies: {
 			get: vi.fn()
@@ -380,6 +383,7 @@ describe('server api helpers', () => {
 				headers: {
 					'Content-Type': 'application/json',
 					Authorization: 'Bearer access-token-1',
+					'x-request-id': 'test-request-id'
 				},
 			})
 		);
@@ -401,6 +405,7 @@ describe('server api helpers', () => {
 				headers: {
 					'Content-Type': 'application/json',
 					Authorization: 'Bearer initial-token',
+					'x-request-id': 'test-request-id'
 				},
 			})
 		);
@@ -411,6 +416,7 @@ describe('server api helpers', () => {
 				headers: {
 					'Content-Type': 'application/json',
 					Authorization: 'Bearer rotated-token',
+					'x-request-id': 'test-request-id'
 				},
 			})
 		);
@@ -432,7 +438,8 @@ describe('server api helpers', () => {
 			expect.objectContaining({
 				method: 'POST',
 				headers: {
-					Authorization: 'Bearer real-user-token'
+					Authorization: 'Bearer real-user-token',
+					'x-request-id': 'test-request-id'
 				}
 			})
 		);
@@ -453,14 +460,20 @@ describe('server api helpers', () => {
 			1,
 			expect.stringContaining('/api/bank-soal/assets'),
 			expect.objectContaining({
-				headers: { Authorization: 'Bearer initial-token' }
+				headers: {
+					Authorization: 'Bearer initial-token',
+					'x-request-id': 'test-request-id'
+				}
 			})
 		);
 		expect(eventFetch).toHaveBeenNthCalledWith(
 			2,
 			expect.stringContaining('/api/bank-soal/assets'),
 			expect.objectContaining({
-				headers: { Authorization: 'Bearer rotated-token' }
+				headers: {
+					Authorization: 'Bearer rotated-token',
+					'x-request-id': 'test-request-id'
+				}
 			})
 		);
 	});
