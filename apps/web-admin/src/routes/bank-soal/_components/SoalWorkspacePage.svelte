@@ -157,6 +157,12 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	type ComposerQuestionType = 'multiple_choice' | 'multiple_answer' | 'true_false' | 'agree_disagree' | 'matching' | 'ordering' | 'short_answer' | 'essay';
 	type ComposerSaveIntent = 'draft' | 'review';
 	type ComposerAction = ComposerSaveIntent | 'draft_next' | 'review_next';
+	type ComposerPostSaveAction = {
+		questionId: string;
+		intent: ComposerSaveIntent;
+		metadata: ComposerMetadataMemory;
+		wasEdit: boolean;
+	};
 	type Question = {
 		id: string;
 		event_id?: string | null;
@@ -438,6 +444,8 @@ type TimelineItem = {
 	let questionVersionsLoading = $state(false);
 	let composerBusy = $state(false);
 	let composerAction = $state<ComposerAction | ''>('');
+	let postSaveActionOpen = $state(false);
+	let postSaveAction = $state<ComposerPostSaveAction | null>(null);
 	let keepMetadataForNext = $state(true);
 	let saveInFlightKey = '';
 	let draftStatus = $state('');
@@ -1007,6 +1015,44 @@ type TimelineItem = {
 		fWorkflowStatus = 'draft';
 		draftSavedAt = null;
 		lastDraftSig = '';
+	}
+
+	function openPostSaveActions(questionId: string | undefined, intent: ComposerSaveIntent, metadata: ComposerMetadataMemory, wasEdit: boolean) {
+		if (!questionId) {
+			toast.success(intent === 'review' ? 'Soal dikirim ke verifikasi' : wasEdit ? 'Konsep soal berhasil diperbarui' : 'Konsep soal berhasil dibuat');
+			closeComposer();
+			return;
+		}
+		postSaveAction = { questionId, intent, metadata, wasEdit };
+		postSaveActionOpen = true;
+	}
+
+	function createNextAfterPostSave() {
+		const action = postSaveAction;
+		postSaveActionOpen = false;
+		postSaveAction = null;
+		if (!action) return;
+		if (keepMetadataForNext) {
+			resetQuestionBodyForNext(action.metadata);
+			toast.success('Form siap untuk soal berikutnya. Metadata tetap dipertahankan.');
+		} else {
+			resetForm();
+			toast.success('Form siap untuk soal berikutnya. Semua isian dikosongkan.');
+		}
+	}
+
+	async function editSavedQuestionAfterPostSave() {
+		const action = postSaveAction;
+		postSaveActionOpen = false;
+		postSaveAction = null;
+		if (!action?.questionId) return;
+		await openQuestionFromRouteParam(action.questionId);
+	}
+
+	function listQuestionsAfterPostSave() {
+		postSaveActionOpen = false;
+		postSaveAction = null;
+		closeComposer();
 	}
 
 	function resetComposerMetadataMemory() {
@@ -2508,6 +2554,7 @@ type TimelineItem = {
 		const payload = buildQuestionSavePayload(false);
 		const offlinePayload = buildQuestionSavePayload(isReview);
 		const metadataForNext = buildComposerMetadataMemory();
+		const wasEdit = Boolean(editingId);
 		let responseReceived = false;
 		let responseStatus: number | undefined;
 		try {
@@ -2536,6 +2583,11 @@ type TimelineItem = {
 			}
 			const saved = await readClientJson<Question>(res);
 			const savedId = saved?.id ?? editingId;
+			if (savedId) {
+				editingId = savedId;
+				editingEventId = saved?.event_id ?? selectedEventId;
+			}
+			if (saved?.workflow_status) fWorkflowStatus = normalizeWorkflowStatus(saved.workflow_status);
 			if (isReview) {
 				if (!savedId) throw new Error('ID soal hasil simpan tidak ditemukan untuk kirim verifikasi.');
 				await fetch(clientApiPath`/api/bank-soal/questions/${savedId}/workflow`, {
@@ -2543,6 +2595,7 @@ type TimelineItem = {
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ action: 'submit_for_review', notes: '' })
 				}).then((response) => readClientJson<unknown>(response));
+				fWorkflowStatus = 'review';
 			}
 
 			if (keepMetadataForNext) rememberLastComposerMetadata();
@@ -2558,8 +2611,8 @@ type TimelineItem = {
 				}
 				return;
 			}
-			toast.success(isReview ? 'Soal dikirim ke verifikasi' : editingId ? 'Konsep soal berhasil diperbarui' : 'Konsep soal berhasil dibuat');
-			closeComposer();
+			toast.success(isReview ? 'Soal dikirim ke verifikasi' : wasEdit ? 'Konsep soal berhasil diperbarui' : 'Konsep soal berhasil dibuat');
+			openPostSaveActions(savedId, intent, metadataForNext, wasEdit);
 		} catch (e) {
 			if (shouldQueueBankSoalQuestionSave({ isOnline: browserOnline(), responseReceived, responseStatus })) {
 				await queueQuestionSave(offlinePayload, intent, false);
@@ -3634,6 +3687,37 @@ type TimelineItem = {
 	</Dialog.Content>
 </Dialog.Root>
 
+<Dialog.Root bind:open={postSaveActionOpen}>
+	<Dialog.Content>
+		<div class="w-[min(94vw,34rem)] space-y-4 p-5">
+			<div class="space-y-1">
+				<p class="text-xs font-bold uppercase tracking-wider text-success">Soal berhasil disimpan</p>
+				<h2 class="text-lg font-black text-foreground">
+					{postSaveAction?.intent === 'review' ? 'Soal sudah dikirim ke verifikasi' : postSaveAction?.wasEdit ? 'Konsep soal diperbarui' : 'Konsep soal dibuat'}
+				</h2>
+				<p class="text-sm text-muted-foreground">
+					Pilih langkah berikutnya. Jika tambah soal berikutnya, isi pertanyaan, opsi, kunci, stimulus, pembahasan, dan rubrik dikosongkan. Metadata tetap mengikuti Mode Buat Beruntun.
+				</p>
+			</div>
+			<div class="rounded-lg border border-success/20 bg-success/5 p-3 text-xs text-muted-foreground">
+				<p class="font-semibold text-foreground">Metadata saat ini</p>
+				<p class="mt-1">{composerStickyMetadataLabel}</p>
+			</div>
+			<div class="grid gap-2 sm:grid-cols-3">
+				<Button type="button" class="h-auto min-h-12 bg-success px-3 py-2 text-xs text-background hover:bg-success" onclick={createNextAfterPostSave}>
+					Tambah soal berikutnya
+				</Button>
+				<Button type="button" variant="outline" class="h-auto min-h-12 px-3 py-2 text-xs" onclick={() => void editSavedQuestionAfterPostSave()}>
+					Edit soal ini
+				</Button>
+				<Button type="button" variant="outline" class="h-auto min-h-12 px-3 py-2 text-xs" onclick={listQuestionsAfterPostSave}>
+					Lihat daftar soal
+				</Button>
+			</div>
+		</div>
+	</Dialog.Content>
+</Dialog.Root>
+
 <Dialog.Root bind:open={questionPreviewOpen}>
 	<Dialog.Content>
 		<div class="w-[min(94vw,42rem)] space-y-4 p-5">
@@ -4632,16 +4716,6 @@ type TimelineItem = {
 						Simpan Konsep
 					</LoadingButton>
 					<LoadingButton
-						onclick={() => void saveQuestion('draft', true)}
-						disabled={detailReadOnly || !canSaveDraft}
-						loading={composerAction === 'draft_next'}
-						loadingLabel="Menyimpan..."
-						variant="outline"
-						class="h-8 border-success/40 text-xs text-success disabled:opacity-50"
-					>
-						Simpan & Buat Berikutnya
-					</LoadingButton>
-					<LoadingButton
 						onclick={() => void saveQuestion('review')}
 						disabled={detailReadOnly || !canSubmitReview}
 						loading={composerAction === 'review'}
@@ -4649,15 +4723,6 @@ type TimelineItem = {
 						class="h-8 bg-success text-xs text-background hover:bg-success disabled:opacity-50"
 					>
 						Kirim Verifikasi
-					</LoadingButton>
-					<LoadingButton
-						onclick={() => void saveQuestion('review', true)}
-						disabled={detailReadOnly || !canSubmitReview}
-						loading={composerAction === 'review_next'}
-						loadingLabel="Mengajukan..."
-						class="h-8 bg-emerald-700 text-xs text-background hover:bg-emerald-700/90 disabled:opacity-50"
-					>
-						Kirim Verifikasi & Buat Berikutnya
 					</LoadingButton>
 				</div>
 			</div>
