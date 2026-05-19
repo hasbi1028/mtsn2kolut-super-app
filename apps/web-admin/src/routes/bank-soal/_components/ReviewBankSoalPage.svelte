@@ -6,6 +6,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { TablePagination } from '$lib/components/ui/pagination';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
@@ -15,6 +16,7 @@
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { htmlToPlainText } from '$lib/utils/html-text';
 	import { displayName } from '$lib/utils/display-name';
+	import { DEFAULT_PAGE_SIZE_OPTIONS, normalizePage, normalizePageSize, type PaginationChange } from '$lib/utils/pagination';
 
 	type PageData = { user?: BankSoalAccessUser };
 	type OptionItem = { label?: string; text?: string; html?: string; latex?: string; match_label?: string; match_text?: string; match_html?: string; is_distractor?: boolean };
@@ -37,7 +39,7 @@
 		author_display_name?: string;
 		review_notes?: string;
 	};
-	type QuestionListResponse = { items: Question[]; meta?: { total: number } };
+	type QuestionListResponse = { items: Question[]; meta?: { total?: number; limit?: number; offset?: number } };
 	type TimelineItem = { id?: string; action?: string; status?: string; notes?: string; actor_username?: string; actor_display_name?: string; created_at?: string };
 	type EventContext = { id: string; title: string; status: string; academic_year_name?: string };
 
@@ -53,6 +55,10 @@
 	const eventId = page.url.searchParams.get('event_id') ?? '';
 	const subjectId = page.url.searchParams.get('subject_id') ?? '';
 	const requestedQuestionId = page.url.searchParams.get('question_id') ?? '';
+	const DEFAULT_PAGE_SIZE = DEFAULT_PAGE_SIZE_OPTIONS[0];
+	let currentPage = $state(normalizePage(page.url.searchParams.get('page'), 1));
+	let pageSize = $state<number>(normalizePageSize(page.url.searchParams.get('limit'), DEFAULT_PAGE_SIZE_OPTIONS, DEFAULT_PAGE_SIZE));
+	let totalItems = $state(0);
 
 	let activeQuestion = $derived(activeDetail ?? queue[activeIndex] ?? null);
 	let canReview = $derived(canReviewBankSoal(data?.user));
@@ -71,8 +77,25 @@
 		return option.html || option.text || option.latex || option.match_html || option.match_text || '-';
 	}
 
-	async function fetchQueue(): Promise<QuestionListResponse> {
-		const params = new URLSearchParams({ workflow_status: 'review', status: 'draft', limit: '30', offset: '0' });
+	function syncUrl(pageNumber: number, limit = pageSize) {
+		if (typeof window === 'undefined') return;
+		const params = new URLSearchParams();
+		if (eventId) params.set('event_id', eventId);
+		if (subjectId) params.set('subject_id', subjectId);
+		if (requestedQuestionId) params.set('question_id', requestedQuestionId);
+		if (pageNumber > 1) params.set('page', String(pageNumber));
+		if (limit !== DEFAULT_PAGE_SIZE) params.set('limit', String(limit));
+		const query = params.toString();
+		window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+	}
+
+	async function fetchQueue(pageNumber = currentPage, limit = pageSize): Promise<QuestionListResponse> {
+		const params = new URLSearchParams({
+			workflow_status: 'review',
+			status: 'draft',
+			limit: String(limit),
+			offset: String(Math.max(0, (pageNumber - 1) * limit))
+		});
 		if (eventId) params.set('event_id', eventId);
 		if (subjectId) params.set('subject_id', subjectId);
 		return fetch(clientApiPathWithQuery('/api/bank-soal/questions', params)).then((response) => readClientApiData<QuestionListResponse>(response, 'Gagal memuat antrean review'));
@@ -87,9 +110,14 @@
 		}
 	}
 
-	function loadQueue() {
-		queuePromise = fetchQueue().then((payload) => {
+	function loadQueue(pageNumber = currentPage, limit = pageSize) {
+		pageSize = limit;
+		currentPage = Math.max(1, pageNumber);
+		queuePromise = fetchQueue(currentPage, limit).then((payload) => {
 			queue = payload.items ?? [];
+			totalItems = payload.meta?.total ?? queue.length;
+			pageSize = normalizePageSize(payload.meta?.limit, DEFAULT_PAGE_SIZE_OPTIONS, limit);
+			syncUrl(currentPage, pageSize);
 			const requestedIndex = requestedQuestionId
 				? queue.findIndex((question) => question.id === requestedQuestionId)
 				: -1;
@@ -123,6 +151,10 @@
 		void loadActiveDetail();
 	}
 
+	function handlePagination(change: PaginationChange) {
+		loadQueue(change.reason === 'limit' ? 1 : change.page, change.limit);
+	}
+
 	async function decide(action: 'approve' | 'reject') {
 		if (!activeQuestion) return;
 		if (!canReview) {
@@ -143,8 +175,14 @@
 			}).then((response) => readClientJson<unknown>(response));
 			toast.success(action === 'approve' ? 'Soal disetujui' : 'Soal dikembalikan untuk revisi');
 			queue = queue.filter((item) => item.id !== activeQuestion.id);
-			activeIndex = Math.min(activeIndex, Math.max(0, queue.length - 1));
-			void loadActiveDetail();
+			totalItems = Math.max(0, totalItems - 1);
+			const nextPage = Math.min(currentPage, Math.max(1, Math.ceil(totalItems / pageSize)));
+			if (queue.length === 0 || nextPage !== currentPage) {
+				loadQueue(nextPage, pageSize);
+			} else {
+				activeIndex = Math.min(activeIndex, Math.max(0, queue.length - 1));
+				void loadActiveDetail();
+			}
 		} catch (error) {
 			toast.error(errorMessage(error, 'Gagal menyimpan keputusan'));
 		} finally {
@@ -166,7 +204,7 @@
 
 	onMount(() => {
 		void fetchEventContext().then((context) => { eventContext = context; });
-		loadQueue();
+		loadQueue(currentPage, pageSize);
 	});
 </script>
 
@@ -212,7 +250,7 @@
 			<Skeleton class="h-96 w-full" />
 		{/snippet}
 		{#snippet failed(error, reset)}
-			<RecoveryPanel title="Antrean Verifikasi Belum Tersaji" message={errorMessage(error, 'Gagal memuat antrean verifikasi.')} onRetry={() => { reset?.(); loadQueue(); }} />
+			<RecoveryPanel title="Antrean Verifikasi Belum Tersaji" message={errorMessage(error, 'Gagal memuat antrean verifikasi.')} onRetry={() => { reset?.(); loadQueue(currentPage, pageSize); }} />
 		{/snippet}
 		{#snippet children()}
 			{#if !activeQuestion}
@@ -283,4 +321,13 @@
 			{/if}
 		{/snippet}
 	</AsyncContent>
+
+	<TablePagination
+		page={currentPage}
+		limit={pageSize}
+		total={totalItems}
+		itemLabel="soal"
+		ariaLabel="Navigasi halaman antrean verifikasi"
+		onchange={handlePagination}
+	/>
 </div>

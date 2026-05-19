@@ -7,10 +7,11 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
-	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { TablePagination } from '$lib/components/ui/pagination';
 	import { readClientApiData } from '$lib/client/api';
 	import { displayName } from '$lib/utils/display-name';
+	import { DEFAULT_PAGE_SIZE_OPTIONS, type PaginationChange } from '$lib/utils/pagination';
 
 	type AuditLog = {
 		id: string;
@@ -28,13 +29,18 @@
 	let logsPromise = $state<Promise<AuditLog[]> | null>(null);
 	let logsRequestId = 0;
 	let fetching = $state(false);
-	let fetchingAction = $state<'previous' | 'next' | null>(null);
 	let page = $state(1);
+	let perPage = $state<number>(DEFAULT_PAGE_SIZE_OPTIONS[0]);
 	let scopeFilter = $state<'all' | 'auth'>('all');
 	let search = $state('');
-	const perPage = 50;
+	let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const filteredLogs = $derived.by(() => filterAuditLogs(logs));
+	const totalEstimate = $derived.by(() => {
+		const offset = (page - 1) * perPage;
+		const hasNext = logs.length >= perPage;
+		return offset + filteredLogs.length + (hasNext ? perPage : 0);
+	});
 
 	function filterAuditLogs(logRows: AuditLog[]) {
 		const q = search.trim().toLowerCase();
@@ -140,12 +146,12 @@
 		return readClientApiData<AuditLog[]>(res, 'Gagal memuat riwayat aktivitas');
 	}
 
-	function load(pageNumber = page, action: 'previous' | 'next' | null = null) {
+	function load(pageNumber = page, nextPerPage = perPage) {
 		const requestId = ++logsRequestId;
 		page = pageNumber;
+		perPage = nextPerPage;
 		logs = [];
 		fetching = true;
-		fetchingAction = action;
 		logsPromise = fetchLogs(pageNumber)
 			.then((nextLogs) => {
 				if (requestId === logsRequestId) {
@@ -160,9 +166,23 @@
 			.finally(() => {
 				if (requestId === logsRequestId) {
 					fetching = false;
-					fetchingAction = null;
 				}
 			});
+	}
+
+	function setScopeFilter(nextScope: 'all' | 'auth') {
+		scopeFilter = nextScope;
+		load(1);
+	}
+
+	function handleSearchInput(event: Event) {
+		search = (event.currentTarget as HTMLInputElement).value;
+		if (searchTimer) clearTimeout(searchTimer);
+		searchTimer = setTimeout(() => load(1), 250);
+	}
+
+	function handlePagination(change: PaginationChange) {
+		load(change.reason === 'limit' ? 1 : change.page, change.limit);
 	}
 
 	function retryLogs(reset?: () => void) {
@@ -181,6 +201,9 @@
 
 	onMount(() => {
 		void load();
+		return () => {
+			if (searchTimer) clearTimeout(searchTimer);
+		};
 	});
 </script>
 
@@ -195,30 +218,13 @@
 			</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
-			<Button variant={scopeFilter === 'all' ? 'default' : 'outline'} size="sm" onclick={() => (scopeFilter = 'all')}>
+			<Button variant={scopeFilter === 'all' ? 'default' : 'outline'} size="sm" onclick={() => setScopeFilter('all')}>
 				Semua
 			</Button>
-			<Button variant={scopeFilter === 'auth' ? 'default' : 'outline'} size="sm" onclick={() => (scopeFilter = 'auth')}>
+			<Button variant={scopeFilter === 'auth' ? 'default' : 'outline'} size="sm" onclick={() => setScopeFilter('auth')}>
 				Auth & Session
 			</Button>
-			<Input bind:value={search} placeholder="Cari aksi, user, sesi..." class="w-full sm:w-64" />
-			<LoadingButton
-				variant="outline"
-				size="sm"
-				disabled={page === 1 || fetching}
-				loading={fetchingAction === 'previous'}
-				loadingLabel="Memuat..."
-				onclick={() => load(Math.max(1, page - 1), 'previous')}
-			>← Sebelumnya</LoadingButton>
-			<span class="text-sm text-muted-foreground">Hal. {page}</span>
-			<LoadingButton
-				variant="outline"
-				size="sm"
-				disabled={fetching || logs.length < perPage}
-				loading={fetchingAction === 'next'}
-				loadingLabel="Memuat..."
-				onclick={() => load(page + 1, 'next')}
-			>Berikutnya →</LoadingButton>
+			<Input value={search} oninput={handleSearchInput} placeholder="Cari aksi, user, sesi..." class="w-full sm:w-64" />
 		</div>
 	</div>
 
@@ -314,4 +320,20 @@
 			</AsyncContent>
 		</Card.Content>
 	</Card.Root>
+
+	<div class="space-y-2">
+		<p class="text-sm text-muted-foreground" aria-live="polite">
+			Menampilkan {filteredLogs.length} aktivitas pada halaman {page}
+		</p>
+		<TablePagination
+			{page}
+			limit={perPage}
+			total={totalEstimate}
+			itemLabel="aktivitas"
+			loading={fetching}
+			showSummary={false}
+			ariaLabel="Navigasi halaman riwayat aktivitas"
+			onchange={handlePagination}
+		/>
+	</div>
 </div>

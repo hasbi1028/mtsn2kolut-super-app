@@ -14,6 +14,7 @@
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import SuccessPanel from '$lib/components/SuccessPanel.svelte';
+	import { TablePagination } from '$lib/components/ui/pagination';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { readClientApiData, readClientJson } from '$lib/client/api';
 	import {
@@ -23,6 +24,7 @@
 		type ParentAccountGenerationResult
 	} from '$lib/client/account-generation';
 	import { displayName } from '$lib/utils/display-name';
+	import { DEFAULT_PAGE_SIZE_OPTIONS, clampPage, paginateItems, type PaginationChange } from '$lib/utils/pagination';
 
 	type Parent = {
 		id: string;
@@ -58,6 +60,8 @@
 	let linkedStudents = $state<Student[]>([]);
 	let linkedStudentsPromise = $state<Promise<Student[]> | null>(null);
 	let linkedStudentsRequestId = 0;
+	let currentPage = $state(1);
+	let pageSize = $state<number>(DEFAULT_PAGE_SIZE_OPTIONS[0]);
 
 	let fNama = $state('');
 	let fPhone = $state('');
@@ -74,6 +78,8 @@
 	const userPermissions = $derived(page.data.user?.permissions ?? []);
 	const canManageParentAccounts = $derived(userRoles.includes('admin') || userPermissions.includes('parent_accounts.manage'));
 	const parentAccountSummary = $derived(parentAccountResult ?? parentAccountPreview);
+	const safePage = $derived(clampPage(currentPage, parents.length, pageSize));
+	const paginatedParents = $derived(paginateItems(parents, safePage, pageSize));
 
 	async function ensureMutationOk(response: Response, fallbackMessage: string) {
 		try {
@@ -174,6 +180,11 @@
 		if (!selectedParent) return;
 		reset?.();
 		loadLinkedStudents(selectedParent.id);
+	}
+
+	function handlePagination(change: PaginationChange) {
+		currentPage = change.reason === 'limit' ? 1 : change.page;
+		pageSize = change.limit;
 	}
 
 	function overviewErrorMessage(error: unknown) {
@@ -558,7 +569,7 @@
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
-							{#each overview.parents as p (p.id)}
+							{#each paginatedParents as p (p.id)}
 								{@const accountCandidate = parentAccountCandidate(p)}
 								<Table.Row>
 									<Table.Cell class="font-medium">{p.nama}</Table.Cell>
@@ -587,6 +598,16 @@
 						</Table.Body>
 					</Table.Root>
 				</Card.Content>
+				<div class="border-t border-border p-3">
+					<TablePagination
+						page={safePage}
+						limit={pageSize}
+						total={overview.parents.length}
+						itemLabel="orang tua"
+						ariaLabel="Navigasi halaman data orang tua"
+						onchange={handlePagination}
+					/>
+				</div>
 			</Card.Root>
 		{/snippet}
 	</AsyncContent>

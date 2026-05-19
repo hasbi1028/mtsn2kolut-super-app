@@ -2,8 +2,6 @@
   import { onMount } from "svelte";
 
   import { resolve } from "$app/paths";
-  import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
-  import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
   import BarChart3Icon from "@lucide/svelte/icons/bar-chart-3";
   import BookOpenCheckIcon from "@lucide/svelte/icons/book-open-check";
   import ClipboardCheckIcon from "@lucide/svelte/icons/clipboard-check";
@@ -27,6 +25,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Skeleton } from "$lib/components/ui/skeleton";
+  import { TablePagination } from "$lib/components/ui/pagination";
   import AsyncContent from "$lib/components/AsyncContent.svelte";
   import LoadingButton from "$lib/components/LoadingButton.svelte";
   import RecoveryPanel from "$lib/components/RecoveryPanel.svelte";
@@ -45,6 +44,12 @@
   } from "$lib/bank-soal/access";
   import { htmlToPlainText } from "$lib/utils/html-text";
   import { displayName } from "$lib/utils/display-name";
+  import {
+    DEFAULT_PAGE_SIZE_OPTIONS,
+    normalizePage,
+    normalizePageSize,
+    type PaginationChange,
+  } from "$lib/utils/pagination";
 
   type PageData = {
     user?: {
@@ -214,7 +219,7 @@
   let { data, mode = "combined" }: { data: PageData; mode?: PageMode } =
     $props();
 
-  const PAGE_SIZE = 12;
+  const DEFAULT_PAGE_SIZE = DEFAULT_PAGE_SIZE_OPTIONS[0];
   const emptyCounts: StatusCounts = {
     all: 0,
     draft: 0,
@@ -319,6 +324,7 @@
   let authors = $state<Author[]>([]);
   let authorsLoaded = $state(false);
   let currentPage = $state(1);
+  let pageSize = $state<number>(DEFAULT_PAGE_SIZE);
   let questions = $state<Question[]>([]);
   let subjects = $state<Subject[]>([]);
   let totalItems = $state(0);
@@ -348,11 +354,6 @@
     if (roles.includes("guru")) return "Guru";
     return roles.length > 0 ? roles.join(", ") : "Pengguna";
   });
-  let pageCount = $derived(Math.max(1, Math.ceil(totalItems / PAGE_SIZE)));
-  let resultStart = $derived(
-    totalItems === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1,
-  );
-  let resultEnd = $derived(Math.min(totalItems, currentPage * PAGE_SIZE));
   let hasFilters = $derived(
     Boolean(
       search.trim() ||
@@ -474,10 +475,10 @@
     }
   }
 
-  function buildListParams(page: number): URLSearchParams {
+  function buildListParams(page: number, limit = pageSize): URLSearchParams {
     const params = buildBaseParams(
-      PAGE_SIZE,
-      Math.max(0, (page - 1) * PAGE_SIZE),
+      limit,
+      Math.max(0, (page - 1) * limit),
     );
     if (workflowFilter) params.set("workflow_status", workflowFilter);
     if (publicationFilter) params.set("status", publicationFilter);
@@ -490,11 +491,9 @@
     return params;
   }
 
-  async function fetchQuestionList(
-    page: number,
-  ): Promise<QuestionListResponse> {
+  async function fetchQuestionList(page: number, limit = pageSize): Promise<QuestionListResponse> {
     return fetch(
-      clientApiPathWithQuery("/api/bank-soal/questions", buildListParams(page)),
+      clientApiPathWithQuery("/api/bank-soal/questions", buildListParams(page, limit)),
     ).then((response) =>
       readClientApiData<QuestionListResponse>(
         response,
@@ -579,10 +578,10 @@
     summaryRecentActivities = buildRecentActivities(summary.recent ?? []);
   }
 
-  async function fetchOverview(page = currentPage): Promise<BankSoalOverview> {
+  async function fetchOverview(page = currentPage, limit = pageSize): Promise<BankSoalOverview> {
     const [questionPayload, loadedSubjects, summaryPayload] = await Promise.all(
       [
-        fetchQuestionList(page),
+        fetchQuestionList(page, limit),
         subjects.length > 0 ? Promise.resolve(subjects) : fetchSubjects(),
         fetchQuestionSummary(),
       ],
@@ -605,9 +604,9 @@
         published: summaryCounts.published ?? 0,
       },
       page,
-      limit: questionPayload.meta?.limit ?? PAGE_SIZE,
+      limit: questionPayload.meta?.limit ?? limit,
       offset:
-        questionPayload.meta?.offset ?? Math.max(0, (page - 1) * PAGE_SIZE),
+        questionPayload.meta?.offset ?? Math.max(0, (page - 1) * limit),
       summary: summaryPayload,
     };
   }
@@ -619,8 +618,8 @@
       totalItems,
       counts,
       page: currentPage,
-      limit: PAGE_SIZE,
-      offset: Math.max(0, (currentPage - 1) * PAGE_SIZE),
+      limit: pageSize,
+      offset: Math.max(0, (currentPage - 1) * pageSize),
     };
   }
 
@@ -633,10 +632,11 @@
     totalItems = overview.totalItems;
     counts = overview.counts;
     currentPage = overview.page;
+    pageSize = normalizePageSize(overview.limit, DEFAULT_PAGE_SIZE_OPTIONS, pageSize);
     applySummaryPayload(summary);
   }
 
-  function syncUrl(page: number) {
+  function syncUrl(page: number, limit = pageSize) {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams();
     if (search.trim()) params.set("q", search.trim());
@@ -647,6 +647,7 @@
     if (hotsFilter) params.set("hots", hotsFilter);
     if (authorFilter) params.set("author_username", authorFilter);
     if (page > 1) params.set("page", String(page));
+    if (limit !== DEFAULT_PAGE_SIZE) params.set("limit", String(limit));
     const query = params.toString();
     window.history.replaceState(
       {},
@@ -655,13 +656,14 @@
     );
   }
 
-  function load(page = currentPage, markRefreshing = false) {
+  function load(page = currentPage, markRefreshing = false, limit = pageSize) {
     const nextPage = Math.max(1, page);
     currentPage = nextPage;
-    syncUrl(nextPage);
+    pageSize = limit;
+    syncUrl(nextPage, limit);
     if (markRefreshing) refreshing = true;
     const activeRequestId = ++requestId;
-    const promise = fetchOverview(nextPage)
+    const promise = fetchOverview(nextPage, limit)
       .then((overview) => {
         if (activeRequestId !== requestId) return currentOverview();
         applyOverview(overview, overview.summary);
@@ -679,13 +681,13 @@
 
   function applyFilters(event?: SubmitEvent) {
     event?.preventDefault();
-    load(1, true);
+    load(1, true, pageSize);
   }
 
   function onSearchInput(event: Event) {
     search = (event.currentTarget as HTMLInputElement).value;
     if (searchTimer) clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => load(1, true), 350);
+    searchTimer = setTimeout(() => load(1, true, pageSize), 350);
   }
 
   function clearFilters() {
@@ -697,7 +699,7 @@
     questionTypeFilter = "";
     hotsFilter = "";
     authorFilter = "";
-    load(1, true);
+    load(1, true, pageSize);
   }
 
   function setSummaryFilter(key: StatusKey) {
@@ -714,7 +716,7 @@
       workflowFilter = key;
       publicationFilter = "";
     }
-    load(1, true);
+    load(1, true, pageSize);
   }
 
   function readInitialFilters() {
@@ -729,9 +731,12 @@
     );
     hotsFilter = normalizeHotsFilter(params.get("hots"));
     authorFilter = params.get("author_username") ?? "";
-    const parsedPage = Number.parseInt(params.get("page") ?? "1", 10);
-    currentPage =
-      Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+    currentPage = normalizePage(params.get("page"), 1);
+    pageSize = normalizePageSize(params.get("limit"), DEFAULT_PAGE_SIZE_OPTIONS, DEFAULT_PAGE_SIZE);
+  }
+
+  function handlePagination(change: PaginationChange) {
+    load(change.reason === "limit" ? 1 : change.page, true, change.limit);
   }
 
   function normalizeWorkflowFilter(value: string | null): WorkflowFilter {
@@ -1125,7 +1130,7 @@
       load(
         Math.min(
           currentPage,
-          Math.max(1, Math.ceil(Math.max(0, totalItems - 1) / PAGE_SIZE)),
+          Math.max(1, Math.ceil(Math.max(0, totalItems - 1) / pageSize)),
         ),
         true,
       );
@@ -2062,18 +2067,13 @@
               <h2 class="text-base font-semibold text-foreground">
                 Soal Tersedia
               </h2>
-              <p class="mt-1 text-xs text-muted-foreground">
-                {totalItems === 0
-                  ? "Tidak ada soal pada filter ini"
-                  : `${resultStart}-${resultEnd} dari ${totalItems} soal`}
-              </p>
+              {#if totalItems === 0}
+                <p class="mt-1 text-xs text-muted-foreground">
+                  Tidak ada soal pada filter ini
+                </p>
+              {/if}
             </div>
             <div class="flex flex-wrap gap-2">
-              <Badge
-                variant="outline"
-                class="border-border bg-muted/50 text-foreground"
-                >{PAGE_SIZE} per halaman</Badge
-              >
               {#if selectedSubject}
                 <Badge
                   variant="outline"
@@ -2503,35 +2503,14 @@
       {/snippet}
     </AsyncContent>
 
-    {#if totalItems > PAGE_SIZE}
-      <nav
-        class="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 text-sm text-muted-foreground shadow-sm sm:flex-row sm:items-center sm:justify-between"
-        aria-label="Navigasi halaman daftar soal"
-      >
-        <span>{resultStart}-{resultEnd} dari {totalItems} soal</span>
-        <div class="flex items-center gap-2">
-          <Button
-            variant="outline"
-            disabled={currentPage <= 1 || refreshing}
-            onclick={() => load(currentPage - 1, true)}
-          >
-            <ChevronLeftIcon class="size-4" />
-            Sebelumnya
-          </Button>
-          <span
-            class="min-w-20 text-center text-xs font-semibold text-muted-foreground"
-            >Hal {currentPage} / {pageCount}</span
-          >
-          <Button
-            variant="outline"
-            disabled={currentPage >= pageCount || refreshing}
-            onclick={() => load(currentPage + 1, true)}
-          >
-            Berikutnya
-            <ChevronRightIcon class="size-4" />
-          </Button>
-        </div>
-      </nav>
-    {/if}
+    <TablePagination
+      page={currentPage}
+      limit={pageSize}
+      total={totalItems}
+      itemLabel="soal"
+      loading={refreshing}
+      ariaLabel="Navigasi halaman daftar soal"
+      onchange={handlePagination}
+    />
   {/if}
 </div>

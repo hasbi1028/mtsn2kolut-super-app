@@ -12,8 +12,10 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { TablePagination } from '$lib/components/ui/pagination';
 	import { readClientApiData, readClientJson } from '$lib/client/api';
 	import { displayName } from '$lib/utils/display-name';
+	import { DEFAULT_PAGE_SIZE_OPTIONS, clampPage, paginateItems, type PaginationChange } from '$lib/utils/pagination';
 
 	interface Item {
 		id: string;
@@ -47,6 +49,8 @@
 	let search = $state('');
 	let filterKategori = $state('');
 	let filterKondisi = $state('');
+	let currentPage = $state(1);
+	let pageSize = $state<number>(DEFAULT_PAGE_SIZE_OPTIONS[0]);
 
 	let showDialog = $state(false);
 	let editingId = $state<string | null>(null);
@@ -77,6 +81,8 @@
 	let fCatatan = $state('');
 
 	const filtered = $derived.by(() => filterItems(items));
+	const safePage = $derived(clampPage(currentPage, filtered.length, pageSize));
+	const paginatedItems = $derived(paginateItems(filtered, safePage, pageSize));
 
 	const selectedItems = $derived.by(() => items.filter((item) => selectedIds.includes(item.id)));
 
@@ -135,10 +141,30 @@
 
 	function toggleSelectAllVisible(checked: boolean) {
 		if (!checked) {
-			selectedIds = selectedIds.filter((id) => !filtered.some((item) => item.id === id));
+			selectedIds = selectedIds.filter((id) => !paginatedItems.some((item) => item.id === id));
 			return;
 		}
-		selectedIds = Array.from(new Set([...selectedIds, ...filtered.map((item) => item.id)]));
+		selectedIds = Array.from(new Set([...selectedIds, ...paginatedItems.map((item) => item.id)]));
+	}
+
+	function handleSearchInput(event: Event) {
+		search = (event.currentTarget as HTMLInputElement).value;
+		currentPage = 1;
+	}
+
+	function handleKategoriChange(event: Event) {
+		filterKategori = (event.currentTarget as HTMLSelectElement).value;
+		currentPage = 1;
+	}
+
+	function handleKondisiChange(event: Event) {
+		filterKondisi = (event.currentTarget as HTMLSelectElement).value;
+		currentPage = 1;
+	}
+
+	function handlePagination(change: PaginationChange) {
+		currentPage = change.reason === 'limit' ? 1 : change.page;
+		pageSize = change.limit;
 	}
 
 	function openBatchDialog() {
@@ -505,11 +531,11 @@
 		<Card.Content class="grid gap-3 p-4 md:grid-cols-3">
 			<div>
 				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Cari Barang</p>
-				<Input class="w-full" placeholder="Cari nama, kode, atau lokasi…" bind:value={search} />
+				<Input class="w-full" placeholder="Cari nama, kode, atau lokasi…" value={search} oninput={handleSearchInput} />
 			</div>
 			<div>
 				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Filter Kategori</p>
-				<select bind:value={filterKategori} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+				<select value={filterKategori} onchange={handleKategoriChange} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 					<option value="">Semua Kategori</option>
 					{#each KATEGORI_LIST as kategori (kategori)}
 						<option value={kategori}>{kategori.charAt(0).toUpperCase() + kategori.slice(1)}</option>
@@ -518,7 +544,7 @@
 			</div>
 			<div>
 				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Filter Kondisi</p>
-				<select bind:value={filterKondisi} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+				<select value={filterKondisi} onchange={handleKondisiChange} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 					<option value="">Semua Kondisi</option>
 					{#each KONDISI_LIST as kondisi (kondisi)}
 						<option value={kondisi}>{conditionLabel(kondisi)}</option>
@@ -577,7 +603,7 @@
 										<input
 											type="checkbox"
 											class="h-4 w-4 rounded border-border"
-											checked={currentFiltered.length > 0 && currentFiltered.every((item) => selectedIds.includes(item.id))}
+											checked={paginatedItems.length > 0 && paginatedItems.every((item) => selectedIds.includes(item.id))}
 											onchange={(event) => toggleSelectAllVisible((event.currentTarget as HTMLInputElement).checked)}
 										/>
 									</Table.Head>
@@ -590,7 +616,7 @@
 								</Table.Row>
 							</Table.Header>
 							<Table.Body>
-								{#each currentFiltered as item (item.id)}
+								{#each paginatedItems as item (item.id)}
 									<Table.Row class="text-sm">
 										<Table.Cell>
 											<input
@@ -626,6 +652,16 @@
 								{/each}
 							</Table.Body>
 						</Table.Root>
+						<div class="border-t border-border p-3">
+							<TablePagination
+								page={safePage}
+								limit={pageSize}
+								total={currentFiltered.length}
+								itemLabel="barang"
+								ariaLabel="Navigasi halaman daftar inventaris"
+								onchange={handlePagination}
+							/>
+						</div>
 					{/if}
 				{/snippet}
 			</AsyncContent>

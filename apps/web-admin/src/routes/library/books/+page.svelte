@@ -12,7 +12,9 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { TablePagination } from '$lib/components/ui/pagination';
 	import { readClientApiData, readClientJson } from '$lib/client/api';
+	import { DEFAULT_PAGE_SIZE_OPTIONS, clampPage, paginateItems, type PaginationChange } from '$lib/utils/pagination';
 
 	interface Book {
 		id: string;
@@ -35,6 +37,8 @@
 	let booksRequestId = 0;
 	let search = $state('');
 	let filterKategori = $state('');
+	let currentPage = $state(1);
+	let pageSize = $state<number>(DEFAULT_PAGE_SIZE_OPTIONS[0]);
 
 	let showDialog = $state(false);
 	let editingId = $state<string | null>(null);
@@ -53,6 +57,10 @@
 	let fEksemplar = $state(1);
 	let fRak = $state('');
 
+	const filteredBooks = $derived(filterBooks(books));
+	const safePage = $derived(clampPage(currentPage, filteredBooks.length, pageSize));
+	const paginatedBooks = $derived(paginateItems(filteredBooks, safePage, pageSize));
+
 	function filterBooks(bookRows: Book[]) {
 		return bookRows.filter((b) => {
 			const q = search.toLowerCase();
@@ -60,6 +68,21 @@
 			const matchKat = !filterKategori || b.kategori === filterKategori;
 			return matchSearch && matchKat;
 		});
+	}
+
+	function handleSearchInput(event: Event) {
+		search = (event.currentTarget as HTMLInputElement).value;
+		currentPage = 1;
+	}
+
+	function handleKategoriChange(event: Event) {
+		filterKategori = (event.currentTarget as HTMLSelectElement).value;
+		currentPage = 1;
+	}
+
+	function handlePagination(change: PaginationChange) {
+		currentPage = change.reason === 'limit' ? 1 : change.page;
+		pageSize = change.limit;
 	}
 
 	async function fetchBooks(): Promise<Book[]> {
@@ -245,12 +268,13 @@
 		<Card.Content class="grid gap-3 p-4 md:grid-cols-[1.2fr_0.8fr]">
 			<div>
 				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Cari Koleksi</p>
-				<Input class="w-full" placeholder="Cari judul, pengarang, atau kode buku…" bind:value={search} />
+				<Input class="w-full" placeholder="Cari judul, pengarang, atau kode buku…" value={search} oninput={handleSearchInput} />
 			</div>
 			<div>
 				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Filter Kategori</p>
 				<select
-					bind:value={filterKategori}
+					value={filterKategori}
+					onchange={handleKategoriChange}
 					class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 				>
 					<option value="">Semua Kategori</option>
@@ -316,7 +340,7 @@
 								</Table.Row>
 							</Table.Header>
 							<Table.Body>
-								{#each currentFiltered as b (b.id)}
+								{#each paginatedBooks as b (b.id)}
 									<Table.Row class="text-sm">
 										<Table.Cell class="font-mono text-xs">{b.kode}</Table.Cell>
 										<Table.Cell>
@@ -342,6 +366,16 @@
 								{/each}
 							</Table.Body>
 						</Table.Root>
+						<div class="border-t border-border p-3">
+							<TablePagination
+								page={safePage}
+								limit={pageSize}
+								total={currentFiltered.length}
+								itemLabel="buku"
+								ariaLabel="Navigasi halaman katalog buku"
+								onchange={handlePagination}
+							/>
+						</div>
 					{/if}
 				{/snippet}
 			</AsyncContent>

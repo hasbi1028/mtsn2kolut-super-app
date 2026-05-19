@@ -10,11 +10,13 @@
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
+	import { TablePagination } from '$lib/components/ui/pagination';
 	import { toast } from '$lib/components/ui/sonner';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { readClientApiData, readClientJson } from '$lib/client/api';
 	import { trackInternalAnalyticsEvent } from '$lib/analytics/internal-analytics';
 	import { displayName } from '$lib/utils/display-name';
+	import { DEFAULT_PAGE_SIZE_OPTIONS, clampPage, paginateItems, type PaginationChange } from '$lib/utils/pagination';
 	import {
 		employeeAccountGenerationCSV,
 		fetchRBACMatrix,
@@ -77,6 +79,10 @@
 	let searchQuery = $state('');
 	let roleFilter = $state('all');
 	let statusFilter = $state<'all' | 'active' | 'inactive' | 'unlinked' | 'never-login' | 'multi-role'>('all');
+	let usersPage = $state(1);
+	let usersPageSize = $state<number>(DEFAULT_PAGE_SIZE_OPTIONS[0]);
+	let generationPage = $state(1);
+	let generationPageSize = $state<number>(DEFAULT_PAGE_SIZE_OPTIONS[0]);
 	let selectedUserIds = $state<string[]>([]);
 	let selectedUser = $state<User | null>(null);
 	let createPanelOpen = $state(false);
@@ -118,14 +124,18 @@
 	const adminUsers = $derived(users.filter((user) => user.roles?.includes('admin')));
 	const problemUsers = $derived(users.filter((user) => accountHealth(user).length > 0));
 	const visibleUsers = $derived.by(() => filterUsers(usersForActiveTab()));
+	const safeUsersPage = $derived(clampPage(usersPage, visibleUsers.length, usersPageSize));
+	const paginatedUsers = $derived(paginateItems(visibleUsers, safeUsersPage, usersPageSize));
 	const selectedUsers = $derived(users.filter((user) => selectedUserIds.includes(user.id)));
-	const allVisibleSelected = $derived(visibleUsers.length > 0 && visibleUsers.every((user) => selectedUserIds.includes(user.id)));
+	const allVisibleSelected = $derived(paginatedUsers.length > 0 && paginatedUsers.every((user) => selectedUserIds.includes(user.id)));
 	const currentGeneration = $derived.by(() => {
 		if (generationAudience === 'employee') return employeeGeneration;
 		if (generationAudience === 'student') return studentGeneration;
 		return parentGeneration;
 	});
 	const visibleGenerationRows = $derived.by(() => filterGenerationRows(currentGenerationRows()));
+	const safeGenerationPage = $derived(clampPage(generationPage, visibleGenerationRows.length, generationPageSize));
+	const paginatedGenerationRows = $derived(paginateItems(visibleGenerationRows, safeGenerationPage, generationPageSize));
 	const candidateMode = $derived.by<CandidateMode>(() => {
 		if (accountType === 'employee') return 'employee';
 		if (accountType === 'student') return 'student';
@@ -265,14 +275,45 @@
 	function setTab(tab: AccountTab) {
 		activeTab = tab;
 		selectedUserIds = [];
+		usersPage = 1;
 	}
 
 	function toggleSelectVisible() {
 		if (allVisibleSelected) {
-			selectedUserIds = selectedUserIds.filter((id) => !visibleUsers.some((user) => user.id === id));
+			selectedUserIds = selectedUserIds.filter((id) => !paginatedUsers.some((user) => user.id === id));
 		} else {
-			selectedUserIds = Array.from(new Set([...selectedUserIds, ...visibleUsers.map((user) => user.id)]));
+			selectedUserIds = Array.from(new Set([...selectedUserIds, ...paginatedUsers.map((user) => user.id)]));
 		}
+	}
+
+	function handleUserPagination(change: PaginationChange) {
+		usersPage = change.reason === 'limit' ? 1 : change.page;
+		usersPageSize = change.limit;
+	}
+
+	function handleGenerationPagination(change: PaginationChange) {
+		generationPage = change.reason === 'limit' ? 1 : change.page;
+		generationPageSize = change.limit;
+	}
+
+	function handleUserSearchInput(event: Event) {
+		searchQuery = (event.currentTarget as HTMLInputElement).value;
+		usersPage = 1;
+	}
+
+	function setRoleFilter(event: Event) {
+		roleFilter = (event.currentTarget as HTMLSelectElement).value;
+		usersPage = 1;
+	}
+
+	function setStatusFilter(event: Event) {
+		statusFilter = (event.currentTarget as HTMLSelectElement).value as typeof statusFilter;
+		usersPage = 1;
+	}
+
+	function handleGenerationSearchInput(event: Event) {
+		generationSearch = (event.currentTarget as HTMLInputElement).value;
+		generationPage = 1;
 	}
 
 	function toggleUserSelection(user: User) {
@@ -784,7 +825,7 @@
 			<Card.Content class="space-y-4">
 				<div class="flex flex-wrap gap-2">
 					{#each [{ id: 'employee', label: 'Pegawai' }, { id: 'student', label: 'Siswa' }, { id: 'parent', label: 'Orang Tua' }] as item}
-						<button class={`rounded-xl border px-3 py-2 text-sm ${generationAudience === item.id ? 'border-primary bg-primary/10 text-primary' : 'bg-card text-muted-foreground'}`} onclick={() => (generationAudience = item.id as GenerationAudience)}>{item.label}</button>
+						<button class={`rounded-xl border px-3 py-2 text-sm ${generationAudience === item.id ? 'border-primary bg-primary/10 text-primary' : 'bg-card text-muted-foreground'}`} onclick={() => { generationAudience = item.id as GenerationAudience; generationPage = 1; }}>{item.label}</button>
 					{/each}
 				</div>
 				<div class="grid gap-3 md:grid-cols-5">
@@ -792,12 +833,12 @@
 						<div class="rounded-xl border bg-card p-3"><p class="text-[11px] uppercase text-muted-foreground">{key}</p><p class="text-xl font-semibold">{currentGeneration?.[key as 'total' | 'ready' | 'created' | 'skipped' | 'failed'] ?? 0}</p></div>
 					{/each}
 				</div>
-				<Input bind:value={generationSearch} placeholder="Cari hasil preview/generate" />
+				<Input value={generationSearch} oninput={handleGenerationSearchInput} placeholder="Cari hasil preview/generate" />
 				<div class="max-h-[520px] overflow-auto rounded-2xl border">
 					<Table.Root>
 						<Table.Header><Table.Row class="bg-muted/50"><Table.Head>Nama</Table.Head><Table.Head>Username</Table.Head><Table.Head>Password Awal</Table.Head><Table.Head>Status</Table.Head><Table.Head>Keterangan</Table.Head></Table.Row></Table.Header>
 						<Table.Body>
-							{#each visibleGenerationRows as row}
+							{#each paginatedGenerationRows as row}
 								<Table.Row><Table.Cell class="font-medium">{String(row.nama ?? '')}</Table.Cell><Table.Cell class="font-mono text-xs">{String(row.username ?? row.generated_username ?? '—')}</Table.Cell><Table.Cell class="font-mono text-xs">{String(row.password ?? row.temporary_password ?? 'ditampilkan setelah generate')}</Table.Cell><Table.Cell><Badge variant={row.status === 'ready' || row.status === 'created' ? 'secondary' : row.status === 'failed' ? 'destructive' : 'outline'}>{String(row.status ?? '—')}</Badge></Table.Cell><Table.Cell class="text-xs text-muted-foreground">{String(row.message ?? row.reason ?? '')}</Table.Cell></Table.Row>
 							{:else}
 								<Table.Row><Table.Cell colspan={5}><EmptyStatePanel compact title="Belum ada preview" description="Klik Preview untuk memuat kandidat akun." /></Table.Cell></Table.Row>
@@ -805,6 +846,14 @@
 						</Table.Body>
 					</Table.Root>
 				</div>
+				<TablePagination
+					page={safeGenerationPage}
+					limit={generationPageSize}
+					total={visibleGenerationRows.length}
+					itemLabel="kandidat"
+					ariaLabel="Navigasi halaman kandidat generate akun"
+					onchange={handleGenerationPagination}
+				/>
 			</Card.Content>
 		</Card.Root>
 	{:else if activeTab === 'audit'}
@@ -821,9 +870,9 @@
 					<div class="flex flex-wrap gap-2"><Button variant="outline" onclick={() => void refreshOverview()}>Muat Ulang</Button><Button onclick={() => openCreate(activeTab === 'siswa' ? 'student' : activeTab === 'ortu' ? 'parent' : activeTab === 'admin' ? 'admin' : 'employee')}>Tambah Sesuai Tab</Button></div>
 				</div>
 				<div class="grid gap-3 md:grid-cols-[1fr_180px_210px]">
-					<Input bind:value={searchQuery} placeholder="Cari nama, username, profil, role…" />
-					<select class="rounded-md border bg-background px-3 py-2 text-sm" bind:value={roleFilter}><option value="all">Semua role</option>{#each availableRoles as role}<option value={role.value}>{role.label}</option>{/each}</select>
-					<select class="rounded-md border bg-background px-3 py-2 text-sm" bind:value={statusFilter}><option value="all">Semua status</option><option value="active">Aktif</option><option value="inactive">Nonaktif</option><option value="unlinked">Belum tertaut profil</option><option value="never-login">Belum pernah login</option><option value="multi-role">Multi-peran</option></select>
+					<Input value={searchQuery} oninput={handleUserSearchInput} placeholder="Cari nama, username, profil, role…" />
+					<select class="rounded-md border bg-background px-3 py-2 text-sm" value={roleFilter} onchange={setRoleFilter}><option value="all">Semua role</option>{#each availableRoles as role}<option value={role.value}>{role.label}</option>{/each}</select>
+					<select class="rounded-md border bg-background px-3 py-2 text-sm" value={statusFilter} onchange={setStatusFilter}><option value="all">Semua status</option><option value="active">Aktif</option><option value="inactive">Nonaktif</option><option value="unlinked">Belum tertaut profil</option><option value="never-login">Belum pernah login</option><option value="multi-role">Multi-peran</option></select>
 				</div>
 				{#if selectedUserIds.length > 0}
 					<div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-primary/10 p-3"><p class="text-sm font-medium">{selectedUserIds.length} akun dipilih</p><div class="flex flex-wrap gap-2"><Button variant="outline" size="sm" onclick={() => (selectedUserIds = [])}>Bersihkan</Button><Button variant="outline" size="sm" onclick={() => (activeTab = 'generate')}>Ke Generate Akun</Button></div></div>
@@ -834,7 +883,7 @@
 					<Table.Root>
 						<Table.Header><Table.Row class="bg-muted/50"><Table.Head class="w-10"><input type="checkbox" checked={allVisibleSelected} onchange={toggleSelectVisible} /></Table.Head><Table.Head>Pengguna</Table.Head><Table.Head>Jenis Profil</Table.Head><Table.Head>Role</Table.Head><Table.Head>Health</Table.Head><Table.Head>Last Login</Table.Head><Table.Head>Aksi</Table.Head></Table.Row></Table.Header>
 						<Table.Body>
-							{#each visibleUsers as user}
+							{#each paginatedUsers as user}
 								<Table.Row class={selectedUser?.id === user.id ? 'bg-primary/5' : ''}>
 									<Table.Cell><input type="checkbox" checked={selectedUserIds.includes(user.id)} onchange={() => toggleUserSelection(user)} /></Table.Cell>
 									<Table.Cell><button class="text-left" onclick={() => (selectedUser = user)}><div class="font-medium">{userDisplayLabel(user)}</div><div class="text-xs text-muted-foreground">{usernameLabel(user)}</div></button></Table.Cell>
@@ -851,6 +900,16 @@
 					</Table.Root>
 				</div>
 			</Card.Content>
+			<div class="border-t border-border p-3">
+				<TablePagination
+					page={safeUsersPage}
+					limit={usersPageSize}
+					total={visibleUsers.length}
+					itemLabel="akun"
+					ariaLabel="Navigasi halaman daftar pengguna"
+					onchange={handleUserPagination}
+				/>
+			</div>
 		</Card.Root>
 	{/if}
 

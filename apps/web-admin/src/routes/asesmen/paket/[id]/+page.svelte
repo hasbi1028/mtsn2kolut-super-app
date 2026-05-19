@@ -14,7 +14,14 @@
   import { Textarea } from "$lib/components/ui/textarea";
   import LoadingButton from "$lib/components/LoadingButton.svelte";
   import AsyncContent from "$lib/components/AsyncContent.svelte";
+  import { TablePagination } from "$lib/components/ui/pagination";
   import { toast } from "$lib/components/ui/sonner";
+  import {
+    DEFAULT_PAGE_SIZE_OPTIONS,
+    clampPage,
+    paginateItems,
+    type PaginationChange,
+  } from "$lib/utils/pagination";
 
   type PackageRow = {
     id: string;
@@ -167,6 +174,8 @@
   let poolCreatedTo = $state("");
   let poolUsage = $state("all");
   let poolSort = $state("metadata_first");
+  let poolPage = $state(1);
+  let poolPageSize = $state<number>(DEFAULT_PAGE_SIZE_OPTIONS[0]);
 
   let isLocked = $derived(
     Boolean(detail?.package.locked_at || detail?.readiness.locked),
@@ -198,6 +207,12 @@
   );
   let selectedQuestions = $derived(
     availablePool.filter((q) => selectedPool.has(q.id)),
+  );
+  let safePoolPage = $derived(
+    clampPage(poolPage, availablePool.length, poolPageSize),
+  );
+  let paginatedPool = $derived(
+    paginateItems(availablePool, safePoolPage, poolPageSize),
   );
   let missingLabel = $derived(
     detail
@@ -567,10 +582,12 @@
     );
   }
   let allSelected = $derived(
-    availablePool.length > 0 &&
-      availablePool.every((q) => selectedPool.has(q.id)),
+    paginatedPool.length > 0 &&
+      paginatedPool.every((q) => selectedPool.has(q.id)),
   );
-  let someSelected = $derived(selectedPool.size > 0 && !allSelected);
+  let someSelected = $derived(
+    paginatedPool.some((q) => selectedPool.has(q.id)) && !allSelected,
+  );
 
   function togglePool(id: string) {
     const next = new Set(selectedPool);
@@ -579,14 +596,23 @@
   }
   function toggleSelectAll() {
     if (allSelected) {
-      selectedPool = new Set();
+      selectedPool = new Set([...selectedPool].filter((id) => !paginatedPool.some((q) => q.id === id)));
       return;
     }
     const next = new Set(selectedPool);
-    for (const q of availablePool) {
+    for (const q of paginatedPool) {
       next.add(q.id);
     }
     selectedPool = next;
+  }
+
+  function resetPoolPage() {
+    poolPage = 1;
+  }
+
+  function handlePoolPagination(change: PaginationChange) {
+    poolPage = change.reason === "limit" ? 1 : change.page;
+    poolPageSize = change.limit;
   }
 
   async function clonePackage() {
@@ -916,10 +942,12 @@
                   <Input
                     placeholder="Cari kode, teks soal, materi..."
                     bind:value={poolSearch}
+                    oninput={resetPoolPage}
                   />
                   <Input
                     placeholder="Cari CP/TP/KD..."
                     bind:value={poolCurriculumSearch}
+                    oninput={resetPoolPage}
                   />
                 </div>
                 <div class="border-t border-border/40"></div>
@@ -934,6 +962,7 @@
                     <select
                       class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       bind:value={poolLevel}
+                      onchange={resetPoolPage}
                     >
                       <option value="all">Semua tingkat</option><option
                         value="VII">VII</option
@@ -949,6 +978,7 @@
                     <select
                       class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       bind:value={poolType}
+                      onchange={resetPoolPage}
                     >
                       <option value="all">Semua jenis</option><option
                         value="multiple_choice">Pilihan Ganda</option
@@ -964,6 +994,7 @@
                     <select
                       class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       bind:value={poolStatus}
+                      onchange={resetPoolPage}
                     >
                       <option value="published">Terbit saja</option><option
                         value="all">Semua status</option
@@ -979,6 +1010,7 @@
                     <select
                       class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       bind:value={poolDifficulty}
+                      onchange={resetPoolPage}
                     >
                       <option value="all">Semua kesulitan</option><option
                         value="easy">Mudah</option
@@ -994,6 +1026,7 @@
                     <select
                       class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       bind:value={poolAuthor}
+                      onchange={resetPoolPage}
                     >
                       <option value="all">Semua pembuat</option>
                       {#each poolAuthorOptions as [username, displayName]}<option
@@ -1014,6 +1047,7 @@
                     <select
                       class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       bind:value={poolCognitive}
+                      onchange={resetPoolPage}
                     >
                       <option value="all">Semua level</option><option value="C1"
                         >C1</option
@@ -1031,6 +1065,7 @@
                     <select
                       class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       bind:value={poolHots}
+                      onchange={resetPoolPage}
                     >
                       <option value="all">Semua HOTS</option><option
                         value="hots">HOTS</option
@@ -1044,6 +1079,7 @@
                     <select
                       class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       bind:value={poolMetadata}
+                      onchange={resetPoolPage}
                     >
                       <option value="all">Semua identitas</option><option
                         value="complete">Identitas lengkap</option
@@ -1057,6 +1093,7 @@
                     <select
                       class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       bind:value={poolUsage}
+                      onchange={resetPoolPage}
                     >
                       <option value="all">Semua pemakaian</option><option
                         value="unused">Belum dipakai paket</option
@@ -1070,6 +1107,7 @@
                     <select
                       class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       bind:value={poolSort}
+                      onchange={resetPoolPage}
                     >
                       <option value="metadata_first"
                         >Identitas lengkap dulu</option
@@ -1091,12 +1129,12 @@
                   <label class="space-y-1.5"
                     ><span class="text-xs font-medium text-muted-foreground"
                       >Dari tanggal dibuat</span
-                    ><Input type="date" bind:value={poolCreatedFrom} /></label
+                    ><Input type="date" bind:value={poolCreatedFrom} oninput={resetPoolPage} /></label
                   >
                   <label class="space-y-1.5"
                     ><span class="text-xs font-medium text-muted-foreground"
                       >Sampai tanggal dibuat</span
-                    ><Input type="date" bind:value={poolCreatedTo} /></label
+                    ><Input type="date" bind:value={poolCreatedTo} oninput={resetPoolPage} /></label
                   >
                 </div>
                 {#if poolStatus !== "published"}<p
@@ -1135,7 +1173,7 @@
                     </Table.Row>
                   </Table.Header>
                   <Table.Body>
-                    {#each availablePool as q (q.id)}
+                    {#each paginatedPool as q (q.id)}
                       <Table.Row
                         class={selectedPool.has(q.id) ? "bg-muted/50" : ""}
                       >
@@ -1206,6 +1244,14 @@
                   </Table.Body>
                 </Table.Root>
               </div>
+              <TablePagination
+                page={safePoolPage}
+                limit={poolPageSize}
+                total={availablePool.length}
+                itemLabel="soal"
+                ariaLabel="Navigasi halaman pool soal paket"
+                onchange={handlePoolPagination}
+              />
               <p class="mt-2 text-xs text-muted-foreground">
                 {selectedPool.size} dari {availablePool.length} soal dipilih.
               </p>

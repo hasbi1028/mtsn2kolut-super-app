@@ -12,8 +12,10 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { TablePagination } from '$lib/components/ui/pagination';
 	import { readClientApiData, readClientJson } from '$lib/client/api';
 	import { displayName } from '$lib/utils/display-name';
+	import { DEFAULT_PAGE_SIZE_OPTIONS, clampPage, paginateItems, type PaginationChange } from '$lib/utils/pagination';
 
 	interface LoanRow {
 		id: string;
@@ -53,6 +55,8 @@
 	let busy = $state(false);
 
 	let tabStatus = $state<'active' | 'returned' | ''>('active');
+	let currentPage = $state(1);
+	let pageSize = $state<number>(DEFAULT_PAGE_SIZE_OPTIONS[0]);
 
 	// Loan form state
 	let showLoanDialog = $state(false);
@@ -104,6 +108,9 @@
 		const days = Math.ceil((now.getTime() - due.getTime()) / 86400000);
 		return days * (returnLoan.denda_per_hari ?? 500);
 	});
+	const filteredLoans = $derived(filterLoans(loans));
+	const safePage = $derived(clampPage(currentPage, filteredLoans.length, pageSize));
+	const paginatedLoans = $derived(paginateItems(filteredLoans, safePage, pageSize));
 
 	function formatDate(iso: string | null | undefined) {
 		if (!iso) return '-';
@@ -116,6 +123,16 @@
 
 	function filterLoans(loanRows: LoanRow[]) {
 		return loanRows.filter((l) => !tabStatus || l.status === tabStatus);
+	}
+
+	function setTabStatus(value: 'active' | 'returned' | '') {
+		tabStatus = value;
+		currentPage = 1;
+	}
+
+	function handlePagination(change: PaginationChange) {
+		currentPage = change.reason === 'limit' ? 1 : change.page;
+		pageSize = change.limit;
 	}
 
 	function applyOverview(overview: LoansOverview) {
@@ -350,7 +367,7 @@
 				{#each [['active', 'Aktif'], ['', 'Semua'], ['returned', 'Dikembalikan']] as [val, label] (val)}
 					<button
 						class="rounded-full px-4 py-2 text-sm font-medium transition-colors {tabStatus === val ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
-						onclick={() => (tabStatus = val as 'active' | 'returned' | '')}
+						onclick={() => setTabStatus(val as 'active' | 'returned' | '')}
 					>{label}</button>
 				{/each}
 			</div>
@@ -415,7 +432,7 @@
 								</Table.Row>
 							</Table.Header>
 							<Table.Body>
-								{#each currentLoans as loan (loan.id)}
+								{#each paginatedLoans as loan (loan.id)}
 									<Table.Row class="text-sm">
 										<Table.Cell>
 											<p class="font-medium max-w-[140px] truncate" title={loan.book_judul}>{loan.book_judul}</p>
@@ -465,6 +482,16 @@
 								{/each}
 							</Table.Body>
 						</Table.Root>
+						<div class="border-t border-border p-3">
+							<TablePagination
+								page={safePage}
+								limit={pageSize}
+								total={currentLoans.length}
+								itemLabel="pinjaman"
+								ariaLabel="Navigasi halaman peminjaman buku"
+								onchange={handlePagination}
+							/>
+						</div>
 					{/if}
 				{/snippet}
 			</AsyncContent>

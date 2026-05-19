@@ -13,6 +13,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { TablePagination } from '$lib/components/ui/pagination';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import {
@@ -22,6 +23,7 @@
 		type StudentAccountGenerationResult
 	} from '$lib/client/account-generation';
 	import { displayName } from '$lib/utils/display-name';
+	import { DEFAULT_PAGE_SIZE_OPTIONS, clampPage, paginateItems, type PaginationChange } from '$lib/utils/pagination';
 
 	type Student = {
 		id: string; nis: string; nisn: string; nama: string; gender: string;
@@ -44,6 +46,8 @@
 	let studentsPromise = $state<Promise<StudentsOverview> | null>(null);
 	let studentsRequestId = 0;
 	let search = $state('');
+	let currentPage = $state(1);
+	let pageSize = $state<number>(DEFAULT_PAGE_SIZE_OPTIONS[0]);
 	let selectedStudentIds = $state<Set<string>>(new Set());
 	let visibleSelectionCheckbox = $state<HTMLInputElement | null>(null);
 	let wasStudentDrawerOpen = false;
@@ -105,7 +109,9 @@
 			)
 			: students
 	);
-	const filteredStudentIds = $derived(filtered.map((student) => student.id));
+	const safePage = $derived(clampPage(currentPage, filtered.length, pageSize));
+	const paginatedStudents = $derived(paginateItems(filtered, safePage, pageSize));
+	const filteredStudentIds = $derived(paginatedStudents.map((student) => student.id));
 	const selectedCount = $derived(selectedStudentIds.size);
 	const filteredSelectedCount = $derived(filteredStudentIds.filter((id) => selectedStudentIds.has(id)).length);
 	const allFilteredStudentsSelected = $derived(filteredStudentIds.length > 0 && filteredSelectedCount === filteredStudentIds.length);
@@ -257,6 +263,16 @@
 			else next.delete(id);
 		}
 		selectedStudentIds = next;
+	}
+
+	function handleSearchInput(event: Event) {
+		search = (event.currentTarget as HTMLInputElement).value;
+		currentPage = 1;
+	}
+
+	function handlePagination(change: PaginationChange) {
+		currentPage = change.reason === 'limit' ? 1 : change.page;
+		pageSize = change.limit;
 	}
 
 	function nextStudentFormStep() {
@@ -731,7 +747,7 @@
 				<Card.Header class="pb-3">
 					<div class="flex flex-col sm:flex-row sm:items-center gap-3">
 						<Card.Title class="text-base shrink-0">Daftar Siswa ({overview.students.length} total)</Card.Title>
-						<Input placeholder="Cari siswa berdasarkan nama, NIS, atau NISN..." bind:value={search} class="w-full sm:max-w-xs sm:ml-auto" />
+						<Input placeholder="Cari siswa berdasarkan nama, NIS, atau NISN..." value={search} oninput={handleSearchInput} class="w-full sm:max-w-xs sm:ml-auto" />
 					</div>
 					{#if selectedCount > 0}
 						<div class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-primary/20 bg-primary/10 px-3 py-2">
@@ -753,7 +769,7 @@
 										type="checkbox"
 										checked={allFilteredStudentsSelected}
 										disabled={filteredStudentIds.length === 0}
-										aria-label="Pilih semua siswa pada hasil filter"
+										aria-label="Pilih semua siswa pada halaman ini"
 										onchange={handleFilteredSelectionChange}
 										class="rounded accent-green-700"
 									/>
@@ -772,7 +788,7 @@
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
-						{#each filtered as s (s.id)}
+						{#each paginatedStudents as s (s.id)}
 							{@const activeKey = lifecycleKey(s.id, 'active')}
 							{@const alumniKey = lifecycleKey(s.id, 'alumni')}
 								{@const mutatedKey = lifecycleKey(s.id, 'mutated')}
@@ -872,7 +888,7 @@
 												: 'Tambahkan siswa pertama agar rombel, orang tua, nilai, dan asesmen bisa mulai terhubung.'}
 										>
 											{#if search}
-												<Button variant="outline" size="sm" onclick={() => (search = '')}>Reset pencarian</Button>
+												<Button variant="outline" size="sm" onclick={() => { search = ''; currentPage = 1; }}>Reset pencarian</Button>
 											{:else}
 												<Button size="sm" onclick={openCreate}>Tambah siswa pertama</Button>
 											{/if}
@@ -885,7 +901,7 @@
 				</div>
 
 				<div class="grid gap-3 p-4 lg:hidden">
-					{#each filtered as s (s.id)}
+					{#each paginatedStudents as s (s.id)}
 						{@const activeKey = lifecycleKey(s.id, 'active')}
 						{@const alumniKey = lifecycleKey(s.id, 'alumni')}
 						{@const mutatedKey = lifecycleKey(s.id, 'mutated')}
@@ -969,12 +985,22 @@
 									: 'Tambahkan siswa pertama dari panel ini agar data akademik dan akun orang tua bisa mulai berjalan.'}
 							>
 								{#if search}
-									<Button variant="outline" size="sm" onclick={() => (search = '')}>Reset pencarian</Button>
+									<Button variant="outline" size="sm" onclick={() => { search = ''; currentPage = 1; }}>Reset pencarian</Button>
 								{:else}
 									<Button size="sm" onclick={openCreate}>Tambah siswa pertama</Button>
 								{/if}
 							</EmptyStatePanel>
 					{/each}
+				</div>
+				<div class="border-t border-border p-3">
+					<TablePagination
+						page={safePage}
+						limit={pageSize}
+						total={filtered.length}
+						itemLabel="siswa"
+						ariaLabel="Navigasi halaman daftar siswa"
+						onchange={handlePagination}
+					/>
 				</div>
 			</Card.Content>
 		</Card.Root>

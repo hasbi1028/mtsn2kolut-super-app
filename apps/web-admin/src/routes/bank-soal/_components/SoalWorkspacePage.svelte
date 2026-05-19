@@ -8,6 +8,7 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { TablePagination } from '$lib/components/ui/pagination';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import LegacyRichTextEditor from '$lib/components/LegacyRichTextEditor.svelte';
@@ -47,6 +48,7 @@
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { htmlToPlainText } from '$lib/utils/html-text';
 	import { displayName } from '$lib/utils/display-name';
+	import { DEFAULT_PAGE_SIZE_OPTIONS, normalizePageSize, type PaginationChange } from '$lib/utils/pagination';
 	import {
 		ANSWER_LABELS,
 		DIFFICULTY_LABEL,
@@ -54,7 +56,6 @@
 		EVENT_MEMBER_ROLES,
 		LAST_METADATA_KEY,
 		MAX_MATCHING_DISTRACTOR_COUNT,
-		PAGE_SIZE,
 		QUESTION_TYPE_CONFIGS,
 		WORKFLOW_LABEL,
 		answerKeyLabelForQuestion,
@@ -231,6 +232,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		questionTargets: QuestionTarget[];
 		totalItems: number;
 		page: number;
+		limit: number;
 	};
 	type PageData = {
 		user?: {
@@ -408,6 +410,7 @@ type TimelineItem = {
 	let approvedTotal = $state(0);
 	let totalItems = $state(0);
 	let currentPage = $state(1);
+	let pageSize = $state<number>(DEFAULT_PAGE_SIZE_OPTIONS[0]);
 
 	let search = $state('');
 	let filterSubject = $state('');
@@ -544,7 +547,6 @@ type TimelineItem = {
 	}));
 
 	// ── Derived ────────────────────────────────────────────────────────────────
-	let pageCount = $derived(Math.max(1, Math.ceil(totalItems / PAGE_SIZE)));
 	let lockedCount = $derived(questions.filter(questionUsageLocked).length);
 	let roles = $derived(data.user?.roles ?? (data.user?.role ? [data.user.role] : []));
 	let canReviewWorkflow = $derived(canReviewBankSoal(data.user));
@@ -1228,10 +1230,10 @@ type TimelineItem = {
 		if (selectedEventId) params.set('event_id', selectedEventId);
 	}
 
-	function buildQuestionParams(page: number) {
+	function buildQuestionParams(page: number, limit = pageSize) {
 		const params = new URLSearchParams();
-		params.set('limit', String(PAGE_SIZE));
-		params.set('offset', String((page - 1) * PAGE_SIZE));
+		params.set('limit', String(limit));
+		params.set('offset', String((page - 1) * limit));
 		applyQuestionScopeParams(params);
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
@@ -1277,8 +1279,8 @@ type TimelineItem = {
 		return params;
 	}
 
-	async function fetchOverview(page = currentPage): Promise<SoalOverview> {
-		const params = buildQuestionParams(page);
+	async function fetchOverview(page = currentPage, limit = pageSize): Promise<SoalOverview> {
+		const params = buildQuestionParams(page, limit);
 		const revisionParams = buildRevisionQueueParams();
 		const verifikasiParams = buildReviewQueueParams();
 		const approvedParams = buildApprovedQueueParams();
@@ -1324,6 +1326,7 @@ type TimelineItem = {
 			approvedTotal: approvedPayload.meta?.total ?? loadedApproved.length,
 			totalItems: questionPayload.meta?.total ?? loadedQuestions.length,
 			page,
+			limit: questionPayload.meta?.limit ?? limit,
 			questionTargets: Array.isArray(targetsPayload) ? targetsPayload : [],
 		};
 	}
@@ -1344,35 +1347,41 @@ type TimelineItem = {
 		if (filterSubject) targetQuestionsInput = questionTargets.find((target) => target.subject_id === filterSubject)?.target_questions ?? 0;
 		totalItems = overview.totalItems;
 		currentPage = overview.page;
+		pageSize = normalizePageSize(overview.limit, DEFAULT_PAGE_SIZE_OPTIONS, pageSize);
 	}
 
-	function load(page = currentPage) {
+	function currentOverview(): SoalOverview {
+		return { questions, subjects, events, revisionQueue, revisionTotal, reviewQueue, reviewTotal, approvedQueue, approvedTotal, questionTargets, totalItems, page: currentPage, limit: pageSize };
+	}
+
+	function load(page = currentPage, limit = pageSize) {
 		const requestId = ++questionsRequestId;
+		pageSize = limit;
 		selectedQuestionIds = [];
-		questionsPromise = fetchOverview(page).then((overview) => {
-			if (requestId !== questionsRequestId) return { questions, subjects, events, revisionQueue, revisionTotal, reviewQueue, reviewTotal, approvedQueue, approvedTotal, questionTargets, totalItems, page: currentPage };
+		questionsPromise = fetchOverview(page, limit).then((overview) => {
+			if (requestId !== questionsRequestId) return currentOverview();
 			applyOverview(overview);
 			return overview;
 		}).catch((error: unknown) => {
 			if (requestId === questionsRequestId) throw error;
-			return { questions, subjects, events, revisionQueue, revisionTotal, reviewQueue, reviewTotal, approvedQueue, approvedTotal, questionTargets, totalItems, page: currentPage };
+			return currentOverview();
 		});
 	}
 
-	async function refreshOverview(page = currentPage) {
+	async function refreshOverview(page = currentPage, limit = pageSize) {
 		if (!questionsPromise) {
-			load(page);
+			load(page, limit);
 			return;
 		}
 		const requestId = ++questionsRequestId;
 		try {
-			const overview = await fetchOverview(page);
+			const overview = await fetchOverview(page, limit);
 			if (requestId !== questionsRequestId) return;
 			applyOverview(overview);
 			questionsPromise = Promise.resolve(overview);
 		} catch (error) {
 			if (requestId === questionsRequestId) {
-				questionsPromise = Promise.resolve({ questions, subjects, events, revisionQueue, revisionTotal, reviewQueue, reviewTotal, approvedQueue, approvedTotal, questionTargets, totalItems, page: currentPage });
+				questionsPromise = Promise.resolve(currentOverview());
 				toast.error(soalErrorMessage(error));
 			}
 		}
@@ -1380,7 +1389,11 @@ type TimelineItem = {
 
 	function retryQuestions(reset?: () => void) {
 		reset?.();
-		load(currentPage);
+		load(currentPage, pageSize);
+	}
+
+	function handleQuestionPagination(change: PaginationChange) {
+		load(change.reason === 'limit' ? 1 : change.page, change.limit);
 	}
 
 	function soalErrorMessage(error: unknown) {
@@ -3365,7 +3378,7 @@ type TimelineItem = {
 									<input
 										type="checkbox"
 										checked={selectedQuestionIds.includes(q.id)}
-										aria-label={`Pilih soal ${(overview.page - 1) * PAGE_SIZE + i + 1}`}
+										aria-label={`Pilih soal ${(overview.page - 1) * pageSize + i + 1}`}
 										onclick={(event) => event.stopPropagation()}
 										onchange={() => toggleQuestionSelection(q.id)}
 										class="rounded accent-green-700"
@@ -3503,33 +3516,14 @@ type TimelineItem = {
 		</Table.Root>
 	</div>
 
-	<!-- Pagination -->
-	{#if pageCount > 1}
-		<div class="flex items-center justify-between text-sm text-muted-foreground">
-			<span class="text-xs">{totalItems} soal total</span>
-			<div class="flex items-center gap-1">
-				<Button
-					variant="outline"
-					class="h-7 w-7 p-0 text-xs"
-					aria-label="Halaman sebelumnya"
-					disabled={currentPage <= 1}
-					onclick={() => load(currentPage - 1)}
-				>
-					‹
-				</Button>
-				<span class="px-2 text-xs">Hal {currentPage} / {pageCount}</span>
-				<Button
-					variant="outline"
-					class="h-7 w-7 p-0 text-xs"
-					aria-label="Halaman berikutnya"
-					disabled={currentPage >= pageCount}
-					onclick={() => load(currentPage + 1)}
-				>
-					›
-				</Button>
-			</div>
-		</div>
-	{/if}
+	<TablePagination
+		page={currentPage}
+		limit={pageSize}
+		total={totalItems}
+		itemLabel="soal"
+		ariaLabel="Navigasi halaman daftar soal"
+		onchange={handleQuestionPagination}
+	/>
 	{/if}
 </div>
 

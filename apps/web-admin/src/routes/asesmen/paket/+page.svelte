@@ -10,6 +10,7 @@
   import { Badge } from "$lib/components/ui/badge";
   import { toast } from "$lib/components/ui/sonner";
   import { Skeleton } from "$lib/components/ui/skeleton";
+  import { TablePagination } from "$lib/components/ui/pagination";
   import AsyncContent from "$lib/components/AsyncContent.svelte";
   import LoadingButton from "$lib/components/LoadingButton.svelte";
   import OperationStatusPanel from "$lib/components/OperationStatusPanel.svelte";
@@ -21,6 +22,12 @@
     readClientApiData,
     readClientJson,
   } from "$lib/client/api";
+  import {
+    DEFAULT_PAGE_SIZE_OPTIONS,
+    clampPage,
+    paginateItems,
+    type PaginationChange,
+  } from "$lib/utils/pagination";
 
   type CbtPackage = {
     id: string;
@@ -175,6 +182,10 @@
   let lockFilter = $state("all");
   let usageFilter = $state("all");
   let sortMode = $state("needs_first");
+  let packagePage = $state(1);
+  let packagePageSize = $state<number>(DEFAULT_PAGE_SIZE_OPTIONS[0]);
+  let questionPoolPage = $state(1);
+  let questionPoolPageSize = $state<number>(DEFAULT_PAGE_SIZE_OPTIONS[0]);
   let selectedPackageIds = new SvelteSet<string>();
   let bulkBusy = $state(false);
   let showUtsMode = $state(true);
@@ -188,6 +199,12 @@
             isQuestionAllowedForPackage(q),
         )
       : [],
+  );
+  let safeQuestionPoolPage = $derived(
+    clampPage(questionPoolPage, questionPool.length, questionPoolPageSize),
+  );
+  let paginatedQuestionPool = $derived(
+    paginateItems(questionPool, safeQuestionPoolPage, questionPoolPageSize),
   );
   let hiddenScopedQuestionCount = $derived(
     fSubjectId
@@ -256,6 +273,21 @@
   function handleSubjectChange() {
     fSelectedIds.clear();
     fQuestionWeights.clear();
+    questionPoolPage = 1;
+  }
+
+  function resetPackagePage() {
+    packagePage = 1;
+  }
+
+  function handlePackagePagination(change: PaginationChange) {
+    packagePage = change.reason === "limit" ? 1 : change.page;
+    packagePageSize = change.limit;
+  }
+
+  function handleQuestionPoolPagination(change: PaginationChange) {
+    questionPoolPage = change.reason === "limit" ? 1 : change.page;
+    questionPoolPageSize = change.limit;
   }
 
   function questionWeightValue(id: string) {
@@ -1403,7 +1435,7 @@
                 </div>
               {/if}
               <div class="border rounded-md max-h-64 overflow-y-auto">
-                {#each questionPool as q (q.id)}
+                {#each paginatedQuestionPool as q (q.id)}
                   <label
                     class="flex items-start gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer border-b last:border-b-0"
                   >
@@ -1453,6 +1485,15 @@
                   </label>
                 {/each}
               </div>
+              <TablePagination
+                page={safeQuestionPoolPage}
+                limit={questionPoolPageSize}
+                total={questionPool.length}
+                itemLabel="soal"
+                ariaLabel="Navigasi halaman pool soal paket"
+                class="mt-2"
+                onchange={handleQuestionPoolPagination}
+              />
             {/if}
             {#if selectedQuestions.length > 0}
               <div
@@ -1689,6 +1730,16 @@
       {@const filteredPackages = sortPackages(
         currentPackages.filter(matchesPackageFilters),
       )}
+      {@const safePackagePage = clampPage(
+        packagePage,
+        filteredPackages.length,
+        packagePageSize,
+      )}
+      {@const paginatedPackages = paginateItems(
+        filteredPackages,
+        safePackagePage,
+        packagePageSize,
+      )}
       {@const summary = packageSummary(currentPackages)}
       {@const hiddenPackages = hiddenPackageCount(overview.packages)}
       <Card.Root
@@ -1755,11 +1806,13 @@
               <Input
                 placeholder="Cari paket, mapel, kode, deskripsi..."
                 bind:value={searchTerm}
+                oninput={resetPackagePage}
                 class="min-w-0"
               />
               <select
                 class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 bind:value={subjectFilter}
+                onchange={resetPackagePage}
               >
                 <option value="all">Semua mapel</option>
                 {#each subjects as s (s.id)}<option value={s.id}
@@ -1769,6 +1822,7 @@
               <select
                 class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 bind:value={readinessFilter}
+                onchange={resetPackagePage}
               >
                 {#each ["all", "empty", "short", "metadata", "unpublished", "ready", "locked"] as status (status)}
                   <option value={status}>{readinessLabel(status)}</option>
@@ -1777,6 +1831,7 @@
               <select
                 class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 bind:value={activeFilter}
+                onchange={resetPackagePage}
               >
                 <option value="all">Semua status</option><option value="active"
                   >Aktif</option
@@ -1785,6 +1840,7 @@
               <select
                 class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 bind:value={lockFilter}
+                onchange={resetPackagePage}
               >
                 <option value="all">Semua status kunci</option><option
                   value="locked">Terkunci</option
@@ -1793,6 +1849,7 @@
               <select
                 class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 bind:value={usageFilter}
+                onchange={resetPackagePage}
               >
                 <option value="all">Semua sesi</option><option value="used"
                   >Dipakai sesi</option
@@ -1801,6 +1858,7 @@
               <select
                 class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 bind:value={sortMode}
+                onchange={resetPackagePage}
               >
                 <option value="needs_first">Prioritas gap</option><option
                   value="name_asc">Nama A-Z</option
@@ -1901,7 +1959,7 @@
                 </Table.Row>
               </Table.Header>
               <Table.Body>
-                {#each filteredPackages as p (p.id)}
+                {#each paginatedPackages as p (p.id)}
                   {@const quality = packageQualitySummary(p.id)}
                   {@const progress = packageProgress(p, quality)}
                   {@const readiness = packageReadinessStatus(p, quality)}
@@ -2067,7 +2125,7 @@
           </div>
 
           <div class="grid gap-3 p-4 lg:hidden">
-            {#each filteredPackages as p (p.id)}
+            {#each paginatedPackages as p (p.id)}
               {@const quality = packageQualitySummary(p.id)}
               {@const progress = packageProgress(p, quality)}
               {@const readiness = packageReadinessStatus(p, quality)}
@@ -2224,6 +2282,16 @@
                 Tidak ada paket sesuai filter
               </div>
             {/each}
+          </div>
+          <div class="border-t border-border p-3">
+            <TablePagination
+              page={safePackagePage}
+              limit={packagePageSize}
+              total={filteredPackages.length}
+              itemLabel="paket"
+              ariaLabel="Navigasi halaman daftar paket asesmen"
+              onchange={handlePackagePagination}
+            />
           </div>
         </Card.Content>
       </Card.Root>

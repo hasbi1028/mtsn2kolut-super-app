@@ -19,6 +19,7 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { TablePagination } from '$lib/components/ui/pagination';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData } from '$lib/client/api';
 	import {
 		accountErrorMessage,
@@ -30,6 +31,7 @@
 		type AccountChangeRequest
 	} from '$lib/client/account';
 	import { displayName } from '$lib/utils/display-name';
+	import { DEFAULT_PAGE_SIZE_OPTIONS, clampPage, paginateItems, type PaginationChange } from '$lib/utils/pagination';
 
 	type ReviewStatus = 'approved' | 'rejected';
 
@@ -53,6 +55,8 @@
 	let reviewBusy = $state<string | null>(null);
 	let refreshBusy = $state(false);
 	let exportBusy = $state(false);
+	let currentPage = $state(1);
+	let pageSize = $state<number>(DEFAULT_PAGE_SIZE_OPTIONS[0]);
 
 	const canReviewProfileChanges = $derived(Boolean(
 		page.data.user?.role === 'admin'
@@ -60,6 +64,8 @@
 		|| page.data.user?.permissions?.includes('profile_changes.review')
 	));
 	const visiblePendingCount = $derived(requests.filter((request) => request.status === 'pending').length);
+	const safePage = $derived(clampPage(currentPage, requests.length, pageSize));
+	const paginatedRequests = $derived(paginateItems(requests, safePage, pageSize));
 	const activeFilterCount = $derived([
 		statusFilter !== 'pending',
 		profileFilter !== 'all',
@@ -140,6 +146,7 @@
 
 	function applyFilters() {
 		appliedSearch = searchDraft.trim();
+		currentPage = 1;
 		loadRequests();
 	}
 
@@ -149,7 +156,13 @@
 		fieldFilter = 'all';
 		searchDraft = '';
 		appliedSearch = '';
+		currentPage = 1;
 		loadRequests();
+	}
+
+	function handlePagination(change: PaginationChange) {
+		currentPage = change.reason === 'limit' ? 1 : change.page;
+		pageSize = change.limit;
 	}
 
 	function retryRequests(reset?: () => void) {
@@ -414,8 +427,9 @@
 				{/snippet}
 
 				{#snippet children(rows)}
-					{@const items = rows as AccountChangeRequest[]}
-					{#if items.length === 0}
+					{@const allItems = rows as AccountChangeRequest[]}
+					{@const items = paginatedRequests}
+					{#if allItems.length === 0}
 						<div class="rounded-lg border border-dashed border-border px-4 py-8 text-center">
 							<p class="text-sm font-medium text-foreground">Belum ada permintaan pada filter ini.</p>
 							<p class="mt-1 text-xs text-muted-foreground">Ubah filter atau reset untuk melihat riwayat lain.</p>
@@ -689,6 +703,15 @@
 								</div>
 							{/each}
 						</div>
+						<TablePagination
+							page={safePage}
+							limit={pageSize}
+							total={allItems.length}
+							itemLabel="permintaan"
+							ariaLabel="Navigasi halaman permintaan perubahan data"
+							class="mt-4"
+							onchange={handlePagination}
+						/>
 					{/if}
 				{/snippet}
 			</AsyncContent>

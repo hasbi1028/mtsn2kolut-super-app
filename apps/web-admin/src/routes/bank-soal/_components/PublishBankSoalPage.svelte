@@ -13,6 +13,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { TablePagination } from '$lib/components/ui/pagination';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
@@ -22,6 +23,7 @@
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { displayName } from '$lib/utils/display-name';
 	import { htmlToPlainText } from '$lib/utils/html-text';
+	import { DEFAULT_PAGE_SIZE_OPTIONS, normalizePage, normalizePageSize, type PaginationChange } from '$lib/utils/pagination';
 
 	type PageData = { user?: BankSoalAccessUser };
 	type OptionItem = { label?: string; text?: string; html?: string; latex?: string; match_label?: string; match_text?: string; match_html?: string; is_distractor?: boolean };
@@ -63,21 +65,23 @@
 	type AcademicPayload = { subjects?: Subject[] };
 	type BulkWorkflowResult = { question_id?: string; id?: string; ok?: boolean; success?: boolean; error?: string; message?: string };
 	type BulkWorkflowResponse = { results?: BulkWorkflowResult[] } | BulkWorkflowResult[];
-	type PublishOverview = { questions: Question[]; subjects: Subject[]; total: number; page: number };
+	type PublishOverview = { questions: Question[]; subjects: Subject[]; total: number; page: number; limit: number };
 
 	let { data }: { data?: PageData } = $props();
 
-	const PAGE_SIZE = 20;
+	const DEFAULT_PAGE_SIZE = DEFAULT_PAGE_SIZE_OPTIONS[0];
 	const initialSubject = page.url.searchParams.get('subject_id') ?? '';
 	const initialSearch = page.url.searchParams.get('q') ?? '';
 	const initialLevel = page.url.searchParams.get('target_level') ?? '';
-	const initialPage = Number(page.url.searchParams.get('page') ?? '1');
+	const initialPage = normalizePage(page.url.searchParams.get('page'), 1);
+	const initialLimit = normalizePageSize(page.url.searchParams.get('limit'), DEFAULT_PAGE_SIZE_OPTIONS, DEFAULT_PAGE_SIZE);
 
 	let queuePromise = $state<Promise<PublishOverview> | null>(null);
 	let questions = $state<Question[]>([]);
 	let subjects = $state<Subject[]>([]);
 	let totalItems = $state(0);
-	let currentPage = $state(Number.isFinite(initialPage) && initialPage > 0 ? initialPage : 1);
+	let currentPage = $state(initialPage);
+	let pageSize = $state<number>(initialLimit);
 	let search = $state(initialSearch);
 	let subjectFilter = $state(initialSubject);
 	let targetLevelFilter = $state(initialLevel);
@@ -88,9 +92,8 @@
 	let canPublish = $derived(canPublishBankSoal(data?.user));
 	let selectedCount = $derived(selectedIds.size);
 	let selectedQuestions = $derived(questions.filter((question) => selectedIds.has(question.id)));
-	let totalPages = $derived(Math.max(1, Math.ceil(totalItems / PAGE_SIZE)));
-	let resultStart = $derived(totalItems === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1);
-	let resultEnd = $derived(Math.min(totalItems, (currentPage - 1) * PAGE_SIZE + questions.length));
+	let resultStart = $derived(totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1);
+	let resultEnd = $derived(Math.min(totalItems, (currentPage - 1) * pageSize + questions.length));
 	let readyWithMetadata = $derived(questions.filter((question) => publishChecklist(question).every((item) => item.ok)).length);
 
 	const levelOptions = ['', 'VII', 'VIII', 'IX'];
@@ -147,8 +150,8 @@
 		];
 	}
 
-	function buildParams(pageNumber: number): URLSearchParams {
-		const params = new URLSearchParams({ workflow_status: 'approved', status: 'draft', limit: String(PAGE_SIZE), offset: String(Math.max(0, (pageNumber - 1) * PAGE_SIZE)) });
+	function buildParams(pageNumber: number, limit = pageSize): URLSearchParams {
+		const params = new URLSearchParams({ workflow_status: 'approved', status: 'draft', limit: String(limit), offset: String(Math.max(0, (pageNumber - 1) * limit)) });
 		if (search.trim()) params.set('q', search.trim());
 		if (subjectFilter) params.set('subject_id', subjectFilter);
 		if (targetLevelFilter) params.set('target_level', targetLevelFilter);
@@ -160,38 +163,42 @@
 		return payload.subjects ?? [];
 	}
 
-	async function fetchQueue(pageNumber: number): Promise<PublishOverview> {
+	async function fetchQueue(pageNumber: number, limit = pageSize): Promise<PublishOverview> {
 		const [questionPayload, loadedSubjects] = await Promise.all([
-			fetch(clientApiPathWithQuery('/api/bank-soal/questions', buildParams(pageNumber))).then((response) => readClientApiData<QuestionListResponse>(response, 'Gagal memuat antrean penerbitan')),
+			fetch(clientApiPathWithQuery('/api/bank-soal/questions', buildParams(pageNumber, limit))).then((response) => readClientApiData<QuestionListResponse>(response, 'Gagal memuat antrean penerbitan')),
 			subjects.length > 0 ? Promise.resolve(subjects) : fetchSubjects()
 		]);
 		return {
 			questions: questionPayload.items ?? [],
 			subjects: loadedSubjects,
 			total: questionPayload.meta?.total ?? questionPayload.items?.length ?? 0,
-			page: pageNumber
+			page: pageNumber,
+			limit: questionPayload.meta?.limit ?? limit
 		};
 	}
 
-	function syncUrl(pageNumber: number) {
+	function syncUrl(pageNumber: number, limit = pageSize) {
 		if (typeof window === 'undefined') return;
 		const params = new URLSearchParams();
 		if (search.trim()) params.set('q', search.trim());
 		if (subjectFilter) params.set('subject_id', subjectFilter);
 		if (targetLevelFilter) params.set('target_level', targetLevelFilter);
 		if (pageNumber > 1) params.set('page', String(pageNumber));
+		if (limit !== DEFAULT_PAGE_SIZE) params.set('limit', String(limit));
 		const query = params.toString();
 		window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
 	}
 
-	function load(pageNumber = currentPage) {
-		queuePromise = fetchQueue(pageNumber).then((overview) => {
+	function load(pageNumber = currentPage, limit = pageSize) {
+		pageSize = limit;
+		queuePromise = fetchQueue(pageNumber, limit).then((overview) => {
 			questions = overview.questions;
 			subjects = overview.subjects;
 			totalItems = overview.total;
 			currentPage = overview.page;
+			pageSize = normalizePageSize(overview.limit, DEFAULT_PAGE_SIZE_OPTIONS, limit);
 			selectedIds = new Set([...selectedIds].filter((id) => overview.questions.some((question) => question.id === id)));
-			syncUrl(overview.page);
+			syncUrl(overview.page, pageSize);
 			return overview;
 		});
 	}
@@ -199,7 +206,17 @@
 	function applyFilters() {
 		currentPage = 1;
 		selectedIds = new Set();
-		load(1);
+		load(1, pageSize);
+	}
+
+	function handlePagination(change: PaginationChange) {
+		load(change.reason === 'limit' ? 1 : change.page, change.limit);
+	}
+
+	function reloadAfterRemoving(removedCount: number) {
+		const remaining = Math.max(0, totalItems - removedCount);
+		const nextPage = Math.min(currentPage, Math.max(1, Math.ceil(remaining / pageSize)));
+		load(nextPage, pageSize);
 	}
 
 	function clearFilters() {
@@ -239,7 +256,7 @@
 			}).then((response) => readClientJson<unknown>(response));
 			toast.success('Soal diterbitkan');
 			selectedIds = new Set([...selectedIds].filter((id) => id !== question.id));
-			load(currentPage);
+			reloadAfterRemoving(1);
 		} catch (error) {
 			toast.error(errorMessage(error, 'Gagal menerbitkan soal'));
 		} finally {
@@ -264,8 +281,9 @@
 			const failed = results.filter((item) => item.ok === false || item.success === false || item.error || item.message?.toLowerCase().includes('gagal'));
 			if (failed.length > 0) toast.warning(`${failed.length} soal belum bisa diterbitkan. Periksa ulang antrean.`);
 			else toast.success(`${selectedIds.size} soal diterbitkan`);
+			const removedCount = Math.max(0, selectedIds.size - failed.length);
 			selectedIds = new Set();
-			load(currentPage);
+			reloadAfterRemoving(removedCount);
 		} catch (error) {
 			toast.error(errorMessage(error, 'Gagal menerbitkan soal terpilih'));
 		} finally {
@@ -479,15 +497,14 @@
 				{/if}
 			</section>
 
-			{#if overview.total > PAGE_SIZE}
-				<div class="flex flex-col gap-2 rounded-xl border border-border bg-card p-3 text-sm shadow-sm md:flex-row md:items-center md:justify-between">
-					<p class="text-muted-foreground">Halaman {currentPage} dari {totalPages}</p>
-					<div class="flex gap-2">
-						<Button variant="outline" disabled={currentPage <= 1} onclick={() => load(currentPage - 1)}>Sebelumnya</Button>
-						<Button variant="outline" disabled={currentPage >= totalPages} onclick={() => load(currentPage + 1)}>Berikutnya</Button>
-					</div>
-				</div>
-			{/if}
+			<TablePagination
+				page={currentPage}
+				limit={pageSize}
+				total={overview.total}
+				itemLabel="soal"
+				ariaLabel="Navigasi halaman antrean penerbitan"
+				onchange={handlePagination}
+			/>
 		{/snippet}
 	</AsyncContent>
 
