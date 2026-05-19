@@ -1250,7 +1250,6 @@ LEFT JOIN users author_user ON author_user.username = q.author_username
 LEFT JOIN employees author_emp ON author_emp.id = author_user.employee_id
 WHERE q.author_username IS NOT NULL
   AND q.author_username != ''
-  AND q.deleted_at IS NULL
 ORDER BY author_display_name
 `
 
