@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { onDestroy, onMount } from 'svelte';
 
 	type ApiEnvelope<T> = { data?: T; error?: string; message?: string };
@@ -94,6 +95,7 @@
 
 	onDestroy(() => {
 		stopIntervals();
+		if (!browser) return;
 		window.removeEventListener('online', handleOnline);
 		window.removeEventListener('offline', handleOffline);
 		document.removeEventListener('visibilitychange', handleVisibilityChange);
