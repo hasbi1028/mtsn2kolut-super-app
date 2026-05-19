@@ -67,6 +67,24 @@ func TestCbtQuestionMegaWorkflowTransitionsWriteAuditAndEvents(t *testing.T) {
 		}
 	})
 
+	t.Run("revision needed latest draft can be resubmitted after edit", func(t *testing.T) {
+		current := megaQuestionBase(questionID, "revision_needed")
+		current.IsLatestVersion = true
+		store := &fakeQuestionStore{current: current}
+		svc := &CbtQuestion{q: store}
+
+		row, err := svc.SubmitForReview(ctx, questionID, CbtQuestionActor{Username: "author"}, "revisi selesai")
+		if err != nil {
+			t.Fatalf("SubmitForReview(revision_needed safe) error = %v", err)
+		}
+		if row.WorkflowStatus != "submitted" || store.updateParams.WorkflowStatus != "submitted" {
+			t.Fatalf("SubmitForReview(revision_needed safe) row/update = %+v/%+v, want submitted", row, store.updateParams)
+		}
+		if len(store.workflowEvents) != 1 || store.workflowEvents[0].FromStatus != "revision_needed" || store.workflowEvents[0].ToStatus != "submitted" {
+			t.Fatalf("SubmitForReview(revision_needed safe) events = %+v, want revision_needed -> submitted", store.workflowEvents)
+		}
+	})
+
 	t.Run("already submitted is idempotent and does not audit", func(t *testing.T) {
 		current := megaQuestionBase(questionID, "submitted")
 		store := &fakeQuestionStore{current: current}

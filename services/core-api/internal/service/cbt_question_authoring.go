@@ -361,8 +361,11 @@ func (s *CbtQuestion) requireModifyQuestion(ctx context.Context, actor CbtQuesti
 	if strings.TrimSpace(current.AuthorUsername) == "" || strings.TrimSpace(current.AuthorUsername) != actor.Username {
 		return domain.ErrForbidden
 	}
-	if current.WorkflowStatus != "" && current.WorkflowStatus != "draft" && current.WorkflowStatus != "rejected" {
-		return fmt.Errorf("%w: soal sedang atau sudah masuk alur review. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
+	workflowStatus := strings.TrimSpace(current.WorkflowStatus)
+	if workflowStatus != "" && workflowStatus != "draft" && workflowStatus != "rejected" {
+		if !revisionNeededInlineEditable(current) {
+			return fmt.Errorf("%w: soal sedang atau sudah masuk alur review. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
+		}
 	}
 	if current.Status != "" && current.Status != db.CbtQuestionStatusEnumDraft {
 		return fmt.Errorf("%w: soal tidak lagi berstatus draft. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
@@ -371,6 +374,15 @@ func (s *CbtQuestion) requireModifyQuestion(ctx context.Context, actor CbtQuesti
 		return s.requireCreateQuestion(ctx, actor, current.EventID, current.SubjectID)
 	}
 	return nil
+}
+
+func revisionNeededInlineEditable(current db.GetCbtQuestionRow) bool {
+	workflowStatus := strings.TrimSpace(current.WorkflowStatus)
+	status := strings.TrimSpace(string(current.Status))
+	return workflowStatus == "revision_needed" &&
+		(status == "" || status == string(db.CbtQuestionStatusEnumDraft)) &&
+		current.IsLatestVersion &&
+		!questionUsageLocked(current.PackageCount, current.AnswerCount)
 }
 
 func sameUUID(a, b pgtype.UUID) bool {
@@ -800,7 +812,7 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 	if out.AuthoringMode == "beginner" {
 		out.Difficulty = db.CbtQuestionDifficultyEnumMedium
 		out.Status = db.CbtQuestionStatusEnumDraft
-		if out.WorkflowStatus != "review" && out.WorkflowStatus != "submitted" {
+		if out.WorkflowStatus != "review" && out.WorkflowStatus != "submitted" && out.WorkflowStatus != "revision_needed" {
 			out.WorkflowStatus = "draft"
 			out.ReviewerUsername = ""
 		}

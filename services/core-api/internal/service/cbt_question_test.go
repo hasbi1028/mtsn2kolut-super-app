@@ -696,6 +696,102 @@ func TestCbtQuestionMediaAssetIDsAreValidated(t *testing.T) {
 	})
 }
 
+func TestCbtQuestionUpdateAllowsSafeRevisionNeededDraft(t *testing.T) {
+	questionID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
+	subjectID := pgtype.UUID{Bytes: [16]byte{7}, Valid: true}
+	store := &fakeQuestionStore{
+		current: db.GetCbtQuestionRow{
+			ID:              questionID,
+			SubjectID:       subjectID,
+			AuthorUsername:  "guru.a",
+			Status:          db.CbtQuestionStatusEnumDraft,
+			WorkflowStatus:  "revision_needed",
+			IsLatestVersion: true,
+			QuestionType:    "multiple_choice",
+			OptionA:         "A",
+			OptionB:         "B",
+			OptionC:         "C",
+			OptionD:         "D",
+			AnswerKey:       "A",
+		},
+	}
+	svc := &CbtQuestion{q: store}
+
+	_, err := svc.Update(context.Background(), SaveCbtQuestionInput{
+		ID:             questionID,
+		SubjectID:      subjectID,
+		AuthoringMode:  "beginner",
+		QuestionType:   "multiple_choice",
+		QuestionText:   "Soal revisi aman",
+		OptionA:        "A",
+		OptionB:        "B",
+		OptionC:        "C",
+		OptionD:        "D",
+		AnswerKey:      "A",
+		WorkflowStatus: "revision_needed",
+		Status:         db.CbtQuestionStatusEnumDraft,
+		AuthorUsername: "guru.a",
+		Actor:          CbtQuestionActor{Username: "guru.a", Roles: []string{"guru"}},
+	})
+	if err != nil {
+		t.Fatalf("Update(safe revision_needed) error = %v", err)
+	}
+	if store.updateCalls != 1 || store.updateParams.WorkflowStatus != "revision_needed" {
+		t.Fatalf("Update(safe revision_needed) update = %d/%q, want one revision_needed update", store.updateCalls, store.updateParams.WorkflowStatus)
+	}
+	if store.auditCalls != 1 || store.auditLogs[0].Action != "update" {
+		t.Fatalf("Update(safe revision_needed) audit = calls %d logs %+v, want update audit", store.auditCalls, store.auditLogs)
+	}
+}
+
+func TestCbtQuestionUpdateRejectsUnsafeRevisionNeededDraft(t *testing.T) {
+	questionID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
+	subjectID := pgtype.UUID{Bytes: [16]byte{7}, Valid: true}
+	tests := []struct {
+		name    string
+		current db.GetCbtQuestionRow
+	}{
+		{
+			name:    "not latest",
+			current: db.GetCbtQuestionRow{ID: questionID, SubjectID: subjectID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "revision_needed", IsLatestVersion: false},
+		},
+		{
+			name:    "package usage",
+			current: db.GetCbtQuestionRow{ID: questionID, SubjectID: subjectID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "revision_needed", IsLatestVersion: true, PackageCount: 1},
+		},
+		{
+			name:    "student answer usage",
+			current: db.GetCbtQuestionRow{ID: questionID, SubjectID: subjectID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "revision_needed", IsLatestVersion: true, AnswerCount: 1},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &fakeQuestionStore{current: tt.current}
+			svc := &CbtQuestion{q: store}
+			_, err := svc.Update(context.Background(), SaveCbtQuestionInput{
+				ID:             questionID,
+				SubjectID:      subjectID,
+				AuthoringMode:  "beginner",
+				QuestionType:   "multiple_choice",
+				QuestionText:   "Soal revisi",
+				OptionA:        "A",
+				OptionB:        "B",
+				OptionC:        "C",
+				OptionD:        "D",
+				AnswerKey:      "A",
+				AuthorUsername: "guru.a",
+				Actor:          CbtQuestionActor{Username: "guru.a", Roles: []string{"guru"}},
+			})
+			if !errors.Is(err, domain.ErrConflict) {
+				t.Fatalf("Update(unsafe revision_needed %s) error = %v, want conflict", tt.name, err)
+			}
+			if store.updateCalls != 0 {
+				t.Fatalf("Update(unsafe revision_needed %s) update calls = %d, want 0", tt.name, store.updateCalls)
+			}
+		})
+	}
+}
+
 func TestCbtQuestionDeleteWithActorAllowsDraftUnusedQuestion(t *testing.T) {
 	questionID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
 	store := &fakeQuestionStore{

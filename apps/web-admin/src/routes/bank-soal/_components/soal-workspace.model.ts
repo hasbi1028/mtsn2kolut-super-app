@@ -630,20 +630,25 @@ export function revisionReason(q: Question): string {
 }
 
 export function canSubmitRevisionReview(q: Question): boolean {
-	return (q.workflow_status === 'rejected' || q.workflow_status === 'revision_needed') && q.status === 'draft' && !questionUsageLocked(q);
+	return (q.workflow_status === 'rejected' || q.workflow_status === 'revision_needed')
+		&& q.status === 'draft'
+		&& q.is_latest_version !== false
+		&& !questionUsageLocked(q);
 }
 
 export function isQuickEditable(q: Question): boolean {
 	return isComposerQuestionType(q.question_type)
 		&& (q.workflow_status === 'draft' || q.workflow_status === 'rejected' || q.workflow_status === 'revision_needed')
 		&& q.status === 'draft'
+		&& q.is_latest_version !== false
 		&& !questionUsageLocked(q);
 }
 
 export function explainQuickEditBlocked(q: Question): string {
 	if (questionUsageLocked(q)) return 'Soal sudah dipakai. Gunakan Duplikat untuk membuat revisi draft.';
-	if ((q.workflow_status !== 'draft' && q.workflow_status !== 'rejected') || q.status !== 'draft') {
-		if (q.workflow_status === 'revision_needed') return 'Soal sudah diminta revisi. Guru pembuat soal dapat mengedit selama soal masih draft dan belum dipakai.';
+	if (q.is_latest_version === false) return 'Soal bukan versi terbaru. Buka versi terbaru atau gunakan Duplikat untuk revisi baru.';
+	if ((q.workflow_status !== 'draft' && q.workflow_status !== 'rejected' && q.workflow_status !== 'revision_needed') || q.status !== 'draft') {
+		if (q.workflow_status === 'revision_needed') return 'Soal diminta revisi, tetapi hanya bisa diedit jika masih draft, versi terbaru, dan belum dipakai.';
 		return 'Soal sudah masuk alur verifikasi/publikasi. Gunakan Duplikat untuk revisi.';
 	}
 	if (!isComposerQuestionType(q.question_type)) {
