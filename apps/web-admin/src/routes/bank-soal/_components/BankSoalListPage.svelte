@@ -284,6 +284,7 @@
 	let publicationFilter = $state<PublicationFilter>('');
 	let questionTypeFilter = $state<QuestionTypeFilter>('');
 	let hotsFilter = $state<HotsFilter>('');
+	let authorFilter = $state('');
 	let currentPage = $state(1);
 	let questions = $state<Question[]>([]);
 	let subjects = $state<Subject[]>([]);
@@ -319,7 +320,8 @@
 			workflowFilter ||
 			publicationFilter ||
 			questionTypeFilter ||
-			hotsFilter
+			hotsFilter ||
+			authorFilter
 	));
 	let selectedSubject = $derived(subjects.find((subject) => subject.id === subjectFilter) ?? null);
 	let composerHref = $derived(resolve('/bank-soal/tambah'));
@@ -401,6 +403,7 @@
 		if (subjectFilter) params.set('subject_id', subjectFilter);
 		if (questionTypeFilter) params.set('question_type', questionTypeFilter);
 		if (hotsFilter) params.set('hots', hotsFilter);
+		if (authorFilter) params.set("author_username", authorFilter);
 		return params;
 	}
 
@@ -547,6 +550,7 @@
 		if (publicationFilter) params.set('status', publicationFilter);
 		if (questionTypeFilter) params.set('question_type', questionTypeFilter);
 		if (hotsFilter) params.set('hots', hotsFilter);
+		if (authorFilter) params.set("author_username", authorFilter);
 		if (page > 1) params.set('page', String(page));
 		const query = params.toString();
 		window.history.replaceState({}, '', query ? `${window.location.pathname}?${query}` : window.location.pathname);
@@ -593,6 +597,7 @@
 		publicationFilter = '';
 		questionTypeFilter = '';
 		hotsFilter = '';
+		authorFilter = '';
 		load(1, true);
 	}
 
@@ -622,6 +627,7 @@
 		publicationFilter = normalizePublicationFilter(params.get('status'));
 		questionTypeFilter = normalizeQuestionTypeFilter(params.get('question_type'));
 		hotsFilter = normalizeHotsFilter(params.get('hots'));
+		authorFilter = params.get("author_username") ?? '';
 		const parsedPage = Number.parseInt(params.get('page') ?? '1', 10);
 		currentPage = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
 	}
@@ -1207,7 +1213,7 @@
 
 	{#if showList}
 	<section class="rounded-lg border border-border bg-card p-4 shadow-sm">
-		<form class="grid gap-3 lg:grid-cols-[minmax(16rem,1.5fr)_repeat(5,minmax(9rem,1fr))_auto] lg:items-end" onsubmit={applyFilters}>
+		<form class="grid gap-3 lg:grid-cols-[minmax(16rem,1.5fr)_repeat(6,minmax(9rem,1fr))_auto] lg:items-end" onsubmit={applyFilters}>
 			<div class="space-y-1">
 				<label for="bank-soal-search" class="text-xs font-semibold text-muted-foreground">Cari soal</label>
 				<div class="relative">
@@ -1235,6 +1241,17 @@
 						<option value={subject.id}>{subject.code ? `${subject.code} - ${subject.name}` : subject.name}</option>
 					{/each}
 				</select>
+			</div>
+			<div class="space-y-1">
+				<label for="bank-soal-author" class="text-xs font-semibold text-muted-foreground">Pembuat</label>
+				<input
+					id="bank-soal-author"
+					type="text"
+					bind:value={authorFilter}
+					oninput={() => load(1, true)}
+					placeholder="Username pembuat..."
+					class="h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+				/>
 			</div>
 
 			<div class="space-y-1">

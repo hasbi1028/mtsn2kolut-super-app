@@ -193,6 +193,7 @@ func questionListInputFromRequest(r *http.Request, defaultLimit int32, maxLimit 
 		MetadataFilter: r.URL.Query().Get("metadata"),
 		HotsFilter:     r.URL.Query().Get("hots"),
 		RevisionSource: r.URL.Query().Get("revision_source"),
+		AuthorUsername: r.URL.Query().Get("author_username"),
 		SearchQuery:    r.URL.Query().Get("q"),
 		SortOrder:      r.URL.Query().Get("sort"),
 		Limit:          limit,
