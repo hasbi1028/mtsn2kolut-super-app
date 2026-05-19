@@ -138,6 +138,10 @@ type cbtParticipantEventStore interface {
 	InsertParticipantEvent(ctx context.Context, arg db.InsertParticipantEventParams) error
 }
 
+type cbtRoomWebFallbackPolicyStore interface {
+	UpdateCbtRoomWebFallbackPolicy(ctx context.Context, arg db.UpdateCbtRoomWebFallbackPolicyParams) (db.CbtExamRoom, error)
+}
+
 const (
 	ParticipantCommandWarningMessage = "warning_message"
 	ParticipantCommandReconnect      = "reconnect"
@@ -859,6 +863,31 @@ func (s *CbtSession) RoomReadiness(ctx context.Context, sessionID pgtype.UUID) (
 
 func (s *CbtSession) GetRoomProctoringDashboard(ctx context.Context, roomID pgtype.UUID) (db.GetCbtRoomProctorDashboardRow, error) {
 	return s.q.GetCbtRoomProctorDashboard(ctx, roomID)
+}
+
+func (s *CbtSession) UpdateRoomWebFallbackPolicy(ctx context.Context, sessionID, roomID, actorUserID pgtype.UUID, allow bool, reason string) (db.CbtExamRoom, error) {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return db.CbtExamRoom{}, domain.ErrBadRequest
+	}
+	q, ok := s.q.(cbtRoomWebFallbackPolicyStore)
+	if !ok {
+		return db.CbtExamRoom{}, fmt.Errorf("cbt web fallback policy store unavailable")
+	}
+	room, err := q.UpdateCbtRoomWebFallbackPolicy(ctx, db.UpdateCbtRoomWebFallbackPolicyParams{
+		SessionID:        sessionID,
+		RoomID:           roomID,
+		AllowWebFallback: allow,
+		ActorUserID:      actorUserID,
+		Reason:           reason,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return db.CbtExamRoom{}, domain.ErrNotFound
+		}
+		return db.CbtExamRoom{}, err
+	}
+	return room, nil
 }
 
 type SaveCbtRoomHandoverInput struct {

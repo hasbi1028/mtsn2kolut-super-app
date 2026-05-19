@@ -53,6 +53,11 @@
 		online_count: number;
 		suspicious_count: number;
 		missing_seat_count: number;
+		allow_web_fallback?: boolean;
+		web_fallback_enabled_at?: string | null;
+		web_fallback_enabled_by?: string | null;
+		web_fallback_reason?: string;
+		web_fallback_disabled_at?: string | null;
 	};
 	type RoomProctor = {
 		id: string;
@@ -82,6 +87,7 @@
 		risk_level: string;
 		locked_at: string | null;
 		locked_reason: string | null;
+		client_type?: string;
 		recent_violation_count: number;
 		last_violation_at: string | null;
 		last_violation_reason: string;
@@ -163,6 +169,7 @@
 	let handoverLoadBusy = $state(false);
 	let handoverBusy = $state(false);
 	let handoverLockBusy = $state(false);
+	let webFallbackBusy = $state(false);
 	let refreshBusy = $state(false);
 	let backgroundBusy = $state(false);
 	let actionBusyId = $state('');
@@ -193,6 +200,7 @@
 		let submitted = 0;
 		let locked = 0;
 		let highRisk = 0;
+		let webFallback = 0;
 		for (const row of participants) {
 			const state = heartbeatState(row);
 			if (state === 'online') online += 1;
@@ -201,8 +209,9 @@
 			if (row.submitted_at) submitted += 1;
 			if (row.locked_at || row.risk_level === 'locked') locked += 1;
 			if (row.risk_level === 'high' || row.risk_level === 'locked') highRisk += 1;
+			if (row.client_type === 'web_fallback') webFallback += 1;
 		}
-		return { online, stale, offline, submitted, locked, highRisk };
+		return { online, stale, offline, submitted, locked, highRisk, webFallback };
 	});
 	const participantFilters: Array<{ key: ParticipantFilter; label: string; aria: string }> = [
 		{ key: 'attention', label: 'Butuh Tindakan', aria: 'Filter peserta: Butuh Tindakan' },
@@ -817,6 +826,44 @@
 		}
 	}
 
+	async function updateRoomWebFallbackPolicy(allow: boolean) {
+		const defaultReason = allow
+			? 'Mode darurat browser diaktifkan karena perangkat/aplikasi peserta bermasalah dan sudah disetujui pengawas.'
+			: 'Mode darurat browser dinonaktifkan setelah kondisi ruang kembali normal.';
+		const reason = window.prompt(
+			allow ? 'Alasan mengaktifkan Browser Darurat untuk ruang ini' : 'Alasan menonaktifkan Browser Darurat untuk ruang ini',
+			room?.web_fallback_reason || defaultReason,
+		)?.trim();
+		if (!reason) return;
+		if (!(await confirmAction({
+			title: allow ? 'Aktifkan Browser Darurat?' : 'Nonaktifkan Browser Darurat?',
+			message: allow
+				? 'Fallback web hanya untuk kondisi darurat/perangkat bermasalah. Peserta yang memakai browser wajib diawasi dan tercatat.'
+				: 'Peserta baru tidak dapat login lewat /ujian setelah dinonaktifkan. Peserta yang sudah masuk tetap perlu dipantau sampai selesai.',
+			confirmLabel: allow ? 'Aktifkan' : 'Nonaktifkan',
+			tone: allow ? 'warning' : 'default',
+		}))) return;
+		webFallbackBusy = true;
+		try {
+			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/web-fallback`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ allow_web_fallback: allow, reason }),
+			});
+			await readClientJson<unknown>(res);
+			operationState = {
+				tone: allow ? 'warning' : 'success',
+				title: allow ? 'Browser Darurat Aktif' : 'Browser Darurat Nonaktif',
+				message: allow ? 'Route /ujian dapat dipakai peserta ruang ini atas arahan pengawas.' : 'Fallback browser ruang sudah ditutup.'
+			};
+			await refreshDashboard(true);
+		} catch (error) {
+			toast.error(detailErrorMessage(error));
+		} finally {
+			webFallbackBusy = false;
+		}
+	}
+
 	function handoverPayload() {
 		return {
 			attendance_checked: handover?.attendance_checked === true,
@@ -971,7 +1018,7 @@
 		{/snippet}
 
 		{#if room}
-				<div class="grid gap-3 md:grid-cols-3">
+				<div class="grid gap-3 md:grid-cols-4">
 					<Card.Root class="border-primary/20">
 						<Card.Header class="pb-2">
 							<Card.Title class="text-sm text-muted-foreground">Butuh tindakan</Card.Title>
@@ -988,6 +1035,15 @@
 						<Card.Content>
 							<div class="text-2xl font-bold text-warning">{participantStats.stale + participantStats.offline}</div>
 							<p class="text-xs text-muted-foreground">Perlu dicek pengawas</p>
+						</Card.Content>
+					</Card.Root>
+					<Card.Root class={room.allow_web_fallback ? 'border-warning/30 bg-warning/5' : 'border-primary/20'}>
+						<Card.Header class="pb-2">
+							<Card.Title class="text-sm text-muted-foreground">Browser Darurat</Card.Title>
+						</Card.Header>
+						<Card.Content>
+							<div class="text-2xl font-bold text-warning">{participantStats.webFallback}</div>
+							<p class="text-xs text-muted-foreground">{room.allow_web_fallback ? 'Fallback /ujian aktif' : 'Default OFF'}</p>
 						</Card.Content>
 					</Card.Root>
 					<Card.Root class="border-primary/20">
@@ -1013,10 +1069,13 @@
 							<div class="flex flex-wrap items-center gap-2">
 								<Badge variant="outline" class="border-primary/20 text-primary">Token ruang {maskedRoomToken(room.room_token)}</Badge>
 								<Badge variant="outline">{room.session_status}</Badge>
+								<Badge variant="outline" class={room.allow_web_fallback ? 'border-warning/30 bg-warning/10 text-warning' : 'border-muted text-muted-foreground'}>
+									{room.allow_web_fallback ? 'Browser Darurat ON' : 'Browser Darurat OFF'}
+								</Badge>
 							</div>
 						</div>
 					</Card.Header>
-					<Card.Content class="grid gap-4 md:grid-cols-3">
+					<Card.Content class="grid gap-4 md:grid-cols-4">
 						<div class="rounded-lg border border-border p-3">
 							<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lokasi</p>
 							<p class="mt-1 text-sm font-medium text-foreground">{room.school_room_code ? `${room.school_room_code} · ${room.school_room_name}` : 'Ruang manual sesi'}</p>
@@ -1036,6 +1095,14 @@
 							<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status Ruang</p>
 							<p class="mt-1 text-sm text-foreground">Durasi paket {room.duration_minutes} menit</p>
 							<p class="text-xs text-muted-foreground">{room.is_locked ? 'Ruang dikunci' : 'Ruang masih dapat diperbarui operator'}</p>
+						</div>
+						<div class={`rounded-lg border p-3 ${room.allow_web_fallback ? 'border-warning/30 bg-warning/5' : 'border-border'}`}>
+							<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Browser Darurat /ujian</p>
+							<p class="mt-1 text-sm font-semibold text-foreground">{room.allow_web_fallback ? 'Aktif untuk ruang ini' : 'Nonaktif (default aman)'}</p>
+							<p class="text-xs text-muted-foreground">{room.web_fallback_reason || 'Hanya aktif bila operator/pengawas memberi izin.'}</p>
+							<LoadingButton class="mt-3" size="sm" variant={room.allow_web_fallback ? 'outline' : 'default'} onclick={() => void updateRoomWebFallbackPolicy(!room?.allow_web_fallback)} loading={webFallbackBusy} loadingLabel="Menyimpan...">
+								{room.allow_web_fallback ? 'Nonaktifkan' : 'Aktifkan Darurat'}
+							</LoadingButton>
 						</div>
 					</Card.Content>
 				</Card.Root>
@@ -1069,6 +1136,9 @@
 												<p class="text-xs text-muted-foreground">{row.nis} · Meja {row.seat_no ?? '—'}</p>
 											</div>
 											<Badge variant="outline" class={riskClass(row)}>{participantAttentionLabel(row)}</Badge>
+							{#if row.client_type === 'web_fallback'}
+								<Badge variant="outline" class="border-warning/30 bg-warning/10 text-warning">Browser Darurat</Badge>
+							{/if}
 										</div>
 										<div class="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
 											<div class="rounded-lg bg-muted p-2"><p class="font-bold">{heartbeatLabel(row)}</p><p class="text-muted-foreground">Koneksi</p></div>

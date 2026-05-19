@@ -32,7 +32,7 @@ VALUES (
   COALESCE(NULLIF($4::TEXT, ''), $3::TEXT),
   $5
 )
-RETURNING id, session_id, room_name, capacity, created_at, school_room_id, room_name_snapshot, capacity_override, room_token, status, is_locked, updated_at, room_token_hash, room_token_hash_version, room_token_generated_at, room_token_revealed_at, room_token_revoked_at
+RETURNING id, session_id, room_name, capacity, created_at, school_room_id, room_name_snapshot, capacity_override, room_token, status, is_locked, updated_at, room_token_hash, room_token_hash_version, room_token_generated_at, room_token_revealed_at, room_token_revoked_at, allow_web_fallback, web_fallback_enabled_at, web_fallback_enabled_by, web_fallback_reason, web_fallback_disabled_at
 `
 
 type CreateCbtExamRoomParams struct {
@@ -70,6 +70,11 @@ func (q *Queries) CreateCbtExamRoom(ctx context.Context, arg CreateCbtExamRoomPa
 		&i.RoomTokenGeneratedAt,
 		&i.RoomTokenRevealedAt,
 		&i.RoomTokenRevokedAt,
+		&i.AllowWebFallback,
+		&i.WebFallbackEnabledAt,
+		&i.WebFallbackEnabledBy,
+		&i.WebFallbackReason,
+		&i.WebFallbackDisabledAt,
 	)
 	return i, err
 }
@@ -125,7 +130,7 @@ func (q *Queries) DeleteCbtRoomProctorsByRoom(ctx context.Context, examRoomID pg
 }
 
 const getCbtExamRoom = `-- name: GetCbtExamRoom :one
-SELECT id, session_id, room_name, capacity, created_at, school_room_id, room_name_snapshot, capacity_override, room_token, status, is_locked, updated_at, room_token_hash, room_token_hash_version, room_token_generated_at, room_token_revealed_at, room_token_revoked_at
+SELECT id, session_id, room_name, capacity, created_at, school_room_id, room_name_snapshot, capacity_override, room_token, status, is_locked, updated_at, room_token_hash, room_token_hash_version, room_token_generated_at, room_token_revealed_at, room_token_revoked_at, allow_web_fallback, web_fallback_enabled_at, web_fallback_enabled_by, web_fallback_reason, web_fallback_disabled_at
 FROM cbt_exam_rooms
 WHERE id = $1
 `
@@ -151,6 +156,11 @@ func (q *Queries) GetCbtExamRoom(ctx context.Context, id pgtype.UUID) (CbtExamRo
 		&i.RoomTokenGeneratedAt,
 		&i.RoomTokenRevealedAt,
 		&i.RoomTokenRevokedAt,
+		&i.AllowWebFallback,
+		&i.WebFallbackEnabledAt,
+		&i.WebFallbackEnabledBy,
+		&i.WebFallbackReason,
+		&i.WebFallbackDisabledAt,
 	)
 	return i, err
 }
@@ -380,6 +390,11 @@ SELECT
   r.is_locked,
   r.created_at,
   r.updated_at,
+  r.allow_web_fallback,
+  r.web_fallback_enabled_at,
+  r.web_fallback_enabled_by,
+  r.web_fallback_reason,
+  r.web_fallback_disabled_at,
   s.title AS session_title,
   s.status AS session_status,
   s.scheduled_start,
@@ -418,6 +433,11 @@ type GetCbtRoomProctorDashboardRow struct {
 	IsLocked               bool                 `json:"is_locked"`
 	CreatedAt              pgtype.Timestamptz   `json:"created_at"`
 	UpdatedAt              pgtype.Timestamptz   `json:"updated_at"`
+	AllowWebFallback       bool                 `json:"allow_web_fallback"`
+	WebFallbackEnabledAt   pgtype.Timestamptz   `json:"web_fallback_enabled_at"`
+	WebFallbackEnabledBy   pgtype.UUID          `json:"web_fallback_enabled_by"`
+	WebFallbackReason      string               `json:"web_fallback_reason"`
+	WebFallbackDisabledAt  pgtype.Timestamptz   `json:"web_fallback_disabled_at"`
 	SessionTitle           string               `json:"session_title"`
 	SessionStatus          CbtSessionStatusEnum `json:"session_status"`
 	ScheduledStart         pgtype.Timestamptz   `json:"scheduled_start"`
@@ -451,6 +471,11 @@ func (q *Queries) GetCbtRoomProctorDashboard(ctx context.Context, id pgtype.UUID
 		&i.IsLocked,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AllowWebFallback,
+		&i.WebFallbackEnabledAt,
+		&i.WebFallbackEnabledBy,
+		&i.WebFallbackReason,
+		&i.WebFallbackDisabledAt,
 		&i.SessionTitle,
 		&i.SessionStatus,
 		&i.ScheduledStart,
@@ -819,6 +844,8 @@ SELECT
   r.id, r.session_id, r.school_room_id,
   r.room_name, r.room_name_snapshot, r.capacity, r.capacity_override,
   r.room_token, r.status, r.is_locked, r.created_at, r.updated_at,
+  r.allow_web_fallback, r.web_fallback_enabled_at, r.web_fallback_enabled_by,
+  r.web_fallback_reason, r.web_fallback_disabled_at,
   COALESCE(sr.code, '') AS school_room_code,
   COALESCE(sr.name, '') AS school_room_name,
   COALESCE(sr.building, '') AS school_room_building,
@@ -852,6 +879,11 @@ type ListCbtExamRoomsRow struct {
 	IsLocked               bool               `json:"is_locked"`
 	CreatedAt              pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	AllowWebFallback       bool               `json:"allow_web_fallback"`
+	WebFallbackEnabledAt   pgtype.Timestamptz `json:"web_fallback_enabled_at"`
+	WebFallbackEnabledBy   pgtype.UUID        `json:"web_fallback_enabled_by"`
+	WebFallbackReason      string             `json:"web_fallback_reason"`
+	WebFallbackDisabledAt  pgtype.Timestamptz `json:"web_fallback_disabled_at"`
 	SchoolRoomCode         string             `json:"school_room_code"`
 	SchoolRoomName         string             `json:"school_room_name"`
 	SchoolRoomBuilding     string             `json:"school_room_building"`
@@ -887,6 +919,11 @@ func (q *Queries) ListCbtExamRooms(ctx context.Context, sessionID pgtype.UUID) (
 			&i.IsLocked,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.AllowWebFallback,
+			&i.WebFallbackEnabledAt,
+			&i.WebFallbackEnabledBy,
+			&i.WebFallbackReason,
+			&i.WebFallbackDisabledAt,
 			&i.SchoolRoomCode,
 			&i.SchoolRoomName,
 			&i.SchoolRoomBuilding,
@@ -1329,6 +1366,72 @@ func (q *Queries) LockCbtRoomHandover(ctx context.Context, arg LockCbtRoomHandov
 		&i.UpdatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateCbtRoomWebFallbackPolicy = `-- name: UpdateCbtRoomWebFallbackPolicy :one
+UPDATE cbt_exam_rooms
+SET allow_web_fallback = $1,
+    web_fallback_enabled_at = CASE
+      WHEN $1::boolean THEN COALESCE(web_fallback_enabled_at, NOW())
+      ELSE web_fallback_enabled_at
+    END,
+    web_fallback_enabled_by = CASE
+      WHEN $1::boolean THEN $2
+      ELSE web_fallback_enabled_by
+    END,
+    web_fallback_reason = $3,
+    web_fallback_disabled_at = CASE
+      WHEN $1::boolean THEN NULL
+      ELSE NOW()
+    END,
+    updated_at = NOW()
+WHERE session_id = $4
+  AND id = $5
+RETURNING id, session_id, room_name, capacity, created_at, school_room_id, room_name_snapshot, capacity_override, room_token, status, is_locked, updated_at, room_token_hash, room_token_hash_version, room_token_generated_at, room_token_revealed_at, room_token_revoked_at, allow_web_fallback, web_fallback_enabled_at, web_fallback_enabled_by, web_fallback_reason, web_fallback_disabled_at
+`
+
+type UpdateCbtRoomWebFallbackPolicyParams struct {
+	AllowWebFallback bool        `json:"allow_web_fallback"`
+	ActorUserID      pgtype.UUID `json:"actor_user_id"`
+	Reason           string      `json:"reason"`
+	SessionID        pgtype.UUID `json:"session_id"`
+	RoomID           pgtype.UUID `json:"room_id"`
+}
+
+func (q *Queries) UpdateCbtRoomWebFallbackPolicy(ctx context.Context, arg UpdateCbtRoomWebFallbackPolicyParams) (CbtExamRoom, error) {
+	row := q.db.QueryRow(ctx, updateCbtRoomWebFallbackPolicy,
+		arg.AllowWebFallback,
+		arg.ActorUserID,
+		arg.Reason,
+		arg.SessionID,
+		arg.RoomID,
+	)
+	var i CbtExamRoom
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.RoomName,
+		&i.Capacity,
+		&i.CreatedAt,
+		&i.SchoolRoomID,
+		&i.RoomNameSnapshot,
+		&i.CapacityOverride,
+		&i.RoomToken,
+		&i.Status,
+		&i.IsLocked,
+		&i.UpdatedAt,
+		&i.RoomTokenHash,
+		&i.RoomTokenHashVersion,
+		&i.RoomTokenGeneratedAt,
+		&i.RoomTokenRevealedAt,
+		&i.RoomTokenRevokedAt,
+		&i.AllowWebFallback,
+		&i.WebFallbackEnabledAt,
+		&i.WebFallbackEnabledBy,
+		&i.WebFallbackReason,
+		&i.WebFallbackDisabledAt,
 	)
 	return i, err
 }

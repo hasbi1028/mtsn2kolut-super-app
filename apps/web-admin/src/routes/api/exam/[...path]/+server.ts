@@ -12,7 +12,7 @@ function examPath(event: RequestEvent): string {
 
 function upstreamHeaders(request: Request): Headers {
 	const headers = new Headers();
-	for (const key of ['accept', 'content-type', 'x-exam-token', 'x-device-fingerprint']) {
+	for (const key of ['accept', 'content-type', 'user-agent', 'x-exam-token', 'x-device-fingerprint', 'x-forwarded-for', 'x-real-ip']) {
 		const value = request.headers.get(key);
 		if (value) headers.set(key, value);
 	}

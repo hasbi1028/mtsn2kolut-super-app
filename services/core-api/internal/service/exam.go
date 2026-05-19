@@ -32,6 +32,7 @@ var (
 	ErrExamRoomRequired     = errors.New("exam room has not been assigned")
 	ErrRoomTokenRequired    = errors.New("room token required")
 	ErrRoomTokenMismatch    = errors.New("room token mismatch")
+	ErrWebFallbackDisabled  = errors.New("web fallback is not enabled for exam room")
 	ErrExamQuestionScope    = errors.New("question is not part of participant exam")
 	ErrExamLocked           = errors.New("exam locked by anti-cheat policy")
 	ErrExamInvalidTelemetry = errors.New("invalid exam telemetry event")
@@ -156,12 +157,36 @@ type ExamQuestion struct {
 	OptionE string `json:"option_e,omitempty"`
 }
 
+type ExamLoginRequest struct {
+	Token              string
+	RoomToken          string
+	DeviceFingerprint  string
+	LoginIP            string
+	ClientType         string
+	BrowserFingerprint string
+	UserAgent          string
+}
+
 func (s *Exam) Login(ctx context.Context, token, roomToken, deviceFingerprint, loginIP string) (LoginResult, error) {
-	deviceFingerprint = strings.TrimSpace(deviceFingerprint)
+	return s.LoginWithClient(ctx, ExamLoginRequest{
+		Token:             token,
+		RoomToken:         roomToken,
+		DeviceFingerprint: deviceFingerprint,
+		LoginIP:           loginIP,
+	})
+}
+
+func (s *Exam) LoginWithClient(ctx context.Context, req ExamLoginRequest) (LoginResult, error) {
+	clientType := normalizeExamClientType(req.ClientType)
+	deviceFingerprint := strings.TrimSpace(req.DeviceFingerprint)
+	browserFingerprint := strings.TrimSpace(req.BrowserFingerprint)
+	if clientType == "web_fallback" && deviceFingerprint == "" {
+		deviceFingerprint = browserFingerprint
+	}
 	if deviceFingerprint == "" {
 		return LoginResult{}, ErrDeviceRequired
 	}
-	p, err := s.q.GetParticipantByToken(ctx, strings.TrimSpace(token))
+	p, err := s.q.GetParticipantByToken(ctx, strings.TrimSpace(req.Token))
 	if err != nil {
 		return LoginResult{}, ErrExamNotFound
 	}
@@ -171,9 +196,12 @@ func (s *Exam) Login(ctx context.Context, token, roomToken, deviceFingerprint, l
 	if !p.RoomID.Valid {
 		return LoginResult{}, ErrExamRoomRequired
 	}
-	if err := validateParticipantRoomToken(p, roomToken); err != nil {
-		s.recordRoomTokenMismatch(ctx, p, loginIP, err)
+	if err := validateParticipantRoomToken(p, req.RoomToken); err != nil {
+		s.recordRoomTokenMismatch(ctx, p, req.LoginIP, err)
 		return LoginResult{}, err
+	}
+	if clientType == "web_fallback" && !p.RoomAllowWebFallback {
+		return LoginResult{}, ErrWebFallbackDisabled
 	}
 	if p.ScheduledStart.Valid && time.Now().Before(p.ScheduledStart.Time) {
 		return LoginResult{}, ErrExamNotStarted
@@ -196,9 +224,12 @@ func (s *Exam) Login(ctx context.Context, token, roomToken, deviceFingerprint, l
 
 	// Record login and bind device
 	if _, err := s.q.UpdateParticipantLogin(ctx, db.UpdateParticipantLoginParams{
-		ID:                p.ID,
-		DeviceFingerprint: pgtype.Text{String: deviceFingerprint, Valid: true},
-		LoginIp:           pgtype.Text{String: loginIP, Valid: true},
+		ID:                     p.ID,
+		DeviceFingerprint:      pgtype.Text{String: deviceFingerprint, Valid: true},
+		LoginIp:                pgtype.Text{String: req.LoginIP, Valid: true},
+		ClientType:             clientType,
+		BrowserFingerprintHash: safeHash(browserFingerprint),
+		ClientUserAgentHash:    safeHash(req.UserAgent),
 	}); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return LoginResult{}, ErrDeviceMismatch
@@ -210,8 +241,26 @@ func (s *Exam) Login(ctx context.Context, token, roomToken, deviceFingerprint, l
 	_ = s.q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
 		ParticipantID: p.ID,
 		EventType:     "login",
-		EventData:     marshalJSON(map[string]string{"ip": loginIP, "device_hash": hashString(deviceFingerprint)}),
+		EventData: marshalJSON(map[string]string{
+			"ip":          req.LoginIP,
+			"device_hash": hashString(deviceFingerprint),
+			"client_type": clientType,
+		}),
 	})
+	if clientType == "web_fallback" {
+		_ = s.q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
+			ParticipantID: p.ID,
+			EventType:     "web_fallback_used",
+			EventData: marshalJSON(map[string]string{
+				"client_type":              clientType,
+				"browser_fingerprint_hash": safeHash(browserFingerprint),
+				"user_agent_hash":          safeHash(req.UserAgent),
+				"session_id":               pgUUIDString(p.SessionID),
+				"room_id":                  pgUUIDString(p.RoomID),
+				"reason":                   "browser_darurat_login",
+			}),
+		})
+	}
 
 	// Load questions for this package
 	questions, err := s.q.GetExamQuestions(ctx, p.PackageID)
@@ -1264,4 +1313,28 @@ func marshalJSON(v any) []byte {
 func hashString(value string) string {
 	sum := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(sum[:])
+}
+
+func safeHash(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	return hashString(value)
+}
+
+func normalizeExamClientType(raw string) string {
+	clean := strings.TrimSpace(strings.ToLower(raw))
+	clean = strings.ReplaceAll(clean, "-", "_")
+	clean = strings.ReplaceAll(clean, " ", "_")
+	switch clean {
+	case "android", "flutter_android", "native_android":
+		return "android"
+	case "windows", "flutter_windows", "native_windows", "desktop":
+		return "windows"
+	case "web", "browser", "browser_darurat", "web_fallback":
+		return "web_fallback"
+	default:
+		return "unknown"
+	}
 }

@@ -21,6 +21,8 @@ SELECT
   r.id, r.session_id, r.school_room_id,
   r.room_name, r.room_name_snapshot, r.capacity, r.capacity_override,
   r.room_token, r.status, r.is_locked, r.created_at, r.updated_at,
+  r.allow_web_fallback, r.web_fallback_enabled_at, r.web_fallback_enabled_by,
+  r.web_fallback_reason, r.web_fallback_disabled_at,
   COALESCE(sr.code, '') AS school_room_code,
   COALESCE(sr.name, '') AS school_room_name,
   COALESCE(sr.building, '') AS school_room_building,
@@ -51,6 +53,27 @@ VALUES (
 )
 RETURNING *;
 
+-- name: UpdateCbtRoomWebFallbackPolicy :one
+UPDATE cbt_exam_rooms
+SET allow_web_fallback = sqlc.arg(allow_web_fallback),
+    web_fallback_enabled_at = CASE
+      WHEN sqlc.arg(allow_web_fallback)::boolean THEN COALESCE(web_fallback_enabled_at, NOW())
+      ELSE web_fallback_enabled_at
+    END,
+    web_fallback_enabled_by = CASE
+      WHEN sqlc.arg(allow_web_fallback)::boolean THEN sqlc.arg(actor_user_id)
+      ELSE web_fallback_enabled_by
+    END,
+    web_fallback_reason = sqlc.arg(reason),
+    web_fallback_disabled_at = CASE
+      WHEN sqlc.arg(allow_web_fallback)::boolean THEN NULL
+      ELSE NOW()
+    END,
+    updated_at = NOW()
+WHERE session_id = sqlc.arg(session_id)
+  AND id = sqlc.arg(room_id)
+RETURNING *;
+
 -- name: DeleteCbtExamRoom :exec
 DELETE FROM cbt_exam_rooms WHERE id = $1;
 
@@ -73,6 +96,11 @@ SELECT
   r.is_locked,
   r.created_at,
   r.updated_at,
+  r.allow_web_fallback,
+  r.web_fallback_enabled_at,
+  r.web_fallback_enabled_by,
+  r.web_fallback_reason,
+  r.web_fallback_disabled_at,
   s.title AS session_title,
   s.status AS session_status,
   s.scheduled_start,

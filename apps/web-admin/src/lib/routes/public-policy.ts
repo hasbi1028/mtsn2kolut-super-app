@@ -20,7 +20,7 @@ const PUBLIC_API_PREFIXES = [
 	'/api/public/site/announcements/'
 ] as const;
 
-const PUBLIC_AUTH_EXACT_PATHS = ['/login', '/maintenance', '/manifest.webmanifest'] as const;
+const PUBLIC_AUTH_EXACT_PATHS = ['/login', '/maintenance', '/manifest.webmanifest', '/ujian'] as const;
 
 export function matchesPathSegment(pathname: string, prefix: string) {
 	const normalizedPrefix = prefix === '/' ? '/' : prefix.replace(/\/$/, '');

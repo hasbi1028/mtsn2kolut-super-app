@@ -51,6 +51,7 @@ var proctorEventAliases = map[string]string{
 	"screen_capture_attempt":           "screenshot_attempt_ambiguous",
 	"submit_blocked_pending_sync":      "submit_held_pending_sync",
 	"auto_submit_blocked_pending_sync": "submit_held_pending_sync",
+	"browser_darurat":                  "web_fallback_used",
 }
 
 var proctorEventWhitelist = map[string]SeverityDecision{
@@ -116,6 +117,39 @@ var proctorEventWhitelist = map[string]SeverityDecision{
 	},
 	"submit_held_pending_sync": {
 		EventType: "submit_held_pending_sync", Severity: ProctorSeverityTechnical, Category: "sync", RequiresNote: true, AudioKey: "technical", LabelID: "submit_held_pending_sync", MessageID: "submit_ditahan_sinkronisasi",
+	},
+	"web_fallback_used": {
+		EventType: "web_fallback_used", Severity: ProctorSeverityInfo, Category: "web_fallback", AudioKey: "none", LabelID: "web_fallback_used", MessageID: "browser_darurat_digunakan",
+	},
+	"web_visibility_hidden": {
+		EventType: "web_visibility_hidden", Severity: ProctorSeverityWarning, Category: "web_fallback", AudioKey: "warning", LabelID: "web_visibility_hidden", MessageID: "browser_tidak_terlihat",
+	},
+	"web_visibility_visible": {
+		EventType: "web_visibility_visible", Severity: ProctorSeverityInfo, Category: "web_fallback", AudioKey: "none", LabelID: "web_visibility_visible", MessageID: "browser_terlihat_kembali",
+	},
+	"web_focus_lost": {
+		EventType: "web_focus_lost", Severity: ProctorSeverityWarning, Category: "web_fallback", AudioKey: "warning", LabelID: "web_focus_lost", MessageID: "fokus_browser_berpindah",
+	},
+	"web_focus_restored": {
+		EventType: "web_focus_restored", Severity: ProctorSeverityInfo, Category: "web_fallback", AudioKey: "none", LabelID: "web_focus_restored", MessageID: "fokus_browser_kembali",
+	},
+	"web_fullscreen_exit": {
+		EventType: "web_fullscreen_exit", Severity: ProctorSeverityWarning, Category: "web_fallback", RiskDelta: 5, AudioKey: "warning", LabelID: "web_fullscreen_exit", MessageID: "fullscreen_browser_keluar",
+	},
+	"web_fullscreen_restored": {
+		EventType: "web_fullscreen_restored", Severity: ProctorSeverityInfo, Category: "web_fallback", AudioKey: "none", LabelID: "web_fullscreen_restored", MessageID: "fullscreen_browser_kembali",
+	},
+	"web_pending_answer_saved": {
+		EventType: "web_pending_answer_saved", Severity: ProctorSeverityTechnical, Category: "sync", AudioKey: "technical", LabelID: "web_pending_answer_saved", MessageID: "jawaban_browser_lokal",
+	},
+	"web_pending_answer_flushed": {
+		EventType: "web_pending_answer_flushed", Severity: ProctorSeverityInfo, Category: "sync", AudioKey: "none", LabelID: "web_pending_answer_flushed", MessageID: "jawaban_browser_terkirim",
+	},
+	"web_connection_degraded": {
+		EventType: "web_connection_degraded", Severity: ProctorSeverityTechnical, Category: "connection", AudioKey: "technical", LabelID: "web_connection_degraded", MessageID: "koneksi_browser_menurun",
+	},
+	"web_connection_restored": {
+		EventType: "web_connection_restored", Severity: ProctorSeverityInfo, Category: "connection", AudioKey: "none", LabelID: "web_connection_restored", MessageID: "koneksi_browser_pulih",
 	},
 }
 

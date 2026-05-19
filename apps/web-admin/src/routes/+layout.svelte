@@ -14,6 +14,7 @@
 	let { children, data } = $props();
 	let isLogin = $derived(page.url.pathname === '/login');
 	let isMaintenancePage = $derived(page.url.pathname === '/maintenance');
+	let isExamFallbackPage = $derived(page.url.pathname === '/ujian');
 	let pwaRegistrationStarted = $state(false);
 	let isPublicSite = $derived(isPublicSitePath(page.url.pathname, Boolean(data.user)));
 	let branding = $derived(data.branding ?? defaultBranding);
@@ -61,7 +62,7 @@
 <GlobalConfirmDialog />
 <RouteProgress active={!!navigating.to} />
 
-{#if isLogin || isMaintenancePage}
+{#if isLogin || isMaintenancePage || isExamFallbackPage}
 	{@render children()}
 {:else if isPublicSite}
 	<PublicSiteShell user={data.user} branding={branding}>

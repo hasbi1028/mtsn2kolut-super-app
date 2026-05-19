@@ -124,6 +124,7 @@ ORDER BY s.nama ASC;
 SELECT
   ep.id, ep.session_id, ep.student_id,
   ep.token, ep.room_id, ep.seat_no, ep.device_fingerprint, ep.question_order, ep.option_order, ep.question_draw_log,
+  ep.client_type, ep.browser_fingerprint_hash, ep.client_user_agent_hash,
   ep.joined_at, ep.submitted_at, ep.score,
   ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
   ep.violation_count, ep.risk_score, ep.risk_level, ep.locked_at, ep.locked_reason,
@@ -139,7 +140,8 @@ SELECT
   p.randomize_questions,
   p.randomize_options,
   p.draw_pg_count,
-  p.draw_essay_count
+  p.draw_essay_count,
+  COALESCE(r.allow_web_fallback, false)::boolean AS room_allow_web_fallback
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
 JOIN cbt_exam_sessions cs ON cs.id = ep.session_id
@@ -286,7 +288,10 @@ UPDATE cbt_exam_participants
 SET device_fingerprint = $2,
     login_ip           = $3,
     joined_at          = COALESCE(joined_at, NOW()),
-    last_heartbeat     = NOW()
+    last_heartbeat     = NOW(),
+    client_type        = $4,
+    browser_fingerprint_hash = $5,
+    client_user_agent_hash = $6
 WHERE id = $1
   AND (
     device_fingerprint IS NULL
@@ -468,6 +473,7 @@ SELECT
   ep.risk_level,
   ep.locked_at,
   ep.locked_reason,
+  ep.client_type,
   ep.last_local_save_at,
   ep.last_synced_at,
   ep.pending_answer_count,
@@ -485,9 +491,9 @@ LEFT JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
 LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
 LEFT JOIN LATERAL (
   SELECT
-    COUNT(*) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt'))::int AS recent_violation_count,
-    MAX(ev.created_at) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt')) AS last_violation_at,
-    COALESCE((array_agg(ev.event_data->>'reason' ORDER BY ev.created_at DESC) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt')))[1], '') AS last_violation_reason
+    COUNT(*) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt', 'web_focus_lost', 'web_visibility_hidden', 'web_fullscreen_exit'))::int AS recent_violation_count,
+    MAX(ev.created_at) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt', 'web_focus_lost', 'web_visibility_hidden', 'web_fullscreen_exit')) AS last_violation_at,
+    COALESCE((array_agg(ev.event_data->>'reason' ORDER BY ev.created_at DESC) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt', 'web_focus_lost', 'web_visibility_hidden', 'web_fullscreen_exit')))[1], '') AS last_violation_reason
   FROM cbt_participant_events ev
   WHERE ev.participant_id = ep.id
     AND ev.created_at >= NOW() - INTERVAL '30 minutes'

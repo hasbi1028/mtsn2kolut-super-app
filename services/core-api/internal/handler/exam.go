@@ -44,11 +44,17 @@ type examService interface {
 	AcknowledgeCommand(ctx context.Context, participantID pgtype.UUID, commandID, status string) error
 }
 
+type examClientLoginService interface {
+	LoginWithClient(ctx context.Context, req service.ExamLoginRequest) (service.LoginResult, error)
+}
+
 func (h *Exam) Login(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Token             string `json:"token"`
-		RoomToken         string `json:"room_token"`
-		DeviceFingerprint string `json:"device_fingerprint"`
+		Token              string `json:"token"`
+		RoomToken          string `json:"room_token"`
+		DeviceFingerprint  string `json:"device_fingerprint"`
+		BrowserFingerprint string `json:"browser_fingerprint"`
+		ClientType         string `json:"client_type"`
 	}
 	if !decodeExamJSON(w, r, examLoginBodyLimit, &body) {
 		return
@@ -61,7 +67,23 @@ func (h *Exam) Login(w http.ResponseWriter, r *http.Request) {
 
 	ip := trustedClientIP(r)
 
-	result, err := h.svc.Login(r.Context(), token, body.RoomToken, body.DeviceFingerprint, ip)
+	var (
+		result service.LoginResult
+		err    error
+	)
+	if clientSvc, ok := h.svc.(examClientLoginService); ok {
+		result, err = clientSvc.LoginWithClient(r.Context(), service.ExamLoginRequest{
+			Token:              token,
+			RoomToken:          body.RoomToken,
+			DeviceFingerprint:  body.DeviceFingerprint,
+			LoginIP:            ip,
+			ClientType:         body.ClientType,
+			BrowserFingerprint: body.BrowserFingerprint,
+			UserAgent:          r.UserAgent(),
+		})
+	} else {
+		result, err = h.svc.Login(r.Context(), token, body.RoomToken, body.DeviceFingerprint, ip)
+	}
 	if err != nil {
 		switch err {
 		case service.ErrExamNotFound:
@@ -86,6 +108,8 @@ func (h *Exam) Login(w http.ResponseWriter, r *http.Request) {
 			api.BadRequest(w, "room token required")
 		case service.ErrRoomTokenMismatch:
 			api.Err(w, http.StatusForbidden, "room token mismatch")
+		case service.ErrWebFallbackDisabled:
+			api.Err(w, http.StatusForbidden, "Mode browser belum diizinkan. Gunakan aplikasi CBT atau hubungi pengawas.")
 		default:
 			api.Internal(w, err)
 		}

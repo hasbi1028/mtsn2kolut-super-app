@@ -603,6 +603,7 @@ const getParticipantByToken = `-- name: GetParticipantByToken :one
 SELECT
   ep.id, ep.session_id, ep.student_id,
   ep.token, ep.room_id, ep.seat_no, ep.device_fingerprint, ep.question_order, ep.option_order, ep.question_draw_log,
+  ep.client_type, ep.browser_fingerprint_hash, ep.client_user_agent_hash,
   ep.joined_at, ep.submitted_at, ep.score,
   ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
   ep.violation_count, ep.risk_score, ep.risk_level, ep.locked_at, ep.locked_reason,
@@ -618,7 +619,8 @@ SELECT
   p.randomize_questions,
   p.randomize_options,
   p.draw_pg_count,
-  p.draw_essay_count
+  p.draw_essay_count,
+  COALESCE(r.allow_web_fallback, false)::boolean AS room_allow_web_fallback
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
 JOIN cbt_exam_sessions cs ON cs.id = ep.session_id
@@ -632,43 +634,47 @@ WHERE ep.token_revoked_at IS NULL
 `
 
 type GetParticipantByTokenRow struct {
-	ID                 pgtype.UUID          `json:"id"`
-	SessionID          pgtype.UUID          `json:"session_id"`
-	StudentID          pgtype.UUID          `json:"student_id"`
-	Token              string               `json:"token"`
-	RoomID             pgtype.UUID          `json:"room_id"`
-	SeatNo             pgtype.Int4          `json:"seat_no"`
-	DeviceFingerprint  pgtype.Text          `json:"device_fingerprint"`
-	QuestionOrder      []byte               `json:"question_order"`
-	OptionOrder        []byte               `json:"option_order"`
-	QuestionDrawLog    []byte               `json:"question_draw_log"`
-	JoinedAt           pgtype.Timestamptz   `json:"joined_at"`
-	SubmittedAt        pgtype.Timestamptz   `json:"submitted_at"`
-	Score              pgtype.Numeric       `json:"score"`
-	AppSwitchCount     int32                `json:"app_switch_count"`
-	ScreenshotAttempt  int32                `json:"screenshot_attempt"`
-	SuspiciousFlag     bool                 `json:"suspicious_flag"`
-	ViolationCount     int32                `json:"violation_count"`
-	RiskScore          int32                `json:"risk_score"`
-	RiskLevel          string               `json:"risk_level"`
-	LockedAt           pgtype.Timestamptz   `json:"locked_at"`
-	LockedReason       pgtype.Text          `json:"locked_reason"`
-	LastHeartbeat      pgtype.Timestamptz   `json:"last_heartbeat"`
-	RoomToken          string               `json:"room_token"`
-	Nis                string               `json:"nis"`
-	Nama               string               `json:"nama"`
-	Gender             GenderEnum           `json:"gender"`
-	SessionStatus      CbtSessionStatusEnum `json:"session_status"`
-	SessionTitle       string               `json:"session_title"`
-	ScheduledStart     pgtype.Timestamptz   `json:"scheduled_start"`
-	ScheduledEnd       pgtype.Timestamptz   `json:"scheduled_end"`
-	PackageID          pgtype.UUID          `json:"package_id"`
-	PackageTitle       string               `json:"package_title"`
-	DurationMinutes    int32                `json:"duration_minutes"`
-	RandomizeQuestions bool                 `json:"randomize_questions"`
-	RandomizeOptions   bool                 `json:"randomize_options"`
-	DrawPgCount        int32                `json:"draw_pg_count"`
-	DrawEssayCount     int32                `json:"draw_essay_count"`
+	ID                     pgtype.UUID          `json:"id"`
+	SessionID              pgtype.UUID          `json:"session_id"`
+	StudentID              pgtype.UUID          `json:"student_id"`
+	Token                  string               `json:"token"`
+	RoomID                 pgtype.UUID          `json:"room_id"`
+	SeatNo                 pgtype.Int4          `json:"seat_no"`
+	DeviceFingerprint      pgtype.Text          `json:"device_fingerprint"`
+	QuestionOrder          []byte               `json:"question_order"`
+	OptionOrder            []byte               `json:"option_order"`
+	QuestionDrawLog        []byte               `json:"question_draw_log"`
+	ClientType             string               `json:"client_type"`
+	BrowserFingerprintHash string               `json:"browser_fingerprint_hash"`
+	ClientUserAgentHash    string               `json:"client_user_agent_hash"`
+	JoinedAt               pgtype.Timestamptz   `json:"joined_at"`
+	SubmittedAt            pgtype.Timestamptz   `json:"submitted_at"`
+	Score                  pgtype.Numeric       `json:"score"`
+	AppSwitchCount         int32                `json:"app_switch_count"`
+	ScreenshotAttempt      int32                `json:"screenshot_attempt"`
+	SuspiciousFlag         bool                 `json:"suspicious_flag"`
+	ViolationCount         int32                `json:"violation_count"`
+	RiskScore              int32                `json:"risk_score"`
+	RiskLevel              string               `json:"risk_level"`
+	LockedAt               pgtype.Timestamptz   `json:"locked_at"`
+	LockedReason           pgtype.Text          `json:"locked_reason"`
+	LastHeartbeat          pgtype.Timestamptz   `json:"last_heartbeat"`
+	RoomToken              string               `json:"room_token"`
+	Nis                    string               `json:"nis"`
+	Nama                   string               `json:"nama"`
+	Gender                 GenderEnum           `json:"gender"`
+	SessionStatus          CbtSessionStatusEnum `json:"session_status"`
+	SessionTitle           string               `json:"session_title"`
+	ScheduledStart         pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd           pgtype.Timestamptz   `json:"scheduled_end"`
+	PackageID              pgtype.UUID          `json:"package_id"`
+	PackageTitle           string               `json:"package_title"`
+	DurationMinutes        int32                `json:"duration_minutes"`
+	RandomizeQuestions     bool                 `json:"randomize_questions"`
+	RandomizeOptions       bool                 `json:"randomize_options"`
+	DrawPgCount            int32                `json:"draw_pg_count"`
+	DrawEssayCount         int32                `json:"draw_essay_count"`
+	RoomAllowWebFallback   bool                 `json:"room_allow_web_fallback"`
 }
 
 func (q *Queries) GetParticipantByToken(ctx context.Context, digest string) (GetParticipantByTokenRow, error) {
@@ -685,6 +691,9 @@ func (q *Queries) GetParticipantByToken(ctx context.Context, digest string) (Get
 		&i.QuestionOrder,
 		&i.OptionOrder,
 		&i.QuestionDrawLog,
+		&i.ClientType,
+		&i.BrowserFingerprintHash,
+		&i.ClientUserAgentHash,
 		&i.JoinedAt,
 		&i.SubmittedAt,
 		&i.Score,
@@ -712,6 +721,7 @@ func (q *Queries) GetParticipantByToken(ctx context.Context, digest string) (Get
 		&i.RandomizeOptions,
 		&i.DrawPgCount,
 		&i.DrawEssayCount,
+		&i.RoomAllowWebFallback,
 	)
 	return i, err
 }
@@ -950,6 +960,7 @@ SELECT
   ep.risk_level,
   ep.locked_at,
   ep.locked_reason,
+  ep.client_type,
   ep.last_local_save_at,
   ep.last_synced_at,
   ep.pending_answer_count,
@@ -967,9 +978,9 @@ LEFT JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
 LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
 LEFT JOIN LATERAL (
   SELECT
-    COUNT(*) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt'))::int AS recent_violation_count,
-    MAX(ev.created_at) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt')) AS last_violation_at,
-    COALESCE((array_agg(ev.event_data->>'reason' ORDER BY ev.created_at DESC) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt')))[1], '') AS last_violation_reason
+    COUNT(*) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt', 'web_focus_lost', 'web_visibility_hidden', 'web_fullscreen_exit'))::int AS recent_violation_count,
+    MAX(ev.created_at) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt', 'web_focus_lost', 'web_visibility_hidden', 'web_fullscreen_exit')) AS last_violation_at,
+    COALESCE((array_agg(ev.event_data->>'reason' ORDER BY ev.created_at DESC) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt', 'web_focus_lost', 'web_visibility_hidden', 'web_fullscreen_exit')))[1], '') AS last_violation_reason
   FROM cbt_participant_events ev
   WHERE ev.participant_id = ep.id
     AND ev.created_at >= NOW() - INTERVAL '30 minutes'
@@ -1004,6 +1015,7 @@ type GetSessionProctoringStatusRow struct {
 	RiskLevel            string             `json:"risk_level"`
 	LockedAt             pgtype.Timestamptz `json:"locked_at"`
 	LockedReason         pgtype.Text        `json:"locked_reason"`
+	ClientType           string             `json:"client_type"`
 	LastLocalSaveAt      pgtype.Timestamptz `json:"last_local_save_at"`
 	LastSyncedAt         pgtype.Timestamptz `json:"last_synced_at"`
 	PendingAnswerCount   int32              `json:"pending_answer_count"`
@@ -1043,6 +1055,7 @@ func (q *Queries) GetSessionProctoringStatus(ctx context.Context, arg GetSession
 			&i.RiskLevel,
 			&i.LockedAt,
 			&i.LockedReason,
+			&i.ClientType,
 			&i.LastLocalSaveAt,
 			&i.LastSyncedAt,
 			&i.PendingAnswerCount,
@@ -3104,7 +3117,10 @@ UPDATE cbt_exam_participants
 SET device_fingerprint = $2,
     login_ip           = $3,
     joined_at          = COALESCE(joined_at, NOW()),
-    last_heartbeat     = NOW()
+    last_heartbeat     = NOW(),
+    client_type        = $4,
+    browser_fingerprint_hash = $5,
+    client_user_agent_hash = $6
 WHERE id = $1
   AND (
     device_fingerprint IS NULL
@@ -3115,13 +3131,23 @@ RETURNING id
 `
 
 type UpdateParticipantLoginParams struct {
-	ID                pgtype.UUID `json:"id"`
-	DeviceFingerprint pgtype.Text `json:"device_fingerprint"`
-	LoginIp           pgtype.Text `json:"login_ip"`
+	ID                     pgtype.UUID `json:"id"`
+	DeviceFingerprint      pgtype.Text `json:"device_fingerprint"`
+	LoginIp                pgtype.Text `json:"login_ip"`
+	ClientType             string      `json:"client_type"`
+	BrowserFingerprintHash string      `json:"browser_fingerprint_hash"`
+	ClientUserAgentHash    string      `json:"client_user_agent_hash"`
 }
 
 func (q *Queries) UpdateParticipantLogin(ctx context.Context, arg UpdateParticipantLoginParams) (pgtype.UUID, error) {
-	row := q.db.QueryRow(ctx, updateParticipantLogin, arg.ID, arg.DeviceFingerprint, arg.LoginIp)
+	row := q.db.QueryRow(ctx, updateParticipantLogin,
+		arg.ID,
+		arg.DeviceFingerprint,
+		arg.LoginIp,
+		arg.ClientType,
+		arg.BrowserFingerprintHash,
+		arg.ClientUserAgentHash,
+	)
 	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err

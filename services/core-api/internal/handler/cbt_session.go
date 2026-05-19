@@ -101,6 +101,10 @@ type cbtSessionRoomProctorDashboardService interface {
 	ListParticipantEventsForRoom(ctx context.Context, sessionID, participantID, roomID pgtype.UUID, limit int32) ([]db.ListSessionParticipantEventsRow, error)
 }
 
+type cbtSessionRoomWebFallbackPolicyService interface {
+	UpdateRoomWebFallbackPolicy(ctx context.Context, sessionID, roomID, actorUserID pgtype.UUID, allow bool, reason string) (db.CbtExamRoom, error)
+}
+
 type cbtSessionRoomHandoverService interface {
 	GetRoomHandover(ctx context.Context, roomID pgtype.UUID) (db.GetCbtRoomHandoverRow, error)
 	GetSessionOperationalRecap(ctx context.Context, sessionID pgtype.UUID) (db.GetCbtSessionOperationalRecapRow, []db.ListCbtSessionRoomOperationalRecapRow, error)
@@ -1879,6 +1883,54 @@ func (h *CbtSession) GetRoomProctoringDashboard(w http.ResponseWriter, r *http.R
 		"participants": serializeProctoringRows(participants, adminAccessAllowed(r)),
 		"events":       events,
 	})
+}
+
+func (h *CbtSession) UpdateRoomWebFallbackPolicy(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, ok := h.requireSessionRoomParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, roomID) {
+		return
+	}
+	var body struct {
+		AllowWebFallback bool   `json:"allow_web_fallback"`
+		Reason           string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "Data yang dikirim tidak valid")
+		return
+	}
+	reason := strings.TrimSpace(body.Reason)
+	if reason == "" {
+		api.BadRequest(w, "Alasan wajib diisi")
+		return
+	}
+	policySvc, ok := h.svc.(cbtSessionRoomWebFallbackPolicyService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt web fallback policy service unavailable"))
+		return
+	}
+	room, err := policySvc.UpdateRoomWebFallbackPolicy(r.Context(), sessionID, roomID, cbtSessionActorUserID(r), body.AllowWebFallback, reason)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Kebijakan Browser Darurat tidak dapat diperbarui")
+		return
+	}
+	action := "CBT_ROOM_WEB_FALLBACK_DISABLED"
+	if body.AllowWebFallback {
+		action = "CBT_ROOM_WEB_FALLBACK_ENABLED"
+	}
+	h.auditEvent(r.Context(), action, "cbt_session_room", pgUUIDString(roomID), map[string]any{
+		"session_id":         pgUUIDString(sessionID),
+		"room_id":            pgUUIDString(roomID),
+		"allow_web_fallback": body.AllowWebFallback,
+		"reason":             reason,
+		"actor_claim_user":   cbtAuditClaimString(r.Context(), "uid"),
+	})
+	api.OK(w, room)
 }
 
 func (h *CbtSession) ListMyProctorRooms(w http.ResponseWriter, r *http.Request) {
