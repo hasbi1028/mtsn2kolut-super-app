@@ -996,9 +996,7 @@
 
   function isSafeDeletable(question: Question): boolean {
     return (
-      ["draft", "rejected", "revision_needed"].includes(
-        question.workflow_status ?? "draft",
-      ) &&
+      ["draft", "rejected"].includes(question.workflow_status ?? "draft") &&
       (question.status ?? "draft") === "draft" &&
       !questionUsageLocked(question)
     );
@@ -1116,7 +1114,7 @@
     if (!canDelete || !isSafeDeletable(question) || deletingQuestionId) return;
     const code = compactText(question.code, "tanpa kode");
     const ok = window.confirm(
-      `Hapus permanen soal ${code}? Tindakan ini hanya untuk soal draft yang belum dipakai.`,
+      `Hapus permanen soal ${code}? Tindakan ini hanya untuk soal draft atau soal ditolak yang belum dipakai di paket/jawaban siswa.`,
     );
     if (!ok) return;
 

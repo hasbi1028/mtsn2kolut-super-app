@@ -814,6 +814,24 @@ func TestCbtQuestionDeleteWithActorAllowsDraftUnusedQuestion(t *testing.T) {
 	}
 }
 
+func TestCbtQuestionDeleteWithActorAllowsRejectedDraftUnusedQuestion(t *testing.T) {
+	questionID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
+	store := &fakeQuestionStore{
+		current: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "rejected"},
+	}
+	svc := &CbtQuestion{q: store}
+
+	if err := svc.DeleteWithActor(context.Background(), questionID, CbtQuestionActor{Username: "guru.a", Roles: []string{"guru"}}); err != nil {
+		t.Fatalf("DeleteWithActor(rejected draft unused) error = %v", err)
+	}
+	if store.deleteCalls != 1 || store.deleteID != questionID {
+		t.Fatalf("DeleteWithActor(rejected draft unused) delete = %d/%v, want once for question", store.deleteCalls, store.deleteID)
+	}
+	if store.auditCalls != 1 || len(store.auditLogs) != 1 || store.auditLogs[0].Action != "delete" {
+		t.Fatalf("DeleteWithActor(rejected draft unused) audit = calls %d logs %+v, want delete audit", store.auditCalls, store.auditLogs)
+	}
+}
+
 func TestCbtQuestionDeleteWithActorRequiresModifyAccess(t *testing.T) {
 	questionID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
 	store := &fakeQuestionStore{
@@ -841,12 +859,20 @@ func TestCbtQuestionDeleteWithActorRejectsNonDraftOrUsedQuestion(t *testing.T) {
 			current: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "review"},
 		},
 		{
+			name:    "revision needed workflow",
+			current: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "revision_needed"},
+		},
+		{
 			name:    "published status",
 			current: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumPublished, WorkflowStatus: "draft"},
 		},
 		{
 			name:    "package usage",
 			current: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "draft", PackageCount: 1},
+		},
+		{
+			name:    "rejected package usage",
+			current: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "rejected", PackageCount: 1},
 		},
 		{
 			name:    "student answer usage",

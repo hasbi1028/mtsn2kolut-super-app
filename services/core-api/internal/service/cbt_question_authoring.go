@@ -226,8 +226,8 @@ func (s *CbtQuestion) DeleteWithActor(ctx context.Context, id pgtype.UUID, actor
 	if err := s.requireModifyQuestion(ctx, actor, current); err != nil {
 		return err
 	}
-	if current.WorkflowStatus != "" && current.WorkflowStatus != "draft" {
-		return fmt.Errorf("%w: soal hanya dapat dihapus saat masih berstatus draft", domain.ErrConflict)
+	if current.WorkflowStatus != "" && current.WorkflowStatus != "draft" && current.WorkflowStatus != "rejected" {
+		return fmt.Errorf("%w: soal hanya dapat dihapus saat masih draft atau sudah ditolak dan belum dipakai", domain.ErrConflict)
 	}
 	if current.Status != "" && current.Status != db.CbtQuestionStatusEnumDraft {
 		return fmt.Errorf("%w: soal hanya dapat dihapus saat belum terbit", domain.ErrConflict)
