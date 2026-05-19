@@ -507,9 +507,13 @@ ORDER BY r.room_name ASC NULLS LAST, ep.seat_no ASC NULLS LAST, s.nama ASC;
 SELECT
   ep.id, ep.student_id, ep.token, ep.room_id, ep.seat_no,
   s.nis, s.nama, s.gender,
+  s.class_id,
+  COALESCE(c.level, '') AS class_level,
+  COALESCE(c.code, '') AS class_code,
   COALESCE(r.room_name, '') AS room_name
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
+LEFT JOIN school_classes c ON c.id = s.class_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 WHERE ep.session_id = $1
 ORDER BY r.room_name ASC NULLS LAST, ep.seat_no ASC NULLS LAST, s.nama ASC;

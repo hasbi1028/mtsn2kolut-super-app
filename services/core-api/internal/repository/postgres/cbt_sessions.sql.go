@@ -2206,24 +2206,31 @@ const listParticipantsByRoom = `-- name: ListParticipantsByRoom :many
 SELECT
   ep.id, ep.student_id, ep.token, ep.room_id, ep.seat_no,
   s.nis, s.nama, s.gender,
+  s.class_id,
+  COALESCE(c.level, '') AS class_level,
+  COALESCE(c.code, '') AS class_code,
   COALESCE(r.room_name, '') AS room_name
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
+LEFT JOIN school_classes c ON c.id = s.class_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 WHERE ep.session_id = $1
 ORDER BY r.room_name ASC NULLS LAST, ep.seat_no ASC NULLS LAST, s.nama ASC
 `
 
 type ListParticipantsByRoomRow struct {
-	ID        pgtype.UUID `json:"id"`
-	StudentID pgtype.UUID `json:"student_id"`
-	Token     string      `json:"token"`
-	RoomID    pgtype.UUID `json:"room_id"`
-	SeatNo    pgtype.Int4 `json:"seat_no"`
-	Nis       string      `json:"nis"`
-	Nama      string      `json:"nama"`
-	Gender    GenderEnum  `json:"gender"`
-	RoomName  string      `json:"room_name"`
+	ID         pgtype.UUID `json:"id"`
+	StudentID  pgtype.UUID `json:"student_id"`
+	Token      string      `json:"token"`
+	RoomID     pgtype.UUID `json:"room_id"`
+	SeatNo     pgtype.Int4 `json:"seat_no"`
+	Nis        string      `json:"nis"`
+	Nama       string      `json:"nama"`
+	Gender     GenderEnum  `json:"gender"`
+	ClassID    pgtype.UUID `json:"class_id"`
+	ClassLevel string      `json:"class_level"`
+	ClassCode  string      `json:"class_code"`
+	RoomName   string      `json:"room_name"`
 }
 
 func (q *Queries) ListParticipantsByRoom(ctx context.Context, sessionID pgtype.UUID) ([]ListParticipantsByRoomRow, error) {
@@ -2244,6 +2251,9 @@ func (q *Queries) ListParticipantsByRoom(ctx context.Context, sessionID pgtype.U
 			&i.Nis,
 			&i.Nama,
 			&i.Gender,
+			&i.ClassID,
+			&i.ClassLevel,
+			&i.ClassCode,
 			&i.RoomName,
 		); err != nil {
 			return nil, err

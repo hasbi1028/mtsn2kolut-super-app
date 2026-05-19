@@ -468,6 +468,117 @@ func TestCbtSessionShuffleRoomsAssignsOnlyWithinEffectiveCapacity(t *testing.T) 
 	}
 }
 
+func TestCbtSessionShuffleRoomsSameClassDoesNotMixRombel(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtSessionTestUUID(140)
+	roomA := cbtSessionTestUUID(141)
+	roomB := cbtSessionTestUUID(142)
+	classA := cbtSessionTestUUID(143)
+	classB := cbtSessionTestUUID(144)
+	store := &fakeCbtSessionStore{
+		sessionRow: db.GetCbtExamSessionRow{ID: sessionID, Status: db.CbtSessionStatusEnumScheduled, MixPolicy: "same_class", AssignmentMode: "random_balanced"},
+		byRoomRows: []db.ListParticipantsByRoomRow{
+			{ID: cbtSessionTestUUID(145), ClassID: classA, ClassLevel: "VII", ClassCode: "VII-A"},
+			{ID: cbtSessionTestUUID(146), ClassID: classB, ClassLevel: "VII", ClassCode: "VII-B"},
+			{ID: cbtSessionTestUUID(147), ClassID: classA, ClassLevel: "VII", ClassCode: "VII-A"},
+			{ID: cbtSessionTestUUID(148), ClassID: classB, ClassLevel: "VII", ClassCode: "VII-B"},
+		},
+		roomRows: []db.ListCbtExamRoomsRow{
+			{ID: roomA, Capacity: 4},
+			{ID: roomB, Capacity: 4},
+		},
+	}
+
+	if err := shuffleRooms(ctx, store, sessionID); err != nil {
+		t.Fatalf("shuffleRooms() error = %v", err)
+	}
+	assertAssignedRoomsDoNotMix(t, store.byRoomRows, store.assignRoomArgs, func(row db.ListParticipantsByRoomRow) string { return row.ClassCode })
+}
+
+func TestCbtSessionShuffleRoomsSameGradeMayMixRombelButNotGrade(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtSessionTestUUID(150)
+	roomA := cbtSessionTestUUID(151)
+	roomB := cbtSessionTestUUID(152)
+	classA := cbtSessionTestUUID(153)
+	classB := cbtSessionTestUUID(154)
+	classC := cbtSessionTestUUID(155)
+	store := &fakeCbtSessionStore{
+		sessionRow: db.GetCbtExamSessionRow{ID: sessionID, Status: db.CbtSessionStatusEnumScheduled, MixPolicy: "same_grade", AssignmentMode: "random_balanced"},
+		byRoomRows: []db.ListParticipantsByRoomRow{
+			{ID: cbtSessionTestUUID(156), ClassID: classA, ClassLevel: "VII", ClassCode: "VII-A"},
+			{ID: cbtSessionTestUUID(157), ClassID: classB, ClassLevel: "VII", ClassCode: "VII-B"},
+			{ID: cbtSessionTestUUID(158), ClassID: classC, ClassLevel: "VIII", ClassCode: "VIII-A"},
+		},
+		roomRows: []db.ListCbtExamRoomsRow{
+			{ID: roomA, Capacity: 2},
+			{ID: roomB, Capacity: 2},
+		},
+	}
+
+	if err := shuffleRooms(ctx, store, sessionID); err != nil {
+		t.Fatalf("shuffleRooms() error = %v", err)
+	}
+	assertAssignedRoomsDoNotMix(t, store.byRoomRows, store.assignRoomArgs, func(row db.ListParticipantsByRoomRow) string { return row.ClassLevel })
+}
+
+func TestCbtSessionShuffleRoomsMixedScopeCrossGradeRequiresSpecialAllow(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtSessionTestUUID(160)
+	roomA := cbtSessionTestUUID(161)
+	roomB := cbtSessionTestUUID(162)
+	rows := []db.ListParticipantsByRoomRow{
+		{ID: cbtSessionTestUUID(163), ClassID: cbtSessionTestUUID(164), ClassLevel: "VII", ClassCode: "VII-A"},
+		{ID: cbtSessionTestUUID(165), ClassID: cbtSessionTestUUID(166), ClassLevel: "VIII", ClassCode: "VIII-A"},
+	}
+	rooms := []db.ListCbtExamRoomsRow{{ID: roomA, Capacity: 2}, {ID: roomB, Capacity: 2}}
+
+	store := &fakeCbtSessionStore{
+		sessionRow: db.GetCbtExamSessionRow{ID: sessionID, Status: db.CbtSessionStatusEnumScheduled, MixPolicy: "mixed_scope", AssignmentMode: "random_balanced", IsSpecialEvent: false, AllowCrossGrade: true},
+		byRoomRows: rows,
+		roomRows:   rooms,
+	}
+	if err := shuffleRooms(ctx, store, sessionID); err != nil {
+		t.Fatalf("shuffleRooms(non-special) error = %v", err)
+	}
+	assertAssignedRoomsDoNotMix(t, rows, store.assignRoomArgs, func(row db.ListParticipantsByRoomRow) string { return row.ClassLevel })
+
+	store = &fakeCbtSessionStore{
+		sessionRow: db.GetCbtExamSessionRow{ID: sessionID, Status: db.CbtSessionStatusEnumScheduled, MixPolicy: "mixed_scope", AssignmentMode: "random_balanced", IsSpecialEvent: true, AllowCrossGrade: true},
+		byRoomRows: rows,
+		roomRows:   []db.ListCbtExamRoomsRow{{ID: roomA, Capacity: 2}},
+	}
+	if err := shuffleRooms(ctx, store, sessionID); err != nil {
+		t.Fatalf("shuffleRooms(special allow cross-grade) error = %v", err)
+	}
+	if len(store.assignRoomArgs) != 2 || store.assignRoomArgs[0].RoomID != roomA || store.assignRoomArgs[1].RoomID != roomA {
+		t.Fatalf("shuffleRooms(special allow cross-grade) assignments = %+v, want both grades in single room", store.assignRoomArgs)
+	}
+}
+
+func assertAssignedRoomsDoNotMix(t *testing.T, participants []db.ListParticipantsByRoomRow, assignments []db.AssignParticipantRoomParams, key func(db.ListParticipantsByRoomRow) string) {
+	t.Helper()
+	participantByID := make(map[pgtype.UUID]db.ListParticipantsByRoomRow, len(participants))
+	for _, row := range participants {
+		participantByID[row.ID] = row
+	}
+	roomKey := map[pgtype.UUID]string{}
+	for _, arg := range assignments {
+		row, ok := participantByID[arg.ID]
+		if !ok {
+			t.Fatalf("assigned unknown participant %v", arg.ID)
+		}
+		gotKey := key(row)
+		if gotKey == "" {
+			t.Fatalf("participant %v has empty policy key", arg.ID)
+		}
+		if previous, ok := roomKey[arg.RoomID]; ok && previous != gotKey {
+			t.Fatalf("room %v mixed policy keys %q and %q in assignments %+v", arg.RoomID, previous, gotKey, assignments)
+		}
+		roomKey[arg.RoomID] = gotKey
+	}
+}
+
 func TestCbtSessionAutoAssignSeatsSortsPerRoomAndSkipsUnassigned(t *testing.T) {
 	ctx := context.Background()
 	sessionID := cbtSessionTestUUID(120)

@@ -15,7 +15,6 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
-	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPath, readClientApiData, readClientJson } from '$lib/client/api';
 	import { csvRow } from '$lib/csv';
 	import {
@@ -591,7 +590,12 @@
 
 	function confirmActionDialog() {
 		if (!actionDialog) return;
-		closeActionDialog({ reason: actionDialogReason, notes: actionDialogNotes.trim() });
+		const notes = actionDialogNotes.trim();
+		if (!notes) {
+			toast.error('Catatan tindakan wajib diisi.');
+			return;
+		}
+		closeActionDialog({ reason: actionDialogReason, notes });
 	}
 
 	function actionNotes(result: DialogResult) {
@@ -663,15 +667,24 @@
 	}
 
 	async function resetAccess(row: ProctoringRow) {
-		if (!(await confirmAction({
+		const result = await openActionDialog({
 			title: 'Atur Ulang Akses Peserta',
-			message: `Atur ulang akses perangkat dan catatan koneksi ${row.nama}. Gunakan ini saat siswa perlu masuk ujian ulang di ruang ini.`,
+			description: `Atur ulang akses perangkat dan catatan koneksi ${row.nama}. Gunakan ini saat siswa perlu masuk ujian ulang di ruang ini.`,
 			confirmLabel: 'Atur Ulang Akses',
-			tone: 'warning',
-		}))) return;
+			textLabel: 'Catatan verifikasi',
+			defaultText: 'Perangkat/koneksi sudah diperiksa pengawas ruang.',
+			placeholder: 'Contoh: perangkat diganti setelah diverifikasi.',
+			includeReason: true,
+		});
+		if (!result) return;
+		const notes = actionNotes(result);
 		actionBusyId = `reset-${row.participant_id}`;
 		try {
-			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/participants/${row.participant_id}/reset-access`, { method: 'POST' });
+			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/participants/${row.participant_id}/reset-access`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ reason: result.reason, notes }),
+			});
 			await readClientJson<unknown>(res);
 			operationState = { tone: 'success', title: 'Akses Diatur Ulang', message: `${row.nama} dapat masuk ujian ulang setelah diverifikasi pengawas.` };
 			await refreshDashboard(true);
@@ -685,7 +698,7 @@
 
 	async function unlockParticipant(row: ProctoringRow) {
 		const result = await openActionDialog({
-			title: `Buka kunci ${row.nama}`,
+			title: 'Buka kunci akses peserta',
 			description: 'Buka akses hanya setelah perangkat dan kondisi peserta diverifikasi pengawas. Histori pelanggaran tetap tersimpan.',
 			confirmLabel: 'Buka Kunci',
 			textLabel: 'Catatan verifikasi',
@@ -716,7 +729,7 @@
 		const row = participants.find((item) => item.participant_id === event.participant_id);
 		if (!row) return;
 		const result = await openActionDialog({
-			title: `Tandai diperiksa: ${event.nama}`,
+			title: 'Tandai kejadian sudah diperiksa',
 			description: 'Catat hasil pemeriksaan agar riwayat ruang jelas untuk berita acara.',
 			confirmLabel: 'Tandai Diperiksa',
 			textLabel: 'Catatan pemeriksaan',
@@ -807,15 +820,24 @@
 	}
 
 	async function forceSubmit(row: ProctoringRow) {
-		if (!(await confirmAction({
+		const result = await openActionDialog({
 			title: 'Paksa Kirim Ujian Peserta',
-			message: `Paksa kirim jawaban ${row.nama}. Tindakan ini dipakai hanya saat ujian ruang sudah harus ditutup.`,
+			description: `Paksa kirim jawaban ${row.nama}. Tindakan ini dipakai hanya saat ujian ruang sudah harus ditutup.`,
 			confirmLabel: 'Paksa Kirim',
-			tone: 'danger',
-		}))) return;
+			textLabel: 'Catatan keputusan',
+			defaultText: 'Ujian ruang sudah ditutup dan jawaban peserta sudah diperiksa pengawas.',
+			placeholder: 'Tuliskan alasan paksa kirim dan kondisi peserta.',
+			includeReason: true,
+		});
+		if (!result) return;
+		const notes = actionNotes(result);
 		actionBusyId = `submit-${row.participant_id}`;
 		try {
-			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/participants/${row.participant_id}/force-submit`, { method: 'POST' });
+			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/participants/${row.participant_id}/force-submit`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ reason: result.reason, notes }),
+			});
 			await readClientJson<unknown>(res);
 			operationState = { tone: 'warning', title: 'Jawaban Peserta Dikirim', message: `${row.nama} sudah dipaksa kirim dari panel ruang.` };
 			await refreshDashboard(true);
@@ -830,19 +852,19 @@
 		const defaultReason = allow
 			? 'Mode darurat browser diaktifkan karena perangkat/aplikasi peserta bermasalah dan sudah disetujui pengawas.'
 			: 'Mode darurat browser dinonaktifkan setelah kondisi ruang kembali normal.';
-		const reason = window.prompt(
-			allow ? 'Alasan mengaktifkan Browser Darurat untuk ruang ini' : 'Alasan menonaktifkan Browser Darurat untuk ruang ini',
-			room?.web_fallback_reason || defaultReason,
-		)?.trim();
-		if (!reason) return;
-		if (!(await confirmAction({
-			title: allow ? 'Aktifkan Browser Darurat?' : 'Nonaktifkan Browser Darurat?',
-			message: allow
-				? 'Fallback web hanya untuk kondisi darurat/perangkat bermasalah. Peserta yang memakai browser wajib diawasi dan tercatat.'
-				: 'Peserta baru tidak dapat login lewat /ujian setelah dinonaktifkan. Peserta yang sudah masuk tetap perlu dipantau sampai selesai.',
-			confirmLabel: allow ? 'Aktifkan' : 'Nonaktifkan',
-			tone: allow ? 'warning' : 'default',
-		}))) return;
+		const result = await openActionDialog({
+			title: 'Akses browser darurat',
+			description: allow
+				? 'Akses browser darurat hanya untuk kondisi darurat/perangkat bermasalah. Peserta yang memakai browser wajib diawasi dan tercatat.'
+				: 'Peserta baru tidak dapat login lewat halaman ujian browser setelah dinonaktifkan. Peserta yang sudah masuk tetap perlu dipantau sampai selesai.',
+			confirmLabel: allow ? 'Aktifkan Browser Darurat' : 'Nonaktifkan Browser Darurat',
+			textLabel: allow ? 'Alasan mengaktifkan Browser Darurat' : 'Alasan menonaktifkan Browser Darurat',
+			defaultText: room?.web_fallback_reason || defaultReason,
+			placeholder: 'Tuliskan alasan dan arahan pengawasan browser darurat.',
+			includeReason: true,
+		});
+		if (!result || !result.notes.trim()) return;
+		const reason = actionNotes(result);
 		webFallbackBusy = true;
 		try {
 			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/web-fallback`, {
@@ -854,7 +876,7 @@
 			operationState = {
 				tone: allow ? 'warning' : 'success',
 				title: allow ? 'Browser Darurat Aktif' : 'Browser Darurat Nonaktif',
-				message: allow ? 'Route /ujian dapat dipakai peserta ruang ini atas arahan pengawas.' : 'Fallback browser ruang sudah ditutup.'
+				message: allow ? 'Halaman ujian browser dapat dipakai peserta ruang ini atas arahan pengawas.' : 'Akses browser darurat ruang sudah ditutup.'
 			};
 			await refreshDashboard(true);
 		} catch (error) {
@@ -897,14 +919,29 @@
 	}
 
 	async function lockHandover() {
-		if (!(await confirmAction({
+		const result = await openActionDialog({
 			title: 'Kunci Serah Terima Ruang',
-			message: 'Setelah dikunci, daftar pemeriksaan dan catatan ruang menjadi arsip akhir dan tidak dapat diedit dari panel pengawas.',
-			confirmLabel: 'Kunci',
-			tone: 'warning',
-		}))) return;
+			description: 'Setelah dikunci, daftar pemeriksaan dan catatan ruang menjadi arsip akhir dan tidak dapat diedit dari panel pengawas.',
+			confirmLabel: 'Kunci Serah Terima',
+			textLabel: 'Catatan penguncian',
+			defaultText: 'Daftar pemeriksaan ruang sudah lengkap dan disetujui pengawas.',
+			placeholder: 'Tuliskan catatan akhir sebelum serah terima dikunci.',
+			includeReason: true,
+		});
+		if (!result) return;
+		const notes = actionNotes(result);
 		handoverLockBusy = true;
 		try {
+			if (handover && !handoverLocked) {
+				const payload = { ...handoverPayload(), handover_notes: notes };
+				const saveRes = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/handover`, {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload),
+				});
+				await readClientJson<unknown>(saveRes);
+			}
+
 			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/handover/lock`, { method: 'POST' });
 			await readClientJson<unknown>(res);
 			operationState = { tone: 'success', title: 'Serah Terima Dikunci', message: 'Ruang sudah memiliki bukti penutupan digital.' };
@@ -986,7 +1023,7 @@
 			</div>
 			<Dialog.Footer>
 				<Button variant="outline" onclick={() => closeActionDialog(null)}>Batal</Button>
-				<Button onclick={confirmActionDialog}>{actionDialog?.confirmLabel ?? 'Simpan'}</Button>
+				<Button onclick={confirmActionDialog} disabled={!actionDialogNotes.trim()}>{actionDialog?.confirmLabel ?? 'Simpan'}</Button>
 			</Dialog.Footer>
 		</Dialog.Content>
 	</Dialog.Root>
@@ -1043,7 +1080,7 @@
 						</Card.Header>
 						<Card.Content>
 							<div class="text-2xl font-bold text-warning">{participantStats.webFallback}</div>
-							<p class="text-xs text-muted-foreground">{room.allow_web_fallback ? 'Fallback /ujian aktif' : 'Default OFF'}</p>
+							<p class="text-xs text-muted-foreground">{room.allow_web_fallback ? 'Akses browser darurat aktif' : 'Nonaktif'}</p>
 						</Card.Content>
 					</Card.Root>
 					<Card.Root class="border-primary/20">

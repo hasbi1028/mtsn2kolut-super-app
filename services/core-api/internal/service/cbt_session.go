@@ -94,6 +94,7 @@ type cbtSessionStore interface {
 }
 
 type cbtRoomShuffleStore interface {
+	GetCbtExamSession(ctx context.Context, id pgtype.UUID) (db.GetCbtExamSessionRow, error)
 	ClearParticipantRooms(ctx context.Context, sessionID pgtype.UUID) error
 	ListParticipantsByRoom(ctx context.Context, sessionID pgtype.UUID) ([]db.ListParticipantsByRoomRow, error)
 	ListCbtExamRooms(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamRoomsRow, error)
@@ -1064,6 +1065,10 @@ func (s *CbtSession) ShuffleRooms(ctx context.Context, sessionID pgtype.UUID) er
 }
 
 func shuffleRooms(ctx context.Context, q cbtRoomShuffleStore, sessionID pgtype.UUID) error {
+	session, err := q.GetCbtExamSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
 	if err := q.ClearParticipantRooms(ctx, sessionID); err != nil {
 		return err
 	}
@@ -1080,26 +1085,90 @@ func shuffleRooms(ctx context.Context, q cbtRoomShuffleStore, sessionID pgtype.U
 		return nil
 	}
 
-	indices := cryptoPermInts(len(participants))
-
-	slot := 0
-	for _, room := range rooms {
-		for range int(cbtRoomEffectiveCapacity(room)) {
-			if slot >= len(indices) {
-				break
-			}
-			p := participants[indices[slot]]
-			if err := q.AssignParticipantRoom(ctx, db.AssignParticipantRoomParams{
-				ID:     p.ID,
-				RoomID: room.ID,
-			}); err != nil {
-				return err
-			}
-			slot++
+	assignments := planCbtRoomShuffle(session, participants, rooms)
+	for _, assignment := range assignments {
+		if err := q.AssignParticipantRoom(ctx, assignment); err != nil {
+			return err
 		}
 	}
-
 	return nil
+}
+
+func planCbtRoomShuffle(session db.GetCbtExamSessionRow, participants []db.ListParticipantsByRoomRow, rooms []db.ListCbtExamRoomsRow) []db.AssignParticipantRoomParams {
+	if len(participants) == 0 || len(rooms) == 0 {
+		return nil
+	}
+	groups := make(map[string][]db.ListParticipantsByRoomRow)
+	keys := make([]string, 0)
+	for _, participant := range participants {
+		key := cbtShufflePolicyGroupKey(session, participant)
+		if _, ok := groups[key]; !ok {
+			keys = append(keys, key)
+		}
+		groups[key] = append(groups[key], participant)
+	}
+	sort.Strings(keys)
+	keyOrder := cryptoPermInts(len(keys))
+
+	assignments := make([]db.AssignParticipantRoomParams, 0, min(len(participants), int(cbtRoomsTotalEffectiveCapacity(rooms))))
+	roomIndex := 0
+	for _, keyIndex := range keyOrder {
+		group := groups[keys[keyIndex]]
+		participantOrder := cryptoPermInts(len(group))
+		participantSlot := 0
+		for participantSlot < len(participantOrder) && roomIndex < len(rooms) {
+			capacity := int(cbtRoomEffectiveCapacity(rooms[roomIndex]))
+			if capacity <= 0 {
+				roomIndex++
+				continue
+			}
+			for used := 0; used < capacity && participantSlot < len(participantOrder); used++ {
+				participant := group[participantOrder[participantSlot]]
+				assignments = append(assignments, db.AssignParticipantRoomParams{ID: participant.ID, RoomID: rooms[roomIndex].ID})
+				participantSlot++
+			}
+			if participantSlot < len(participantOrder) {
+				roomIndex++
+			}
+		}
+		// Do not place another policy group into spare capacity of this room.
+		if participantSlot == len(participantOrder) {
+			roomIndex++
+		}
+	}
+	return assignments
+}
+
+func cbtShufflePolicyGroupKey(session db.GetCbtExamSessionRow, participant db.ListParticipantsByRoomRow) string {
+	switch session.MixPolicy {
+	case "same_class":
+		if participant.ClassID.Valid {
+			return "class:" + participant.ClassID.String()
+		}
+		if strings.TrimSpace(participant.ClassCode) != "" {
+			return "class_code:" + strings.TrimSpace(participant.ClassCode)
+		}
+		return "class:unknown"
+	case "mixed_scope":
+		if session.IsSpecialEvent && session.AllowCrossGrade {
+			return "mixed"
+		}
+	}
+	level := strings.TrimSpace(participant.ClassLevel)
+	if level == "" {
+		level = "unknown"
+	}
+	return "grade:" + level
+}
+
+func cbtRoomsTotalEffectiveCapacity(rooms []db.ListCbtExamRoomsRow) int32 {
+	var total int32
+	for _, room := range rooms {
+		if capacity := cbtRoomEffectiveCapacity(room); capacity > 0 {
+			total += capacity
+		}
+	}
+	return total
 }
 
 func (s *CbtSession) AutoAssignSeats(ctx context.Context, sessionID pgtype.UUID) error {

@@ -81,7 +81,7 @@
 			priority: { admin: 2, staf: 1 }
 		},
 		{
-			title: 'Hasil & BA',
+			title: 'Hasil & Berita Acara',
 			description: 'Buka rekap jawaban, koreksi, nilai, berita acara, dan unduhan operasional.',
 			href: '/asesmen/hasil',
 			actionLabel: 'Buka Hasil',

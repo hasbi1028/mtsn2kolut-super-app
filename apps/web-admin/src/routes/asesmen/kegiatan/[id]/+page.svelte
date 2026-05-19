@@ -116,7 +116,7 @@
 		{ id: 'ringkasan', label: 'Ringkasan' },
 		{ id: 'persiapan', label: 'Persiapan' },
 		{ id: 'pelaksanaan', label: 'Pelaksanaan' },
-		{ id: 'hasil', label: 'Hasil & BA' },
+		{ id: 'hasil', label: 'Hasil & Berita Acara' },
 		{ id: 'arsip', label: 'Arsip' },
 	];
 	let completenessLevel = $state('');
@@ -363,7 +363,7 @@
 			},
 			{
 				id: 'hasil',
-				title: 'Hasil & BA',
+				title: 'Hasil & Berita Acara',
 				description: 'Rekap nilai gabungan, ekspor, dan berita acara saat data sudah masuk.',
 				items: ['Hasil'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
 			},
@@ -745,7 +745,7 @@
 				title={currentInfo.title}
 				subtitle="Kelola kegiatan dari ringkasan, persiapan, pelaksanaan, hasil dan berita acara, sampai arsip final."
 				context={`${currentInfo.academic_year_name} · ${scopeLabel[currentInfo.scope] ?? currentInfo.scope}`}
-				primaryAction={{ label: currentInfo.status === 'finished' ? 'Buka Hasil & BA' : 'Buka Pelaksanaan', onclick: () => (activeSection = currentInfo.status === 'finished' ? 'hasil' : 'pelaksanaan') }}
+				primaryAction={{ label: currentInfo.status === 'finished' ? 'Buka Hasil & Berita Acara' : 'Buka Pelaksanaan', onclick: () => (activeSection = currentInfo.status === 'finished' ? 'hasil' : 'pelaksanaan') }}
 				secondaryAction={{ label: 'Daftar Kegiatan', href: resolve('/asesmen/kegiatan') }}
 			>
 				{#snippet meta()}
@@ -770,7 +770,7 @@
 			<section class="grid gap-3 md:grid-cols-3" aria-label="Ringkasan kegiatan asesmen">
 				<MetricCard label="Kesiapan" value={`${readyCount}/${checklist.length}`} helper={blockingItems.length > 0 ? `${blockingItems.length} item perlu tindakan` : 'Item utama terbaca siap'} tone={blockingItems.length > 0 ? 'warning' : 'success'} />
 				<MetricCard label="Peserta / Sesi" value={`${detail.overview?.member_count ?? '-'} / ${detail.sessions.length}`} helper={`${detail.sessions.reduce((sum, session) => sum + (session.room_count ?? 0), 0)} ruang terbaca`} />
-				<MetricCard label="Hasil & BA" value={currentResults.length} helper="Baris hasil dari seluruh sesi kegiatan" tone={currentResults.length > 0 ? 'success' : 'muted'} />
+				<MetricCard label="Hasil & Berita Acara" value={currentResults.length} helper="Baris hasil dari seluruh sesi kegiatan" tone={currentResults.length > 0 ? 'success' : 'muted'} />
 			</section>
 
 			<BlockerPanel
@@ -851,7 +851,7 @@
 								<Card.Description>Sepuluh tahap formal dari persiapan soal sampai arsip akhir. Status bersifat panduan baca, belum mengunci alur kerja.</Card.Description>
 							</div>
 							<Badge variant="outline" class={detail.sopReadiness ? 'border-primary/20 bg-primary/10 text-primary' : 'border-warning/30 bg-warning/10 text-warning'}>
-								{detail.sopReadiness ? 'Readiness backend' : 'Fallback halaman'}
+								{detail.sopReadiness ? 'Kesiapan dari layanan ujian' : 'Mode cadangan halaman'}
 							</Badge>
 						</div>
 					</Card.Header>
@@ -1134,7 +1134,7 @@
 			<Card.Root id="hasil" bind:ref={hasilSectionElement} tabindex={-1}>
 				<Card.Header class="pb-2">
 					<div class="flex flex-wrap items-start justify-between gap-3">
-						<div><Card.Title class="text-base">Hasil & BA</Card.Title><Card.Description>Rekap nilai gabungan, status submit, dan bahan berita acara dari seluruh sesi kegiatan.</Card.Description></div>
+						<div><Card.Title class="text-base">Hasil & Berita Acara</Card.Title><Card.Description>Rekap nilai gabungan, status submit, dan bahan berita acara dari seluruh sesi kegiatan.</Card.Description></div>
 						<div class="flex flex-wrap gap-2">
 							<a href={resolve(`/asesmen/kegiatan/${eventId}/archive`)} class="inline-flex h-8 items-center rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted/50">Arsip BA</a>
 							<LoadingButton variant="outline" onclick={exportCSV} disabled={currentResults.length === 0} label="Ekspor CSV" />

@@ -132,6 +132,19 @@
 		return 'mixed_scope';
 	}
 
+	function mixPolicyHelp(value: string) {
+		if (value === 'same_class') return 'Peserta tetap dikelompokkan berdasarkan kelas asal; pengacakan ruang tidak mencampur kelas lain.';
+		if (value === 'same_grade') return 'Peserta dapat dicampur antar kelas pada tingkat yang sama; tidak mencampur tingkat VII, VIII, dan IX.';
+		return 'Peserta dapat dicampur di seluruh cakupan sesi. Gunakan hanya bila cakupan dan izin lintas tingkat sudah sesuai kebijakan kegiatan.';
+	}
+
+	function assignmentModeHelp(value: string) {
+		if (value === 'manual') return 'Manual: operator menentukan ruang dan kursi peserta secara langsung.';
+		if (value === 'random_by_gender') return 'Acak berdasarkan jenis kelamin: sistem mengacak dengan mempertimbangkan kelompok jenis kelamin sesuai data peserta.';
+		if (value === 'random_by_accommodation') return 'Acak akomodasi khusus: sistem mengacak dengan mempertimbangkan kebutuhan atau akomodasi peserta.';
+		return 'Acak seimbang: sistem membagi peserta ke ruang tersedia secara proporsional berdasarkan kapasitas.';
+	}
+
 	function updateScopeType(value: string) {
 		fScopeType = value;
 		fMixPolicy = adaptiveMixPolicy(value);
@@ -164,7 +177,7 @@
 		if (fStart && fEnd && new Date(fEnd) <= new Date(fStart)) issues.push('Jadwal selesai harus setelah mulai');
 		if (fScopeType === 'class' && !fClassId) issues.push('Pilih kelas peserta');
 		if (fScopeType === 'grade' && !fGradeLevel) issues.push('Pilih tingkat peserta');
-		if (fAllowCrossGrade && !fIsSpecialEvent) issues.push('Lintas tingkat hanya boleh untuk sesi khusus');
+		if (fAllowCrossGrade && !fIsSpecialEvent) issues.push('Pencampuran lintas tingkat hanya boleh untuk sesi khusus');
 		return issues;
 	}
 
@@ -340,7 +353,7 @@
 							{@const quality = selectedPackageQuality}
 							<div class="rounded-lg border border-border bg-muted/50 px-3 py-2 sm:col-span-2">
 								<div class="flex flex-wrap items-start justify-between gap-3">
-									<div><p class="text-xs font-semibold uppercase tracking-[0.16em] text-foreground">Quality Gate Paket</p><p class="mt-1 text-sm font-medium text-foreground">{selectedPackage?.title ?? 'Paket dipilih'}</p></div>
+									<div><p class="text-xs font-semibold uppercase tracking-[0.16em] text-foreground">Pemeriksaan Kesiapan Paket</p><p class="mt-1 text-sm font-medium text-foreground">{selectedPackage?.title ?? 'Paket dipilih'}</p></div>
 									<div class="flex flex-wrap gap-1.5">
 										<Badge variant="outline" class="bg-card text-xs">{quality.totalCount} soal</Badge>
 										{#each quality.typeBuckets.slice(0, 3) as bucket (bucket.label)}<Badge variant="outline" class="bg-card text-xs">{bucket.label}: {bucket.count}</Badge>{/each}
@@ -349,7 +362,7 @@
 										{#if quality.unpublishedCount > 0}<Badge class="border-destructive/30 bg-destructive/10 text-xs text-destructive">{quality.unpublishedCount} belum terbit</Badge>{/if}
 									</div>
 								</div>
-								{#if selectedPackage && !selectedPackage.is_active}<p class="mt-2 text-xs font-medium text-destructive">Paket nonaktif tidak boleh dijadikan sesi ujian.</p>{:else if quality.totalCount === 0}<p class="mt-2 text-xs font-medium text-destructive">Paket ini belum memiliki soal, sehingga sesi tidak bisa dibuat.</p>{:else if quality.unpublishedCount > 0}<p class="mt-2 text-xs font-medium text-destructive">Rapikan paket dulu. Flutter hanya menyajikan soal terbit.</p>{:else if quality.missingCount > 0}<p class="mt-2 text-xs font-medium text-warning">Sesi masih boleh dibuat, tetapi {quality.missingCount} soal belum lengkap CP/TP/KD atau level kognitif.</p>{:else}<p class="mt-2 text-xs font-medium text-primary">Paket siap dipakai untuk draft sesi CBT.</p>{/if}
+								{#if selectedPackage && !selectedPackage.is_active}<p class="mt-2 text-xs font-medium text-destructive">Paket nonaktif tidak boleh dijadikan sesi ujian.</p>{:else if quality.totalCount === 0}<p class="mt-2 text-xs font-medium text-destructive">Paket ini belum memiliki soal, sehingga sesi tidak bisa dibuat.</p>{:else if quality.unpublishedCount > 0}<p class="mt-2 text-xs font-medium text-destructive">Rapikan paket dulu. Aplikasi siswa hanya menyajikan soal terbit.</p>{:else if quality.missingCount > 0}<p class="mt-2 text-xs font-medium text-warning">Sesi masih boleh dibuat, tetapi {quality.missingCount} soal belum lengkap CP/TP/KD atau level kognitif.</p>{:else}<p class="mt-2 text-xs font-medium text-primary">Paket siap dipakai untuk draft sesi CBT.</p>{/if}
 							</div>
 						{/if}
 						<div>
@@ -377,13 +390,15 @@
 							<div class="rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary">Semua siswa aktif di sekolah dapat menjadi peserta sesi ini.</div>
 						{/if}
 						<div>
-							<label for="session-mix-policy" class="mb-1 block text-xs text-muted-foreground">Mix policy</label>
-							<select id="session-mix-policy" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fMixPolicy}><option value="same_class">Tetap per kelas</option><option value="same_grade">Campur dalam tingkat</option><option value="mixed_scope">Campur lintas cakupan</option></select>
-							<p class="mt-1 text-[11px] text-muted-foreground">Saat cakupan berubah, opsi disetel otomatis lalu tetap bisa disesuaikan operator.</p>
+							<label for="session-mix-policy" class="mb-1 block text-xs text-muted-foreground">Kebijakan pencampuran peserta</label>
+							<select id="session-mix-policy" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fMixPolicy}><option value="same_class">Tetap dalam kelas asal</option><option value="same_grade">Campur dalam tingkat yang sama</option><option value="mixed_scope">Campur sesuai cakupan sesi</option></select>
+							<p class="mt-1 text-[11px] text-muted-foreground">{mixPolicyHelp(fMixPolicy)}</p>
+							<p class="mt-1 text-[11px] text-muted-foreground">Saat cakupan peserta berubah, sistem menyetel kebijakan awal secara otomatis; operator tetap wajib memeriksa konsekuensi pencampuran sebelum menyimpan.</p>
 						</div>
 						<div>
-							<label for="session-assignment-mode" class="mb-1 block text-xs text-muted-foreground">Mode alokasi ruangan</label>
-							<select id="session-assignment-mode" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fAssignmentMode}><option value="random_balanced">Acak seimbang</option><option value="manual">Manual</option><option value="random_by_gender">Acak per gender</option><option value="random_by_accommodation">Acak akomodasi khusus</option></select>
+							<label for="session-assignment-mode" class="mb-1 block text-xs text-muted-foreground">Metode penempatan ruang</label>
+							<select id="session-assignment-mode" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fAssignmentMode}><option value="random_balanced">Acak seimbang</option><option value="manual">Manual</option><option value="random_by_gender">Acak berdasarkan jenis kelamin</option><option value="random_by_accommodation">Acak dengan akomodasi khusus</option></select>
+							<p class="mt-1 text-[11px] text-muted-foreground">{assignmentModeHelp(fAssignmentMode)}</p>
 						</div>
 						<div class="sm:col-span-2">
 							<label for="session-title" class="mb-1 block text-xs text-muted-foreground">Nama Sesi <span class="text-destructive">*</span></label>
@@ -398,6 +413,11 @@
 						<div class="grid gap-3 sm:col-span-2 sm:grid-cols-2">
 							<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-foreground"><input type="checkbox" bind:checked={fIsSpecialEvent} class="size-4 accent-primary" /> Tandai sebagai sesi khusus</label>
 							<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-foreground"><input type="checkbox" bind:checked={fAllowCrossGrade} class="size-4 accent-primary" /> Izinkan lintas tingkat</label>
+						</div>
+						<div class="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning sm:col-span-2">
+							<p class="font-semibold">Peringatan pencampuran lintas tingkat</p>
+							<p>Pencampuran peserta lintas tingkat hanya boleh digunakan untuk sesi khusus, misalnya kegiatan gabungan yang sudah disetujui panitia. Sistem hanya akan mengizinkan pencampuran lintas tingkat bila opsi <span class="font-semibold">Izinkan lintas tingkat</span> aktif.</p>
+							{#if fAllowCrossGrade && !fIsSpecialEvent}<p class="font-semibold text-destructive">Aktifkan penanda sesi khusus atau nonaktifkan izin lintas tingkat sebelum membuat sesi.</p>{:else if fAllowCrossGrade}<p>Pastikan cakupan peserta, kebijakan pencampuran, dan persetujuan kegiatan memang mengizinkan penggabungan tingkat.</p>{/if}
 						</div>
 					</div>
 

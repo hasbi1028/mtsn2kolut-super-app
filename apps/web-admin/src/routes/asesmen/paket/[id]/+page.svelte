@@ -8,8 +8,10 @@
     readClientApiData,
   } from "$lib/client/api";
   import * as Card from "$lib/components/ui/card";
+  import * as Dialog from "$lib/components/ui/dialog";
   import * as Table from "$lib/components/ui/table";
   import { Badge } from "$lib/components/ui/badge";
+  import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Textarea } from "$lib/components/ui/textarea";
   import LoadingButton from "$lib/components/LoadingButton.svelte";
@@ -176,6 +178,10 @@
   let poolSort = $state("metadata_first");
   let poolPage = $state(1);
   let poolPageSize = $state<number>(DEFAULT_PAGE_SIZE_OPTIONS[0]);
+  let cloneDialogOpen = $state(false);
+  let cloneTitle = $state("");
+  let lockDialogOpen = $state(false);
+  let lockReason = $state("");
 
   let isLocked = $derived(
     Boolean(detail?.package.locked_at || detail?.readiness.locked),
@@ -615,12 +621,15 @@
     poolPageSize = change.limit;
   }
 
-  async function clonePackage() {
+  function openCloneDialog() {
     if (!detail) return;
-    const newTitle = window.prompt(
-      "Nama paket revisi/clone",
-      `${detail.package.title} - Revisi`,
-    );
+    cloneTitle = `${detail.package.title} - Revisi`;
+    cloneDialogOpen = true;
+  }
+
+  async function submitClonePackage() {
+    if (!detail) return;
+    const newTitle = cloneTitle.trim();
     if (!newTitle) return;
     busy = "clone";
     try {
@@ -633,6 +642,7 @@
         },
       ).then((res) => readClientApiData<DetailPayload>(res));
       toast.success("Paket revisi dibuat");
+      cloneDialogOpen = false;
       await goto(`/asesmen/paket/${payload.package.id}`);
     } catch (e) {
       toast.error((e as Error).message);
@@ -641,22 +651,25 @@
     }
   }
 
-  async function lockPackage() {
-    if (
-      !detail ||
-      !window.confirm(
-        "Kunci paket dan buat snapshot? Setelah terkunci, paket tidak bisa diedit langsung.",
-      )
-    )
-      return;
+  function openLockDialog() {
+    if (!detail || isLocked) return;
+    lockReason = detail.package.lock_reason?.trim() || "Dikunci dari Penyusunan Paket";
+    lockDialogOpen = true;
+  }
+
+  async function submitLockPackage() {
+    if (!detail || isLocked) return;
+    const reason = lockReason.trim();
+    if (!reason) return;
     busy = "lock";
     try {
       await fetch(clientApiPath`/api/asesmen/packages/${packageId}/lock`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: "Dikunci dari Paket Builder" }),
+        body: JSON.stringify({ reason }),
       }).then((res) => readClientApiData(res));
       toast.success("Paket terkunci dan snapshot dibuat");
+      lockDialogOpen = false;
       await refresh();
     } catch (e) {
       toast.error((e as Error).message);
@@ -666,7 +679,7 @@
   }
 </script>
 
-<svelte:head><title>Paket Builder — MTSN 2 Kolut</title></svelte:head>
+<svelte:head><title>Penyusunan Paket — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-5 p-4 md:p-6">
   <AsyncContent promise={detailPromise}>
@@ -679,7 +692,7 @@
             <p
               class="text-xs font-semibold uppercase tracking-[0.18em] text-primary"
             >
-              Paket Builder
+              Penyusunan Paket
             </p>
             <h1 class="text-2xl font-semibold tracking-tight">
               {detail.package.title}
@@ -820,7 +833,7 @@
               >
               <LoadingButton
                 variant="outline"
-                onclick={clonePackage}
+                onclick={openCloneDialog}
                 loading={busy === "clone"}>Buat Revisi/Salinan</LoadingButton
               >
             </div>
@@ -1310,13 +1323,13 @@
                 </p>{/if}
               <div class="flex gap-2">
                 <LoadingButton
-                  onclick={lockPackage}
+                  onclick={openLockDialog}
                   loading={busy === "lock"}
                   disabled={isLocked}
                   >Kunci + Simpan Salinan Kondisi</LoadingButton
                 ><LoadingButton
                   variant="outline"
-                  onclick={clonePackage}
+                  onclick={openCloneDialog}
                   loading={busy === "clone"}>Buat Revisi/Salinan</LoadingButton
                 >
               </div></Card.Content
@@ -1326,4 +1339,111 @@
       {/if}
     {/snippet}
   </AsyncContent>
+
+  <Dialog.Root bind:open={cloneDialogOpen}>
+    <Dialog.Content>
+      <form
+        class="space-y-4"
+        onsubmit={(event) => {
+          event.preventDefault();
+          void submitClonePackage();
+        }}
+      >
+        <Dialog.Header>
+          <Dialog.Title>Buat Revisi atau Salinan Paket</Dialog.Title>
+          <Dialog.Description>
+            Salinan baru akan dibuat dari isi paket saat ini. Paket asal tetap
+            tidak berubah, dan Anda akan diarahkan ke paket hasil revisi.
+          </Dialog.Description>
+        </Dialog.Header>
+
+        <label class="space-y-2 block">
+          <span class="text-sm font-medium">Nama Paket Baru</span>
+          <Input
+            bind:value={cloneTitle}
+            placeholder="Masukkan nama paket revisi atau salinan"
+            disabled={busy === "clone"}
+            autofocus
+          />
+        </label>
+
+        <Dialog.Footer>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy === "clone"}
+            onclick={() => (cloneDialogOpen = false)}>Batal</Button
+          >
+          <LoadingButton
+            type="submit"
+            loading={busy === "clone"}
+            disabled={!cloneTitle.trim()}>Buat Paket</LoadingButton
+          >
+        </Dialog.Footer>
+      </form>
+    </Dialog.Content>
+  </Dialog.Root>
+
+  <Dialog.Root bind:open={lockDialogOpen}>
+    <Dialog.Content>
+      <form
+        class="space-y-4"
+        onsubmit={(event) => {
+          event.preventDefault();
+          void submitLockPackage();
+        }}
+      >
+        <Dialog.Header>
+          <Dialog.Title>Kunci Paket dan Simpan Salinan Kondisi</Dialog.Title>
+          <Dialog.Description>
+            Setelah dikunci, paket tidak dapat diedit langsung. Sistem akan
+            menyimpan snapshot untuk menjaga konsistensi sesi asesmen yang
+            memakai paket ini.
+          </Dialog.Description>
+        </Dialog.Header>
+
+        {#if detail}
+          <div class="rounded-xl border bg-muted/30 p-4 text-sm space-y-2">
+            <p><span class="font-medium">Paket:</span> {detail.package.title}</p>
+            <p>
+              <span class="font-medium">Dampak:</span> identitas dan isi soal
+              terkunci; perubahan berikutnya harus dilakukan melalui revisi atau
+              salinan baru.
+            </p>
+            <p>
+              <span class="font-medium">Pemakaian:</span>
+              {detail.readiness.session_count} sesi memakai paket ini.
+            </p>
+          </div>
+        {/if}
+
+        <label class="space-y-2 block">
+          <span class="text-sm font-medium">Alasan Penguncian</span>
+          <Textarea
+            bind:value={lockReason}
+            placeholder="Tuliskan alasan penguncian paket"
+            disabled={busy === "lock"}
+            rows={4}
+          />
+          <span class="text-xs text-muted-foreground">
+            Alasan ini akan dikirim sebagai catatan penguncian paket.
+          </span>
+        </label>
+
+        <Dialog.Footer>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy === "lock"}
+            onclick={() => (lockDialogOpen = false)}>Batal</Button
+          >
+          <LoadingButton
+            type="submit"
+            loading={busy === "lock"}
+            disabled={!lockReason.trim()}>Kunci Paket</LoadingButton
+          >
+        </Dialog.Footer>
+      </form>
+    </Dialog.Content>
+  </Dialog.Root>
 </div>

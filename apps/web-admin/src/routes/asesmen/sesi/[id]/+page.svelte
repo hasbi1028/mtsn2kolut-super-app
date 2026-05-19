@@ -3,12 +3,14 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { Textarea } from '$lib/components/ui/textarea';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
@@ -111,6 +113,15 @@
 		event_data: unknown;
 		created_at: string;
 	};
+
+	type ParticipantActionDialogOptions = {
+		title: string;
+		description: string;
+		confirmLabel: string;
+		defaultText: string;
+		placeholder: string;
+	};
+	type ParticipantActionDialogResult = { notes: string };
 	type AuditLog = {
 		id: string;
 		user_id: string;
@@ -294,6 +305,11 @@
 	let flagBusyId = $state('');
 	let resetAccessBusyId = $state('');
 	let forceSubmitBusyId = $state('');
+
+	let participantActionDialogOpen = $state(false);
+	let participantActionDialog = $state<ParticipantActionDialogOptions | null>(null);
+	let participantActionNotes = $state('');
+	let participantActionDialogResolver: ((result: ParticipantActionDialogResult | null) => void) | null = null;
 	let revisionBusyId = $state('');
 	let eventPanelParticipantId = $state('');
 	let procInterval: ReturnType<typeof setInterval> | null = null;
@@ -318,7 +334,7 @@
 		{ id: 'monitor', label: 'Monitor' },
 		{ id: 'peserta', label: 'Peserta' },
 		{ id: 'insiden', label: 'Masalah/Insiden' },
-		{ id: 'hasil', label: 'Hasil & BA' },
+		{ id: 'hasil', label: 'Hasil & Berita Acara' },
 	];
 
 	function selectedSchoolRoom() {
@@ -553,6 +569,35 @@
 				detailPromise = Promise.reject(error);
 			}
 		}
+	}
+
+
+	function openParticipantActionDialog(options: ParticipantActionDialogOptions): Promise<ParticipantActionDialogResult | null> {
+		participantActionDialogResolver?.(null);
+		participantActionDialog = options;
+		participantActionNotes = options.defaultText;
+		participantActionDialogOpen = true;
+		return new Promise((resolve) => {
+			participantActionDialogResolver = resolve;
+		});
+	}
+
+	function closeParticipantActionDialog(result: ParticipantActionDialogResult | null) {
+		participantActionDialogOpen = false;
+		const resolver = participantActionDialogResolver;
+		participantActionDialogResolver = null;
+		participantActionDialog = null;
+		resolver?.(result);
+	}
+
+	function confirmParticipantActionDialog() {
+		if (!participantActionDialog) return;
+		const notes = participantActionNotes.trim();
+		if (!notes) {
+			toast.error('Catatan tindakan wajib diisi.');
+			return;
+		}
+		closeParticipantActionDialog({ notes });
 	}
 
 	function retryDetail(reset?: () => void) {
@@ -1133,10 +1178,21 @@
 	}
 
 	async function resetParticipantAccess(pid: string, nama: string) {
-		if (!(await confirmPhrase('Reset Akses Ujian', `Akses perangkat untuk ${nama} akan dilepas sehingga peserta dapat login ulang. Gunakan hanya setelah diverifikasi oleh pengawas.`, 'RESET AKSES'))) return;
+		const result = await openParticipantActionDialog({
+			title: 'Reset Akses Ujian',
+			description: `Akses perangkat untuk ${nama} akan dilepas sehingga peserta dapat login ulang. Gunakan hanya setelah diverifikasi oleh pengawas.`,
+			confirmLabel: 'Reset Akses',
+			defaultText: 'Perangkat dan identitas peserta sudah diverifikasi pengawas.',
+			placeholder: 'Tuliskan alasan reset akses dan hasil verifikasi pengawas.',
+		});
+		if (!result) return;
 		resetAccessBusyId = pid;
 		try {
-			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/participants/${pid}/reset-access`, { method: 'POST' });
+			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/participants/${pid}/reset-access`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ notes: result.notes }),
+			});
 			await readClientJson<unknown>(res);
 			setOperationState('warning', 'Akses Peserta Direset', `${nama} dapat login ulang setelah pengawas memastikan perangkat yang dipakai benar.`);
 			toast.success('Akses peserta direset');
@@ -1151,10 +1207,21 @@
 	}
 
 	async function forceSubmitParticipant(pid: string, nama: string) {
-		if (!(await confirmPhrase('Paksa Kirim Jawaban Peserta', `Jawaban ${nama} akan dikunci dan skor objektif dihitung dari jawaban yang sudah tersimpan. Tindakan ini untuk kondisi darurat operasional.`, 'PAKSA SUBMIT'))) return;
+		const result = await openParticipantActionDialog({
+			title: 'Paksa Kirim Jawaban Peserta',
+			description: `Jawaban ${nama} akan dikunci dan skor objektif dihitung dari jawaban yang sudah tersimpan. Tindakan ini untuk kondisi darurat operasional.`,
+			confirmLabel: 'Paksa Kirim Jawaban',
+			defaultText: 'Keputusan paksa kirim sudah diverifikasi oleh proktor/pengawas sesi.',
+			placeholder: 'Tuliskan alasan paksa kirim, kondisi peserta, dan bukti pengawasan.',
+		});
+		if (!result) return;
 		forceSubmitBusyId = pid;
 		try {
-			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/participants/${pid}/force-submit`, { method: 'POST' });
+			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/participants/${pid}/force-submit`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ notes: result.notes }),
+			});
 			await readClientJson<unknown>(res);
 			setOperationState('warning', 'Jawaban Peserta Dikirim Paksa', `${nama} sudah ditandai submit oleh proktor. Periksa hasil akhir sebelum menutup sesi.`);
 			toast.success('Jawaban peserta dikirim oleh proktor');
@@ -1304,6 +1371,23 @@
 </svelte:head>
 
 <div class="space-y-5 p-6">
+	<Dialog.Root bind:open={participantActionDialogOpen}>
+		<Dialog.Content>
+			<Dialog.Header>
+				<Dialog.Title>{participantActionDialog?.title ?? 'Tindakan Peserta'}</Dialog.Title>
+				<Dialog.Description>{participantActionDialog?.description ?? 'Catat alasan tindakan peserta.'}</Dialog.Description>
+			</Dialog.Header>
+			<div class="space-y-3 py-2">
+				<label class="block text-sm font-semibold text-foreground" for="participant-action-notes">Catatan tindakan</label>
+				<Textarea id="participant-action-notes" class="min-h-28" bind:value={participantActionNotes} placeholder={participantActionDialog?.placeholder ?? 'Tuliskan alasan tindakan.'} />
+				<p class="text-xs text-muted-foreground">Catatan ini wajib diisi agar tindakan penting tetap dapat diaudit.</p>
+			</div>
+			<Dialog.Footer>
+				<Button variant="outline" onclick={() => closeParticipantActionDialog(null)}>Batal</Button>
+				<Button onclick={confirmParticipantActionDialog} disabled={!participantActionNotes.trim()}>{participantActionDialog?.confirmLabel ?? 'Simpan'}</Button>
+			</Dialog.Footer>
+		</Dialog.Content>
+	</Dialog.Root>
 	<!-- Breadcrumb -->
 	<div class="flex items-center gap-2 text-sm text-muted-foreground">
 		<a href={resolve('/asesmen/sesi')} class="hover:text-foreground">Kegiatan & Sesi</a>
@@ -1466,7 +1550,7 @@
 				<Card.Header class="pb-2">
 					<div class="flex flex-wrap items-start justify-between gap-3">
 						<div>
-							<Card.Title class="text-base">Hasil & BA ({results.length} peserta)</Card.Title>
+							<Card.Title class="text-base">Hasil & Berita Acara ({results.length} peserta)</Card.Title>
 							<p class="mt-1 text-xs text-muted-foreground">Rekap jawaban, nilai, CSV, dan berita acara sesi.</p>
 						</div>
 						<div class="flex flex-wrap gap-2">

@@ -3,12 +3,14 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { Textarea } from '$lib/components/ui/textarea';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
@@ -60,6 +62,15 @@
 		high_count: number;
 		locked_count: number;
 	};
+	type DialogResult = { reason: string; notes: string };
+	type ActionDialogOptions = {
+		title: string;
+		description: string;
+		confirmLabel: string;
+		textLabel: string;
+		defaultText: string;
+		placeholder: string;
+	};
 
 	const sessionId = page.params.id ?? '';
 	let dashboardPromise = $state<Promise<ProctoringRow[]> | null>(null);
@@ -73,6 +84,11 @@
 	let filter = $state<'all' | 'warning' | 'high' | 'locked' | 'offline'>('all');
 	let audioAlertsEnabled = $state(false);
 	let actionBusyId = $state('');
+	let actionDialogOpen = $state(false);
+	let actionDialog = $state<ActionDialogOptions | null>(null);
+	let actionDialogReason = $state('verified_device');
+	let actionDialogNotes = $state('');
+	let actionDialogResolver: ((value: DialogResult | null) => void) | null = null;
 	let hasPrimedEvents = false;
 
 	let roomSummaries = $derived.by<RoomSummary[]>(() => {
@@ -109,6 +125,13 @@
 		if (filter === 'offline') return heartbeatState(row) === 'offline';
 		return true;
 	}));
+	const actionReasonOptions = [
+		{ value: 'verified_device', label: 'Perangkat sudah diverifikasi' },
+		{ value: 'network_issue', label: 'Gangguan jaringan' },
+		{ value: 'accidental_exit', label: 'Salah keluar aplikasi' },
+		{ value: 'approved_device_change', label: 'Ganti perangkat disetujui' },
+		{ value: 'other', label: 'Lainnya' },
+	];
 
 	onMount(() => {
 		dashboardPromise = loadDashboard();
@@ -249,9 +272,56 @@
 		}
 	}
 
+	function actionReasonLabel(value: string) {
+		return actionReasonOptions.find((item) => item.value === value)?.label ?? 'Lainnya';
+	}
+
+	function openActionDialog(options: ActionDialogOptions): Promise<DialogResult | null> {
+		actionDialogResolver?.(null);
+		actionDialog = options;
+		actionDialogReason = 'verified_device';
+		actionDialogNotes = options.defaultText;
+		actionDialogOpen = true;
+		return new Promise((resolve) => {
+			actionDialogResolver = resolve;
+		});
+	}
+
+	function closeActionDialog(result: DialogResult | null) {
+		actionDialogOpen = false;
+		const resolver = actionDialogResolver;
+		actionDialogResolver = null;
+		actionDialog = null;
+		resolver?.(result);
+	}
+
+	function confirmActionDialog() {
+		if (!actionDialog) return;
+		const notes = actionDialogNotes.trim();
+		if (!notes) {
+			toast.error('Catatan tindakan wajib diisi.');
+			return;
+		}
+		closeActionDialog({ reason: actionDialogReason, notes });
+	}
+
+	function actionNotes(result: DialogResult) {
+		const reason = actionReasonLabel(result.reason);
+		return result.notes ? `${reason}: ${result.notes}` : reason;
+	}
+
 	async function unlockParticipant(row: ProctoringRow) {
 		if (!row.room_id) return;
-		const notes = window.prompt(`Catatan buka kunci untuk ${row.nama}`, 'Diverifikasi dari panel pengawasan') ?? '';
+		const result = await openActionDialog({
+			title: 'Buka kunci akses peserta',
+			description: `Buka akses ${row.nama} hanya setelah perangkat dan kondisi peserta diverifikasi pengawas. Histori pelanggaran tetap tersimpan.`,
+			confirmLabel: 'Buka Kunci',
+			textLabel: 'Catatan verifikasi',
+			defaultText: 'Sudah diverifikasi dari panel pengawasan',
+			placeholder: 'Contoh: jaringan terputus, peserta sudah kembali ke aplikasi.',
+		});
+		if (!result) return;
+		const notes = actionNotes(result);
 		actionBusyId = `unlock-${row.participant_id}`;
 		try {
 			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${row.room_id}/participants/${row.participant_id}/unlock`, {
@@ -271,7 +341,16 @@
 
 	async function acknowledgeEvent(event: ProctoringEvent) {
 		if (!event.room_id) return;
-		const notes = window.prompt(`Catatan pemeriksaan untuk ${event.nama}`, eventReason(event)) ?? '';
+		const result = await openActionDialog({
+			title: 'Tandai kejadian sudah diperiksa',
+			description: `Catat hasil pemeriksaan kejadian ${event.nama} agar riwayat pengawasan jelas.`,
+			confirmLabel: 'Tandai Diperiksa',
+			textLabel: 'Catatan pemeriksaan',
+			defaultText: eventReason(event),
+			placeholder: 'Tuliskan temuan pengawas atau tindak lanjut.',
+		});
+		if (!result) return;
+		const notes = actionNotes(result);
 		actionBusyId = `ack-${event.id}`;
 		try {
 			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${event.room_id}/participants/${event.participant_id}/acknowledge`, {
@@ -380,6 +459,29 @@
 			<Button variant="outline" onclick={() => void loadEvents(true)}>Muat Ulang Riwayat</Button>
 		</div>
 	</div>
+
+	<Dialog.Root bind:open={actionDialogOpen}>
+		<Dialog.Content>
+			<Dialog.Header>
+				<Dialog.Title>{actionDialog?.title ?? 'Tindakan Pengawas'}</Dialog.Title>
+				<Dialog.Description>{actionDialog?.description ?? 'Catat tindakan pengawas.'}</Dialog.Description>
+			</Dialog.Header>
+			<div class="space-y-4 py-2">
+				<label class="block text-sm font-semibold text-foreground" for="action-reason">Alasan tindakan</label>
+				<select id="action-reason" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={actionDialogReason}>
+					{#each actionReasonOptions as option}
+						<option value={option.value}>{option.label}</option>
+					{/each}
+				</select>
+				<label class="block text-sm font-semibold text-foreground" for="action-notes">{actionDialog?.textLabel ?? 'Catatan'}</label>
+				<Textarea id="action-notes" class="min-h-28" bind:value={actionDialogNotes} placeholder={actionDialog?.placeholder ?? 'Tulis catatan pengawas.'} />
+			</div>
+			<Dialog.Footer>
+				<Button variant="outline" onclick={() => closeActionDialog(null)}>Batal</Button>
+				<Button onclick={confirmActionDialog} disabled={!actionDialogNotes.trim()}>{actionDialog?.confirmLabel ?? 'Simpan'}</Button>
+			</Dialog.Footer>
+		</Dialog.Content>
+	</Dialog.Root>
 
 	<AsyncContent promise={dashboardPromise}>
 		{#snippet pending()}
