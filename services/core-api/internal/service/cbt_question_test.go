@@ -295,6 +295,10 @@ func (f *fakeQuestionStore) ListCbtQuestionVersions(ctx context.Context, id pgty
 	return f.versionRows, nil
 }
 
+func (f *fakeQuestionStore) ListCbtQuestionAuthors(ctx context.Context) ([]db.ListCbtQuestionAuthorsRow, error) {
+	return []db.ListCbtQuestionAuthorsRow{}, nil
+}
+
 func mustQuestionUUID(t *testing.T, value string) pgtype.UUID {
 	t.Helper()
 	var id pgtype.UUID

@@ -1242,6 +1242,43 @@ func (q *Queries) ListBankSoalQuestionWorkflowEvents(ctx context.Context, questi
 	return items, nil
 }
 
+const listCbtQuestionAuthors = `-- name: ListCbtQuestionAuthors :many
+SELECT DISTINCT q.author_username,
+       COALESCE(NULLIF(btrim(author_emp.nama), ''), NULLIF(btrim(author_user.display_name), ''), q.author_username) AS author_display_name
+FROM cbt_questions q
+LEFT JOIN users author_user ON author_user.username = q.author_username
+LEFT JOIN employees author_emp ON author_emp.id = author_user.employee_id
+WHERE q.author_username IS NOT NULL
+  AND q.author_username != ''
+  AND q.deleted_at IS NULL
+ORDER BY author_display_name
+`
+
+type ListCbtQuestionAuthorsRow struct {
+	AuthorUsername    string `json:"author_username"`
+	AuthorDisplayName string `json:"author_display_name"`
+}
+
+func (q *Queries) ListCbtQuestionAuthors(ctx context.Context) ([]ListCbtQuestionAuthorsRow, error) {
+	rows, err := q.db.Query(ctx, listCbtQuestionAuthors)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtQuestionAuthorsRow{}
+	for rows.Next() {
+		var i ListCbtQuestionAuthorsRow
+		if err := rows.Scan(&i.AuthorUsername, &i.AuthorDisplayName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCbtQuestionStemTextsBySubject = `-- name: ListCbtQuestionStemTextsBySubject :many
 SELECT question_text, stem_html
 FROM cbt_questions

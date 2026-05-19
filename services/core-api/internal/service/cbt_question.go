@@ -50,6 +50,7 @@ type cbtQuestionStore interface {
 	CbtQuestionEventExists(ctx context.Context, id pgtype.UUID) (bool, error)
 	GenerateCbtQuestionAcademicCode(ctx context.Context, arg db.GenerateCbtQuestionAcademicCodeParams) (string, error)
 	ListCbtQuestions(ctx context.Context, arg db.ListCbtQuestionsParams) ([]db.ListCbtQuestionsRow, error)
+	ListCbtQuestionAuthors(ctx context.Context) ([]db.ListCbtQuestionAuthorsRow, error)
 	ListCbtQuestionsFiltered(ctx context.Context, arg db.ListCbtQuestionsFilteredParams) ([]db.ListCbtQuestionsFilteredRow, error)
 	CountCbtQuestionsFiltered(ctx context.Context, arg db.CountCbtQuestionsFilteredParams) (int64, error)
 	GetCbtQuestionSummaryCounts(ctx context.Context, arg db.GetCbtQuestionSummaryCountsParams) (db.GetCbtQuestionSummaryCountsRow, error)
@@ -269,6 +270,11 @@ func inputActor(input SaveCbtQuestionInput) CbtQuestionActor {
 func (s *CbtQuestion) List(ctx context.Context) ([]db.ListCbtQuestionsRow, error) {
 	return s.q.ListCbtQuestions(ctx, db.ListCbtQuestionsParams{IsAdmin: true})
 }
+
+func (s *CbtQuestion) ListAuthors(ctx context.Context) ([]db.ListCbtQuestionAuthorsRow, error) {
+	return s.q.ListCbtQuestionAuthors(ctx)
+}
+
 
 type ListCbtQuestionsInput struct {
 	EventID        pgtype.UUID

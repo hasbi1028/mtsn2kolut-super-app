@@ -456,6 +456,8 @@ func main() {
 		r.With(requireWebsiteManage).Post("/api/website/media", websiteMediaH.Upload)
 
 		r.With(requireBankSoalRead).Get("/api/cbt/questions/summary", questionH.Summary)
+		r.With(requireBankSoalRead).Get("/api/cbt/questions/authors", questionH.HandleListAuthors)
+		r.With(requireBankSoalRead).Get("/api/bank-soal/questions/authors", questionH.HandleListAuthors)
 		r.With(requireBankSoalRead).Get("/api/cbt/questions", questionH.List)
 		r.With(requireBankSoalCreate).Post("/api/cbt/questions", questionH.Create)
 		r.With(requireBankSoalReviewWorkflow).Patch("/api/cbt/questions/bulk-workflow", questionH.BulkWorkflowAction)

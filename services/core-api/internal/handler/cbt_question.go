@@ -45,6 +45,7 @@ type cbtQuestionService interface {
 	Archive(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.CbtQuestion, error)
 	DuplicateAsDraft(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.CbtQuestion, error)
 	DuplicateForRevision(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error)
+	ListAuthors(ctx context.Context) ([]db.ListCbtQuestionAuthorsRow, error)
 }
 
 type cbtQuestionImportService interface {
@@ -104,6 +105,27 @@ type cbtQuestionBody struct {
 	WorkflowStatus  string                   `json:"workflow_status"`
 	WriterNotes     string                   `json:"writer_notes"`
 	ReviewNotes     string                   `json:"review_notes"`
+}
+
+
+func (h *CbtQuestion) HandleListAuthors(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	rows, err := h.svc.ListAuthors(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	items := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, map[string]any{
+			"username":       row.AuthorUsername,
+			"display_name": row.AuthorDisplayName,
+		})
+	}
+	api.OK(w, map[string]any{"items": items})
 }
 
 func (h *CbtQuestion) Summary(w http.ResponseWriter, r *http.Request) {

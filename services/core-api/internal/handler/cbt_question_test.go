@@ -374,6 +374,10 @@ func (f *fakeCbtQuestionService) ExportCSV(_ context.Context, input service.List
 	return f.exportResult, nil
 }
 
+func (f *fakeCbtQuestionService) ListAuthors(_ context.Context) ([]db.ListCbtQuestionAuthorsRow, error) {
+	return []db.ListCbtQuestionAuthorsRow{}, nil
+}
+
 func (f *fakeCbtQuestionService) TemplateCSV() (service.ExportCbtQuestionsCSVResult, error) {
 	if f.templateErr != nil {
 		return service.ExportCbtQuestionsCSVResult{}, f.templateErr

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+
 	import { resolve } from '$app/paths';
 	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
@@ -19,6 +20,7 @@
 	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import SparklesIcon from '@lucide/svelte/icons/sparkles';
 	import Trash2Icon from '@lucide/svelte/icons/trash-2';
+import ArchiveIcon from '@lucide/svelte/icons/archive';
 	import UploadIcon from '@lucide/svelte/icons/upload';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
@@ -29,7 +31,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
-	import { canCreateBankSoal, canDeleteBankSoal, canImportBankSoal, canManageBankSoalSettings, canReviewBankSoal } from '$lib/bank-soal/access';
+	import { canCreateBankSoal, canDeleteBankSoal, canImportBankSoal, canManageBankSoalSettings, canPublishBankSoal, canReviewBankSoal } from '$lib/bank-soal/access';
 	import { htmlToPlainText } from '$lib/utils/html-text';
 	import { displayName } from '$lib/utils/display-name';
 
@@ -48,6 +50,8 @@
 		name: string;
 		code?: string;
 	};
+
+	type Author = { username: string; display_name: string };
 
 	type OptionItem = {
 		label?: string;
@@ -285,6 +289,8 @@
 	let questionTypeFilter = $state<QuestionTypeFilter>('');
 	let hotsFilter = $state<HotsFilter>('');
 	let authorFilter = $state('');
+	let authors = $state<Author[]>([]);
+	let authorsLoaded = $state(false);
 	let currentPage = $state(1);
 	let questions = $state<Question[]>([]);
 	let subjects = $state<Subject[]>([]);
@@ -293,6 +299,7 @@
 	let questionsPromise = $state<Promise<BankSoalOverview> | null>(null);
 	let refreshing = $state(false);
 	let deletingQuestionId = $state<string | null>(null);
+	let archivingQuestionId = $state<string | null>(null);
 	let revisingQuestionId = $state<string | null>(null);
 	let revisionError = $state('');
 	let deleteError = $state('');
@@ -304,6 +311,7 @@
 	let canImport = $derived(canImportBankSoal(data.user));
 	let canDelete = $derived(canDeleteBankSoal(data.user));
 	let canReview = $derived(canReviewBankSoal(data.user));
+	let canPublish = $derived(canPublishBankSoal(data.user));
 	let canSettings = $derived(canManageBankSoalSettings(data.user));
 	let canQuality = $derived(canAccessQuality(data.user));
 	let roleLabel = $derived.by(() => {
@@ -845,6 +853,16 @@
 		);
 	}
 
+	function canArchive(question: Question): boolean {
+		const archiveable = ['approved', 'published', 'rejected'];
+		return (
+			canPublish &&
+			!questionUsageLocked(question) &&
+			question.status !== 'archived' &&
+			(archiveable.includes(question.workflow_status ?? '') || question.status === 'published')
+		);
+	}
+
 	function revisionDefaultNote(question: Question): string {
 		if (question.status === 'published' || questionUsageLocked(question)) return 'Membuat versi revisi baru agar riwayat paket/ujian lama tetap aman.';
 		return 'Dikembalikan ke revisi untuk perbaikan setelah review.';
@@ -910,6 +928,26 @@
 		}
 	}
 
+	async function archiveQuestion(question: Question) {
+		if (!canArchive(question) || archivingQuestionId) return;
+		const code = compactText(question.code, 'tanpa kode');
+		const ok = window.confirm(`Arsipkan soal "${code}"? Soal akan disembunyikan dari daftar aktif tetapi tetap tersimpan untuk riwayat.`);
+		if (!ok) return;
+		archivingQuestionId = question.id;
+		try {
+			await fetch(`/api/bank-soal/questions/${encodeURIComponent(question.id)}/workflow`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action: 'archive' })
+			}).then((response) => readClientJson<unknown>(response));
+			load(currentPage, true);
+		} catch {
+			// error handled via re-fetch
+		} finally {
+			archivingQuestionId = null;
+		}
+	}
+
 	function workflowBadgeClass(value: string | undefined): string {
 		switch (value) {
 			case 'review':
@@ -954,9 +992,24 @@
 		return userRoles.includes('admin') || permissions.includes('bank_soal.analytics');
 	}
 
+
+	async function fetchAuthors() {
+		if (authorsLoaded) return;
+		try {
+			const payload = await fetch('/api/bank-soal/soal-support/authors').then((response) =>
+				readClientApiData<{ items?: Author[] }>(response, 'Gagal memuat data pembuat soal')
+			);
+			authors = payload.items ?? [];
+			authorsLoaded = true;
+		} catch {
+			// silently fail, dropdown shows empty
+		}
+	}
+
 	onMount(() => {
 		readInitialFilters();
 		load(currentPage);
+		fetchAuthors();
 		return () => {
 			if (searchTimer) clearTimeout(searchTimer);
 		};
@@ -1244,14 +1297,17 @@
 			</div>
 			<div class="space-y-1">
 				<label for="bank-soal-author" class="text-xs font-semibold text-muted-foreground">Pembuat</label>
-				<input
+				<select
 					id="bank-soal-author"
-					type="text"
 					bind:value={authorFilter}
-					oninput={() => load(1, true)}
-					placeholder="Username pembuat..."
+					onchange={() => load(1, true)}
 					class="h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-				/>
+				>
+					<option value="">Semua pembuat</option>
+					{#each authors as author (author.username)}
+						<option value={author.username}>{author.display_name}</option>
+					{/each}
+				</select>
 			</div>
 
 			<div class="space-y-1">
@@ -1522,6 +1578,18 @@
 														{revisingQuestionId === question.id ? 'Membuat' : 'Revisi Baru'}
 													</Button>
 												{/if}
+												{#if canArchive(question)}
+													<Button
+														variant="outline"
+														size="sm"
+														class="border-muted-foreground/30 text-muted-foreground hover:bg-muted/50"
+														disabled={archivingQuestionId === question.id}
+														onclick={() => void archiveQuestion(question)}
+													>
+														<ArchiveIcon class="size-3.5" />
+														{archivingQuestionId === question.id ? 'Mengarsipkan' : 'Arsip'}
+													</Button>
+												{/if}
 												{#if canDelete && isSafeDeletable(question)}
 													<Button
 														variant="outline"
@@ -1609,6 +1677,17 @@
 										>
 											<SparklesIcon class="size-4" />
 											{revisingQuestionId === question.id ? 'Membuat' : 'Buat Revisi Baru'}
+										</Button>
+									{/if}
+									{#if canArchive(question)}
+										<Button
+											variant="outline"
+											class="w-full border-muted-foreground/30 text-muted-foreground hover:bg-muted/50"
+											disabled={archivingQuestionId === question.id}
+											onclick={() => void archiveQuestion(question)}
+										>
+											<ArchiveIcon class="size-4" />
+											{archivingQuestionId === question.id ? 'Mengarsipkan' : 'Arsip'}
 										</Button>
 									{/if}
 									{#if canDelete && isSafeDeletable(question)}
