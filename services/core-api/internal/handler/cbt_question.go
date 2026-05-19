@@ -146,7 +146,7 @@ func (h *CbtQuestion) List(w http.ResponseWriter, r *http.Request) {
 		api.Forbidden(w)
 		return
 	}
-	input, err := questionListInputFromRequest(r, 25, 100)
+	input, err := questionListInputFromRequest(r, 25, 2000)
 	if err != nil {
 		api.BadRequest(w, err.Error())
 		return
