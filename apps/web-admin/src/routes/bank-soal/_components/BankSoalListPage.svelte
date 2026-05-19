@@ -997,9 +997,9 @@ import ArchiveIcon from '@lucide/svelte/icons/archive';
 		if (authorsLoaded) return;
 		try {
 			const payload = await fetch('/api/bank-soal/soal-support/authors').then((response) =>
-				readClientApiData<{ items?: Author[] }>(response, 'Gagal memuat data pembuat soal')
+				readClientApiData<Author[]>(response, 'Gagal memuat data pembuat soal')
 			);
-			authors = payload.items ?? [];
+			authors = payload ?? [];
 			authorsLoaded = true;
 		} catch {
 			// silently fail, dropdown shows empty
