@@ -333,8 +333,10 @@
   let refreshing = $state(false);
   let deletingQuestionId = $state<string | null>(null);
   let archivingQuestionId = $state<string | null>(null);
+  let restoringQuestionId = $state<string | null>(null);
   let revisingQuestionId = $state<string | null>(null);
   let revisionError = $state("");
+  let restoreError = $state("");
   let deleteError = $state("");
   let requestId = 0;
   let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1037,11 +1039,21 @@
     );
   }
 
+  function canRestoreArchive(question: Question): boolean {
+    return (
+      canPublish &&
+      question.workflow_status === "archived" &&
+      question.status === "archived" &&
+      !questionUsageLocked(question)
+    );
+  }
+
   function hasSecondaryActions(question: Question): boolean {
     return (
       canReturnToRevision(question) ||
       canCreateRevision(question) ||
       canArchive(question) ||
+      canRestoreArchive(question) ||
       (canDelete && isSafeDeletable(question))
     );
   }
@@ -1162,6 +1174,36 @@
       // error handled via re-fetch
     } finally {
       archivingQuestionId = null;
+    }
+  }
+
+  async function restoreArchive(question: Question) {
+    if (!canRestoreArchive(question) || restoringQuestionId) return;
+    const code = compactText(question.code, "tanpa kode");
+    const notes = window.prompt(
+      `Pulihkan soal arsip "${code}"? Soal akan kembali menjadi draft ditolak dan bisa direview/dihapus jika belum dipakai.`,
+      "Dipulihkan dari arsip untuk ditinjau ulang.",
+    );
+    if (notes === null) return;
+    restoringQuestionId = question.id;
+    restoreError = "";
+    try {
+      await fetch(
+        `/api/bank-soal/questions/${encodeURIComponent(question.id)}/workflow`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "restore_archive", notes }),
+        },
+      ).then((response) => readClientJson<Question>(response));
+      load(currentPage, true);
+    } catch (error) {
+      restoreError =
+        error instanceof Error
+          ? error.message
+          : "Soal arsip belum dapat dipulihkan";
+    } finally {
+      restoringQuestionId = null;
     }
   }
 
@@ -2050,12 +2092,12 @@
         {@const overview = value as BankSoalOverview}
         {@const currentQuestions = overview.questions}
         <section class="rounded-lg border border-border bg-card shadow-sm">
-          {#if deleteError || revisionError}
+          {#if deleteError || revisionError || restoreError}
             <div
               role="alert"
               class="border-b border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
             >
-              {deleteError || revisionError}
+              {deleteError || revisionError || restoreError}
             </div>
           {/if}
           <div
@@ -2325,6 +2367,22 @@
                                       : "Arsip"}
                                   </Button>
                                 {/if}
+                                {#if canRestoreArchive(question)}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    class="w-full justify-start text-primary hover:bg-primary/10"
+                                    disabled={restoringQuestionId ===
+                                      question.id}
+                                    aria-label={`Pulihkan soal arsip ${compactText(question.code, "tanpa kode")}`}
+                                    onclick={() => void restoreArchive(question)}
+                                  >
+                                    <RefreshCcwIcon class="size-3.5" />
+                                    {restoringQuestionId === question.id
+                                      ? "Memulihkan"
+                                      : "Pulihkan Arsip"}
+                                  </Button>
+                                {/if}
                                 {#if canDelete && isSafeDeletable(question)}
                                   <Button
                                     variant="ghost"
@@ -2476,6 +2534,20 @@
                         {archivingQuestionId === question.id
                           ? "Mengarsipkan"
                           : "Arsip"}
+                      </Button>
+                    {/if}
+                    {#if canRestoreArchive(question)}
+                      <Button
+                        variant="outline"
+                        class="min-h-10 w-full border-primary/20 text-primary hover:bg-primary/10"
+                        disabled={restoringQuestionId === question.id}
+                        aria-label={`Pulihkan soal arsip ${compactText(question.code, "tanpa kode")}`}
+                        onclick={() => void restoreArchive(question)}
+                      >
+                        <RefreshCcwIcon class="size-4" />
+                        {restoringQuestionId === question.id
+                          ? "Memulihkan"
+                          : "Pulihkan Arsip"}
                       </Button>
                     {/if}
                     {#if canDelete && isSafeDeletable(question)}

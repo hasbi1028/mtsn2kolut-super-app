@@ -43,6 +43,7 @@ type cbtQuestionService interface {
 	ReturnToRevision(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error)
 	Publish(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.CbtQuestion, error)
 	Archive(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.CbtQuestion, error)
+	RestoreArchive(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error)
 	DuplicateAsDraft(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.CbtQuestion, error)
 	DuplicateForRevision(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error)
 	ListAuthors(ctx context.Context) ([]db.ListCbtQuestionAuthorsRow, error)
@@ -107,7 +108,6 @@ type cbtQuestionBody struct {
 	ReviewNotes     string                   `json:"review_notes"`
 }
 
-
 func (h *CbtQuestion) HandleListAuthors(w http.ResponseWriter, r *http.Request) {
 	if !cbtAccessAllowed(r) {
 		api.Forbidden(w)
@@ -121,7 +121,7 @@ func (h *CbtQuestion) HandleListAuthors(w http.ResponseWriter, r *http.Request) 
 	items := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, map[string]any{
-			"username":       row.AuthorUsername,
+			"username":     row.AuthorUsername,
 			"display_name": row.AuthorDisplayName,
 		})
 	}

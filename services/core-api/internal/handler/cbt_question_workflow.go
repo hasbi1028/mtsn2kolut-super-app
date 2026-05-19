@@ -60,6 +60,10 @@ func (h *CbtQuestion) BulkWorkflowAction(w http.ResponseWriter, r *http.Request)
 		api.Forbidden(w)
 		return
 	}
+	if normalizedAction == "restore_archive" && !hasAnyPermission(r, "bank_soal.approve", "bank_soal.publish") && !hasAnyRole(r, "admin") {
+		api.Forbidden(w)
+		return
+	}
 	if normalizedAction == "approve" && !hasAnyPermission(r, "bank_soal.approve", "bank_soal.publish") && !hasAnyRole(r, "admin") {
 		api.Forbidden(w)
 		return
@@ -221,6 +225,22 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		}
 		cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_ARCHIVE", "cbt_question", pgUUIDString(row.ID), map[string]any{
 			"status": row.Status,
+		})
+		api.OK(w, serializeQuestionModel(row))
+	case "restore_archive":
+		if !hasAnyPermission(r, "bank_soal.approve", "bank_soal.publish") && !hasAnyRole(r, "admin") {
+			api.Forbidden(w)
+			return
+		}
+		row, err := h.svc.RestoreArchive(r.Context(), id, actor, body.Notes)
+		if err != nil {
+			writeClientError(w, err, "Aksi workflow soal CBT tidak valid")
+			return
+		}
+		cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_RESTORE_ARCHIVE", "cbt_question", pgUUIDString(row.ID), map[string]any{
+			"status":          row.Status,
+			"workflow_status": row.WorkflowStatus,
+			"review_notes":    body.Notes,
 		})
 		api.OK(w, serializeQuestionModel(row))
 	default:

@@ -117,6 +117,12 @@ type fakeCbtQuestionService struct {
 	archiveRow  db.CbtQuestion
 	archiveErr  error
 
+	restoreArchiveID    pgtype.UUID
+	restoreArchiveUser  string
+	restoreArchiveNotes string
+	restoreArchiveRow   db.CbtQuestion
+	restoreArchiveErr   error
+
 	duplicateID   pgtype.UUID
 	duplicateUser string
 	duplicateRow  db.CbtQuestion
@@ -345,6 +351,16 @@ func (f *fakeCbtQuestionService) Archive(_ context.Context, id pgtype.UUID, acto
 		return db.CbtQuestion{}, f.archiveErr
 	}
 	return f.archiveRow, nil
+}
+
+func (f *fakeCbtQuestionService) RestoreArchive(_ context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
+	f.restoreArchiveID = id
+	f.restoreArchiveUser = actor.Username
+	f.restoreArchiveNotes = reviewNotes
+	if f.restoreArchiveErr != nil {
+		return db.CbtQuestion{}, f.restoreArchiveErr
+	}
+	return f.restoreArchiveRow, nil
 }
 
 func (f *fakeCbtQuestionService) DuplicateAsDraft(_ context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.CbtQuestion, error) {

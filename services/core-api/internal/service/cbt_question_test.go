@@ -1295,6 +1295,116 @@ func TestCbtQuestionRequestRevisionAndMarkReviewedWorkflow(t *testing.T) {
 	}
 }
 
+func TestCbtQuestionRestoreArchiveAllowsUnusedArchivedQuestion(t *testing.T) {
+	questionID := pgtype.UUID{Bytes: [16]byte{46}, Valid: true}
+	current := workflowQuestionRow(questionID, "archived")
+	current.Status = db.CbtQuestionStatusEnumArchived
+	current.PackageCount = 0
+	current.AnswerCount = 0
+	store := &fakeQuestionStore{current: current}
+	svc := &CbtQuestion{q: store}
+	actor := CbtQuestionActor{Username: "admin", Roles: []string{"admin"}}
+
+	row, err := svc.RestoreArchive(context.Background(), questionID, actor, "pulihkan duplikat salah arsip")
+	if err != nil {
+		t.Fatalf("RestoreArchive(unused archived) error = %v", err)
+	}
+	if row.Status != db.CbtQuestionStatusEnumDraft || row.WorkflowStatus != "rejected" {
+		t.Fatalf("RestoreArchive(unused archived) row = %+v, want draft/rejected", row)
+	}
+	if store.updateCalls != 1 || store.updateParams.Status != db.CbtQuestionStatusEnumDraft || store.updateParams.WorkflowStatus != "rejected" {
+		t.Fatalf("RestoreArchive(unused archived) update = calls %d params %+v, want one draft/rejected update", store.updateCalls, store.updateParams)
+	}
+	if store.updateParams.ReviewerUsername != "admin" || store.updateParams.ApproverUsername != "" {
+		t.Fatalf("RestoreArchive(unused archived) reviewer/approver = %q/%q, want admin/empty", store.updateParams.ReviewerUsername, store.updateParams.ApproverUsername)
+	}
+	if len(store.workflowEvents) != 1 || store.workflowEvents[0].Action != "restore_archive" || store.workflowEvents[0].FromStatus != "archived" || store.workflowEvents[0].ToStatus != "rejected" {
+		t.Fatalf("RestoreArchive(unused archived) workflow events = %+v, want archived -> rejected restore event", store.workflowEvents)
+	}
+	if store.auditCalls != 1 || len(store.auditLogs) != 1 || store.auditLogs[0].Action != "restore_archive" {
+		t.Fatalf("RestoreArchive(unused archived) audit = calls %d logs %+v, want restore audit", store.auditCalls, store.auditLogs)
+	}
+}
+
+func TestCbtQuestionRestoreArchiveRejectsInvalidOrUsedQuestion(t *testing.T) {
+	questionID := pgtype.UUID{Bytes: [16]byte{47}, Valid: true}
+	actor := CbtQuestionActor{Username: "admin", Roles: []string{"admin"}}
+	tests := []struct {
+		name    string
+		current db.GetCbtQuestionRow
+	}{
+		{
+			name:    "not archived workflow",
+			current: workflowQuestionRow(questionID, "approved"),
+		},
+		{
+			name: "not archived publication status",
+			current: func() db.GetCbtQuestionRow {
+				row := workflowQuestionRow(questionID, "archived")
+				row.Status = db.CbtQuestionStatusEnumDraft
+				return row
+			}(),
+		},
+		{
+			name: "package usage",
+			current: func() db.GetCbtQuestionRow {
+				row := workflowQuestionRow(questionID, "archived")
+				row.Status = db.CbtQuestionStatusEnumArchived
+				row.PackageCount = 1
+				return row
+			}(),
+		},
+		{
+			name: "student answer usage",
+			current: func() db.GetCbtQuestionRow {
+				row := workflowQuestionRow(questionID, "archived")
+				row.Status = db.CbtQuestionStatusEnumArchived
+				row.AnswerCount = 1
+				return row
+			}(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &fakeQuestionStore{current: tt.current}
+			svc := &CbtQuestion{q: store}
+			err := error(nil)
+			_, err = svc.RestoreArchive(context.Background(), questionID, actor, "pulihkan")
+			if !errors.Is(err, domain.ErrConflict) {
+				t.Fatalf("RestoreArchive(%s) error = %v, want ErrConflict", tt.name, err)
+			}
+			if store.updateCalls != 0 || store.auditCalls != 0 || len(store.workflowEvents) != 0 {
+				t.Fatalf("RestoreArchive(%s) update/audit/events = %d/%d/%d, want no mutation", tt.name, store.updateCalls, store.auditCalls, len(store.workflowEvents))
+			}
+		})
+	}
+}
+
+func TestCbtQuestionBulkWorkflowRestoresArchivedQuestions(t *testing.T) {
+	questionID := pgtype.UUID{Bytes: [16]byte{48}, Valid: true}
+	current := workflowQuestionRow(questionID, "archived")
+	current.Status = db.CbtQuestionStatusEnumArchived
+	store := &fakeQuestionStore{current: current}
+	svc := &CbtQuestion{q: store}
+	actor := CbtQuestionActor{Username: "admin", Roles: []string{"admin"}}
+
+	result, err := svc.BulkWorkflow(context.Background(), BulkCbtQuestionWorkflowInput{
+		QuestionIDs: []pgtype.UUID{questionID},
+		Action:      " restore_archive ",
+		Notes:       "pulihkan arsip",
+		Actor:       actor,
+	})
+	if err != nil {
+		t.Fatalf("BulkWorkflow(restore_archive) error = %v", err)
+	}
+	if result.Action != "restore_archive" || result.Success != 1 || result.Failed != 0 || len(result.Items) != 1 || result.Items[0].Workflow != "rejected" {
+		t.Fatalf("BulkWorkflow(restore_archive) result = %+v, want one rejected success", result)
+	}
+	if store.updateParams.Status != db.CbtQuestionStatusEnumDraft || store.updateParams.WorkflowStatus != "rejected" || len(store.workflowEvents) != 1 || store.workflowEvents[0].Action != "restore_archive" {
+		t.Fatalf("BulkWorkflow(restore_archive) update/events = %+v/%+v, want restore", store.updateParams, store.workflowEvents)
+	}
+}
+
 func TestCbtQuestionBulkWorkflowActionNormalizationAndItemResults(t *testing.T) {
 	firstID := pgtype.UUID{Bytes: [16]byte{43}, Valid: true}
 	secondID := pgtype.UUID{Bytes: [16]byte{44}, Valid: true}

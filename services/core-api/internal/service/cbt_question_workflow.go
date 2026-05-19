@@ -57,7 +57,7 @@ func (s *CbtQuestion) Versions(ctx context.Context, id pgtype.UUID, actor CbtQue
 func (s *CbtQuestion) BulkWorkflow(ctx context.Context, in BulkCbtQuestionWorkflowInput) (BulkCbtQuestionWorkflowResult, error) {
 	action := normalizeWorkflowAction(in.Action)
 	switch action {
-	case "submit_for_review", "request_revision", "mark_reviewed", "reject", "approve", "publish", "archive":
+	case "submit_for_review", "request_revision", "mark_reviewed", "reject", "approve", "publish", "archive", "restore_archive":
 	default:
 		return BulkCbtQuestionWorkflowResult{}, fmt.Errorf("%w: action tidak didukung", domain.ErrBadRequest)
 	}
@@ -99,6 +99,8 @@ func (s *CbtQuestion) applyBulkWorkflowItem(ctx context.Context, id pgtype.UUID,
 		return s.Publish(ctx, id, actor)
 	case "archive":
 		return s.Archive(ctx, id, actor)
+	case "restore_archive":
+		return s.RestoreArchive(ctx, id, actor, notes)
 	default:
 		return db.CbtQuestion{}, fmt.Errorf("%w: action tidak didukung", domain.ErrBadRequest)
 	}
@@ -374,6 +376,42 @@ func (s *CbtQuestion) Archive(ctx context.Context, id pgtype.UUID, actor CbtQues
 	input.WorkflowStatus = "archived"
 	input.Status = db.CbtQuestionStatusEnumArchived
 	return s.updateWithWorkflowAudit(ctx, input, actor, "archive", "", map[string]any{"workflow_status": "archived", "status": db.CbtQuestionStatusEnumArchived}, fromStatus, "archived")
+}
+
+func (s *CbtQuestion) RestoreArchive(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor, notes string) (db.CbtQuestion, error) {
+	actor = normalizeCbtQuestionActor(actor)
+	current, err := s.q.GetCbtQuestion(ctx, id)
+	if err != nil {
+		return db.CbtQuestion{}, normalizeNoRows(err)
+	}
+	fromStatus := strings.TrimSpace(current.WorkflowStatus)
+	if !workflowStatusIn(fromStatus, "archived") || current.Status != db.CbtQuestionStatusEnumArchived {
+		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal arsip yang dapat dipulihkan", domain.ErrConflict)
+	}
+	if err := s.requireBankSoalApprover(ctx, actor, current, false); err != nil {
+		return db.CbtQuestion{}, err
+	}
+	if questionUsageLocked(current.PackageCount, current.AnswerCount) {
+		return db.CbtQuestion{}, fmt.Errorf("%w: soal arsip sudah pernah dipakai. Buat revisi baru agar riwayat paket/jawaban lama tetap aman", domain.ErrConflict)
+	}
+	input := questionInputFromCurrent(current, actor.Username)
+	input.Actor = workflowMutationActor(actor)
+	input.WorkflowStatus = "rejected"
+	input.Status = db.CbtQuestionStatusEnumDraft
+	input.ReviewerUsername = actor.Username
+	input.ApproverUsername = ""
+	input.ReviewNotes = mergeNotes(current.ReviewNotes, notes)
+	if strings.TrimSpace(input.ReviewNotes) == "" {
+		input.ReviewNotes = "Dipulihkan dari arsip untuk ditinjau ulang."
+	}
+	metadata := map[string]any{
+		"workflow_status": "rejected",
+		"status":          db.CbtQuestionStatusEnumDraft,
+		"restore_target":  "draft_rejected",
+		"package_count":   current.PackageCount,
+		"answer_count":    current.AnswerCount,
+	}
+	return s.updateWithWorkflowAudit(ctx, input, actor, "restore_archive", notes, metadata, fromStatus, "rejected")
 }
 
 func workflowMutationActor(actor CbtQuestionActor) CbtQuestionActor {
