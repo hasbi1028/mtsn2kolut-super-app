@@ -160,7 +160,16 @@
     recent?: Question[];
   };
 
-  type WorkflowFilter = "" | "draft" | "review" | "approved" | "rejected";
+  type WorkflowFilter =
+    | "draft"
+    | "submitted"
+    | "review"
+    | "revision_needed"
+    | "reviewed"
+    | "approved"
+    | "published"
+    | "rejected"
+    | "archived";
   type PublicationFilter = "" | "draft" | "published";
   type QuestionTypeFilter =
     | ""
@@ -239,11 +248,15 @@
   };
 
   const workflowOptions: Array<{ value: WorkflowFilter; label: string }> = [
-    { value: "", label: "Semua status pengerjaan" },
     { value: "draft", label: "Draft" },
-    { value: "review", label: "Menunggu verifikasi" },
+    { value: "submitted", label: "Diajukan" },
+    { value: "review", label: "Review" },
+    { value: "revision_needed", label: "Perlu Revisi" },
+    { value: "reviewed", label: "Sudah Direview" },
     { value: "approved", label: "Disetujui" },
-    { value: "rejected", label: "Perlu revisi" },
+    { value: "published", label: "Published" },
+    { value: "rejected", label: "Ditolak" },
+    { value: "archived", label: "Arsip" },
   ];
 
   const publicationOptions: Array<{ value: PublicationFilter; label: string }> =
@@ -275,9 +288,14 @@
 
   const workflowLabels: Record<string, string> = {
     draft: "Draft",
-    review: "Verifikasi",
+    submitted: "Diajukan",
+    review: "Review",
+    revision_needed: "Perlu Revisi",
+    reviewed: "Sudah Direview",
     approved: "Disetujui",
-    rejected: "Perlu Revisi",
+    published: "Published",
+    rejected: "Ditolak",
+    archived: "Arsip",
   };
 
   const publicationLabels: Record<string, string> = {
@@ -325,7 +343,8 @@
 
   let search = $state("");
   let subjectFilter = $state("");
-  let workflowFilter = $state<WorkflowFilter>("");
+  let workflowFilters = $state<WorkflowFilter[]>([]);
+  let workflowDropdownOpen = $state(false);
   let publicationFilter = $state<PublicationFilter>("");
   let questionTypeFilter = $state<QuestionTypeFilter>("");
   let hotsFilter = $state<HotsFilter>("");
@@ -371,7 +390,7 @@
     Boolean(
       search.trim() ||
         subjectFilter ||
-        workflowFilter ||
+        workflowFilters.length > 0 ||
         publicationFilter ||
         questionTypeFilter ||
         hotsFilter ||
@@ -417,7 +436,7 @@
       helper: "stok sesuai filter",
       value: counts.all,
       tone: "slate",
-      active: !workflowFilter && !publicationFilter,
+      active: workflowFilters.length === 0 && !publicationFilter,
     },
     {
       key: "draft",
@@ -425,7 +444,7 @@
       helper: "masih disusun",
       value: counts.draft,
       tone: "slate",
-      active: workflowFilter === "draft" && !publicationFilter,
+      active: workflowFilters.length === 1 && workflowFilters[0] === "draft" && !publicationFilter,
     },
     {
       key: "review",
@@ -433,7 +452,7 @@
       helper: "menunggu keputusan",
       value: counts.review,
       tone: "amber",
-      active: workflowFilter === "review" && !publicationFilter,
+      active: workflowFilters.length === 1 && workflowFilters[0] === "review" && !publicationFilter,
     },
     {
       key: "rejected",
@@ -441,7 +460,7 @@
       helper: "perlu perbaikan",
       value: counts.rejected,
       tone: "red",
-      active: workflowFilter === "rejected" && !publicationFilter,
+      active: workflowFilters.length === 1 && workflowFilters[0] === "rejected" && !publicationFilter,
     },
     {
       key: "approved",
@@ -449,7 +468,7 @@
       helper: "siap diterbitkan",
       value: counts.approved,
       tone: "green",
-      active: workflowFilter === "approved" && publicationFilter === "draft",
+      active: workflowFilters.length === 1 && workflowFilters[0] === "approved" && publicationFilter === "draft",
     },
     {
       key: "published",
@@ -457,7 +476,7 @@
       helper: "siap dipakai paket",
       value: counts.published,
       tone: "emerald",
-      active: !workflowFilter && publicationFilter === "published",
+      active: workflowFilters.length === 0 && publicationFilter === "published",
     },
   ]);
 
@@ -493,7 +512,7 @@
       limit,
       Math.max(0, (page - 1) * limit),
     );
-    if (workflowFilter) params.set("workflow_status", workflowFilter);
+    workflowFilters.forEach((status) => params.append("workflow_status", status));
     if (publicationFilter) params.set("status", publicationFilter);
     return params;
   }
@@ -660,7 +679,7 @@
     const params = new URLSearchParams();
     if (search.trim()) params.set("q", search.trim());
     if (subjectFilter) params.set("subject_id", subjectFilter);
-    if (workflowFilter) params.set("workflow_status", workflowFilter);
+    workflowFilters.forEach((status) => params.append("workflow_status", status));
     if (publicationFilter) params.set("status", publicationFilter);
     if (questionTypeFilter) params.set("question_type", questionTypeFilter);
     if (hotsFilter) params.set("hots", hotsFilter);
@@ -713,7 +732,7 @@
     if (searchTimer) clearTimeout(searchTimer);
     search = "";
     subjectFilter = "";
-    workflowFilter = "";
+    workflowFilters = [];
     publicationFilter = "";
     questionTypeFilter = "";
     hotsFilter = "";
@@ -723,16 +742,16 @@
 
   function setSummaryFilter(key: StatusKey) {
     if (key === "all") {
-      workflowFilter = "";
+      workflowFilters = [];
       publicationFilter = "";
     } else if (key === "approved") {
-      workflowFilter = "approved";
+      workflowFilters = ["approved"];
       publicationFilter = "draft";
     } else if (key === "published") {
-      workflowFilter = "";
+      workflowFilters = [];
       publicationFilter = "published";
     } else {
-      workflowFilter = key;
+      workflowFilters = [key as WorkflowFilter];
       publicationFilter = "";
     }
     load(1, true, pageSize);
@@ -743,7 +762,7 @@
     const params = new URLSearchParams(window.location.search);
     search = params.get("q") ?? "";
     subjectFilter = params.get("subject_id") ?? "";
-    workflowFilter = normalizeWorkflowFilter(params.get("workflow_status"));
+    workflowFilters = normalizeWorkflowFilters(params.getAll("workflow_status"));
     publicationFilter = normalizePublicationFilter(params.get("status"));
     questionTypeFilter = normalizeQuestionTypeFilter(
       params.get("question_type"),
@@ -758,13 +777,30 @@
     load(change.reason === "limit" ? 1 : change.page, true, change.limit);
   }
 
-  function normalizeWorkflowFilter(value: string | null): WorkflowFilter {
-    return value === "draft" ||
-      value === "review" ||
-      value === "approved" ||
-      value === "rejected"
-      ? value
-      : "";
+  function normalizeWorkflowFilters(values: string[]): WorkflowFilter[] {
+    const allowed = new Set(workflowOptions.map((option) => option.value));
+    const selected: WorkflowFilter[] = [];
+    for (const value of values) {
+      for (const part of value.split(",")) {
+        const normalized = part.trim() as WorkflowFilter;
+        if (!allowed.has(normalized) || selected.includes(normalized)) continue;
+        selected.push(normalized);
+      }
+    }
+    return selected;
+  }
+
+  function toggleWorkflowFilter(value: WorkflowFilter) {
+    workflowFilters = workflowFilters.includes(value)
+      ? workflowFilters.filter((item) => item !== value)
+      : [...workflowFilters, value];
+    load(1, true);
+  }
+
+  function workflowFilterSummary(): string {
+    if (workflowFilters.length === 0) return "Semua status pengerjaan";
+    if (workflowFilters.length === 1) return workflowLabel(workflowFilters[0]);
+    return `${workflowFilters.length} status dipilih`;
   }
 
   function normalizePublicationFilter(value: string | null): PublicationFilter {
@@ -1961,20 +1997,58 @@
                   >{/each}</select
               >
             </div>
-            <div class="min-w-0 space-y-1">
-              <label
-                for="bank-soal-workflow"
+            <div class="relative min-w-0 space-y-1">
+              <span
+                id="bank-soal-workflow-label"
                 class="text-xs font-semibold text-muted-foreground"
-                >Status pengerjaan</label
-              ><select
-                id="bank-soal-workflow"
-                bind:value={workflowFilter}
-                onchange={() => load(1, true)}
-                class="h-9 min-w-0 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                >{#each workflowOptions as option (option.value)}<option
-                    value={option.value}>{option.label}</option
-                  >{/each}</select
+                >Status pengerjaan</span
+              ><button
+                type="button"
+                aria-labelledby="bank-soal-workflow-label"
+                aria-haspopup="listbox"
+                aria-expanded={workflowDropdownOpen}
+                onclick={() => (workflowDropdownOpen = !workflowDropdownOpen)}
+                class="flex h-9 min-w-0 w-full items-center justify-between gap-2 rounded-md border border-border bg-card px-3 text-left text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                ><span class="truncate">{workflowFilterSummary()}</span
+                ><span class="text-xs text-muted-foreground">▾</span></button
               >
+              {#if workflowDropdownOpen}
+                <div
+                  class="absolute z-30 mt-1 max-h-72 w-full min-w-64 overflow-y-auto rounded-md border border-border bg-card p-2 shadow-lg"
+                  role="listbox"
+                  aria-multiselectable="true"
+                >
+                  <button
+                    type="button"
+                    class="mb-2 h-8 w-full rounded-md px-2 text-left text-xs font-semibold text-muted-foreground hover:bg-muted"
+                    onclick={() => {
+                      workflowFilters = [];
+                      load(1, true);
+                    }}>Semua status pengerjaan</button
+                  >
+                  {#each workflowOptions as option (option.value)}
+                    <label
+                      class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
+                    >
+                      <input
+                        type="checkbox"
+                        class="h-4 w-4 rounded border-border"
+                        checked={workflowFilters.includes(option.value)}
+                        onchange={() => toggleWorkflowFilter(option.value)}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  {/each}
+                  <div class="mt-2 flex justify-end border-t border-border/60 pt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onclick={() => (workflowDropdownOpen = false)}>Selesai</Button
+                    >
+                  </div>
+                </div>
+              {/if}
             </div>
             <div class="min-w-0 space-y-1">
               <label
@@ -2059,16 +2133,18 @@
                 load(1, true);
               }}>Pembuat: {selectedAuthor.display_name} ×</Button
             >{/if}
-          {#if workflowFilter}<Button
+          {#each workflowFilters as status (status)}
+            <Button
               type="button"
               variant="outline"
               size="sm"
               class="h-7 rounded-full"
               onclick={() => {
-                workflowFilter = "";
+                workflowFilters = workflowFilters.filter((item) => item !== status);
                 load(1, true);
-              }}>Status: {workflowLabel(workflowFilter)} ×</Button
-            >{/if}
+              }}>Status: {workflowLabel(status)} ×</Button
+            >
+          {/each}
           {#if publicationFilter}<Button
               type="button"
               variant="outline"

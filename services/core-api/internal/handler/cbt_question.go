@@ -170,6 +170,18 @@ func (h *CbtQuestion) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func queryValues(r *http.Request, key string) []string {
+	values := r.URL.Query()[key]
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		out = append(out, value)
+	}
+	return out
+}
+
 func questionListInputFromRequest(r *http.Request, defaultLimit int32, maxLimit int32) (service.ListCbtQuestionsInput, error) {
 	eventID := pgtype.UUID{}
 	if raw := strings.TrimSpace(r.URL.Query().Get("event_id")); raw != "" {
@@ -202,24 +214,25 @@ func questionListInputFromRequest(r *http.Request, defaultLimit int32, maxLimit 
 		}
 	}
 	return service.ListCbtQuestionsInput{
-		EventID:        eventID,
-		QuestionScope:  r.URL.Query().Get("scope"),
-		SubjectID:      subjectID,
-		WorkflowStatus: r.URL.Query().Get("workflow_status"),
-		Status:         r.URL.Query().Get("status"),
-		QuestionType:   r.URL.Query().Get("question_type"),
-		TargetLevel:    r.URL.Query().Get("target_level"),
-		Difficulty:     r.URL.Query().Get("difficulty"),
-		CognitiveLevel: r.URL.Query().Get("cognitive_level"),
-		MaterialTopic:  r.URL.Query().Get("material_topic"),
-		MetadataFilter: r.URL.Query().Get("metadata"),
-		HotsFilter:     r.URL.Query().Get("hots"),
-		RevisionSource: r.URL.Query().Get("revision_source"),
-		AuthorUsername: r.URL.Query().Get("author_username"),
-		SearchQuery:    r.URL.Query().Get("q"),
-		SortOrder:      r.URL.Query().Get("sort"),
-		Limit:          limit,
-		Offset:         offset,
-		Actor:          cbtQuestionActorFromRequest(r),
+		EventID:          eventID,
+		QuestionScope:    r.URL.Query().Get("scope"),
+		SubjectID:        subjectID,
+		WorkflowStatus:   r.URL.Query().Get("workflow_status"),
+		WorkflowStatuses: queryValues(r, "workflow_status"),
+		Status:           r.URL.Query().Get("status"),
+		QuestionType:     r.URL.Query().Get("question_type"),
+		TargetLevel:      r.URL.Query().Get("target_level"),
+		Difficulty:       r.URL.Query().Get("difficulty"),
+		CognitiveLevel:   r.URL.Query().Get("cognitive_level"),
+		MaterialTopic:    r.URL.Query().Get("material_topic"),
+		MetadataFilter:   r.URL.Query().Get("metadata"),
+		HotsFilter:       r.URL.Query().Get("hots"),
+		RevisionSource:   r.URL.Query().Get("revision_source"),
+		AuthorUsername:   r.URL.Query().Get("author_username"),
+		SearchQuery:      r.URL.Query().Get("q"),
+		SortOrder:        r.URL.Query().Get("sort"),
+		Limit:            limit,
+		Offset:           offset,
+		Actor:            cbtQuestionActorFromRequest(r),
 	}, nil
 }

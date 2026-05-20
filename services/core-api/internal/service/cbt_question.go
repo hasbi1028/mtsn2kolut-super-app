@@ -275,27 +275,27 @@ func (s *CbtQuestion) ListAuthors(ctx context.Context) ([]db.ListCbtQuestionAuth
 	return s.q.ListCbtQuestionAuthors(ctx)
 }
 
-
 type ListCbtQuestionsInput struct {
-	EventID        pgtype.UUID
-	QuestionScope  string
-	SubjectID      pgtype.UUID
-	AuthorUsername string
-	WorkflowStatus string
-	Status         string
-	QuestionType   string
-	TargetLevel    string
-	Difficulty     string
-	CognitiveLevel string
-	MaterialTopic  string
-	MetadataFilter string
-	HotsFilter     string
-	RevisionSource string
-	SearchQuery    string
-	SortOrder      string
-	Limit          int32
-	Offset         int32
-	Actor          CbtQuestionActor
+	EventID          pgtype.UUID
+	QuestionScope    string
+	SubjectID        pgtype.UUID
+	AuthorUsername   string
+	WorkflowStatus   string
+	WorkflowStatuses []string
+	Status           string
+	QuestionType     string
+	TargetLevel      string
+	Difficulty       string
+	CognitiveLevel   string
+	MaterialTopic    string
+	MetadataFilter   string
+	HotsFilter       string
+	RevisionSource   string
+	SearchQuery      string
+	SortOrder        string
+	Limit            int32
+	Offset           int32
+	Actor            CbtQuestionActor
 }
 
 type ExportCbtQuestionsCSVResult struct {
@@ -373,12 +373,13 @@ func (s *CbtQuestion) Summary(ctx context.Context, actor CbtQuestionActor) (CbtQ
 
 func (s *CbtQuestion) ListFiltered(ctx context.Context, in ListCbtQuestionsInput) ([]db.ListCbtQuestionsFilteredRow, int64, error) {
 	actor := normalizeCbtQuestionActor(in.Actor)
+	workflowStatuses := normalizeQuestionWorkflowStatuses(in.WorkflowStatuses, in.WorkflowStatus)
 	rows, err := s.q.ListCbtQuestionsFiltered(ctx, db.ListCbtQuestionsFilteredParams{
 		ScopeFilter:      normalizeQuestionScope(in.QuestionScope),
 		EventID:          in.EventID,
 		SubjectID:        in.SubjectID,
 		AuthorUsername:   strings.TrimSpace(in.AuthorUsername),
-		WorkflowStatus:   strings.TrimSpace(in.WorkflowStatus),
+		WorkflowStatuses: workflowStatuses,
 		StatusFilter:     normalizeQuestionStatusFilter(in.Status),
 		QuestionType:     strings.TrimSpace(in.QuestionType),
 		TargetLevel:      normalizeQuestionTargetLevelFilter(in.TargetLevel),
@@ -407,7 +408,7 @@ func (s *CbtQuestion) ListFiltered(ctx context.Context, in ListCbtQuestionsInput
 		EventID:          in.EventID,
 		SubjectID:        in.SubjectID,
 		AuthorUsername:   strings.TrimSpace(in.AuthorUsername),
-		WorkflowStatus:   strings.TrimSpace(in.WorkflowStatus),
+		WorkflowStatuses: workflowStatuses,
 		StatusFilter:     normalizeQuestionStatusFilter(in.Status),
 		QuestionType:     strings.TrimSpace(in.QuestionType),
 		TargetLevel:      normalizeQuestionTargetLevelFilter(in.TargetLevel),

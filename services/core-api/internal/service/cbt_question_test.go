@@ -16,6 +16,18 @@ import (
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
+func sameStringSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 type fakeQuestionStore struct {
 	current db.GetCbtQuestionRow
 	detail  db.GetCbtQuestionDetailRow
@@ -401,10 +413,10 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 	if len(rows) != 1 || total != 7 {
 		t.Fatalf("ListFiltered() rows/total = %d/%d, want 1/7", len(rows), total)
 	}
-	if store.listFilterArg.AuthorUsername != "guru.ipa" || store.listFilterArg.ScopeFilter != "event_pool" || store.listFilterArg.WorkflowStatus != "draft" || store.listFilterArg.StatusFilter != "published" || store.listFilterArg.QuestionType != "multiple_choice" || store.listFilterArg.TargetLevel != "VIII" || store.listFilterArg.DifficultyFilter != "hard" || store.listFilterArg.CognitiveLevel != "C3" || store.listFilterArg.MaterialTopic != "bilangan" || store.listFilterArg.MetadataFilter != "gap" || store.listFilterArg.HotsFilter != "true" || store.listFilterArg.RevisionSource != "item_analysis" || store.listFilterArg.SearchQuery != "aljabar" || store.listFilterArg.SortOrder != "code_asc" {
+	if store.listFilterArg.AuthorUsername != "guru.ipa" || store.listFilterArg.ScopeFilter != "event_pool" || len(store.listFilterArg.WorkflowStatuses) != 1 || store.listFilterArg.WorkflowStatuses[0] != "draft" || store.listFilterArg.StatusFilter != "published" || store.listFilterArg.QuestionType != "multiple_choice" || store.listFilterArg.TargetLevel != "VIII" || store.listFilterArg.DifficultyFilter != "hard" || store.listFilterArg.CognitiveLevel != "C3" || store.listFilterArg.MaterialTopic != "bilangan" || store.listFilterArg.MetadataFilter != "gap" || store.listFilterArg.HotsFilter != "true" || store.listFilterArg.RevisionSource != "item_analysis" || store.listFilterArg.SearchQuery != "aljabar" || store.listFilterArg.SortOrder != "code_asc" {
 		t.Fatalf("ListFiltered() arg = %+v, want trimmed filters", store.listFilterArg)
 	}
-	if store.countArg.AuthorUsername != store.listFilterArg.AuthorUsername || store.countArg.ScopeFilter != store.listFilterArg.ScopeFilter || store.countArg.WorkflowStatus != store.listFilterArg.WorkflowStatus || store.countArg.StatusFilter != store.listFilterArg.StatusFilter || store.countArg.TargetLevel != store.listFilterArg.TargetLevel || store.countArg.DifficultyFilter != store.listFilterArg.DifficultyFilter || store.countArg.CognitiveLevel != store.listFilterArg.CognitiveLevel || store.countArg.MaterialTopic != store.listFilterArg.MaterialTopic || store.countArg.MetadataFilter != store.listFilterArg.MetadataFilter || store.countArg.RevisionSource != store.listFilterArg.RevisionSource || store.countArg.SearchQuery != store.listFilterArg.SearchQuery {
+	if store.countArg.AuthorUsername != store.listFilterArg.AuthorUsername || store.countArg.ScopeFilter != store.listFilterArg.ScopeFilter || !sameStringSlice(store.countArg.WorkflowStatuses, store.listFilterArg.WorkflowStatuses) || store.countArg.StatusFilter != store.listFilterArg.StatusFilter || store.countArg.TargetLevel != store.listFilterArg.TargetLevel || store.countArg.DifficultyFilter != store.listFilterArg.DifficultyFilter || store.countArg.CognitiveLevel != store.listFilterArg.CognitiveLevel || store.countArg.MaterialTopic != store.listFilterArg.MaterialTopic || store.countArg.MetadataFilter != store.listFilterArg.MetadataFilter || store.countArg.RevisionSource != store.listFilterArg.RevisionSource || store.countArg.SearchQuery != store.listFilterArg.SearchQuery {
 		t.Fatalf("ListFiltered() count arg = %+v, want same trimmed filters", store.countArg)
 	}
 
@@ -1534,7 +1546,7 @@ func TestCbtQuestionExportCSVMapsStructuredTypes(t *testing.T) {
 	if got.Count != 2 || !strings.HasPrefix(got.Filename, "bank-soal-") {
 		t.Fatalf("ExportCSV() result = %+v, want count and generated filename", got)
 	}
-	if store.listFilterArg.LimitCount != 2000 || store.listFilterArg.WorkflowStatus != "draft" || store.listFilterArg.AuthorUsername != "guru.ipa" {
+	if store.listFilterArg.LimitCount != 2000 || len(store.listFilterArg.WorkflowStatuses) != 1 || store.listFilterArg.WorkflowStatuses[0] != "draft" || store.listFilterArg.AuthorUsername != "guru.ipa" {
 		t.Fatalf("ExportCSV() list arg = %+v, want default export limit and trimmed workflow", store.listFilterArg)
 	}
 	records, err := csv.NewReader(strings.NewReader(string(got.Content))).ReadAll()

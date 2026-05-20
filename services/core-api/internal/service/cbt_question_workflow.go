@@ -151,6 +151,40 @@ func normalizeQuestionStatusFilter(value string) string {
 	}
 }
 
+func normalizeQuestionWorkflowStatuses(values []string, legacy string) []string {
+	allowed := map[string]struct{}{
+		"draft":           {},
+		"submitted":       {},
+		"review":          {},
+		"revision_needed": {},
+		"reviewed":        {},
+		"approved":        {},
+		"published":       {},
+		"rejected":        {},
+		"archived":        {},
+	}
+	seen := make(map[string]struct{}, len(values)+1)
+	out := make([]string, 0, len(values)+1)
+	add := func(raw string) {
+		for _, part := range strings.Split(raw, ",") {
+			normalized := strings.TrimSpace(strings.ToLower(part))
+			if _, ok := allowed[normalized]; !ok {
+				continue
+			}
+			if _, ok := seen[normalized]; ok {
+				continue
+			}
+			seen[normalized] = struct{}{}
+			out = append(out, normalized)
+		}
+	}
+	for _, value := range values {
+		add(value)
+	}
+	add(legacy)
+	return out
+}
+
 func normalizeQuestionTargetLevel(value string) (string, bool) {
 	normalized := strings.ToUpper(strings.TrimSpace(value))
 	switch normalized {

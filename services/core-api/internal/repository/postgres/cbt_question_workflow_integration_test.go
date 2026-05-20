@@ -74,15 +74,15 @@ func TestIntegrationCbtQuestionWorkflowStatusAndAuditQueries(t *testing.T) {
 	}
 
 	filtered, err := q.ListCbtQuestionsFiltered(ctx, ListCbtQuestionsFilteredParams{
-		IsAdmin:        false,
-		ActorUsername:  "cbt_" + fixture.suffix,
-		ActorUserID:    fixture.userID,
-		ScopeFilter:    "event_pool",
-		EventID:        fixture.eventID,
-		SubjectID:      fixture.subjectID,
-		WorkflowStatus: "submitted",
-		SortOrder:      "oldest",
-		LimitCount:     10,
+		IsAdmin:          false,
+		ActorUsername:    "cbt_" + fixture.suffix,
+		ActorUserID:      fixture.userID,
+		ScopeFilter:      "event_pool",
+		EventID:          fixture.eventID,
+		SubjectID:        fixture.subjectID,
+		WorkflowStatuses: []string{"submitted"},
+		SortOrder:        "oldest",
+		LimitCount:       10,
 	})
 	if err != nil {
 		t.Fatalf("list cbt questions filtered: %v", err)
@@ -94,12 +94,12 @@ func TestIntegrationCbtQuestionWorkflowStatusAndAuditQueries(t *testing.T) {
 	}
 
 	count, err := q.CountCbtQuestionsFiltered(ctx, CountCbtQuestionsFilteredParams{
-		ScopeFilter:    "event_pool",
-		EventID:        fixture.eventID,
-		SubjectID:      fixture.subjectID,
-		WorkflowStatus: "submitted",
-		ActorUsername:  "cbt_" + fixture.suffix,
-		ActorUserID:    fixture.userID,
+		ScopeFilter:      "event_pool",
+		EventID:          fixture.eventID,
+		SubjectID:        fixture.subjectID,
+		WorkflowStatuses: []string{"submitted"},
+		ActorUsername:    "cbt_" + fixture.suffix,
+		ActorUserID:      fixture.userID,
 	})
 	if err != nil {
 		t.Fatalf("count cbt questions filtered: %v", err)

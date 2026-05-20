@@ -227,10 +227,8 @@ WHERE (
   AND (sqlc.arg(subject_id)::uuid IS NULL OR q.subject_id = sqlc.arg(subject_id)::uuid)
   AND (sqlc.arg(author_username)::text = '' OR q.author_username = sqlc.arg(author_username)::text)
   AND (
-    sqlc.arg(workflow_status)::text = ''
-    OR q.workflow_status = sqlc.arg(workflow_status)::text
-    OR (sqlc.arg(workflow_status)::text = 'submitted' AND q.workflow_status = 'review')
-    OR (sqlc.arg(workflow_status)::text = 'review' AND q.workflow_status = 'submitted')
+    cardinality(sqlc.arg(workflow_statuses)::text[]) = 0
+    OR q.workflow_status = ANY(sqlc.arg(workflow_statuses)::text[])
   )
   AND (sqlc.arg(status_filter)::text = '' OR q.status::text = sqlc.arg(status_filter)::text)
   AND (sqlc.arg(question_type)::text = '' OR q.question_type = sqlc.arg(question_type)::text)
@@ -426,10 +424,8 @@ WHERE (
   AND (sqlc.arg(subject_id)::uuid IS NULL OR q.subject_id = sqlc.arg(subject_id)::uuid)
   AND (sqlc.arg(author_username)::text = '' OR q.author_username = sqlc.arg(author_username)::text)
   AND (
-    sqlc.arg(workflow_status)::text = ''
-    OR q.workflow_status = sqlc.arg(workflow_status)::text
-    OR (sqlc.arg(workflow_status)::text = 'submitted' AND q.workflow_status = 'review')
-    OR (sqlc.arg(workflow_status)::text = 'review' AND q.workflow_status = 'submitted')
+    cardinality(sqlc.arg(workflow_statuses)::text[]) = 0
+    OR q.workflow_status = ANY(sqlc.arg(workflow_statuses)::text[])
   )
   AND (sqlc.arg(status_filter)::text = '' OR q.status::text = sqlc.arg(status_filter)::text)
   AND (sqlc.arg(question_type)::text = '' OR q.question_type = sqlc.arg(question_type)::text)
@@ -539,10 +535,8 @@ WHERE (
   AND (sqlc.arg(subject_id)::uuid IS NULL OR q.subject_id = sqlc.arg(subject_id)::uuid)
   AND (sqlc.arg(author_username)::text = '' OR q.author_username = sqlc.arg(author_username)::text)
   AND (
-    sqlc.arg(workflow_status)::text = ''
-    OR q.workflow_status = sqlc.arg(workflow_status)::text
-    OR (sqlc.arg(workflow_status)::text = 'submitted' AND q.workflow_status = 'review')
-    OR (sqlc.arg(workflow_status)::text = 'review' AND q.workflow_status = 'submitted')
+    cardinality(sqlc.arg(workflow_statuses)::text[]) = 0
+    OR q.workflow_status = ANY(sqlc.arg(workflow_statuses)::text[])
   )
   AND (sqlc.arg(status_filter)::text = '' OR q.status::text = sqlc.arg(status_filter)::text)
   AND (sqlc.arg(question_type)::text = '' OR q.question_type = sqlc.arg(question_type)::text)

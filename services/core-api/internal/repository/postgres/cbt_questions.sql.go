@@ -59,10 +59,8 @@ WHERE (
   AND ($3::uuid IS NULL OR q.subject_id = $3::uuid)
   AND ($4::text = '' OR q.author_username = $4::text)
   AND (
-    $5::text = ''
-    OR q.workflow_status = $5::text
-    OR ($5::text = 'submitted' AND q.workflow_status = 'review')
-    OR ($5::text = 'review' AND q.workflow_status = 'submitted')
+    cardinality($5::text[]) = 0
+    OR q.workflow_status = ANY($5::text[])
   )
   AND ($6::text = '' OR q.status::text = $6::text)
   AND ($7::text = '' OR q.question_type = $7::text)
@@ -153,7 +151,7 @@ type CountCbtQuestionsFilteredParams struct {
 	EventID          pgtype.UUID `json:"event_id"`
 	SubjectID        pgtype.UUID `json:"subject_id"`
 	AuthorUsername   string      `json:"author_username"`
-	WorkflowStatus   string      `json:"workflow_status"`
+	WorkflowStatuses []string    `json:"workflow_statuses"`
 	StatusFilter     string      `json:"status_filter"`
 	QuestionType     string      `json:"question_type"`
 	TargetLevel      string      `json:"target_level"`
@@ -176,7 +174,7 @@ func (q *Queries) CountCbtQuestionsFiltered(ctx context.Context, arg CountCbtQue
 		arg.EventID,
 		arg.SubjectID,
 		arg.AuthorUsername,
-		arg.WorkflowStatus,
+		arg.WorkflowStatuses,
 		arg.StatusFilter,
 		arg.QuestionType,
 		arg.TargetLevel,
@@ -2039,10 +2037,8 @@ WHERE (
   AND ($8::uuid IS NULL OR q.subject_id = $8::uuid)
   AND ($9::text = '' OR q.author_username = $9::text)
   AND (
-    $10::text = ''
-    OR q.workflow_status = $10::text
-    OR ($10::text = 'submitted' AND q.workflow_status = 'review')
-    OR ($10::text = 'review' AND q.workflow_status = 'submitted')
+    cardinality($10::text[]) = 0
+    OR q.workflow_status = ANY($10::text[])
   )
   AND ($11::text = '' OR q.status::text = $11::text)
   AND ($12::text = '' OR q.question_type = $12::text)
@@ -2146,7 +2142,7 @@ type ListCbtQuestionsFilteredParams struct {
 	EventID          pgtype.UUID `json:"event_id"`
 	SubjectID        pgtype.UUID `json:"subject_id"`
 	AuthorUsername   string      `json:"author_username"`
-	WorkflowStatus   string      `json:"workflow_status"`
+	WorkflowStatuses []string    `json:"workflow_statuses"`
 	StatusFilter     string      `json:"status_filter"`
 	QuestionType     string      `json:"question_type"`
 	TargetLevel      string      `json:"target_level"`
@@ -2233,7 +2229,7 @@ func (q *Queries) ListCbtQuestionsFiltered(ctx context.Context, arg ListCbtQuest
 		arg.EventID,
 		arg.SubjectID,
 		arg.AuthorUsername,
-		arg.WorkflowStatus,
+		arg.WorkflowStatuses,
 		arg.StatusFilter,
 		arg.QuestionType,
 		arg.TargetLevel,
@@ -2427,10 +2423,8 @@ WHERE (
   AND ($8::uuid IS NULL OR q.subject_id = $8::uuid)
   AND ($9::text = '' OR q.author_username = $9::text)
   AND (
-    $10::text = ''
-    OR q.workflow_status = $10::text
-    OR ($10::text = 'submitted' AND q.workflow_status = 'review')
-    OR ($10::text = 'review' AND q.workflow_status = 'submitted')
+    cardinality($10::text[]) = 0
+    OR q.workflow_status = ANY($10::text[])
   )
   AND ($11::text = '' OR q.status::text = $11::text)
   AND ($12::text = '' OR q.question_type = $12::text)
@@ -2534,7 +2528,7 @@ type ListCbtQuestionsScopedParams struct {
 	EventID          pgtype.UUID `json:"event_id"`
 	SubjectID        pgtype.UUID `json:"subject_id"`
 	AuthorUsername   string      `json:"author_username"`
-	WorkflowStatus   string      `json:"workflow_status"`
+	WorkflowStatuses []string    `json:"workflow_statuses"`
 	StatusFilter     string      `json:"status_filter"`
 	QuestionType     string      `json:"question_type"`
 	TargetLevel      string      `json:"target_level"`
@@ -2621,7 +2615,7 @@ func (q *Queries) ListCbtQuestionsScoped(ctx context.Context, arg ListCbtQuestio
 		arg.EventID,
 		arg.SubjectID,
 		arg.AuthorUsername,
-		arg.WorkflowStatus,
+		arg.WorkflowStatuses,
 		arg.StatusFilter,
 		arg.QuestionType,
 		arg.TargetLevel,
