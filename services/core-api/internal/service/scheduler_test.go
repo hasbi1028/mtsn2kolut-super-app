@@ -274,13 +274,13 @@ func TestSchedulerTickResetsClaimOnRunAllError(t *testing.T) {
 func TestSchedulerEmployeeScheduleWindow(t *testing.T) {
 	loc := time.FixedZone("WITA", 8*60*60)
 
-	t.Run("builds not before from schedule base", func(t *testing.T) {
+	t.Run("builds second-precision not before from schedule base", func(t *testing.T) {
 		localNow := time.Date(2026, 5, 13, 14, 40, 0, 0, loc)
 		window, err := buildEmployeeScheduleWindow(localNow, "14:33", 28, 15, 3*time.Minute, loc)
 		if err != nil {
 			t.Fatalf("buildEmployeeScheduleWindow() error = %v", err)
 		}
-		wantNotBefore := time.Date(2026, 5, 13, 14, 48, 0, 0, loc)
+		wantNotBefore := time.Date(2026, 5, 13, 14, 33, 15, 0, loc)
 		wantLatest := time.Date(2026, 5, 13, 15, 4, 0, 0, loc)
 		if !window.NotBefore.Equal(wantNotBefore) {
 			t.Fatalf("not_before = %v, want %v", window.NotBefore, wantNotBefore)
@@ -290,6 +290,18 @@ func TestSchedulerEmployeeScheduleWindow(t *testing.T) {
 		}
 		if window.Expired {
 			t.Fatal("window marked expired before latest boundary")
+		}
+	})
+
+	t.Run("clamps second delay to random window", func(t *testing.T) {
+		localNow := time.Date(2026, 5, 13, 14, 40, 0, 0, loc)
+		window, err := buildEmployeeScheduleWindow(localNow, "14:33", 1, 90, 3*time.Minute, loc)
+		if err != nil {
+			t.Fatalf("buildEmployeeScheduleWindow() error = %v", err)
+		}
+		wantNotBefore := time.Date(2026, 5, 13, 14, 34, 0, 0, loc)
+		if !window.NotBefore.Equal(wantNotBefore) {
+			t.Fatalf("not_before = %v, want clamped %v", window.NotBefore, wantNotBefore)
 		}
 	})
 

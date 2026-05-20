@@ -35,7 +35,7 @@ func parseScheduleLocalTime(localDate time.Time, runTime string, loc *time.Locat
 	return time.Date(localDate.Year(), localDate.Month(), localDate.Day(), parsed.Hour(), parsed.Minute(), 0, 0, loc), nil
 }
 
-func buildEmployeeScheduleWindow(localNow time.Time, runTime string, randomWindowMinutes int32, randomDelayMinutes int32, grace time.Duration, loc *time.Location) (employeeScheduleWindow, error) {
+func buildEmployeeScheduleWindow(localNow time.Time, runTime string, randomWindowMinutes int32, randomDelaySeconds int32, grace time.Duration, loc *time.Location) (employeeScheduleWindow, error) {
 	base, err := parseScheduleLocalTime(localNow, runTime, loc)
 	if err != nil {
 		return employeeScheduleWindow{}, err
@@ -43,17 +43,18 @@ func buildEmployeeScheduleWindow(localNow time.Time, runTime string, randomWindo
 	if randomWindowMinutes < 0 {
 		randomWindowMinutes = 0
 	}
-	if randomDelayMinutes < 0 {
-		randomDelayMinutes = 0
+	maxDelaySeconds := randomWindowMinutes * 60
+	if randomDelaySeconds < 0 {
+		randomDelaySeconds = 0
 	}
-	if randomDelayMinutes > randomWindowMinutes {
-		randomDelayMinutes = randomWindowMinutes
+	if randomDelaySeconds > maxDelaySeconds {
+		randomDelaySeconds = maxDelaySeconds
 	}
 	latest := base.Add(time.Duration(randomWindowMinutes) * time.Minute).Add(grace)
 	return employeeScheduleWindow{
 		Base:      base,
 		Latest:    latest,
-		NotBefore: base.Add(time.Duration(randomDelayMinutes) * time.Minute),
+		NotBefore: base.Add(time.Duration(randomDelaySeconds) * time.Second),
 		Expired:   localNow.After(latest),
 	}, nil
 }
@@ -190,12 +191,13 @@ func (s *PusakaScheduler) Tick(ctx context.Context, now time.Time) (PusakaSchedu
 		for _, es := range empSchedules {
 			result.Processed++
 
-			var delayMinutes int32
+			var delaySeconds int32
 			if es.RandomWindowMinutes > 0 {
-				delayMinutes = rand.Int31n(int32(es.RandomWindowMinutes) + 1)
+				maxDelaySeconds := int32(es.RandomWindowMinutes) * 60
+				delaySeconds = rand.Int31n(maxDelaySeconds + 1)
 			}
 
-			window, windowErr := buildEmployeeScheduleWindow(localNow, es.RunTime, int32(es.RandomWindowMinutes), delayMinutes, defaultEmployeeScheduleGrace, s.loc)
+			window, windowErr := buildEmployeeScheduleWindow(localNow, es.RunTime, int32(es.RandomWindowMinutes), delaySeconds, defaultEmployeeScheduleGrace, s.loc)
 			if windowErr != nil {
 				_ = s.store.ResetEmployeeScheduleEnqueueState(ctx, db.ResetEmployeeScheduleEnqueueStateParams{
 					ID:                  es.ID,
