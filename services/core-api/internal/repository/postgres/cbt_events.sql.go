@@ -50,7 +50,7 @@ func (q *Queries) CreateCbtEventMember(ctx context.Context, arg CreateCbtEventMe
 const createCbtExamEvent = `-- name: CreateCbtExamEvent :one
 INSERT INTO cbt_exam_events (title, exam_type, scope, target_levels, academic_year_id, status)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at, target_levels
+RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at, target_levels, sop_state, sop_state_updated_at, sop_state_updated_by, sop_state_note
 `
 
 type CreateCbtExamEventParams struct {
@@ -82,6 +82,10 @@ func (q *Queries) CreateCbtExamEvent(ctx context.Context, arg CreateCbtExamEvent
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.TargetLevels,
+		&i.SopState,
+		&i.SopStateUpdatedAt,
+		&i.SopStateUpdatedBy,
+		&i.SopStateNote,
 	)
 	return i, err
 }
@@ -137,6 +141,159 @@ func (q *Queries) DeleteCbtExamEvent(ctx context.Context, id pgtype.UUID) (int64
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const getCbtEventFinalArchiveCompleteness = `-- name: GetCbtEventFinalArchiveCompleteness :one
+WITH sessions AS (
+  SELECT id, status
+  FROM cbt_exam_sessions
+  WHERE event_id = $1
+), participant_stats AS (
+  SELECT
+    COUNT(ep.id)::int AS participant_count,
+    COUNT(ep.id) FILTER (WHERE ep.submitted_at IS NULL)::int AS participants_without_final_status,
+    COUNT(ep.id) FILTER (WHERE ep.joined_at IS NOT NULL AND ep.submitted_at IS NULL)::int AS unfinished_participant_count,
+    COUNT(ep.id) FILTER (WHERE ep.submitted_at IS NOT NULL AND ep.score IS NULL)::int AS unscored_participant_count
+  FROM sessions s
+  JOIN cbt_exam_participants ep ON ep.session_id = s.id
+), session_stats AS (
+  SELECT
+    COUNT(*)::int AS session_count,
+    COUNT(*) FILTER (WHERE status <> 'finished')::int AS unfinished_session_count,
+    COUNT(*) FILTER (WHERE status = 'finished')::int AS finished_session_count
+  FROM sessions
+), room_stats AS (
+  SELECT
+    COUNT(r.id)::int AS room_count,
+    COUNT(r.id) FILTER (WHERE h.id IS NULL)::int AS missing_handover_count,
+    COUNT(r.id) FILTER (WHERE h.id IS NOT NULL AND h.locked_at IS NULL)::int AS draft_handover_count,
+    COUNT(r.id) FILTER (WHERE h.locked_at IS NOT NULL)::int AS locked_handover_count,
+    COUNT(r.id) FILTER (
+      WHERE h.locked_at IS NULL
+         OR COALESCE(h.attendance_checked, FALSE) = FALSE
+         OR COALESCE(h.all_submitted_checked, FALSE) = FALSE
+         OR COALESCE(h.room_clean_checked, FALSE) = FALSE
+         OR COALESCE(h.token_returned_checked, FALSE) = FALSE
+         OR COALESCE(h.assets_returned_checked, FALSE) = FALSE
+    )::int AS incomplete_document_room_count
+  FROM sessions s
+  JOIN cbt_exam_rooms r ON r.session_id = s.id
+  LEFT JOIN cbt_room_handovers h ON h.exam_room_id = r.id
+), essay_stats AS (
+  SELECT COUNT(a.id)::int AS ungraded_essay_count
+  FROM sessions s
+  JOIN cbt_exam_participants ep ON ep.session_id = s.id
+  JOIN cbt_student_answers a ON a.participant_id = ep.id
+  JOIN cbt_questions q ON q.id = a.question_id
+  WHERE q.question_type = 'essay'
+    AND ep.submitted_at IS NOT NULL
+    AND a.manual_score IS NULL
+), incident_stats AS (
+  SELECT
+    COUNT(ev.id) FILTER (
+      WHERE (ev.requires_note = TRUE OR ev.severity IN ('warning', 'danger', 'critical') OR ev.category IN ('integrity', 'security', 'device'))
+    )::int AS incident_count,
+    COUNT(ev.id) FILTER (
+      WHERE (ev.requires_note = TRUE OR ev.severity IN ('warning', 'danger', 'critical') OR ev.category IN ('integrity', 'security', 'device'))
+        AND ev.acknowledged_at IS NULL
+    )::int AS unacknowledged_incident_count
+  FROM sessions s
+  JOIN cbt_exam_participants ep ON ep.session_id = s.id
+  JOIN cbt_participant_events ev ON ev.participant_id = ep.id
+), approval_stats AS (
+  SELECT
+    EXISTS (
+      SELECT 1 FROM cbt_approval_records ar
+      WHERE ar.entity_type = 'event'
+        AND ar.entity_id = $1
+        AND ar.approval_type = 'results_verified'
+        AND ar.status = 'approved'
+    ) AS results_verified,
+    EXISTS (
+      SELECT 1 FROM cbt_approval_records ar
+      WHERE ar.entity_type = 'event'
+        AND ar.entity_id = $1
+        AND ar.approval_type = 'final_archive'
+        AND ar.status = 'approved'
+    ) AS final_archive_approved
+)
+SELECT
+  e.id AS event_id,
+  e.status AS event_status,
+  COALESCE(ss.session_count, 0)::int AS session_count,
+  COALESCE(ss.unfinished_session_count, 0)::int AS unfinished_session_count,
+  COALESCE(ss.finished_session_count, 0)::int AS finished_session_count,
+  COALESCE(ps.participant_count, 0)::int AS participant_count,
+  COALESCE(ps.participants_without_final_status, 0)::int AS participants_without_final_status,
+  COALESCE(ps.unfinished_participant_count, 0)::int AS unfinished_participant_count,
+  COALESCE(ps.unscored_participant_count, 0)::int AS unscored_participant_count,
+  COALESCE(es.ungraded_essay_count, 0)::int AS ungraded_essay_count,
+  COALESCE(ins.incident_count, 0)::int AS incident_count,
+  COALESCE(ins.unacknowledged_incident_count, 0)::int AS unacknowledged_incident_count,
+  COALESCE(rs.room_count, 0)::int AS room_count,
+  COALESCE(rs.missing_handover_count, 0)::int AS missing_handover_count,
+  COALESCE(rs.draft_handover_count, 0)::int AS draft_handover_count,
+  COALESCE(rs.locked_handover_count, 0)::int AS locked_handover_count,
+  COALESCE(rs.incomplete_document_room_count, 0)::int AS incomplete_document_room_count,
+  COALESCE(ap.results_verified, FALSE)::boolean AS results_verified,
+  COALESCE(ap.final_archive_approved, FALSE)::boolean AS final_archive_approved
+FROM cbt_exam_events e
+CROSS JOIN approval_stats ap
+LEFT JOIN session_stats ss ON TRUE
+LEFT JOIN participant_stats ps ON TRUE
+LEFT JOIN room_stats rs ON TRUE
+LEFT JOIN essay_stats es ON TRUE
+LEFT JOIN incident_stats ins ON TRUE
+WHERE e.id = $1
+`
+
+type GetCbtEventFinalArchiveCompletenessRow struct {
+	EventID                        pgtype.UUID `json:"event_id"`
+	EventStatus                    string      `json:"event_status"`
+	SessionCount                   int32       `json:"session_count"`
+	UnfinishedSessionCount         int32       `json:"unfinished_session_count"`
+	FinishedSessionCount           int32       `json:"finished_session_count"`
+	ParticipantCount               int32       `json:"participant_count"`
+	ParticipantsWithoutFinalStatus int32       `json:"participants_without_final_status"`
+	UnfinishedParticipantCount     int32       `json:"unfinished_participant_count"`
+	UnscoredParticipantCount       int32       `json:"unscored_participant_count"`
+	UngradedEssayCount             int32       `json:"ungraded_essay_count"`
+	IncidentCount                  int32       `json:"incident_count"`
+	UnacknowledgedIncidentCount    int32       `json:"unacknowledged_incident_count"`
+	RoomCount                      int32       `json:"room_count"`
+	MissingHandoverCount           int32       `json:"missing_handover_count"`
+	DraftHandoverCount             int32       `json:"draft_handover_count"`
+	LockedHandoverCount            int32       `json:"locked_handover_count"`
+	IncompleteDocumentRoomCount    int32       `json:"incomplete_document_room_count"`
+	ResultsVerified                bool        `json:"results_verified"`
+	FinalArchiveApproved           bool        `json:"final_archive_approved"`
+}
+
+func (q *Queries) GetCbtEventFinalArchiveCompleteness(ctx context.Context, id pgtype.UUID) (GetCbtEventFinalArchiveCompletenessRow, error) {
+	row := q.db.QueryRow(ctx, getCbtEventFinalArchiveCompleteness, id)
+	var i GetCbtEventFinalArchiveCompletenessRow
+	err := row.Scan(
+		&i.EventID,
+		&i.EventStatus,
+		&i.SessionCount,
+		&i.UnfinishedSessionCount,
+		&i.FinishedSessionCount,
+		&i.ParticipantCount,
+		&i.ParticipantsWithoutFinalStatus,
+		&i.UnfinishedParticipantCount,
+		&i.UnscoredParticipantCount,
+		&i.UngradedEssayCount,
+		&i.IncidentCount,
+		&i.UnacknowledgedIncidentCount,
+		&i.RoomCount,
+		&i.MissingHandoverCount,
+		&i.DraftHandoverCount,
+		&i.LockedHandoverCount,
+		&i.IncompleteDocumentRoomCount,
+		&i.ResultsVerified,
+		&i.FinalArchiveApproved,
+	)
+	return i, err
 }
 
 const getCbtEventMember = `-- name: GetCbtEventMember :one
@@ -465,6 +622,38 @@ func (q *Queries) GetCbtEventQuestionRequirements(ctx context.Context, id pgtype
 	return i, err
 }
 
+const getCbtEventSopState = `-- name: GetCbtEventSopState :one
+SELECT
+  id AS event_id,
+  sop_state,
+  sop_state_updated_at,
+  sop_state_updated_by,
+  sop_state_note
+FROM cbt_exam_events
+WHERE id = $1
+`
+
+type GetCbtEventSopStateRow struct {
+	EventID           pgtype.UUID        `json:"event_id"`
+	SopState          string             `json:"sop_state"`
+	SopStateUpdatedAt pgtype.Timestamptz `json:"sop_state_updated_at"`
+	SopStateUpdatedBy pgtype.UUID        `json:"sop_state_updated_by"`
+	SopStateNote      string             `json:"sop_state_note"`
+}
+
+func (q *Queries) GetCbtEventSopState(ctx context.Context, id pgtype.UUID) (GetCbtEventSopStateRow, error) {
+	row := q.db.QueryRow(ctx, getCbtEventSopState, id)
+	var i GetCbtEventSopStateRow
+	err := row.Scan(
+		&i.EventID,
+		&i.SopState,
+		&i.SopStateUpdatedAt,
+		&i.SopStateUpdatedBy,
+		&i.SopStateNote,
+	)
+	return i, err
+}
+
 const getCbtExamEvent = `-- name: GetCbtExamEvent :one
 SELECT
   e.id, e.title, e.exam_type, e.scope, e.target_levels, e.status,
@@ -654,6 +843,44 @@ func (q *Queries) GetEventResults(ctx context.Context, eventID pgtype.UUID) ([]G
 		return nil, err
 	}
 	return items, nil
+}
+
+const insertCbtEventSopTransition = `-- name: InsertCbtEventSopTransition :one
+INSERT INTO cbt_event_sop_transitions (event_id, from_state, to_state, actor_id, note, gate_snapshot)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, event_id, from_state, to_state, actor_id, note, gate_snapshot, created_at
+`
+
+type InsertCbtEventSopTransitionParams struct {
+	EventID      pgtype.UUID `json:"event_id"`
+	FromState    string      `json:"from_state"`
+	ToState      string      `json:"to_state"`
+	ActorID      pgtype.UUID `json:"actor_id"`
+	Note         string      `json:"note"`
+	GateSnapshot []byte      `json:"gate_snapshot"`
+}
+
+func (q *Queries) InsertCbtEventSopTransition(ctx context.Context, arg InsertCbtEventSopTransitionParams) (CbtEventSopTransition, error) {
+	row := q.db.QueryRow(ctx, insertCbtEventSopTransition,
+		arg.EventID,
+		arg.FromState,
+		arg.ToState,
+		arg.ActorID,
+		arg.Note,
+		arg.GateSnapshot,
+	)
+	var i CbtEventSopTransition
+	err := row.Scan(
+		&i.ID,
+		&i.EventID,
+		&i.FromState,
+		&i.ToState,
+		&i.ActorID,
+		&i.Note,
+		&i.GateSnapshot,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const listCbtEventMembers = `-- name: ListCbtEventMembers :many
@@ -1289,6 +1516,42 @@ func (q *Queries) ListCbtEventSessionsReadiness(ctx context.Context, eventID pgt
 	return items, nil
 }
 
+const listCbtEventSopTransitions = `-- name: ListCbtEventSopTransitions :many
+SELECT id, event_id, from_state, to_state, actor_id, note, gate_snapshot, created_at
+FROM cbt_event_sop_transitions
+WHERE event_id = $1
+ORDER BY created_at DESC, id DESC
+`
+
+func (q *Queries) ListCbtEventSopTransitions(ctx context.Context, eventID pgtype.UUID) ([]CbtEventSopTransition, error) {
+	rows, err := q.db.Query(ctx, listCbtEventSopTransitions, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CbtEventSopTransition{}
+	for rows.Next() {
+		var i CbtEventSopTransition
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventID,
+			&i.FromState,
+			&i.ToState,
+			&i.ActorID,
+			&i.Note,
+			&i.GateSnapshot,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCbtEventSubjectMatrix = `-- name: ListCbtEventSubjectMatrix :many
 SELECT
   subjects.subject_id,
@@ -1600,11 +1863,60 @@ func (q *Queries) UpdateCbtEventMember(ctx context.Context, arg UpdateCbtEventMe
 	return i, err
 }
 
+const updateCbtEventSopState = `-- name: UpdateCbtEventSopState :one
+UPDATE cbt_exam_events
+SET sop_state = $2,
+    sop_state_updated_at = NOW(),
+    sop_state_updated_by = $3,
+    sop_state_note = $4,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING
+  id AS event_id,
+  sop_state,
+  sop_state_updated_at,
+  sop_state_updated_by,
+  sop_state_note
+`
+
+type UpdateCbtEventSopStateParams struct {
+	ID                pgtype.UUID `json:"id"`
+	SopState          string      `json:"sop_state"`
+	SopStateUpdatedBy pgtype.UUID `json:"sop_state_updated_by"`
+	SopStateNote      string      `json:"sop_state_note"`
+}
+
+type UpdateCbtEventSopStateRow struct {
+	EventID           pgtype.UUID        `json:"event_id"`
+	SopState          string             `json:"sop_state"`
+	SopStateUpdatedAt pgtype.Timestamptz `json:"sop_state_updated_at"`
+	SopStateUpdatedBy pgtype.UUID        `json:"sop_state_updated_by"`
+	SopStateNote      string             `json:"sop_state_note"`
+}
+
+func (q *Queries) UpdateCbtEventSopState(ctx context.Context, arg UpdateCbtEventSopStateParams) (UpdateCbtEventSopStateRow, error) {
+	row := q.db.QueryRow(ctx, updateCbtEventSopState,
+		arg.ID,
+		arg.SopState,
+		arg.SopStateUpdatedBy,
+		arg.SopStateNote,
+	)
+	var i UpdateCbtEventSopStateRow
+	err := row.Scan(
+		&i.EventID,
+		&i.SopState,
+		&i.SopStateUpdatedAt,
+		&i.SopStateUpdatedBy,
+		&i.SopStateNote,
+	)
+	return i, err
+}
+
 const updateCbtExamEvent = `-- name: UpdateCbtExamEvent :one
 UPDATE cbt_exam_events
 SET title = $2, exam_type = $3, scope = $4, target_levels = $5, academic_year_id = $6, updated_at = NOW()
 WHERE id = $1
-RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at, target_levels
+RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at, target_levels, sop_state, sop_state_updated_at, sop_state_updated_by, sop_state_note
 `
 
 type UpdateCbtExamEventParams struct {
@@ -1636,6 +1948,10 @@ func (q *Queries) UpdateCbtExamEvent(ctx context.Context, arg UpdateCbtExamEvent
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.TargetLevels,
+		&i.SopState,
+		&i.SopStateUpdatedAt,
+		&i.SopStateUpdatedBy,
+		&i.SopStateNote,
 	)
 	return i, err
 }
@@ -1644,7 +1960,7 @@ const updateCbtExamEventStatus = `-- name: UpdateCbtExamEventStatus :one
 UPDATE cbt_exam_events
 SET status = $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at, target_levels
+RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at, target_levels, sop_state, sop_state_updated_at, sop_state_updated_by, sop_state_note
 `
 
 type UpdateCbtExamEventStatusParams struct {
@@ -1665,6 +1981,10 @@ func (q *Queries) UpdateCbtExamEventStatus(ctx context.Context, arg UpdateCbtExa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.TargetLevels,
+		&i.SopState,
+		&i.SopStateUpdatedAt,
+		&i.SopStateUpdatedBy,
+		&i.SopStateNote,
 	)
 	return i, err
 }

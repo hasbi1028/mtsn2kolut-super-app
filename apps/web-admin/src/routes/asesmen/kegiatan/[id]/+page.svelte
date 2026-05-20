@@ -69,6 +69,8 @@
 		packages: EventPackage[];
 		questionCompleteness: QuestionCompleteness | null;
 		sopReadiness: SopReadinessResponse | null;
+		sopDetail: SopDetail | null;
+		sopTransitions: SopTransitionRecord[];
 		approvals: AssessmentApprovalRecord[];
 		approvalsAvailable: boolean;
 	};
@@ -101,6 +103,24 @@
 		approvalType: EventApprovalType;
 		stageKey: SopStageKey;
 		helper: string;
+	};
+	type SopTransitionRecord = {
+		id?: string;
+		from_stage?: string | null;
+		to_stage: string;
+		note?: string | null;
+		actor?: string | null;
+		created_at?: string | null;
+	};
+	type SopDetail = {
+		event_id?: string;
+		current_stage?: string;
+		current_stage_label?: string;
+		next_action?: string | { label?: string; href?: string } | null;
+		blockers?: string[];
+		warnings?: string[];
+		transitions?: SopTransitionRecord[];
+		report_only?: boolean;
 	};
 
 	const eventId = page.params.id ?? '';
@@ -187,6 +207,60 @@
 		return { event_id: payload.event_id, stages };
 	}
 
+	function parseStringList(value: unknown): string[] {
+		if (!Array.isArray(value)) return [];
+		return value.map((item) => typeof item === 'string' ? item : isRecord(item) && typeof item.label === 'string' ? item.label : '').filter(Boolean);
+	}
+
+	function parseSopTransition(value: unknown): SopTransitionRecord | null {
+		if (!isRecord(value)) return null;
+		const toStage = typeof value.to_stage === 'string'
+			? value.to_stage
+			: typeof value.to === 'string'
+				? value.to
+				: typeof value.stage === 'string'
+					? value.stage
+					: '';
+		if (!toStage) return null;
+		const actor = typeof value.actor === 'string'
+			? value.actor
+			: typeof value.actor_name === 'string'
+				? value.actor_name
+				: typeof value.created_by_display_name === 'string'
+					? value.created_by_display_name
+					: typeof value.created_by_username === 'string'
+						? value.created_by_username
+						: null;
+		return {
+			id: typeof value.id === 'string' ? value.id : undefined,
+			from_stage: typeof value.from_stage === 'string' ? value.from_stage : typeof value.from === 'string' ? value.from : null,
+			to_stage: toStage,
+			note: typeof value.note === 'string' ? value.note : typeof value.notes === 'string' ? value.notes : null,
+			actor,
+			created_at: typeof value.created_at === 'string' ? value.created_at : typeof value.transitioned_at === 'string' ? value.transitioned_at : null,
+		};
+	}
+
+	function parseSopTransitions(payload: unknown): SopTransitionRecord[] {
+		const values = Array.isArray(payload) ? payload : isRecord(payload) && Array.isArray(payload.transitions) ? payload.transitions : [];
+		return values.map(parseSopTransition).filter((item): item is SopTransitionRecord => Boolean(item));
+	}
+
+	function parseSopDetail(payload: unknown): SopDetail | null {
+		if (!isRecord(payload)) return null;
+		const transitions = parseSopTransitions(payload);
+		return {
+			event_id: typeof payload.event_id === 'string' ? payload.event_id : undefined,
+			current_stage: typeof payload.current_stage === 'string' ? payload.current_stage : typeof payload.stage === 'string' ? payload.stage : undefined,
+			current_stage_label: typeof payload.current_stage_label === 'string' ? payload.current_stage_label : undefined,
+			next_action: typeof payload.next_action === 'string' || isRecord(payload.next_action) ? payload.next_action as SopDetail['next_action'] : null,
+			blockers: parseStringList(payload.blockers),
+			warnings: parseStringList(payload.warnings),
+			transitions,
+			report_only: payload.report_only === true,
+		};
+	}
+
 	function syncQuestionRequirementForm(completeness: QuestionCompleteness | null) {
 		const requirements = completeness?.requirements;
 		if (!requirements) return;
@@ -214,7 +288,7 @@
 	}
 
 	async function fetchDetail(): Promise<EventCommandDetail> {
-		const [nextInfo, nextResults, overviewPayload, sessionPayload, packagePayload, completenessPayload, sopPayload, approvalPayload] = await Promise.all([
+		const [nextInfo, nextResults, overviewPayload, sessionPayload, packagePayload, completenessPayload, sopPayload, sopDetailPayload, sopTransitionsPayload, approvalPayload] = await Promise.all([
 			fetch(clientApiPath`/api/asesmen/events/${eventId}`).then((response) => readClientApiData<EventInfo>(response, 'Gagal memuat kegiatan ujian')),
 			fetch(clientApiPath`/api/asesmen/events/${eventId}/results`).then((response) => readClientApiData<ResultRow[]>(response, 'Gagal memuat rekap nilai kegiatan')),
 			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/overview`, null),
@@ -222,6 +296,8 @@
 			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/packages`, []),
 			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/question-completeness`, null),
 			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/sop-readiness`, null),
+			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/sop`, null),
+			optionalApiData<unknown>(clientApiPath`/api/asesmen/events/${eventId}/transitions`, null),
 			fetchEventApprovals(),
 		]);
 		const questionCompleteness = isRecord(completenessPayload) ? completenessPayload as QuestionCompleteness : null;
@@ -234,6 +310,8 @@
 			packages: parseArrayPayload<EventPackage>(packagePayload, 'packages'),
 			questionCompleteness,
 			sopReadiness: parseSopReadiness(sopPayload),
+			sopDetail: parseSopDetail(sopDetailPayload),
+			sopTransitions: parseSopTransitions(sopTransitionsPayload),
 			approvals: approvalPayload.approvals,
 			approvalsAvailable: approvalPayload.available,
 		};
@@ -251,13 +329,13 @@
 		detailPromise = fetchDetail().then((detail) => {
 			if (requestId !== detailRequestId) {
 				if (!info) throw new Error('Permintaan panel kegiatan dibatalkan');
-				return { info, results, overview: null, sessions: [], packages: [], questionCompleteness: null, sopReadiness: null, approvals: [], approvalsAvailable: false };
+				return { info, results, overview: null, sessions: [], packages: [], questionCompleteness: null, sopReadiness: null, sopDetail: null, sopTransitions: [], approvals: [], approvalsAvailable: false };
 			}
 			applyDetail(detail);
 			return detail;
 		}).catch((error: unknown) => {
 			if (requestId === detailRequestId || !info) throw error;
-			return { info, results, overview: null, sessions: [], packages: [], questionCompleteness: null, sopReadiness: null, approvals: [], approvalsAvailable: false };
+			return { info, results, overview: null, sessions: [], packages: [], questionCompleteness: null, sopReadiness: null, sopDetail: null, sopTransitions: [], approvals: [], approvalsAvailable: false };
 		});
 	}
 
@@ -456,6 +534,59 @@
 		if (status === 'running') return 'border-accent bg-accent/70 text-accent-foreground';
 		if (status === 'warning') return 'border-warning/30 bg-warning/10 text-warning';
 		return 'border-muted bg-muted/60 text-muted-foreground';
+	}
+
+	function sopStageLabel(key: string | null | undefined) {
+		if (!key) return 'Belum tercatat';
+		return sopStages.find((stage) => stage.key === key)?.label ?? key.replace(/_/g, ' ');
+	}
+
+	function sopTransitionTime(value: string | null | undefined) {
+		if (!value) return 'Waktu belum tercatat';
+		return new Date(value).toLocaleString('id-ID', {
+			timeZone: 'Asia/Makassar',
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+		}) + ' WITA';
+	}
+
+	function currentSopStage(detail: EventCommandDetail, timeline: SopStageReadiness[]) {
+		const explicit = detail.sopDetail?.current_stage;
+		if (explicit) return timeline.find((stage) => stage.key === explicit) ?? null;
+		return timeline.find((stage) => stage.status === 'running')
+			?? timeline.find((stage) => stage.status === 'blocked' || stage.status === 'warning')
+			?? [...timeline].reverse().find((stage) => stage.status === 'ready')
+			?? timeline[0]
+			?? null;
+	}
+
+	function currentSopLabel(detail: EventCommandDetail, timeline: SopStageReadiness[]) {
+		return detail.sopDetail?.current_stage_label ?? currentSopStage(detail, timeline)?.label ?? 'Belum tercatat';
+	}
+
+	function currentSopNextAction(detail: EventCommandDetail, timeline: SopStageReadiness[]) {
+		const explicit = detail.sopDetail?.next_action;
+		if (typeof explicit === 'string' && explicit.trim()) return { label: explicit, href: '' };
+		if (isRecord(explicit) && typeof explicit.label === 'string') return { label: explicit.label, href: typeof explicit.href === 'string' ? explicit.href : '' };
+		const stage = currentSopStage(detail, timeline);
+		return stage?.next_actions[0] ?? null;
+	}
+
+	function sopPanelIssues(detail: EventCommandDetail, timeline: SopStageReadiness[], checklist: ChecklistItem[]) {
+		const blockers = detail.sopDetail?.blockers?.length
+			? detail.sopDetail.blockers
+			: checklist.filter((item) => item.tone === 'warning').map((item) => `${item.label}: ${item.helper}`);
+		const warnings = detail.sopDetail?.warnings?.length
+			? detail.sopDetail.warnings
+			: timeline.filter((stage) => stage.status === 'warning').map((stage) => `${stage.label}: ${stage.warning_count} perhatian`);
+		return { blockers, warnings };
+	}
+
+	function sopHistory(detail: EventCommandDetail) {
+		return (detail.sopTransitions.length ? detail.sopTransitions : detail.sopDetail?.transitions ?? []).slice(0, 5);
 	}
 
 	function approvalRecordFor(approvals: AssessmentApprovalRecord[], approvalType: EventApprovalType) {
@@ -738,6 +869,11 @@
 			{@const readinessGroups = buildReadinessGroups(checklist)}
 			{@const nextActions = buildNextActions(detail, checklist)}
 			{@const sopTimeline = buildSopTimeline(detail, checklist)}
+			{@const currentSop = currentSopStage(detail, sopTimeline)}
+			{@const currentSopAction = currentSopNextAction(detail, sopTimeline)}
+			{@const sopIssues = sopPanelIssues(detail, sopTimeline, checklist)}
+			{@const sopTransitionHistory = sopHistory(detail)}
+			{@const sopBackendAvailable = Boolean(detail.sopDetail || detail.sopReadiness || detail.sopTransitions.length)}
 			{@const blockingItems = checklist.filter((item) => item.tone === 'warning')}
 			{@const readyCount = checklist.filter((item) => item.tone === 'success').length}
 			<PageHeader
@@ -771,6 +907,79 @@
 				<MetricCard label="Kesiapan" value={`${readyCount}/${checklist.length}`} helper={blockingItems.length > 0 ? `${blockingItems.length} item perlu tindakan` : 'Item utama terbaca siap'} tone={blockingItems.length > 0 ? 'warning' : 'success'} />
 				<MetricCard label="Peserta / Sesi" value={`${detail.overview?.member_count ?? '-'} / ${detail.sessions.length}`} helper={`${detail.sessions.reduce((sum, session) => sum + (session.room_count ?? 0), 0)} ruang terbaca`} />
 				<MetricCard label="Hasil & Berita Acara" value={currentResults.length} helper="Baris hasil dari seluruh sesi kegiatan" tone={currentResults.length > 0 ? 'success' : 'muted'} />
+			</section>
+
+			<section aria-label="Panel SOP kegiatan asesmen">
+				<Card.Root class="border-primary/20 shadow-sm">
+					<Card.Header class="pb-3">
+						<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+							<div>
+								<Card.Title class="text-base">Panel SOP Kegiatan</Card.Title>
+								<Card.Description>Ringkasan tahap formal, tindakan berikutnya, catatan perhatian, dan riwayat transisi jika layanan SOP sudah tersedia.</Card.Description>
+							</div>
+							<Badge variant="outline" class={sopBackendAvailable ? 'border-primary/20 bg-primary/10 text-primary' : 'border-warning/30 bg-warning/10 text-warning'}>
+								{sopBackendAvailable ? 'Terhubung data SOP' : 'Mode laporan kesiapan'}
+							</Badge>
+						</div>
+					</Card.Header>
+					<Card.Content class="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+						<div class="space-y-3">
+							<div class="rounded-xl border border-border bg-card p-4">
+								<p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Tahap Saat Ini</p>
+								<div class="mt-2 flex flex-wrap items-center gap-2">
+									<p class="text-lg font-semibold text-foreground">{currentSopLabel(detail, sopTimeline)}</p>
+									{#if currentSop}<Badge variant="outline" class={sopStageClass(currentSop.status)}>{sopStatusLabels[currentSop.status]}</Badge>{/if}
+								</div>
+								<p class="mt-2 text-sm leading-6 text-muted-foreground">{currentSop?.description ?? 'Tahap formal belum tercatat dari backend; panel memakai ringkasan kesiapan yang sudah tersedia.'}</p>
+							</div>
+							<div class="rounded-xl border border-border bg-muted/30 p-4">
+								<p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Tindakan Berikutnya</p>
+								{#if currentSopAction}
+									{#if currentSopAction.href}
+										<a href={currentSopAction.href} class="mt-2 inline-flex rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15">{currentSopAction.label}</a>
+									{:else}
+										<p class="mt-2 text-sm font-semibold text-foreground">{currentSopAction.label}</p>
+									{/if}
+								{:else}
+									<p class="mt-2 text-sm text-muted-foreground">Tidak ada tindakan lanjutan dari data aktif.</p>
+								{/if}
+							</div>
+						</div>
+						<div class="grid gap-3 md:grid-cols-2">
+							<div class="rounded-xl border border-border bg-card p-4">
+								<p class="text-sm font-semibold text-foreground">Penghambat & Perhatian</p>
+								<div class="mt-3 space-y-3 text-sm">
+									<div>
+										<p class="text-xs font-semibold uppercase tracking-[0.14em] text-warning">Penghambat</p>
+										<ul class="mt-2 space-y-1 text-muted-foreground">
+											{#each sopIssues.blockers.slice(0, 4) as blocker (blocker)}<li>• {blocker}</li>{:else}<li>Tidak ada penghambat utama terbaca.</li>{/each}
+										</ul>
+									</div>
+									<div>
+										<p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Peringatan</p>
+										<ul class="mt-2 space-y-1 text-muted-foreground">
+											{#each sopIssues.warnings.slice(0, 4) as warning (warning)}<li>• {warning}</li>{:else}<li>Tidak ada peringatan tambahan.</li>{/each}
+										</ul>
+									</div>
+								</div>
+							</div>
+							<div class="rounded-xl border border-border bg-card p-4">
+								<p class="text-sm font-semibold text-foreground">Riwayat Transisi</p>
+								<div class="mt-3 space-y-3">
+									{#each sopTransitionHistory as item (`${item.id ?? item.to_stage}-${item.created_at ?? item.note ?? ''}`)}
+										<div class="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
+											<p class="font-semibold text-foreground">{sopStageLabel(item.from_stage)} → {sopStageLabel(item.to_stage)}</p>
+											<p>{sopTransitionTime(item.created_at)}{item.actor ? ` · ${item.actor}` : ''}</p>
+											{#if item.note}<p class="mt-1 leading-5">{item.note}</p>{/if}
+										</div>
+									{:else}
+										<p class="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">Riwayat transisi formal belum tersedia. Panel tetap menampilkan mode laporan berdasarkan kesiapan dan pengesahan yang ada.</p>
+									{/each}
+								</div>
+							</div>
+						</div>
+					</Card.Content>
+				</Card.Root>
 			</section>
 
 			<BlockerPanel

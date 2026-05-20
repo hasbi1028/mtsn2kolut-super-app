@@ -185,6 +185,20 @@ func (f *fakeCbtEventStore) DeleteCbtExamEvent(ctx context.Context, id pgtype.UU
 	return 1, nil
 }
 
+
+func (f *fakeCbtEventStore) GetCbtEventSopState(ctx context.Context, id pgtype.UUID) (db.GetCbtEventSopStateRow, error) {
+	return db.GetCbtEventSopStateRow{SopState: "draft"}, nil
+}
+func (f *fakeCbtEventStore) UpdateCbtEventSopState(ctx context.Context, arg db.UpdateCbtEventSopStateParams) (db.UpdateCbtEventSopStateRow, error) {
+	return db.UpdateCbtEventSopStateRow{SopState: arg.SopState}, nil
+}
+func (f *fakeCbtEventStore) InsertCbtEventSopTransition(ctx context.Context, arg db.InsertCbtEventSopTransitionParams) (db.CbtEventSopTransition, error) {
+	return db.CbtEventSopTransition{EventID: arg.EventID, FromState: arg.FromState, ToState: arg.ToState, Note: arg.Note, GateSnapshot: arg.GateSnapshot}, nil
+}
+func (f *fakeCbtEventStore) ListCbtEventSopTransitions(ctx context.Context, eventID pgtype.UUID) ([]db.CbtEventSopTransition, error) {
+	return []db.CbtEventSopTransition{}, nil
+}
+
 func (f *fakeCbtEventStore) ListCbtEventMembers(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventMembersRow, error) {
 	return nil, nil
 }

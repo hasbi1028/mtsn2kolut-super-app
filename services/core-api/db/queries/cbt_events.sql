@@ -182,6 +182,109 @@ LEFT JOIN LATERAL (
 ) participant_summary ON TRUE
 WHERE e.id = $1;
 
+-- name: GetCbtEventFinalArchiveCompleteness :one
+WITH sessions AS (
+  SELECT id, status
+  FROM cbt_exam_sessions
+  WHERE event_id = $1
+), participant_stats AS (
+  SELECT
+    COUNT(ep.id)::int AS participant_count,
+    COUNT(ep.id) FILTER (WHERE ep.submitted_at IS NULL)::int AS participants_without_final_status,
+    COUNT(ep.id) FILTER (WHERE ep.joined_at IS NOT NULL AND ep.submitted_at IS NULL)::int AS unfinished_participant_count,
+    COUNT(ep.id) FILTER (WHERE ep.submitted_at IS NOT NULL AND ep.score IS NULL)::int AS unscored_participant_count
+  FROM sessions s
+  JOIN cbt_exam_participants ep ON ep.session_id = s.id
+), session_stats AS (
+  SELECT
+    COUNT(*)::int AS session_count,
+    COUNT(*) FILTER (WHERE status <> 'finished')::int AS unfinished_session_count,
+    COUNT(*) FILTER (WHERE status = 'finished')::int AS finished_session_count
+  FROM sessions
+), room_stats AS (
+  SELECT
+    COUNT(r.id)::int AS room_count,
+    COUNT(r.id) FILTER (WHERE h.id IS NULL)::int AS missing_handover_count,
+    COUNT(r.id) FILTER (WHERE h.id IS NOT NULL AND h.locked_at IS NULL)::int AS draft_handover_count,
+    COUNT(r.id) FILTER (WHERE h.locked_at IS NOT NULL)::int AS locked_handover_count,
+    COUNT(r.id) FILTER (
+      WHERE h.locked_at IS NULL
+         OR COALESCE(h.attendance_checked, FALSE) = FALSE
+         OR COALESCE(h.all_submitted_checked, FALSE) = FALSE
+         OR COALESCE(h.room_clean_checked, FALSE) = FALSE
+         OR COALESCE(h.token_returned_checked, FALSE) = FALSE
+         OR COALESCE(h.assets_returned_checked, FALSE) = FALSE
+    )::int AS incomplete_document_room_count
+  FROM sessions s
+  JOIN cbt_exam_rooms r ON r.session_id = s.id
+  LEFT JOIN cbt_room_handovers h ON h.exam_room_id = r.id
+), essay_stats AS (
+  SELECT COUNT(a.id)::int AS ungraded_essay_count
+  FROM sessions s
+  JOIN cbt_exam_participants ep ON ep.session_id = s.id
+  JOIN cbt_student_answers a ON a.participant_id = ep.id
+  JOIN cbt_questions q ON q.id = a.question_id
+  WHERE q.question_type = 'essay'
+    AND ep.submitted_at IS NOT NULL
+    AND a.manual_score IS NULL
+), incident_stats AS (
+  SELECT
+    COUNT(ev.id) FILTER (
+      WHERE (ev.requires_note = TRUE OR ev.severity IN ('warning', 'danger', 'critical') OR ev.category IN ('integrity', 'security', 'device'))
+    )::int AS incident_count,
+    COUNT(ev.id) FILTER (
+      WHERE (ev.requires_note = TRUE OR ev.severity IN ('warning', 'danger', 'critical') OR ev.category IN ('integrity', 'security', 'device'))
+        AND ev.acknowledged_at IS NULL
+    )::int AS unacknowledged_incident_count
+  FROM sessions s
+  JOIN cbt_exam_participants ep ON ep.session_id = s.id
+  JOIN cbt_participant_events ev ON ev.participant_id = ep.id
+), approval_stats AS (
+  SELECT
+    EXISTS (
+      SELECT 1 FROM cbt_approval_records ar
+      WHERE ar.entity_type = 'event'
+        AND ar.entity_id = $1
+        AND ar.approval_type = 'results_verified'
+        AND ar.status = 'approved'
+    ) AS results_verified,
+    EXISTS (
+      SELECT 1 FROM cbt_approval_records ar
+      WHERE ar.entity_type = 'event'
+        AND ar.entity_id = $1
+        AND ar.approval_type = 'final_archive'
+        AND ar.status = 'approved'
+    ) AS final_archive_approved
+)
+SELECT
+  e.id AS event_id,
+  e.status AS event_status,
+  COALESCE(ss.session_count, 0)::int AS session_count,
+  COALESCE(ss.unfinished_session_count, 0)::int AS unfinished_session_count,
+  COALESCE(ss.finished_session_count, 0)::int AS finished_session_count,
+  COALESCE(ps.participant_count, 0)::int AS participant_count,
+  COALESCE(ps.participants_without_final_status, 0)::int AS participants_without_final_status,
+  COALESCE(ps.unfinished_participant_count, 0)::int AS unfinished_participant_count,
+  COALESCE(ps.unscored_participant_count, 0)::int AS unscored_participant_count,
+  COALESCE(es.ungraded_essay_count, 0)::int AS ungraded_essay_count,
+  COALESCE(ins.incident_count, 0)::int AS incident_count,
+  COALESCE(ins.unacknowledged_incident_count, 0)::int AS unacknowledged_incident_count,
+  COALESCE(rs.room_count, 0)::int AS room_count,
+  COALESCE(rs.missing_handover_count, 0)::int AS missing_handover_count,
+  COALESCE(rs.draft_handover_count, 0)::int AS draft_handover_count,
+  COALESCE(rs.locked_handover_count, 0)::int AS locked_handover_count,
+  COALESCE(rs.incomplete_document_room_count, 0)::int AS incomplete_document_room_count,
+  COALESCE(ap.results_verified, FALSE)::boolean AS results_verified,
+  COALESCE(ap.final_archive_approved, FALSE)::boolean AS final_archive_approved
+FROM cbt_exam_events e
+CROSS JOIN approval_stats ap
+LEFT JOIN session_stats ss ON TRUE
+LEFT JOIN participant_stats ps ON TRUE
+LEFT JOIN room_stats rs ON TRUE
+LEFT JOIN essay_stats es ON TRUE
+LEFT JOIN incident_stats ins ON TRUE
+WHERE e.id = $1;
+
 -- name: ListCbtEventSubjectMatrix :many
 SELECT
   subjects.subject_id,
@@ -716,3 +819,40 @@ LEFT JOIN school_classes c ON c.id = std.class_id
 LEFT JOIN cbt_exam_rooms r ON r.id = p.room_id
 WHERE e.id = $1
 ORDER BY s.scheduled_start ASC, c.code ASC, std.nama ASC;
+
+
+-- name: GetCbtEventSopState :one
+SELECT
+  id AS event_id,
+  sop_state,
+  sop_state_updated_at,
+  sop_state_updated_by,
+  sop_state_note
+FROM cbt_exam_events
+WHERE id = $1;
+
+-- name: UpdateCbtEventSopState :one
+UPDATE cbt_exam_events
+SET sop_state = $2,
+    sop_state_updated_at = NOW(),
+    sop_state_updated_by = $3,
+    sop_state_note = $4,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING
+  id AS event_id,
+  sop_state,
+  sop_state_updated_at,
+  sop_state_updated_by,
+  sop_state_note;
+
+-- name: InsertCbtEventSopTransition :one
+INSERT INTO cbt_event_sop_transitions (event_id, from_state, to_state, actor_id, note, gate_snapshot)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING *;
+
+-- name: ListCbtEventSopTransitions :many
+SELECT *
+FROM cbt_event_sop_transitions
+WHERE event_id = $1
+ORDER BY created_at DESC, id DESC;

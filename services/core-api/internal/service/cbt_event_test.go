@@ -116,6 +116,20 @@ func (f *fakeCbtEventStore7A) UpdateCbtExamEvent(ctx context.Context, arg db.Upd
 func (f *fakeCbtEventStore7A) DeleteCbtExamEvent(ctx context.Context, id pgtype.UUID) (int64, error) {
 	return f.deleteEventRows, f.err
 }
+
+func (f *fakeCbtEventStore7A) GetCbtEventSopState(ctx context.Context, id pgtype.UUID) (db.GetCbtEventSopStateRow, error) {
+	return db.GetCbtEventSopStateRow{SopState: "draft"}, f.err
+}
+func (f *fakeCbtEventStore7A) UpdateCbtEventSopState(ctx context.Context, arg db.UpdateCbtEventSopStateParams) (db.UpdateCbtEventSopStateRow, error) {
+	return db.UpdateCbtEventSopStateRow{SopState: arg.SopState}, f.err
+}
+func (f *fakeCbtEventStore7A) InsertCbtEventSopTransition(ctx context.Context, arg db.InsertCbtEventSopTransitionParams) (db.CbtEventSopTransition, error) {
+	return db.CbtEventSopTransition{EventID: arg.EventID, FromState: arg.FromState, ToState: arg.ToState, Note: arg.Note, GateSnapshot: arg.GateSnapshot}, f.err
+}
+func (f *fakeCbtEventStore7A) ListCbtEventSopTransitions(ctx context.Context, eventID pgtype.UUID) ([]db.CbtEventSopTransition, error) {
+	return []db.CbtEventSopTransition{}, f.err
+}
+
 func (f *fakeCbtEventStore7A) ListCbtEventMembers(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventMembersRow, error) {
 	return f.membersRows, f.err
 }

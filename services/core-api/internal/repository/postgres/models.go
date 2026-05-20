@@ -1008,6 +1008,17 @@ type CbtEventQuestionRequirement struct {
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
+type CbtEventSopTransition struct {
+	ID           pgtype.UUID        `json:"id"`
+	EventID      pgtype.UUID        `json:"event_id"`
+	FromState    string             `json:"from_state"`
+	ToState      string             `json:"to_state"`
+	ActorID      pgtype.UUID        `json:"actor_id"`
+	Note         string             `json:"note"`
+	GateSnapshot []byte             `json:"gate_snapshot"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
 type CbtEventSubjectTarget struct {
 	ID              pgtype.UUID        `json:"id"`
 	EventID         pgtype.UUID        `json:"event_id"`
@@ -1018,15 +1029,19 @@ type CbtEventSubjectTarget struct {
 }
 
 type CbtExamEvent struct {
-	ID             pgtype.UUID        `json:"id"`
-	Title          string             `json:"title"`
-	ExamType       CbtExamType        `json:"exam_type"`
-	Scope          string             `json:"scope"`
-	AcademicYearID pgtype.UUID        `json:"academic_year_id"`
-	Status         string             `json:"status"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	TargetLevels   []string           `json:"target_levels"`
+	ID                pgtype.UUID        `json:"id"`
+	Title             string             `json:"title"`
+	ExamType          CbtExamType        `json:"exam_type"`
+	Scope             string             `json:"scope"`
+	AcademicYearID    pgtype.UUID        `json:"academic_year_id"`
+	Status            string             `json:"status"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	TargetLevels      []string           `json:"target_levels"`
+	SopState          string             `json:"sop_state"`
+	SopStateUpdatedAt pgtype.Timestamptz `json:"sop_state_updated_at"`
+	SopStateUpdatedBy pgtype.UUID        `json:"sop_state_updated_by"`
+	SopStateNote      string             `json:"sop_state_note"`
 }
 
 type CbtExamParticipant struct {
