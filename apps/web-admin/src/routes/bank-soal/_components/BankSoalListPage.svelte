@@ -29,6 +29,7 @@
   import AsyncContent from "$lib/components/AsyncContent.svelte";
   import LoadingButton from "$lib/components/LoadingButton.svelte";
   import RecoveryPanel from "$lib/components/RecoveryPanel.svelte";
+  import RichContent from "$lib/components/RichContent.svelte";
   import {
     clientApiPathWithQuery,
     readClientApiData,
@@ -42,7 +43,6 @@
     canPublishBankSoal,
     canReviewBankSoal,
   } from "$lib/bank-soal/access";
-  import { htmlToPlainText } from "$lib/utils/html-text";
   import { displayName } from "$lib/utils/display-name";
   import {
     DEFAULT_PAGE_SIZE_OPTIONS,
@@ -778,14 +778,9 @@
       : resolve("/bank-soal/verifikasi");
   }
 
-  function questionPratinjau(question: Question): string {
-    const text = htmlToPlainText(
-      question.stem_html || question.question_text || "",
-    )
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!text) return "(Isi soal belum tersedia)";
-    return text.length > 180 ? `${text.slice(0, 180)}...` : text;
+  function questionPratinjauHtml(question: Question): string {
+    const html = (question.stem_html || question.question_text || "").trim();
+    return html || "(Isi soal belum tersedia)";
   }
 
   function normalizeBloomLevel(value: string | undefined | null): string {
@@ -2225,11 +2220,10 @@
                               >
                             {/if}
                           </div>
-                          <p
-                            class="line-clamp-2 break-words text-sm leading-6 text-foreground [overflow-wrap:anywhere]"
-                          >
-                            {questionPratinjau(question)}
-                          </p>
+                          <RichContent
+                            html={questionPratinjauHtml(question)}
+                            class="line-clamp-2 break-words text-sm leading-6 text-foreground [overflow-wrap:anywhere] [&_.katex-display]:my-1 [&_.latex-display]:my-1"
+                          />
                           <div
                             class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"
                           >
@@ -2418,11 +2412,10 @@
                       <p class="font-mono text-xs font-semibold text-primary">
                         {compactText(question.code, "Tanpa kode")}
                       </p>
-                      <h2
-                        class="mt-1 line-clamp-3 break-words text-sm font-semibold leading-6 text-foreground [overflow-wrap:anywhere]"
-                      >
-                        {questionPratinjau(question)}
-                      </h2>
+                      <RichContent
+                        html={questionPratinjauHtml(question)}
+                        class="mt-1 line-clamp-3 break-words text-sm font-semibold leading-6 text-foreground [overflow-wrap:anywhere] [&_.katex-display]:my-1 [&_.latex-display]:my-1"
+                      />
                     </div>
                     <Badge
                       variant="outline"
