@@ -3,6 +3,7 @@
 	import { clientApiPathWithQuery, readClientApiData } from '$lib/client/api';
 
 	type ReportKey = 'input' | 'progress' | 'revision' | 'reviewer' | 'readiness' | 'honor';
+	type StatusOption = { value: string; label: string };
 	type ReportRow = {
 		no: number;
 		primary: string;
@@ -66,12 +67,49 @@
 	let subjectId = $state('');
 	let targetLevel = $state('');
 	let authorUsername = $state('');
-	let workflowStatus = $state('');
+	let workflowStatuses = $state<string[]>([]);
+	let statusDropdownOpen = $state(false);
 	let includeSystem = $state(true);
 	let loading = $state(false);
 	let exporting = $state('');
 	let error = $state('');
 	let report = $state<ReportResult | null>(null);
+
+	const workflowStatusOptions: StatusOption[] = [
+		{ value: 'draft', label: 'Draft' },
+		{ value: 'submitted', label: 'Submitted' },
+		{ value: 'review', label: 'Review' },
+		{ value: 'revision_needed', label: 'Perlu Revisi' },
+		{ value: 'approved', label: 'Approved' },
+		{ value: 'published', label: 'Published' },
+		{ value: 'rejected', label: 'Rejected' },
+		{ value: 'archived', label: 'Archived' }
+	];
+
+	let selectedStatusLabels = $derived(
+		workflowStatuses
+			.map((status) => workflowStatusOptions.find((option) => option.value === status)?.label ?? status)
+			.filter(Boolean)
+	);
+	let statusSummary = $derived(
+		selectedStatusLabels.length === 0
+			? 'Semua status'
+			: selectedStatusLabels.length === 1
+				? selectedStatusLabels[0]
+				: `${selectedStatusLabels.length} status dipilih`
+	);
+
+	function toggleWorkflowStatus(value: string) {
+		if (workflowStatuses.includes(value)) {
+			workflowStatuses = workflowStatuses.filter((status) => status !== value);
+			return;
+		}
+		workflowStatuses = [...workflowStatuses, value];
+	}
+
+	function clearWorkflowStatuses() {
+		workflowStatuses = [];
+	}
 
 	function params(format?: string) {
 		const p = new URLSearchParams();
@@ -84,7 +122,7 @@
 		if (subjectId.trim()) p.set('subject_id', subjectId.trim());
 		if (targetLevel) p.set('target_level', targetLevel);
 		if (authorUsername.trim()) p.set('author_username', authorUsername.trim());
-		if (workflowStatus) p.set('workflow_status', workflowStatus);
+		for (const status of workflowStatuses) p.append('workflow_status', status);
 		p.set('include_system', includeSystem ? 'true' : 'false');
 		if (format) p.set('format', format);
 		return p;
@@ -170,18 +208,52 @@
 				<option value="IX">IX</option>
 			</select>
 		</label>
-		<label>Status
-			<select bind:value={workflowStatus}>
-				<option value="">Semua</option>
-				<option value="draft">Draft</option>
-				<option value="submitted">Submitted</option>
-				<option value="review">Review</option>
-				<option value="revision_needed">Perlu Revisi</option>
-				<option value="approved">Approved</option>
-				<option value="published">Published</option>
-				<option value="rejected">Rejected</option>
-			</select>
-		</label>
+		<div class="status-filter">
+			<span class="filter-label">Status</span>
+			<button
+				type="button"
+				class="status-trigger"
+				aria-haspopup="listbox"
+				aria-expanded={statusDropdownOpen}
+				onclick={() => (statusDropdownOpen = !statusDropdownOpen)}
+			>
+				<span>{statusSummary}</span>
+				<small>{workflowStatuses.length === 0 ? 'Filter multi status' : selectedStatusLabels.join(', ')}</small>
+			</button>
+			{#if statusDropdownOpen}
+				<div class="status-menu" role="listbox" aria-label="Pilih status laporan" aria-multiselectable="true">
+					<label class="status-option status-option-all">
+						<input type="checkbox" checked={workflowStatuses.length === 0} onchange={clearWorkflowStatuses} />
+						<span>Semua status</span>
+					</label>
+					<div class="status-divider"></div>
+					{#each workflowStatusOptions as option}
+						<label class="status-option">
+							<input
+								type="checkbox"
+								checked={workflowStatuses.includes(option.value)}
+								onchange={() => toggleWorkflowStatus(option.value)}
+							/>
+							<span>{option.label}</span>
+						</label>
+					{/each}
+					<div class="status-menu-actions">
+						<button type="button" class="secondary compact" onclick={clearWorkflowStatuses}>Reset</button>
+						<button type="button" class="primary compact" onclick={() => (statusDropdownOpen = false)}>Selesai</button>
+					</div>
+				</div>
+			{/if}
+			{#if workflowStatuses.length > 0}
+				<div class="status-chips" aria-label="Status aktif">
+					{#each workflowStatuses as status}
+						<button type="button" class="status-chip" onclick={() => toggleWorkflowStatus(status)}>
+							{workflowStatusOptions.find((option) => option.value === status)?.label ?? status}
+							<span aria-hidden="true">×</span>
+						</button>
+					{/each}
+				</div>
+			{/if}
+		</div>
 		<label>Pembuat <input placeholder="username" bind:value={authorUsername} /></label>
 		<label>Subject ID <input placeholder="opsional UUID mapel" bind:value={subjectId} /></label>
 		<label class="check"><input type="checkbox" bind:checked={includeSystem} /> Tampilkan system/seed</label>
@@ -299,13 +371,31 @@
 	small { color: #64748b; }
 	.mobile-rows { display: none; }
 
+	.status-filter { position: relative; display: grid; gap: 6px; min-width: 220px; }
+	.filter-label { font-size: 12px; font-weight: 800; color: #475569; }
+	.status-trigger { border: 1px solid #cbd5e1; border-radius: 10px; padding: 8px 10px; min-height: 42px; background: white; display: grid; gap: 2px; text-align: left; cursor: pointer; min-width: 220px; }
+	.status-trigger span { font-weight: 800; color: #0f172a; }
+	.status-trigger small { color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+	.status-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; width: min(320px, calc(100vw - 32px)); background: white; border: 1px solid #cbd5e1; border-radius: 14px; padding: 10px; box-shadow: 0 16px 36px #0f172a22; display: grid; gap: 4px; }
+	.status-option { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 10px; font-size: 13px; color: #0f172a; cursor: pointer; }
+	.status-option:hover { background: #f1f5f9; }
+	.status-option input { width: auto; min-width: 0; padding: 0; }
+	.status-option-all { font-weight: 900; }
+	.status-divider { border-top: 1px solid #e5e7eb; margin: 4px 0; }
+	.status-menu-actions { display: flex; gap: 8px; justify-content: flex-end; border-top: 1px solid #e5e7eb; padding-top: 8px; margin-top: 4px; }
+	.compact { min-height: 34px; padding: 7px 10px; font-size: 12px; }
+	.status-chips { display: flex; flex-wrap: wrap; gap: 6px; max-width: 360px; }
+	.status-chip { border: 1px solid #99f6e4; background: #ccfbf1; color: #0f766e; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 900; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+	.status-chip span { font-size: 13px; line-height: 1; }
+
 	@media (max-width: 760px) {
 		.page-shell { padding: 12px; gap: 12px; }
 		.hero { display: grid; border-radius: 18px; padding: 18px; }
 		.hero .actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
 		.hero .actions button { width: 100%; padding-inline: 10px; font-size: 12px; }
 		.filters { display: grid; grid-template-columns: 1fr; padding: 12px; }
-		.filters label, .filters button, input, select { width: 100%; min-width: 0; }
+		.filters label, .filters button, input, select, .status-filter, .status-trigger { width: 100%; min-width: 0; }
+		.status-menu { position: static; width: 100%; box-shadow: 0 10px 24px #0f172a18; }
 		.check { justify-content: flex-start; }
 		.tabs { display: flex; overflow-x: auto; padding-bottom: 4px; scroll-snap-type: x mandatory; }
 		.tabs button { min-width: 168px; scroll-snap-align: start; }

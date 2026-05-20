@@ -28,17 +28,18 @@ func NewBankSoalReportService(pool *pgxpool.Pool) *BankSoalReportService {
 }
 
 type BankSoalReportFilters struct {
-	Report         string `json:"report"`
-	PeriodPreset   string `json:"period_preset"`
-	StartDate      string `json:"start_date,omitempty"`
-	EndDate        string `json:"end_date,omitempty"`
-	EventID        string `json:"event_id,omitempty"`
-	SubjectID      string `json:"subject_id,omitempty"`
-	TargetLevel    string `json:"target_level,omitempty"`
-	AuthorUsername string `json:"author_username,omitempty"`
-	WorkflowStatus string `json:"workflow_status,omitempty"`
-	IncludeSystem  bool   `json:"include_system"`
-	GroupBy        string `json:"group_by,omitempty"`
+	Report           string   `json:"report"`
+	PeriodPreset     string   `json:"period_preset"`
+	StartDate        string   `json:"start_date,omitempty"`
+	EndDate          string   `json:"end_date,omitempty"`
+	EventID          string   `json:"event_id,omitempty"`
+	SubjectID        string   `json:"subject_id,omitempty"`
+	TargetLevel      string   `json:"target_level,omitempty"`
+	AuthorUsername   string   `json:"author_username,omitempty"`
+	WorkflowStatus   string   `json:"workflow_status,omitempty"`
+	WorkflowStatuses []string `json:"workflow_statuses,omitempty"`
+	IncludeSystem    bool     `json:"include_system"`
+	GroupBy          string   `json:"group_by,omitempty"`
 }
 
 type BankSoalReportRow struct {
@@ -187,9 +188,42 @@ func normalizeBankSoalReportFilters(f BankSoalReportFilters) BankSoalReportFilte
 	f.TargetLevel = strings.TrimSpace(f.TargetLevel)
 	f.AuthorUsername = strings.TrimSpace(f.AuthorUsername)
 	f.WorkflowStatus = strings.TrimSpace(f.WorkflowStatus)
+	f.WorkflowStatuses = normalizeBankSoalWorkflowStatuses(f.WorkflowStatus, f.WorkflowStatuses)
+	f.WorkflowStatus = strings.Join(f.WorkflowStatuses, ",")
 	f.SubjectID = strings.TrimSpace(f.SubjectID)
 	f.EventID = strings.TrimSpace(f.EventID)
 	return f
+}
+
+func normalizeBankSoalWorkflowStatuses(primary string, values []string) []string {
+	allowed := map[string]bool{
+		"draft":           true,
+		"submitted":       true,
+		"review":          true,
+		"reviewed":        true,
+		"revision_needed": true,
+		"approved":        true,
+		"published":       true,
+		"rejected":        true,
+		"archived":        true,
+	}
+	seen := map[string]bool{}
+	out := []string{}
+	add := func(raw string) {
+		for _, part := range strings.Split(raw, ",") {
+			status := strings.ToLower(strings.TrimSpace(part))
+			if status == "" || !allowed[status] || seen[status] {
+				continue
+			}
+			seen[status] = true
+			out = append(out, status)
+		}
+	}
+	add(primary)
+	for _, value := range values {
+		add(value)
+	}
+	return out
 }
 
 func bankSoalReportRange(f BankSoalReportFilters) (time.Time, time.Time, string, error) {
@@ -274,7 +308,7 @@ WITH filtered AS (
     AND ($4::text = '' OR q.subject_id::text = $4)
     AND ($5::text = '' OR q.target_level = $5)
     AND ($6::text = '' OR q.author_username = $6)
-    AND ($7::text = '' OR q.workflow_status::text = $7)
+    AND (cardinality($7::text[]) = 0 OR q.workflow_status::text = ANY($7::text[]))
     AND ($8::text = '' OR COALESCE(q.event_id::text,'') = $8)
 )
 `
@@ -282,7 +316,7 @@ WITH filtered AS (
 func (s *BankSoalReportService) queryRows(ctx context.Context, f BankSoalReportFilters, startAt, endAt time.Time) ([]BankSoalReportRow, error) {
 	selectSQL := bankSoalReportSelectSQL(f.Report)
 	query := bankSoalBaseFilterSQL + selectSQL
-	rows, err := s.pool.Query(ctx, query, startAt, endAt, f.IncludeSystem, f.SubjectID, f.TargetLevel, f.AuthorUsername, f.WorkflowStatus, f.EventID)
+	rows, err := s.pool.Query(ctx, query, startAt, endAt, f.IncludeSystem, f.SubjectID, f.TargetLevel, f.AuthorUsername, f.WorkflowStatuses, f.EventID)
 	if err != nil {
 		return nil, err
 	}

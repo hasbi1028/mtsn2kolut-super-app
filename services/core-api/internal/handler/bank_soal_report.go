@@ -74,17 +74,22 @@ func bankSoalReportFiltersFromRequest(r *http.Request) service.BankSoalReportFil
 	case "1", "true", "yes", "ya":
 		includeSystem = true
 	}
+	workflowStatuses := q["workflow_status"]
+	if len(workflowStatuses) == 0 {
+		workflowStatuses = q["workflow_status[]"]
+	}
 	return service.BankSoalReportFilters{
-		Report:         q.Get("report"),
-		PeriodPreset:   q.Get("period_preset"),
-		StartDate:      q.Get("start_date"),
-		EndDate:        q.Get("end_date"),
-		EventID:        q.Get("event_id"),
-		SubjectID:      q.Get("subject_id"),
-		TargetLevel:    q.Get("target_level"),
-		AuthorUsername: q.Get("author_username"),
-		WorkflowStatus: q.Get("workflow_status"),
-		IncludeSystem:  includeSystem,
-		GroupBy:        q.Get("group_by"),
+		Report:           q.Get("report"),
+		PeriodPreset:     q.Get("period_preset"),
+		StartDate:        q.Get("start_date"),
+		EndDate:          q.Get("end_date"),
+		EventID:          q.Get("event_id"),
+		SubjectID:        q.Get("subject_id"),
+		TargetLevel:      q.Get("target_level"),
+		AuthorUsername:   q.Get("author_username"),
+		WorkflowStatus:   q.Get("workflow_status"),
+		WorkflowStatuses: workflowStatuses,
+		IncludeSystem:    includeSystem,
+		GroupBy:          q.Get("group_by"),
 	}
 }
