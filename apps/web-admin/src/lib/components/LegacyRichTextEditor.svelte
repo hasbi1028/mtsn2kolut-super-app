@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type Quill from 'quill';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { toast } from '$lib/components/ui/sonner';
@@ -44,6 +45,11 @@
 	let manualWidth = $state('320');
 	let activePresetWidth = $state<number | null>(320);
 	let isAdjustingImage = $state(false);
+	let tableDialogOpen = $state(false);
+	let tableRows = $state('4');
+	let tableColumns = $state('2');
+	let tableHasHeader = $state(true);
+	let tableCaption = $state('');
 	let syncingFromEditor = false;
 	const minHeight = $derived(`${Math.max(compact ? 2 : 3, minRows) * (compact ? 2 : 2.5)}rem`);
 
@@ -121,6 +127,67 @@
 	async function uploadImage(file: File) {
 		if (onImageUpload) return onImageUpload(file);
 		return fileToDataURL(file);
+	}
+
+	function clampTableDimension(value: string, min: number, max: number, fallback: number) {
+		const parsed = Number.parseInt(value, 10);
+		if (!Number.isFinite(parsed)) return fallback;
+		return Math.max(min, Math.min(max, parsed));
+	}
+
+	function escapeTableText(value: string) {
+		return value
+			.replaceAll('&', '&amp;')
+			.replaceAll('<', '&lt;')
+			.replaceAll('>', '&gt;')
+			.replaceAll('"', '&quot;')
+			.replaceAll("'", '&#39;');
+	}
+
+	function tableCellPlaceholder(rowIndex: number, columnIndex: number) {
+		if (tableHasHeader && rowIndex === 0) return columnIndex === 0 ? 'Kolom 1' : `Kolom ${columnIndex + 1}`;
+		return columnIndex === 0 ? `Baris ${tableHasHeader ? rowIndex : rowIndex + 1}` : '';
+	}
+
+	function buildTableHTML() {
+		const rows = clampTableDimension(tableRows, 1, 20, 4);
+		const columns = clampTableDimension(tableColumns, 1, 8, 2);
+		const caption = tableCaption.trim();
+		const bodyRows = tableHasHeader ? Math.max(1, rows - 1) : rows;
+		let html = '<table class="bank-soal-table"><tbody>';
+		if (caption) {
+			html += '<tr>';
+			for (let col = 0; col < columns; col += 1) {
+				html += `<td>${col === 0 ? `<strong>${escapeTableText(caption)}</strong>` : ''}</td>`;
+			}
+			html += '</tr>';
+		}
+		if (tableHasHeader) {
+			html += '<tr>';
+			for (let col = 0; col < columns; col += 1) {
+				html += `<td><strong>${escapeTableText(tableCellPlaceholder(0, col))}</strong></td>`;
+			}
+			html += '</tr>';
+		}
+		for (let row = 0; row < bodyRows; row += 1) {
+			html += '<tr>';
+			for (let col = 0; col < columns; col += 1) {
+				html += `<td>${escapeTableText(tableCellPlaceholder(tableHasHeader ? row + 1 : row, col))}</td>`;
+			}
+			html += '</tr>';
+		}
+		html += '</tbody></table><p><br></p>';
+		return html;
+	}
+
+	function insertTable() {
+		if (!quill) return;
+		const range = quill.getSelection(true) ?? { index: quill.getLength(), length: 0 };
+		quill.clipboard.dangerouslyPasteHTML(range.index, buildTableHTML(), 'user');
+		syncValueFromEditor();
+		quill.setSelection(range.index + 1, 0);
+		tableDialogOpen = false;
+		toast.success('Tabel ditambahkan. Klik isi sel untuk mengubah teks tabel.');
 	}
 
 	function installImageHandler(editor: Quill) {
@@ -206,6 +273,49 @@
 	class:legacy-rich-editor--compact={compact}
 	class:legacy-rich-editor--resizable={resizable}
 >
+	<div class="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/60 px-3 py-2">
+		<div class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Alat cepat</div>
+		<Button type="button" variant="outline" size="sm" class="h-7 px-2 text-[10px] font-semibold uppercase tracking-wider" onclick={() => (tableDialogOpen = true)}>
+			+ Tabel
+		</Button>
+		<Dialog.Root bind:open={tableDialogOpen}>
+			<Dialog.Content>
+				<Dialog.Header>
+					<Dialog.Title>Tambah Tabel</Dialog.Title>
+					<Dialog.Description>
+						Sisipkan tabel sederhana untuk soal data, statistika, IPA, IPS, atau bacaan. Setelah masuk editor, klik isi sel untuk mengubah teksnya.
+					</Dialog.Description>
+				</Dialog.Header>
+				<div class="space-y-4 py-2">
+					<div class="grid grid-cols-2 gap-3">
+						<label class="space-y-1 text-xs font-semibold text-foreground">
+							<span>Jumlah baris</span>
+							<Input type="number" min="1" max="20" bind:value={tableRows} />
+						</label>
+						<label class="space-y-1 text-xs font-semibold text-foreground">
+							<span>Jumlah kolom</span>
+							<Input type="number" min="1" max="8" bind:value={tableColumns} />
+						</label>
+					</div>
+					<label class="space-y-1 text-xs font-semibold text-foreground">
+						<span>Judul tabel opsional</span>
+						<Input bind:value={tableCaption} placeholder="Contoh: Data berat badan siswa" />
+					</label>
+					<label class="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-foreground">
+						<input type="checkbox" bind:checked={tableHasHeader} class="mt-0.5" />
+						<span>
+							<span class="block font-semibold">Gunakan baris header</span>
+							<span class="text-muted-foreground">Cocok untuk tabel seperti “Berat badan (kg)” dan “Banyak orang”.</span>
+						</span>
+					</label>
+				</div>
+				<Dialog.Footer>
+					<Button type="button" variant="outline" onclick={() => (tableDialogOpen = false)}>Batal</Button>
+					<Button type="button" onclick={insertTable}>Masukkan Tabel</Button>
+				</Dialog.Footer>
+			</Dialog.Content>
+		</Dialog.Root>
+	</div>
 	{#if selectedImage}
 		<div
 			bind:this={controlsElement}
@@ -331,6 +441,21 @@
 		max-width: 100%;
 		overflow-x: auto;
 		vertical-align: middle;
+	}
+	:global(.legacy-rich-editor .ql-editor table) {
+		width: 100%;
+		max-width: 100%;
+		margin: 0.75rem 0;
+		border-collapse: collapse;
+		overflow-x: auto;
+	}
+	:global(.legacy-rich-editor .ql-editor td) {
+		border: 1px solid var(--border);
+		padding: 0.45rem 0.55rem;
+		vertical-align: top;
+	}
+	:global(.legacy-rich-editor .ql-editor tr:first-child td) {
+		background: var(--muted);
 	}
 	:global(.legacy-rich-editor .ql-snow .ql-stroke) {
 		stroke: var(--primary) !important;

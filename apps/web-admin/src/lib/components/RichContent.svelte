@@ -56,4 +56,25 @@
 	:global(.rich-content ul ul ul) {
 		list-style: square;
 	}
+
+	:global(.rich-content table) {
+		width: 100%;
+		max-width: 100%;
+		margin: 0.75rem 0;
+		border-collapse: collapse;
+		table-layout: auto;
+	}
+
+	:global(.rich-content td),
+	:global(.rich-content th) {
+		border: 1px solid var(--border);
+		padding: 0.45rem 0.55rem;
+		vertical-align: top;
+	}
+
+	:global(.rich-content th),
+	:global(.rich-content tr:first-child td) {
+		background: var(--muted);
+		font-weight: 700;
+	}
 </style>
