@@ -90,9 +90,18 @@
     question_text?: string;
     question_type?: string;
     stem_html?: string;
+    stem_latex?: string;
     stimulus_html?: string;
     options?: OptionItem[];
+    option_a?: string;
+    option_b?: string;
+    option_c?: string;
+    option_d?: string;
+    option_e?: string;
     answer_key?: string;
+    explanation?: string;
+    explanation_html?: string;
+    writer_notes?: string;
     difficulty?: string;
     status?: string;
     workflow_status?: string;
@@ -335,6 +344,7 @@
   let archivingQuestionId = $state<string | null>(null);
   let restoringQuestionId = $state<string | null>(null);
   let revisingQuestionId = $state<string | null>(null);
+  let expandedQuestionId = $state<string | null>(null);
   let revisionError = $state("");
   let restoreError = $state("");
   let deleteError = $state("");
@@ -351,6 +361,7 @@
   let canPublish = $derived(canPublishBankSoal(data.user));
   let canSettings = $derived(canManageBankSoalSettings(data.user));
   let canQuality = $derived(canAccessQuality(data.user));
+  let canSeeAnswerKey = $derived(canReview || canPublish || canQuality);
   let roleLabel = $derived.by(() => {
     if (roles.includes("admin")) return "Admin";
     if (roles.includes("guru")) return "Guru";
@@ -630,6 +641,12 @@
     summary?: BankSoalSummaryResponse,
   ) {
     questions = overview.questions;
+    if (
+      expandedQuestionId &&
+      !questions.some((question) => question.id === expandedQuestionId)
+    ) {
+      expandedQuestionId = null;
+    }
     subjects = overview.subjects;
     totalItems = overview.totalItems;
     counts = overview.counts;
@@ -781,6 +798,56 @@
   function questionPratinjauHtml(question: Question): string {
     const html = (question.stem_html || question.question_text || "").trim();
     return html || "(Isi soal belum tersedia)";
+  }
+
+  function questionDetailHtml(question: Question): string {
+    const html = (
+      question.stem_html ||
+      question.stem_latex ||
+      question.question_text ||
+      ""
+    ).trim();
+    return html || "(Isi soal belum tersedia)";
+  }
+
+  function questionStimulusHtml(question: Question): string {
+    return (question.stimulus_html || "").trim();
+  }
+
+  function questionExplanationHtml(question: Question): string {
+    return (question.explanation_html || question.explanation || "").trim();
+  }
+
+  function questionOptionRows(question: Question) {
+    const optionRows = Array.isArray(question.options)
+      ? question.options
+          .map((option, index) => ({
+            label: compactText(
+              option.label || String.fromCharCode(65 + index),
+              String.fromCharCode(65 + index),
+            ),
+            html: compactText(option.html || option.latex || option.text, ""),
+          }))
+          .filter((option) => option.html)
+      : [];
+    if (optionRows.length > 0) return optionRows;
+    return [
+      ["A", question.option_a],
+      ["B", question.option_b],
+      ["C", question.option_c],
+      ["D", question.option_d],
+      ["E", question.option_e],
+    ]
+      .map(([label, html]) => ({ label: String(label), html: compactText(html, "") }))
+      .filter((option) => option.html);
+  }
+
+  function toggleQuestionDetail(questionId: string) {
+    expandedQuestionId = expandedQuestionId === questionId ? null : questionId;
+  }
+
+  function isQuestionExpanded(questionId: string): boolean {
+    return expandedQuestionId === questionId;
   }
 
   function normalizeBloomLevel(value: string | undefined | null): string {
@@ -2042,6 +2109,166 @@
       {/if}
     </section>
 
+
+    {#snippet questionDetailPanel(question: Question)}
+      {@const options = questionOptionRows(question)}
+      {@const explanation = questionExplanationHtml(question)}
+      {@const stimulus = questionStimulusHtml(question)}
+      <div
+        class="space-y-4 rounded-2xl border border-border bg-muted/20 p-4 text-sm"
+      >
+        <div class="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" class="font-mono text-xs">
+            {compactText(question.code, "Tanpa kode")}
+          </Badge>
+          <Badge variant="outline" class={workflowBadgeClass(question.workflow_status)}>
+            {workflowLabel(question.workflow_status)}
+          </Badge>
+          <Badge variant="outline" class={publicationBadgeClass(question.status)}>
+            {publicationLabel(question.status)}
+          </Badge>
+          <Badge variant="secondary" class="text-xs">
+            {questionTypeLabel(question.question_type)}
+          </Badge>
+          {#if question.hots_flag}
+            <Badge
+              variant="outline"
+              class="border-warning/30 bg-warning/10 text-warning"
+              >HOTS</Badge
+            >
+          {/if}
+        </div>
+
+        {#if stimulus}
+          <section class="space-y-2">
+            <p
+              class="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            >
+              Stimulus
+            </p>
+            <div class="overflow-x-auto rounded-xl border bg-background p-3">
+              <RichContent html={stimulus} class="max-w-none text-sm leading-6" />
+            </div>
+          </section>
+        {/if}
+
+        <section class="space-y-2">
+          <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Soal
+          </p>
+          <div class="overflow-x-auto rounded-xl border bg-background p-3">
+            <RichContent
+              html={questionDetailHtml(question)}
+              class="max-w-none break-words text-sm leading-6 [overflow-wrap:anywhere] [&_table]:min-w-max [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:px-3 [&_td]:py-2 [&_th]:border [&_th]:border-border [&_th]:px-3 [&_th]:py-2"
+            />
+          </div>
+        </section>
+
+        <section class="space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <p
+              class="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            >
+              Pilihan Jawaban
+            </p>
+            {#if canSeeAnswerKey && question.answer_key}
+              <Badge variant="outline" class="bg-primary/10 text-primary">
+                Kunci: {question.answer_key}
+              </Badge>
+            {/if}
+          </div>
+          {#if options.length > 0}
+            <div class="grid gap-2 md:grid-cols-2">
+              {#each options as option, index (`${option.label}-${index}`)}
+                <div class="rounded-xl border bg-background p-3">
+                  <div class="flex min-w-0 gap-2">
+                    <span class="font-semibold text-primary">{option.label}.</span>
+                    <RichContent
+                      html={option.html}
+                      class="min-w-0 flex-1 break-words text-sm leading-6 [overflow-wrap:anywhere]"
+                    />
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <p class="rounded-xl border bg-background p-3 text-muted-foreground">
+              Pilihan jawaban belum tersedia pada ringkasan daftar.
+            </p>
+          {/if}
+        </section>
+
+        {#if explanation}
+          <section class="space-y-2">
+            <p
+              class="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            >
+              Pembahasan
+            </p>
+            <div class="overflow-x-auto rounded-xl border bg-background p-3">
+              <RichContent html={explanation} class="max-w-none text-sm leading-6" />
+            </div>
+          </section>
+        {/if}
+
+        <section
+          class="grid gap-2 rounded-xl border bg-background p-3 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4"
+        >
+          <p>
+            <span class="font-medium text-foreground">Mapel:</span>
+            {subjectLabel(question)}
+          </p>
+          <p>
+            <span class="font-medium text-foreground">Tingkat:</span>
+            {gradeLabel(question)}
+          </p>
+          <p>
+            <span class="font-medium text-foreground">Materi:</span>
+            {compactText(question.material_topic, "Belum diisi")}
+          </p>
+          <p>
+            <span class="font-medium text-foreground">Level:</span>
+            {compactText(question.cognitive_level, "Belum diisi")}
+          </p>
+          <p>
+            <span class="font-medium text-foreground">Pembuat:</span>
+            {displayName(
+              {
+                display_name: question.author_display_name,
+                username: question.author_username,
+              },
+              "Penulis belum tercatat",
+            )}
+          </p>
+          <p>
+            <span class="font-medium text-foreground">Pemakaian:</span>
+            {questionUsageText(question)}
+          </p>
+          <p>
+            <span class="font-medium text-foreground">Kesulitan:</span>
+            {difficultyLabel(question.difficulty)}
+          </p>
+          <p>
+            <span class="font-medium text-foreground">Dibuat:</span>
+            {formatDate(question.created_at)}
+          </p>
+        </section>
+
+        {#if question.writer_notes || question.review_notes}
+          <section
+            class="space-y-1 rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-warning"
+          >
+            {#if question.writer_notes}
+              <p><span class="font-semibold">Catatan penulis:</span> {question.writer_notes}</p>
+            {/if}
+            {#if question.review_notes}
+              <p><span class="font-semibold">Catatan reviewer:</span> {question.review_notes}</p>
+            {/if}
+          </section>
+        {/if}
+      </div>
+    {/snippet}
+
     <AsyncContent
       promise={questionsPromise}
       onerror={handleQuestionsRenderError}
@@ -2285,6 +2512,17 @@
                       <Table.Cell class="text-right">
                         <div class="flex flex-wrap justify-end gap-2">
                           <Button
+                            variant="outline"
+                            size="sm"
+                            type="button"
+                            aria-expanded={isQuestionExpanded(question.id)}
+                            aria-controls={`question-detail-${question.id}`}
+                            aria-label={`${isQuestionExpanded(question.id) ? "Tutup detail" : "Lihat detail"} soal ${compactText(question.code, "tanpa kode")}`}
+                            onclick={() => toggleQuestionDetail(question.id)}
+                          >
+                            {isQuestionExpanded(question.id) ? "Tutup" : "Detail"}
+                          </Button>
+                          <Button
                             href={questionHref(question)}
                             variant="outline"
                             size="sm"
@@ -2399,6 +2637,16 @@
                         </div>
                       </Table.Cell>
                     </Table.Row>
+                    {#if isQuestionExpanded(question.id)}
+                      <Table.Row
+                        id={`question-detail-${question.id}`}
+                        class="bg-muted/10"
+                      >
+                        <Table.Cell colspan={5} class="p-4">
+                          {@render questionDetailPanel(question)}
+                        </Table.Cell>
+                      </Table.Row>
+                    {/if}
                   {/each}
                 </Table.Body>
               </Table.Root>
@@ -2487,6 +2735,17 @@
                         Lihat Soal
                       {/if}
                     </Button>
+                    <Button
+                      variant="outline"
+                      class="min-h-10 w-full"
+                      type="button"
+                      aria-expanded={isQuestionExpanded(question.id)}
+                      aria-controls={`question-mobile-detail-${question.id}`}
+                      aria-label={`${isQuestionExpanded(question.id) ? "Tutup detail" : "Lihat detail"} soal ${compactText(question.code, "tanpa kode")}`}
+                      onclick={() => toggleQuestionDetail(question.id)}
+                    >
+                      {isQuestionExpanded(question.id) ? "Tutup Detail" : "Detail Soal"}
+                    </Button>
                     {#if canReturnToRevision(question)}
                       <Button
                         variant="outline"
@@ -2558,6 +2817,11 @@
                       </Button>
                     {/if}
                   </div>
+                  {#if isQuestionExpanded(question.id)}
+                    <div id={`question-mobile-detail-${question.id}`} class="pt-1" role="region">
+                      {@render questionDetailPanel(question)}
+                    </div>
+                  {/if}
                 </article>
               {/each}
             </div>

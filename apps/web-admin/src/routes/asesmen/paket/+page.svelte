@@ -187,6 +187,7 @@
   let questionPoolPage = $state(1);
   let questionPoolPageSize = $state<number>(DEFAULT_PAGE_SIZE_OPTIONS[0]);
   let selectedPackageIds = new SvelteSet<string>();
+  let expandedPackageId = $state<string | null>(null);
   let bulkBusy = $state(false);
   let showUtsMode = $state(true);
 
@@ -376,6 +377,17 @@
     const text =
       value === null || value === undefined ? "" : String(value).trim();
     return text || fallback;
+  }
+
+  function formatDate(value: string | undefined | null): string {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
   }
 
   function questionTypeLabel(value: string | null | undefined) {
@@ -695,6 +707,14 @@
     selectedPackageIds.clear();
   }
 
+  function togglePackageDetail(packageId: string) {
+    expandedPackageId = expandedPackageId === packageId ? null : packageId;
+  }
+
+  function isPackageExpanded(packageId: string): boolean {
+    return expandedPackageId === packageId;
+  }
+
   function csvEscape(value: unknown) {
     const text = String(value ?? "");
     return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
@@ -926,6 +946,12 @@
   function applyOverview(overview: PackagesOverview) {
     hiddenEventPackageCount = hiddenPackageCount(overview.packages);
     packages = strictEventPackages(overview.packages);
+    if (
+      expandedPackageId &&
+      !packages.some((pkg) => pkg.id === expandedPackageId)
+    ) {
+      expandedPackageId = null;
+    }
     packageQuestions = overview.packageQuestions;
     allQuestions = overview.allQuestions;
     subjects = overview.subjects;
@@ -1742,6 +1768,164 @@
       )}
       {@const summary = packageSummary(currentPackages)}
       {@const hiddenPackages = hiddenPackageCount(overview.packages)}
+        {#snippet packageDetailPanel(pkg: CbtPackage, quality: PackageQualitySummary, progress: ReturnType<typeof packageProgress>, readiness: string)}
+          <div
+            class="space-y-4 rounded-2xl border border-border bg-muted/20 p-4 text-sm"
+          >
+            <div class="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" class="font-semibold">
+                {pkg.title}
+              </Badge>
+              <Badge class={`text-xs ${readinessBadgeClass(readiness)}`}>
+                {readinessLabel(readiness)}
+              </Badge>
+              {#if pkg.locked_at}
+                <Badge variant="outline" class="text-xs">Terkunci</Badge>
+              {/if}
+              {#if Number(pkg.session_count ?? 0) > 0}
+                <Badge variant="outline" class="text-xs">
+                  {pkg.session_count} sesi
+                </Badge>
+              {/if}
+            </div>
+
+            {#if pkg.description}
+              <p class="rounded-xl border bg-background p-3 text-muted-foreground">
+                {pkg.description}
+              </p>
+            {/if}
+
+            <section
+              class="grid gap-2 rounded-xl border bg-background p-3 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4"
+            >
+              <p>
+                <span class="font-medium text-foreground">Mapel:</span>
+                {pkg.subject_name} ({pkg.subject_code})
+              </p>
+              <p>
+                <span class="font-medium text-foreground">Durasi:</span>
+                {pkg.duration_minutes} menit
+              </p>
+              <p>
+                <span class="font-medium text-foreground">Jumlah soal:</span>
+                {quality.questions.length || pkg.question_count} soal
+              </p>
+              <p>
+                <span class="font-medium text-foreground">Total poin:</span>
+                {quality.totalPoints || "Belum dihitung"}
+              </p>
+              <p>
+                <span class="font-medium text-foreground">Acak soal:</span>
+                {pkg.randomize_questions ? "Ya" : "Tidak"}
+              </p>
+              <p>
+                <span class="font-medium text-foreground">Acak opsi:</span>
+                {pkg.randomize_options ? "Ya" : "Tidak"}
+              </p>
+              <p>
+                <span class="font-medium text-foreground">Status:</span>
+                {pkg.is_active ? "Aktif" : "Nonaktif"}
+              </p>
+              <p>
+                <span class="font-medium text-foreground">Dibuat:</span>
+                {formatDate(pkg.created_at)}
+              </p>
+            </section>
+
+            <section class="space-y-2">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Komposisi Paket
+                </p>
+                <span class="text-xs text-muted-foreground">
+                  {progress.pgCount}/{packageTargets(pkg).pg} PG · {progress.essayCount}/{packageTargets(pkg).essay} Essay
+                </span>
+              </div>
+              <div class="h-2 rounded-full bg-muted">
+                <div
+                  class="h-2 rounded-full bg-primary"
+                  style={`width: ${Math.min(100, progress.percent)}%`}
+                ></div>
+              </div>
+              {#if quality.questions.length > 0}
+                <div class="flex flex-wrap gap-1.5">
+                  {#each quality.typeBuckets as bucket (bucket.label)}
+                    <Badge variant="outline" class="bg-background text-xs">
+                      {bucket.label}: {bucket.count}
+                    </Badge>
+                  {/each}
+                  {#each quality.cognitiveBuckets as bucket (bucket.label)}
+                    <Badge variant="secondary" class="text-xs">
+                      {bucket.label}: {bucket.count}
+                    </Badge>
+                  {/each}
+                  {#if quality.hotsCount > 0}
+                    <Badge class="border-warning/30 bg-warning/10 text-warning text-xs">
+                      {quality.hotsCount} HOTS
+                    </Badge>
+                  {/if}
+                  {#if quality.missingCount > 0}
+                    <Badge class="border-warning/30 bg-warning/10 text-warning text-xs">
+                      {quality.missingCount} metadata kurang
+                    </Badge>
+                  {/if}
+                  {#if quality.unpublishedCount > 0}
+                    <Badge class="border-destructive/30 bg-destructive/10 text-destructive text-xs">
+                      {quality.unpublishedCount} belum terbit
+                    </Badge>
+                  {/if}
+                </div>
+              {:else}
+                <p class="rounded-xl border bg-background p-3 text-muted-foreground">
+                  Rincian soal paket belum tersedia pada daftar ini. Buka Kelola untuk menyusun isi paket.
+                </p>
+              {/if}
+            </section>
+
+            {#if quality.questions.length > 0}
+              <section class="space-y-2">
+                <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Cuplikan Isi Paket
+                </p>
+                <div class="max-h-72 overflow-auto rounded-xl border bg-background">
+                  <ol class="divide-y divide-border text-xs">
+                    {#each quality.questions.slice(0, 12) as question (question.question_id)}
+                      <li class="grid gap-1 p-3 sm:grid-cols-[3rem_1fr_auto] sm:items-start">
+                        <span class="font-semibold text-muted-foreground">#{question.position}</span>
+                        <div class="min-w-0">
+                          <p class="font-mono font-semibold text-primary">
+                            {question.question_code}
+                          </p>
+                          <p class="mt-1 line-clamp-2 break-words text-muted-foreground [overflow-wrap:anywhere]">
+                            {question.question_text}
+                          </p>
+                        </div>
+                        <div class="flex flex-wrap gap-1 sm:justify-end">
+                          <Badge variant="outline" class="text-[11px]">
+                            {questionTypeLabel(question.question_type)}
+                          </Badge>
+                          <Badge variant="secondary" class="text-[11px]">
+                            {difficultyLabel(question.difficulty)}
+                          </Badge>
+                          <Badge variant="outline" class="text-[11px]">
+                            {question.points} poin
+                          </Badge>
+                        </div>
+                      </li>
+                    {/each}
+                  </ol>
+                  {#if quality.questions.length > 12}
+                    <p class="border-t border-border p-3 text-xs text-muted-foreground">
+                      +{quality.questions.length - 12} soal lainnya. Buka Kelola untuk melihat semua isi paket.
+                    </p>
+                  {/if}
+                </div>
+              </section>
+            {/if}
+          </div>
+        {/snippet}
+
+
       <Card.Root
         id="paket-saya"
         class="overflow-hidden border-border shadow-sm"
@@ -1942,7 +2126,7 @@
         </Card.Header>
         <Card.Content class="p-0">
           <div class="hidden overflow-x-auto lg:block">
-            <Table.Root>
+            <Table.Root class="min-w-[1120px]">
               <Table.Header>
                 <Table.Row>
                   <Table.Head class="w-10"></Table.Head>
@@ -2080,6 +2264,16 @@
                     </Table.Cell>
                     <Table.Cell>
                       <div class="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          class="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted"
+                          aria-expanded={isPackageExpanded(p.id)}
+                          aria-controls={`package-detail-${p.id}`}
+                          aria-label={`${isPackageExpanded(p.id) ? "Tutup detail" : "Lihat detail"} paket ${p.title}`}
+                          onclick={() => togglePackageDetail(p.id)}
+                        >
+                          {isPackageExpanded(p.id) ? "Tutup" : "Detail"}
+                        </button>
                         <a
                           href={`${resolve("/asesmen/paket")}/${p.id}`}
                           class="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted"
@@ -2111,10 +2305,17 @@
                       </div>
                     </Table.Cell>
                   </Table.Row>
+                  {#if isPackageExpanded(p.id)}
+                    <Table.Row id={`package-detail-${p.id}`} class="bg-muted/10">
+                      <Table.Cell colspan={11} class="p-4">
+                        {@render packageDetailPanel(p, quality, progress, readiness)}
+                      </Table.Cell>
+                    </Table.Row>
+                  {/if}
                 {:else}
                   <Table.Row>
                     <Table.Cell
-                      colspan={10}
+                      colspan={11}
                       class="text-center text-muted-foreground py-8"
                       >Tidak ada paket sesuai filter</Table.Cell
                     >
@@ -2240,7 +2441,22 @@
                     {p.description}
                   </p>
                 {/if}
+                {#if isPackageExpanded(p.id)}
+                  <div id={`package-mobile-detail-${p.id}`} class="mt-4" role="region">
+                    {@render packageDetailPanel(p, quality, progress, readiness)}
+                  </div>
+                {/if}
                 <div class="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    class="inline-flex flex-1 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-semibold hover:bg-muted"
+                    aria-expanded={isPackageExpanded(p.id)}
+                    aria-controls={`package-mobile-detail-${p.id}`}
+                    aria-label={`${isPackageExpanded(p.id) ? "Tutup detail" : "Lihat detail"} paket ${p.title}`}
+                    onclick={() => togglePackageDetail(p.id)}
+                  >
+                    {isPackageExpanded(p.id) ? "Tutup Detail" : "Detail"}
+                  </button>
                   <a
                     href={`${resolve("/asesmen/paket")}/${p.id}`}
                     class="inline-flex flex-1 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-semibold hover:bg-muted"
