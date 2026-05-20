@@ -526,6 +526,27 @@ func TestExamOperationalMethodsHandleErrorsAndEvents(t *testing.T) {
 	if store.appSwitchID != participant.ID || store.screenshotID != participant.ID || len(store.events) != 2 {
 		t.Fatalf("RecordClientEvent counters/events = app %v screenshot %v events %+v", store.appSwitchID, store.screenshotID, store.events)
 	}
+	if store.events[0].EventType != "app_switch_once" || store.events[1].EventType != "screenshot_attempt_ambiguous" {
+		t.Fatalf("RecordClientEvent canonical event types = %+v, want app_switch_once then screenshot_attempt_ambiguous", store.events)
+	}
+
+	store = &fakeExamStore{}
+	svc = &Exam{q: store}
+	if err := svc.RecordClientEvent(ctx, participant.ID, "screenshot_attempt", map[string]any{"valid_platform_callback": "true"}); err != nil {
+		t.Fatalf("RecordClientEvent(screenshot_attempt string callback) error = %v", err)
+	}
+	if store.events[0].EventType != "screenshot_attempt_ambiguous" || store.antiCheatViolationArg.LockedReason.String != "screenshot_attempt_ambiguous" {
+		t.Fatalf("screenshot string callback event/reason = %+v/%+v, want ambiguous warning", store.events[0], store.antiCheatViolationArg)
+	}
+
+	store = &fakeExamStore{}
+	svc = &Exam{q: store}
+	if err := svc.RecordClientEvent(ctx, participant.ID, "app_switch_once", map[string]any{"count": 3}); err != nil {
+		t.Fatalf("RecordClientEvent(app_switch repeated) error = %v", err)
+	}
+	if store.events[0].EventType != "app_switch_repeated" || store.antiCheatViolationArg.LockedReason.String != "app_switch_repeated" || store.antiCheatViolationArg.RiskScore != 25 {
+		t.Fatalf("repeated app switch event/risk = %+v/%+v, want repeated canonical event and risk", store.events[0], store.antiCheatViolationArg)
+	}
 
 	svc = &Exam{q: &fakeExamStore{eventErr: eventErr}}
 	if err := svc.RecordClientEvent(ctx, participant.ID, "focus_lost_short", nil); !errors.Is(err, eventErr) {

@@ -3,6 +3,7 @@ package service
 import (
 	"database/sql"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -98,7 +99,7 @@ func TestCbtProctoringPolicyNormalizationAndDataDrivenClassification(t *testing.
 		{name: "trim lower dash alias", raw: " Window-Focus-Lost ", wantType: "focus_lost_short", severity: ProctorSeverityWarning, riskDelta: 5},
 		{name: "background alias", raw: "app background resume", wantType: "background_over_threshold", severity: ProctorSeverityMedium, riskDelta: 30},
 		{name: "screenshot platform callback bool", raw: "screen_capture_attempt", data: map[string]any{"valid_platform_callback": true}, wantType: "screenshot_attempt_valid", severity: ProctorSeverityMedium, riskDelta: 25},
-		{name: "screenshot platform callback string", raw: "screenshot_attempt", data: map[string]any{"valid_platform_callback": "yes"}, wantType: "screenshot_attempt_valid", severity: ProctorSeverityMedium, riskDelta: 25},
+		{name: "screenshot platform callback string remains ambiguous", raw: "screenshot_attempt", data: map[string]any{"valid_platform_callback": "true"}, wantType: "screenshot_attempt_ambiguous", severity: ProctorSeverityWarning, riskDelta: 5},
 		{name: "app switch json number count", raw: "app_switch_once", data: map[string]any{"count": json.Number("3")}, wantType: "app_switch_repeated", severity: ProctorSeverityMedium, riskDelta: 25},
 		{name: "root emulator local lock alias", raw: "anti_cheat_local_lock", wantType: "root_emulator_strong", severity: ProctorSeverityCritical, riskDelta: 70},
 	}
@@ -111,6 +112,66 @@ func TestCbtProctoringPolicyNormalizationAndDataDrivenClassification(t *testing.
 			decision := ClassifyProctorSeverity(normalized, tc.data)
 			if decision.EventType != tc.wantType || decision.Severity != tc.severity || decision.RiskDelta != tc.riskDelta {
 				t.Fatalf("ClassifyProctorSeverity(%q) = %+v, want type=%s severity=%s risk=%d", tc.raw, decision, tc.wantType, tc.severity, tc.riskDelta)
+			}
+		})
+	}
+}
+
+func TestCbtProctoringPolicyWhitelistContractIsCompleteAndSafe(t *testing.T) {
+	validSeverity := map[ProctorSeverity]bool{
+		ProctorSeverityInfo:      true,
+		ProctorSeverityWarning:   true,
+		ProctorSeverityMedium:    true,
+		ProctorSeverityCritical:  true,
+		ProctorSeverityTechnical: true,
+	}
+	validAudioKey := map[string]bool{"none": true, "warning": true, "medium": true, "critical": true, "technical": true}
+	for key, decision := range proctorEventWhitelist {
+		t.Run(key, func(t *testing.T) {
+			if normalized, ok := NormalizeProctorEventType(key); !ok || normalized != decision.EventType {
+				t.Fatalf("NormalizeProctorEventType(%q) = %q/%v, want %q/true", key, normalized, ok, decision.EventType)
+			}
+			classified := ClassifyProctorSeverity(key, nil)
+			if classified.EventType != decision.EventType {
+				t.Fatalf("ClassifyProctorSeverity(%q).EventType = %q, want %q", key, classified.EventType, decision.EventType)
+			}
+			if decision.EventType == "" || decision.Category == "" || decision.LabelID == "" || decision.MessageID == "" {
+				t.Fatalf("decision has incomplete event/category/label/message contract: %+v", decision)
+			}
+			if !validSeverity[decision.Severity] {
+				t.Fatalf("unsupported severity %q in decision %+v", decision.Severity, decision)
+			}
+			if !validAudioKey[decision.AudioKey] {
+				t.Fatalf("unsupported audio key %q in decision %+v", decision.AudioKey, decision)
+			}
+			if decision.Severity == ProctorSeverityTechnical && (decision.RiskDelta != 0 || decision.LockEligible) {
+				t.Fatalf("technical event can raise risk or lock: %+v", decision)
+			}
+			if strings.TrimSpace(decision.LabelID) != decision.LabelID || strings.TrimSpace(decision.MessageID) != decision.MessageID {
+				t.Fatalf("label/message ids must be canonical without whitespace: %+v", decision)
+			}
+		})
+	}
+}
+
+func TestCbtProctoringPolicyScreenshotRequiresBooleanPlatformCallback(t *testing.T) {
+	cases := []struct {
+		name     string
+		data     map[string]any
+		wantType string
+		wantRisk int32
+	}{
+		{name: "missing", data: nil, wantType: "screenshot_attempt_ambiguous", wantRisk: 5},
+		{name: "false", data: map[string]any{"valid_platform_callback": false}, wantType: "screenshot_attempt_ambiguous", wantRisk: 5},
+		{name: "string true is not trusted", data: map[string]any{"valid_platform_callback": "true"}, wantType: "screenshot_attempt_ambiguous", wantRisk: 5},
+		{name: "numeric true is not trusted", data: map[string]any{"valid_platform_callback": 1}, wantType: "screenshot_attempt_ambiguous", wantRisk: 5},
+		{name: "boolean true", data: map[string]any{"valid_platform_callback": true}, wantType: "screenshot_attempt_valid", wantRisk: 25},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ClassifyProctorSeverity("screenshot_attempt", tc.data)
+			if got.EventType != tc.wantType || got.RiskDelta != tc.wantRisk {
+				t.Fatalf("ClassifyProctorSeverity(screenshot_attempt) = %+v, want type=%s risk=%d", got, tc.wantType, tc.wantRisk)
 			}
 		})
 	}

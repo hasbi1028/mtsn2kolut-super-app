@@ -187,7 +187,7 @@ func ClassifyProctorSeverity(eventType string, data map[string]any) SeverityDeci
 	if decision.EventType == "" {
 		return SeverityDecision{}
 	}
-	if normalized == "screenshot_attempt_ambiguous" && hasTruth(data, "valid_platform_callback") {
+	if normalized == "screenshot_attempt_ambiguous" && hasBoolTrue(data, "valid_platform_callback") {
 		decision = proctorEventWhitelist["screenshot_attempt_valid"]
 	}
 	if normalized == "app_switch_once" && intFromAny(data["count"]) >= 3 {
@@ -274,19 +274,13 @@ func hasCorroboratingCriticalScore(score int) bool {
 	return score >= 80
 }
 
-func hasTruth(data map[string]any, key string) bool {
+func hasBoolTrue(data map[string]any, key string) bool {
 	value, ok := data[key]
 	if !ok {
 		return false
 	}
-	switch typed := value.(type) {
-	case bool:
-		return typed
-	case string:
-		return strings.EqualFold(strings.TrimSpace(typed), "true") || strings.EqualFold(strings.TrimSpace(typed), "yes")
-	default:
-		return false
-	}
+	typed, ok := value.(bool)
+	return ok && typed
 }
 
 func intFromAny(value any) int {

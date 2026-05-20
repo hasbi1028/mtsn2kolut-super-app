@@ -9,7 +9,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData } from '$lib/client/api';
 	import { csvRow } from '$lib/csv';
-	import { classifyProctorEvent, proctorEventLabel, proctorEvidenceCategoryLabel } from '$lib/cbt/proctor-evidence';
+	import { classifyProctorEvent, proctorEventDetail, proctorEventLabel, proctorEvidenceCategoryLabel } from '$lib/cbt/proctor-evidence';
 
 	type ProctoringRow = {
 		participant_id: string;
@@ -95,16 +95,6 @@
 		return ['proctor_acknowledge', 'proctor_incident_action'].includes(event.event_type);
 	}
 
-	function eventDetail(event: ProctoringEvent) {
-		const data = event.event_data && typeof event.event_data === 'object' ? event.event_data as Record<string, unknown> : {};
-		const parts = [proctorEventLabel(event)];
-		for (const key of ['action', 'status', 'reason', 'notes', 'message', 'command_type', 'actor']) {
-			const value = data[key];
-			if (typeof value === 'string' && value.trim()) parts.push(`${key}=${value}`);
-		}
-		return parts.join(' · ');
-	}
-
 	function fmtDate(value?: string | null) {
 		if (!value) return '-';
 		return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
@@ -141,7 +131,7 @@
 				proctorEvidenceCategoryLabel(classifyProctorEvent(event)),
 				riskLabel(riskBadge(row)),
 				reviewedParticipantIds.has(event.participant_id) ? 'ya' : 'belum',
-				eventDetail(event)
+				proctorEventDetail(event)
 			]);
 		}
 		const blob = new Blob([rows.map((row) => csvRow(row)).join('\n')], { type: 'text/csv;charset=utf-8' });
@@ -229,7 +219,7 @@
 								<Table.Cell><div class="font-medium">{event.nama}</div><div class="text-xs text-muted-foreground">{event.nis}</div></Table.Cell>
 								<Table.Cell><Badge variant="outline">{proctorEventLabel(event)}</Badge></Table.Cell>
 								<Table.Cell><Badge variant="outline">{reviewedParticipantIds.has(event.participant_id) ? 'sudah diperiksa' : riskLabel(riskBadge(row))}</Badge></Table.Cell>
-								<Table.Cell class="max-w-md text-xs">{eventDetail(event)}</Table.Cell>
+								<Table.Cell class="max-w-md text-xs">{proctorEventDetail(event)}</Table.Cell>
 							</Table.Row>
 						{/each}
 					</Table.Body>

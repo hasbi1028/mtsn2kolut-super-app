@@ -51,10 +51,30 @@ describe('CBT proctor evidence helpers', () => {
 		expect(classifyProctorEvent({ event_type: 'proctor_reset_access', event_data: {} })).toBe('reset_access');
 	});
 
+
+
+	it('classifies backend canonical proctor event names for reports', () => {
+		expect(classifyProctorEvent({ event_type: 'focus_lost_short', event_data: {} })).toBe('app_background_resume');
+		expect(classifyProctorEvent({ event_type: 'app_switch_repeated', event_data: {} })).toBe('app_background_resume');
+		expect(classifyProctorEvent({ event_type: 'background_over_threshold', event_data: {} })).toBe('app_background_resume');
+		expect(classifyProctorEvent({ event_type: 'screenshot_attempt_ambiguous', event_data: {} })).toBe('anti_cheat');
+		expect(classifyProctorEvent({ event_type: 'screenshot_attempt_valid', event_data: {} })).toBe('anti_cheat');
+		expect(classifyProctorEvent({ event_type: 'split_screen_detected', event_data: {} })).toBe('anti_cheat');
+		expect(classifyProctorEvent({ event_type: 'pip_detected', event_data: {} })).toBe('anti_cheat');
+		expect(classifyProctorEvent({ event_type: 'root_emulator_strong', event_data: {} })).toBe('anti_cheat');
+		expect(classifyProctorEvent({ event_type: 'device_mismatch_strong', event_data: {} })).toBe('device_mismatch');
+		expect(classifyProctorEvent({ event_type: 'token_reuse_confirmed', event_data: {} })).toBe('device_mismatch');
+		expect(classifyProctorEvent({ event_type: 'submit_held_pending_sync', event_data: {} })).toBe('submit_guard');
+		expect(classifyProctorEvent({ event_type: 'pending_sync', event_data: {} })).toBe('submit_guard');
+		expect(classifyProctorEvent({ event_type: 'offline_short', event_data: {} })).toBe('stale_connection');
+		expect(classifyProctorEvent({ event_type: 'web_connection_degraded', event_data: {} })).toBe('stale_connection');
+		expect(proctorEventLabel({ event_type: 'screenshot_attempt_valid', event_data: {} })).toBe('Percobaan tangkap layar tervalidasi');
+	});
+
 	it('decodes JSON event data returned from Go byte slices as base64 strings', () => {
 		const encoded = btoa(JSON.stringify({ reason: 'stale_connection_attention' }));
 		expect(classifyProctorEvent({ event_type: 'warning', event_data: encoded })).toBe('stale_connection');
-		expect(proctorEventLabel({ event_type: 'warning', event_data: encoded })).toBe('Koneksi stale');
+		expect(proctorEventLabel({ event_type: 'warning', event_data: encoded })).toBe('Koneksi perlu dicek');
 	});
 
 	it('summarizes heartbeat, stale connection, warning, actions, and export evidence deterministically', () => {
@@ -133,35 +153,50 @@ describe('CBT proctor evidence helpers', () => {
 
 		expect(rows[0]).toEqual(['section', 'category', 'timestamp', 'participant', 'nis', 'detail']);
 		expect(rows.flat().join(' ')).toContain('PAT IPA');
-		expect(rows.flat().join(' ')).toContain('Resume gate');
+		expect(rows.flat().join(' ')).toContain('Masuk kembali ke ujian');
 		expect(rows.flat().join(' ')).not.toMatch(/token/i);
 	});
 
 	it('maps warning reason labels for the room timeline', () => {
 		expect(proctorEventLabel({ event_type: 'warning', event_data: { reason: 'stale_connection_attention' } })).toBe(
-			'Koneksi stale'
+			'Koneksi perlu dicek'
 		);
 		expect(proctorEventLabel({ event_type: 'warning', event_data: { reason: 'manual_submit' } })).toBe(
-			'Submit manual'
+			'Pengiriman manual'
 		);
 	});
 
-	it('provides C2 operator-facing evidence labels, summaries, and guidance without token wording', async () => {
+	it('provides C2 operator-facing evidence labels, summaries, and guidance without raw technical wording', async () => {
 		const { proctorEvidenceCategoryLabel, proctorEvidenceCategorySummary, proctorOperatorGuidance } = await import(
 			'./proctor-evidence'
 		);
-		expect(proctorEvidenceCategoryLabel('heartbeat')).toBe('Online/heartbeat OK');
-		expect(proctorEvidenceCategorySummary('stale_connection')).toContain('stale');
-		expect(proctorEvidenceCategoryLabel('app_background_resume')).toBe('Background/resume');
-		expect(proctorEvidenceCategoryLabel('device_mismatch')).toBe('Device mismatch');
-		expect(proctorEvidenceCategoryLabel('force_submit')).toBe('Submitted/force submitted');
-		expect(proctorEvidenceCategoryLabel(null)).toBe('Event lain');
+		expect(proctorEvidenceCategoryLabel('heartbeat')).toBe('Koneksi aktif');
+		expect(proctorEvidenceCategorySummary('stale_connection')).toContain('Kontak perangkat terlambat');
+		expect(proctorEvidenceCategoryLabel('app_background_resume')).toBe('Aplikasi ditinggalkan');
+		expect(proctorEvidenceCategoryLabel('device_mismatch')).toBe('Perangkat tidak sesuai');
+		expect(proctorEvidenceCategoryLabel('force_submit')).toBe('Jawaban dikirim oleh pengawas');
+		expect(proctorEvidenceCategoryLabel(null)).toBe('Kejadian lain');
 		expect(proctorOperatorGuidance.map((item) => item.title)).toEqual([
 			'Kapan memperingatkan siswa',
 			'Kapan reset akses',
-			'Kapan paksa submit'
+			'Kapan paksa kirim'
 		]);
-		expect(JSON.stringify(proctorOperatorGuidance)).not.toMatch(/token\s*=/i);
+		expect(JSON.stringify(proctorOperatorGuidance)).not.toMatch(/token\s*=|heartbeat|background|stale|screenshot|app switch|anti-cheat/i);
+	});
+
+	it('formats event detail with formal labels instead of raw key/value incident terms', async () => {
+		const { proctorEventDetail, proctorEventLabel, proctorIncidentReasonLabel } = await import('./proctor-evidence');
+		const detail = proctorEventDetail({
+			event_type: 'proctor_incident_action',
+			event_data: { action: 'warning_given', reason: 'split_screen', actor: 'admin', command_type: 'reconnect' }
+		});
+
+		expect(proctorEventLabel({ event_type: 'unknown_internal_event', event_data: null })).toBe('Kejadian pengawasan');
+		expect(proctorIncidentReasonLabel('device_mismatch')).toBe('Perangkat tidak sesuai');
+		expect(detail).toContain('Tindakan: Peringatan diberikan');
+		expect(detail).toContain('Alasan: Layar terbagi');
+		expect(detail).toContain('Petugas: Operator/admin');
+		expect(detail).not.toMatch(/warning_given|split_screen|actor=|command_type=/);
 	});
 
 	it('redacts sensitive evidence values and escapes CSV injection cells', () => {

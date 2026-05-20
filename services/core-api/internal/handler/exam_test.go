@@ -1253,6 +1253,34 @@ func TestExamRecordEventHardensJSONBody(t *testing.T) {
 	})
 }
 
+func TestExamRecordEventRejectsInvalidTelemetryContract(t *testing.T) {
+	svc := &fakeExamService{eventErr: service.ErrExamInvalidTelemetry}
+	h := &Exam{svc: svc}
+	var participant db.GetParticipantByTokenRow
+	req := httptest.NewRequest("POST", "http://internal/api/exam/event", bytes.NewBufferString(`{"event_type":"unknown_event","data":{"reason":"test"}}`))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	rec := httptest.NewRecorder()
+
+	h.RecordEvent(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if payload.Error != "event_type tidak didukung" {
+		t.Fatalf("error = %q, want unsupported event contract message", payload.Error)
+	}
+	if svc.lastEventType != "unknown_event" {
+		t.Fatalf("event type passed to service = %q, want trimmed unknown_event", svc.lastEventType)
+	}
+}
+
 func TestExamRecordEventMapsUnexpectedServiceError(t *testing.T) {
 	h := &Exam{svc: &fakeExamService{eventErr: errors.New("event write failed")}}
 	var participant db.GetParticipantByTokenRow

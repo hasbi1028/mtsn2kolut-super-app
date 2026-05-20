@@ -9,7 +9,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
 	import { csvRow } from '$lib/csv';
-	import { classifyProctorEvent, proctorEventLabel, proctorEvidenceCategoryLabel } from '$lib/cbt/proctor-evidence';
+	import { classifyProctorEvent, proctorEventDetail, proctorEventLabel, proctorEvidenceCategoryLabel } from '$lib/cbt/proctor-evidence';
 
 	type RoomDashboard = { id: string; session_id: string; room_name: string; session_title: string; session_status: string; scheduled_start: string; scheduled_end: string; package_title: string; participant_count: number; submitted_count: number; online_count: number; suspicious_count: number };
 	type RoomProctor = { id: string; nama: string; nip: string; role: string };
@@ -71,15 +71,6 @@
 	function isReviewEvent(event: ProctoringEvent) {
 		return ['proctor_acknowledge', 'proctor_incident_action'].includes(event.event_type);
 	}
-	function eventDetail(event: ProctoringEvent) {
-		const data = event.event_data && typeof event.event_data === 'object' ? event.event_data as Record<string, unknown> : {};
-		const parts = [proctorEventLabel(event)];
-		for (const key of ['action', 'status', 'reason', 'notes', 'message', 'command_type', 'actor']) {
-			const value = data[key];
-			if (typeof value === 'string' && value.trim()) parts.push(`${key}=${value}`);
-		}
-		return parts.join(' · ');
-	}
 	function fmtDate(value?: string | null) {
 		if (!value) return '-';
 		return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
@@ -101,7 +92,7 @@
 		const rows = [['tanggal', 'ruang', 'nis', 'nama', 'kejadian', 'kategori', 'risiko', 'sudah_diperiksa', 'detail']];
 		for (const event of filteredEvents) {
 			const row = participants.find((p) => p.participant_id === event.participant_id);
-			rows.push([event.created_at, event.room_name, event.nis, event.nama, proctorEventLabel(event), proctorEvidenceCategoryLabel(classifyProctorEvent(event)), riskLabel(riskBadge(row)), reviewedParticipantIds.has(event.participant_id) ? 'ya' : 'belum', eventDetail(event)]);
+			rows.push([event.created_at, event.room_name, event.nis, event.nama, proctorEventLabel(event), proctorEvidenceCategoryLabel(classifyProctorEvent(event)), riskLabel(riskBadge(row)), reviewedParticipantIds.has(event.participant_id) ? 'ya' : 'belum', proctorEventDetail(event)]);
 		}
 		const blob = new Blob([rows.map((row) => csvRow(row)).join('\n')], { type: 'text/csv;charset=utf-8' });
 		const url = URL.createObjectURL(blob);
@@ -159,7 +150,7 @@
 				</div>
 				<Table.Root>
 					<Table.Header><Table.Row><Table.Head>Waktu</Table.Head><Table.Head>Peserta</Table.Head><Table.Head>Kejadian</Table.Head><Table.Head>Status</Table.Head><Table.Head>Detail/Tindakan</Table.Head></Table.Row></Table.Header>
-					<Table.Body>{#each filteredEvents as event}{@const row = participants.find((p) => p.participant_id === event.participant_id)}<Table.Row><Table.Cell>{fmtDate(event.created_at)}</Table.Cell><Table.Cell><div class="font-medium">{event.nama}</div><div class="text-xs text-muted-foreground">{event.nis}</div></Table.Cell><Table.Cell><Badge variant="outline">{proctorEventLabel(event)}</Badge></Table.Cell><Table.Cell><Badge variant="outline">{reviewedParticipantIds.has(event.participant_id) ? 'sudah diperiksa' : riskLabel(riskBadge(row))}</Badge></Table.Cell><Table.Cell class="max-w-md text-xs">{eventDetail(event)}</Table.Cell></Table.Row>{/each}</Table.Body>
+					<Table.Body>{#each filteredEvents as event}{@const row = participants.find((p) => p.participant_id === event.participant_id)}<Table.Row><Table.Cell>{fmtDate(event.created_at)}</Table.Cell><Table.Cell><div class="font-medium">{event.nama}</div><div class="text-xs text-muted-foreground">{event.nis}</div></Table.Cell><Table.Cell><Badge variant="outline">{proctorEventLabel(event)}</Badge></Table.Cell><Table.Cell><Badge variant="outline">{reviewedParticipantIds.has(event.participant_id) ? 'sudah diperiksa' : riskLabel(riskBadge(row))}</Badge></Table.Cell><Table.Cell class="max-w-md text-xs">{proctorEventDetail(event)}</Table.Cell></Table.Row>{/each}</Table.Body>
 				</Table.Root>
 				<div class="grid gap-8 pt-8 text-center text-sm md:grid-cols-3 print:grid-cols-3"><div><p>Pengawas Ruang</p><div class="h-16"></div><p class="border-t pt-2">Nama & Tanda Tangan</p></div><div><p>Operator/Admin Ujian</p><div class="h-16"></div><p class="border-t pt-2">Nama & Tanda Tangan</p></div><div><p>Ketua Panitia</p><div class="h-16"></div><p class="border-t pt-2">Nama & Tanda Tangan</p></div></div>
 			</Card.Content>

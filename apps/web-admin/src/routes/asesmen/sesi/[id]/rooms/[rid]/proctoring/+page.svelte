@@ -21,9 +21,12 @@
 		PROCTOR_EVIDENCE_CATEGORIES,
 		buildProctorEvidenceCsvRows,
 		classifyProctorEvent,
+		proctorEventReasonLabel,
 		proctorEventLabel,
 		proctorEvidenceCategoryLabel,
 		proctorEvidenceCategorySummary,
+		proctorIncidentActionLabel,
+		proctorIncidentReasonLabel,
 		proctorOperatorGuidance,
 		summarizeProctorEvidence,
 		type ProctorEvidenceCategory
@@ -321,11 +324,7 @@
 	}
 
 	function eventReason(event: ProctoringEvent) {
-		if (event.event_data && typeof event.event_data === 'object' && 'reason' in event.event_data) {
-			const reason = (event.event_data as { reason?: unknown }).reason;
-			if (typeof reason === 'string' && reason.trim()) return reason.replaceAll('_', ' ');
-		}
-		return proctorEventLabel(event);
+		return proctorEventReasonLabel(event);
 	}
 
 	function notifyNewEvents(nextEvents: ProctoringEvent[]) {
@@ -759,7 +758,7 @@
 	async function recordIncidentAction(event: ProctoringEvent, action: 'reviewed' | 'cleared' | 'warning_given' | 'escalated') {
 		const result = await openActionDialog({
 			title: `Catat tindak lanjut ${event.nama}`,
-			description: `Status tindakan: ${action.replaceAll('_', ' ')}. Catatan ini masuk bukti pengawasan ruang.`,
+			description: `Status tindakan: ${proctorIncidentActionLabel(action)}. Catatan ini masuk bukti pengawasan ruang.`,
 			confirmLabel: 'Simpan Tindakan',
 			textLabel: 'Catatan tindak lanjut',
 			defaultText: eventReason(event),
@@ -1201,7 +1200,7 @@
 				<Card.Root class="border-primary/20">
 					<Card.Header class="pb-3">
 						<Card.Title>Bukti Pengawas</Card.Title>
-						<Card.Description>Ringkasan bukti ruang dari catatan koneksi, peringatan BYOD, tindakan pengawas, dan paket unduh/cetak.</Card.Description>
+						<Card.Description>Ringkasan bukti ruang dari catatan koneksi, peringatan aplikasi, tindakan pengawas, dan paket unduh/cetak.</Card.Description>
 					</Card.Header>
 					<Card.Content class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
 						{#each PROCTOR_EVIDENCE_CATEGORIES as category (category)}
@@ -1218,7 +1217,7 @@
 				<Card.Root class="border-primary/20">
 					<Card.Header class="pb-3">
 						<Card.Title>Panduan Tindakan Pengawas</Card.Title>
-						<Card.Description>Kapan memberi peringatan, atur ulang akses, atau paksa kirim saat uji coba ruang.</Card.Description>
+						<Card.Description>Kapan memberi peringatan, atur ulang akses, atau paksa kirim saat pengawasan ruang.</Card.Description>
 					</Card.Header>
 					<Card.Content class="grid gap-3 md:grid-cols-3">
 						{#each proctorOperatorGuidance as item (item.title)}
@@ -1393,7 +1392,7 @@
 											<Table.Cell class="text-center font-mono">{row.screenshot_attempt}</Table.Cell>
 											<Table.Cell>
 												<Badge variant="outline" class={riskClass(row)}>{riskLabel(row)} · {row.risk_score}</Badge>
-												<p class="mt-1 text-[11px] text-muted-foreground">{row.violation_count} peringatan{row.last_violation_reason ? ` · ${row.last_violation_reason.replaceAll('_', ' ')}` : ''}</p>
+												<p class="mt-1 text-[11px] text-muted-foreground">{row.violation_count} peringatan{row.last_violation_reason ? ` · ${proctorIncidentReasonLabel(row.last_violation_reason)}` : ''}</p>
 											</Table.Cell>
 											<Table.Cell class="text-center font-mono">{fmtScore(row.score)}</Table.Cell>
 											<Table.Cell class="min-w-[260px] text-right">

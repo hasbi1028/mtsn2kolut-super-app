@@ -47,52 +47,52 @@ export type ProctorOperatorGuidanceItem = {
 };
 
 const PROCTOR_EVIDENCE_CATEGORY_LABELS: Record<ProctorEvidenceCategory, string> = {
-	heartbeat: 'Online/heartbeat OK',
-	app_background_resume: 'Background/resume',
-	device_mismatch: 'Device mismatch',
-	submit_guard: 'Submit guard',
-	stale_connection: 'Stale connection',
+	heartbeat: 'Koneksi aktif',
+	app_background_resume: 'Aplikasi ditinggalkan',
+	device_mismatch: 'Perangkat tidak sesuai',
+	submit_guard: 'Pengiriman ditahan',
+	stale_connection: 'Koneksi perlu dicek',
 	warning: 'Peringatan pengawas',
-	anti_cheat: 'Anti-cheat BYOD',
-	force_submit: 'Submitted/force submitted',
+	anti_cheat: 'Pelanggaran tata tertib aplikasi',
+	force_submit: 'Jawaban dikirim oleh pengawas',
 	reset_access: 'Reset akses',
-	export_print: 'Export/print token-free'
+	export_print: 'Dokumen pengawasan dicetak'
 };
 
 const PROCTOR_EVIDENCE_CATEGORY_SUMMARIES: Record<ProctorEvidenceCategory, string> = {
-	heartbeat: 'Heartbeat aktif atau kontak server terakhir masih sehat.',
-	app_background_resume: 'Aplikasi sempat background/resume; verifikasi siswa tetap mengikuti arahan ruang.',
-	device_mismatch: 'Perangkat tidak sesuai binding sesi; reset akses hanya setelah verifikasi identitas.',
-	submit_guard: 'Submit ditahan karena pending sinkron/degraded mode; tunggu jawaban aman terkirim.',
-	stale_connection: 'Koneksi stale atau heartbeat tertunda; pengawas perlu cek jaringan/perangkat.',
-	warning: 'Peringatan BYOD atau catatan manual dari runtime ujian.',
-	anti_cheat: 'Split screen, PiP, fokus hilang, background, atau lock anti-cheat tercatat.',
-	force_submit: 'Submit manual/force submit sudah tercatat sebagai tindakan pengawas.',
+	heartbeat: 'Peserta masih tercatat terhubung dengan server ujian.',
+	app_background_resume: 'Aplikasi ujian sempat tidak menjadi fokus; verifikasi siswa tetap mengikuti arahan ruang.',
+	device_mismatch: 'Perangkat berbeda dari catatan sesi; reset akses hanya setelah verifikasi identitas.',
+	submit_guard: 'Pengiriman jawaban ditahan karena sinkronisasi belum aman.',
+	stale_connection: 'Kontak perangkat terlambat; pengawas perlu cek jaringan atau perangkat.',
+	warning: 'Peringatan aplikasi atau catatan manual dari proses ujian.',
+	anti_cheat: 'Aplikasi mencatat perilaku yang perlu ditindaklanjuti pengawas.',
+	force_submit: 'Pengiriman jawaban oleh pengawas sudah tercatat sebagai tindakan resmi.',
 	reset_access: 'Akses perangkat direset oleh pengawas setelah verifikasi ruang.',
-	export_print: 'Bukti cetak/export tersedia tanpa dump token mentah.'
+	export_print: 'Bukti cetak atau unduhan tersedia tanpa data rahasia.'
 };
 
 export const proctorOperatorGuidance: ProctorOperatorGuidanceItem[] = [
 	{
 		title: 'Kapan memperingatkan siswa',
-		description: 'Saat app background/resume, heartbeat mulai stale, atau ada percobaan screenshot/app switch berulang.'
+		description: 'Saat aplikasi ditinggalkan, koneksi mulai terlambat, atau ada percobaan tangkap layar/keluar aplikasi berulang.'
 	},
 	{
 		title: 'Kapan reset akses',
 		description: 'Saat perangkat sah perlu login ulang setelah pengawas memverifikasi identitas, ruang, dan alasan gangguan.'
 	},
 	{
-		title: 'Kapan paksa submit',
+		title: 'Kapan paksa kirim',
 		description: 'Saat ruang harus ditutup dan pengawas sudah memastikan jawaban tersinkron atau prosedur manual dicatat.'
 	}
 ];
 
 export function proctorEvidenceCategoryLabel(category: ProctorEvidenceCategory | null): string {
-	return category ? PROCTOR_EVIDENCE_CATEGORY_LABELS[category] : 'Event lain';
+	return category ? PROCTOR_EVIDENCE_CATEGORY_LABELS[category] : 'Kejadian lain';
 }
 
 export function proctorEvidenceCategorySummary(category: ProctorEvidenceCategory | null): string {
-	return category ? PROCTOR_EVIDENCE_CATEGORY_SUMMARIES[category] : 'Event tidak masuk kategori utama evidence.';
+	return category ? PROCTOR_EVIDENCE_CATEGORY_SUMMARIES[category] : 'Kejadian tidak masuk kategori utama bukti pengawasan.';
 }
 
 type ProctorEvidenceSummaryInput = {
@@ -115,19 +115,116 @@ type ProctorEvidenceCsvInput = {
 type EventDataRecord = Record<string, unknown>;
 
 const WARNING_REASON_LABELS: Record<string, string> = {
-	resume_exam: 'Resume gate',
-	repeat_resume_attempt: 'Resume berulang',
+	resume_exam: 'Masuk kembali ke ujian',
+	repeat_resume_attempt: 'Masuk kembali berulang',
 	answer_saved_local_only: 'Jawaban lokal',
-	submit_blocked_pending_sync: 'Submit ditahan: pending sync',
-	auto_submit_blocked_pending_sync: 'Auto-submit ditahan',
-	submit_blocked_degraded_mode: 'Submit ditahan: koneksi menurun',
+	submit_blocked_pending_sync: 'Pengiriman ditahan: menunggu sinkronisasi',
+	auto_submit_blocked_pending_sync: 'Pengiriman otomatis ditahan',
+	submit_blocked_degraded_mode: 'Pengiriman ditahan: koneksi menurun',
 	degraded_mode_entered: 'Koneksi menurun',
-	stale_connection_attention: 'Koneksi stale',
-	stale_connection_escalated: 'Intervensi stale urgent',
+	stale_connection_attention: 'Koneksi perlu dicek',
+	stale_connection_escalated: 'Koneksi perlu tindakan segera',
 	back_button_attempt: 'Tombol kembali',
-	manual_submit: 'Submit manual',
-	device_mismatch: 'Device mismatch',
-	token_already_bound: 'Device mismatch'
+	manual_submit: 'Pengiriman manual',
+	device_mismatch: 'Perangkat tidak sesuai',
+	token_already_bound: 'Perangkat tidak sesuai'
+};
+
+const PROCTOR_EVENT_TYPE_LABELS: Record<string, string> = {
+	login: 'Masuk ujian',
+	heartbeat: 'Koneksi aktif',
+	app_switch: 'Keluar/kembali aplikasi',
+	app_backgrounded: 'Aplikasi ditinggalkan',
+	app_resumed: 'Kembali ke aplikasi ujian',
+	resume: 'Kembali ujian',
+	device_mismatch: 'Perangkat tidak sesuai',
+	answer: 'Simpan jawaban',
+	answer_save: 'Simpan jawaban',
+	submit: 'Kirim jawaban',
+	submit_guard: 'Pengiriman ditahan',
+	stale_connection: 'Koneksi perlu dicek',
+	heartbeat_failed: 'Koneksi gagal',
+	screenshot_attempt: 'Percobaan tangkap layar',
+	focus_lost_short: 'Fokus aplikasi berpindah',
+	app_switch_once: 'Aplikasi berpindah',
+	app_switch_repeated: 'Aplikasi berpindah berulang',
+	background_over_threshold: 'Aplikasi ditinggalkan terlalu lama',
+	split_screen_detected: 'Layar terbagi',
+	pip_detected: 'Jendela mengambang',
+	overlay_suspicious_confirmed: 'Tampilan mencurigakan',
+	screenshot_attempt_ambiguous: 'Indikasi tangkap layar',
+	screenshot_attempt_valid: 'Percobaan tangkap layar tervalidasi',
+	device_mismatch_weak: 'Perangkat tidak sesuai',
+	device_mismatch_strong: 'Perangkat tidak sesuai kuat',
+	token_reuse_confirmed: 'Akses ujian digunakan ulang',
+	root_emulator_weak: 'Integritas perangkat lemah',
+	root_emulator_strong: 'Integritas perangkat kuat',
+	offline_short: 'Kontak perangkat terlambat',
+	offline_mass: 'Gangguan teknis massal',
+	pending_sync: 'Jawaban belum terkirim',
+	submit_held_pending_sync: 'Pengiriman ditahan: menunggu sinkronisasi',
+	web_fallback_used: 'Browser darurat digunakan',
+	web_visibility_hidden: 'Browser tidak terlihat',
+	web_visibility_visible: 'Browser terlihat kembali',
+	web_focus_lost: 'Fokus browser berpindah',
+	web_focus_restored: 'Fokus browser kembali',
+	web_fullscreen_exit: 'Layar penuh browser keluar',
+	web_fullscreen_restored: 'Layar penuh browser kembali',
+	web_pending_answer_saved: 'Jawaban browser lokal',
+	web_pending_answer_flushed: 'Jawaban browser terkirim',
+	web_connection_degraded: 'Koneksi browser menurun',
+	web_connection_restored: 'Koneksi browser pulih',
+	proctor_reset_access: 'Reset akses',
+	proctor_unlock: 'Buka kunci peserta',
+	proctor_acknowledge: 'Tandai diperiksa',
+	proctor_incident_action: 'Tindak lanjut insiden',
+	participant_command: 'Instruksi ke aplikasi siswa',
+	participant_command_ack: 'Instruksi diterima aplikasi siswa',
+	student_portal_token_reveal: 'Akses ujian siswa dibuka portal',
+	student_portal_room_token_mismatch: 'Kode ruang salah di portal',
+	exam_room_token_mismatch: 'Kode ruang salah di aplikasi ujian',
+	proctor_heartbeat: 'Koneksi pengawas aktif',
+	anti_cheat_violation: 'Pelanggaran tata tertib aplikasi',
+	proctor_force_submit: 'Jawaban dikirim oleh pengawas'
+};
+
+const DETAIL_KEY_LABELS: Record<string, string> = {
+	action: 'Tindakan',
+	status: 'Status',
+	reason: 'Alasan',
+	notes: 'Catatan',
+	message: 'Pesan',
+	command_type: 'Instruksi',
+	state: 'Kondisi',
+	pending_count: 'Belum tersinkron',
+	failure_count: 'Gagal sinkron',
+	seconds_since_last_contact: 'Detik sejak kontak terakhir',
+	actor: 'Petugas'
+};
+
+const FORMAL_VALUE_LABELS: Record<string, string> = {
+	paused: 'Aplikasi tidak aktif',
+	resumed: 'Aplikasi aktif kembali',
+	backgrounded: 'Aplikasi ditinggalkan',
+	locked: 'Terkunci',
+	high: 'Risiko tinggi',
+	warning: 'Perlu perhatian',
+	normal: 'Normal',
+	reviewed: 'Sudah diperiksa',
+	cleared: 'Selesai',
+	warning_given: 'Peringatan diberikan',
+	escalated: 'Dieskalasi',
+	admin: 'Operator/admin',
+	proctor: 'Pengawas',
+	warning_message: 'Peringatan siswa',
+	reconnect: 'Instruksi masuk ulang',
+	unlock_notice: 'Pemberitahuan akses dibuka',
+	split_screen: 'Layar terbagi',
+	picture_in_picture: 'Jendela mengambang',
+	focus_lost: 'Fokus aplikasi hilang',
+	screenshot_attempt: 'Percobaan tangkap layar',
+	app_switch: 'Keluar/kembali aplikasi',
+	anti_cheat_locked: 'Akses dikunci karena pelanggaran'
 };
 
 export function classifyProctorEvent(event: ProctorEvidenceEvent): ProctorEvidenceCategory | null {
@@ -135,16 +232,44 @@ export function classifyProctorEvent(event: ProctorEvidenceEvent): ProctorEviden
 	const data = eventDataRecord(event.event_data);
 	const reason = stringValue(data.reason).toLowerCase();
 
-	if (eventType === 'heartbeat') return 'heartbeat';
-	if (eventType === 'app_switch' || eventType === 'app_backgrounded' || eventType === 'app_resumed' || eventType === 'resume') {
+	if (eventType === 'heartbeat' || eventType === 'proctor_heartbeat' || eventType === 'web_visibility_visible' || eventType === 'web_focus_restored' || eventType === 'web_fullscreen_restored' || eventType === 'web_pending_answer_flushed' || eventType === 'web_connection_restored') return 'heartbeat';
+	if (
+		eventType === 'app_switch' ||
+		eventType === 'app_switch_once' ||
+		eventType === 'app_switch_repeated' ||
+		eventType === 'app_backgrounded' ||
+		eventType === 'app_resumed' ||
+		eventType === 'resume' ||
+		eventType === 'focus_lost_short' ||
+		eventType === 'background_over_threshold' ||
+		eventType === 'web_visibility_hidden' ||
+		eventType === 'web_focus_lost' ||
+		eventType === 'web_fullscreen_exit'
+	) {
 		return 'app_background_resume';
 	}
-	if (eventType === 'device_mismatch') return 'device_mismatch';
-	if (eventType === 'exam_room_token_mismatch' || eventType === 'student_portal_room_token_mismatch') return 'device_mismatch';
+	if (
+		eventType === 'device_mismatch' ||
+		eventType === 'device_mismatch_weak' ||
+		eventType === 'device_mismatch_strong' ||
+		eventType === 'token_reuse_confirmed' ||
+		eventType === 'exam_room_token_mismatch' ||
+		eventType === 'student_portal_room_token_mismatch'
+	) return 'device_mismatch';
 	if (eventType === 'student_portal_token_reveal') return 'export_print';
-	if (eventType === 'submit_guard') return 'submit_guard';
-	if (eventType === 'anti_cheat_violation') return 'anti_cheat';
-	if (eventType === 'stale_connection' || eventType === 'heartbeat_failed') return 'stale_connection';
+	if (eventType === 'submit_guard' || eventType === 'submit_held_pending_sync' || eventType === 'pending_sync' || eventType === 'web_pending_answer_saved') return 'submit_guard';
+	if (
+		eventType === 'anti_cheat_violation' ||
+		eventType === 'split_screen_detected' ||
+		eventType === 'pip_detected' ||
+		eventType === 'overlay_suspicious_confirmed' ||
+		eventType === 'screenshot_attempt' ||
+		eventType === 'screenshot_attempt_ambiguous' ||
+		eventType === 'screenshot_attempt_valid' ||
+		eventType === 'root_emulator_weak' ||
+		eventType === 'root_emulator_strong'
+	) return 'anti_cheat';
+	if (eventType === 'stale_connection' || eventType === 'heartbeat_failed' || eventType === 'offline_short' || eventType === 'offline_mass' || eventType === 'web_connection_degraded') return 'stale_connection';
 	if (eventType === 'proctor_force_submit') return 'force_submit';
 	if (eventType === 'proctor_reset_access' || eventType === 'proctor_unlock') return 'reset_access';
 	if (eventType === 'proctor_acknowledge' || eventType === 'proctor_incident_action' || eventType === 'participant_command') return 'warning';
@@ -165,38 +290,30 @@ export function proctorEventLabel(event: ProctorEvidenceEvent): string {
 	const eventType = event.event_type.trim().toLowerCase();
 	const data = eventDataRecord(event.event_data);
 	const reason = stringValue(data.reason).toLowerCase();
-	if (eventType === 'warning' && reason) return WARNING_REASON_LABELS[reason] ?? reason.replaceAll('_', ' ');
-	if (eventType === 'anti_cheat_violation' && reason) return reason.replaceAll('_', ' ');
+	if (eventType === 'warning' && reason) return proctorIncidentReasonLabel(reason);
+	if (eventType === 'anti_cheat_violation' && reason) return proctorIncidentReasonLabel(reason);
+	return PROCTOR_EVENT_TYPE_LABELS[eventType] ?? 'Kejadian pengawasan';
+}
 
-	const labels: Record<string, string> = {
-		login: 'Login',
-		heartbeat: 'Heartbeat',
-		app_switch: 'Keluar/kembali aplikasi',
-		app_backgrounded: 'App background',
-		app_resumed: 'App resume',
-		resume: 'Kembali ujian',
-		device_mismatch: 'Device mismatch',
-		answer: 'Simpan jawaban',
-		answer_save: 'Simpan jawaban',
-		submit: 'Submit',
-		submit_guard: 'Submit guard',
-		stale_connection: 'Koneksi stale',
-		heartbeat_failed: 'Heartbeat gagal',
-		screenshot_attempt: 'Percobaan screenshot',
-		proctor_reset_access: 'Reset akses',
-		proctor_unlock: 'Unlock peserta',
-		proctor_acknowledge: 'Tandai diperiksa',
-		proctor_incident_action: 'Tindak lanjut insiden',
-		participant_command: 'Instruksi ke APK',
-		participant_command_ack: 'Instruksi diterima APK',
-		student_portal_token_reveal: 'Token siswa dibuka portal',
-		student_portal_room_token_mismatch: 'Token ruang salah di portal',
-		exam_room_token_mismatch: 'Token ruang salah di APK',
-		proctor_heartbeat: 'Heartbeat pengawas',
-		anti_cheat_violation: 'Anti-cheat BYOD',
-		proctor_force_submit: 'Paksa submit'
-	};
-	return labels[eventType] ?? event.event_type.replaceAll('_', ' ');
+export function proctorEventReasonLabel(event: ProctorEvidenceEvent): string {
+	const data = eventDataRecord(event.event_data);
+	const reason = stringValue(data.reason);
+	return reason ? proctorIncidentReasonLabel(reason) : proctorEventLabel(event);
+}
+
+export function proctorIncidentReasonLabel(value: string | null | undefined): string {
+	if (!value) return 'Kejadian pengawasan';
+	const normalized = value.trim().toLowerCase();
+	if (!normalized) return 'Kejadian pengawasan';
+	const redacted = sanitizeSensitiveEvidenceString(normalized);
+	if (redacted.includes('[redacted]')) return 'Kejadian pengawasan';
+	return WARNING_REASON_LABELS[normalized] ?? FORMAL_VALUE_LABELS[normalized] ?? 'Kejadian pengawasan';
+}
+
+export function proctorIncidentActionLabel(value: string | null | undefined): string {
+	if (!value) return 'Tindakan pengawas';
+	const normalized = value.trim().toLowerCase();
+	return FORMAL_VALUE_LABELS[normalized] ?? 'Tindakan pengawas';
 }
 
 export function summarizeProctorEvidence(input: ProctorEvidenceSummaryInput): ProctorEvidenceSummary {
@@ -258,12 +375,16 @@ export function buildProctorEvidenceCsvRows(input: ProctorEvidenceCsvInput): str
 	return rows.map((row) => row.map((cell) => safeEvidenceCsvCell(cell)));
 }
 
-function proctorEventDetail(event: ProctorEvidenceEvent): string {
+export function proctorEventDetail(event: ProctorEvidenceEvent): string {
 	const data = eventDataRecord(event.event_data);
-	const reason = stringValue(data.reason);
 	const parts = [proctorEventLabel(event)];
-	if (reason && proctorEventLabel(event).toLowerCase() !== reason.toLowerCase()) parts.push(`reason=${reason}`);
 	for (const key of [
+		'action',
+		'status',
+		'reason',
+		'notes',
+		'message',
+		'command_type',
 		'state',
 		'pending_count',
 		'failure_count',
@@ -281,9 +402,20 @@ function proctorEventDetail(event: ProctorEvidenceEvent): string {
 		'device_fingerprint'
 	]) {
 		const value = data[key];
-		if (value !== undefined && value !== null && value !== '') parts.push(`${key}=${redactEvidenceValue(key, value)}`);
+		if (value !== undefined && value !== null && value !== '') parts.push(formatEvidenceDetail(key, value));
 	}
 	return parts.join('; ');
+}
+
+function formatEvidenceDetail(key: string, value: unknown): string {
+	const label = DETAIL_KEY_LABELS[key] ?? 'Detail';
+	const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+	if (key === 'reason') return `${label}: ${proctorIncidentReasonLabel(String(value))}`;
+	if (key === 'action') return `${label}: ${proctorIncidentActionLabel(String(value))}`;
+	if (key === 'status' || key === 'command_type' || key === 'state' || key === 'actor') {
+		return `${label}: ${FORMAL_VALUE_LABELS[normalized] ?? sanitizeSensitiveEvidenceString(String(value))}`;
+	}
+	return `${label}: ${redactEvidenceValue(key, value)}`;
 }
 
 

@@ -440,18 +440,18 @@ func (s *Exam) RecordClientEvent(ctx context.Context, participantID pgtype.UUID,
 		return recordProctorTelemetryWithStore(ctx, q, participantID, normalized, data, time.Now())
 	}
 	decision := ClassifyProctorSeverity(normalized, data)
-	switch normalized {
-	case "app_switch_once", "app_switch_repeated":
+	switch decision.Category {
+	case "app_switch":
 		_ = s.q.IncrementParticipantAppSwitch(ctx, participantID)
-	case "screenshot_attempt_ambiguous", "screenshot_attempt_valid":
+	case "screenshot":
 		_ = s.q.IncrementParticipantScreenshot(ctx, participantID)
 	}
 	if decision.RiskDelta > 0 && decision.Severity != ProctorSeverityTechnical {
-		_ = s.incrementAntiCheatRisk(ctx, participantID, decision.RiskDelta, normalized)
+		_ = s.incrementAntiCheatRisk(ctx, participantID, decision.RiskDelta, decision.EventType)
 	}
 	return s.q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
 		ParticipantID: participantID,
-		EventType:     normalized,
+		EventType:     decision.EventType,
 		EventData:     marshalJSON(proctorEventDataWithDecision(sanitizeProctorEventData(data), decision, false)),
 	})
 }
