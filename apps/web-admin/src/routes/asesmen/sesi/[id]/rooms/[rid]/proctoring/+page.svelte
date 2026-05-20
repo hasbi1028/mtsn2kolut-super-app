@@ -116,6 +116,14 @@
 	};
 	type ProctorViewMode = 'simple' | 'complete';
 	type ParticipantFilter = 'attention' | 'locked' | 'disconnected' | 'not_submitted' | 'submitted' | 'all';
+	type PriorityCard = {
+		key: string;
+		label: string;
+		count: number;
+		detail: string;
+		tone: 'danger' | 'warning' | 'info' | 'success';
+		filter?: ParticipantFilter;
+	};
 	type DialogResult = { reason: string; notes: string };
 	type ActionDialogOptions = {
 		title: string;
@@ -241,6 +249,57 @@
 	}));
 	let attentionParticipants = $derived(participants.filter(participantNeedsAttention));
 	let evidenceSummary = $derived.by(() => summarizeProctorEvidence({ participants, events, hasPrintPack: true }));
+	let unreviewedIncidentEvents = $derived(events.filter((event) => incidentNeedsReview(event)));
+	let priorityCards: PriorityCard[] = $derived.by(() => {
+		const disconnectedCount = participants.filter((row) => {
+			const state = heartbeatState(row);
+			return state === 'offline' || state === 'stale';
+		}).length;
+		const pendingSyncParticipantIds = new Set(events.filter((event) => isPendingSyncEvent(event)).map((event) => event.participant_id).filter(Boolean));
+
+		return [
+			{
+				key: 'locked',
+				label: 'Peserta terkunci',
+				count: participants.filter(participantLocked).length,
+				detail: 'Verifikasi perangkat/kejadian sebelum buka kunci.',
+				tone: 'danger',
+				filter: 'locked'
+			},
+			{
+				key: 'disconnected',
+				label: 'Koneksi terputus/waspada',
+				count: disconnectedCount,
+				detail: `${participantStats.offline} terputus, ${participantStats.stale} terlambat kontak.`,
+				tone: disconnectedCount > 0 ? 'warning' : 'success',
+				filter: 'disconnected'
+			},
+			{
+				key: 'not_submitted',
+				label: 'Belum kirim jawaban',
+				count: participants.filter((row) => !row.submitted_at).length,
+				detail: 'Pantau sebelum penutupan/serah terima ruang.',
+				tone: 'info',
+				filter: 'not_submitted'
+			},
+			{
+				key: 'pending_sync',
+				label: 'Menunggu sinkronisasi',
+				count: pendingSyncParticipantIds.size,
+				detail: 'Ada catatan jawaban lokal atau kirim tertahan.',
+				tone: pendingSyncParticipantIds.size > 0 ? 'warning' : 'success',
+				filter: 'attention'
+			},
+			{
+				key: 'unreviewed_incidents',
+				label: 'Insiden belum ditinjau',
+				count: unreviewedIncidentEvents.length,
+				detail: 'Tandai diperiksa atau catat tindak lanjut di riwayat.',
+				tone: unreviewedIncidentEvents.length > 0 ? 'danger' : 'success',
+				filter: 'attention'
+			}
+		];
+	});
 
 	onMount(() => {
 		dashboardPromise = loadDashboard();
@@ -562,6 +621,103 @@
 		if (key === 'not_submitted') return participants.filter((row) => !row.submitted_at).length;
 		if (key === 'submitted') return participants.filter((row) => Boolean(row.submitted_at)).length;
 		return 0;
+	}
+
+	function priorityCardClass(tone: PriorityCard['tone'], count: number) {
+		if (count === 0 && tone !== 'info') return 'border-primary/20 bg-primary/5';
+		if (tone === 'danger') return 'border-destructive/30 bg-destructive/5';
+		if (tone === 'warning') return 'border-warning/30 bg-warning/5';
+		if (tone === 'success') return 'border-primary/20 bg-primary/5';
+		return 'border-primary/20 bg-card';
+	}
+
+	function priorityCountClass(tone: PriorityCard['tone'], count: number) {
+		if (count === 0 && tone !== 'info') return 'text-primary';
+		if (tone === 'danger') return 'text-destructive';
+		if (tone === 'warning') return 'text-warning';
+		if (tone === 'success') return 'text-primary';
+		return 'text-foreground';
+	}
+
+	function eventDataRecord(value: unknown): Record<string, unknown> {
+		if (typeof value === 'string') {
+			const direct = parseEventDataJson(value);
+			if (direct) return direct;
+			try {
+				const decoder = globalThis.atob;
+				if (decoder) {
+					const decoded = parseEventDataJson(decoder(value.trim()));
+					if (decoded) return decoded;
+				}
+			} catch {
+				return {};
+			}
+		}
+		if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+		return value as Record<string, unknown>;
+	}
+
+	function parseEventDataJson(value: string): Record<string, unknown> | null {
+		try {
+			const parsed: unknown = JSON.parse(value);
+			if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+		} catch {
+			return null;
+		}
+		return null;
+	}
+
+	function eventDataString(event: ProctoringEvent, key: string) {
+		const value = eventDataRecord(event.event_data)[key];
+		return typeof value === 'string' ? value.trim() : '';
+	}
+
+	function isPendingSyncEvent(event: ProctoringEvent) {
+		const eventType = event.event_type.trim().toLowerCase();
+		const reason = eventDataString(event, 'reason').toLowerCase();
+		return eventType === 'pending_sync' || eventType === 'submit_held_pending_sync' || eventType === 'web_pending_answer_saved' || reason.includes('pending_sync');
+	}
+
+	function incidentReviewable(event: ProctoringEvent) {
+		const eventType = event.event_type.trim().toLowerCase();
+		return [
+			'anti_cheat_violation',
+			'app_switch',
+			'app_switch_once',
+			'app_switch_repeated',
+			'app_backgrounded',
+			'background_over_threshold',
+			'screenshot_attempt',
+			'screenshot_attempt_ambiguous',
+			'screenshot_attempt_valid',
+			'split_screen_detected',
+			'pip_detected',
+			'overlay_suspicious_confirmed',
+			'device_mismatch',
+			'device_mismatch_weak',
+			'device_mismatch_strong',
+			'token_reuse_confirmed',
+			'pending_sync',
+			'submit_held_pending_sync',
+			'web_pending_answer_saved',
+			'web_visibility_hidden',
+			'web_focus_lost',
+			'web_fullscreen_exit'
+		].includes(eventType);
+	}
+
+	function eventReviewsIncident(actionEvent: ProctoringEvent, incident: ProctoringEvent) {
+		const eventType = actionEvent.event_type.trim().toLowerCase();
+		if (eventType !== 'proctor_acknowledge' && eventType !== 'proctor_incident_action') return false;
+		if (actionEvent.participant_id !== incident.participant_id) return false;
+		const eventId = eventDataString(actionEvent, 'event_id');
+		if (eventId) return eventId === incident.id;
+		return new Date(actionEvent.created_at).getTime() >= new Date(incident.created_at).getTime();
+	}
+
+	function incidentNeedsReview(event: ProctoringEvent) {
+		if (!incidentReviewable(event)) return false;
+		return !events.some((item) => eventReviewsIncident(item, event));
 	}
 
 	function actionReasonLabel(value: string) {
@@ -981,6 +1137,13 @@
 			{#if backgroundBusy}
 				<Badge variant="outline" class="border-primary/20 text-primary">Memperbarui</Badge>
 			{/if}
+			<Button variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/proctoring/report`)}>
+				Berita Acara
+			</Button>
+			<Button variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/print-pack`)}>
+				<PrinterIcon class="mr-2 size-4" />
+				Paket Cetak
+			</Button>
 			<LoadingButton onclick={() => void refreshDashboard()} loading={refreshBusy} loadingLabel="Memuat...">
 				Muat Ulang
 			</LoadingButton>
@@ -993,12 +1156,12 @@
 
 	<div class="flex flex-col gap-3 rounded-2xl border border-border bg-card p-3 shadow-sm md:flex-row md:items-center md:justify-between">
 		<div>
-			<p class="text-sm font-bold text-foreground">Mode Pengawas</p>
-			<p class="text-xs text-muted-foreground">Mode sederhana menampilkan peserta butuh tindakan dan tombol cepat hari-H.</p>
+			<p class="text-sm font-bold text-foreground">Tampilan Pengawas Ruang</p>
+			<p class="text-xs text-muted-foreground">Tampilan hari-H menonjolkan prioritas tindakan, ringkasan serah terima, dan tombol cepat.</p>
 		</div>
 		<div class="inline-flex w-fit rounded-full border border-border bg-muted/50 p-1 text-xs font-semibold" role="tablist" aria-label="Mode tampilan pengawas">
-			<button type="button" role="tab" class={`rounded-full px-3 py-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${proctorViewMode === 'simple' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`} aria-selected={proctorViewMode === 'simple'} onclick={() => (proctorViewMode = 'simple')}>Mode Sederhana</button>
-			<button type="button" role="tab" class={`rounded-full px-3 py-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${proctorViewMode === 'complete' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`} aria-selected={proctorViewMode === 'complete'} onclick={() => (proctorViewMode = 'complete')}>Rincian lengkap</button>
+			<button type="button" role="tab" class={`rounded-full px-3 py-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${proctorViewMode === 'simple' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`} aria-selected={proctorViewMode === 'simple'} onclick={() => (proctorViewMode = 'simple')}>Tampilan Hari-H</button>
+			<button type="button" role="tab" class={`rounded-full px-3 py-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${proctorViewMode === 'complete' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`} aria-selected={proctorViewMode === 'complete'} onclick={() => (proctorViewMode = 'complete')}>Rincian Lengkap</button>
 		</div>
 	</div>
 
@@ -1092,6 +1255,33 @@
 						</Card.Content>
 					</Card.Root>
 				</div>
+
+				<Card.Root class="border-primary/20">
+					<Card.Header class="pb-3">
+						<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+							<div>
+								<Card.Title>Prioritas Tindakan Hari-H</Card.Title>
+								<Card.Description>Urutan cek cepat untuk pengawas ruang sebelum ujian ditutup atau serah terima dikunci.</Card.Description>
+							</div>
+							<div class="flex flex-wrap gap-2">
+								<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/proctoring/report`)}>Buka Berita Acara</Button>
+								<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/print-pack`)}>Paket Cetak</Button>
+							</div>
+						</div>
+					</Card.Header>
+					<Card.Content class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+						{#each priorityCards as item (item.key)}
+							<button type="button" class={`rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${priorityCardClass(item.tone, item.count)}`} onclick={() => item.filter && (participantFilter = item.filter)} aria-label={`${item.label}: ${item.count}`}>
+								<p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{item.label}</p>
+								<p class={`mt-1 text-3xl font-bold ${priorityCountClass(item.tone, item.count)}`}>{item.count}</p>
+								<p class="mt-1 min-h-8 text-xs leading-4 text-muted-foreground">{item.detail}</p>
+								{#if item.filter}
+									<p class="mt-2 text-[11px] font-semibold text-primary">Lihat filter {participantFilters.find((filter) => filter.key === item.filter)?.label ?? 'atensi'}</p>
+								{/if}
+							</button>
+						{/each}
+					</Card.Content>
+				</Card.Root>
 
 				<Card.Root class="border-primary/20">
 					<Card.Header>

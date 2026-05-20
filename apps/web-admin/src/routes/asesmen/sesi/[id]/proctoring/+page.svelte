@@ -51,6 +51,13 @@
 		event_data: unknown;
 		created_at: string;
 	};
+	type SessionInfo = {
+		id: string;
+		title: string;
+		scheduled_start: string;
+		scheduled_end: string;
+		status: string;
+	};
 	type RoomSummary = {
 		room_id: string;
 		room_name: string;
@@ -61,6 +68,15 @@
 		warning_count: number;
 		high_count: number;
 		locked_count: number;
+	};
+	type PriorityFilter = 'urgent' | 'connection' | 'locked' | 'near_end_unsubmitted' | 'unreviewed_incident' | 'pending_sync' | 'all';
+	type PriorityCard = {
+		key: PriorityFilter;
+		label: string;
+		summary: string;
+		count: number;
+		tone: string;
+		meta: string;
 	};
 	type DialogResult = { reason: string; notes: string };
 	type ActionDialogOptions = {
@@ -74,6 +90,7 @@
 
 	const sessionId = page.params.id ?? '';
 	let dashboardPromise = $state<Promise<ProctoringRow[]> | null>(null);
+	let sessionInfo = $state<SessionInfo | null>(null);
 	let participants = $state<ProctoringRow[]>([]);
 	let events = $state<ProctoringEvent[]>([]);
 	let recentAlertEvents = $state<ProctoringEvent[]>([]);
@@ -81,7 +98,7 @@
 	let liveSource = $state<EventSource | null>(null);
 	let interval: ReturnType<typeof setInterval> | undefined;
 	let liveMode = $state<'connecting' | 'sse' | 'polling'>('connecting');
-	let filter = $state<'all' | 'warning' | 'high' | 'locked' | 'offline'>('all');
+	let filter = $state<PriorityFilter>('urgent');
 	let audioAlertsEnabled = $state(false);
 	let actionBusyId = $state('');
 	let actionDialogOpen = $state(false);
@@ -118,13 +135,94 @@
 		return [...map.values()].sort((a, b) => (b.locked_count + b.high_count + b.warning_count) - (a.locked_count + a.high_count + a.warning_count));
 	});
 
+	let pendingSyncEvents = $derived.by(() => events.filter(isPendingSyncEvent));
+	let acknowledgedEventIds = $derived.by(() => {
+		const ids = new Set<string>();
+		for (const event of events) {
+			if (event.event_type !== 'proctor_acknowledge' && event.event_type !== 'proctor_incident_action') continue;
+			const data = eventDataRecord(event.event_data);
+			for (const key of ['event_id', 'incident_id', 'ack_event_id']) {
+				const value = data[key];
+				if (typeof value === 'string' && value.trim()) ids.add(value.trim());
+			}
+		}
+		return ids;
+	});
+	let unreviewedIncidentEvents = $derived.by(() => events.filter((event) => importantIncidentEvent(event) && !acknowledgedEventIds.has(event.id)));
+	let participantIncidentEventIds = $derived.by(() => new Set(unreviewedIncidentEvents.map((event) => event.participant_id)));
+	let participantPendingSyncIds = $derived.by(() => new Set(pendingSyncEvents.map((event) => event.participant_id)));
 	let filteredParticipants = $derived.by(() => participants.filter((row) => {
-		if (filter === 'warning') return riskLevel(row) === 'warning';
-		if (filter === 'high') return riskLevel(row) === 'high';
+		if (filter === 'urgent') return needsActionNow(row);
+		if (filter === 'connection') return connectionIssue(row);
 		if (filter === 'locked') return riskLevel(row) === 'locked';
-		if (filter === 'offline') return heartbeatState(row) === 'offline';
+		if (filter === 'near_end_unsubmitted') return nearEndUnsubmitted(row);
+		if (filter === 'unreviewed_incident') return participantIncidentEventIds.has(row.participant_id);
+		if (filter === 'pending_sync') return participantHasPendingSync(row);
 		return true;
 	}));
+	let priorityCards = $derived.by<PriorityCard[]>(() => {
+		const urgentCount = participants.filter(needsActionNow).length;
+		const nearEnd = minutesUntilSessionEnd();
+		const nearEndText = Number.isFinite(nearEnd) ? `${Math.max(0, Math.ceil(nearEnd))} menit tersisa` : 'Jadwal akhir belum termuat';
+		return [
+			{
+				key: 'urgent',
+				label: 'Butuh tindakan sekarang',
+				summary: 'Terkunci, bahaya, koneksi kritis, insiden, atau sinkronisasi tertahan.',
+				count: urgentCount,
+				tone: urgentCount > 0 ? 'locked' : 'normal',
+				meta: urgentCount > 0 ? 'Buka daftar prioritas' : 'Tidak ada prioritas kritis'
+			},
+			{
+				key: 'connection',
+				label: 'Gangguan koneksi',
+				summary: 'Peserta waspada/terputus dan perlu dicek jaringan atau perangkat.',
+				count: participants.filter(connectionIssue).length,
+				tone: 'offline',
+				meta: 'Cek ruang dan perangkat'
+			},
+			{
+				key: 'locked',
+				label: 'Peserta terkunci',
+				summary: 'Akses peserta terkunci; buka hanya setelah verifikasi pengawas.',
+				count: participants.filter((row) => riskLevel(row) === 'locked').length,
+				tone: 'locked',
+				meta: 'Buka kunci tersedia per peserta'
+			},
+			{
+				key: 'near_end_unsubmitted',
+				label: 'Belum submit mendekati akhir',
+				summary: 'Peserta belum mengirim saat sisa waktu sesi sudah pendek.',
+				count: participants.filter(nearEndUnsubmitted).length,
+				tone: 'high',
+				meta: nearEndText
+			},
+			{
+				key: 'unreviewed_incident',
+				label: 'Insiden belum diperiksa',
+				summary: 'Kejadian penting belum memiliki catatan pemeriksaan pengawas.',
+				count: unreviewedIncidentEvents.length,
+				tone: 'warning',
+				meta: 'Tandai diperiksa dari kartu insiden'
+			},
+			{
+				key: 'pending_sync',
+				label: 'Pending sinkronisasi',
+				summary: 'Jawaban atau submit tertahan menunggu sinkronisasi perangkat.',
+				count: participants.filter(participantHasPendingSync).length,
+				tone: 'high',
+				meta: `${pendingSyncEvents.length} kejadian sinkronisasi`
+			},
+			{
+				key: 'all',
+				label: 'Semua peserta',
+				summary: 'Tampilkan seluruh peserta lintas ruang tanpa prioritas.',
+				count: participants.length,
+				tone: 'normal',
+				meta: 'Daftar lengkap'
+			}
+		];
+	});
 	const actionReasonOptions = [
 		{ value: 'verified_device', label: 'Perangkat sudah diverifikasi' },
 		{ value: 'network_issue', label: 'Gangguan jaringan' },
@@ -135,6 +233,7 @@
 
 	onMount(() => {
 		dashboardPromise = loadDashboard();
+		void loadSessionInfo();
 		void loadEvents();
 		connectLiveStream();
 		interval = setInterval(() => {
@@ -154,6 +253,15 @@
 		const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/proctoring`);
 		participants = await readClientApiData<ProctoringRow[]>(res, 'Gagal memuat panel pengawasan');
 		return participants;
+	}
+
+	async function loadSessionInfo() {
+		try {
+			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}`);
+			sessionInfo = await readClientApiData<SessionInfo>(res, 'Gagal memuat jadwal sesi');
+		} catch (error) {
+			console.warn('Jadwal sesi pengawasan tidak termuat', error);
+		}
 	}
 
 	async function loadEvents(background = false) {
@@ -390,6 +498,91 @@
 		return 'normal';
 	}
 
+	function connectionIssue(row: ProctoringRow) {
+		const state = heartbeatState(row);
+		return state === 'offline' || state === 'stale';
+	}
+
+	function minutesUntilSessionEnd() {
+		if (!sessionInfo?.scheduled_end) return Number.POSITIVE_INFINITY;
+		const end = new Date(sessionInfo.scheduled_end);
+		if (Number.isNaN(end.getTime())) return Number.POSITIVE_INFINITY;
+		return (end.getTime() - Date.now()) / 60000;
+	}
+
+	function sessionNearEnd() {
+		const minutes = minutesUntilSessionEnd();
+		return Number.isFinite(minutes) && minutes <= 15;
+	}
+
+	function nearEndUnsubmitted(row: ProctoringRow) {
+		return !row.submitted_at && sessionNearEnd();
+	}
+
+	function importantIncidentEvent(event: ProctoringEvent) {
+		return ['anti_cheat_violation', 'app_switch', 'screenshot_attempt', 'stale_connection', 'heartbeat_failed', 'offline_short', 'offline_mass', 'submit_guard', 'submit_held_pending_sync', 'pending_sync', 'web_pending_answer_saved', 'warning'].includes(event.event_type);
+	}
+
+	function isPendingSyncEvent(event: ProctoringEvent) {
+		const eventType = event.event_type.trim().toLowerCase();
+		const data = eventDataRecord(event.event_data);
+		const reason = stringValue(data.reason).toLowerCase();
+		const status = stringValue(data.status).toLowerCase();
+		return eventType === 'pending_sync' ||
+			eventType === 'submit_guard' ||
+			eventType === 'submit_held_pending_sync' ||
+			eventType === 'web_pending_answer_saved' ||
+			reason.includes('pending_sync') ||
+			reason.includes('submit_blocked') ||
+			status.includes('pending');
+	}
+
+	function participantHasPendingSync(row: ProctoringRow) {
+		return participantPendingSyncIds.has(row.participant_id) || row.last_violation_reason?.toLowerCase().includes('sinkron') || row.last_violation_reason?.toLowerCase().includes('pending sync') || row.last_violation_reason?.toLowerCase().includes('pending_sync');
+	}
+
+	function needsActionNow(row: ProctoringRow) {
+		return riskLevel(row) === 'locked' ||
+			riskLevel(row) === 'high' ||
+			connectionIssue(row) ||
+			nearEndUnsubmitted(row) ||
+			participantHasPendingSync(row) ||
+			participantIncidentEventIds.has(row.participant_id) ||
+			row.suspicious_flag;
+	}
+
+	function eventDataRecord(value: unknown): Record<string, unknown> {
+		if (typeof value === 'string') {
+			const parsed = parseEventDataString(value);
+			if (parsed) return parsed;
+		}
+		if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+		return value as Record<string, unknown>;
+	}
+
+	function stringValue(value: unknown) {
+		return typeof value === 'string' ? value.trim() : '';
+	}
+
+	function parseEventDataString(value: string): Record<string, unknown> | null {
+		const trimmed = value.trim();
+		if (!trimmed) return null;
+		try {
+			const parsed: unknown = JSON.parse(trimmed);
+			if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+		} catch {
+			// Some legacy event payloads are encoded by the client.
+		}
+		try {
+			const decoded = globalThis.atob(trimmed);
+			const parsed: unknown = JSON.parse(decoded);
+			if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+		} catch {
+			return null;
+		}
+		return null;
+	}
+
 	function heartbeatLabel(state: ReturnType<typeof heartbeatState>) {
 		const labels: Record<ReturnType<typeof heartbeatState>, string> = {
 			submitted: 'Sudah kirim',
@@ -410,13 +603,15 @@
 		return labels[level] ?? level;
 	}
 
-	function filterLabel(value: typeof filter) {
-		const labels: Record<typeof filter, string> = {
-			all: 'Semua',
-			warning: 'Perlu perhatian',
-			high: 'Bahaya',
-			locked: 'Terkunci',
-			offline: 'Terputus',
+	function filterLabel(value: PriorityFilter) {
+		const labels: Record<PriorityFilter, string> = {
+			urgent: 'Butuh tindakan sekarang',
+			connection: 'Gangguan koneksi',
+			locked: 'Peserta terkunci',
+			near_end_unsubmitted: 'Belum submit mendekati akhir',
+			unreviewed_incident: 'Insiden belum diperiksa',
+			pending_sync: 'Pending sinkronisasi',
+			all: 'Semua peserta',
 		};
 		return labels[value];
 	}
@@ -494,6 +689,33 @@
 			<RecoveryPanel title="Panel Pengawasan Belum Termuat" message={error instanceof Error ? error.message : 'Gagal memuat panel pengawasan'} onRetry={() => { reset?.(); dashboardPromise = loadDashboard(); }} />
 		{/snippet}
 
+		<div class="space-y-3">
+			<div class="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+				<div>
+					<h2 class="text-lg font-semibold text-foreground">Mode Hari-H: Prioritas Operator</h2>
+					<p class="text-sm text-muted-foreground">Klik kartu untuk memfilter peserta yang perlu ditangani cepat lintas ruang.</p>
+				</div>
+				<Badge variant="outline" class={badgeClass(liveMode === 'sse' ? 'normal' : 'offline')}>{liveModeLabel()}</Badge>
+			</div>
+			<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+				{#each priorityCards as card (card.key)}
+					<button
+						type="button"
+						class={`rounded-lg border bg-card p-3 text-left shadow-sm transition hover:border-primary/40 hover:bg-accent/30 ${filter === card.key ? 'border-primary ring-2 ring-primary/20' : ''}`}
+						onclick={() => filter = card.key}
+						aria-pressed={filter === card.key}
+					>
+						<div class="flex items-start justify-between gap-3">
+							<div class="text-sm font-semibold leading-tight text-foreground">{card.label}</div>
+							<Badge variant="outline" class={badgeClass(card.tone)}>{card.count}</Badge>
+						</div>
+						<p class="mt-2 line-clamp-2 text-xs text-muted-foreground">{card.summary}</p>
+						<div class="mt-3 text-xs font-medium text-primary">{card.meta}</div>
+					</button>
+				{/each}
+			</div>
+		</div>
+
 		<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
 			<Card.Root><Card.Header><Card.Title class="text-sm">Peserta</Card.Title></Card.Header><Card.Content><div class="text-2xl font-bold">{participants.length}</div></Card.Content></Card.Root>
 			<Card.Root><Card.Header><Card.Title class="text-sm">Perlu Perhatian/Bahaya</Card.Title></Card.Header><Card.Content><div class="text-2xl font-bold">{participants.filter((row) => riskLevel(row) === 'warning' || riskLevel(row) === 'high').length}</div></Card.Content></Card.Root>
@@ -506,6 +728,27 @@
 				<Card.Header><Card.Title class="text-base">Peringatan Langsung Lintas Ruang</Card.Title></Card.Header>
 				<Card.Content class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
 					{#each recentAlertEvents.slice(0, 9) as event (event.id)}
+						<div class="rounded-lg border bg-card p-3 text-sm">
+							<div class="font-semibold">{event.room_name} · {event.nama}</div>
+							<div class="text-muted-foreground">{eventReason(event)} · {fmtDate(event.created_at)}</div>
+							<div class="mt-2"><LoadingButton size="sm" variant="outline" onclick={() => void acknowledgeEvent(event)} loading={actionBusyId === `ack-${event.id}`} disabled={!event.room_id || (actionBusyId !== '' && actionBusyId !== `ack-${event.id}`)} loadingLabel="Simpan...">Tandai diperiksa</LoadingButton></div>
+						</div>
+					{/each}
+				</Card.Content>
+			</Card.Root>
+		{/if}
+
+		{#if unreviewedIncidentEvents.length > 0}
+			<Card.Root class="border-warning/30">
+				<Card.Header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+					<div>
+						<Card.Title class="text-base">Insiden Belum Diperiksa</Card.Title>
+						<p class="text-sm text-muted-foreground">Tindak lanjuti kejadian penting terbaru dan catat pemeriksaan pengawas.</p>
+					</div>
+					<Button size="sm" variant={filter === 'unreviewed_incident' ? 'default' : 'outline'} onclick={() => filter = 'unreviewed_incident'}>Fokus insiden</Button>
+				</Card.Header>
+				<Card.Content class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+					{#each unreviewedIncidentEvents.slice(0, 6) as event (event.id)}
 						<div class="rounded-lg border bg-card p-3 text-sm">
 							<div class="font-semibold">{event.room_name} · {event.nama}</div>
 							<div class="text-muted-foreground">{eventReason(event)} · {fmtDate(event.created_at)}</div>
@@ -539,10 +782,13 @@
 
 		<Card.Root>
 			<Card.Header class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-				<Card.Title>Peserta Bermasalah / Semua Peserta</Card.Title>
+				<div>
+					<Card.Title>Daftar Tindak Lanjut: {filterLabel(filter)}</Card.Title>
+					<p class="text-sm text-muted-foreground">{filteredParticipants.length} dari {participants.length} peserta sesuai prioritas aktif.</p>
+				</div>
 				<div class="flex flex-wrap gap-2">
-					{#each ['all', 'warning', 'high', 'locked', 'offline'] as item (item)}
-						<Button size="sm" variant={filter === item ? 'default' : 'outline'} onclick={() => filter = item as typeof filter}>{filterLabel(item as typeof filter)}</Button>
+					{#each priorityCards as card (card.key)}
+						<Button size="sm" variant={filter === card.key ? 'default' : 'outline'} onclick={() => filter = card.key}>{card.label} ({card.count})</Button>
 					{/each}
 				</div>
 			</Card.Header>
