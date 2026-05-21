@@ -73,6 +73,7 @@
 	let loading = $state(false);
 	let exporting = $state('');
 	let compactMode = $state(false);
+	let compactDensity = $state<'readable' | 'dense'>('readable');
 	let error = $state('');
 	let report = $state<ReportResult | null>(null);
 
@@ -230,7 +231,12 @@
 
 <svelte:head><title>Laporan Bank Soal</title></svelte:head>
 
-<div class="page-shell" class:compact-mode={compactMode}>
+<div
+	class="page-shell"
+	class:compact-mode={compactMode}
+	class:compact-readable={compactMode && compactDensity === 'readable'}
+	class:compact-dense={compactMode && compactDensity === 'dense'}
+>
 	<section class="hero">
 		<div>
 			<p class="eyebrow">Bank Soal</p>
@@ -247,6 +253,16 @@
 			>
 				{compactMode ? 'Mode Normal' : 'Mode Ringkas'}
 			</button>
+			{#if compactMode}
+				<button
+					type="button"
+					class="secondary density-toggle"
+					onclick={() => (compactDensity = compactDensity === 'readable' ? 'dense' : 'readable')}
+					aria-label="Ganti kepadatan mode ringkas"
+				>
+					{compactDensity === 'readable' ? 'Nyaman 24–26 baris' : 'Padat ±31 baris'}
+				</button>
+			{/if}
 			<button class="secondary" onclick={() => exportReport('csv')} disabled={loading || !!exporting}>{exporting === 'csv' ? 'Menyiapkan…' : 'Download Excel/CSV'}</button>
 			<button class="secondary" onclick={() => exportReport('html')} disabled={loading || !!exporting}>Download HTML</button>
 			<button class="secondary" onclick={() => exportReport('pdf')} disabled={loading || !!exporting}>{exporting === 'pdf' ? 'Render PDF…' : 'Download PDF'}</button>
@@ -356,6 +372,7 @@
 					<span>{report.summary.authors} pembuat/grup</span>
 					<span>{report.summary.subjects} mapel</span>
 					<span>{report.rows.length} baris</span>
+					<span>{compactDensity === 'readable' ? 'Nyaman 24–26 baris' : 'Padat ±31 baris'}</span>
 				</div>
 			{/if}
 			<div class="table-head">
@@ -490,8 +507,12 @@
 	.compact-mode .actions {
 		gap: 6px;
 	}
-	.compact-mode .actions button:not(.compact-active) {
+	.compact-mode .actions button:not(.compact-active):not(.density-toggle) {
 		display: none;
+	}
+	.compact-mode .density-toggle {
+		background: #e0f2fe;
+		color: #075985;
 	}
 	.compact-mode .table-card {
 		padding: 10px;
@@ -572,6 +593,42 @@
 	}
 	.compact-mode td:nth-child(11) {
 		color: #475569;
+	}
+
+	.compact-mode.compact-dense .compact-banner {
+		padding: 8px 10px;
+		font-size: 12px;
+	}
+	.compact-mode.compact-dense .table-card {
+		padding: 8px;
+	}
+	.compact-mode.compact-dense .table-head {
+		padding: 2px 2px 6px;
+	}
+	.compact-mode.compact-dense .table-head h2 {
+		font-size: 15px;
+	}
+	.compact-mode.compact-dense .table-head p,
+	.compact-mode.compact-dense .table-head span {
+		font-size: 11px;
+	}
+	.compact-mode.compact-dense th {
+		font-size: 10.8px;
+		padding: 5px;
+	}
+	.compact-mode.compact-dense td {
+		font-size: 11.2px;
+		padding: 4.5px 5px;
+		line-height: 1.18;
+	}
+	.compact-mode.compact-dense td:nth-child(2) {
+		max-width: 168px;
+	}
+	.compact-mode.compact-dense td:nth-child(3) {
+		max-width: 118px;
+	}
+	.compact-mode.compact-dense td:nth-child(10) {
+		max-width: 132px;
 	}
 
 
