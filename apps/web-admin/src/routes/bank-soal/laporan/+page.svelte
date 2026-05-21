@@ -617,23 +617,25 @@
 		padding: 5px;
 	}
 	.compact-mode.compact-dense .table-head {
-		padding: 2px 2px 6px;
+		padding: 1px 2px 4px;
 	}
 	.compact-mode.compact-dense .table-head h2 {
-		font-size: 15px;
+		font-size: 14px;
 	}
 	.compact-mode.compact-dense .table-head p,
 	.compact-mode.compact-dense .table-head span {
-		font-size: 11px;
+		font-size: 10.5px;
+		line-height: 1.12;
 	}
 	.compact-mode.compact-dense th {
-		font-size: 10.8px;
-		padding: 5px 2.5px;
+		font-size: 10.5px;
+		padding: 3px 2.5px;
+		line-height: 1.08;
 	}
 	.compact-mode.compact-dense td {
-		font-size: 11.2px;
-		padding: 4.5px 2.5px;
-		line-height: 1.18;
+		font-size: 10.8px;
+		padding: 2px 2.5px;
+		line-height: 1.08;
 	}
 	.compact-mode.compact-dense td:nth-child(2) {
 		max-width: 150px;
@@ -675,8 +677,11 @@
 		.compact-mode .hero { padding: 8px; }
 		.compact-mode .table-card { padding: 5px; border-radius: 12px; }
 		.compact-mode .table-head { padding: 2px 2px 6px; }
+		.compact-mode.compact-dense .table-head { padding: 0 1px 3px; }
 		.compact-mode th { padding-inline: 2.5px; }
 		.compact-mode td { padding-inline: 2.5px; }
+		.compact-mode.compact-dense th { padding: 2px 2px; }
+		.compact-mode.compact-dense td { padding: 1.5px 2px; }
 		.compact-mode .compact-banner { gap: 5px; padding-inline: 7px; }
 		.compact-mode .compact-banner span { padding-left: 5px; }
 		.filters { display: grid; grid-template-columns: 1fr; padding: 12px; }
