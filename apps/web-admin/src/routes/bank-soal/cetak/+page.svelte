@@ -102,6 +102,7 @@
 	let dateFrom = $state('');
 	let dateTo = $state('');
 	let sortOrder = $state('subject_code_asc');
+	let resultLimit = $state('100');
 	let loadedTotal = $state(0);
 	let includeAnswer = $state(false);
 	let includeExplanation = $state(false);
@@ -132,6 +133,13 @@
 		{ value: 'author_subject_code_asc', label: 'Guru, mapel, lalu kode soal' },
 		{ value: 'status_subject_code_asc', label: 'Status, mapel, lalu kode soal' },
 		{ value: 'type_subject_code_asc', label: 'Tipe, mapel, lalu kode soal' }
+	];
+
+	const resultLimitOptions = [
+		{ value: '50', label: '50 soal' },
+		{ value: '100', label: '100 soal' },
+		{ value: '200', label: '200 soal' },
+		{ value: 'all', label: 'Semua hasil filter' }
 	];
 
 	const questionTypeOptions = [
@@ -177,6 +185,21 @@
 		return author?.display_name || author?.username || authorFilter;
 	});
 	let selectedSortName = $derived(sortOptions.find((option) => option.value === sortOrder)?.label ?? 'Urutan standar');
+	let selectedLimitName = $derived(resultLimitOptions.find((option) => option.value === resultLimit)?.label ?? '100 soal');
+	let isBroadAllSelection = $derived(
+		canPrintOtherAuthors &&
+		!authorFilter &&
+		!subjectFilter &&
+		!workflowFilter &&
+		!typeFilter &&
+		!dateFrom &&
+		!dateTo &&
+		resultLimit === 'all'
+	);
+	let shouldWarnLargeSelection = $derived(
+		resultLimit === 'all' || (canPrintOtherAuthors && !authorFilter && !subjectFilter && !workflowFilter && !typeFilter)
+	);
+	let loadedHasMore = $derived(loadedTotal > questions.length);
 
 	onMount(() => {
 		void loadReferenceData();
@@ -218,8 +241,17 @@
 		loadingQuestions = true;
 		error = '';
 		try {
+			if (isBroadAllSelection) {
+				const ok = window.confirm(
+					'Bapak memilih Semua guru + semua filter + semua hasil. Ini bisa memuat ratusan soal dan membuat browser berat. Lanjutkan?'
+				);
+				if (!ok) {
+					loadingQuestions = false;
+					return;
+				}
+			}
 			const params = new URLSearchParams({
-				limit: '2000',
+				limit: resultLimit === 'all' ? '2000' : resultLimit,
 				offset: '0',
 				sort: backendSortOrder(sortOrder)
 			});
@@ -406,6 +438,12 @@
 	}
 
 	function printPage() {
+		if (loadedHasMore) {
+			const ok = window.confirm(
+				`Yang tampil baru ${questions.length} dari ${loadedTotal} soal. Cetak halaman ini saja? Pilih batas "Semua hasil filter" jika ingin mencetak seluruh hasil.`
+			);
+			if (!ok) return;
+		}
 		window.print();
 	}
 
@@ -498,7 +536,22 @@
 					{/each}
 				</select>
 			</label>
+			<label class="space-y-1.5 text-sm">
+				<span class="text-xs font-semibold text-muted-foreground">Batas tampil/cetak</span>
+				<select bind:value={resultLimit} onchange={clearLoadedQuestions} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
+					{#each resultLimitOptions as option (option.value)}
+						<option value={option.value}>{option.label}</option>
+					{/each}
+				</select>
+			</label>
 		</div>
+
+		{#if shouldWarnLargeSelection}
+			<div class="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+				Saran: untuk performa terbaik, pilih guru/mapel/status terlebih dahulu atau gunakan batas 50/100/200 soal.
+				Opsi <span class="font-semibold">Semua hasil filter</span> hanya disarankan setelah filter cukup spesifik.
+			</div>
+		{/if}
 
 		<div class="mt-4 flex flex-wrap gap-3 border-t border-border/60 pt-4 text-sm">
 			<label class="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2">
@@ -526,7 +579,7 @@
 	{:else if !hasLoadedQuestions}
 		<div class="no-print rounded-xl border border-dashed border-border bg-card p-6 text-sm leading-6 text-muted-foreground">
 			Pilih guru/mapel/status/tipe/tanggal dan urutan, lalu klik <span class="font-semibold text-foreground">Terapkan & Muat Soal</span>.
-			Halaman ini tidak lagi memuat dan merender semua soal otomatis agar tetap ringan.
+			Halaman ini tidak lagi memuat dan merender semua soal otomatis agar tetap ringan. Default batas cetak adalah 100 soal; pilih batas lebih kecil/besar sesuai kebutuhan.
 		</div>
 	{:else}
 		<section class="print-document rounded-xl border border-border bg-white p-6 text-slate-950 shadow-sm">
@@ -539,11 +592,18 @@
 			<div class="mt-4 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
 				<div><span class="font-semibold">Pembuat:</span> {selectedAuthorName}</div>
 				<div><span class="font-semibold">Jumlah soal:</span> {filteredQuestions.length}{loadedTotal > filteredQuestions.length ? ` dari ${loadedTotal}` : ''}</div>
+				<div><span class="font-semibold">Batas:</span> {selectedLimitName}</div>
 				<div><span class="font-semibold">Status:</span> {workflowOptions.find((option) => option.value === workflowFilter)?.label ?? 'Semua status'}</div>
 				<div><span class="font-semibold">Tipe:</span> {questionTypeOptions.find((option) => option.value === typeFilter)?.label ?? 'Semua tipe'}</div>
 				<div><span class="font-semibold">Kunci:</span> {includeAnswer ? 'Ditampilkan' : 'Tidak ditampilkan'}</div>
 				<div><span class="font-semibold">Urutan:</span> {selectedSortName}</div>
 			</div>
+
+			{#if loadedHasMore}
+				<div class="no-print mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+					Ditampilkan {questions.length} dari {loadedTotal} soal sesuai filter. Untuk mencetak semua, ubah batas ke <span class="font-semibold">Semua hasil filter</span> lalu muat ulang.
+				</div>
+			{/if}
 
 			{#if filteredQuestions.length === 0}
 				<div class="mt-8 rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-600">
