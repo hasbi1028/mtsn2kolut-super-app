@@ -72,6 +72,7 @@
 	let includeSystem = $state(true);
 	let loading = $state(false);
 	let exporting = $state('');
+	let compactMode = $state(false);
 	let error = $state('');
 	let report = $state<ReportResult | null>(null);
 
@@ -172,7 +173,7 @@
 
 <svelte:head><title>Laporan Bank Soal</title></svelte:head>
 
-<div class="page-shell">
+<div class="page-shell" class:compact-mode={compactMode}>
 	<section class="hero">
 		<div>
 			<p class="eyebrow">Bank Soal</p>
@@ -180,6 +181,15 @@
 			<p class="muted">Laporan input, progres mapel, revisi, reviewer, kesiapan paket, dan volume tugas/honor tanpa bantuan AI.</p>
 		</div>
 		<div class="actions">
+			<button
+				type="button"
+				class="secondary"
+				class:compact-active={compactMode}
+				onclick={() => (compactMode = !compactMode)}
+				aria-pressed={compactMode}
+			>
+				{compactMode ? 'Mode Normal' : 'Mode Ringkas'}
+			</button>
 			<button class="secondary" onclick={() => exportReport('csv')} disabled={loading || !!exporting}>{exporting === 'csv' ? 'Menyiapkan…' : 'Download Excel/CSV'}</button>
 			<button class="secondary" onclick={() => exportReport('html')} disabled={loading || !!exporting}>Download HTML</button>
 			<button class="secondary" onclick={() => exportReport('pdf')} disabled={loading || !!exporting}>{exporting === 'pdf' ? 'Render PDF…' : 'Download PDF'}</button>
@@ -283,21 +293,29 @@
 		</section>
 
 		<section class="table-card">
+			{#if compactMode}
+				<div class="compact-banner" aria-label="Ringkasan laporan untuk screenshot">
+					<strong>{report.summary.total} soal</strong>
+					<span>{report.summary.authors} pembuat/grup</span>
+					<span>{report.summary.subjects} mapel</span>
+					<span>{report.rows.length} baris</span>
+				</div>
+			{/if}
 			<div class="table-head">
 				<div><h2>{report.title}</h2><p>{report.period_label} · {report.access_note}</p></div>
 				<span>{report.rows.length} baris</span>
 			</div>
 			<div class="table-wrap" aria-label="Tabel laporan lengkap">
 				<table>
-					<thead><tr><th>No</th><th>Utama</th><th>Mapel</th><th>Tingkat</th><th>Tugas</th><th>Total</th><th>PG</th><th>Essay</th><th>Lain</th><th>Status</th><th>Terakhir</th><th>Keterangan</th></tr></thead>
+					<thead><tr><th>No</th><th>Utama</th><th>Mapel</th><th>Tingkat</th><th class="wide-only">Tugas</th><th>Total</th><th class="wide-only">PG</th><th class="wide-only">Essay</th><th class="wide-only">Lain</th><th>Status</th><th>Terakhir</th><th class="wide-only">Keterangan</th></tr></thead>
 					<tbody>
 						{#each report.rows as row}
 							<tr class:system={row.system_row} class:warning={row.data_warning}>
 								<td>{row.no}</td>
 								<td><b>{row.primary}</b><br><small>{row.secondary}</small></td>
-								<td>{row.subject_name}</td><td>{row.level_name}</td><td>{row.task}</td>
-								<td class="num">{row.total}</td><td class="num">{row.pg}</td><td class="num">{row.essay}</td><td class="num">{row.other}</td>
-								<td>{row.statuses}</td><td>{row.last_input}</td><td>{row.notes}</td>
+								<td>{row.subject_name}</td><td>{row.level_name}</td><td class="wide-only">{row.task}</td>
+								<td class="num">{row.total}</td><td class="num wide-only">{row.pg}</td><td class="num wide-only">{row.essay}</td><td class="num wide-only">{row.other}</td>
+								<td>{row.statuses}</td><td>{row.last_input}</td><td class="wide-only">{row.notes}</td>
 							</tr>
 						{/each}
 					</tbody>
@@ -371,6 +389,121 @@
 	small { color: #64748b; }
 	.mobile-rows { display: none; }
 
+	.compact-active {
+		background: #ccfbf1;
+		color: #0f766e;
+		box-shadow: inset 0 0 0 2px #0f766e;
+	}
+	.compact-banner {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+		align-items: center;
+		border: 1px solid #d1fae5;
+		background: #ecfdf5;
+		color: #065f46;
+		border-radius: 12px;
+		padding: 8px 10px;
+		font-size: 12px;
+	}
+	.compact-banner span {
+		border-left: 1px solid #a7f3d0;
+		padding-left: 8px;
+	}
+	.compact-mode {
+		gap: 8px;
+		padding: 10px;
+	}
+	.compact-mode .hero {
+		border-radius: 16px;
+		padding: 12px 14px;
+		align-items: center;
+	}
+	.compact-mode .hero .eyebrow,
+	.compact-mode .hero .muted,
+	.compact-mode .tabs,
+	.compact-mode .filters,
+	.compact-mode .summary,
+	.compact-mode .wide-only {
+		display: none;
+	}
+	.compact-mode h1 {
+		font-size: 20px;
+	}
+	.compact-mode .actions {
+		gap: 6px;
+	}
+	.compact-mode .actions button:not(.compact-active) {
+		display: none;
+	}
+	.compact-mode .table-card {
+		padding: 8px;
+		border-radius: 16px;
+		box-shadow: 0 6px 18px #0f172a12;
+	}
+	.compact-mode .table-head {
+		padding: 2px 2px 6px;
+	}
+	.compact-mode .table-head h2 {
+		font-size: 15px;
+	}
+	.compact-mode .table-head p,
+	.compact-mode .table-head span {
+		font-size: 11px;
+	}
+	.compact-mode .table-wrap {
+		display: block;
+		border: 1px solid #e5e7eb;
+		border-radius: 12px;
+		overflow-x: auto;
+	}
+	.compact-mode table {
+		min-width: 0;
+		width: 100%;
+		table-layout: auto;
+	}
+	.compact-mode th {
+		position: static;
+		background: #f8fafc;
+		color: #475569;
+		font-size: 10px;
+		padding: 5px 4px;
+		border-bottom: 1px solid #dbe3ea;
+	}
+	.compact-mode td {
+		font-size: 10.5px;
+		padding: 4px;
+		line-height: 1.15;
+	}
+	.compact-mode td:first-child,
+	.compact-mode th:first-child {
+		width: 26px;
+		text-align: center;
+		color: #64748b;
+	}
+	.compact-mode td:nth-child(2) {
+		max-width: 140px;
+	}
+	.compact-mode td:nth-child(2) b {
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.compact-mode td:nth-child(2) small {
+		display: none;
+	}
+	.compact-mode td:nth-child(3),
+	.compact-mode td:nth-child(4),
+	.compact-mode td:nth-child(10),
+	.compact-mode td:nth-child(11) {
+		white-space: nowrap;
+	}
+	.compact-mode tr:nth-child(even) td {
+		background: #f8fafc;
+	}
+
+
 	.status-filter { position: relative; display: grid; gap: 6px; min-width: 220px; }
 	.filter-label { font-size: 12px; font-weight: 800; color: #475569; }
 	.status-trigger { border: 1px solid #cbd5e1; border-radius: 10px; padding: 8px 10px; min-height: 42px; background: white; display: grid; gap: 2px; text-align: left; cursor: pointer; min-width: 220px; }
@@ -393,6 +526,9 @@
 		.hero { display: grid; border-radius: 18px; padding: 18px; }
 		.hero .actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
 		.hero .actions button { width: 100%; padding-inline: 10px; font-size: 12px; }
+		.compact-mode .hero { display: flex; padding: 10px; }
+		.compact-mode .hero .actions { width: auto; display: flex; margin-left: auto; }
+		.compact-mode .hero .actions button { width: auto; }
 		.filters { display: grid; grid-template-columns: 1fr; padding: 12px; }
 		.filters label, .filters button, input, select, .status-filter, .status-trigger { width: 100%; min-width: 0; }
 		.status-menu { position: static; width: 100%; box-shadow: 0 10px 24px #0f172a18; }
@@ -406,6 +542,8 @@
 		.table-head { display: grid; align-items: start; }
 		.table-head span { justify-self: start; }
 		.table-wrap { display: none; }
+		.compact-mode .table-wrap { display: block; }
+		.compact-mode .mobile-rows { display: none; }
 		.mobile-rows { display: grid; gap: 10px; }
 		.mobile-rows article { border: 1px solid #e5e7eb; border-radius: 16px; padding: 12px; background: white; }
 		.mobile-row-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
