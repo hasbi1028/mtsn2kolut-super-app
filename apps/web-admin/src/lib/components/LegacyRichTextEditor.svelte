@@ -399,6 +399,7 @@
 		min-height: inherit;
 		padding: 14px !important;
 		line-height: 1.65;
+		overflow-x: auto;
 	}
 	:global(.legacy-rich-editor--compact .ql-toolbar.ql-snow) {
 		padding: 4px !important;
@@ -443,19 +444,27 @@
 		vertical-align: middle;
 	}
 	:global(.legacy-rich-editor .ql-editor table) {
-		width: 100%;
-		max-width: 100%;
+		width: max-content;
+		min-width: min(100%, 28rem);
+		max-width: none;
 		margin: 0.75rem 0;
 		border-collapse: collapse;
-		overflow-x: auto;
+		table-layout: auto;
 	}
-	:global(.legacy-rich-editor .ql-editor td) {
+	:global(.legacy-rich-editor .ql-editor td),
+	:global(.legacy-rich-editor .ql-editor th) {
+		min-width: 4.5rem;
 		border: 1px solid var(--border);
 		padding: 0.45rem 0.55rem;
 		vertical-align: top;
+		white-space: normal;
+		word-break: normal;
+		overflow-wrap: break-word;
 	}
+	:global(.legacy-rich-editor .ql-editor th),
 	:global(.legacy-rich-editor .ql-editor tr:first-child td) {
 		background: var(--muted);
+		font-weight: 700;
 	}
 	:global(.legacy-rich-editor .ql-snow .ql-stroke) {
 		stroke: var(--primary) !important;

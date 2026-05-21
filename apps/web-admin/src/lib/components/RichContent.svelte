@@ -57,9 +57,14 @@
 		list-style: square;
 	}
 
+	:global(.rich-content) {
+		overflow-x: auto;
+	}
+
 	:global(.rich-content table) {
-		width: 100%;
-		max-width: 100%;
+		width: max-content;
+		min-width: min(100%, 28rem);
+		max-width: none;
 		margin: 0.75rem 0;
 		border-collapse: collapse;
 		table-layout: auto;
@@ -67,9 +72,13 @@
 
 	:global(.rich-content td),
 	:global(.rich-content th) {
+		min-width: 4.5rem;
 		border: 1px solid var(--border);
 		padding: 0.45rem 0.55rem;
 		vertical-align: top;
+		white-space: normal;
+		word-break: normal;
+		overflow-wrap: break-word;
 	}
 
 	:global(.rich-content th),
