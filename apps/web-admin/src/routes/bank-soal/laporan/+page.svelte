@@ -112,6 +112,63 @@
 		workflowStatuses = [];
 	}
 
+	const subjectShortNames: Record<string, string> = {
+		'Pendidikan Jasmani, Olahraga, dan Kesehatan': 'PJOK',
+		'Pendidikan Jasmani Olahraga dan Kesehatan': 'PJOK',
+		'Ilmu Pengetahuan Alam': 'IPA',
+		'Ilmu Pengetahuan Sosial': 'IPS',
+		'Bahasa Indonesia': 'B. Indonesia',
+		'Bahasa Inggris': 'B. Inggris',
+		'Bahasa Arab': 'B. Arab',
+		'Pendidikan Pancasila dan Kewarganegaraan': 'PPKn',
+		'Sejarah Kebudayaan Islam': 'SKI',
+		"Al-Qur'an Hadis": 'Qurdis',
+		"Qur'an Hadits": 'Qurdis',
+		'Akidah Akhlak': 'Akidah',
+		'Fikih': 'Fikih',
+		'Prakarya': 'Prakarya',
+		'Matematika': 'MTK',
+		'Informatika': 'Informatika'
+	};
+
+	const statusShortNames: Record<string, string> = {
+		draft: 'Draft',
+		submitted: 'Sub',
+		review: 'Review',
+		revision_needed: 'Rev',
+		approved: 'Appr',
+		published: 'Pub',
+		rejected: 'Reject',
+		archived: 'Arsip'
+	};
+
+	function compactSubjectName(value?: string) {
+		const name = value?.trim() ?? '';
+		return subjectShortNames[name] ?? name;
+	}
+
+	function compactStatuses(value?: string) {
+		const text = value?.trim() ?? '';
+		if (!text) return '';
+		return text
+			.split(',')
+			.map((part) => {
+				const [rawStatus, rawCount] = part.trim().split(':');
+				const label = statusShortNames[rawStatus?.trim() ?? ''] ?? rawStatus?.trim() ?? '';
+				const count = rawCount?.trim();
+				return count ? `${label} ${count}` : label;
+			})
+			.filter(Boolean)
+			.join(' · ');
+	}
+
+	function compactDateTime(value?: string) {
+		const text = value?.trim() ?? '';
+		const match = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}:\d{2}))?/.exec(text);
+		if (!match) return text;
+		return `${match[3]}/${match[2]}${match[4] ? ` ${match[4]}` : ''}`;
+	}
+
 	function params(format?: string) {
 		const p = new URLSearchParams();
 		p.set('report', activeReport);
@@ -313,9 +370,9 @@
 							<tr class:system={row.system_row} class:warning={row.data_warning}>
 								<td>{row.no}</td>
 								<td><b>{row.primary}</b><br><small>{row.secondary}</small></td>
-								<td>{row.subject_name}</td><td>{row.level_name}</td><td class="wide-only">{row.task}</td>
+								<td>{compactMode ? compactSubjectName(row.subject_name) : row.subject_name}</td><td>{row.level_name}</td><td class="wide-only">{row.task}</td>
 								<td class="num">{row.total}</td><td class="num wide-only">{row.pg}</td><td class="num wide-only">{row.essay}</td><td class="num wide-only">{row.other}</td>
-								<td>{row.statuses}</td><td>{row.last_input}</td><td class="wide-only">{row.notes}</td>
+								<td>{compactMode ? compactStatuses(row.statuses) : row.statuses}</td><td>{compactMode ? compactDateTime(row.last_input) : row.last_input}</td><td class="wide-only">{row.notes}</td>
 							</tr>
 						{/each}
 					</tbody>
@@ -466,14 +523,14 @@
 		position: static;
 		background: #f8fafc;
 		color: #475569;
-		font-size: 10px;
-		padding: 5px 4px;
+		font-size: 10.8px;
+		padding: 5px 5px;
 		border-bottom: 1px solid #dbe3ea;
 	}
 	.compact-mode td {
-		font-size: 10.5px;
-		padding: 4px;
-		line-height: 1.15;
+		font-size: 11.2px;
+		padding: 4.5px 5px;
+		line-height: 1.18;
 	}
 	.compact-mode td:first-child,
 	.compact-mode th:first-child {
@@ -482,7 +539,7 @@
 		color: #64748b;
 	}
 	.compact-mode td:nth-child(2) {
-		max-width: 140px;
+		max-width: 168px;
 	}
 	.compact-mode td:nth-child(2) b {
 		display: block;
@@ -501,6 +558,20 @@
 	}
 	.compact-mode tr:nth-child(even) td {
 		background: #f8fafc;
+	}
+
+	.compact-mode td:nth-child(3) {
+		max-width: 118px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.compact-mode td:nth-child(10) {
+		max-width: 132px;
+		font-weight: 700;
+		color: #334155;
+	}
+	.compact-mode td:nth-child(11) {
+		color: #475569;
 	}
 
 
