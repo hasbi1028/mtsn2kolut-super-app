@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
 	clearBankSoalDraftPayloads,
 	enqueueBankSoalQuestionSync,
+	guardBankSoalQuestionTableSyncItem,
 	isAuthExpiredSyncStatus,
 	isLegacyComposerDraftKey,
 	listBankSoalQuestionSyncQueue,
 	loadBankSoalDraftPayload,
 	markBankSoalQuestionSyncFailed,
+	syncItemContainsTableHtml,
 	migrateLegacyBankSoalDrafts,
 	normalizeBankSoalQuestionSyncEndpoint,
 	removeBankSoalQuestionSyncItem,
@@ -106,6 +108,49 @@ describe('bank soal sync queue fallback', () => {
 
 		await removeBankSoalQuestionSyncItem('queue-1', { ...noIdb, storage });
 		await expect(listBankSoalQuestionSyncQueue({ ...noIdb, storage })).resolves.toEqual([]);
+	});
+
+
+	it('blocks automatic sync only for existing question updates that contain table html', () => {
+		const tablePayload = { stem_html: '<table><tr><td>A</td></tr></table>' };
+		const textPayload = { stem_html: '<p>Aman</p>' };
+
+		expect(guardBankSoalQuestionTableSyncItem({
+			draftKey: 'draft-new',
+			intent: 'draft',
+			method: 'POST',
+			endpoint: '/api/bank-soal/questions',
+			payload: tablePayload,
+		}).blocked).toBe(false);
+		expect(guardBankSoalQuestionTableSyncItem({
+			draftKey: 'draft-existing',
+			intent: 'draft',
+			method: 'PUT',
+			endpoint: '/api/bank-soal/questions/abc',
+			questionId: 'abc',
+			payload: tablePayload,
+		}).blocked).toBe(true);
+		expect(guardBankSoalQuestionTableSyncItem({
+			draftKey: 'draft-existing',
+			intent: 'draft',
+			method: 'POST',
+			endpoint: '/api/bank-soal/questions/abc',
+			payload: tablePayload,
+		}).blocked).toBe(true);
+		expect(guardBankSoalQuestionTableSyncItem({
+			draftKey: 'draft-existing',
+			intent: 'draft',
+			method: 'PUT',
+			endpoint: '/api/bank-soal/questions/abc',
+			payload: textPayload,
+		}).blocked).toBe(false);
+		expect(syncItemContainsTableHtml({
+			draftKey: 'draft-existing',
+			intent: 'draft',
+			method: 'PUT',
+			endpoint: '/api/bank-soal/questions/abc',
+			payload: tablePayload,
+		})).toBe(true);
 	});
 
 	it('migrates legacy cbt endpoints and filters unsafe queued endpoints', async () => {

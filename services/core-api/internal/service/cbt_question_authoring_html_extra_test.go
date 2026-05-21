@@ -91,3 +91,53 @@ func TestPlainTextFromHTMLDocumentsAdditionalCurrentBranches(t *testing.T) {
 		}
 	})
 }
+
+func TestSanitizeHTMLPreservesBankSoalTableStructure(t *testing.T) {
+	input := `<table><thead><tr><th>Mapel</th><th>Nilai</th></tr></thead><tbody><tr><td>Matematika</td><td>90</td></tr></tbody></table>`
+
+	got := sanitizeHTML(input)
+
+	for _, want := range []string{
+		"<table>", "<thead>", "<tr>", "<th>Mapel</th>", "<th>Nilai</th>",
+		"<tbody>", "<td>Matematika</td>", "<td>90</td>", "</table>",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("sanitizeHTML(table) = %q, want to contain %q", got, want)
+		}
+	}
+}
+
+func TestSanitizeHTMLRemovesDangerousPayloadInsideBankSoalTable(t *testing.T) {
+	input := `<table><tbody><tr onclick="alert(1)"><td style="color:#112233; background:url(javascript:alert(7))" onmouseover="alert(2)">A<script>alert(3)</script><a href="javascript:alert(4)">tautan</a><img src="javascript:alert(5)" onerror="alert(6)"></td></tr></tbody></table>`
+
+	got := sanitizeHTML(input)
+
+	for _, want := range []string{"<table>", "<tbody>", "<tr>", "<td", "A", "tautan"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("sanitizeHTML(dangerous table) = %q, want to contain %q", got, want)
+		}
+	}
+	for _, forbidden := range []string{"onclick", "onmouseover", "onerror", "javascript:", "<script", "alert("} {
+		if strings.Contains(strings.ToLower(got), forbidden) {
+			t.Fatalf("sanitizeHTML(dangerous table) = %q, must not contain %q", got, forbidden)
+		}
+	}
+}
+
+func TestSanitizeHTMLDocumentsTableHeaderSpanAttributes(t *testing.T) {
+	input := `<table><thead><tr><th colspan="2" rowspan="1" data-extra="drop" style="text-align:center;color:#ff0000">Kompetensi</th></tr></thead><tbody><tr><td colspan="3" rowspan="2">Baris 1</td></tr></tbody></table>`
+
+	got := sanitizeHTML(input)
+
+	for _, want := range []string{
+		"<th", "colspan=\"2\"", "rowspan=\"1\"", "text-align: center", "color: #ff0000", "Kompetensi</th>",
+		"<td", "colspan=\"3\"", "rowspan=\"2\"", "Baris 1</td>",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("sanitizeHTML(table spans) = %q, want to contain %q", got, want)
+		}
+	}
+	if strings.Contains(got, "data-extra") {
+		t.Fatalf("sanitizeHTML(table spans) = %q, data-extra should not be preserved", got)
+	}
+}

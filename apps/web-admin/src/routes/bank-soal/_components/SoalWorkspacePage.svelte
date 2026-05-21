@@ -33,10 +33,12 @@
 		clearBankSoalDraftPayloads,
 		deleteBankSoalDraftPayload,
 		enqueueBankSoalQuestionSync,
+		guardBankSoalQuestionTableSyncItem,
 		isAuthExpiredSyncStatus,
 		listBankSoalQuestionSyncQueue,
 		loadBankSoalDraftPayload,
 		markBankSoalQuestionSyncFailed,
+		markBankSoalQuestionSyncPending,
 		migrateLegacyBankSoalDrafts,
 		removeBankSoalQuestionSyncItem,
 		saveBankSoalDraftPayload,
@@ -44,6 +46,11 @@
 	} from '$lib/client/bank-soal-offline';
 	import { questionExportButtonLabel, questionExportSuccessMessage } from '$lib/cbt/question-export-ui';
 	import { canDeleteBankSoal, canPublishBankSoal, canReviewBankSoal } from '$lib/bank-soal/access';
+	import {
+		compareTableHtmlBeforeSave,
+		hasBlockingTableHtmlIssues,
+		type TableHtmlIssue,
+	} from '$lib/bank-soal/table-html-guard';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { htmlToPlainText } from '$lib/utils/html-text';
@@ -317,6 +324,14 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		writer_notes: string;
 		review_notes: string;
 	};
+	type ServerBaselineHtml = {
+		stem: string;
+		stimulus: string;
+		explanation: string;
+		rubric: string;
+		options: Record<string, string>;
+	};
+	type GuardedHtmlField = { label: string; baseline: string; draft: string };
 	type OptionLabel = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 	type LegacyImportResult = {
 		total_rows: number;
@@ -493,6 +508,7 @@ type TimelineItem = {
 	let offlineStatus = $state('');
 	let offlineAuthRequired = $state(false);
 	let offlineLastSyncAt = $state<string | null>(null);
+	let serverBaselineHtml = $state<ServerBaselineHtml | null>(null);
 
 	// ── Form fields ────────────────────────────────────────────────────────────
 	let fSubjectId = $state('');
@@ -1002,6 +1018,7 @@ type TimelineItem = {
 	function resetQuestionBodyForNext(meta: ComposerMetadataMemory) {
 		editingId = null;
 		editingEventId = '';
+		clearServerBaselineHtml();
 		detailReadOnly = false;
 		detailQuestion = null;
 		questionVersions = [];
@@ -1246,14 +1263,19 @@ type TimelineItem = {
 
 	async function useServerQuestionData(deleteLocalDraft = true) {
 		const draftKey = pendingLocalDraftKey || activeDraftKey;
-		if (deleteLocalDraft && draftKey) await deleteBankSoalDraftPayload(draftKey);
+		const serverSignature = draftSignature;
+		if (deleteLocalDraft && draftKey) {
+			await deleteBankSoalDraftPayload(draftKey);
+		} else if (draftKey) {
+			await saveBankSoalDraftPayload(draftKey, buildDraftPayload());
+		}
+		lastDraftSig = serverSignature;
 		suppressDraftAutosave = false;
 		clearPendingLocalDraftChoice();
-		lastDraftSig = '';
 		draftStatus = deleteLocalDraft
 			? 'Data server dipakai. Konsep lokal lama dihapus agar tidak menimpa revisi.'
-			: 'Data server dipakai untuk sesi ini.';
-		draftSavedAt = null;
+			: 'Data server dipakai dan konsep lokal diganti dengan salinan server yang rapi.';
+		draftSavedAt = deleteLocalDraft ? null : new Date().toISOString();
 		toast.success(draftStatus);
 	}
 
@@ -1521,6 +1543,17 @@ type TimelineItem = {
 		toast.warning(authRequired ? offlineStatus : 'Perubahan Bank Soal disimpan lokal dan akan disinkronkan saat online.');
 	}
 
+	async function resolveMatchingOfflineQueueAfterManualSave(draftKey: string, savedId?: string | null) {
+		const items = await listBankSoalQuestionSyncQueue<QuestionSavePayload>();
+		const matchingItems = items.filter((item) => item.draftKey === draftKey || (savedId && item.questionId === savedId));
+		if (matchingItems.length === 0) return;
+		for (const item of matchingItems) {
+			await removeBankSoalQuestionSyncItem(item.id);
+		}
+		await refreshOfflineQueueState();
+		offlineStatus = offlineQueueCount > 0 ? `${offlineQueueCount} perubahan Bank Soal masih menunggu sinkronisasi.` : 'Antrian Bank Soal selesai.';
+	}
+
 	async function syncBankSoalOfflineQueue(manual = false) {
 		if (offlineSyncBusy) return;
 		updateOnlineStatus();
@@ -1540,9 +1573,16 @@ type TimelineItem = {
 		offlineStatus = 'Menyinkronkan antrian Bank Soal...';
 		let synced = 0;
 		let failed = 0;
+		let blocked = 0;
 		let authBlocked = false;
 		try {
 			for (const item of items) {
+				const tableGuard = guardBankSoalQuestionTableSyncItem(item);
+				if (tableGuard.blocked) {
+					blocked += 1;
+					await markBankSoalQuestionSyncPending(item.id, tableGuard.reason ?? 'Update soal bertabel menunggu sinkronisasi manual.');
+					continue;
+				}
 				let responseReceived = false;
 				try {
 					const response = await fetch(item.endpoint, {
@@ -1577,6 +1617,9 @@ type TimelineItem = {
 			}
 			if (authBlocked) {
 				offlineStatus = bankSoalQueueAuthRequiredMessage(offlineQueueCount);
+				toast.warning(offlineStatus);
+			} else if (blocked > 0) {
+				offlineStatus = `${blocked} update soal bertabel tidak disinkronkan otomatis. Buka soal saat online, periksa tabel, lalu simpan manual.`;
 				toast.warning(offlineStatus);
 			} else if (failed > 0) {
 				offlineStatus = `${failed} perubahan belum tersinkron. Coba lagi saat koneksi stabil.`;
@@ -2200,6 +2243,7 @@ type TimelineItem = {
 
 	async function openReadonlyDetail(q: Question) {
 		composerBusy = true;
+		clearServerBaselineHtml();
 		detailReadOnly = true;
 		detailQuestion = null;
 		questionVersions = [];
@@ -2222,6 +2266,7 @@ type TimelineItem = {
 	}
 
 	function resetForm() {
+		clearServerBaselineHtml();
 		fSubjectId = '';
 		fQuestionType = 'multiple_choice';
 		fAuthoringMode = 'beginner';
@@ -2321,6 +2366,7 @@ type TimelineItem = {
 			fCognitiveLevel = d.cognitive_level ?? '';
 			fHotsFlag = d.hots_flag ?? false;
 			fWorkflowStatus = normalizeWorkflowStatus(d.workflow_status);
+			storeServerBaselineHtml(d);
 			showInspector = false;
 			focusedEditor = null;
 			composerMobilePanel = 'write';
@@ -2356,6 +2402,7 @@ type TimelineItem = {
 			fCognitiveLevel = q.cognitive_level ?? '';
 			fHotsFlag = q.hots_flag ?? false;
 			fWorkflowStatus = normalizeWorkflowStatus(q.workflow_status);
+			storeServerBaselineHtml(q);
 			showInspector = false;
 			focusedEditor = null;
 			composerMobilePanel = 'write';
@@ -2375,6 +2422,7 @@ type TimelineItem = {
 		setModuleMode('catalog');
 		editingId = null;
 		editingEventId = '';
+		clearServerBaselineHtml();
 		focusedEditor = null;
 		showInspector = false;
 	}
@@ -2482,6 +2530,7 @@ type TimelineItem = {
 	function openImport() {
 		editingId = null;
 		editingEventId = '';
+		clearServerBaselineHtml();
 		setImportSubject(filterSubject || fSubjectId || '');
 		importFile = null;
 		importResult = null;
@@ -2554,6 +2603,97 @@ type TimelineItem = {
 		}));
 	}
 
+	function htmlContainsTable(html: string | null | undefined): boolean {
+		return /<table\b/i.test(html ?? '');
+	}
+
+	function emptyServerBaselineHtml(): ServerBaselineHtml {
+		return { stem: '', stimulus: '', explanation: '', rubric: '', options: {} };
+	}
+
+	function optionBaselineKey(prefix: 'option' | 'match', label: string, fallbackIndex: number): string {
+		const normalized = label.trim();
+		return `${prefix}:${normalized || fallbackIndex + 1}`;
+	}
+
+	function optionGuardLabel(key: string): string {
+		const [prefix, rawLabel = ''] = key.split(':');
+		if (prefix === 'match') return `Pasangan kanan ${rawLabel}`;
+		return `Opsi ${rawLabel}`;
+	}
+
+	function optionBaselineMap(options: OptionItem[] | undefined): Record<string, string> {
+		const baseline: Record<string, string> = {};
+		for (const [index, option] of (options ?? []).entries()) {
+			const leftHtml = option.html || option.text || option.latex || '';
+			const rightHtml = option.match_html || option.match_text || '';
+			if (leftHtml) baseline[optionBaselineKey('option', option.label ?? '', index)] = leftHtml;
+			if (rightHtml) baseline[optionBaselineKey('match', option.match_label ?? '', index)] = rightHtml;
+		}
+		return baseline;
+	}
+
+	function storeServerBaselineHtml(q: Question) {
+		serverBaselineHtml = {
+			stem: q.stem_html || q.question_text || '',
+			stimulus: q.stimulus_html ?? '',
+			explanation: q.explanation_html ?? '',
+			rubric: q.rubric_html ?? '',
+			options: optionBaselineMap(q.options),
+		};
+	}
+
+	function clearServerBaselineHtml() {
+		serverBaselineHtml = null;
+	}
+
+	function collectTableHtmlGuardIssues(payload: QuestionSavePayload): Array<{ label: string; issue: TableHtmlIssue }> {
+		const baseline = serverBaselineHtml ?? emptyServerBaselineHtml();
+		const guardedFields: GuardedHtmlField[] = [
+			{ label: 'Pertanyaan', baseline: baseline.stem, draft: payload.stem_html },
+			{ label: 'Bacaan pendukung', baseline: baseline.stimulus, draft: payload.stimulus_html },
+			{ label: 'Pembahasan', baseline: baseline.explanation, draft: payload.explanation_html },
+			{ label: 'Rubrik', baseline: baseline.rubric, draft: payload.rubric_html },
+		];
+
+		for (const [index, option] of payload.options.entries()) {
+			const leftKey = optionBaselineKey('option', option.label ?? '', index);
+			if (baseline.options[leftKey] || option.html) {
+				guardedFields.push({ label: optionGuardLabel(leftKey), baseline: baseline.options[leftKey] ?? '', draft: option.html ?? '' });
+			}
+
+			const rightKey = optionBaselineKey('match', option.match_label ?? '', index);
+			if (baseline.options[rightKey] || option.match_html) {
+				guardedFields.push({ label: optionGuardLabel(rightKey), baseline: baseline.options[rightKey] ?? '', draft: option.match_html ?? '' });
+			}
+		}
+
+		const issues: Array<{ label: string; issue: TableHtmlIssue }> = [];
+		for (const field of guardedFields) {
+			if (!htmlContainsTable(field.baseline) && !htmlContainsTable(field.draft)) continue;
+			const fieldIssues = compareTableHtmlBeforeSave({
+				fieldLabel: field.label,
+				serverHtml: field.baseline,
+				draftHtml: field.draft,
+			});
+			if (!hasBlockingTableHtmlIssues(fieldIssues)) continue;
+			for (const issue of fieldIssues) {
+				if (issue.severity === 'blocker') issues.push({ label: field.label, issue });
+			}
+		}
+		return issues;
+	}
+
+	function assertTableHtmlSafeBeforeSave(payload: QuestionSavePayload): boolean {
+		const issues = collectTableHtmlGuardIssues(payload);
+		if (issues.length === 0) return true;
+
+		const first = issues[0];
+		const detail = first.issue.evidence ? ` (${first.issue.evidence})` : '';
+		toast.error(`Simpan dibatalkan: tabel di ${first.label} berisiko rusak${detail}. Periksa tabel lalu simpan lagi.`);
+		return false;
+	}
+
 	function buildPayloadAnswerKey(): string {
 		const config = getQuestionTypeConfig(fQuestionType);
 		if (config.answerMode === 'rubric') return '';
@@ -2609,6 +2749,7 @@ type TimelineItem = {
 				return;
 			}
 		}
+		const payload = buildQuestionSavePayload(false);
 		const saveKey = `${editingId ?? activeDraftKey}:${intent}:${createNext ? 'next' : 'close'}:${draftSignature}`;
 		if (saveInFlightKey === saveKey) {
 			toast.info('Simpan soal masih diproses. Mohon tunggu sebentar.');
@@ -2617,19 +2758,20 @@ type TimelineItem = {
 		saveInFlightKey = saveKey;
 		composerBusy = true;
 		composerAction = createNext ? (intent === 'review' ? 'review_next' : 'draft_next') : intent;
-		const payload = buildQuestionSavePayload(false);
 		const offlinePayload = buildQuestionSavePayload(isReview);
 		const metadataForNext = buildComposerMetadataMemory();
 		const wasEdit = Boolean(editingId);
 		let responseReceived = false;
 		let responseStatus: number | undefined;
 		try {
+			const saveDraftKey = activeDraftKey;
 			const syncInput = buildBankSoalQuestionSyncInput({
-				draftKey: activeDraftKey,
+				draftKey: saveDraftKey,
 				editingId,
 				intent,
 				payload,
 			});
+			if (!assertTableHtmlSafeBeforeSave(payload)) return;
 			if (!browserOnline()) {
 				await queueQuestionSave(offlinePayload, intent, false);
 				closeComposer();
@@ -2654,6 +2796,8 @@ type TimelineItem = {
 				editingEventId = saved?.event_id ?? selectedEventId;
 			}
 			if (saved?.workflow_status) fWorkflowStatus = normalizeWorkflowStatus(saved.workflow_status);
+			if (saved) storeServerBaselineHtml(saved);
+			await resolveMatchingOfflineQueueAfterManualSave(saveDraftKey, savedId);
 			if (isReview) {
 				if (!savedId) throw new Error('ID soal hasil simpan tidak ditemukan untuk kirim verifikasi.');
 				await fetch(clientApiPath`/api/bank-soal/questions/${savedId}/workflow`, {

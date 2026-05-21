@@ -51,6 +51,11 @@ export type BankSoalQuestionSyncInput<TPayload = unknown> = {
 	authRequired?: boolean;
 };
 
+export type BankSoalQuestionSyncTableGuardResult = {
+	blocked: boolean;
+	reason?: string;
+};
+
 export type BankSoalStorageOptions = {
 	indexedDB?: IDBFactory | null;
 	storage?: StorageLike | null;
@@ -252,6 +257,43 @@ function normalizeBankSoalQuestionSyncItem<TPayload>(item: BankSoalQuestionSyncI
 	return endpoint === item.endpoint ? item : { ...item, endpoint };
 }
 
+function payloadContainsTableHtml(value: unknown, seen = new WeakSet<object>()): boolean {
+	if (typeof value === 'string') return /<table\b/i.test(value);
+	if (!value || typeof value !== 'object') return false;
+	if (seen.has(value)) return false;
+	seen.add(value);
+	if (Array.isArray(value)) return value.some((item) => payloadContainsTableHtml(item, seen));
+	return Object.values(value as Record<string, unknown>).some((item) => payloadContainsTableHtml(item, seen));
+}
+
+function endpointTargetsExistingBankSoalQuestion(endpoint: string): boolean {
+	const normalized = normalizeBankSoalQuestionSyncEndpoint(endpoint);
+	if (!normalized) return false;
+	const suffix = normalized.slice(BANK_SOAL_QUESTION_SYNC_PREFIX.length);
+	return /^\/[^/]+$/.test(suffix);
+}
+
+export function bankSoalQuestionSyncPayloadHasTableHtml(item: BankSoalQuestionSyncItem | BankSoalQuestionSyncInput): boolean {
+	return payloadContainsTableHtml(item.payload);
+}
+
+export function syncItemContainsTableHtml(item: BankSoalQuestionSyncItem | BankSoalQuestionSyncInput): boolean {
+	return bankSoalQuestionSyncPayloadHasTableHtml(item);
+}
+
+export function isExistingBankSoalQuestionUpdateSyncItem(item: BankSoalQuestionSyncItem | BankSoalQuestionSyncInput): boolean {
+	return item.method === 'PUT' || Boolean(item.questionId) || endpointTargetsExistingBankSoalQuestion(item.endpoint);
+}
+
+export function guardBankSoalQuestionTableSyncItem(item: BankSoalQuestionSyncItem | BankSoalQuestionSyncInput): BankSoalQuestionSyncTableGuardResult {
+	if (!isExistingBankSoalQuestionUpdateSyncItem(item)) return { blocked: false };
+	if (!bankSoalQuestionSyncPayloadHasTableHtml(item)) return { blocked: false };
+	return {
+		blocked: true,
+		reason: 'Update soal yang memuat tabel tidak disinkronkan otomatis. Buka soal saat online, periksa tabel, lalu simpan manual.',
+	};
+}
+
 export function isLegacyComposerDraftKey(key: string): boolean {
 	return key.startsWith(CURRENT_COMPOSER_DRAFT_PREFIX) || key.startsWith(LEGACY_CBT_COMPOSER_DRAFT_PREFIX);
 }
@@ -413,6 +455,24 @@ export async function markBankSoalQuestionSyncFailed(
 		attempts: item.attempts + 1,
 		lastError: message,
 		authRequired,
+		updatedAt: nowIso(options),
+	};
+	if (await idbPut(BANK_SOAL_SYNC_STORE, nextItem, options)) return;
+	saveFallbackQueueItems(items.map((queued) => (queued.id === id ? nextItem : queued)), storageFromOptions(options));
+}
+
+export async function markBankSoalQuestionSyncPending(
+	id: string,
+	message: string,
+	options?: BankSoalStorageOptions
+): Promise<void> {
+	const items = await listBankSoalQuestionSyncQueue(options);
+	const item = items.find((queued) => queued.id === id);
+	if (!item) return;
+	const nextItem: BankSoalQuestionSyncItem = {
+		...item,
+		lastError: message,
+		authRequired: false,
 		updatedAt: nowIso(options),
 	};
 	if (await idbPut(BANK_SOAL_SYNC_STORE, nextItem, options)) return;
