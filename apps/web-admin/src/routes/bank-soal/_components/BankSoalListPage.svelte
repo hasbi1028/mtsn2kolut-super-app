@@ -13,6 +13,7 @@
   import PackageIcon from "@lucide/svelte/icons/package";
   import PencilIcon from "@lucide/svelte/icons/pencil";
   import PlusIcon from "@lucide/svelte/icons/plus";
+  import PrinterIcon from "@lucide/svelte/icons/printer";
   import RefreshCcwIcon from "@lucide/svelte/icons/refresh-ccw";
   import SearchIcon from "@lucide/svelte/icons/search";
   import SettingsIcon from "@lucide/svelte/icons/settings";
@@ -405,6 +406,7 @@
   );
   let composerHref = $derived(resolve("/bank-soal/tambah"));
   let importHref = $derived(resolve("/bank-soal/impor"));
+  let printHref = $derived(resolve("/bank-soal/cetak"));
   let reviewRouteHref = $derived(reviewHref());
   let analysisHref = $derived(resolve("/bank-soal/analisis-butir"));
   let mapelKdHref = $derived(resolve("/bank-soal/mapel-kd"));
@@ -1443,6 +1445,10 @@
               Tambah Soal
             </Button>
           {/if}
+          <Button href={printHref} variant="outline">
+            <PrinterIcon class="size-4" />
+            Cetak Soal Saya
+          </Button>
           {#if canReview}
             <Button href={reviewRouteHref} variant="outline">
               <ClipboardCheckIcon class="size-4" />
@@ -1519,6 +1525,14 @@
                 Verifikasi
               </Button>
             {/if}
+            <Button
+              href={printHref}
+              variant="outline"
+              class="border-white/30 bg-white/10 text-white hover:bg-white/20"
+            >
+              <PrinterIcon class="size-4" />
+              Cetak Soal Saya
+            </Button>
             {#if canImport}
               <Button
                 href={importHref}
