@@ -97,7 +97,9 @@
 	let authors = $state<Author[]>([]);
 	let authorFilter = $state('');
 	let subjectFilter = $state('');
-	let workflowFilter = $state('');
+	type WorkflowFilter = 'draft' | 'submitted' | 'review' | 'reviewed' | 'revision_needed' | 'approved' | 'published' | 'rejected' | 'archived';
+	let workflowFilters = $state<WorkflowFilter[]>([]);
+	let workflowDropdownOpen = $state(false);
 	let typeFilter = $state('');
 	let dateFrom = $state('');
 	let dateTo = $state('');
@@ -142,6 +144,11 @@
 		{ value: 'all', label: 'Semua hasil filter' }
 	];
 
+	const workflowSelectableOptions = workflowOptions.filter((option) => option.value) as Array<{
+		value: WorkflowFilter;
+		label: string;
+	}>;
+
 	const questionTypeOptions = [
 		{ value: '', label: 'Semua tipe' },
 		{ value: 'multiple_choice', label: 'Pilihan Ganda' },
@@ -167,7 +174,7 @@
 		sortQuestions(
 			questions.filter((question) => {
 				if (subjectFilter && question.subject_id !== subjectFilter) return false;
-				if (workflowFilter && (question.workflow_status ?? question.status ?? '') !== workflowFilter) return false;
+				if (workflowFilters.length > 0 && !workflowFilters.includes((question.workflow_status ?? question.status ?? '') as WorkflowFilter)) return false;
 				if (typeFilter && question.question_type !== typeFilter) return false;
 				if (dateFrom && normalizeDate(question.created_at) < dateFrom) return false;
 				if (dateTo && normalizeDate(question.created_at) > dateTo) return false;
@@ -190,14 +197,14 @@
 		canPrintOtherAuthors &&
 		!authorFilter &&
 		!subjectFilter &&
-		!workflowFilter &&
+		workflowFilters.length === 0 &&
 		!typeFilter &&
 		!dateFrom &&
 		!dateTo &&
 		resultLimit === 'all'
 	);
 	let shouldWarnLargeSelection = $derived(
-		resultLimit === 'all' || (canPrintOtherAuthors && !authorFilter && !subjectFilter && !workflowFilter && !typeFilter)
+		resultLimit === 'all' || (canPrintOtherAuthors && !authorFilter && !subjectFilter && workflowFilters.length === 0 && !typeFilter)
 	);
 	let loadedHasMore = $derived(loadedTotal > questions.length);
 
@@ -261,7 +268,7 @@
 				params.set('author_username', currentUsername);
 			}
 			if (subjectFilter) params.set('subject_id', subjectFilter);
-			if (workflowFilter) params.set('workflow_status', workflowFilter);
+			workflowFilters.forEach((status) => params.append('workflow_status', status));
 			if (typeFilter) params.set('question_type', typeFilter);
 			const questionPayload = await fetch(clientApiPathWithQuery('/api/bank-soal/questions', params)).then((response) =>
 				readClientApiData<QuestionListResponse>(response, 'Gagal memuat soal untuk dicetak')
@@ -292,6 +299,24 @@
 
 	function compareDate(left: string | undefined, right: string | undefined): number {
 		return new Date(left ?? 0).getTime() - new Date(right ?? 0).getTime();
+	}
+
+	function toggleWorkflowFilter(value: WorkflowFilter) {
+		workflowFilters = workflowFilters.includes(value)
+			? workflowFilters.filter((item) => item !== value)
+			: [...workflowFilters, value];
+		clearLoadedQuestions();
+	}
+
+	function clearWorkflowFilters() {
+		workflowFilters = [];
+		clearLoadedQuestions();
+	}
+
+	function workflowFilterSummary(): string {
+		if (workflowFilters.length === 0) return 'Semua status';
+		if (workflowFilters.length === 1) return workflowLabel(workflowFilters[0]);
+		return `${workflowFilters.length} status dipilih`;
 	}
 
 	function sortQuestions(items: Question[]): Question[] {
@@ -502,14 +527,36 @@
 					{/each}
 				</select>
 			</label>
-			<label class="space-y-1.5 text-sm">
-				<span class="text-xs font-semibold text-muted-foreground">Status</span>
-				<select bind:value={workflowFilter} onchange={clearLoadedQuestions} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
-					{#each workflowOptions as option (option.value)}
-						<option value={option.value}>{option.label}</option>
-					{/each}
-				</select>
-			</label>
+			<div class="relative space-y-1.5 text-sm">
+				<span id="print-workflow-filter-label" class="text-xs font-semibold text-muted-foreground">Status</span>
+				<button
+					type="button"
+					class="flex h-9 w-full items-center justify-between rounded-md border border-border bg-background px-3 text-left text-sm"
+					aria-labelledby="print-workflow-filter-label"
+					aria-expanded={workflowDropdownOpen}
+					onclick={() => (workflowDropdownOpen = !workflowDropdownOpen)}
+				>
+					<span class="truncate">{workflowFilterSummary()}</span>
+					<span class="text-muted-foreground">▾</span>
+				</button>
+				{#if workflowDropdownOpen}
+					<div class="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-border bg-popover p-2 text-popover-foreground shadow-lg">
+						<button type="button" class="mb-1 w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted" onclick={clearWorkflowFilters}>
+							Semua status
+						</button>
+						{#each workflowSelectableOptions as option (option.value)}
+							<label class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-muted">
+								<input
+									type="checkbox"
+									checked={workflowFilters.includes(option.value)}
+									onchange={() => toggleWorkflowFilter(option.value)}
+								/>
+								<span>{option.label}</span>
+							</label>
+						{/each}
+					</div>
+				{/if}
+			</div>
 			<label class="space-y-1.5 text-sm">
 				<span class="text-xs font-semibold text-muted-foreground">Tipe</span>
 				<select bind:value={typeFilter} onchange={clearLoadedQuestions} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
@@ -545,6 +592,22 @@
 				</select>
 			</label>
 		</div>
+
+		{#if workflowFilters.length > 0}
+			<div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+				<span class="font-semibold text-muted-foreground">Status dipilih:</span>
+				{#each workflowFilters as status (status)}
+					<button
+						type="button"
+						class="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-primary hover:bg-primary/15"
+						onclick={() => toggleWorkflowFilter(status)}
+					>
+						{workflowLabel(status)} ×
+					</button>
+				{/each}
+				<button type="button" class="text-muted-foreground underline-offset-4 hover:underline" onclick={clearWorkflowFilters}>Reset status</button>
+			</div>
+		{/if}
 
 		{#if shouldWarnLargeSelection}
 			<div class="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
@@ -593,7 +656,7 @@
 				<div><span class="font-semibold">Pembuat:</span> {selectedAuthorName}</div>
 				<div><span class="font-semibold">Jumlah soal:</span> {filteredQuestions.length}{loadedTotal > filteredQuestions.length ? ` dari ${loadedTotal}` : ''}</div>
 				<div><span class="font-semibold">Batas:</span> {selectedLimitName}</div>
-				<div><span class="font-semibold">Status:</span> {workflowOptions.find((option) => option.value === workflowFilter)?.label ?? 'Semua status'}</div>
+				<div><span class="font-semibold">Status:</span> {workflowFilterSummary()}</div>
 				<div><span class="font-semibold">Tipe:</span> {questionTypeOptions.find((option) => option.value === typeFilter)?.label ?? 'Semua tipe'}</div>
 				<div><span class="font-semibold">Kunci:</span> {includeAnswer ? 'Ditampilkan' : 'Tidak ditampilkan'}</div>
 				<div><span class="font-semibold">Urutan:</span> {selectedSortName}</div>
