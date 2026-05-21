@@ -22,6 +22,11 @@
 		code?: string;
 	};
 
+	type Author = {
+		username: string;
+		display_name?: string | null;
+	};
+
 	type OptionItem = {
 		label?: string;
 		text?: string;
@@ -87,6 +92,8 @@
 	let error = $state('');
 	let questions = $state<Question[]>([]);
 	let subjects = $state<Subject[]>([]);
+	let authors = $state<Author[]>([]);
+	let authorFilter = $state('');
 	let subjectFilter = $state('');
 	let workflowFilter = $state('');
 	let typeFilter = $state('');
@@ -124,6 +131,11 @@
 	];
 
 	let currentUsername = $derived(data.user?.username ?? data.account?.username ?? '');
+	let userRoles = $derived(data.user?.roles ?? (data.user?.role ? [data.user.role] : []));
+	let userPermissions = $derived(data.user?.permissions ?? []);
+	let canPrintOtherAuthors = $derived(
+		userRoles.includes('admin') || userPermissions.includes('bank_soal.manage') || userPermissions.includes('bank_soal.analytics')
+	);
 	let teacherName = $derived(
 		data.account?.profile_nama || data.account?.display_name || data.user?.username || 'Guru'
 	);
@@ -140,6 +152,12 @@
 	let selectedSubjectName = $derived(
 		subjectFilter ? subjects.find((subject) => subject.id === subjectFilter)?.name || 'Mapel dipilih' : 'Semua mapel'
 	);
+	let selectedAuthorName = $derived.by(() => {
+		if (!canPrintOtherAuthors) return teacherName;
+		if (!authorFilter) return 'Semua guru';
+		const author = authors.find((item) => item.username === authorFilter);
+		return author?.display_name || author?.username || authorFilter;
+	});
 
 	onMount(() => {
 		void loadPrintData();
@@ -157,19 +175,30 @@
 			const params = new URLSearchParams({
 				limit: '2000',
 				offset: '0',
-				author_username: currentUsername,
 				sort: 'newest'
 			});
-			const [questionPayload, subjectPayload] = await Promise.all([
+			if (canPrintOtherAuthors) {
+				if (authorFilter) params.set('author_username', authorFilter);
+			} else {
+				params.set('author_username', currentUsername);
+			}
+			const requests = [
 				fetch(clientApiPathWithQuery('/api/bank-soal/questions', params)).then((response) =>
 					readClientApiData<QuestionListResponse>(response, 'Gagal memuat soal untuk dicetak')
 				),
 				fetch('/api/bank-soal/soal-support/subjects').then((response) =>
 					readClientApiData<AcademicPayload>(response, 'Gagal memuat daftar mapel')
-				)
-			]);
+				),
+				canPrintOtherAuthors
+					? fetch('/api/bank-soal/soal-support/authors').then((response) =>
+						readClientApiData<Author[]>(response, 'Gagal memuat daftar guru')
+					)
+					: Promise.resolve([] as Author[])
+			] as const;
+			const [questionPayload, subjectPayload, authorPayload] = await Promise.all(requests);
 			questions = questionPayload.items ?? [];
 			subjects = subjectPayload.subjects ?? [];
+			authors = authorPayload ?? [];
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Data cetak belum dapat dimuat';
 		} finally {
@@ -295,6 +324,10 @@
 	function printPage() {
 		window.print();
 	}
+
+	function handleAuthorChange() {
+		void loadPrintData();
+	}
 </script>
 
 <svelte:head>
@@ -308,7 +341,9 @@
 				<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Bank Soal</p>
 				<h1 class="mt-1 text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Cetak Soal Saya</h1>
 				<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-					Cetak soal yang Bapak/Ibu input sendiri. Kunci jawaban, pembahasan, dan metadata bisa ditampilkan sesuai kebutuhan.
+					{canPrintOtherAuthors
+						? 'Admin dapat mencetak soal milik semua guru atau memilih guru tertentu.'
+						: 'Cetak soal yang Bapak/Ibu input sendiri.'} Kunci jawaban, pembahasan, dan metadata bisa ditampilkan sesuai kebutuhan.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
@@ -323,6 +358,17 @@
 		</div>
 
 		<div class="mt-4 grid gap-3 border-t border-border/60 pt-4 sm:grid-cols-2 lg:grid-cols-4">
+			{#if canPrintOtherAuthors}
+				<label class="space-y-1.5 text-sm">
+					<span class="text-xs font-semibold text-muted-foreground">Guru/Pembuat</span>
+					<select bind:value={authorFilter} onchange={handleAuthorChange} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
+						<option value="">Semua guru</option>
+						{#each authors as author (author.username)}
+							<option value={author.username}>{author.display_name || author.username}</option>
+						{/each}
+					</select>
+				</label>
+			{/if}
 			<label class="space-y-1.5 text-sm">
 				<span class="text-xs font-semibold text-muted-foreground">Mapel</span>
 				<select bind:value={subjectFilter} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
@@ -385,10 +431,11 @@
 			<header class="border-b border-slate-300 pb-4 text-center">
 				<p class="text-sm font-semibold uppercase tracking-[0.18em]">MTsN 2 Kolaka Utara</p>
 				<h2 class="mt-1 text-xl font-bold">{printTitle}</h2>
-				<p class="mt-1 text-sm text-slate-600">{teacherName} · {selectedSubjectName} · Dicetak {formatDateTime()}</p>
+				<p class="mt-1 text-sm text-slate-600">{selectedAuthorName} · {selectedSubjectName} · Dicetak {formatDateTime()}</p>
 			</header>
 
 			<div class="mt-4 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+				<div><span class="font-semibold">Pembuat:</span> {selectedAuthorName}</div>
 				<div><span class="font-semibold">Jumlah soal:</span> {filteredQuestions.length}</div>
 				<div><span class="font-semibold">Status:</span> {workflowOptions.find((option) => option.value === workflowFilter)?.label ?? 'Semua status'}</div>
 				<div><span class="font-semibold">Tipe:</span> {questionTypeOptions.find((option) => option.value === typeFilter)?.label ?? 'Semua tipe'}</div>
