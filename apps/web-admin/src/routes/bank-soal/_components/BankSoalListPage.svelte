@@ -440,19 +440,19 @@
     },
     {
       key: "draft",
-      label: "Draft",
-      helper: "masih disusun",
+      label: "Belum Terbit",
+      helper: "semua draft operasional",
       value: counts.draft,
       tone: "slate",
-      active: workflowFilters.length === 1 && workflowFilters[0] === "draft" && !publicationFilter,
+      active: workflowFilters.length === 0 && publicationFilter === "draft",
     },
     {
       key: "review",
       label: "Verifikasi",
-      helper: "menunggu keputusan",
+      helper: "diajukan/review",
       value: counts.review,
       tone: "amber",
-      active: workflowFilters.length === 1 && workflowFilters[0] === "review" && !publicationFilter,
+      active: workflowFiltersEqual(["submitted", "review"]) && !publicationFilter,
     },
     {
       key: "rejected",
@@ -460,7 +460,7 @@
       helper: "perlu perbaikan",
       value: counts.rejected,
       tone: "red",
-      active: workflowFilters.length === 1 && workflowFilters[0] === "rejected" && !publicationFilter,
+      active: workflowFiltersEqual(["revision_needed", "rejected"]) && publicationFilter === "draft",
     },
     {
       key: "approved",
@@ -493,8 +493,19 @@
   }
 
   function appendStatusParams(params: URLSearchParams, key: StatusKey) {
-    if (key === "draft" || key === "review" || key === "rejected") {
-      params.set("workflow_status", key);
+    if (key === "draft") {
+      params.set("status", "draft");
+      return;
+    }
+    if (key === "review") {
+      params.append("workflow_status", "submitted");
+      params.append("workflow_status", "review");
+      return;
+    }
+    if (key === "rejected") {
+      params.append("workflow_status", "revision_needed");
+      params.append("workflow_status", "rejected");
+      params.set("status", "draft");
       return;
     }
     if (key === "approved") {
@@ -744,6 +755,15 @@
     if (key === "all") {
       workflowFilters = [];
       publicationFilter = "";
+    } else if (key === "draft") {
+      workflowFilters = [];
+      publicationFilter = "draft";
+    } else if (key === "review") {
+      workflowFilters = ["submitted", "review"];
+      publicationFilter = "";
+    } else if (key === "rejected") {
+      workflowFilters = ["revision_needed", "rejected"];
+      publicationFilter = "draft";
     } else if (key === "approved") {
       workflowFilters = ["approved"];
       publicationFilter = "draft";
@@ -755,6 +775,13 @@
       publicationFilter = "";
     }
     load(1, true, pageSize);
+  }
+
+  function workflowFiltersEqual(expected: WorkflowFilter[]): boolean {
+    return (
+      workflowFilters.length === expected.length &&
+      expected.every((status) => workflowFilters.includes(status))
+    );
   }
 
   function readInitialFilters() {
@@ -2593,23 +2620,27 @@
                             type="button"
                             aria-expanded={isQuestionExpanded(question.id)}
                             aria-controls={`question-detail-${question.id}`}
-                            aria-label={`${isQuestionExpanded(question.id) ? "Tutup detail" : "Lihat detail"} soal ${compactText(question.code, "tanpa kode")}`}
+                            aria-label={`${isQuestionExpanded(question.id) ? "Tutup pratinjau" : "Buka pratinjau"} soal ${compactText(question.code, "tanpa kode")}`}
+                            title="Pratinjau ringkas di halaman ini"
                             onclick={() => toggleQuestionDetail(question.id)}
                           >
-                            {isQuestionExpanded(question.id) ? "Tutup" : "Detail"}
+                            {isQuestionExpanded(question.id) ? "Tutup" : "Pratinjau"}
                           </Button>
                           <Button
                             href={questionHref(question)}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             variant="outline"
                             size="sm"
-                            aria-label={`${isQuickEditable(question) ? quickEditLabel(question) : "Lihat"} soal ${compactText(question.code, "tanpa kode")}`}
+                            title="Buka halaman soal lengkap di tab baru"
+                            aria-label={`${isQuickEditable(question) ? quickEditLabel(question) : "Buka"} soal ${compactText(question.code, "tanpa kode")} di tab baru`}
                           >
                             {#if isQuickEditable(question)}
                               <PencilIcon class="size-3.5" />
                               {quickEditLabel(question)}
                             {:else}
                               <EyeIcon class="size-3.5" />
-                              Lihat
+                              Buka
                             {/if}
                           </Button>
                           {#if hasSecondaryActions(question)}
@@ -2800,15 +2831,18 @@
                   <div class="grid gap-2 sm:grid-cols-2">
                     <Button
                       href={questionHref(question)}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       variant="outline"
                       class="min-h-10 w-full"
+                      title="Buka halaman soal lengkap di tab baru"
                     >
                       {#if isQuickEditable(question)}
                         <PencilIcon class="size-4" />
-                        {quickEditLabel(question)} di Penyusun soal
+                        {quickEditLabel(question)} di tab baru
                       {:else}
                         <EyeIcon class="size-4" />
-                        Lihat Soal
+                        Buka Soal di Tab Baru
                       {/if}
                     </Button>
                     <Button
@@ -2817,10 +2851,11 @@
                       type="button"
                       aria-expanded={isQuestionExpanded(question.id)}
                       aria-controls={`question-mobile-detail-${question.id}`}
-                      aria-label={`${isQuestionExpanded(question.id) ? "Tutup detail" : "Lihat detail"} soal ${compactText(question.code, "tanpa kode")}`}
+                      aria-label={`${isQuestionExpanded(question.id) ? "Tutup pratinjau" : "Buka pratinjau"} soal ${compactText(question.code, "tanpa kode")}`}
+                      title="Pratinjau ringkas di halaman ini"
                       onclick={() => toggleQuestionDetail(question.id)}
                     >
-                      {isQuestionExpanded(question.id) ? "Tutup Detail" : "Detail Soal"}
+                      {isQuestionExpanded(question.id) ? "Tutup Pratinjau" : "Pratinjau Soal"}
                     </Button>
                     {#if canReturnToRevision(question)}
                       <Button
