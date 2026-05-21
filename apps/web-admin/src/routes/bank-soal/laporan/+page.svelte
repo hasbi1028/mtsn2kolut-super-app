@@ -460,8 +460,8 @@
 		background: #ecfdf5;
 		color: #065f46;
 		border-radius: 12px;
-		padding: 8px 10px;
-		font-size: 12px;
+		padding: 9px 11px;
+		font-size: 13px;
 	}
 	.compact-banner span {
 		border-left: 1px solid #a7f3d0;
@@ -494,19 +494,19 @@
 		display: none;
 	}
 	.compact-mode .table-card {
-		padding: 8px;
+		padding: 10px;
 		border-radius: 16px;
 		box-shadow: 0 6px 18px #0f172a12;
 	}
 	.compact-mode .table-head {
-		padding: 2px 2px 6px;
+		padding: 3px 3px 8px;
 	}
 	.compact-mode .table-head h2 {
-		font-size: 15px;
+		font-size: 16px;
 	}
 	.compact-mode .table-head p,
 	.compact-mode .table-head span {
-		font-size: 11px;
+		font-size: 12px;
 	}
 	.compact-mode .table-wrap {
 		display: block;
@@ -523,14 +523,14 @@
 		position: static;
 		background: #f8fafc;
 		color: #475569;
-		font-size: 10.8px;
-		padding: 5px 5px;
+		font-size: 11.5px;
+		padding: 7px 6px;
 		border-bottom: 1px solid #dbe3ea;
 	}
 	.compact-mode td {
-		font-size: 11.2px;
-		padding: 4.5px 5px;
-		line-height: 1.18;
+		font-size: 12px;
+		padding: 7px 6px;
+		line-height: 1.24;
 	}
 	.compact-mode td:first-child,
 	.compact-mode th:first-child {
@@ -539,7 +539,7 @@
 		color: #64748b;
 	}
 	.compact-mode td:nth-child(2) {
-		max-width: 168px;
+		max-width: 190px;
 	}
 	.compact-mode td:nth-child(2) b {
 		display: block;
@@ -561,12 +561,12 @@
 	}
 
 	.compact-mode td:nth-child(3) {
-		max-width: 118px;
+		max-width: 130px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 	.compact-mode td:nth-child(10) {
-		max-width: 132px;
+		max-width: 150px;
 		font-weight: 700;
 		color: #334155;
 	}
