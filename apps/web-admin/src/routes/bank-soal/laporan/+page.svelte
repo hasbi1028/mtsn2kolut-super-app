@@ -122,6 +122,9 @@
 		'Bahasa Inggris': 'B. Inggris',
 		'Bahasa Arab': 'B. Arab',
 		'Pendidikan Pancasila dan Kewarganegaraan': 'PPKn',
+		'Pendidikan Pancasila': 'PPKn',
+		'Mulok Kewirausahaan': 'Mulok KWU',
+		'Muatan Lokal Kewirausahaan': 'Mulok KWU',
 		'Sejarah Kebudayaan Islam': 'SKI',
 		"Al-Qur'an Hadis": 'Qurdis',
 		"Qur'an Hadits": 'Qurdis',
@@ -470,23 +473,23 @@
 	}
 	.compact-banner {
 		display: flex;
-		gap: 8px;
+		gap: 6px;
 		flex-wrap: wrap;
 		align-items: center;
 		border: 1px solid #d1fae5;
 		background: #ecfdf5;
 		color: #065f46;
 		border-radius: 12px;
-		padding: 9px 11px;
+		padding: 8px 9px;
 		font-size: 13px;
 	}
 	.compact-banner span {
 		border-left: 1px solid #a7f3d0;
-		padding-left: 8px;
+		padding-left: 6px;
 	}
 	.compact-mode {
-		gap: 8px;
-		padding: 10px;
+		gap: 7px;
+		padding: 8px;
 	}
 	.compact-mode .hero {
 		border-radius: 16px;
@@ -515,8 +518,8 @@
 		color: #075985;
 	}
 	.compact-mode .table-card {
-		padding: 10px;
-		border-radius: 16px;
+		padding: 6px;
+		border-radius: 14px;
 		box-shadow: 0 6px 18px #0f172a12;
 	}
 	.compact-mode .table-head {
@@ -532,7 +535,7 @@
 	.compact-mode .table-wrap {
 		display: block;
 		border: 1px solid #e5e7eb;
-		border-radius: 12px;
+		border-radius: 10px;
 		overflow-x: auto;
 	}
 	.compact-mode table {
@@ -545,22 +548,22 @@
 		background: #f8fafc;
 		color: #475569;
 		font-size: 11.5px;
-		padding: 7px 6px;
+		padding: 7px 3px;
 		border-bottom: 1px solid #dbe3ea;
 	}
 	.compact-mode td {
 		font-size: 12px;
-		padding: 7px 6px;
+		padding: 7px 3px;
 		line-height: 1.24;
 	}
 	.compact-mode td:first-child,
 	.compact-mode th:first-child {
-		width: 26px;
+		width: 20px;
 		text-align: center;
 		color: #64748b;
 	}
 	.compact-mode td:nth-child(2) {
-		max-width: 190px;
+		max-width: 170px;
 	}
 	.compact-mode td:nth-child(2) b {
 		display: block;
@@ -582,25 +585,36 @@
 	}
 
 	.compact-mode td:nth-child(3) {
-		max-width: 130px;
+		max-width: 104px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
+	.compact-mode td:nth-child(4),
+	.compact-mode th:nth-child(4) {
+		width: 34px;
+	}
+	.compact-mode td:nth-child(6),
+	.compact-mode th:nth-child(6) {
+		width: 30px;
+	}
 	.compact-mode td:nth-child(10) {
-		max-width: 150px;
+		max-width: 132px;
 		font-weight: 700;
 		color: #334155;
 	}
-	.compact-mode td:nth-child(11) {
+	.compact-mode td:nth-child(11),
+	.compact-mode th:nth-child(11) {
+		width: 56px;
 		color: #475569;
+		text-align: right;
 	}
 
 	.compact-mode.compact-dense .compact-banner {
-		padding: 8px 10px;
+		padding: 7px 8px;
 		font-size: 12px;
 	}
 	.compact-mode.compact-dense .table-card {
-		padding: 8px;
+		padding: 5px;
 	}
 	.compact-mode.compact-dense .table-head {
 		padding: 2px 2px 6px;
@@ -614,21 +628,21 @@
 	}
 	.compact-mode.compact-dense th {
 		font-size: 10.8px;
-		padding: 5px;
+		padding: 5px 2.5px;
 	}
 	.compact-mode.compact-dense td {
 		font-size: 11.2px;
-		padding: 4.5px 5px;
+		padding: 4.5px 2.5px;
 		line-height: 1.18;
 	}
 	.compact-mode.compact-dense td:nth-child(2) {
-		max-width: 168px;
+		max-width: 150px;
 	}
 	.compact-mode.compact-dense td:nth-child(3) {
-		max-width: 118px;
+		max-width: 92px;
 	}
 	.compact-mode.compact-dense td:nth-child(10) {
-		max-width: 132px;
+		max-width: 118px;
 	}
 
 
@@ -656,7 +670,15 @@
 		.hero .actions button { width: 100%; padding-inline: 10px; font-size: 12px; }
 		.compact-mode .hero { display: flex; padding: 10px; }
 		.compact-mode .hero .actions { width: auto; display: flex; margin-left: auto; }
-		.compact-mode .hero .actions button { width: auto; }
+		.compact-mode .hero .actions button { width: auto; padding-inline: 8px; }
+		.compact-mode { padding: 6px; gap: 6px; }
+		.compact-mode .hero { padding: 8px; }
+		.compact-mode .table-card { padding: 5px; border-radius: 12px; }
+		.compact-mode .table-head { padding: 2px 2px 6px; }
+		.compact-mode th { padding-inline: 2.5px; }
+		.compact-mode td { padding-inline: 2.5px; }
+		.compact-mode .compact-banner { gap: 5px; padding-inline: 7px; }
+		.compact-mode .compact-banner span { padding-left: 5px; }
 		.filters { display: grid; grid-template-columns: 1fr; padding: 12px; }
 		.filters label, .filters button, input, select, .status-filter, .status-trigger { width: 100%; min-width: 0; }
 		.status-menu { position: static; width: 100%; box-shadow: 0 10px 24px #0f172a18; }
