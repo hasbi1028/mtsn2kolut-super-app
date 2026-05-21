@@ -455,6 +455,10 @@ type TimelineItem = {
 	let draftSavedAt = $state<string | null>(null);
 	let pendingLocalDraft = $state<DraftPayload | null>(null);
 	let pendingLocalDraftSavedAt = $state<string | null>(null);
+	let pendingLocalDraftKey = $state('');
+	let pendingLocalDraftQuestionLabel = $state('');
+	let localDraftChoiceOpen = $state(false);
+	let suppressDraftAutosave = $state(false);
 	let showInspector = $state(false);
 	let composerMobilePanel = $state<'write' | 'preview'>('write');
 	let composerMobileStepId = $state<ComposerMobileStep['id']>('metadata');
@@ -1147,7 +1151,7 @@ type TimelineItem = {
 	}
 
 	$effect(() => {
-		if (activeMode !== 'composer') return;
+		if (activeMode !== 'composer' || suppressDraftAutosave) return;
 		const sig = draftSignature;
 		if (sig === lastDraftSig) return;
 
@@ -1160,49 +1164,26 @@ type TimelineItem = {
 		};
 	});
 
+	function applyDraftPayload(d: Partial<DraftPayload>, statusMessage = 'Konsep tersimpan dipulihkan') {
+		applyComposerMetadataMemory(d, statusMessage);
+		fStem = d.stem ?? '';
+		fStimulus = d.stimulus ?? '';
+		fRubric = d.rubric ?? '';
+		fExplanation = d.explanation ?? '';
+		fOptions = normalizeOptionCount(d.options ?? defaultOptionsForQuestionType(fQuestionType), fQuestionType);
+		fMatchingPairs = normalizeMatchingPairs(d.matchingPairs ?? [], fQuestionType);
+		fMatchingDistractors = normalizeMatchingDistractors(d.matchingDistractors ?? [], fQuestionType);
+		fAnswerKey = normalizeAnswerKey(d.answerKey, fQuestionType, answerItemCountForType(fQuestionType));
+		fWorkflowStatus = normalizeWorkflowStatus(d.workflowStatus);
+		draftStatus = statusMessage;
+		draftSavedAt = d.savedAt ?? null;
+	}
+
 	async function restoreDraft(): Promise<boolean> {
 		try {
-			const d = await loadBankSoalDraftPayload<{
-				eventId?: string;
-				specialEventMode?: boolean;
-				subjectId?: string;
-				questionType?: string;
-				authoringMode?: string;
-				stem?: string;
-				stimulus?: string;
-				rubric?: string;
-				explanation?: string;
-				options?: string[];
-				matchingPairs?: MatchingPair[];
-				matchingDistractors?: string[];
-				answerKey?: string;
-				weight?: number;
-				difficulty?: string;
-				isRtl?: boolean;
-				gradeLevel?: number;
-				targetLevel?: string;
-				academicPhase?: string;
-				cpRef?: string;
-				tpRef?: string;
-				kdRef?: string;
-				indicatorRef?: string;
-				materialTopic?: string;
-				cognitiveLevel?: string;
-				hotsFlag?: boolean;
-				workflowStatus?: string;
-				savedAt?: string;
-			}>(activeDraftKey);
+			const d = await loadBankSoalDraftPayload<DraftPayload>(activeDraftKey);
 			if (!d) return false;
-			applyComposerMetadataMemory(d, 'Konsep tersimpan dipulihkan');
-			fStem = d.stem ?? '';
-			fStimulus = d.stimulus ?? '';
-			fRubric = d.rubric ?? '';
-			fExplanation = d.explanation ?? '';
-			fOptions = normalizeOptionCount(d.options ?? defaultOptionsForQuestionType(fQuestionType), fQuestionType);
-			fMatchingPairs = normalizeMatchingPairs(d.matchingPairs ?? [], fQuestionType);
-			fMatchingDistractors = normalizeMatchingDistractors(d.matchingDistractors ?? [], fQuestionType);
-			fAnswerKey = normalizeAnswerKey(d.answerKey, fQuestionType, answerItemCountForType(fQuestionType));
-			fWorkflowStatus = normalizeWorkflowStatus(d.workflowStatus);
+			applyDraftPayload(d);
 			return true;
 		} catch {
 			return false;
@@ -1214,6 +1195,66 @@ type TimelineItem = {
 		lastDraftSig = '';
 		draftStatus = '';
 		draftSavedAt = null;
+	}
+
+	function localDraftSavedAtLabel(): string {
+		if (!pendingLocalDraftSavedAt) return 'waktu tidak tercatat';
+		const saved = new Date(pendingLocalDraftSavedAt);
+		if (Number.isNaN(saved.getTime())) return 'waktu tidak tercatat';
+		return saved.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+	}
+
+	function clearPendingLocalDraftChoice() {
+		pendingLocalDraft = null;
+		pendingLocalDraftSavedAt = null;
+		pendingLocalDraftKey = '';
+		pendingLocalDraftQuestionLabel = '';
+		localDraftChoiceOpen = false;
+	}
+
+	async function promptLocalDraftChoiceForEdit(q: Question) {
+		const draftKey = activeDraftKey;
+		try {
+			const localDraft = await loadBankSoalDraftPayload<DraftPayload>(draftKey);
+			if (!localDraft || editingId !== q.id) {
+				suppressDraftAutosave = false;
+				return;
+			}
+			pendingLocalDraft = localDraft;
+			pendingLocalDraftSavedAt = localDraft.savedAt ?? null;
+			pendingLocalDraftKey = draftKey;
+			pendingLocalDraftQuestionLabel = q.code || stemPreview(q) || 'soal ini';
+			draftStatus = 'Data server dimuat. Ada konsep lokal tersimpan; pilih sumber data sebelum menyimpan.';
+			draftSavedAt = null;
+			localDraftChoiceOpen = true;
+		} catch {
+			suppressDraftAutosave = false;
+		}
+	}
+
+	function usePendingLocalDraft() {
+		if (!pendingLocalDraft) {
+			suppressDraftAutosave = false;
+			clearPendingLocalDraftChoice();
+			return;
+		}
+		applyDraftPayload(pendingLocalDraft, 'Konsep lokal dipakai untuk revisi');
+		suppressDraftAutosave = false;
+		clearPendingLocalDraftChoice();
+		toast.info('Konsep lokal dipakai. Cek ulang tabel sebelum menyimpan.');
+	}
+
+	async function useServerQuestionData(deleteLocalDraft = true) {
+		const draftKey = pendingLocalDraftKey || activeDraftKey;
+		if (deleteLocalDraft && draftKey) await deleteBankSoalDraftPayload(draftKey);
+		suppressDraftAutosave = false;
+		clearPendingLocalDraftChoice();
+		lastDraftSig = '';
+		draftStatus = deleteLocalDraft
+			? 'Data server dipakai. Konsep lokal lama dihapus agar tidak menimpa revisi.'
+			: 'Data server dipakai untuk sesi ini.';
+		draftSavedAt = null;
+		toast.success(draftStatus);
 	}
 
 	async function clearAllLocalDrafts() {
@@ -2174,6 +2215,7 @@ type TimelineItem = {
 			void loadQuestionVersions(d.id);
 			void loadQuestionTimeline(d.id);
 			setModuleMode('composer');
+			suppressDraftAutosave = false;
 		} finally {
 			composerBusy = false;
 		}
@@ -2211,6 +2253,8 @@ type TimelineItem = {
 	}
 
 	function openCreate() {
+		suppressDraftAutosave = false;
+		clearPendingLocalDraftChoice();
 		detailReadOnly = false;
 		detailQuestion = null;
 		questionVersions = [];
@@ -2231,10 +2275,13 @@ type TimelineItem = {
 	}
 
 	async function openEdit(q: Question, options: { allowReadOnly?: boolean } = {}) {
+		clearPendingLocalDraftChoice();
+		suppressDraftAutosave = !options.allowReadOnly;
 		detailReadOnly = false;
 		detailQuestion = null;
 		questionVersions = [];
 		if (!options.allowReadOnly && !isQuickEditable(q)) {
+			suppressDraftAutosave = false;
 			setModuleMode('catalog');
 			toast.warning(explainQuickEditBlocked(q));
 			return;
@@ -2280,9 +2327,7 @@ type TimelineItem = {
 			setModuleMode('composer');
 			if (!options.allowReadOnly) {
 				setTimeout(() => {
-					void restoreDraft().then((restored) => {
-						if (restored) toast.info('Konsep edit lokal dipulihkan otomatis.');
-					});
+					void promptLocalDraftChoiceForEdit(d);
 				}, 50);
 			}
 		} catch (error) {
@@ -2315,12 +2360,15 @@ type TimelineItem = {
 			focusedEditor = null;
 			composerMobilePanel = 'write';
 			setModuleMode('composer');
+			suppressDraftAutosave = false;
 		} finally {
 			composerBusy = false;
 		}
 	}
 
 	function closeComposer() {
+		suppressDraftAutosave = false;
+		clearPendingLocalDraftChoice();
 		detailReadOnly = false;
 		detailQuestion = null;
 		questionVersions = [];
@@ -2984,6 +3032,12 @@ type TimelineItem = {
 		return applied;
 	}
 
+	$effect(() => {
+		if (!localDraftChoiceOpen && suppressDraftAutosave && pendingLocalDraft) {
+			void useServerQuestionData(false);
+		}
+	});
+
 	onMount(() => {
 		const params = new URLSearchParams(window.location.search);
 		const queryQuestionId = params.get('question_id');
@@ -3044,6 +3098,33 @@ type TimelineItem = {
 
 <!-- ── Main page ──────────────────────────────────────────────────────────── -->
 <div class="space-y-4">
+	<Dialog.Root bind:open={localDraftChoiceOpen}>
+		<Dialog.Content>
+			<div class="max-w-lg space-y-4">
+			<Dialog.Header>
+				<Dialog.Title>Pilih Sumber Revisi</Dialog.Title>
+				<Dialog.Description>
+					Ditemukan konsep lokal untuk {pendingLocalDraftQuestionLabel || 'soal ini'} yang tersimpan pada {localDraftSavedAtLabel()}. Pilih dengan hati-hati agar konsep lama tidak menimpa data server yang masih rapi.
+				</Dialog.Description>
+			</Dialog.Header>
+			<div class="space-y-3 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
+				<p class="font-semibold">Untuk kasus tabel rusak/terhambur, pilihan paling aman adalah memakai data server dan menghapus konsep lokal lama.</p>
+				<p class="text-xs opacity-90">Gunakan konsep lokal hanya jika Bapak/Ibu yakin perubahan terakhir di perangkat ini memang perlu dipulihkan.</p>
+			</div>
+			<Dialog.Footer>
+				<Button type="button" variant="outline" onclick={() => void useServerQuestionData(false)}>
+					Muat Data Server Saja
+				</Button>
+				<Button type="button" variant="outline" onclick={usePendingLocalDraft}>
+					Pakai Konsep Lokal
+				</Button>
+				<Button type="button" onclick={() => void useServerQuestionData(true)} class="bg-success text-background hover:bg-success">
+					Data Server & Hapus Lokal
+				</Button>
+			</Dialog.Footer>
+			</div>
+		</Dialog.Content>
+	</Dialog.Root>
 	<SoalShellHeader
 		reviewHref={reviewFocusHref()}
 		{exportButtonLabel}
