@@ -88,7 +88,9 @@
 
 	let { data }: { data: PageData } = $props();
 
-	let loading = $state(true);
+	let loadingReferences = $state(true);
+	let loadingQuestions = $state(false);
+	let hasLoadedQuestions = $state(false);
 	let error = $state('');
 	let questions = $state<Question[]>([]);
 	let subjects = $state<Subject[]>([]);
@@ -99,6 +101,8 @@
 	let typeFilter = $state('');
 	let dateFrom = $state('');
 	let dateTo = $state('');
+	let sortOrder = $state('subject_code_asc');
+	let loadedTotal = $state(0);
 	let includeAnswer = $state(false);
 	let includeExplanation = $state(false);
 	let includeMetadata = $state(true);
@@ -117,6 +121,17 @@
 		{ value: 'published', label: 'Terbit' },
 		{ value: 'rejected', label: 'Ditolak' },
 		{ value: 'archived', label: 'Arsip' }
+	];
+
+	const sortOptions = [
+		{ value: 'subject_code_asc', label: 'Mapel lalu kode soal (A-Z)' },
+		{ value: 'code_asc', label: 'Kode soal (A-Z)' },
+		{ value: 'code_desc', label: 'Kode soal (Z-A)' },
+		{ value: 'newest', label: 'Tanggal input terbaru' },
+		{ value: 'oldest', label: 'Tanggal input terlama' },
+		{ value: 'author_subject_code_asc', label: 'Guru, mapel, lalu kode soal' },
+		{ value: 'status_subject_code_asc', label: 'Status, mapel, lalu kode soal' },
+		{ value: 'type_subject_code_asc', label: 'Tipe, mapel, lalu kode soal' }
 	];
 
 	const questionTypeOptions = [
@@ -139,15 +154,18 @@
 	let teacherName = $derived(
 		data.account?.profile_nama || data.account?.display_name || data.user?.username || 'Guru'
 	);
-	let filteredQuestions = $derived(
-		questions.filter((question) => {
-			if (subjectFilter && question.subject_id !== subjectFilter) return false;
-			if (workflowFilter && (question.workflow_status ?? question.status ?? '') !== workflowFilter) return false;
-			if (typeFilter && question.question_type !== typeFilter) return false;
-			if (dateFrom && normalizeDate(question.created_at) < dateFrom) return false;
-			if (dateTo && normalizeDate(question.created_at) > dateTo) return false;
-			return true;
-		})
+	let loading = $derived(loadingReferences || loadingQuestions);
+	let filteredQuestions = $derived.by(() =>
+		sortQuestions(
+			questions.filter((question) => {
+				if (subjectFilter && question.subject_id !== subjectFilter) return false;
+				if (workflowFilter && (question.workflow_status ?? question.status ?? '') !== workflowFilter) return false;
+				if (typeFilter && question.question_type !== typeFilter) return false;
+				if (dateFrom && normalizeDate(question.created_at) < dateFrom) return false;
+				if (dateTo && normalizeDate(question.created_at) > dateTo) return false;
+				return true;
+			})
+		)
 	);
 	let selectedSubjectName = $derived(
 		subjectFilter ? subjects.find((subject) => subject.id === subjectFilter)?.name || 'Mapel dipilih' : 'Semua mapel'
@@ -158,34 +176,22 @@
 		const author = authors.find((item) => item.username === authorFilter);
 		return author?.display_name || author?.username || authorFilter;
 	});
+	let selectedSortName = $derived(sortOptions.find((option) => option.value === sortOrder)?.label ?? 'Urutan standar');
 
 	onMount(() => {
-		void loadPrintData();
+		void loadReferenceData();
 	});
 
-	async function loadPrintData() {
+	async function loadReferenceData() {
 		if (!currentUsername) {
 			error = 'Akun belum terbaca. Silakan login ulang sebelum mencetak soal.';
-			loading = false;
+			loadingReferences = false;
 			return;
 		}
-		loading = true;
+		loadingReferences = true;
 		error = '';
 		try {
-			const params = new URLSearchParams({
-				limit: '2000',
-				offset: '0',
-				sort: 'newest'
-			});
-			if (canPrintOtherAuthors) {
-				if (authorFilter) params.set('author_username', authorFilter);
-			} else {
-				params.set('author_username', currentUsername);
-			}
-			const requests = [
-				fetch(clientApiPathWithQuery('/api/bank-soal/questions', params)).then((response) =>
-					readClientApiData<QuestionListResponse>(response, 'Gagal memuat soal untuk dicetak')
-				),
+			const [subjectPayload, authorPayload] = await Promise.all([
 				fetch('/api/bank-soal/soal-support/subjects').then((response) =>
 					readClientApiData<AcademicPayload>(response, 'Gagal memuat daftar mapel')
 				),
@@ -194,21 +200,99 @@
 						readClientApiData<Author[]>(response, 'Gagal memuat daftar guru')
 					)
 					: Promise.resolve([] as Author[])
-			] as const;
-			const [questionPayload, subjectPayload, authorPayload] = await Promise.all(requests);
-			questions = questionPayload.items ?? [];
+			]);
 			subjects = subjectPayload.subjects ?? [];
 			authors = authorPayload ?? [];
 		} catch (e) {
+			error = e instanceof Error ? e.message : 'Data referensi cetak belum dapat dimuat';
+		} finally {
+			loadingReferences = false;
+		}
+	}
+
+	async function loadPrintData() {
+		if (!currentUsername) {
+			error = 'Akun belum terbaca. Silakan login ulang sebelum mencetak soal.';
+			return;
+		}
+		loadingQuestions = true;
+		error = '';
+		try {
+			const params = new URLSearchParams({
+				limit: '2000',
+				offset: '0',
+				sort: backendSortOrder(sortOrder)
+			});
+			if (canPrintOtherAuthors) {
+				if (authorFilter) params.set('author_username', authorFilter);
+			} else {
+				params.set('author_username', currentUsername);
+			}
+			if (subjectFilter) params.set('subject_id', subjectFilter);
+			if (workflowFilter) params.set('workflow_status', workflowFilter);
+			if (typeFilter) params.set('question_type', typeFilter);
+			const questionPayload = await fetch(clientApiPathWithQuery('/api/bank-soal/questions', params)).then((response) =>
+				readClientApiData<QuestionListResponse>(response, 'Gagal memuat soal untuk dicetak')
+			);
+			questions = questionPayload.items ?? [];
+			loadedTotal = questionPayload.meta?.total ?? questions.length;
+			hasLoadedQuestions = true;
+		} catch (e) {
 			error = e instanceof Error ? e.message : 'Data cetak belum dapat dimuat';
 		} finally {
-			loading = false;
+			loadingQuestions = false;
 		}
 	}
 
 	function normalizeDate(value: string | undefined): string {
 		if (!value) return '';
 		return value.slice(0, 10);
+	}
+
+	function backendSortOrder(value: string): string {
+		if (value === 'oldest') return 'oldest';
+		return 'newest';
+	}
+
+	function compareText(left: string | undefined | null, right: string | undefined | null): number {
+		return compactText(left, '').localeCompare(compactText(right, ''), 'id', { numeric: true, sensitivity: 'base' });
+	}
+
+	function compareDate(left: string | undefined, right: string | undefined): number {
+		return new Date(left ?? 0).getTime() - new Date(right ?? 0).getTime();
+	}
+
+	function sortQuestions(items: Question[]): Question[] {
+		const sorted = [...items];
+		sorted.sort((left, right) => {
+			if (sortOrder === 'oldest') return compareDate(left.created_at, right.created_at) || compareText(left.code, right.code);
+			if (sortOrder === 'newest') return compareDate(right.created_at, left.created_at) || compareText(left.code, right.code);
+			if (sortOrder === 'code_desc') return compareText(right.code, left.code);
+			if (sortOrder === 'code_asc') return compareText(left.code, right.code);
+			if (sortOrder === 'author_subject_code_asc') {
+				return (
+					compareText(left.author_display_name || left.author_username, right.author_display_name || right.author_username) ||
+					compareText(left.subject_code || left.subject_name, right.subject_code || right.subject_name) ||
+					compareText(left.code, right.code)
+				);
+			}
+			if (sortOrder === 'status_subject_code_asc') {
+				return (
+					compareText(workflowLabel(left.workflow_status ?? left.status), workflowLabel(right.workflow_status ?? right.status)) ||
+					compareText(left.subject_code || left.subject_name, right.subject_code || right.subject_name) ||
+					compareText(left.code, right.code)
+				);
+			}
+			if (sortOrder === 'type_subject_code_asc') {
+				return (
+					compareText(questionTypeLabel(left.question_type), questionTypeLabel(right.question_type)) ||
+					compareText(left.subject_code || left.subject_name, right.subject_code || right.subject_name) ||
+					compareText(left.code, right.code)
+				);
+			}
+			return compareText(left.subject_code || left.subject_name, right.subject_code || right.subject_name) || compareText(left.code, right.code);
+		});
+		return sorted;
 	}
 
 	function formatDate(value: string | undefined): string {
@@ -325,8 +409,10 @@
 		window.print();
 	}
 
-	function handleAuthorChange() {
-		void loadPrintData();
+	function clearLoadedQuestions() {
+		questions = [];
+		loadedTotal = 0;
+		hasLoadedQuestions = false;
 	}
 </script>
 
@@ -348,8 +434,8 @@
 			</div>
 			<div class="flex flex-wrap gap-2">
 				<Button href={listHref} variant="outline"><ArrowLeftIcon class="size-4" />Kembali</Button>
-				<Button variant="outline" onclick={() => void loadPrintData()} disabled={loading}>
-					<RefreshCcwIcon class="size-4" />Muat Ulang
+				<Button variant="outline" onclick={() => void loadReferenceData()} disabled={loading}>
+					<RefreshCcwIcon class="size-4" />Muat Referensi
 				</Button>
 				<Button onclick={printPage} disabled={loading || filteredQuestions.length === 0}>
 					<PrinterIcon class="size-4" />Print / Simpan PDF
@@ -361,7 +447,7 @@
 			{#if canPrintOtherAuthors}
 				<label class="space-y-1.5 text-sm">
 					<span class="text-xs font-semibold text-muted-foreground">Guru/Pembuat</span>
-					<select bind:value={authorFilter} onchange={handleAuthorChange} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
+					<select bind:value={authorFilter} onchange={clearLoadedQuestions} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
 						<option value="">Semua guru</option>
 						{#each authors as author (author.username)}
 							<option value={author.username}>{author.display_name || author.username}</option>
@@ -371,7 +457,7 @@
 			{/if}
 			<label class="space-y-1.5 text-sm">
 				<span class="text-xs font-semibold text-muted-foreground">Mapel</span>
-				<select bind:value={subjectFilter} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
+				<select bind:value={subjectFilter} onchange={clearLoadedQuestions} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
 					<option value="">Semua mapel</option>
 					{#each subjects as subject (subject.id)}
 						<option value={subject.id}>{subject.code ? `${subject.code} - ${subject.name}` : subject.name}</option>
@@ -380,7 +466,7 @@
 			</label>
 			<label class="space-y-1.5 text-sm">
 				<span class="text-xs font-semibold text-muted-foreground">Status</span>
-				<select bind:value={workflowFilter} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
+				<select bind:value={workflowFilter} onchange={clearLoadedQuestions} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
 					{#each workflowOptions as option (option.value)}
 						<option value={option.value}>{option.label}</option>
 					{/each}
@@ -388,7 +474,7 @@
 			</label>
 			<label class="space-y-1.5 text-sm">
 				<span class="text-xs font-semibold text-muted-foreground">Tipe</span>
-				<select bind:value={typeFilter} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
+				<select bind:value={typeFilter} onchange={clearLoadedQuestions} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
 					{#each questionTypeOptions as option (option.value)}
 						<option value={option.value}>{option.label}</option>
 					{/each}
@@ -397,13 +483,21 @@
 			<div class="grid grid-cols-2 gap-2">
 				<label class="space-y-1.5 text-sm">
 					<span class="text-xs font-semibold text-muted-foreground">Dari</span>
-					<input type="date" bind:value={dateFrom} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+					<input type="date" bind:value={dateFrom} onchange={clearLoadedQuestions} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
 				</label>
 				<label class="space-y-1.5 text-sm">
 					<span class="text-xs font-semibold text-muted-foreground">Sampai</span>
-					<input type="date" bind:value={dateTo} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+					<input type="date" bind:value={dateTo} onchange={clearLoadedQuestions} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
 				</label>
 			</div>
+			<label class="space-y-1.5 text-sm">
+				<span class="text-xs font-semibold text-muted-foreground">Urutkan</span>
+				<select bind:value={sortOrder} class="h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
+					{#each sortOptions as option (option.value)}
+						<option value={option.value}>{option.label}</option>
+					{/each}
+				</select>
+			</label>
 		</div>
 
 		<div class="mt-4 flex flex-wrap gap-3 border-t border-border/60 pt-4 text-sm">
@@ -419,27 +513,36 @@
 				<input type="checkbox" bind:checked={includeExplanation} />
 				<span>Tampilkan pembahasan/rubrik</span>
 			</label>
+			<Button onclick={() => void loadPrintData()} disabled={loading} class="ml-auto">
+				<RefreshCcwIcon class="size-4" />Terapkan & Muat Soal
+			</Button>
 		</div>
 	</section>
 
 	{#if error}
 		<div class="no-print rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{error}</div>
 	{:else if loading}
-		<div class="no-print rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">Memuat soal untuk cetak...</div>
+		<div class="no-print rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">Memuat data cetak...</div>
+	{:else if !hasLoadedQuestions}
+		<div class="no-print rounded-xl border border-dashed border-border bg-card p-6 text-sm leading-6 text-muted-foreground">
+			Pilih guru/mapel/status/tipe/tanggal dan urutan, lalu klik <span class="font-semibold text-foreground">Terapkan & Muat Soal</span>.
+			Halaman ini tidak lagi memuat dan merender semua soal otomatis agar tetap ringan.
+		</div>
 	{:else}
 		<section class="print-document rounded-xl border border-border bg-white p-6 text-slate-950 shadow-sm">
 			<header class="border-b border-slate-300 pb-4 text-center">
 				<p class="text-sm font-semibold uppercase tracking-[0.18em]">MTsN 2 Kolaka Utara</p>
 				<h2 class="mt-1 text-xl font-bold">{printTitle}</h2>
-				<p class="mt-1 text-sm text-slate-600">{selectedAuthorName} · {selectedSubjectName} · Dicetak {formatDateTime()}</p>
+				<p class="mt-1 text-sm text-slate-600">{selectedAuthorName} · {selectedSubjectName} · {selectedSortName} · Dicetak {formatDateTime()}</p>
 			</header>
 
 			<div class="mt-4 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
 				<div><span class="font-semibold">Pembuat:</span> {selectedAuthorName}</div>
-				<div><span class="font-semibold">Jumlah soal:</span> {filteredQuestions.length}</div>
+				<div><span class="font-semibold">Jumlah soal:</span> {filteredQuestions.length}{loadedTotal > filteredQuestions.length ? ` dari ${loadedTotal}` : ''}</div>
 				<div><span class="font-semibold">Status:</span> {workflowOptions.find((option) => option.value === workflowFilter)?.label ?? 'Semua status'}</div>
 				<div><span class="font-semibold">Tipe:</span> {questionTypeOptions.find((option) => option.value === typeFilter)?.label ?? 'Semua tipe'}</div>
 				<div><span class="font-semibold">Kunci:</span> {includeAnswer ? 'Ditampilkan' : 'Tidak ditampilkan'}</div>
+				<div><span class="font-semibold">Urutan:</span> {selectedSortName}</div>
 			</div>
 
 			{#if filteredQuestions.length === 0}
