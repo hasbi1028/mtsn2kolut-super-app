@@ -58,7 +58,9 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		items: [
 			{ href: '/students', label: 'Siswa', icon: 'users', roles: ['admin', 'kesiswaan', 'guru'], permissions: ['students.read'] },
 			{ href: '/parents', label: 'Orang Tua', icon: 'user-group', roles: ['admin'], permissions: ['parents.read'] },
-			{ href: '/kesiswaan', label: 'Kesiswaan', icon: 'user-check', roles: ['admin', 'kesiswaan', 'guru'], permissions: ['kesiswaan.read', 'students.read'] }
+			{ href: '/kesiswaan', label: 'Kesiswaan', icon: 'user-check', roles: ['admin', 'kesiswaan', 'guru'], permissions: ['kesiswaan.read', 'students.read'] },
+			{ href: '/kesiswaan/kartu-siswa', label: 'Kartu Siswa', icon: 'printer', roles: ['admin', 'kesiswaan'], permissions: ['id_cards.read', 'id_cards.manage'] },
+			{ href: '/kesiswaan/kartu-siswa/scan', label: 'Scanner Kartu', icon: 'activity', roles: ['admin', 'kesiswaan', 'guru', 'staf'], permissions: ['id_cards.scan'] }
 		]
 	},
 	{

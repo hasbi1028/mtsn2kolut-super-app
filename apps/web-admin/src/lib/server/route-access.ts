@@ -338,6 +338,8 @@ export function requiredPermissionsForPath(pathname: string, method: string): st
 	if (matchesPathSegment(pathname, '/api/portal/guru/timetable')) return ['academic.read', 'journal.read', 'journal.manage', 'journal.read_all', 'journal.manage_all'];
 	if (isStudentPortalPath(pathname)) return ['student_portal.read'];
 	if (isParentPortalPath(pathname)) return ['parent_portal.read'];
+	if (matchesPathSegment(pathname, '/kesiswaan/kartu-siswa/scan') || matchesPathSegment(pathname, '/api/kesiswaan/kartu-siswa/scan')) return ['id_cards.scan', 'id_cards.manage'];
+	if (matchesPathSegment(pathname, '/kesiswaan/kartu-siswa') || matchesPathSegment(pathname, '/api/kesiswaan/kartu-siswa')) return isReadMethod(method) ? ['id_cards.read', 'id_cards.manage'] : ['id_cards.manage'];
 	if (isKesiswaanPath(pathname)) return isReadMethod(method) ? ['kesiswaan.read', 'students.read'] : ['kesiswaan.manage', 'students.manage'];
 	if (isStudentPagePath(pathname) || isStudentApiPath(pathname)) return isReadMethod(method) ? ['students.read'] : ['students.manage'];
 	return usersPermission(pathname, method)

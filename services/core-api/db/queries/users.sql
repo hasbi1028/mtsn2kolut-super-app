@@ -40,6 +40,29 @@ FROM users u
 WHERE u.id = $1
   AND u.deleted_at IS NULL;
 
+-- name: GetUserByStudentID :one
+SELECT
+    u.id, u.username, u.password_hash,
+    u.display_name,
+    u.employee_id, u.student_id, u.parent_id,
+    u.is_active, u.auth_version, u.must_change_password, u.password_changed_at, u.last_login_at, u.deleted_at, u.created_at, u.updated_at,
+    COALESCE(
+      (
+        SELECT json_agg(r.code ORDER BY r.code)
+        FROM rbac_user_roles ur
+        JOIN rbac_roles r ON r.id = ur.role_id
+        WHERE ur.user_id = u.id
+          AND r.is_active = TRUE
+      ),
+      (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id),
+      '[]'::json
+    ) as roles
+FROM users u
+WHERE u.student_id = $1
+  AND u.deleted_at IS NULL
+  AND u.is_active = TRUE
+LIMIT 1;
+
 -- name: ListUsers :many
 SELECT 
     u.id, u.username,

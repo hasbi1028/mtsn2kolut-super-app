@@ -418,6 +418,73 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDR
 	return i, err
 }
 
+const getUserByStudentID = `-- name: GetUserByStudentID :one
+SELECT
+    u.id, u.username, u.password_hash,
+    u.display_name,
+    u.employee_id, u.student_id, u.parent_id,
+    u.is_active, u.auth_version, u.must_change_password, u.password_changed_at, u.last_login_at, u.deleted_at, u.created_at, u.updated_at,
+    COALESCE(
+      (
+        SELECT json_agg(r.code ORDER BY r.code)
+        FROM rbac_user_roles ur
+        JOIN rbac_roles r ON r.id = ur.role_id
+        WHERE ur.user_id = u.id
+          AND r.is_active = TRUE
+      ),
+      (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id),
+      '[]'::json
+    ) as roles
+FROM users u
+WHERE u.student_id = $1
+  AND u.deleted_at IS NULL
+  AND u.is_active = TRUE
+LIMIT 1
+`
+
+type GetUserByStudentIDRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	Username           string             `json:"username"`
+	PasswordHash       string             `json:"password_hash"`
+	DisplayName        pgtype.Text        `json:"display_name"`
+	EmployeeID         pgtype.UUID        `json:"employee_id"`
+	StudentID          pgtype.UUID        `json:"student_id"`
+	ParentID           pgtype.UUID        `json:"parent_id"`
+	IsActive           bool               `json:"is_active"`
+	AuthVersion        int32              `json:"auth_version"`
+	MustChangePassword bool               `json:"must_change_password"`
+	PasswordChangedAt  pgtype.Timestamptz `json:"password_changed_at"`
+	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	Roles              interface{}        `json:"roles"`
+}
+
+func (q *Queries) GetUserByStudentID(ctx context.Context, studentID pgtype.UUID) (GetUserByStudentIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserByStudentID, studentID)
+	var i GetUserByStudentIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.DisplayName,
+		&i.EmployeeID,
+		&i.StudentID,
+		&i.ParentID,
+		&i.IsActive,
+		&i.AuthVersion,
+		&i.MustChangePassword,
+		&i.PasswordChangedAt,
+		&i.LastLoginAt,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Roles,
+	)
+	return i, err
+}
+
 const getUserByUsername = `-- name: GetUserByUsername :one
 SELECT 
     u.id, u.username, u.password_hash,

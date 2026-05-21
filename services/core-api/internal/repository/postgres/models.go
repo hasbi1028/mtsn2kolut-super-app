@@ -2256,6 +2256,31 @@ type StudentAchievement struct {
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }
 
+type StudentActivityAttendanceScan struct {
+	ID              pgtype.UUID        `json:"id"`
+	CardID          pgtype.UUID        `json:"card_id"`
+	StudentID       pgtype.UUID        `json:"student_id"`
+	ActivityCode    string             `json:"activity_code"`
+	ScanType        string             `json:"scan_type"`
+	ScannedByUserID pgtype.UUID        `json:"scanned_by_user_id"`
+	ScannedAt       pgtype.Timestamptz `json:"scanned_at"`
+	Metadata        []byte             `json:"metadata"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type StudentCardPortalLoginAttempt struct {
+	ID          pgtype.UUID        `json:"id"`
+	CardID      pgtype.UUID        `json:"card_id"`
+	StudentID   pgtype.UUID        `json:"student_id"`
+	Challenge   string             `json:"challenge"`
+	Status      string             `json:"status"`
+	IpAddress   string             `json:"ip_address"`
+	UserAgent   string             `json:"user_agent"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	CompletedAt pgtype.Timestamptz `json:"completed_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type StudentCertificate struct {
 	ID               pgtype.UUID        `json:"id"`
 	TemplateID       pgtype.UUID        `json:"template_id"`
@@ -2270,6 +2295,56 @@ type StudentCertificate struct {
 	CreatedByUserID  pgtype.UUID        `json:"created_by_user_id"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StudentIDCard struct {
+	ID              pgtype.UUID        `json:"id"`
+	StudentID       pgtype.UUID        `json:"student_id"`
+	CardNo          string             `json:"card_no"`
+	TokenHash       string             `json:"token_hash"`
+	TokenHint       string             `json:"token_hint"`
+	Status          string             `json:"status"`
+	IssuedAt        pgtype.Timestamptz `json:"issued_at"`
+	PrintedAt       pgtype.Timestamptz `json:"printed_at"`
+	RevokedAt       pgtype.Timestamptz `json:"revoked_at"`
+	RevokedReason   string             `json:"revoked_reason"`
+	ReissuedFromID  pgtype.UUID        `json:"reissued_from_id"`
+	CreatedByUserID pgtype.UUID        `json:"created_by_user_id"`
+	UpdatedByUserID pgtype.UUID        `json:"updated_by_user_id"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StudentIDCardAuditLog struct {
+	ID          pgtype.UUID        `json:"id"`
+	CardID      pgtype.UUID        `json:"card_id"`
+	StudentID   pgtype.UUID        `json:"student_id"`
+	ActorUserID pgtype.UUID        `json:"actor_user_id"`
+	Action      string             `json:"action"`
+	Target      string             `json:"target"`
+	Metadata    []byte             `json:"metadata"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type StudentIDCardEvent struct {
+	ID          pgtype.UUID        `json:"id"`
+	CardID      pgtype.UUID        `json:"card_id"`
+	StudentID   pgtype.UUID        `json:"student_id"`
+	EventType   string             `json:"event_type"`
+	ActorUserID pgtype.UUID        `json:"actor_user_id"`
+	Source      string             `json:"source"`
+	Metadata    []byte             `json:"metadata"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type StudentPortalPinCredential struct {
+	StudentID      pgtype.UUID        `json:"student_id"`
+	PinHash        string             `json:"pin_hash"`
+	IsEnabled      bool               `json:"is_enabled"`
+	FailedAttempts int32              `json:"failed_attempts"`
+	LockedUntil    pgtype.Timestamptz `json:"locked_until"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 type StudentTransfer struct {

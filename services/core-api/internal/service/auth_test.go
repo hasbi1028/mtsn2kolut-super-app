@@ -152,6 +152,35 @@ func (f *fakeStore) GetUserByID(ctx context.Context, id pgtype.UUID) (db.GetUser
 	return db.GetUserByIDRow{}, pgx.ErrNoRows
 }
 
+func (f *fakeStore) GetUserByStudentID(ctx context.Context, studentID pgtype.UUID) (db.GetUserByStudentIDRow, error) {
+	if f.getUserByIDErr != nil {
+		return db.GetUserByStudentIDRow{}, f.getUserByIDErr
+	}
+	for _, u := range f.users {
+		if u.StudentID == studentID {
+			roles := f.userRoles[u.ID]
+			rolesJSON, _ := json.Marshal(roles)
+			return db.GetUserByStudentIDRow{
+				ID:                 u.ID,
+				Username:           u.Username,
+				PasswordHash:       u.PasswordHash,
+				DisplayName:        u.DisplayName,
+				EmployeeID:         u.EmployeeID,
+				StudentID:          u.StudentID,
+				ParentID:           u.ParentID,
+				IsActive:           u.IsActive,
+				AuthVersion:        u.AuthVersion,
+				MustChangePassword: u.MustChangePassword,
+				PasswordChangedAt:  u.PasswordChangedAt,
+				CreatedAt:          u.CreatedAt,
+				UpdatedAt:          u.UpdatedAt,
+				Roles:              rolesJSON,
+			}, nil
+		}
+	}
+	return db.GetUserByStudentIDRow{}, pgx.ErrNoRows
+}
+
 func (f *fakeStore) GetUserAccountSummary(ctx context.Context, id pgtype.UUID) (db.GetUserAccountSummaryRow, error) {
 	if f.getUserByIDErr != nil {
 		return db.GetUserAccountSummaryRow{}, f.getUserByIDErr

@@ -17,8 +17,11 @@ const PUBLIC_API_PREFIXES = [
 	'/releases/mobile/',
 	'/api/public/site/pages/',
 	'/api/public/site/posts/',
-	'/api/public/site/announcements/'
+	'/api/public/site/announcements/',
+	'/api/public/student-cards/'
 ] as const;
+
+const PUBLIC_PAGE_PREFIXES = ['/s/idc/', '/portal/siswa/qr-login'] as const;
 
 const PUBLIC_AUTH_EXACT_PATHS = ['/login', '/maintenance', '/manifest.webmanifest', '/ujian'] as const;
 
@@ -37,6 +40,7 @@ export function isPublicSitePath(pathname: string, authenticated = false) {
 
 export function isPublicPath(pathname: string) {
 	if (isPublicSitePath(pathname)) return true;
+	if (PUBLIC_PAGE_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix))) return true;
 	if (PUBLIC_AUTH_EXACT_PATHS.includes(pathname as (typeof PUBLIC_AUTH_EXACT_PATHS)[number])) return true;
 	if (PUBLIC_API_EXACT_PATHS.includes(pathname as (typeof PUBLIC_API_EXACT_PATHS)[number])) return true;
 	return PUBLIC_API_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));

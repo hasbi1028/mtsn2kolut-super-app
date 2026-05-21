@@ -34,6 +34,7 @@ const (
 type authStore interface {
 	GetUserByUsername(ctx context.Context, username string) (db.GetUserByUsernameRow, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (db.GetUserByIDRow, error)
+	GetUserByStudentID(ctx context.Context, studentID pgtype.UUID) (db.GetUserByStudentIDRow, error)
 	GetUserAccountSummary(ctx context.Context, id pgtype.UUID) (db.GetUserAccountSummaryRow, error)
 	UpdateOwnedEmployeeContact(ctx context.Context, arg db.UpdateOwnedEmployeeContactParams) (db.UpdateOwnedEmployeeContactRow, error)
 	UpdateOwnedStudentContact(ctx context.Context, arg db.UpdateOwnedStudentContactParams) (db.UpdateOwnedStudentContactRow, error)
@@ -157,6 +158,27 @@ func (s *Auth) Login(ctx context.Context, username, password string, meta Sessio
 		return domain.TokenPair{}, err
 	}
 
+	return s.issueTokenPair(ctx, user, normalizeSessionMeta(meta))
+}
+
+func (s *Auth) LoginStudentByID(ctx context.Context, studentID pgtype.UUID, meta SessionMeta) (domain.TokenPair, error) {
+	if !studentID.Valid {
+		return domain.TokenPair{}, domain.ErrBadRequest
+	}
+	row, err := s.q.GetUserByStudentID(ctx, studentID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.TokenPair{}, domain.ErrUnauthorized
+	}
+	if err != nil {
+		return domain.TokenPair{}, err
+	}
+	user := authUserFromStudentIDRow(row)
+	if !user.IsActive {
+		return domain.TokenPair{}, domain.ErrSuspended
+	}
+	if err := s.q.MarkUserLastLogin(ctx, user.ID); err != nil {
+		return domain.TokenPair{}, err
+	}
 	return s.issueTokenPair(ctx, user, normalizeSessionMeta(meta))
 }
 
@@ -1131,6 +1153,21 @@ func authUserFromUsernameRow(row db.GetUserByUsernameRow) authUserRecord {
 }
 
 func authUserFromIDRow(row db.GetUserByIDRow) authUserRecord {
+	return authUserRecord{
+		ID:                 row.ID,
+		Username:           row.Username,
+		PasswordHash:       row.PasswordHash,
+		EmployeeID:         row.EmployeeID,
+		StudentID:          row.StudentID,
+		ParentID:           row.ParentID,
+		IsActive:           row.IsActive,
+		AuthVersion:        row.AuthVersion,
+		MustChangePassword: row.MustChangePassword,
+		Roles:              authRolesBytes(row.Roles),
+	}
+}
+
+func authUserFromStudentIDRow(row db.GetUserByStudentIDRow) authUserRecord {
 	return authUserRecord{
 		ID:                 row.ID,
 		Username:           row.Username,
