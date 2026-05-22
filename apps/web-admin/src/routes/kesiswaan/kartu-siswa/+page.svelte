@@ -42,6 +42,7 @@
 	let detailLoading = $state(false);
 	let reissueReason = $state('');
 	let lastIssued = $state<IssueResult | null>(null);
+	let lastIssuedQrReady = $state(false);
 
 	const normalizedSearch = $derived(search.trim().toLowerCase());
 	const filteredCards = $derived(cards.filter((card) => {
@@ -52,6 +53,8 @@
 			.some((value) => String(value ?? '').toLowerCase().includes(normalizedSearch));
 	}));
 	const activeCount = $derived(cards.filter((card) => card.status === 'active').length);
+	const lastIssuedHasQr = $derived(Boolean(lastIssued?.qr_url || lastIssued?.qr_token));
+	const lastIssuedCanPrint = $derived(lastIssuedHasQr && lastIssuedQrReady);
 
 	function formatDate(value?: string | null) {
 		if (!value) return '-';
@@ -66,21 +69,34 @@
 		return status === 'active' ? 'default' : status === 'printed' ? 'secondary' : 'destructive';
 	}
 
+	function printLastIssued() {
+		if (!lastIssuedCanPrint) {
+			toast.error('QR aman belum tersedia. Jangan cetak kartu ini.');
+			return;
+		}
+		document.body.classList.add('student-card-print-mode');
+		window.print();
+		setTimeout(() => document.body.classList.remove('student-card-print-mode'), 500);
+	}
+
 	async function load() {
 		loading = true;
-		try {
-			const [cardItems, studentItems] = await Promise.all([
-				fetch('/api/kesiswaan/kartu-siswa?limit=200').then((res) => readClientApiData<StudentCard[]>(res, 'Gagal memuat kartu siswa')),
-				fetch('/api/students').then((res) => readClientApiData<Student[]>(res, 'Gagal memuat siswa'))
-			]);
-			cards = cardItems ?? [];
-			students = studentItems ?? [];
+		const [cardResult, studentResult] = await Promise.allSettled([
+			fetch('/api/kesiswaan/kartu-siswa?limit=200').then((res) => readClientApiData<StudentCard[]>(res, 'Gagal memuat kartu siswa')),
+			fetch('/api/students').then((res) => readClientApiData<Student[]>(res, 'Gagal memuat siswa'))
+		]);
+		if (cardResult.status === 'fulfilled') {
+			cards = cardResult.value ?? [];
 			if (selectedCard) selectedCard = cards.find((card) => card.id === selectedCard?.id) ?? selectedCard;
-		} catch (error) {
-			toast.error((error as Error).message || 'Gagal memuat data kartu siswa');
-		} finally {
-			loading = false;
+		} else {
+			toast.error(cardResult.reason?.message || 'Gagal memuat kartu siswa');
 		}
+		if (studentResult.status === 'fulfilled') {
+			students = studentResult.value ?? [];
+		} else {
+			toast.error(studentResult.reason?.message || 'Gagal memuat siswa');
+		}
+		loading = false;
 	}
 
 	async function generateCard() {
@@ -90,13 +106,14 @@
 		}
 		busy = 'generate';
 		try {
+			lastIssuedQrReady = false;
 			lastIssued = await readClientApiData<IssueResult>(await fetch('/api/kesiswaan/kartu-siswa', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ student_id: selectedStudentId })
 			}), 'Gagal membuat kartu siswa');
 			toast.success('Kartu siswa berhasil dibuat. QR siap dipreview/cetak.');
-			selectedStudentId = '';
+			selectedStudentId = lastIssued?.card?.student_id ?? selectedStudentId;
 			await load();
 		} catch (error) {
 			toast.error((error as Error).message || 'Gagal membuat kartu siswa');
@@ -143,6 +160,7 @@
 		}
 		busy = `reissue:${card.id}`;
 		try {
+			lastIssuedQrReady = false;
 			lastIssued = await readClientApiData<IssueResult>(await fetch(clientApiPath`/api/kesiswaan/kartu-siswa/${card.id}/reissue`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -150,6 +168,7 @@
 			}), 'Gagal membuat kartu pengganti');
 			toast.success('Kartu pengganti berhasil dibuat. QR baru siap dipreview/cetak.');
 			reissueReason = '';
+			selectedCard = null;
 			await load();
 		} catch (error) {
 			toast.error((error as Error).message || 'Gagal membuat kartu pengganti');
@@ -187,6 +206,7 @@
 			<h1 class="text-2xl font-semibold tracking-tight">Kartu Siswa</h1>
 			<p class="text-sm text-muted-foreground">Kelola penerbitan, status, cetak ulang, event, dan audit kartu siswa terpadu.</p>
 		</div>
+
 		<Button onclick={load} disabled={loading}>Muat ulang</Button>
 	</div>
 
@@ -216,14 +236,19 @@
 					<div class="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
 						<div>
 							<h3 class="font-semibold">Preview kartu terakhir dibuat</h3>
-							<p class="text-xs text-muted-foreground">QR/token mentah hanya tampil saat generate/reissue. Simpan dengan mencetak sekarang atau lakukan reissue jika perlu QR baru.</p>
+							<p class="text-xs text-muted-foreground">QR hanya dicetak sebagai kode gambar. Token mentah tidak ditampilkan sebagai teks. Cetak hanya jika indikator QR siap.</p>
 						</div>
 						<div class="flex gap-2">
-							<Button variant="outline" onclick={() => window.print()}>Cetak halaman</Button>
-							<Button variant="ghost" onclick={() => lastIssued = null}>Tutup preview</Button>
+							<Button variant="outline" disabled={!lastIssuedCanPrint} onclick={printLastIssued}>{lastIssuedCanPrint ? 'Cetak kartu' : 'Menyiapkan QR...'}</Button>
+							<Button variant="ghost" onclick={() => { lastIssued = null; lastIssuedQrReady = false; }}>Tutup preview</Button>
 						</div>
 					</div>
-					<StudentIdCardTemplate card={{ ...lastIssued.card, qr_url: lastIssued.qr_url, qr_token: lastIssued.qr_token }} print />
+					{#if !lastIssuedHasQr}
+						<div class="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">QR aman belum tersedia. Jangan cetak kartu ini; lakukan reissue/generate ulang jika perlu.</div>
+					{/if}
+					<div class="student-card-print-area">
+						<StudentIdCardTemplate card={{ ...lastIssued.card, qr_url: lastIssued.qr_url, qr_token: lastIssued.qr_token }} print onQrReady={(ready) => lastIssuedQrReady = ready} />
+					</div>
 				</div>
 			{/if}
 		</Card.Content>
@@ -276,7 +301,7 @@
 									<td class="p-3">
 										<div class="flex flex-wrap gap-2">
 											<Button size="sm" variant="outline" onclick={() => openDetail(card)}>Detail</Button>
-											<Button size="sm" variant="outline" disabled={busy === `print:${card.id}`} onclick={() => markPrinted(card)}>Cetak</Button>
+											<Button size="sm" variant="outline" disabled={busy === `print:${card.id}`} onclick={() => markPrinted(card)}>Tandai tercetak</Button>
 											<select class="h-9 rounded-md border bg-background px-2 text-xs" disabled={busy === `status:${card.id}`} onchange={(event) => updateStatus(card, event.currentTarget.value)}>
 												<option value="">Ubah status</option>
 												<option value="active">Aktif</option>
@@ -350,3 +375,13 @@
 		</Card.Root>
 	{/if}
 </div>
+
+<style>
+	@media print {
+		:global(body.student-card-print-mode) { background: white !important; }
+		:global(body.student-card-print-mode *) { visibility: hidden !important; }
+		:global(body.student-card-print-mode .student-card-print-area),
+		:global(body.student-card-print-mode .student-card-print-area *) { visibility: visible !important; }
+		:global(body.student-card-print-mode .student-card-print-area) { position: fixed !important; left: 10mm !important; top: 10mm !important; }
+	}
+</style>

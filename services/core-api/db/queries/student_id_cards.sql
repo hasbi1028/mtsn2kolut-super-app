@@ -3,6 +3,35 @@ INSERT INTO student_id_cards (student_id, card_no, token_hash, token_hint, statu
 VALUES ($1, $2, $3, $4, 'active', sqlc.narg(created_by_user_id), sqlc.narg(updated_by_user_id))
 RETURNING *;
 
+-- name: ReissueStudentIDCard :one
+WITH old_card AS (
+  SELECT student_id_cards.*
+  FROM student_id_cards
+  WHERE student_id_cards.id = sqlc.arg(old_id)
+    AND student_id_cards.status = 'active'
+  FOR UPDATE
+), replaced AS (
+  UPDATE student_id_cards c
+  SET status = 'replaced',
+      revoked_at = COALESCE(c.revoked_at, NOW()),
+      revoked_reason = COALESCE(NULLIF(sqlc.arg(reason)::TEXT, ''), c.revoked_reason),
+      updated_by_user_id = sqlc.narg(actor_id),
+      updated_at = NOW()
+  FROM old_card o
+  WHERE c.id = o.id
+  RETURNING c.*
+), new_card AS (
+  INSERT INTO student_id_cards (student_id, card_no, token_hash, token_hint, status, reissued_from_id, created_by_user_id, updated_by_user_id)
+  SELECT r.student_id, sqlc.arg(card_no), sqlc.arg(token_hash), sqlc.arg(token_hint), 'active', r.id, sqlc.narg(actor_id), sqlc.narg(actor_id)
+  FROM replaced r
+  RETURNING *
+)
+SELECT n.*, s.nis, s.nisn, s.nama, s.photo_url, s.is_active AS student_is_active,
+       COALESCE(sc.name, '') AS class_name, COALESCE(sc.code, '') AS class_code
+FROM new_card n
+JOIN students s ON s.id = n.student_id
+LEFT JOIN school_classes sc ON sc.id = s.class_id;
+
 -- name: GetStudentIDCard :one
 SELECT c.*, s.nis, s.nisn, s.nama, s.photo_url, s.is_active AS student_is_active,
        COALESCE(sc.name, '') AS class_name, COALESCE(sc.code, '') AS class_code

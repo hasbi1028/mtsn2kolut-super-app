@@ -679,6 +679,107 @@ func (q *Queries) MarkStudentIDCardPrinted(ctx context.Context, arg MarkStudentI
 	return i, err
 }
 
+const reissueStudentIDCard = `-- name: ReissueStudentIDCard :one
+WITH old_card AS (
+  SELECT student_id_cards.id, student_id_cards.student_id, student_id_cards.card_no, student_id_cards.token_hash, student_id_cards.token_hint, student_id_cards.status, student_id_cards.issued_at, student_id_cards.printed_at, student_id_cards.revoked_at, student_id_cards.revoked_reason, student_id_cards.reissued_from_id, student_id_cards.created_by_user_id, student_id_cards.updated_by_user_id, student_id_cards.created_at, student_id_cards.updated_at
+  FROM student_id_cards
+  WHERE student_id_cards.id = $1
+    AND student_id_cards.status = 'active'
+  FOR UPDATE
+), replaced AS (
+  UPDATE student_id_cards c
+  SET status = 'replaced',
+      revoked_at = COALESCE(c.revoked_at, NOW()),
+      revoked_reason = COALESCE(NULLIF($2::TEXT, ''), c.revoked_reason),
+      updated_by_user_id = $3,
+      updated_at = NOW()
+  FROM old_card o
+  WHERE c.id = o.id
+  RETURNING c.id, c.student_id, c.card_no, c.token_hash, c.token_hint, c.status, c.issued_at, c.printed_at, c.revoked_at, c.revoked_reason, c.reissued_from_id, c.created_by_user_id, c.updated_by_user_id, c.created_at, c.updated_at
+), new_card AS (
+  INSERT INTO student_id_cards (student_id, card_no, token_hash, token_hint, status, reissued_from_id, created_by_user_id, updated_by_user_id)
+  SELECT r.student_id, $4, $5, $6, 'active', r.id, $3, $3
+  FROM replaced r
+  RETURNING id, student_id, card_no, token_hash, token_hint, status, issued_at, printed_at, revoked_at, revoked_reason, reissued_from_id, created_by_user_id, updated_by_user_id, created_at, updated_at
+)
+SELECT n.id, n.student_id, n.card_no, n.token_hash, n.token_hint, n.status, n.issued_at, n.printed_at, n.revoked_at, n.revoked_reason, n.reissued_from_id, n.created_by_user_id, n.updated_by_user_id, n.created_at, n.updated_at, s.nis, s.nisn, s.nama, s.photo_url, s.is_active AS student_is_active,
+       COALESCE(sc.name, '') AS class_name, COALESCE(sc.code, '') AS class_code
+FROM new_card n
+JOIN students s ON s.id = n.student_id
+LEFT JOIN school_classes sc ON sc.id = s.class_id
+`
+
+type ReissueStudentIDCardParams struct {
+	OldID     pgtype.UUID `json:"old_id"`
+	Reason    string      `json:"reason"`
+	ActorID   pgtype.UUID `json:"actor_id"`
+	CardNo    string      `json:"card_no"`
+	TokenHash string      `json:"token_hash"`
+	TokenHint string      `json:"token_hint"`
+}
+
+type ReissueStudentIDCardRow struct {
+	ID              pgtype.UUID        `json:"id"`
+	StudentID       pgtype.UUID        `json:"student_id"`
+	CardNo          string             `json:"card_no"`
+	TokenHash       string             `json:"token_hash"`
+	TokenHint       string             `json:"token_hint"`
+	Status          string             `json:"status"`
+	IssuedAt        pgtype.Timestamptz `json:"issued_at"`
+	PrintedAt       pgtype.Timestamptz `json:"printed_at"`
+	RevokedAt       pgtype.Timestamptz `json:"revoked_at"`
+	RevokedReason   string             `json:"revoked_reason"`
+	ReissuedFromID  pgtype.UUID        `json:"reissued_from_id"`
+	CreatedByUserID pgtype.UUID        `json:"created_by_user_id"`
+	UpdatedByUserID pgtype.UUID        `json:"updated_by_user_id"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	Nis             string             `json:"nis"`
+	Nisn            string             `json:"nisn"`
+	Nama            string             `json:"nama"`
+	PhotoUrl        string             `json:"photo_url"`
+	StudentIsActive bool               `json:"student_is_active"`
+	ClassName       string             `json:"class_name"`
+	ClassCode       string             `json:"class_code"`
+}
+
+func (q *Queries) ReissueStudentIDCard(ctx context.Context, arg ReissueStudentIDCardParams) (ReissueStudentIDCardRow, error) {
+	row := q.db.QueryRow(ctx, reissueStudentIDCard,
+		arg.OldID,
+		arg.Reason,
+		arg.ActorID,
+		arg.CardNo,
+		arg.TokenHash,
+		arg.TokenHint,
+	)
+	var i ReissueStudentIDCardRow
+	err := row.Scan(
+		&i.ID,
+		&i.StudentID,
+		&i.CardNo,
+		&i.TokenHash,
+		&i.TokenHint,
+		&i.Status,
+		&i.IssuedAt,
+		&i.PrintedAt,
+		&i.RevokedAt,
+		&i.RevokedReason,
+		&i.ReissuedFromID,
+		&i.CreatedByUserID,
+		&i.UpdatedByUserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Nis,
+		&i.Nisn,
+		&i.Nama,
+		&i.PhotoUrl,
+		&i.StudentIsActive,
+		&i.ClassName,
+		&i.ClassCode,
+	)
+	return i, err
+}
+
 const resetStudentPortalPINFailure = `-- name: ResetStudentPortalPINFailure :one
 UPDATE student_portal_pin_credentials
 SET failed_attempts = 0,

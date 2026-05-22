@@ -16,20 +16,28 @@
 		valid_until?: string;
 	};
 
-	let { card, side = 'both', print = false }: { card: CardData; side?: CardSide; print?: boolean } = $props();
+	let { card, side = 'both', print = false, onQrReady }: { card: CardData; side?: CardSide; print?: boolean; onQrReady?: (ready: boolean) => void } = $props();
 
-	const qrValue = $derived(card.qr_url || card.qr_token || card.card_no || 'MTSN2KOLUT-IDCARD');
+	const qrValue = $derived(card.qr_url || card.qr_token || '');
+	const hasSecureQr = $derived(Boolean(qrValue));
 	const classLabel = $derived(card.class_name || card.class_code || '-');
 	let qrDataUrl = $state('');
 
 	$effect(() => {
 		const value = qrValue;
+		qrDataUrl = '';
+		onQrReady?.(false);
+		if (!value) return;
 		QRCode.toDataURL(value, { errorCorrectionLevel: 'M', margin: 1, width: 192, color: { dark: '#052e16', light: '#ffffff' } })
 			.then((url) => {
-				if (qrValue === value) qrDataUrl = url;
+				if (qrValue === value) {
+					qrDataUrl = url;
+					onQrReady?.(true);
+				}
 			})
 			.catch(() => {
 				qrDataUrl = '';
+				onQrReady?.(false);
 			});
 	});
 
@@ -42,15 +50,6 @@
 			.join('') || 'S';
 	}
 
-	function qrCell(index: number) {
-		let seed = 0;
-		for (let i = 0; i < qrValue.length; i += 1) seed = (seed * 31 + qrValue.charCodeAt(i)) >>> 0;
-		const row = Math.floor(index / 17);
-		const col = index % 17;
-		const finder = (row < 5 && col < 5) || (row < 5 && col > 11) || (row > 11 && col < 5);
-		if (finder) return row === 0 || row === 4 || col === 0 || col === 4 || (row >= 2 && row <= 2 && col >= 2 && col <= 2) || row > 11 || col > 11;
-		return ((seed + index * 13 + row * 7 + col * 11) % 5) < 2;
-	}
 </script>
 
 <div class:print-sheet={print} class="student-id-card-wrap side-{side}">
@@ -98,13 +97,11 @@
 				<p>QR bukan password. Login tetap memerlukan PIN/token sesuai layanan.</p>
 			</div>
 			<div class="qr-box" aria-label="QR verifikasi kartu">
-				<div class="qr" aria-label="QR verifikasi kartu">
-					{#if qrDataUrl}
+				<div class:qr={hasSecureQr && qrDataUrl} class:qr-missing={!hasSecureQr || !qrDataUrl} aria-label="QR verifikasi kartu">
+					{#if qrDataUrl && hasSecureQr}
 						<img src={qrDataUrl} alt="QR verifikasi kartu siswa" />
 					{:else}
-						{#each Array.from({ length: 289 }) as _, i}
-							<span class:dark={qrCell(i)}></span>
-						{/each}
+						<span>QR belum tersedia — jangan cetak</span>
 					{/if}
 				</div>
 			</div>
@@ -112,7 +109,7 @@
 			<div class="back-info">
 				<p>ID Kartu</p>
 				<strong>{card.card_no || '-'}</strong>
-				<small>{qrValue}</small>
+				<small>{hasSecureQr ? 'QR aman aktif — token tidak dicetak sebagai teks' : 'QR belum tersedia — jangan cetak kartu ini'}</small>
 			</div>
 			<div class="rules">
 				<p>Kartu ini milik madrasah. Jika ditemukan, mohon kembalikan ke MTsN 2 Kolaka Utara.</p>
@@ -149,8 +146,7 @@
 	.qr-box { position: absolute; left: 20px; top: 78px; width: 104px; height: 104px; border-radius: 14px; background: #fff; padding: 9px; box-shadow: 0 12px 28px rgba(0,0,0,.24); }
 	.qr { display: grid; grid-template-columns: repeat(17, 1fr); gap: 1px; width: 86px; height: 86px; }
 	.qr img { width: 86px; height: 86px; display: block; }
-	.qr span { background: #fff; }
-	.qr span.dark { background: #102217; }
+	.qr-missing { display: grid; place-items: center; width: 86px; height: 86px; border: 2px dashed #b91c1c; color: #b91c1c; background: #fff7ed; text-align: center; font-size: 8px; font-weight: 800; line-height: 1.2; padding: 6px; }
 	.back-info { position: absolute; left: 142px; right: 20px; top: 84px; }
 	.back-info p { margin: 0; font-size: 8px; color: #e8d79e; text-transform: uppercase; letter-spacing: .12em; font-weight: 800; }
 	.back-info strong { display: block; margin-top: 4px; font-size: 18px; color: #ffd966; }

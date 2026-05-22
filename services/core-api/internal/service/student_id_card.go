@@ -46,9 +46,9 @@ func NewStudentIDCard(q *db.Queries) *StudentIDCard {
 }
 
 type StudentIDCardIssueResult struct {
-	Card  db.StudentIDCard `json:"card"`
-	Token string           `json:"qr_token"`
-	URL   string           `json:"qr_url"`
+	Card  any    `json:"card"`
+	Token string `json:"qr_token"`
+	URL   string `json:"qr_url"`
 }
 
 type StudentIDCardVerifyResult struct {
@@ -122,15 +122,20 @@ func (s *StudentIDCard) Issue(ctx context.Context, studentID, actorID pgtype.UUI
 		return StudentIDCardIssueResult{}, err
 	}
 	hash := s.hashToken(token)
+	tokenHint := tokenHint(token)
 	cardNo := fmt.Sprintf("MTSN2K-%d-%s", time.Now().Year(), strings.ToUpper(cardCode[:10]))
 	card, err := s.q.CreateStudentIDCard(ctx, db.CreateStudentIDCardParams{
-		StudentID: studentID, CardNo: cardNo, TokenHash: hash, TokenHint: "", CreatedByUserID: actorID, UpdatedByUserID: actorID,
+		StudentID: studentID, CardNo: cardNo, TokenHash: hash, TokenHint: tokenHint, CreatedByUserID: actorID, UpdatedByUserID: actorID,
 	})
 	if err != nil {
 		return StudentIDCardIssueResult{}, err
 	}
-	_, _ = s.q.InsertStudentIDCardEvent(ctx, db.InsertStudentIDCardEventParams{CardID: card.ID, StudentID: card.StudentID, EventType: "generated", ActorUserID: actorID, Source: "admin", Metadata: []byte(`{}`)})
-	return StudentIDCardIssueResult{Card: card, Token: token, URL: joinCardURL(baseURL, token)}, nil
+	_, _ = s.q.InsertStudentIDCardEvent(ctx, db.InsertStudentIDCardEventParams{CardID: card.ID, StudentID: card.StudentID, EventType: "generated", ActorUserID: actorID, Source: "admin", Metadata: eventMetadata(map[string]any{"qr_token_hint": tokenHint, "card_no": cardNo})})
+	view, err := s.q.GetStudentIDCard(ctx, card.ID)
+	if err != nil {
+		return StudentIDCardIssueResult{}, err
+	}
+	return StudentIDCardIssueResult{Card: view, Token: token, URL: joinCardURL(baseURL, token)}, nil
 }
 
 func (s *StudentIDCard) UpdateStatus(ctx context.Context, id, actorID pgtype.UUID, status, reason string) (db.StudentIDCard, error) {
@@ -144,7 +149,7 @@ func (s *StudentIDCard) UpdateStatus(ctx context.Context, id, actorID pgtype.UUI
 	if err != nil {
 		return card, err
 	}
-	_, _ = s.q.InsertStudentIDCardEvent(ctx, db.InsertStudentIDCardEventParams{CardID: card.ID, StudentID: card.StudentID, EventType: status, ActorUserID: actorID, Source: "admin", Metadata: []byte(`{}`)})
+	_, _ = s.q.InsertStudentIDCardEvent(ctx, db.InsertStudentIDCardEventParams{CardID: card.ID, StudentID: card.StudentID, EventType: status, ActorUserID: actorID, Source: "admin", Metadata: eventMetadata(map[string]any{"reason": strings.TrimSpace(reason), "new_status": status})})
 	return card, nil
 }
 
@@ -160,17 +165,32 @@ func (s *StudentIDCard) MarkPrinted(ctx context.Context, id, actorID pgtype.UUID
 }
 
 func (s *StudentIDCard) Reissue(ctx context.Context, oldID, actorID pgtype.UUID, baseURL, reason string) (StudentIDCardIssueResult, error) {
-	old, err := s.q.GetStudentIDCard(ctx, oldID)
+	if !oldID.Valid || !actorID.Valid {
+		return StudentIDCardIssueResult{}, domain.ErrBadRequest
+	}
+	token, err := randomToken(32)
+	if err != nil {
+		return StudentIDCardIssueResult{}, err
+	}
+	cardCode, err := randomToken(8)
+	if err != nil {
+		return StudentIDCardIssueResult{}, err
+	}
+	cardNo := fmt.Sprintf("MTSN2K-%d-%s", time.Now().Year(), strings.ToUpper(cardCode[:10]))
+	tokenHint := tokenHint(token)
+	row, err := s.q.ReissueStudentIDCard(ctx, db.ReissueStudentIDCardParams{OldID: oldID, Reason: strings.TrimSpace(reason), ActorID: actorID, CardNo: cardNo, TokenHash: s.hashToken(token), TokenHint: tokenHint})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return StudentIDCardIssueResult{}, domain.ErrNotFound
 	}
 	if err != nil {
 		return StudentIDCardIssueResult{}, err
 	}
-	if _, err := s.UpdateStatus(ctx, oldID, actorID, StudentIDCardStatusReplaced, reason); err != nil {
-		return StudentIDCardIssueResult{}, err
+	metadata := eventMetadata(map[string]any{"reason": strings.TrimSpace(reason), "replacement_card_id": idCardUUIDString(row.ID), "replacement_card_no": row.CardNo})
+	if row.ReissuedFromID.Valid {
+		_, _ = s.q.InsertStudentIDCardEvent(ctx, db.InsertStudentIDCardEventParams{CardID: row.ReissuedFromID, StudentID: row.StudentID, EventType: "replaced", ActorUserID: actorID, Source: "admin", Metadata: metadata})
 	}
-	return s.Issue(ctx, old.StudentID, actorID, baseURL)
+	_, _ = s.q.InsertStudentIDCardEvent(ctx, db.InsertStudentIDCardEventParams{CardID: row.ID, StudentID: row.StudentID, EventType: "reissued", ActorUserID: actorID, Source: "admin", Metadata: eventMetadata(map[string]any{"reason": strings.TrimSpace(reason), "reissued_from_id": idCardUUIDString(row.ReissuedFromID), "qr_token_hint": tokenHint})})
+	return StudentIDCardIssueResult{Card: row, Token: token, URL: joinCardURL(baseURL, token)}, nil
 }
 
 func (s *StudentIDCard) ResolveToken(ctx context.Context, token string) (db.GetStudentIDCardByHashRow, error) {
@@ -203,11 +223,11 @@ func (s *StudentIDCard) PublicVerify(ctx context.Context, token, ip, userAgent s
 	res.Card.ID = idCardUUIDString(row.ID)
 	res.Card.CardNo = row.CardNo
 	res.Card.Status = row.Status
-	res.Student.ID = idCardUUIDString(row.StudentID)
-	res.Student.Name = row.Nama
-	res.Student.NIS = row.Nis
+	res.Student.ID = ""
+	res.Student.Name = maskName(row.Nama)
+	res.Student.NIS = maskID(row.Nis)
 	res.Student.ClassName = idCardFirstNonEmpty(row.ClassName, row.ClassCode)
-	res.Student.PhotoURL = row.PhotoUrl
+	res.Student.PhotoURL = ""
 	return res, nil
 }
 
@@ -359,6 +379,22 @@ func randomToken(n int) (string, error) {
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
+func tokenHint(token string) string {
+	token = extractToken(token)
+	if len(token) <= 8 {
+		return token
+	}
+	return token[len(token)-8:]
+}
+
+func eventMetadata(values map[string]any) []byte {
+	payload, err := json.Marshal(values)
+	if err != nil {
+		return []byte(`{}`)
+	}
+	return payload
+}
+
 func extractToken(v string) string {
 	v = strings.TrimSpace(v)
 	if i := strings.LastIndex(v, "/"); i >= 0 {
@@ -403,4 +439,12 @@ func maskName(name string) string {
 		return name
 	}
 	return string(r[:3]) + "***"
+}
+
+func maskID(value string) string {
+	r := []rune(strings.TrimSpace(value))
+	if len(r) <= 4 {
+		return ""
+	}
+	return strings.Repeat("•", len(r)-4) + string(r[len(r)-4:])
 }
