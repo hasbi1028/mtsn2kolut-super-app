@@ -106,6 +106,10 @@ func (s *CbtQuestion) createWithAudit(ctx context.Context, input SaveCbtQuestion
 			logging.Error(ctx, "cbt_question_create_db_failed", err, questionInputLogAttrs(input, actor)...)
 			return db.CbtQuestion{}, err
 		}
+		if err := s.bindMediaAssetsToQuestion(ctx, store, decodeStringArray(row.MediaAssetIds), row.ID); err != nil {
+			logging.Error(ctx, "cbt_question_create_asset_bind_failed", err, append(questionInputLogAttrs(input, actor), slog.String("question_id", cbtQuestionUUIDString(row.ID)))...)
+			return db.CbtQuestion{}, err
+		}
 		if err := logQuestionAudit(ctx, store, row.ID, actor.Username, action, note, metadata); err != nil {
 			logging.Error(ctx, "cbt_question_create_audit_failed", err, append(questionInputLogAttrs(input, actor), slog.String("question_id", cbtQuestionUUIDString(row.ID)))...)
 			return db.CbtQuestion{}, err
@@ -204,6 +208,9 @@ func (s *CbtQuestion) updateWithAudit(ctx context.Context, input SaveCbtQuestion
 		}
 		row, err := store.UpdateCbtQuestion(ctx, params)
 		if err != nil {
+			return db.CbtQuestion{}, err
+		}
+		if err := s.bindMediaAssetsToQuestion(ctx, store, decodeStringArray(row.MediaAssetIds), row.ID); err != nil {
 			return db.CbtQuestion{}, err
 		}
 		if err := logQuestionAudit(ctx, store, row.ID, actor.Username, action, note, metadata); err != nil {
@@ -475,6 +482,25 @@ func (s *CbtQuestion) validateMediaAssetIDs(ctx context.Context, store cbtQuesti
 	return nil
 }
 
+func (s *CbtQuestion) bindMediaAssetsToQuestion(ctx context.Context, store cbtQuestionStore, rawIDs []string, questionID pgtype.UUID) error {
+	ids := normalizeStringList(rawIDs)
+	if len(ids) == 0 || !questionID.Valid {
+		return nil
+	}
+	assetIDs := make([]pgtype.UUID, 0, len(ids))
+	for _, rawID := range ids {
+		assetID, err := parseMediaAssetUUID(rawID)
+		if err != nil {
+			return fmt.Errorf("%w: media_asset_ids harus berisi UUID valid", domain.ErrBadRequest)
+		}
+		assetIDs = append(assetIDs, assetID)
+	}
+	return store.BindCbtQuestionAssetsToQuestion(ctx, db.BindCbtQuestionAssetsToQuestionParams{
+		QuestionID: questionID,
+		AssetIds:   assetIDs,
+	})
+}
+
 func parseMediaAssetUUID(value string) (pgtype.UUID, error) {
 	var id pgtype.UUID
 	if err := id.Scan(strings.TrimSpace(value)); err != nil {
@@ -501,6 +527,31 @@ func normalizeStringList(values []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+func mergeQuestionHTMLMediaAssetIDs(input SaveCbtQuestionInput) ([]string, error) {
+	ids := normalizeStringList(input.MediaAssetIDs)
+	seen := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		seen[id] = true
+	}
+	fragments := []string{input.StemHTML, input.StimulusHTML, input.ExplanationHTML, input.RubricHTML}
+	for _, option := range input.Options {
+		fragments = append(fragments, option.HTML, option.MatchHTML)
+	}
+	for _, fragment := range fragments {
+		found, err := collectBankSoalImageAssetIDs(fragment)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range found {
+			if !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
+			}
+		}
+	}
+	return ids, nil
 }
 
 func memberSubjectMatches(memberSubjectID pgtype.UUID, subjectID pgtype.UUID) bool {
@@ -858,6 +909,11 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 	out.OptionC = optionC
 	out.OptionD = optionD
 	out.OptionE = optionE
+	mediaAssetIDs, err := mergeQuestionHTMLMediaAssetIDs(out)
+	if err != nil {
+		return SaveCbtQuestionInput{}, err
+	}
+	out.MediaAssetIDs = mediaAssetIDs
 	if out.QuestionType == "short_answer" {
 		out.AnswerKey = normalizeShortAnswerKey(out.AnswerKey)
 	} else if out.QuestionType == "matching" {

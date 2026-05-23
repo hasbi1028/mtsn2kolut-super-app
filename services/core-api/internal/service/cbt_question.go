@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"html"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -9,7 +12,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/microcosm-cc/bluemonday"
+	nethtml "golang.org/x/net/html"
 
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
@@ -17,6 +22,7 @@ var importAnswerTokenSeparators = regexp.MustCompile(`[,\|;/+\s]+`)
 var importMatchingPairSeparators = regexp.MustCompile(`[;,|]+`)
 var bankSoalColorStyleValue = regexp.MustCompile(`(?i)^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$`)
 var bankSoalDataAttributeValue = regexp.MustCompile(`^[a-zA-Z0-9 _.,:;@#%+=/\-()]+$`)
+var bankSoalAssetImagePath = regexp.MustCompile(`^/api/(?:bank-soal|cbt)/assets/([0-9a-fA-F-]{36})/file$`)
 var bankSoalHTMLPolicy = newBankSoalHTMLPolicy()
 var bankSoalPlainTextPolicy = bluemonday.StrictPolicy()
 
@@ -45,6 +51,71 @@ func newBankSoalHTMLPolicy() *bluemonday.Policy {
 	return p
 }
 
+func collectBankSoalImageAssetIDs(value string) ([]string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" || !strings.Contains(strings.ToLower(value), "<img") {
+		return nil, nil
+	}
+	doc, err := nethtml.Parse(strings.NewReader("<div>" + value + "</div>"))
+	if err != nil {
+		return nil, fmt.Errorf("%w: HTML gambar soal tidak valid", domain.ErrBadRequest)
+	}
+	seen := map[string]bool{}
+	ids := []string{}
+	var walk func(*nethtml.Node) error
+	walk = func(n *nethtml.Node) error {
+		if n == nil {
+			return nil
+		}
+		if n.Type == nethtml.ElementNode && strings.EqualFold(n.Data, "img") {
+			src := ""
+			for _, attr := range n.Attr {
+				if strings.EqualFold(attr.Key, "src") {
+					src = strings.TrimSpace(html.UnescapeString(attr.Val))
+					break
+				}
+			}
+			id, err := bankSoalAssetIDFromImageSrc(src)
+			if err != nil {
+				return err
+			}
+			if id != "" && !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
+			}
+		}
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
+			if err := walk(child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := walk(doc); err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+func bankSoalAssetIDFromImageSrc(src string) (string, error) {
+	src = strings.TrimSpace(src)
+	if src == "" || src == "//:0" || strings.HasPrefix(strings.ToLower(src), "blob:") || strings.HasPrefix(strings.ToLower(src), "data:") || strings.HasPrefix(strings.ToLower(src), "file:") {
+		return "", fmt.Errorf("%w: Gambar soal belum tersimpan ke server. Upload ulang gambar melalui tombol gambar/editor sebelum menyimpan atau mengirim review", domain.ErrBadRequest)
+	}
+	parsed, err := url.Parse(src)
+	if err != nil {
+		return "", fmt.Errorf("%w: Gambar soal memiliki alamat tidak valid", domain.ErrBadRequest)
+	}
+	if parsed.Scheme != "" || parsed.Host != "" {
+		return "", fmt.Errorf("%w: Gambar soal harus memakai aset server Bank Soal, bukan tautan eksternal", domain.ErrBadRequest)
+	}
+	match := bankSoalAssetImagePath.FindStringSubmatch(parsed.Path)
+	if len(match) != 2 {
+		return "", fmt.Errorf("%w: Gambar soal belum tersimpan ke server. Upload ulang gambar melalui tombol gambar/editor sebelum menyimpan atau mengirim review", domain.ErrBadRequest)
+	}
+	return strings.ToLower(match[1]), nil
+}
+
 type cbtQuestionStore interface {
 	CbtQuestionSubjectExists(ctx context.Context, id pgtype.UUID) (bool, error)
 	CbtQuestionEventExists(ctx context.Context, id pgtype.UUID) (bool, error)
@@ -63,6 +134,7 @@ type cbtQuestionStore interface {
 	GetCbtQuestion(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error)
 	GetCbtQuestionDetail(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionDetailRow, error)
 	GetCbtQuestionAsset(ctx context.Context, id pgtype.UUID) (db.CbtQuestionAsset, error)
+	BindCbtQuestionAssetsToQuestion(ctx context.Context, arg db.BindCbtQuestionAssetsToQuestionParams) error
 	AcquireCbtQuestionDraftDuplicateLock(ctx context.Context, fingerprint string) error
 	FindRecentCbtQuestionDraftDuplicate(ctx context.Context, arg db.FindRecentCbtQuestionDraftDuplicateParams) (db.CbtQuestion, error)
 	CreateCbtQuestion(ctx context.Context, arg db.CreateCbtQuestionParams) (db.CbtQuestion, error)

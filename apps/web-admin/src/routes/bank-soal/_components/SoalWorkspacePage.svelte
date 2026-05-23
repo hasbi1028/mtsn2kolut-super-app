@@ -2772,6 +2772,7 @@ type TimelineItem = {
 				payload,
 			});
 			if (!assertTableHtmlSafeBeforeSave(payload)) return;
+			if (!assertServerImageAssetsBeforeSave(payload)) return;
 			if (!browserOnline()) {
 				await queueQuestionSave(offlinePayload, intent, false);
 				closeComposer();
@@ -3121,6 +3122,78 @@ type TimelineItem = {
 		openMenuId = '';
 	}
 
+
+	function collectUnsafeImageSourcesFromHtml(html: string): string[] {
+		if (!html || !/<img/i.test(html)) return [];
+		const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+		const unsafe: string[] = [];
+		for (const image of Array.from(doc.querySelectorAll('img'))) {
+			const src = (image.getAttribute('src') ?? '').trim();
+			if (!src || src === '//:0' || /^(blob:|data:image|file:)/i.test(src) || /^https?:\/\//i.test(src)) {
+				unsafe.push(src || '(kosong)');
+				continue;
+			}
+			try {
+				const url = new URL(src, window.location.origin);
+				if (!/^\/api\/(bank-soal|cbt)\/assets\/[0-9a-f-]{36}\/file/i.test(url.pathname)) unsafe.push(src);
+			} catch {
+				unsafe.push(src);
+			}
+		}
+		return unsafe;
+	}
+
+	function collectUnsafeImageIssues(payload: QuestionSavePayload): string[] {
+		const fields: Array<[string, string]> = [
+			['stimulus', payload.stimulus_html],
+			['pertanyaan', payload.stem_html],
+			['pembahasan', payload.explanation_html],
+			['rubrik', payload.rubric_html],
+		];
+		for (const option of payload.options) {
+			fields.push([`opsi ${option.label}`, option.html ?? '']);
+			fields.push([`pasangan ${option.label}`, option.match_html ?? '']);
+		}
+		const issues: string[] = [];
+		for (const [label, html] of fields) {
+			for (const src of collectUnsafeImageSourcesFromHtml(html)) issues.push(`${label}: ${src}`);
+		}
+		return issues;
+	}
+
+	function assertServerImageAssetsBeforeSave(payload: QuestionSavePayload): boolean {
+		const issues = collectUnsafeImageIssues(payload);
+		if (issues.length === 0) return true;
+		toast.error(`Ada gambar yang belum tersimpan ke server (${issues[0]}). Upload ulang gambar melalui tombol gambar/editor.`);
+		return false;
+	}
+
+	async function ensureDraftQuestionForImageUpload(): Promise<string> {
+		if (editingId) return editingId;
+		if (!browserOnline()) throw new Error('Upload gambar butuh koneksi server; mode offline tidak bisa menyimpan gambar.');
+		if (!fSubjectId || !fTargetLevel) throw new Error('Pilih mapel dan kelas dahulu sebelum upload gambar.');
+		const payload = buildQuestionSavePayload(false);
+		const draftPayload: QuestionSavePayload = {
+			...payload,
+			question_text: payload.question_text || 'Draft gambar',
+			stem_html: payload.stem_html || '<p>Draft gambar</p>',
+			workflow_status: 'draft',
+		};
+		const res = await fetch('/api/bank-soal/questions', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(draftPayload),
+		});
+		const saved = await readClientJson<Question>(res);
+		if (!saved?.id) throw new Error('Draft soal gagal dibuat sebelum upload gambar.');
+		editingId = saved.id;
+		editingEventId = saved.event_id ?? selectedEventId;
+		if (saved.workflow_status) fWorkflowStatus = normalizeWorkflowStatus(saved.workflow_status);
+		storeServerBaselineHtml(saved);
+		toast.info('Draft soal dibuat otomatis agar gambar tersimpan di server.');
+		return saved.id;
+	}
+
 	function normalizeEditorAssetUrl(url: string): string {
 		return url.replace(/^\/api\/cbt\/assets\//, '/api/bank-soal/assets/');
 	}
@@ -3129,7 +3202,8 @@ type TimelineItem = {
 		const form = new FormData();
 		form.set('file', file);
 		form.set('purpose', 'general');
-		if (editingId) form.set('question_id', editingId);
+		const questionId = await ensureDraftQuestionForImageUpload();
+		form.set('question_id', questionId);
 		const res = await fetch('/api/bank-soal/assets', { method: 'POST', body: form });
 		const payload = await readClientApiData<{ url?: string }>(res, 'Upload gambar gagal');
 		return normalizeEditorAssetUrl(payload.url ?? '');

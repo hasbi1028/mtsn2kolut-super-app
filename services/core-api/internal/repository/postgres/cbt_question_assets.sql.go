@@ -11,6 +11,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const bindCbtQuestionAssetsToQuestion = `-- name: BindCbtQuestionAssetsToQuestion :exec
+UPDATE cbt_question_assets
+SET question_id = $1::uuid
+WHERE id = ANY($2::uuid[])
+  AND (question_id IS NULL OR question_id = $1::uuid)
+`
+
+type BindCbtQuestionAssetsToQuestionParams struct {
+	QuestionID pgtype.UUID   `json:"question_id"`
+	AssetIds   []pgtype.UUID `json:"asset_ids"`
+}
+
+func (q *Queries) BindCbtQuestionAssetsToQuestion(ctx context.Context, arg BindCbtQuestionAssetsToQuestionParams) error {
+	_, err := q.db.Exec(ctx, bindCbtQuestionAssetsToQuestion, arg.QuestionID, arg.AssetIds)
+	return err
+}
+
 const createCbtQuestionAsset = `-- name: CreateCbtQuestionAsset :one
 INSERT INTO cbt_question_assets (
   question_id, original_name, stored_name, mime_type, file_size, storage_path, purpose, uploaded_by

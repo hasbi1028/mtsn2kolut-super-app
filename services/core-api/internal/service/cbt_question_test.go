@@ -62,6 +62,7 @@ type fakeQuestionStore struct {
 	deleteCalls       int
 	assets            map[pgtype.UUID]db.CbtQuestionAsset
 	assetErr          error
+	boundAssetParams  []db.BindCbtQuestionAssetsToQuestionParams
 	membersByUser     []db.CbtEventMember
 	membersByUsername []db.CbtEventMember
 	auditLogs         []db.CbtQuestionAuditLog
@@ -164,6 +165,11 @@ func (f *fakeQuestionStore) GetCbtQuestionAsset(ctx context.Context, id pgtype.U
 		}
 	}
 	return db.CbtQuestionAsset{}, pgx.ErrNoRows
+}
+
+func (f *fakeQuestionStore) BindCbtQuestionAssetsToQuestion(ctx context.Context, arg db.BindCbtQuestionAssetsToQuestionParams) error {
+	f.boundAssetParams = append(f.boundAssetParams, arg)
+	return nil
 }
 
 func (f *fakeQuestionStore) AcquireCbtQuestionDraftDuplicateLock(ctx context.Context, fingerprint string) error {
@@ -465,8 +471,14 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 }
 
 func TestCbtQuestionCreateAllowsMissingTargetLevel(t *testing.T) {
+	assetStemID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
+	assetOptionID := pgtype.UUID{Bytes: [16]byte{10}, Valid: true}
 	store := &fakeQuestionStore{
 		createRow: db.CbtQuestion{ID: pgtype.UUID{Bytes: [16]byte{8}, Valid: true}},
+		assets: map[pgtype.UUID]db.CbtQuestionAsset{
+			assetStemID:   {ID: assetStemID, UploadedBy: "guru.cbt"},
+			assetOptionID: {ID: assetOptionID, UploadedBy: "guru.cbt"},
+		},
 	}
 	svc := &CbtQuestion{q: store}
 
@@ -908,13 +920,19 @@ func TestCbtQuestionDeleteWithActorRejectsNonDraftOrUsedQuestion(t *testing.T) {
 
 func TestCbtQuestionImportLegacyCSVMapsRows(t *testing.T) {
 	subjectID := pgtype.UUID{Bytes: [16]byte{7}, Valid: true}
+	assetStemID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
+	assetOptionID := pgtype.UUID{Bytes: [16]byte{10}, Valid: true}
 	store := &fakeQuestionStore{
 		createRow: db.CbtQuestion{ID: pgtype.UUID{Bytes: [16]byte{8}, Valid: true}},
+		assets: map[pgtype.UUID]db.CbtQuestionAsset{
+			assetStemID:   {ID: assetStemID, UploadedBy: "guru.cbt"},
+			assetOptionID: {ID: assetOptionID, UploadedBy: "guru.cbt"},
+		},
 	}
 	svc := &CbtQuestion{q: store}
 	csvText := strings.Join([]string{
 		"kode;soal;opsi_a;opsi_b;opsi_c;opsi_d;jawaban;gambar_soal;gambar_b;bobot;is_rtl",
-		"MTK-1;<p>Berapa 2+2?</p>;3;4;5;6;1;https://cdn.test/soal.png;https://cdn.test/b.png;2;true",
+		"MTK-1;<p>Berapa 2+2?</p>;3;4;5;6;1;/api/bank-soal/assets/09000000-0000-0000-0000-000000000000/file;/api/bank-soal/assets/0a000000-0000-0000-0000-000000000000/file;2;true",
 		"MTK-1;Berapa 3+3?;5;6;7;8;B;;;;",
 		"; ;A;B;C;D;A;;;;",
 		"MTK-2;Pilih huruf;A;B;C;D;C;;;;",
@@ -945,8 +963,8 @@ func TestCbtQuestionImportLegacyCSVMapsRows(t *testing.T) {
 	if first.SubjectID != subjectID || first.Code != "MTK-1" || first.AnswerKey != "B" || first.AuthorUsername != "guru.cbt" {
 		t.Fatalf("first imported params = %+v, want subject/code/answer/author mapped", first)
 	}
-	if !strings.Contains(first.StemHtml, "https://cdn.test/soal.png") || !strings.Contains(string(first.Options), "https://cdn.test/b.png") {
-		t.Fatalf("first imported media = stem %q options %s, want legacy image URLs", first.StemHtml, string(first.Options))
+	if !strings.Contains(first.StemHtml, "/api/bank-soal/assets/09000000-0000-0000-0000-000000000000/file") || !strings.Contains(string(first.Options), "/api/bank-soal/assets/0a000000-0000-0000-0000-000000000000/file") {
+		t.Fatalf("first imported media = stem %q options %s, want server asset URLs", first.StemHtml, string(first.Options))
 	}
 	if !strings.Contains(first.WriterNotes, "Bobot legacy: 2") || !strings.Contains(first.WriterNotes, "RTL legacy: ya") {
 		t.Fatalf("first imported notes = %q, want legacy metadata notes", first.WriterNotes)

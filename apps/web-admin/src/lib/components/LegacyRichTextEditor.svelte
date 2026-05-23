@@ -115,18 +115,11 @@
 		return error instanceof Error && error.message ? error.message : 'Upload gambar gagal';
 	}
 
-	async function fileToDataURL(file: File) {
-		return new Promise<string>((resolve, reject) => {
-			const reader = new FileReader();
-			reader.onload = () => resolve(String(reader.result ?? ''));
-			reader.onerror = reject;
-			reader.readAsDataURL(file);
-		});
-	}
-
 	async function uploadImage(file: File) {
-		if (onImageUpload) return onImageUpload(file);
-		return fileToDataURL(file);
+		if (!onImageUpload) {
+			throw new Error('Upload gambar harus melalui server. Editor ini belum menyiapkan handler upload.');
+		}
+		return onImageUpload(file);
 	}
 
 	function clampTableDimension(value: string, min: number, max: number, fallback: number) {
@@ -190,6 +183,26 @@
 		toast.success('Tabel ditambahkan. Klik isi sel untuk mengubah teks tabel.');
 	}
 
+	async function insertUploadedImage(editor: Quill, file: File, index?: number) {
+		const url = await uploadImage(file);
+		if (!url) return;
+		const range = editor.getSelection() ?? { index: editor.getLength(), length: 0 };
+		const insertIndex = typeof index === 'number' ? index : range.index;
+		editor.insertEmbed(insertIndex, 'image', url, 'user');
+		const imageNode = getImageNodeFromLeaf(editor, insertIndex);
+		if (imageNode) {
+			imageNode.setAttribute('width', '320');
+			imageNode.removeAttribute('height');
+			setImageSelection(imageNode);
+		}
+		syncValueFromEditor();
+		editor.setSelection(insertIndex + 1, 0);
+	}
+
+	function htmlContainsUnsafeImage(html: string) {
+		return /<img\b[^>]*src=["']?(?:\/\/:0|blob:|data:image|file:|https?:\/\/)/i.test(html);
+	}
+
 	function installImageHandler(editor: Quill) {
 		const toolbar = editor.getModule('toolbar') as QuillToolbarModule;
 		toolbar.addHandler('image', () => {
@@ -202,22 +215,54 @@
 				const file = input.files?.[0];
 				if (!file) return;
 				try {
-					const url = await uploadImage(file);
-					if (!url) return;
-					const range = editor.getSelection() ?? { index: editor.getLength(), length: 0 };
-					editor.insertEmbed(range.index, 'image', url);
-					const imageNode = getImageNodeFromLeaf(editor, range.index);
-					if (imageNode) {
-						imageNode.setAttribute('width', '320');
-						imageNode.removeAttribute('height');
-						setImageSelection(imageNode);
-					}
-					syncValueFromEditor();
-					editor.setSelection(range.index + 1, 0);
+					await insertUploadedImage(editor, file);
 				} catch (error) {
 					toast.error(uploadErrorMessage(error));
 				}
 			};
+		});
+	}
+
+	function installImagePasteAndDropHandlers(editor: Quill) {
+		editor.root.addEventListener('paste', (event) => {
+			const files = Array.from(event.clipboardData?.files ?? []).filter((file) => file.type.startsWith('image/'));
+			const html = event.clipboardData?.getData('text/html') ?? '';
+			if (files.length > 0) {
+				event.preventDefault();
+				void (async () => {
+					let index = editor.getSelection()?.index ?? editor.getLength();
+					for (const file of files) {
+						try {
+							await insertUploadedImage(editor, file, index);
+							index += 1;
+						} catch (error) {
+							toast.error(uploadErrorMessage(error));
+						}
+					}
+				})();
+				return;
+			}
+			if (htmlContainsUnsafeImage(html)) {
+				event.preventDefault();
+				toast.error('Gambar dari Word/browser belum tersimpan ke server. Upload gambar melalui tombol gambar atau paste file gambar langsung.');
+			}
+		});
+
+		editor.root.addEventListener('drop', (event) => {
+			const files = Array.from(event.dataTransfer?.files ?? []).filter((file) => file.type.startsWith('image/'));
+			if (files.length === 0) return;
+			event.preventDefault();
+			void (async () => {
+				let index = editor.getSelection()?.index ?? editor.getLength();
+				for (const file of files) {
+					try {
+						await insertUploadedImage(editor, file, index);
+						index += 1;
+					} catch (error) {
+						toast.error(uploadErrorMessage(error));
+					}
+				}
+			})();
 		});
 	}
 
@@ -257,6 +302,7 @@
 			setImageSelection(target instanceof HTMLImageElement ? target : null);
 		});
 		installImageHandler(editor);
+		installImagePasteAndDropHandlers(editor);
 	});
 
 	$effect(() => {

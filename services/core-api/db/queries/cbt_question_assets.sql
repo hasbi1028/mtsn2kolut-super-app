@@ -15,3 +15,9 @@ SELECT id, question_id, original_name, stored_name, mime_type, file_size, storag
 FROM cbt_question_assets
 WHERE question_id = $1
 ORDER BY created_at DESC;
+
+-- name: BindCbtQuestionAssetsToQuestion :exec
+UPDATE cbt_question_assets
+SET question_id = sqlc.arg(question_id)::uuid
+WHERE id = ANY(sqlc.arg(asset_ids)::uuid[])
+  AND (question_id IS NULL OR question_id = sqlc.arg(question_id)::uuid);
