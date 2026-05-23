@@ -11,6 +11,7 @@ type QuestionListPayload = {
 type SummaryCounts = {
 	all: number;
 	total: number;
+	unpublished: number;
 	draft: number;
 	review: number;
 	rejected: number;
@@ -38,6 +39,7 @@ function aggregateListFallback(payload: QuestionListPayload) {
 	const counts: SummaryCounts = {
 		all: payload.meta?.total ?? items.length,
 		total: payload.meta?.total ?? items.length,
+		unpublished: 0,
 		draft: 0,
 		review: 0,
 		rejected: 0,
@@ -60,10 +62,11 @@ function aggregateListFallback(payload: QuestionListPayload) {
 	for (const item of items) {
 		const workflow = text(item.workflow_status);
 		const status = text(item.status);
-		if (workflow === 'review') counts.review += 1;
-		else if (workflow === 'rejected' || workflow === 'revision') counts.rejected += 1;
+		if (status === 'draft') counts.unpublished += 1;
+		if (workflow === 'submitted' || workflow === 'review') counts.review += 1;
+		else if (workflow === 'revision_needed' || workflow === 'rejected' || workflow === 'revision') counts.rejected += 1;
 		else if (workflow === 'approved') counts.approved += 1;
-		else counts.draft += 1;
+		else if (!workflow || workflow === 'draft') counts.draft += 1;
 		if (status === 'published') counts.published += 1;
 		const packageCount = numberValue(item.package_count) || numberValue((item.usage as Record<string, unknown> | undefined)?.package_count);
 		if (packageCount > 0) counts.package_usage += 1;

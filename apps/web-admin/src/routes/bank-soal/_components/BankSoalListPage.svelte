@@ -149,8 +149,15 @@
     message?: string;
   };
 
+  type SummaryCountPayload = Partial<
+    Record<
+      StatusKey | "package_usage" | "total" | "unsubmitted" | "workflow_draft",
+      number
+    >
+  >;
+
   type BankSoalSummaryResponse = {
-    counts?: Partial<Record<StatusKey | "package_usage", number>>;
+    counts?: SummaryCountPayload;
     by_subject?: Array<{
       subject_id?: string;
       subject_name?: string;
@@ -184,6 +191,7 @@
   type HotsFilter = "" | "yes" | "no";
   type StatusKey =
     | "all"
+    | "unpublished"
     | "draft"
     | "review"
     | "rejected"
@@ -241,6 +249,7 @@
   const DEFAULT_PAGE_SIZE = DEFAULT_PAGE_SIZE_OPTIONS[0];
   const emptyCounts: StatusCounts = {
     all: 0,
+    unpublished: 0,
     draft: 0,
     review: 0,
     rejected: 0,
@@ -441,12 +450,20 @@
       active: workflowFilters.length === 0 && !publicationFilter,
     },
     {
-      key: "draft",
+      key: "unpublished",
       label: "Belum Terbit",
-      helper: "semua draft operasional",
-      value: counts.draft,
+      helper: "ringkasan belum tayang",
+      value: counts.unpublished,
       tone: "slate",
       active: workflowFilters.length === 0 && publicationFilter === "draft",
+    },
+    {
+      key: "draft",
+      label: "Draft / Belum Diajukan",
+      helper: "belum masuk verifikasi",
+      value: counts.draft,
+      tone: "slate",
+      active: workflowFiltersEqual(["draft"]) && publicationFilter === "draft",
     },
     {
       key: "review",
@@ -495,7 +512,12 @@
   }
 
   function appendStatusParams(params: URLSearchParams, key: StatusKey) {
+    if (key === "unpublished") {
+      params.set("status", "draft");
+      return;
+    }
     if (key === "draft") {
+      params.set("workflow_status", "draft");
       params.set("status", "draft");
       return;
     }
@@ -579,17 +601,38 @@
     );
   }
 
+  function normalizeSummaryCounts(
+    summaryCounts: SummaryCountPayload | undefined,
+    fallback: StatusCounts = emptyCounts,
+  ): StatusCounts {
+    const all = summaryCounts?.all ?? summaryCounts?.total ?? fallback.all;
+    const unpublished = summaryCounts?.unpublished ?? summaryCounts?.draft ?? fallback.unpublished;
+    const review = summaryCounts?.review ?? fallback.review;
+    const rejected = summaryCounts?.rejected ?? fallback.rejected;
+    const approved = summaryCounts?.approved ?? fallback.approved;
+    const published = summaryCounts?.published ?? fallback.published;
+    const draft =
+      summaryCounts?.unsubmitted ??
+      summaryCounts?.workflow_draft ??
+      (summaryCounts?.unpublished !== undefined
+        ? summaryCounts?.draft ?? Math.max(0, unpublished - review - rejected - approved)
+        : Math.max(0, unpublished - review - rejected - approved));
+
+    return {
+      all,
+      unpublished,
+      draft,
+      review,
+      rejected,
+      approved,
+      published,
+    };
+  }
+
   function applySummaryPayload(summary: BankSoalSummaryResponse | undefined) {
     if (!summary) return;
     if (summary.counts) {
-      counts = {
-        all: summary.counts.all ?? counts.all,
-        draft: summary.counts.draft ?? counts.draft,
-        review: summary.counts.review ?? counts.review,
-        rejected: summary.counts.rejected ?? counts.rejected,
-        approved: summary.counts.approved ?? counts.approved,
-        published: summary.counts.published ?? counts.published,
-      };
+      counts = normalizeSummaryCounts(summary.counts, counts);
       summaryPackageUsage = summary.counts.package_usage ?? summaryPackageUsage;
     }
     summarySubjectDistribution = (summary.by_subject ?? [])
@@ -640,14 +683,7 @@
         summaryCounts.all ??
         questionPayload.items?.length ??
         0,
-      counts: {
-        all: summaryCounts.all ?? 0,
-        draft: summaryCounts.draft ?? 0,
-        review: summaryCounts.review ?? 0,
-        rejected: summaryCounts.rejected ?? 0,
-        approved: summaryCounts.approved ?? 0,
-        published: summaryCounts.published ?? 0,
-      },
+      counts: normalizeSummaryCounts(summaryCounts),
       page,
       limit: questionPayload.meta?.limit ?? limit,
       offset:
@@ -757,8 +793,11 @@
     if (key === "all") {
       workflowFilters = [];
       publicationFilter = "";
-    } else if (key === "draft") {
+    } else if (key === "unpublished") {
       workflowFilters = [];
+      publicationFilter = "draft";
+    } else if (key === "draft") {
+      workflowFilters = ["draft"];
       publicationFilter = "draft";
     } else if (key === "review") {
       workflowFilters = ["submitted", "review"];
