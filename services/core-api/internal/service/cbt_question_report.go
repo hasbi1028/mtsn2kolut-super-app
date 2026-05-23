@@ -449,7 +449,11 @@ func renderBankSoalReportPNG(r BankSoalReportResult) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(chrome, "--headless", "--no-sandbox", "--disable-gpu", "--hide-scrollbars", "--window-size=1900,1800", "--screenshot="+pngPath, "file://"+htmlPath)
+	// Use a dynamic viewport height so the exported PNG becomes a long-image
+	// attachment: all report rows are visible in a single image instead of being
+	// clipped by the old fixed 1800px screenshot viewport.
+	height := bankSoalReportPNGHeight(len(r.Rows))
+	cmd := exec.Command(chrome, "--headless", "--no-sandbox", "--disable-gpu", "--hide-scrollbars", fmt.Sprintf("--window-size=1900,%d", height), "--screenshot="+pngPath, "file://"+htmlPath)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("render gambar gagal: %s", string(out))
 	}
@@ -489,6 +493,19 @@ func bankSoalReportChrome() (string, error) {
 	return "", fmt.Errorf("renderer gambar/PDF tidak tersedia")
 }
 
+func bankSoalReportPNGHeight(rowCount int) int {
+	// Compact export header is ~150px, table header ~44px, each row ~30px.
+	// Keep a small bottom margin and clamp to Chromium's practical screenshot size.
+	height := 230 + rowCount*32
+	if height < 900 {
+		return 900
+	}
+	if height > 16000 {
+		return 16000
+	}
+	return height
+}
+
 func renderBankSoalReportHTML(r BankSoalReportResult) string {
 	rows := ""
 	for _, row := range r.Rows {
@@ -499,8 +516,111 @@ func renderBankSoalReportHTML(r BankSoalReportResult) string {
 		if row.DataWarning {
 			cls += " warning"
 		}
-		rows += fmt.Sprintf(`<tr class="%s"><td>%d</td><td><b>%s</b><br><small>%s</small></td><td>%s</td><td>%s</td><td>%s</td><td class="num">%d</td><td class="num">%d</td><td class="num">%d</td><td class="num">%d</td><td>%s</td><td>%s</td><td>%s</td></tr>`, cls, row.No, esc(row.Primary), esc(row.Secondary), esc(row.SubjectName), esc(row.LevelName), esc(row.Task), row.Total, row.PG, row.Essay, row.Other, esc(row.Statuses), esc(row.LastInput), esc(row.Notes))
+		rows += fmt.Sprintf(`<tr class="%s"><td>%d</td><td><b>%s</b></td><td>%s</td><td>%s</td><td class="num">%d</td><td class="num">%d</td><td class="num">%d</td><td>%s</td><td>%s</td></tr>`, cls, row.No, esc(row.Primary), esc(bankSoalReportShortSubject(row.SubjectName)), esc(row.LevelName), row.Total, row.PG, row.Essay, esc(bankSoalReportShortStatuses(row.Statuses)), esc(bankSoalReportShortDate(row.LastInput)))
 	}
-	return fmt.Sprintf(`<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;background:#eef2f7;margin:0;color:#0f172a}.page{width:1840px;padding:40px}.head{background:linear-gradient(135deg,#0f766e,#0f172a);color:white;border-radius:28px;padding:34px 42px}h1{font-size:44px;margin:0 0 10px}.sub{font-size:22px}.cards{display:grid;grid-template-columns:repeat(6,1fr);gap:16px;margin:24px 0}.card{background:white;border-radius:20px;padding:20px;box-shadow:0 8px 24px #0f172a18}.label{font-size:15px;color:#64748b;font-weight:bold}.value{font-size:38px;font-weight:900;margin-top:4px}table{width:100%%;border-collapse:separate;border-spacing:0;background:white;border-radius:22px;overflow:hidden;box-shadow:0 12px 32px #0f172a18}th{background:#0f172a;color:white;text-align:left;padding:14px;font-size:16px}td{padding:13px;border-bottom:1px solid #e5e7eb;font-size:16px}tr:nth-child(even) td{background:#f8fafc}.system td{background:#eef6ff!important}.warning td{background:#fff7ed!important}.num{text-align:right}.notes{margin-top:20px;background:white;border-radius:18px;padding:18px;font-size:18px}</style></head><body><div class="page"><div class="head"><h1>%s</h1><div class="sub">Bank Soal MTsN 2 Kolaka Utara — %s</div><div class="sub">Dibuat: %s WITA</div></div><div class="cards"><div class="card"><div class="label">Total</div><div class="value">%d</div></div><div class="card"><div class="label">PG</div><div class="value">%d</div></div><div class="card"><div class="label">Essay</div><div class="value">%d</div></div><div class="card"><div class="label">Lain</div><div class="value">%d</div></div><div class="card"><div class="label">Pembuat/Grup</div><div class="value">%d</div></div><div class="card"><div class="label">Mapel</div><div class="value">%d</div></div></div><table><thead><tr><th>No</th><th>Utama</th><th>Mapel</th><th>Tingkat</th><th>Tugas</th><th>Total</th><th>PG</th><th>Essay</th><th>Lain</th><th>Status</th><th>Terakhir</th><th>Keterangan</th></tr></thead><tbody>%s</tbody></table><div class="notes"><b>Catatan:</b> Baris biru = system/seed. Baris oranye = data perlu dilengkapi. %s</div></div></body></html>`, esc(r.Title), esc(r.PeriodLabel), esc(r.GeneratedAt), r.Summary.Total, r.Summary.PG, r.Summary.Essay, r.Summary.Other, r.Summary.Authors, r.Summary.Subjects, rows, esc(r.AccessNote))
+	return fmt.Sprintf(`<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	*{box-sizing:border-box}
+	body{font-family:Arial,sans-serif;background:#eef2f7;margin:0;color:#0f172a}
+	.page{width:1840px;padding:18px}
+	.banner{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:white;border:1px solid #d1fae5;border-left:10px solid #0f766e;border-radius:16px;padding:14px 18px;margin-bottom:12px;box-shadow:0 8px 24px #0f172a12;font-size:22px;line-height:1.18}
+	.banner b{font-size:27px;color:#0f766e}
+	.banner span{color:#334155;border-left:1px solid #cbd5e1;padding-left:14px;font-weight:700}
+	table{width:100%%;border-collapse:separate;border-spacing:0;background:white;border-radius:16px;overflow:hidden;box-shadow:0 10px 28px #0f172a14;table-layout:fixed}
+	th{background:#0f172a;color:white;text-align:left;padding:8px 9px;font-size:18px;line-height:1.08}
+	td{padding:6px 9px;border-bottom:1px solid #e5e7eb;font-size:17px;line-height:1.08;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+	tr:nth-child(even) td{background:#f8fafc}.system td{background:#eef6ff!important}.warning td{background:#fff7ed!important}.num{text-align:right;font-variant-numeric:tabular-nums}
+	th:nth-child(1),td:nth-child(1){width:54px;text-align:center;color:#64748b}th:nth-child(2),td:nth-child(2){width:430px}th:nth-child(3),td:nth-child(3){width:240px}th:nth-child(4),td:nth-child(4){width:85px;text-align:center}th:nth-child(5),td:nth-child(5),th:nth-child(6),td:nth-child(6),th:nth-child(7),td:nth-child(7){width:82px}th:nth-child(8),td:nth-child(8){width:520px}th:nth-child(9),td:nth-child(9){width:150px;text-align:right;color:#475569}
+	.footer{margin-top:8px;color:#64748b;font-size:14px;text-align:right}
+</style>
+</head>
+<body>
+<div class="page">
+	<div class="banner"><b>%s</b><span>%d soal</span><span>%d pembuat/grup</span><span>%d mapel</span><span>%d baris</span><span>%s</span></div>
+	<table><thead><tr><th>No</th><th>Utama/Pembuat</th><th>Mapel</th><th>Tingkat</th><th>Total</th><th>PG</th><th>Essay</th><th>Status</th><th>Terakhir</th></tr></thead><tbody>%s</tbody></table>
+	<div class="footer">Bank Soal MTsN 2 Kolaka Utara · Dibuat %s WITA</div>
+</div>
+</body>
+</html>`, esc(r.Title), r.Summary.Total, r.Summary.Authors, r.Summary.Subjects, len(r.Rows), esc(r.PeriodLabel), rows, esc(r.GeneratedAt))
 }
+
+func bankSoalReportShortSubject(value string) string {
+	switch strings.TrimSpace(value) {
+	case "Pendidikan Jasmani, Olahraga, dan Kesehatan", "Pendidikan Jasmani Olahraga dan Kesehatan":
+		return "PJOK"
+	case "Ilmu Pengetahuan Alam":
+		return "IPA"
+	case "Ilmu Pengetahuan Sosial":
+		return "IPS"
+	case "Bahasa Indonesia":
+		return "B. Indonesia"
+	case "Bahasa Inggris":
+		return "B. Inggris"
+	case "Bahasa Arab":
+		return "B. Arab"
+	case "Pendidikan Pancasila dan Kewarganegaraan", "Pendidikan Pancasila":
+		return "PPKn"
+	case "Mulok Kewirausahaan", "Muatan Lokal Kewirausahaan":
+		return "Mulok KWU"
+	case "Sejarah Kebudayaan Islam":
+		return "SKI"
+	case "Al-Qur'an Hadis", "Qur'an Hadits":
+		return "Qurdis"
+	case "Akidah Akhlak":
+		return "Akidah"
+	case "Matematika":
+		return "MTK"
+	default:
+		return strings.TrimSpace(value)
+	}
+}
+
+func bankSoalReportShortStatuses(value string) string {
+	text := strings.TrimSpace(value)
+	if text == "" {
+		return ""
+	}
+	aliases := map[string]string{
+		"draft":           "Draft",
+		"submitted":       "Sub",
+		"review":          "Review",
+		"reviewed":        "Review",
+		"revision_needed": "Rev",
+		"approved":        "Appr",
+		"published":       "Pub",
+		"rejected":        "Reject",
+		"archived":        "Arsip",
+	}
+	parts := strings.Split(text, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		item := strings.TrimSpace(part)
+		if item == "" {
+			continue
+		}
+		pair := strings.SplitN(item, ":", 2)
+		label := strings.TrimSpace(pair[0])
+		if alias, ok := aliases[label]; ok {
+			label = alias
+		}
+		if len(pair) == 2 && strings.TrimSpace(pair[1]) != "" {
+			out = append(out, label+" "+strings.TrimSpace(pair[1]))
+		} else {
+			out = append(out, label)
+		}
+	}
+	return strings.Join(out, " · ")
+}
+
+func bankSoalReportShortDate(value string) string {
+	text := strings.TrimSpace(value)
+	if len(text) >= 16 && text[4] == '-' && text[7] == '-' {
+		return text[8:10] + "/" + text[5:7] + " " + text[11:16]
+	}
+	return text
+}
+
 func esc(s string) string { return html.EscapeString(s) }
