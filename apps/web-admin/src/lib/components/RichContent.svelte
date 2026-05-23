@@ -61,6 +61,35 @@
 		overflow-x: auto;
 	}
 
+
+	:global(.rich-content .ql-formula),
+	:global(.rich-content .katex) {
+		display: inline-block;
+		max-width: 100%;
+		line-height: 1.25;
+		vertical-align: middle;
+		white-space: nowrap;
+	}
+
+	:global(.rich-content .katex-html) {
+		overflow: visible;
+	}
+
+	:global(.rich-content .katex .vlist),
+	:global(.rich-content .katex .vlist-t),
+	:global(.rich-content .katex .vlist-r),
+	:global(.rich-content .katex .msupsub) {
+		overflow: visible;
+	}
+
+	:global(.rich-content .katex-display),
+	:global(.rich-content .latex-display) {
+		max-width: 100%;
+		overflow-x: auto;
+		overflow-y: visible;
+		padding-block: 0.15rem;
+	}
+
 	:global(.rich-content table) {
 		width: max-content;
 		min-width: min(100%, 28rem);

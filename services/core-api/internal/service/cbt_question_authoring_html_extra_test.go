@@ -141,3 +141,14 @@ func TestSanitizeHTMLDocumentsTableHeaderSpanAttributes(t *testing.T) {
 		t.Fatalf("sanitizeHTML(table spans) = %q, data-extra should not be preserved", got)
 	}
 }
+
+func TestSanitizeHTMLPreservesQuillFormulaSource(t *testing.T) {
+	input := `<p>Nilai <span class="ql-formula" data-value="y^2"><span class="katex">stale</span></span></p>`
+
+	got := sanitizeHTML(input)
+	for _, want := range []string{"class=\"ql-formula\"", "data-value=\"y^2\"", "stale"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("sanitizeHTML(formula) = %q, want to contain %q", got, want)
+		}
+	}
+}

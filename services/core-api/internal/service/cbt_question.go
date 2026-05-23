@@ -44,6 +44,7 @@ func newBankSoalHTMLPolicy() *bluemonday.Policy {
 	p.AllowAttrs("lang").Matching(regexp.MustCompile(`^[a-zA-Z]{2,20}$`)).Globally()
 	p.AllowAttrs("class").Matching(bluemonday.SpaceSeparatedTokens).Globally()
 	p.AllowAttrs("data-align", "data-color").Matching(bankSoalDataAttributeValue).OnElements("span", "div", "p")
+	p.AllowAttrs("data-value").Matching(regexp.MustCompile(`^[^<>]{1,500}$`)).OnElements("span")
 	p.AllowAttrs("style").OnElements("span", "p", "div", "h1", "h2", "h3", "td", "th")
 	p.AllowStyles("text-align").MatchingEnum("left", "right", "center", "justify").Globally()
 	p.AllowStyles("color").Matching(bankSoalColorStyleValue).Globally()

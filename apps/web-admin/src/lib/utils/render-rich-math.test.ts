@@ -23,4 +23,14 @@ describe('renderRichMathHtml', () => {
 		expect(html).toContain('latex-display');
 		expect(html).toContain('Nilai');
 	});
+
+	it('rerenders Quill formula from data-value instead of trusting stale rendered HTML', () => {
+		const html = renderRichMathHtml('<p>Koefisien <span class="ql-formula" data-value="y^2"><span class="katex-html">rusak</span></span></p>');
+
+		expect(html).toContain('katex');
+		expect(html).toContain('data-value="y^2"');
+		expect(html).toContain('mord mtight">2</span>');
+		expect(html).not.toContain('rusak');
+	});
+
 });

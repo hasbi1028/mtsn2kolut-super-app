@@ -79,7 +79,7 @@ const TAG_ATTRS: Record<string, Set<string>> = {
 	annotation: new Set(['encoding']),
 	img: new Set(['alt', 'loading', 'src']),
 	math: new Set(['display', 'xmlns']),
-	span: new Set(['data-align', 'data-color']),
+	span: new Set(['data-align', 'data-color', 'data-value']),
 	td: new Set(['colspan', 'rowspan']),
 	th: new Set(['colspan', 'rowspan', 'scope']),
 };
@@ -188,6 +188,20 @@ function sanitizeElement(el: Element) {
 	}
 }
 
+
+function renderQuillFormulaElements(root: Element) {
+	for (const formulaEl of Array.from(root.querySelectorAll('.ql-formula[data-value]'))) {
+		const formula = formulaEl.getAttribute('data-value')?.trim();
+		if (!formula) continue;
+		try {
+			formulaEl.innerHTML = katex.renderToString(formula, { throwOnError: false, displayMode: false });
+			formulaEl.setAttribute('data-value', formula);
+		} catch {
+			// Keep the existing content when KaTeX cannot parse the stored source.
+		}
+	}
+}
+
 function sanitizeRichHtml(html: string): string {
 	const parser = new DOMParser();
 	const doc = parser.parseFromString(html, 'text/html');
@@ -206,6 +220,7 @@ export function renderRichMathHtml(html: string): string {
 	const parser = new DOMParser();
 	const doc = parser.parseFromString(pass1, 'text/html');
 	const body = doc.body;
+	renderQuillFormulaElements(body);
 
 	const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT);
 	const targets: Text[] = [];
