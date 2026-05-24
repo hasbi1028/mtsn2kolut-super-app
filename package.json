@@ -24,6 +24,7 @@
     "ops:validate-pm2": "node scripts/validate-pm2-configs.mjs",
     "security:scan-secrets": "python3 scripts/scan-secrets.py",
     "security:scan-secrets:staged": "python3 scripts/scan-secrets.py --staged",
+    "smoke:web:asesmen-cbt:opsi0": "npm --prefix apps/web-admin run smoke:asesmen-cbt:opsi0",
     "test:web": "npm --prefix apps/web-admin run test:unit"
   }
 }
