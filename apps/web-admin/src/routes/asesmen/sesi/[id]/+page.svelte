@@ -58,6 +58,14 @@
 		statusLabel,
 		tabFromQuery
 	} from './session-detail.model';
+	import {
+		commandRoomStatusClass,
+		commandRoomStatusLabel,
+		deriveCommandRoomStatus,
+		maskToken,
+		prioritizeCommandCenterIssues,
+		type CommandCenterIssue
+	} from './command-center.model';
 
 	type SessionInfo = {
 		id: string; title: string; package_title: string; duration_minutes: number;
@@ -402,23 +410,23 @@
 	});
 
 	let commandCenterIssues = $derived.by(() => {
-		const issues: { label: string; tone: 'danger' | 'warning' | 'info'; tab: ActiveTab }[] = [];
+		const issues: CommandCenterIssue[] = [];
 		if (!roomReadiness) {
-			issues.push({ label: 'Kesiapan ruang belum dimuat', tone: 'info', tab: 'ruangan' });
+			issues.push({ id: 'readiness-missing', title: 'Kesiapan ruang belum dimuat', severity: 'info', actionLabel: 'Muat ulang', actionTab: 'ruangan' });
 		} else {
-			if (roomReadiness.participant_count === 0) issues.push({ label: 'Belum ada peserta', tone: 'warning', tab: 'peserta' });
-			if (roomReadiness.total_capacity < roomReadiness.participant_count) issues.push({ label: 'Kapasitas ruang kurang', tone: 'danger', tab: 'ruangan' });
-			if (roomReadiness.unassigned_participant_count > 0) issues.push({ label: `${roomReadiness.unassigned_participant_count} peserta belum punya ruang`, tone: 'warning', tab: 'ruangan' });
-			if (roomReadiness.missing_seat_count > 0) issues.push({ label: `${roomReadiness.missing_seat_count} nomor meja kosong`, tone: 'warning', tab: 'ruangan' });
-			if (roomReadiness.rooms_without_proctor > 0) issues.push({ label: `${roomReadiness.rooms_without_proctor} ruang belum ada pengawas`, tone: 'danger', tab: 'ruangan' });
+			if (roomReadiness.participant_count === 0) issues.push({ id: 'no-participants', title: 'Belum ada peserta', severity: 'warning', description: 'Tambahkan peserta sebelum sesi dimulai.', actionLabel: 'Lihat Peserta', actionTab: 'peserta' });
+			if (roomReadiness.total_capacity < roomReadiness.participant_count) issues.push({ id: 'capacity-low', title: 'Kapasitas ruang kurang', severity: 'critical', description: `${roomReadiness.total_capacity} kursi untuk ${roomReadiness.participant_count} peserta.`, actionLabel: 'Atur Ruang', actionTab: 'ruangan' });
+			if (roomReadiness.unassigned_participant_count > 0) issues.push({ id: 'unassigned-participants', title: `${roomReadiness.unassigned_participant_count} peserta belum punya ruang`, severity: 'warning', actionLabel: 'Acak Ruang', actionTab: 'ruangan' });
+			if (roomReadiness.missing_seat_count > 0) issues.push({ id: 'missing-seats', title: `${roomReadiness.missing_seat_count} nomor meja kosong`, severity: 'warning', actionLabel: 'Atur Nomor Meja', actionTab: 'ruangan' });
+			if (roomReadiness.rooms_without_proctor > 0) issues.push({ id: 'missing-proctors', title: `${roomReadiness.rooms_without_proctor} ruang belum ada pengawas`, severity: 'critical', actionLabel: 'Tetapkan Pengawas', actionTab: 'ruangan' });
 		}
 		if (operationalRecap) {
-			if (operationalRecap.incident_room_count > 0) issues.push({ label: `${operationalRecap.incident_room_count} ruang punya catatan insiden`, tone: 'warning', tab: 'operasional' });
-			if (operationalRecap.handover_missing_count > 0) issues.push({ label: `${operationalRecap.handover_missing_count} handover belum dibuat`, tone: 'warning', tab: 'operasional' });
-			if (operationalRecap.suspicious_count > 0) issues.push({ label: `${operationalRecap.suspicious_count} peserta perlu atensi`, tone: 'danger', tab: 'proctoring' });
+			if (operationalRecap.incident_room_count > 0) issues.push({ id: 'incident-rooms', title: `${operationalRecap.incident_room_count} ruang punya catatan insiden`, severity: 'warning', actionLabel: 'Buka Rekap', actionTab: 'operasional' });
+			if (operationalRecap.handover_missing_count > 0 && operationalRecap.session_status === 'finished') issues.push({ id: 'handover-missing', title: `${operationalRecap.handover_missing_count} handover belum dibuat`, severity: 'warning', actionLabel: 'Lengkapi Handover', actionTab: 'operasional' });
+			if (operationalRecap.suspicious_count > 0) issues.push({ id: 'suspicious-participants', title: `${operationalRecap.suspicious_count} peserta perlu atensi`, severity: 'critical', actionLabel: 'Buka Pengawasan', actionTab: 'proctoring' });
 		}
-		if (proctoringStats.slow + proctoringStats.offline > 0) issues.push({ label: `${proctoringStats.slow + proctoringStats.offline} koneksi lambat/offline`, tone: 'warning', tab: 'proctoring' });
-		return issues;
+		if (proctoringStats.slow + proctoringStats.offline > 0) issues.push({ id: 'heartbeat-issues', title: `${proctoringStats.slow + proctoringStats.offline} koneksi lambat/offline`, severity: proctoringStats.offline > 0 ? 'critical' : 'warning', actionLabel: 'Buka Pengawasan', actionTab: 'proctoring' });
+		return prioritizeCommandCenterIssues(issues);
 	});
 
 	let commandCenterMetrics = $derived.by(() => [
@@ -460,15 +468,58 @@
 		},
 	]);
 
+	let commandCenterRooms = $derived.by(() => {
+		const roomMeta = new Map(rooms.map((room) => [room.id, room]));
+		const proctoringByRoom = new Map<string, { online: number; slow: number; offline: number }>();
+		for (const row of proctoring) {
+			const roomName = row.room_name || 'Tanpa ruang';
+			const current = proctoringByRoom.get(roomName) ?? { online: 0, slow: 0, offline: 0 };
+			if (!row.submitted_at) {
+				const bucket = heartbeatBucket(row.last_heartbeat);
+				if (bucket === 'online') current.online += 1;
+				else if (bucket === 'slow') current.slow += 1;
+				else current.offline += 1;
+			}
+			proctoringByRoom.set(roomName, current);
+		}
+		return operationalRooms.map((room) => {
+			const meta = roomMeta.get(room.room_id);
+			const live = proctoringByRoom.get(room.room_name) ?? { online: 0, slow: 0, offline: 0 };
+			const handoverLocked = Boolean(room.locked_at);
+			const status = deriveCommandRoomStatus({
+				participant_count: room.participant_count,
+				joined_count: room.joined_count,
+				submitted_count: room.submitted_count,
+				no_show_count: room.no_show_count,
+				suspicious_count: room.suspicious_count,
+				incident_event_count: room.incident_event_count,
+				missing_seat_count: room.missing_seat_count,
+				force_submit_count: room.force_submit_count,
+				reset_access_count: room.reset_access_count,
+				offline_count: live.offline,
+				proctor_count: meta?.proctor_count,
+				handover_locked: handoverLocked,
+				session_status: session?.status ?? null
+			});
+			return { ...room, ...live, primary_proctor_name: meta?.primary_proctor_name, proctor_count: meta?.proctor_count ?? 0, masked_token: maskToken(room.room_token), handover_locked: handoverLocked, command_status: status };
+		}).sort((a, b) => {
+			const rank = { critical: 0, attention: 1, finishing: 2, setup: 3, running: 4, ready: 5, final: 6 } as const;
+			const diff = rank[a.command_status] - rank[b.command_status];
+			return diff !== 0 ? diff : a.room_name.localeCompare(b.room_name, 'id');
+		});
+	});
+
+	let commandCenterLastUpdated = $derived(new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Makassar', hour: '2-digit', minute: '2-digit' }));
+
 	function commandCenterClass() {
-		if (commandCenterIssues.some((issue) => issue.tone === 'danger')) return 'border-destructive/30 bg-destructive/10';
-		if (commandCenterIssues.some((issue) => issue.tone === 'warning')) return 'border-warning/30 bg-warning/10';
+		if (commandCenterIssues.some((issue) => issue.severity === 'critical')) return 'border-destructive/30 bg-destructive/10';
+		if (commandCenterIssues.some((issue) => issue.severity === 'warning')) return 'border-warning/30 bg-warning/10';
 		return 'border-primary/20 bg-primary/10';
 	}
 
-	function commandIssueClass(tone: 'danger' | 'warning' | 'info') {
-		if (tone === 'danger') return 'border-destructive/30 bg-card text-destructive';
-		if (tone === 'warning') return 'border-warning/30 bg-card text-warning';
+	function commandIssueClass(severity: 'critical' | 'warning' | 'info') {
+		if (severity === 'critical') return 'border-destructive/30 bg-card text-destructive';
+		if (severity === 'warning') return 'border-warning/30 bg-card text-warning';
 		return 'border-border bg-card text-muted-foreground';
 	}
 
@@ -1473,19 +1524,99 @@
 				]}
 			/>
 
-			<section class="grid gap-3 md:grid-cols-3" aria-label="Ringkasan sesi ujian">
-				<MetricCard label="Peserta hadir/total" value={operationalRecap ? `${operationalRecap.joined_count}/${operationalRecap.participant_count}` : `${stats.submitted}/${stats.total}`} helper={operationalRecap ? `${operationalRecap.no_show_count} belum hadir` : 'Menggunakan data hasil yang sudah termuat'} tone="success" />
-				<MetricCard label="Progress submit" value={operationalRecap ? `${operationalRecap.submitted_count}/${operationalRecap.participant_count}` : `${stats.submitted}/${stats.total}`} helper="Jawaban terkirim dan siap direkap" />
-				<MetricCard label="Masalah aktif" value={commandCenterIssues.length} helper={commandCenterIssues.length > 0 ? 'Buka masalah/kejadian untuk tindak lanjut' : 'Belum ada perhatian dari pantauan terbaru'} tone={commandCenterIssues.length > 0 ? 'warning' : 'success'} />
+			<section class={`rounded-xl border p-4 shadow-sm ${commandCenterClass()}`} aria-label="Command Center Hari-H CBT">
+				<div class="flex flex-wrap items-start justify-between gap-3">
+					<div>
+						<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Command Center Hari-H</p>
+						<h2 class="mt-1 text-lg font-bold text-foreground">Grid 8 Ruang UAS</h2>
+						<p class="mt-1 text-sm text-muted-foreground">Pantau login, submit, koneksi, atensi pengawasan, token masked, dan handover dari satu layar operator.</p>
+					</div>
+					<div class="flex flex-wrap gap-2">
+						<LoadingButton variant="outline" size="sm" onclick={() => void refreshCommandCenter()} loading={commandCenterBusy} loadingLabel="Memuat..." disabled={commandCenterBusy}>
+							↻ Refresh Live
+						</LoadingButton>
+						<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Masalah Aktif</Button>
+						<Button variant="outline" size="sm" onclick={() => switchTab('ruangan')}>Kelola Ruang</Button>
+						<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Cetak Semua Paket Ruang</Button>
+					</div>
+				</div>
+
+				<div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+					{#each commandCenterMetrics as metric (metric.label)}
+						<button type="button" class="rounded-lg border border-border bg-card p-3 text-left transition hover:border-primary/40 hover:bg-background" onclick={() => switchTab(metric.tab)}>
+							<p class="text-xs text-muted-foreground">{metric.label}</p>
+							<p class="mt-1 text-2xl font-bold text-foreground">{metric.value}</p>
+							<p class="mt-1 text-[11px] text-muted-foreground">{metric.helper}</p>
+						</button>
+					{/each}
+				</div>
+
+				<div class="mt-4 grid gap-4 xl:grid-cols-[1fr_22rem]">
+					<div>
+						<div class="mb-2 flex items-center justify-between gap-2">
+							<p class="text-sm font-semibold text-foreground">Status 8 Ruang</p>
+							<p class="text-xs text-muted-foreground">Update WITA {commandCenterLastUpdated}</p>
+						</div>
+						<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+							{#each commandCenterRooms as room (room.room_id)}
+								<Card.Root class="border-border bg-card">
+									<Card.Content class="space-y-3 p-3">
+										<div class="flex items-start justify-between gap-2">
+											<div>
+												<p class="text-sm font-semibold text-foreground">{room.room_name}</p>
+												<p class="text-[11px] text-muted-foreground">Pengawas: {room.primary_proctor_name || 'Belum ditugaskan'}</p>
+											</div>
+											<Badge variant="outline" class={commandRoomStatusClass(room.command_status)}>{commandRoomStatusLabel(room.command_status)}</Badge>
+										</div>
+										<div class="grid grid-cols-3 gap-2 text-center">
+											<div class="rounded-md bg-muted/50 p-2"><p class="text-[10px] text-muted-foreground">Login</p><p class="font-bold">{room.joined_count}/{room.participant_count}</p></div>
+											<div class="rounded-md bg-muted/50 p-2"><p class="text-[10px] text-muted-foreground">Submit</p><p class="font-bold">{room.submitted_count}/{room.participant_count}</p></div>
+											<div class="rounded-md bg-muted/50 p-2"><p class="text-[10px] text-muted-foreground">Offline</p><p class={room.offline > 0 ? 'font-bold text-destructive' : 'font-bold'}>{room.offline}</p></div>
+										</div>
+										<div class="flex flex-wrap gap-1 text-[11px]">
+											<Badge variant="outline">Token {room.masked_token}</Badge>
+											{#if room.missing_seat_count > 0}<Badge variant="outline" class="border-warning/30 text-warning">{room.missing_seat_count} meja kosong</Badge>{/if}
+											{#if room.suspicious_count > 0}<Badge variant="outline" class="border-destructive/30 text-destructive">{room.suspicious_count} atensi</Badge>{/if}
+											{#if room.handover_locked}<Badge variant="outline" class="border-success/30 text-success">Handover final</Badge>{/if}
+										</div>
+										<div class="flex flex-wrap gap-2">
+											<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${room.room_id}/proctoring`)}>Buka Ruang</Button>
+											<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${room.room_id}/print-pack`)}>Cetak Paket</Button>
+											<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Handover</Button>
+										</div>
+									</Card.Content>
+								</Card.Root>
+							{:else}
+								<div class="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground md:col-span-2 xl:col-span-4">Belum ada snapshot ruang. Klik Refresh Live atau buka tab Operasional.</div>
+							{/each}
+						</div>
+					</div>
+					<aside class="rounded-lg border border-border bg-card p-3">
+						<div class="mb-3 flex items-center justify-between gap-2">
+							<p class="text-sm font-semibold text-foreground">Masalah Aktif</p>
+							<Badge variant="outline">{commandCenterIssues.length}</Badge>
+						</div>
+						<div class="space-y-2">
+							{#each commandCenterIssues.slice(0, 6) as issue (issue.id)}
+								<button type="button" class={`w-full rounded-md border p-2 text-left text-xs ${commandIssueClass(issue.severity)}`} onclick={() => switchTab((issue.actionTab as ActiveTab) ?? 'operasional')}>
+									<p class="font-semibold">{issue.title}</p>
+									<p class="mt-0.5 text-[11px] opacity-80">{issue.description || 'Klik untuk membuka area tindak lanjut.'}</p>
+								</button>
+							{:else}
+								<p class="rounded-md border border-success/20 bg-success/10 p-3 text-sm text-success">Belum ada masalah aktif dari pantauan terbaru.</p>
+							{/each}
+						</div>
+					</aside>
+				</div>
 			</section>
 
 			<BlockerPanel
 				title="Masalah yang Perlu Ditangani"
 				blockers={commandCenterIssues.slice(0, 3).map((issue) => ({
-					label: issue.label,
-					description: 'Status operasional tidak hanya ditandai warna; buka area kerja terkait untuk tindak lanjut.',
-					actionLabel: 'Buka',
-					tone: issue.tone === 'danger' ? 'danger' : issue.tone === 'warning' ? 'warning' : 'info'
+					label: issue.title,
+					description: issue.description || 'Status operasional tidak hanya ditandai warna; buka area kerja terkait untuk tindak lanjut.',
+					actionLabel: issue.actionLabel || 'Buka',
+					tone: issue.severity === 'critical' ? 'danger' : issue.severity === 'warning' ? 'warning' : 'info'
 				}))}
 			/>
 
@@ -2118,7 +2249,7 @@
 									<Table.Row class={room.locked_at ? '' : 'bg-warning/10'}>
 										<Table.Cell>
 											<div class="font-medium text-foreground">{room.room_name}</div>
-											<div class="text-xs text-muted-foreground">Token rahasia {room.room_token || '—'} · {room.joined_count}/{room.participant_count} login</div>
+											<div class="text-xs text-muted-foreground">Token masked {maskToken(room.room_token)} · {room.joined_count}/{room.participant_count} login</div>
 										</Table.Cell>
 										<Table.Cell>
 											<Badge variant="outline" class={handoverStatusClass(room)}>{handoverStatusLabel(room)}</Badge>
