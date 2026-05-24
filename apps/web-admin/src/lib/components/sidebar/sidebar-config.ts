@@ -149,6 +149,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 			]},
 			{ kind: 'folder', id: 'pelaksanaan-pengawasan', label: 'Pelaksanaan & Pengawasan', icon: 'activity', children: [
 				{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan Ujian', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
+				{ href: '/ujian/command-center', label: 'Command Center Ujian', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
 				{ href: '/asesmen/pengawasan', label: 'Pengawasan Ujian', icon: 'user-check', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] }
 			]},
 			{ kind: 'folder', id: 'hasil-aplikasi', label: 'Hasil & Aplikasi', icon: 'clipboard', children: [

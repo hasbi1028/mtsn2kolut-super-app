@@ -243,7 +243,7 @@ function isSensitiveAssessmentReadPath(pathname: string): boolean {
 function asesmenPermission(pathname: string, method: string): string[] | undefined {
 	if (matchesPathSegment(pathname, '/asesmen/aplikasi-siswa/release')) return [];
 	if (matchesPathSegment(pathname, '/asesmen/hasil')) return ['asesmen.result_read'];
-	if (matchesPathSegment(pathname, '/asesmen/pelaksanaan') || matchesPathSegment(pathname, '/asesmen/pengawasan')) return ['asesmen.proctor'];
+	if (matchesPathSegment(pathname, '/ujian/command-center') || matchesPathSegment(pathname, '/asesmen/pelaksanaan') || matchesPathSegment(pathname, '/asesmen/pengawasan')) return ['asesmen.proctor'];
 	if (/^\/api\/asesmen\/events\/[^/]+\/results\/?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/(results|item-analysis|operational-recap)\/?$/.test(pathname)) {
 		return ['asesmen.result_read'];
 	}

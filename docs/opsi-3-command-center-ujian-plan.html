@@ -1,0 +1,891 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<title>Plan Command Center Ujian Opsi 3</title>
+<style>
+@page { size: A4; margin: 16mm 14mm; }
+body { font-family: Arial, sans-serif; color:#111827; line-height:1.45; font-size: 10.8pt; }
+h1 { color:#14532d; border-bottom:3px solid #d4af37; padding-bottom:6px; font-size:22pt; }
+h2 { color:#166534; margin-top:18px; font-size:16pt; }
+h3 { color:#374151; font-size:12.5pt; }
+table { border-collapse: collapse; width:100%; margin:10px 0; font-size:9pt; }
+th,td { border:1px solid #d1d5db; padding:5px; vertical-align:top; }
+th { background:#ecfdf5; color:#14532d; }
+code, pre { background:#f3f4f6; border-radius:4px; }
+pre { padding:8px; white-space:pre-wrap; }
+blockquote { border-left:4px solid #d4af37; padding-left:10px; color:#4b5563; }
+.cover { text-align:center; margin:40px 0 24px; }
+.badge { display:inline-block; background:#14532d; color:white; padding:4px 10px; border-radius:999px; font-size:9pt; }
+.footer-note { margin-top:28px; color:#6b7280; font-size:8.5pt; text-align:center; }
+</style>
+</head>
+<body>
+<div class="cover"><div class="badge">MTsN 2 Kolaka Utara</div></div>
+<h1 id="architecture-plan-opsi-3-command-center-ujian">Architecture Plan Opsi 3 — Command Center Ujian</h1>
+<p>MTsN 2 Kolaka Utara Super App<br />
+Fokus: backend, data model, API, impor jadwal pengawas, pembaruan master data pegawai/guru dari daftar foto, validasi, rollback, dan audit-safe rollout.<br />
+Tanggal rencana: 24 Mei 2026</p>
+<hr />
+<h2 id="1-ringkasan-eksekutif">1. Ringkasan Eksekutif</h2>
+<p><strong>Opsi 3 Command Center Ujian</strong> adalah modul operasional ujian yang memusatkan:</p>
+<ul>
+<li>master kegiatan ujian,</li>
+<li>ruang ujian,</li>
+<li>sesi/hari ujian,</li>
+<li>penugasan pengawas per ruang,</li>
+<li>impor jadwal dari dokumen/foto/CSV,</li>
+<li>koreksi nama pegawai/guru sebagai master data,</li>
+<li>audit trail setiap perubahan,</li>
+<li>validasi sebelum publish,</li>
+<li>rollback aman bila impor atau update data bermasalah.</li>
+</ul>
+<p>Prinsip utama:</p>
+<ul>
+<li><strong>PostgreSQL hanya dimiliki <code>services/core-api</code>.</strong></li>
+<li><strong>Web Admin SvelteKit hanya BFF/proxy</strong>, bukan pemilik data.</li>
+<li><strong>Semua SQL eksplisit di <code>services/core-api/db/queries</code> dan digenerate sqlc.</strong></li>
+<li><strong>Tidak langsung menulis jadwal final dari hasil OCR/foto.</strong> Semua masuk ke staging import, divalidasi, direview, baru di-commit.</li>
+<li><strong>Nama pengawas dari foto diperlakukan sebagai master data rujukan</strong>, tetapi update ke <code>employees</code> tetap dibuat sebagai batch yang bisa diaudit dan di-rollback.</li>
+</ul>
+<hr />
+<h2 id="2-kondisi-repo-dan-baseline-yang-relevan">2. Kondisi Repo dan Baseline yang Relevan</h2>
+<p>Berdasarkan struktur repo saat ini:</p>
+<ul>
+<li>Backend: <code>services/core-api</code> Go + Chi + sqlc + pgx + PostgreSQL.</li>
+<li>Frontend admin: <code>apps/web-admin</code> SvelteKit BFF/proxy.</li>
+<li>Tabel existing yang relevan:</li>
+<li><code>employees</code>: master pegawai umum.</li>
+<li><code>users</code>: akun login, bisa terkait <code>employee_id</code>.</li>
+<li><code>audit_logs</code>: audit umum existing.</li>
+<li><code>academic_years</code>: tahun pelajaran.</li>
+<li><code>cbt_exam_events</code>: kegiatan ujian.</li>
+<li><code>cbt_exam_sessions</code>: sesi ujian.</li>
+<li><code>cbt_exam_rooms</code>: ruang ujian per sesi.</li>
+<li><code>school_rooms</code>: master ruang fisik.</li>
+<li><code>cbt_room_proctors</code>: pengawas/proktor per ruang ujian.</li>
+<li><code>cbt_participant_events</code>, <code>cbt_proctor_actions</code>: audit runtime CBT/proctoring.</li>
+</ul>
+<p>Implikasi desain:</p>
+<ul>
+<li>Jangan membuat sistem ujian paralel yang lepas dari CBT/Assessment existing.</li>
+<li>Tambahkan lapisan <strong>Command Center</strong> sebagai orchestration, import, readiness, dan audit di atas tabel CBT existing.</li>
+<li>Gunakan tabel staging/import untuk data yang datang dari foto agar aman.</li>
+</ul>
+<hr />
+<h2 id="3-data-dari-foto-yang-harus-dijadikan-master-pengawas">3. Data dari Foto yang Harus Dijadikan Master Pengawas</h2>
+<p>Daftar pengawas dari foto yang harus dipakai untuk pembaruan nama di aplikasi:</p>
+<ol>
+<li>Taufik S.Ag M.Pd</li>
+<li>Kardi S.Pd</li>
+<li>Irmawati Nur S.Ag M.Pd</li>
+<li>Supriadi S.Pd</li>
+<li>Dra Ratnawati</li>
+<li>Drs H Chaeruddin</li>
+<li>Andi Rasnia S.Ag</li>
+<li>Sitti Rafidah S.Pd.I</li>
+<li>Herniati S.Pd</li>
+<li>Muh Saing S.E</li>
+<li>Sutra S.Ag</li>
+<li>Saimang S.Ag</li>
+<li>Mida S.Ag</li>
+<li>Rusnawati S.Pd</li>
+<li>Wati Zaelani Sidi Ellyanando S.Pd</li>
+<li>Susianti S.Pd</li>
+<li>Rustiani S.Pd</li>
+<li>Nirmawati Tahir S.Pd</li>
+<li>Nurul Fitri Usman S.Pd</li>
+<li>Kaharuddin S.Pd</li>
+<li>Abdillah S.Pd</li>
+<li>Yurnianti S.Pd</li>
+<li>Mutmainnah S.Pd</li>
+<li>Andi Mirna S.Pd</li>
+<li>Nur Ilmi S.Pd</li>
+<li>Mirnawati S.Pd</li>
+<li>Nurunnisa Alimah A S.Pd</li>
+</ol>
+<p>Catatan kualitas data dari foto:</p>
+<ul>
+<li>Kegiatan: <strong>Evaluasi Semester Genap TP 2025/2026</strong>.</li>
+<li>Ruang: <strong>R.I sampai R.VIII</strong>.</li>
+<li>Rentang tanggal final hasil koreksi: <strong>4–6 Juni 2026 dan 8–10 Juni 2026</strong>. Bagian yang tertulis Senin dan seterusnya mengikuti <strong>nama hari</strong>: Senin 08 Juni, Selasa 09 Juni, Rabu 10 Juni 2026.</li>
+<li>Koreksi hari/tanggal sudah diputuskan: bagian Senin dan seterusnya digeser menjadi <strong>Senin 08 Juni 2026, Selasa 09 Juni 2026, Rabu 10 Juni 2026</strong>. Tidak ada ujian pada Minggu 07 Juni 2026.</li>
+<li>Ada <strong>duplikasi nomor pengawas 23</strong> pada jadwal/foto. Sesuai arahan panitia, duplikasi ini <strong>boleh tetap masuk sebagai catatan pending koreksi</strong>, tidak memblokir import awal, dan diperbaiki manual besok sebelum final/pelaksanaan.</li>
+<li>Master nomor pengawas valid hanya <strong>1–27</strong>. Nomor di luar rentang atau kosong harus error.</li>
+</ul>
+<hr />
+<h2 id="4-target-arsitektur-opsi-3">4. Target Arsitektur Opsi 3</h2>
+<h3 id="41-lapisan-backend">4.1 Lapisan Backend</h3>
+<p>Modul baru di Core API:</p>
+<ul>
+<li><code>internal/service/exam_command_center.go</code></li>
+<li><code>internal/handler/exam_command_center.go</code></li>
+<li><code>db/queries/exam_command_center.sql</code></li>
+<li>migration baru, misalnya <code>120_exam_command_center.sql</code></li>
+</ul>
+<p>Tanggung jawab service:</p>
+<ul>
+<li>Membuat/mengelola event ujian.</li>
+<li>Import staging jadwal pengawas.</li>
+<li>Validasi data staging.</li>
+<li>Apply batch update master pegawai.</li>
+<li>Apply jadwal final ke <code>cbt_exam_sessions</code>, <code>cbt_exam_rooms</code>, dan <code>cbt_room_proctors</code>.</li>
+<li>Membuat audit log dan rollback snapshot.</li>
+<li>Menyediakan overview/readiness Command Center.</li>
+</ul>
+<h3 id="42-lapisan-web-admin">4.2 Lapisan Web Admin</h3>
+<p>Web Admin hanya proxy/BFF:</p>
+<ul>
+<li>route UI: <code>/asesmen/pelaksanaan/command-center</code> atau <code>/ujian/command-center</code>.</li>
+<li>BFF API: <code>/api/command-center/*</code> proxy ke Core API.</li>
+<li>Tidak ada akses DB langsung.</li>
+</ul>
+<h3 id="43-alur-data">4.3 Alur Data</h3>
+<ol>
+<li>Admin upload/paste jadwal dari foto/OCR/CSV.</li>
+<li>Backend membuat <code>exam_import_batches</code> status <code>draft</code>.</li>
+<li>Data pengawas dari foto masuk <code>exam_import_supervisor_master_rows</code>.</li>
+<li>Jadwal per ruang masuk <code>exam_import_schedule_rows</code>.</li>
+<li>Backend menjalankan validasi:</li>
+<li>nomor pengawas valid 1–27,</li>
+<li>nama sesuai master,</li>
+<li>ruang R.I–R.VIII valid,</li>
+<li>tanggal final 4–6 Juni dan 8–10 Juni 2026 valid,</li>
+<li>hari/tanggal konsisten,</li>
+<li>tidak ada konflik satu pengawas di dua ruang pada slot sama,</li>
+<li>tidak ada duplicate role utama di satu ruang/slot,</li>
+<li>nomor 23 duplikat ditandai sebagai <code>pending_koreksi_pengawas</code>, bukan blocker awal.</li>
+<li>Admin review diff.</li>
+<li>Admin klik <strong>Apply Master Data</strong> untuk update nama/alias pegawai.</li>
+<li>Admin klik <strong>Publish Jadwal</strong> untuk membuat sesi/ruang/pengawas final.</li>
+<li>Semua perubahan mencatat audit + snapshot rollback.</li>
+</ol>
+<hr />
+<h2 id="5-data-model-yang-direkomendasikan">5. Data Model yang Direkomendasikan</h2>
+<h3 id="51-pertahankan-tabel-existing-sebagai-source-of-truth-final">5.1 Pertahankan Tabel Existing Sebagai Source of Truth Final</h3>
+<p>Final runtime tetap memakai:</p>
+<ul>
+<li><code>cbt_exam_events</code></li>
+<li><code>cbt_exam_sessions</code></li>
+<li><code>cbt_exam_rooms</code></li>
+<li><code>school_rooms</code></li>
+<li><code>cbt_room_proctors</code></li>
+<li><code>employees</code></li>
+<li><code>audit_logs</code></li>
+</ul>
+<h3 id="52-tambahan-kolom-ringan-pada-employees">5.2 Tambahan Kolom Ringan pada <code>employees</code></h3>
+<p>Tujuan: master nomor pengawas dari foto bisa stabil tanpa menyalahgunakan <code>nip</code> atau <code>pegawai_uid</code>.</p>
+<pre><code class="language-sql">ALTER TABLE employees
+  ADD COLUMN IF NOT EXISTS exam_supervisor_code INTEGER,
+  ADD COLUMN IF NOT EXISTS display_name_source TEXT NOT NULL DEFAULT 'manual',
+  ADD COLUMN IF NOT EXISTS name_verified_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS name_verified_by UUID REFERENCES users(id) ON DELETE SET NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_employees_exam_supervisor_code
+  ON employees(exam_supervisor_code)
+  WHERE exam_supervisor_code IS NOT NULL;
+
+ALTER TABLE employees
+  ADD CONSTRAINT chk_employees_exam_supervisor_code
+  CHECK (exam_supervisor_code IS NULL OR exam_supervisor_code BETWEEN 1 AND 999);
+</code></pre>
+<p>Catatan:</p>
+<ul>
+<li>Untuk kasus foto ini gunakan kode 1–27.</li>
+<li>Jangan pakai kode ini untuk identitas negara/resmi; ini kode operasional jadwal ujian.</li>
+<li><code>display_name_source = 'photo_import_2026_genap'</code> saat nama berasal dari daftar foto dan sudah disetujui.</li>
+</ul>
+<h3 id="53-tabel-batch-import">5.3 Tabel Batch Import</h3>
+<pre><code class="language-sql">CREATE TABLE exam_import_batches (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID REFERENCES cbt_exam_events(id) ON DELETE SET NULL,
+  title TEXT NOT NULL,
+  source_type TEXT NOT NULL DEFAULT 'photo_ocr',
+  source_label TEXT NOT NULL DEFAULT '',
+  source_checksum TEXT NOT NULL DEFAULT '',
+  academic_year_id UUID REFERENCES academic_years(id) ON DELETE SET NULL,
+  date_start DATE NOT NULL,
+  date_end DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'draft',
+  validation_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+  applied_master_at TIMESTAMPTZ,
+  applied_schedule_at TIMESTAMPTZ,
+  applied_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  rollback_of_batch_id UUID REFERENCES exam_import_batches(id) ON DELETE SET NULL,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_exam_import_batches_status CHECK (
+    status IN ('draft', 'validated', 'needs_review', 'applied_master', 'published', 'rolled_back', 'rejected')
+  )
+);
+</code></pre>
+<h3 id="54-tabel-master-row-pengawas-dari-foto">5.4 Tabel Master Row Pengawas dari Foto</h3>
+<pre><code class="language-sql">CREATE TABLE exam_import_supervisor_master_rows (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  batch_id UUID NOT NULL REFERENCES exam_import_batches(id) ON DELETE CASCADE,
+  supervisor_code INTEGER NOT NULL,
+  raw_name TEXT NOT NULL,
+  normalized_name TEXT NOT NULL,
+  matched_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
+  match_strategy TEXT NOT NULL DEFAULT 'none',
+  match_confidence NUMERIC(5,2) NOT NULL DEFAULT 0,
+  action TEXT NOT NULL DEFAULT 'review',
+  validation_errors JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_exam_import_supervisor_code_per_batch UNIQUE(batch_id, supervisor_code),
+  CONSTRAINT chk_exam_import_supervisor_code CHECK (supervisor_code BETWEEN 1 AND 999),
+  CONSTRAINT chk_exam_import_supervisor_action CHECK (
+    action IN ('create_employee', 'update_employee_name', 'link_existing', 'skip', 'review')
+  )
+);
+</code></pre>
+<p>Untuk data foto ini importer membuat 27 row. Bila ada duplikasi nomor pada daftar master, constraint akan gagal di staging atau ditandai sebelum insert, bukan mengubah final.</p>
+<h3 id="55-tabel-row-jadwal-pengawas-dari-foto">5.5 Tabel Row Jadwal Pengawas dari Foto</h3>
+<p>Karena jadwal perlu import per ruang sesuai nomor kode pengawas:</p>
+<pre><code class="language-sql">CREATE TABLE exam_import_schedule_rows (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  batch_id UUID NOT NULL REFERENCES exam_import_batches(id) ON DELETE CASCADE,
+  row_no INTEGER NOT NULL,
+  exam_date DATE NOT NULL,
+  day_name_raw TEXT NOT NULL DEFAULT '',
+  session_label TEXT NOT NULL DEFAULT '',
+  starts_at TIME,
+  ends_at TIME,
+  room_code TEXT NOT NULL,
+  room_name_raw TEXT NOT NULL DEFAULT '',
+  supervisor_code INTEGER NOT NULL,
+  supervisor_role TEXT NOT NULL DEFAULT 'utama',
+  raw_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  matched_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
+  matched_school_room_id UUID REFERENCES school_rooms(id) ON DELETE SET NULL,
+  target_session_id UUID,
+  target_exam_room_id UUID,
+  validation_errors JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_exam_import_schedule_supervisor_code CHECK (supervisor_code BETWEEN 1 AND 999),
+  CONSTRAINT chk_exam_import_schedule_role CHECK (supervisor_role IN ('utama', 'pendamping', 'cadangan'))
+);
+
+CREATE INDEX idx_exam_import_schedule_batch_date_room
+  ON exam_import_schedule_rows(batch_id, exam_date, room_code);
+
+CREATE INDEX idx_exam_import_schedule_batch_supervisor_slot
+  ON exam_import_schedule_rows(batch_id, exam_date, session_label, supervisor_code);
+</code></pre>
+<p>Catatan:</p>
+<ul>
+<li>Jika foto hanya punya dua pengawas per ruang, row dibuat dua kali: role <code>utama</code> dan <code>pendamping</code>.</li>
+<li>Jika waktu ujian tidak terbaca, <code>session_label</code> wajib ada, misalnya <code>pagi</code>, <code>sesi_1</code>, atau <code>hari_1</code>. Nanti di-normalisasi saat publish.</li>
+</ul>
+<h3 id="56-tabel-snapshot-rollback">5.6 Tabel Snapshot Rollback</h3>
+<pre><code class="language-sql">CREATE TABLE exam_import_apply_snapshots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  batch_id UUID NOT NULL REFERENCES exam_import_batches(id) ON DELETE CASCADE,
+  snapshot_type TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id UUID,
+  before_data JSONB,
+  after_data JSONB,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_exam_import_snapshot_type CHECK (
+    snapshot_type IN ('master_employee', 'event', 'session', 'room', 'proctor')
+  )
+);
+
+CREATE INDEX idx_exam_import_snapshots_batch
+  ON exam_import_apply_snapshots(batch_id, created_at DESC);
+</code></pre>
+<h3 id="57-audit-domain-khusus-command-center">5.7 Audit Domain Khusus Command Center</h3>
+<p>Bisa memakai <code>audit_logs</code> existing. Jika ingin query lebih cepat dan metadata lebih kaya, tambahkan domain audit:</p>
+<pre><code class="language-sql">CREATE TABLE exam_command_center_audit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  batch_id UUID REFERENCES exam_import_batches(id) ON DELETE SET NULL,
+  event_id UUID REFERENCES cbt_exam_events(id) ON DELETE SET NULL,
+  action TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id UUID,
+  actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  actor_username_snapshot TEXT NOT NULL DEFAULT '',
+  request_id TEXT NOT NULL DEFAULT '',
+  source_ip TEXT NOT NULL DEFAULT '',
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_exam_cc_audit_batch ON exam_command_center_audit_logs(batch_id, created_at DESC);
+CREATE INDEX idx_exam_cc_audit_event ON exam_command_center_audit_logs(event_id, created_at DESC);
+</code></pre>
+<p>Rekomendasi: tulis ke <code>audit_logs</code> umum dan tabel domain khusus untuk investigasi detail.</p>
+<hr />
+<h2 id="6-api-contract-backend">6. API Contract Backend</h2>
+<p>Prefix disarankan: <code>/api/exam-command-center</code> atau <code>/api/asesmen/command-center</code>.</p>
+<h3 id="61-event-dan-overview">6.1 Event dan Overview</h3>
+<ul>
+<li><code>GET /api/exam-command-center/events</code></li>
+<li>list kegiatan ujian.</li>
+<li><code>POST /api/exam-command-center/events</code></li>
+<li>membuat event <code>Evaluasi Semester Genap TP 2025/2026</code>.</li>
+<li><code>GET /api/exam-command-center/events/{event_id}/overview</code></li>
+<li>ringkasan status:<ul>
+<li>jumlah sesi,</li>
+<li>jumlah ruang,</li>
+<li>ruang tanpa pengawas,</li>
+<li>konflik jadwal,</li>
+<li>status publish,</li>
+<li>audit terbaru.</li>
+</ul>
+</li>
+</ul>
+<h3 id="62-import-batch">6.2 Import Batch</h3>
+<ul>
+<li><code>POST /api/exam-command-center/import-batches</code></li>
+<li>
+<p>body:
+    <code>json
+    {
+      "title": "Import Jadwal Pengawas Evaluasi Semester Genap TP 2025/2026",
+      "source_type": "photo_ocr",
+      "source_label": "foto_jadwal_pengawas_juni_2026",
+      "date_start": "2026-06-04",
+      "date_end": "2026-06-10"
+    }</code></p>
+</li>
+<li>
+<p><code>POST /api/exam-command-center/import-batches/{batch_id}/supervisors</code></p>
+</li>
+<li>
+<p>upsert staging 27 pengawas dari foto.</p>
+</li>
+<li>
+<p><code>POST /api/exam-command-center/import-batches/{batch_id}/schedule-rows</code></p>
+</li>
+<li>upload CSV/JSON hasil transkripsi jadwal per ruang.</li>
+<li>
+<p>format JSON row minimal:
+    <code>json
+    {
+      "row_no": 1,
+      "exam_date": "2026-06-04",
+      "day_name_raw": "Kamis",
+      "session_label": "pagi",
+      "room_code": "R.I",
+      "supervisor_code": 1,
+      "supervisor_role": "utama"
+    }</code></p>
+</li>
+<li>
+<p><code>POST /api/exam-command-center/import-batches/{batch_id}/validate</code></p>
+</li>
+<li>
+<p>jalankan validasi tanpa apply.</p>
+</li>
+<li>
+<p><code>GET /api/exam-command-center/import-batches/{batch_id}/validation-report</code></p>
+</li>
+<li>menampilkan error/warning/diff.</li>
+</ul>
+<h3 id="63-apply-dan-rollback">6.3 Apply dan Rollback</h3>
+<ul>
+<li><code>POST /api/exam-command-center/import-batches/{batch_id}/apply-master-data</code></li>
+<li>update/link/create <code>employees</code> berdasarkan daftar foto.</li>
+<li>
+<p>wajib <code>dry_run=false</code> dan <code>confirm_token</code> atau <code>expected_validation_hash</code>.</p>
+</li>
+<li>
+<p><code>POST /api/exam-command-center/import-batches/{batch_id}/publish-schedule</code></p>
+</li>
+<li>membuat/memperbarui event/session/room/proctor final.</li>
+<li>
+<p>hanya boleh jika batch <code>validated</code> atau <code>applied_master</code> tanpa blocking errors.</p>
+</li>
+<li>
+<p><code>POST /api/exam-command-center/import-batches/{batch_id}/rollback</code></p>
+</li>
+<li>
+<p>rollback perubahan yang dibuat batch:</p>
+<ul>
+<li>hapus proctor assignment dari batch,</li>
+<li>hapus room/session/event yang dibuat batch bila belum dipakai peserta,</li>
+<li>revert nama/kode pengawas employee dari snapshot,</li>
+<li>status batch menjadi <code>rolled_back</code>.</li>
+</ul>
+</li>
+<li>
+<p><code>GET /api/exam-command-center/import-batches/{batch_id}/audit</code></p>
+</li>
+<li>audit lengkap batch.</li>
+</ul>
+<hr />
+<h2 id="7-format-import-jadwal-pengawas">7. Format Import Jadwal Pengawas</h2>
+<h3 id="71-format-csv-yang-direkomendasikan">7.1 Format CSV yang Direkomendasikan</h3>
+<p>Kolom wajib:</p>
+<ul>
+<li><code>tanggal</code> — <code>YYYY-MM-DD</code></li>
+<li><code>hari</code> — nama hari dari foto, untuk validasi</li>
+<li><code>sesi</code> — misalnya <code>pagi</code>, <code>sesi_1</code>, atau jam ujian</li>
+<li><code>ruang</code> — <code>R.I</code> sampai <code>R.VIII</code></li>
+<li><code>kode_pengawas</code> — angka 1–27</li>
+<li><code>peran</code> — <code>utama</code> / <code>pendamping</code> / <code>cadangan</code></li>
+</ul>
+<p>Contoh:</p>
+<pre><code class="language-csv">tanggal,hari,sesi,ruang,kode_pengawas,peran
+2026-06-04,Kamis,pagi,R.I,1,utama
+2026-06-04,Kamis,pagi,R.I,2,pendamping
+2026-06-04,Kamis,pagi,R.II,3,utama
+</code></pre>
+<h3 id="72-normalisasi-ruang">7.2 Normalisasi Ruang</h3>
+<p>Mapping ruang foto:</p>
+<ul>
+<li><code>R.I</code> -&gt; <code>R.I</code></li>
+<li><code>R.II</code> -&gt; <code>R.II</code></li>
+<li><code>R.III</code> -&gt; <code>R.III</code></li>
+<li><code>R.IV</code> -&gt; <code>R.IV</code></li>
+<li><code>R.V</code> -&gt; <code>R.V</code></li>
+<li><code>R.VI</code> -&gt; <code>R.VI</code></li>
+<li><code>R.VII</code> -&gt; <code>R.VII</code></li>
+<li><code>R.VIII</code> -&gt; <code>R.VIII</code></li>
+</ul>
+<p>Backend harus menerima variasi aman:</p>
+<ul>
+<li><code>RI</code>, <code>R I</code>, <code>R. I</code> dinormalisasi ke <code>R.I</code>.</li>
+<li><code>Ruang I</code> dinormalisasi ke <code>R.I</code>.</li>
+</ul>
+<p>Tetapi variasi ambigu, misalnya <code>R.IIII</code>, harus error.</p>
+<h3 id="73-normalisasi-haritanggal">7.3 Normalisasi Hari/Tanggal</h3>
+<p>Untuk Indonesia/WITA, validasi kalender Gregorian:</p>
+<ul>
+<li>2026-06-04 = Kamis</li>
+<li>2026-06-05 = Jumat</li>
+<li>2026-06-06 = Sabtu</li>
+<li>2026-06-07 = Minggu, tidak dipakai untuk ujian</li>
+<li>2026-06-08 = Senin, dipakai untuk baris yang tertulis Senin</li>
+<li>2026-06-09 = Selasa, dipakai untuk baris yang tertulis Selasa</li>
+<li>2026-06-10 = Rabu, dipakai untuk baris yang tertulis Rabu</li>
+</ul>
+<p>Karena foto awal bermasalah pada <strong>07–09 Juni</strong> dan sudah ada keputusan panitia untuk mengikuti nama hari, importer harus:</p>
+<ul>
+<li>tetap menyimpan <code>day_name_raw</code>,</li>
+<li>menghitung <code>computed_day_name</code>,</li>
+<li>menghasilkan warning/error jika berbeda,</li>
+<li>tidak boleh publish bila mismatch belum di-acknowledge admin.</li>
+</ul>
+<p>Kebijakan rekomendasi:</p>
+<ul>
+<li>menerapkan koreksi final: Senin=2026-06-08, Selasa=2026-06-09, Rabu=2026-06-10.</li>
+<li>menandai 2026-06-07 sebagai libur/tidak ada ujian.</li>
+<li>menyimpan catatan audit bahwa koreksi tanggal mengikuti instruksi panitia.</li>
+</ul>
+<hr />
+<h2 id="8-validasi-wajib">8. Validasi Wajib</h2>
+<h3 id="81-validasi-master-pengawas">8.1 Validasi Master Pengawas</h3>
+<p>Blocking error:</p>
+<ul>
+<li><code>supervisor_code</code> kosong.</li>
+<li>kode di luar 1–27 untuk batch ini.</li>
+<li>duplikasi kode dalam master row.</li>
+<li>nama kosong.</li>
+<li>nama master berbeda drastis dari existing employee yang sudah punya kode sama.</li>
+<li>satu employee existing dipetakan ke dua kode berbeda tanpa approval.</li>
+</ul>
+<p>Warning:</p>
+<ul>
+<li>nama hanya beda gelar/titik/spasi.</li>
+<li>match confidence rendah.</li>
+<li>employee belum punya NIP/tanggal lahir.</li>
+<li>perlu create employee baru karena tidak ditemukan.</li>
+</ul>
+<h3 id="82-validasi-jadwal">8.2 Validasi Jadwal</h3>
+<p>Blocking error:</p>
+<ul>
+<li>tanggal di luar 2026-06-04 sampai 2026-06-10, kecuali Minggu 2026-06-07 tidak dipakai.</li>
+<li>ruang bukan R.I–R.VIII.</li>
+<li>kode pengawas tidak ada di master batch.</li>
+<li>employee untuk kode belum resolved.</li>
+<li>satu ruang/sesi tidak punya pengawas utama.</li>
+<li>satu ruang/sesi punya lebih dari satu pengawas utama jika kebijakan hanya satu.</li>
+<li>satu pengawas ditempatkan di dua ruang pada tanggal+sesi yang sama.</li>
+<li>duplikasi nomor pengawas 23 pada slot Al-Qur'an Hadis ditandai pending koreksi, bukan blocker awal sesuai arahan panitia.</li>
+</ul>
+<p>Warning:</p>
+<ul>
+<li>hari dari foto tidak sama dengan tanggal kalender.</li>
+<li>jadwal pada Minggu/libur selain 2026-06-07 yang memang dikosongkan.</li>
+<li>pengawas yang sama terlalu sering berturut-turut.</li>
+<li>ruang belum ada di <code>school_rooms</code>.</li>
+<li>jumlah pengawas per ruang tidak sesuai kebijakan, misalnya kurang dari dua.</li>
+</ul>
+<h3 id="83-validasi-publish">8.3 Validasi Publish</h3>
+<p>Sebelum <code>publish-schedule</code>:</p>
+<ul>
+<li>event harus ada atau dibuat otomatis dalam transaksi.</li>
+<li>academic year <code>2025/2026</code> resolved.</li>
+<li>semua ruang R.I–R.VIII resolved ke <code>school_rooms</code> atau dibuat sebagai placeholder dengan <code>is_exam_eligible=true</code>.</li>
+<li>tidak ada blocking errors.</li>
+<li>admin menyetujui koreksi tanggal Senin 08, Selasa 09, Rabu 10 Juni 2026; duplikasi nomor 23 dicatat pending koreksi.</li>
+<li><code>expected_validation_hash</code> cocok dengan report terakhir agar tidak apply data yang berubah setelah review.</li>
+</ul>
+<hr />
+<h2 id="9-strategi-update-nama-pegawaiguru-dari-foto">9. Strategi Update Nama Pegawai/Guru dari Foto</h2>
+<h3 id="91-prinsip">9.1 Prinsip</h3>
+<ul>
+<li><code>employees.nama</code> adalah master display untuk banyak modul, jadi update harus hati-hati.</li>
+<li>Foto menjadi sumber operasional, bukan bukti identitas formal.</li>
+<li>Perubahan nama harus reversible.</li>
+</ul>
+<h3 id="92-matching-strategy">9.2 Matching Strategy</h3>
+<p>Urutan pencocokan:</p>
+<ol>
+<li>Jika <code>exam_supervisor_code</code> sudah ada, gunakan kode.</li>
+<li>Exact normalized name:</li>
+<li>lowercase,</li>
+<li>hapus titik gelar,</li>
+<li>collapse whitespace,</li>
+<li>normalisasi <code>Muh.</code>/<code>Muh</code>, <code>S.Pd.I</code>/<code>S Pd I</code>.</li>
+<li>Trigram/fuzzy search terhadap <code>employees.nama</code>.</li>
+<li>Manual review.</li>
+</ol>
+<h3 id="93-apply-master-data">9.3 Apply Master Data</h3>
+<p>Dalam satu transaksi:</p>
+<ul>
+<li>lock batch row <code>FOR UPDATE</code>.</li>
+<li>ambil semua master rows.</li>
+<li>untuk setiap row:</li>
+<li>create snapshot <code>before_data</code> employee.</li>
+<li>update <code>employees.exam_supervisor_code</code>.</li>
+<li>update <code>employees.nama</code> hanya jika action <code>update_employee_name</code> disetujui.</li>
+<li>set <code>display_name_source</code>, <code>name_verified_at</code>, <code>name_verified_by</code>.</li>
+<li>create audit log.</li>
+<li>update status batch ke <code>applied_master</code>.</li>
+</ul>
+<p>Untuk 27 nama foto, rekomendasi awal:</p>
+<ul>
+<li>Jika employee existing sudah ada tapi beda format gelar kecil, lakukan <code>update_employee_name</code>.</li>
+<li>Jika tidak ada, buat employee minimal:</li>
+<li><code>nama</code>,</li>
+<li><code>unit_kerja = 'MTsN 2 Kolaka Utara'</code>,</li>
+<li><code>employment_type = 'honorer'</code> atau <code>unknown</code> sesuai enum/validasi existing,</li>
+<li><code>is_active = true</code>,</li>
+<li><code>exam_supervisor_code</code>.</li>
+<li>Jangan mengisi NIP palsu.</li>
+</ul>
+<hr />
+<h2 id="10-strategi-publish-jadwal-final">10. Strategi Publish Jadwal Final</h2>
+<h3 id="101-event">10.1 Event</h3>
+<p>Buat atau gunakan event:</p>
+<ul>
+<li><code>title</code>: <code>Evaluasi Semester Genap TP 2025/2026</code></li>
+<li><code>exam_type</code>: karena enum existing tidak punya <code>semester</code>, gunakan <code>uas</code> atau <code>lainnya</code> sesuai kebijakan sekolah. Rekomendasi teknis aman: <code>uas</code> bila evaluasi semester setara PAS/SAS, atau <code>lainnya</code> jika hanya command center non-CBT.</li>
+<li><code>scope</code>: <code>school</code></li>
+<li><code>academic_year_id</code>: TP 2025/2026</li>
+<li><code>status</code>: <code>draft</code> saat import, <code>active</code> setelah publish.</li>
+</ul>
+<h3 id="102-sessions">10.2 Sessions</h3>
+<p>Untuk setiap kombinasi tanggal+sesi:</p>
+<ul>
+<li>buat <code>cbt_exam_sessions</code> jika belum ada.</li>
+<li>nama sesi: <code>Evaluasi Semester Genap 2025/2026 - 2026-06-04 pagi</code>.</li>
+<li>simpan relasi event via <code>event_id</code>.</li>
+</ul>
+<p>Jika <code>cbt_exam_sessions</code> membutuhkan <code>package_id</code>/field tertentu dari schema existing, buat mode Command Center yang hanya membuat sesi saat paket tersedia, atau tambahkan kolom nullable secara migration terpisah setelah review schema lengkap.</p>
+<h3 id="103-rooms">10.3 Rooms</h3>
+<p>Untuk setiap room <code>R.I</code>–<code>R.VIII</code> per session:</p>
+<ul>
+<li>resolve/create <code>school_rooms</code>.</li>
+<li>buat <code>cbt_exam_rooms</code>:</li>
+<li><code>session_id</code>,</li>
+<li><code>school_room_id</code>,</li>
+<li><code>room_name = room_code</code>,</li>
+<li><code>room_name_snapshot</code>,</li>
+<li><code>capacity</code> dari <code>school_rooms.exam_capacity</code>,</li>
+<li><code>status = 'ready'</code> setelah semua pengawas valid.</li>
+</ul>
+<h3 id="104-proctors">10.4 Proctors</h3>
+<p>Untuk setiap row jadwal:</p>
+<ul>
+<li>insert <code>cbt_room_proctors</code>:</li>
+<li><code>exam_room_id</code>,</li>
+<li><code>employee_id</code>,</li>
+<li><code>role</code>: <code>utama</code>/<code>pendamping</code>/<code>cadangan</code>,</li>
+<li><code>assigned_by</code>: admin.</li>
+<li>constraint existing mencegah employee sama double di room yang sama.</li>
+<li>service harus menambah validasi cross-room sebelum insert.</li>
+</ul>
+<h3 id="105-idempotency">10.5 Idempotency</h3>
+<p><code>publish-schedule</code> harus idempotent:</p>
+<ul>
+<li>gunakan <code>batch_id</code> dan snapshot untuk tahu entity yang dibuat.</li>
+<li>sebelum insert, cari existing berdasarkan event+session+room+employee.</li>
+<li>jika sama, skip dan audit <code>noop</code>.</li>
+<li>jika beda, require explicit <code>replace_existing=true</code>.</li>
+</ul>
+<hr />
+<h2 id="11-rbac-dan-keamanan">11. RBAC dan Keamanan</h2>
+<p>Permission baru yang disarankan:</p>
+<ul>
+<li><code>exam_command_center.read</code></li>
+<li><code>exam_command_center.import</code></li>
+<li><code>exam_command_center.validate</code></li>
+<li><code>exam_command_center.apply_master</code></li>
+<li><code>exam_command_center.publish</code></li>
+<li><code>exam_command_center.rollback</code></li>
+<li><code>exam_command_center.audit</code></li>
+</ul>
+<p>Migration permission wajib grant ke <code>admin</code> dalam migration yang sama.</p>
+<p>Role rekomendasi:</p>
+<ul>
+<li><code>admin</code>: semua permission.</li>
+<li><code>staf</code> atau panitia ujian: read, import, validate, audit terbatas.</li>
+<li><code>guru</code>: read assignment miliknya saja, bukan apply/publish.</li>
+</ul>
+<p>Keamanan API:</p>
+<ul>
+<li>Semua mutasi harus authenticated.</li>
+<li>Semua body JSON dibatasi ukuran dengan <code>http.MaxBytesReader</code>.</li>
+<li>Upload CSV dibatasi ukuran dan MIME/extension allowlist.</li>
+<li>Request mutasi mencatat <code>request_id</code>, <code>source_ip</code>, actor username snapshot.</li>
+</ul>
+<hr />
+<h2 id="12-audit-safe-rollout">12. Audit-Safe Rollout</h2>
+<h3 id="121-phase-0-design-lock">12.1 Phase 0 — Design Lock</h3>
+<ul>
+<li>Finalisasi format CSV impor jadwal.</li>
+<li>Terapkan kebijakan hari/tanggal final: Minggu 07 Juni 2026 libur, Senin 08, Selasa 09, Rabu 10 Juni 2026.</li>
+<li>Duplikasi nomor 23 di foto dicatat sebagai pending koreksi panitia besok, belum diganti otomatis.</li>
+</ul>
+<h3 id="122-phase-1-migration-additive">12.2 Phase 1 — Migration Additive</h3>
+<p>Deploy migration additive saja:</p>
+<ul>
+<li>tambah kolom nullable ke <code>employees</code>,</li>
+<li>tambah tabel import/staging/snapshot/audit,</li>
+<li>tambah RBAC permission.</li>
+</ul>
+<p>Tidak mengubah flow existing.</p>
+<p>Rollback phase ini:</p>
+<ul>
+<li>drop tabel baru,</li>
+<li>drop kolom baru jika belum dipakai,</li>
+<li>hapus permission baru.</li>
+</ul>
+<h3 id="123-phase-2-backend-dry-run">12.3 Phase 2 — Backend Dry-Run</h3>
+<p>Deploy endpoint import dan validate:</p>
+<ul>
+<li>belum ada apply final.</li>
+<li>admin bisa upload/paste data.</li>
+<li>hasil hanya validation report.</li>
+</ul>
+<p>Rollback:</p>
+<ul>
+<li>matikan route dengan feature flag.</li>
+<li>data staging bisa tetap disimpan atau dihapus batch.</li>
+</ul>
+<h3 id="124-phase-3-apply-master-data-terbatas">12.4 Phase 3 — Apply Master Data Terbatas</h3>
+<p>Aktifkan <code>apply-master-data</code>:</p>
+<ul>
+<li>hanya admin.</li>
+<li>wajib validation hash.</li>
+<li>create snapshot before/after.</li>
+<li>audit every employee touched.</li>
+</ul>
+<p>Rollback:</p>
+<ul>
+<li>endpoint rollback employee dari <code>exam_import_apply_snapshots</code>.</li>
+<li>revert <code>nama</code>, <code>exam_supervisor_code</code>, <code>display_name_source</code>, <code>name_verified_at</code>, <code>name_verified_by</code>.</li>
+</ul>
+<h3 id="125-phase-4-publish-jadwal-terbatas">12.5 Phase 4 — Publish Jadwal Terbatas</h3>
+<p>Aktifkan <code>publish-schedule</code>:</p>
+<ul>
+<li>hanya untuk satu event.</li>
+<li>publish ke draft/ready rooms.</li>
+<li>tidak mengganggu peserta existing.</li>
+</ul>
+<p>Rollback:</p>
+<ul>
+<li>hapus <code>cbt_room_proctors</code> yang dibuat batch.</li>
+<li>hapus <code>cbt_exam_rooms</code> yang dibuat batch jika belum ada peserta.</li>
+<li>hapus <code>cbt_exam_sessions</code> yang dibuat batch jika belum ada peserta.</li>
+<li>event dikembalikan <code>draft</code> atau dihapus jika hanya dibuat batch dan belum punya relasi lain.</li>
+</ul>
+<h3 id="126-phase-5-ui-command-center">12.6 Phase 5 — UI Command Center</h3>
+<ul>
+<li>tampilkan readiness dashboard.</li>
+<li>import wizard.</li>
+<li>validation report.</li>
+<li>approval warning.</li>
+<li>audit timeline.</li>
+<li>rollback button hanya untuk admin.</li>
+</ul>
+<hr />
+<h2 id="13-rollback-detail">13. Rollback Detail</h2>
+<h3 id="131-rollback-master-data">13.1 Rollback Master Data</h3>
+<p>Syarat:</p>
+<ul>
+<li>batch status <code>applied_master</code> atau <code>published</code>.</li>
+<li>tidak ada batch lain setelahnya yang mengubah employee sama, atau perlu conflict review.</li>
+</ul>
+<p>Algoritma:</p>
+<ol>
+<li>Lock batch.</li>
+<li>Ambil snapshot <code>snapshot_type='master_employee'</code> urut newest-first.</li>
+<li>Untuk tiap employee:</li>
+<li>bandingkan current data dengan <code>after_data</code>.</li>
+<li>jika current != after_data, tandai conflict dan jangan rollback otomatis.</li>
+<li>jika sama, restore <code>before_data</code>.</li>
+<li>Audit <code>rollback_master_employee</code>.</li>
+<li>Set batch <code>rolled_back</code> bila schedule juga sudah rollback.</li>
+</ol>
+<h3 id="132-rollback-jadwal">13.2 Rollback Jadwal</h3>
+<p>Syarat:</p>
+<ul>
+<li>belum ada peserta submit/aktivitas runtime penting pada session terkait.</li>
+<li>jika sudah ada peserta/hasil, rollback tidak boleh hard delete; gunakan soft cancel/revision event.</li>
+</ul>
+<p>Algoritma:</p>
+<ol>
+<li>Lock batch.</li>
+<li>Ambil snapshot <code>proctor</code>, hapus proctor assignment yang dibuat batch.</li>
+<li>Ambil snapshot <code>room</code>, hapus room yang dibuat batch jika tidak punya peserta.</li>
+<li>Ambil snapshot <code>session</code>, hapus session yang dibuat batch jika aman.</li>
+<li>Event kembali <code>draft</code> atau <code>finished/cancelled</code> sesuai status existing.</li>
+<li>Audit <code>rollback_schedule</code>.</li>
+</ol>
+<h3 id="133-rollback-dengan-batch-koreksi">13.3 Rollback dengan Batch Koreksi</h3>
+<p>Jika data sudah dipakai ujian, jangan rollback fisik. Buat <strong>correction batch</strong>:</p>
+<ul>
+<li>batch baru dengan <code>rollback_of_batch_id</code>.</li>
+<li>perubahan bersifat append-only.</li>
+<li>audit menghubungkan batch lama dan koreksi.</li>
+</ul>
+<hr />
+<h2 id="14-rencana-implementasi-teknis-detail">14. Rencana Implementasi Teknis Detail</h2>
+<h3 id="backend">Backend</h3>
+<ol>
+<li>Buat migration <code>120_exam_command_center.sql</code>.</li>
+<li>Tambahkan query sqlc:</li>
+<li>create/list/get import batch,</li>
+<li>insert/update supervisor master rows,</li>
+<li>insert schedule rows,</li>
+<li>list validation rows,</li>
+<li>create snapshots,</li>
+<li>create audit domain log,</li>
+<li>update employee by exam supervisor code,</li>
+<li>resolve school rooms.</li>
+<li>Regenerate sqlc dengan <code>make db-sqlc</code>.</li>
+<li>Buat service:</li>
+<li><code>CreateImportBatch</code></li>
+<li><code>ImportSupervisorMasterRows</code></li>
+<li><code>ImportScheduleRows</code></li>
+<li><code>ValidateImportBatch</code></li>
+<li><code>ApplyMasterData</code></li>
+<li><code>PublishSchedule</code></li>
+<li><code>RollbackBatch</code></li>
+<li>Buat handler thin:</li>
+<li>parse body,</li>
+<li>call service,</li>
+<li>map error ke HTTP.</li>
+<li>Tambahkan route dan RBAC guard.</li>
+<li>Tambahkan tests:</li>
+<li>validasi tanggal/hari,</li>
+<li>duplikasi kode 23,</li>
+<li>kode pengawas tidak ada,</li>
+<li>double booking pengawas,</li>
+<li>rollback employee snapshot,</li>
+<li>idempotent publish.</li>
+</ol>
+<h3 id="frontendbff">Frontend/BFF</h3>
+<ol>
+<li>Tambah proxy endpoint <code>/api/command-center/*</code> ke Core API.</li>
+<li>Tambah halaman wizard:</li>
+<li>create/select event,</li>
+<li>paste/upload master pengawas,</li>
+<li>upload jadwal,</li>
+<li>validate,</li>
+<li>review diff,</li>
+<li>apply master,</li>
+<li>publish,</li>
+<li>audit/rollback.</li>
+<li>Gunakan skeleton/AsyncContent dan toast Sonner sesuai baseline repo.</li>
+<li>Jangan ada DB direct access.</li>
+</ol>
+<h3 id="operasional">Operasional</h3>
+<ol>
+<li>Siapkan CSV hasil transkripsi jadwal foto.</li>
+<li>Jalankan dry-run validasi.</li>
+<li>Terapkan koreksi tanggal yang sudah disetujui dan tampilkan duplikasi nomor 23 sebagai catatan pending koreksi.</li>
+<li>Apply master data.</li>
+<li>Publish jadwal.</li>
+<li>Export report audit sebagai arsip.</li>
+</ol>
+<hr />
+<h2 id="15-risiko-dan-mitigasi">15. Risiko dan Mitigasi</h2>
+<ul>
+<li>Risiko: OCR/foto salah membaca nomor pengawas.</li>
+<li>
+<p>Mitigasi: staging + validation + manual approval.</p>
+</li>
+<li>
+<p>Risiko: update nama pegawai merusak modul lain.</p>
+</li>
+<li>
+<p>Mitigasi: snapshot before/after, reversible, dan hanya field nama/kode yang diubah.</p>
+</li>
+<li>
+<p>Risiko: duplikasi nomor 23 menyebabkan pengawas double booking; mitigasi sementara: tampil sebagai warning pending koreksi, bukan final locked.</p>
+</li>
+<li>
+<p>Mitigasi: blocking validation pada tanggal+sesi sama.</p>
+</li>
+<li>
+<p>Risiko: tanggal dari foto salah; mitigasi: gunakan koreksi final Senin=08, Selasa=09, Rabu=10 Juni 2026.</p>
+</li>
+<li>
+<p>Mitigasi: computed calendar validation dan approval eksplisit.</p>
+</li>
+<li>
+<p>Risiko: publish ganda membuat row dobel.</p>
+</li>
+<li>
+<p>Mitigasi: idempotency key batch + uniqueness application-level + constraints existing.</p>
+</li>
+<li>
+<p>Risiko: rollback setelah ujian berjalan menghapus evidence.</p>
+</li>
+<li>Mitigasi: hard rollback hanya sebelum runtime; setelah runtime gunakan correction batch.</li>
+</ul>
+<hr />
+<h2 id="16-definition-of-done">16. Definition of Done</h2>
+<p>Backend selesai jika:</p>
+<ul>
+<li>migration additive berhasil,</li>
+<li>sqlc generated,</li>
+<li>semua endpoint ada dan protected RBAC,</li>
+<li>dry-run validation mengeluarkan blocking errors/warnings jelas,</li>
+<li>apply master data membuat snapshot dan audit,</li>
+<li>publish schedule idempotent,</li>
+<li>rollback teruji,</li>
+<li>tests pass.</li>
+</ul>
+<p>Data siap publish jika:</p>
+<ul>
+<li>27 master pengawas resolved ke employees,</li>
+<li>ruang R.I–R.VIII resolved,</li>
+<li>semua jadwal tanggal 4–6 dan 8–10 Juni 2026 tervalidasi,</li>
+<li>koreksi tanggal Senin dan seterusnya sudah diterapkan,</li>
+<li>duplikasi nomor 23 diberi status pending koreksi panitia dan tidak menghalangi import awal,</li>
+<li>tidak ada double booking pengawas.</li>
+</ul>
+<hr />
+<h2 id="17-rekomendasi-keputusan-sebelum-implementasi">17. Rekomendasi Keputusan Sebelum Implementasi</h2>
+<p>Sebelum coding, kepala/admin perlu memutuskan:</p>
+<ol>
+<li>Duplikasi nomor pengawas 23 akan diganti ke nomor berapa saat panitia mengoreksi besok?</li>
+<li>Apakah setelah koreksi nomor 23 jadwal langsung dikunci final?</li>
+<li>Apakah event ini harus memakai <code>exam_type='uas'</code> atau <code>exam_type='lainnya'</code>?</li>
+<li>Apakah pengawas per ruang wajib dua orang atau boleh satu?</li>
+<li>Apakah nama dari foto boleh langsung mengganti <code>employees.nama</code>, atau hanya menjadi alias/display khusus ujian?</li>
+</ol>
+<p>Rekomendasi paling aman: <strong>pakai staging + alias/kode pengawas lebih dulu, lalu update <code>employees.nama</code> hanya setelah admin menyetujui diff per pegawai.</strong></p>
+<div class="footer-note">Dokumen rencana implementasi audit-safe. Pengawas nomor 23 ganda ditandai sebagai pending koreksi panitia.</div>
+</body>
+</html>

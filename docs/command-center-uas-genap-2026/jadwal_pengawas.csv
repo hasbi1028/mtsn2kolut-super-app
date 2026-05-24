@@ -1,0 +1,121 @@
+tanggal,hari,jam_mulai,jam_selesai,mata_pelajaran,ruang,kode_pengawas,nama_pengawas,status
+2026-06-04,Kamis,07:30,09:00,Matematika,R.I,1,Taufik S.Ag M.Pd,ready
+2026-06-04,Kamis,07:30,09:00,Matematika,R.II,2,Kardi S.Pd,ready
+2026-06-04,Kamis,07:30,09:00,Matematika,R.III,11,Sutra S.Ag,ready
+2026-06-04,Kamis,07:30,09:00,Matematika,R.IV,20,Kaharuddin S.Pd,ready
+2026-06-04,Kamis,07:30,09:00,Matematika,R.V,5,Dra Ratnawati,ready
+2026-06-04,Kamis,07:30,09:00,Matematika,R.VI,6,Drs H Chaeruddin,ready
+2026-06-04,Kamis,07:30,09:00,Matematika,R.VII,7,Andi Rasnia S.Ag,ready
+2026-06-04,Kamis,07:30,09:00,Matematika,R.VIII,8,Sitti Rafidah S.Pd.I,ready
+2026-06-04,Kamis,09:30,11:00,SKI,R.I,9,Herniati S.Pd,ready
+2026-06-04,Kamis,09:30,11:00,SKI,R.II,10,Muh Saing S.E,ready
+2026-06-04,Kamis,09:30,11:00,SKI,R.III,3,Irmawati Nur S.Ag M.Pd,ready
+2026-06-04,Kamis,09:30,11:00,SKI,R.IV,12,Saimang S.Ag,ready
+2026-06-04,Kamis,09:30,11:00,SKI,R.V,13,Mida S.Ag,ready
+2026-06-04,Kamis,09:30,11:00,SKI,R.VI,14,Rusnawati S.Pd,ready
+2026-06-04,Kamis,09:30,11:00,SKI,R.VII,15,Wati Zaelani Sidi Ellyanando S.Pd,ready
+2026-06-04,Kamis,09:30,11:00,SKI,R.VIII,16,Susianti S.Pd,ready
+2026-06-05,Jumat,07:30,09:00,IPS,R.I,17,Rustiani S.Pd,ready
+2026-06-05,Jumat,07:30,09:00,IPS,R.II,18,Nirmawati Tahir S.Pd,ready
+2026-06-05,Jumat,07:30,09:00,IPS,R.III,19,Nurul Fitri Usman S.Pd,ready
+2026-06-05,Jumat,07:30,09:00,IPS,R.IV,20,Kaharuddin S.Pd,ready
+2026-06-05,Jumat,07:30,09:00,IPS,R.V,21,Abdillah S.Pd,ready
+2026-06-05,Jumat,07:30,09:00,IPS,R.VI,27,Nurunnisa Alimah A S.Pd,ready
+2026-06-05,Jumat,07:30,09:00,IPS,R.VII,5,Dra Ratnawati,ready
+2026-06-05,Jumat,07:30,09:00,IPS,R.VIII,24,Andi Mirna S.Pd,ready
+2026-06-05,Jumat,09:30,11:00,Al-Qur'an Hadis,R.I,25,Nur Ilmi S.Pd,ready
+2026-06-05,Jumat,09:30,11:00,Al-Qur'an Hadis,R.II,26,Mirnawati S.Pd,ready
+2026-06-05,Jumat,09:30,11:00,Al-Qur'an Hadis,R.III,23,Mutmainnah S.Pd,pending_review
+2026-06-05,Jumat,09:30,11:00,Al-Qur'an Hadis,R.IV,27,Nurunnisa Alimah A S.Pd,ready
+2026-06-05,Jumat,09:30,11:00,Al-Qur'an Hadis,R.V,3,Irmawati Nur S.Ag M.Pd,ready
+2026-06-05,Jumat,09:30,11:00,Al-Qur'an Hadis,R.VI,22,Yurnianti S.Pd,ready
+2026-06-05,Jumat,09:30,11:00,Al-Qur'an Hadis,R.VII,23,Mutmainnah S.Pd,pending_review
+2026-06-05,Jumat,09:30,11:00,Al-Qur'an Hadis,R.VIII,6,Drs H Chaeruddin,ready
+2026-06-06,Sabtu,07:30,09:00,IPA,R.I,7,Andi Rasnia S.Ag,ready
+2026-06-06,Sabtu,07:30,09:00,IPA,R.II,8,Sitti Rafidah S.Pd.I,ready
+2026-06-06,Sabtu,07:30,09:00,IPA,R.III,17,Rustiani S.Pd,ready
+2026-06-06,Sabtu,07:30,09:00,IPA,R.IV,10,Muh Saing S.E,ready
+2026-06-06,Sabtu,07:30,09:00,IPA,R.V,11,Sutra S.Ag,ready
+2026-06-06,Sabtu,07:30,09:00,IPA,R.VI,12,Saimang S.Ag,ready
+2026-06-06,Sabtu,07:30,09:00,IPA,R.VII,13,Mida S.Ag,ready
+2026-06-06,Sabtu,07:30,09:00,IPA,R.VIII,14,Rusnawati S.Pd,ready
+2026-06-06,Sabtu,09:00,10:30,Informatika,R.I,15,Wati Zaelani Sidi Ellyanando S.Pd,ready
+2026-06-06,Sabtu,09:00,10:30,Informatika,R.II,16,Susianti S.Pd,ready
+2026-06-06,Sabtu,09:00,10:30,Informatika,R.III,17,Rustiani S.Pd,ready
+2026-06-06,Sabtu,09:00,10:30,Informatika,R.IV,18,Nirmawati Tahir S.Pd,ready
+2026-06-06,Sabtu,09:00,10:30,Informatika,R.V,19,Nurul Fitri Usman S.Pd,ready
+2026-06-06,Sabtu,09:00,10:30,Informatika,R.VI,20,Kaharuddin S.Pd,ready
+2026-06-06,Sabtu,09:00,10:30,Informatika,R.VII,21,Abdillah S.Pd,ready
+2026-06-06,Sabtu,09:00,10:30,Informatika,R.VIII,22,Yurnianti S.Pd,ready
+2026-06-06,Sabtu,10:40,12:00,Akidah Akhlak,R.I,23,Mutmainnah S.Pd,ready
+2026-06-06,Sabtu,10:40,12:00,Akidah Akhlak,R.II,24,Andi Mirna S.Pd,ready
+2026-06-06,Sabtu,10:40,12:00,Akidah Akhlak,R.III,25,Nur Ilmi S.Pd,ready
+2026-06-06,Sabtu,10:40,12:00,Akidah Akhlak,R.IV,26,Mirnawati S.Pd,ready
+2026-06-06,Sabtu,10:40,12:00,Akidah Akhlak,R.V,1,Taufik S.Ag M.Pd,ready
+2026-06-06,Sabtu,10:40,12:00,Akidah Akhlak,R.VI,2,Kardi S.Pd,ready
+2026-06-06,Sabtu,10:40,12:00,Akidah Akhlak,R.VII,19,Nurul Fitri Usman S.Pd,ready
+2026-06-06,Sabtu,10:40,12:00,Akidah Akhlak,R.VIII,4,Supriadi S.Pd,ready
+2026-06-08,Senin,07:30,09:00,Bahasa Indonesia,R.I,21,Abdillah S.Pd,ready
+2026-06-08,Senin,07:30,09:00,Bahasa Indonesia,R.II,22,Yurnianti S.Pd,ready
+2026-06-08,Senin,07:30,09:00,Bahasa Indonesia,R.III,25,Nur Ilmi S.Pd,ready
+2026-06-08,Senin,07:30,09:00,Bahasa Indonesia,R.IV,8,Sitti Rafidah S.Pd.I,ready
+2026-06-08,Senin,07:30,09:00,Bahasa Indonesia,R.V,9,Herniati S.Pd,ready
+2026-06-08,Senin,07:30,09:00,Bahasa Indonesia,R.VI,10,Muh Saing S.E,ready
+2026-06-08,Senin,07:30,09:00,Bahasa Indonesia,R.VII,11,Sutra S.Ag,ready
+2026-06-08,Senin,07:30,09:00,Bahasa Indonesia,R.VIII,20,Kaharuddin S.Pd,ready
+2026-06-08,Senin,09:00,10:30,Penjas,R.I,13,Mida S.Ag,ready
+2026-06-08,Senin,09:00,10:30,Penjas,R.II,14,Rusnawati S.Pd,ready
+2026-06-08,Senin,09:00,10:30,Penjas,R.III,15,Wati Zaelani Sidi Ellyanando S.Pd,ready
+2026-06-08,Senin,09:00,10:30,Penjas,R.IV,16,Susianti S.Pd,ready
+2026-06-08,Senin,09:00,10:30,Penjas,R.V,17,Rustiani S.Pd,ready
+2026-06-08,Senin,09:00,10:30,Penjas,R.VI,18,Nirmawati Tahir S.Pd,ready
+2026-06-08,Senin,09:00,10:30,Penjas,R.VII,19,Nurul Fitri Usman S.Pd,ready
+2026-06-08,Senin,09:00,10:30,Penjas,R.VIII,12,Saimang S.Ag,ready
+2026-06-08,Senin,10:40,12:00,Fiqih,R.I,21,Abdillah S.Pd,ready
+2026-06-08,Senin,10:40,12:00,Fiqih,R.II,22,Yurnianti S.Pd,ready
+2026-06-08,Senin,10:40,12:00,Fiqih,R.III,23,Mutmainnah S.Pd,ready
+2026-06-08,Senin,10:40,12:00,Fiqih,R.IV,24,Andi Mirna S.Pd,ready
+2026-06-08,Senin,10:40,12:00,Fiqih,R.V,25,Nur Ilmi S.Pd,ready
+2026-06-08,Senin,10:40,12:00,Fiqih,R.VI,26,Mirnawati S.Pd,ready
+2026-06-08,Senin,10:40,12:00,Fiqih,R.VII,1,Taufik S.Ag M.Pd,ready
+2026-06-08,Senin,10:40,12:00,Fiqih,R.VIII,2,Kardi S.Pd,ready
+2026-06-09,Selasa,07:30,09:00,Bahasa Inggris,R.I,3,Irmawati Nur S.Ag M.Pd,ready
+2026-06-09,Selasa,07:30,09:00,Bahasa Inggris,R.II,4,Supriadi S.Pd,ready
+2026-06-09,Selasa,07:30,09:00,Bahasa Inggris,R.III,5,Dra Ratnawati,ready
+2026-06-09,Selasa,07:30,09:00,Bahasa Inggris,R.IV,6,Drs H Chaeruddin,ready
+2026-06-09,Selasa,07:30,09:00,Bahasa Inggris,R.V,7,Andi Rasnia S.Ag,ready
+2026-06-09,Selasa,07:30,09:00,Bahasa Inggris,R.VI,8,Sitti Rafidah S.Pd.I,ready
+2026-06-09,Selasa,07:30,09:00,Bahasa Inggris,R.VII,9,Herniati S.Pd,ready
+2026-06-09,Selasa,07:30,09:00,Bahasa Inggris,R.VIII,10,Muh Saing S.E,ready
+2026-06-09,Selasa,09:00,10:30,Kewirausahaan,R.I,24,Andi Mirna S.Pd,ready
+2026-06-09,Selasa,09:00,10:30,Kewirausahaan,R.II,12,Saimang S.Ag,ready
+2026-06-09,Selasa,09:00,10:30,Kewirausahaan,R.III,13,Mida S.Ag,ready
+2026-06-09,Selasa,09:00,10:30,Kewirausahaan,R.IV,14,Rusnawati S.Pd,ready
+2026-06-09,Selasa,09:00,10:30,Kewirausahaan,R.V,15,Wati Zaelani Sidi Ellyanando S.Pd,ready
+2026-06-09,Selasa,09:00,10:30,Kewirausahaan,R.VI,16,Susianti S.Pd,ready
+2026-06-09,Selasa,09:00,10:30,Kewirausahaan,R.VII,25,Nur Ilmi S.Pd,ready
+2026-06-09,Selasa,09:00,10:30,Kewirausahaan,R.VIII,18,Nirmawati Tahir S.Pd,ready
+2026-06-09,Selasa,10:40,12:00,Seni Budaya,R.I,19,Nurul Fitri Usman S.Pd,ready
+2026-06-09,Selasa,10:40,12:00,Seni Budaya,R.II,20,Kaharuddin S.Pd,ready
+2026-06-09,Selasa,10:40,12:00,Seni Budaya,R.III,21,Abdillah S.Pd,ready
+2026-06-09,Selasa,10:40,12:00,Seni Budaya,R.IV,22,Yurnianti S.Pd,ready
+2026-06-09,Selasa,10:40,12:00,Seni Budaya,R.V,23,Mutmainnah S.Pd,ready
+2026-06-09,Selasa,10:40,12:00,Seni Budaya,R.VI,24,Andi Mirna S.Pd,ready
+2026-06-09,Selasa,10:40,12:00,Seni Budaya,R.VII,17,Rustiani S.Pd,ready
+2026-06-09,Selasa,10:40,12:00,Seni Budaya,R.VIII,26,Mirnawati S.Pd,ready
+2026-06-10,Rabu,07:30,09:00,Bahasa Arab,R.I,1,Taufik S.Ag M.Pd,ready
+2026-06-10,Rabu,07:30,09:00,Bahasa Arab,R.II,10,Muh Saing S.E,ready
+2026-06-10,Rabu,07:30,09:00,Bahasa Arab,R.III,3,Irmawati Nur S.Ag M.Pd,ready
+2026-06-10,Rabu,07:30,09:00,Bahasa Arab,R.IV,27,Nurunnisa Alimah A S.Pd,ready
+2026-06-10,Rabu,07:30,09:00,Bahasa Arab,R.V,5,Dra Ratnawati,ready
+2026-06-10,Rabu,07:30,09:00,Bahasa Arab,R.VI,6,Drs H Chaeruddin,ready
+2026-06-10,Rabu,07:30,09:00,Bahasa Arab,R.VII,7,Andi Rasnia S.Ag,ready
+2026-06-10,Rabu,07:30,09:00,Bahasa Arab,R.VIII,8,Sitti Rafidah S.Pd.I,ready
+2026-06-10,Rabu,09:30,11:00,PKN,R.I,9,Herniati S.Pd,ready
+2026-06-10,Rabu,09:30,11:00,PKN,R.II,27,Nurunnisa Alimah A S.Pd,ready
+2026-06-10,Rabu,09:30,11:00,PKN,R.III,11,Sutra S.Ag,ready
+2026-06-10,Rabu,09:30,11:00,PKN,R.IV,12,Saimang S.Ag,ready
+2026-06-10,Rabu,09:30,11:00,PKN,R.V,13,Mida S.Ag,ready
+2026-06-10,Rabu,09:30,11:00,PKN,R.VI,14,Rusnawati S.Pd,ready
+2026-06-10,Rabu,09:30,11:00,PKN,R.VII,15,Wati Zaelani Sidi Ellyanando S.Pd,ready
+2026-06-10,Rabu,09:30,11:00,PKN,R.VIII,16,Susianti S.Pd,ready

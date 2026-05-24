@@ -130,6 +130,9 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/api/auth/account', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/api/auth/account/change-request-fields', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(user, '/bank-soal/daftar', 'GET')).toBe(true);
+		expect(requiredPermissionsForPath('/ujian/command-center', 'GET')).toEqual(['asesmen.proctor']);
+		expect(canAccessProtectedRoute({ ...user, permissions: ['asesmen.proctor'] }, '/ujian/command-center', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(user, '/ujian/command-center', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute(user, '/asesmen/kegiatan', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/settings/users', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/settings/rbac', 'GET')).toBe(false);
