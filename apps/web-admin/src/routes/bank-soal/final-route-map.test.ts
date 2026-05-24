@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { sidebarNavGroups } from '$lib/components/sidebar/sidebar-config';
+import { flattenSidebarNavGroups } from '$lib/components/sidebar/sidebar-tree';
 
 const SRC_ROOT = path.resolve(process.cwd(), 'src');
 const ROUTES_ROOT = path.join(SRC_ROOT, 'routes');
@@ -31,12 +32,19 @@ describe('Bank Soal final route map', () => {
 	});
 
 	it('keeps sidebar navigation aligned with the operational Bank Soal layer', () => {
-		const bankSoalItems = sidebarNavGroups.find((group) => group.group === 'Bank Soal')?.items ?? [];
+		const bankSoalGroup = sidebarNavGroups.find((group) => group.group === 'Bank Soal');
+		const bankSoalItems = bankSoalGroup ? flattenSidebarNavGroups([bankSoalGroup]) : [];
 		expect(bankSoalItems.map((item) => item.href)).toEqual([
 			'/bank-soal',
 			'/bank-soal/daftar',
+			'/bank-soal/tambah',
+			'/bank-soal/impor',
+			'/bank-soal/cetak',
 			'/bank-soal/verifikasi',
+			'/bank-soal/penerbitan',
+			'/bank-soal/mapel-kd',
 			'/bank-soal/analisis-butir',
+			'/bank-soal/laporan',
 			'/bank-soal/pengaturan'
 		]);
 		expect(new Set(bankSoalItems.map((item) => item.href)).size).toBe(bankSoalItems.length);

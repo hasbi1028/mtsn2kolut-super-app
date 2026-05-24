@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { dashboardNavItem, sidebarNavGroups } from '$lib/components/sidebar/sidebar-config';
+import { flattenSidebarNavGroups } from '$lib/components/sidebar/sidebar-tree';
 import { requiredPermissionsForPath } from '$lib/server/route-access';
 import { DASHBOARD_WIDGETS } from '$lib/rbac/dashboard-policy';
 import { RBAC_PERMISSION_CATALOG, permissionCatalogCodes, permissionLabel } from './permission-catalog';
@@ -69,7 +70,7 @@ describe('RBAC permission catalog stabilization', () => {
 		const routePermissions = routeSamples.flatMap(([path, method]) => requiredPermissionsForPath(path, method));
 		const sidebarPermissions = [
 			...dashboardNavItem.permissions,
-			...sidebarNavGroups.flatMap((group) => group.items).flatMap((item) => item.permissions)
+			...flattenSidebarNavGroups(sidebarNavGroups).flatMap((item) => item.permissions)
 		];
 		const dashboardPermissions = DASHBOARD_WIDGETS.flatMap((widget) => widget.permissions);
 		const unknown = [...new Set([...routePermissions, ...sidebarPermissions, ...dashboardPermissions])].filter((code) => !seeded.has(code));

@@ -1,43 +1,61 @@
 import { describe, expect, it } from 'vitest';
 import { filterSidebarNavGroupsByAccess, hasAnyPermission, itemAllowedByAccess } from './sidebar-access';
-import type { SidebarNavGroup } from './sidebar-config';
+import type { SidebarNavGroup, SidebarNavItem } from './sidebar-config';
+import { flattenSidebarNavGroups } from './sidebar-tree';
+
+const accountItem: SidebarNavItem = { href: '/settings/account', label: 'Akun Saya', icon: 'user-check', permissions: ['settings.account'], allowAuthenticatedFallback: true };
+const userItem: SidebarNavItem = { href: '/settings/users', label: 'Manajemen User', icon: 'users', roles: ['admin'], permissions: ['users.read'] };
+const auditItem: SidebarNavItem = { href: '/settings/audit-logs', label: 'Audit Trail', icon: 'file-text', roles: ['admin'], permissions: ['audit.read'] };
+const portalItem: SidebarNavItem = { href: '/portal/siswa', label: 'Portal Siswa', icon: 'book-open', roles: ['siswa'], roleFallbacks: ['siswa'], permissions: ['student_portal.read'] };
 
 const groups: SidebarNavGroup[] = [
 	{
 		group: 'Sistem',
 		items: [
-			{ href: '/settings/account', label: 'Akun Saya', icon: 'user-check', permissions: ['settings.account'], allowAuthenticatedFallback: true },
-			{ href: '/settings/users', label: 'Manajemen User', icon: 'users', roles: ['admin'], permissions: ['users.read'] },
-			{ href: '/settings/audit-logs', label: 'Audit Trail', icon: 'file-text', roles: ['admin'], permissions: ['audit.read'] },
-			{ href: '/portal/siswa', label: 'Portal Siswa', icon: 'book-open', roles: ['siswa'], roleFallbacks: ['siswa'], permissions: ['student_portal.read'] }
+			{
+				kind: 'folder',
+				id: 'akun-akses',
+				label: 'Akun & Akses',
+				icon: 'settings',
+				children: [accountItem, userItem, auditItem]
+			},
+			{
+				kind: 'folder',
+				id: 'portal',
+				label: 'Portal',
+				icon: 'book-open',
+				children: [portalItem]
+			}
 		]
 	}
 ];
 
+const visibleHrefs = (visibleGroups: SidebarNavGroup[]) => flattenSidebarNavGroups(visibleGroups).map((item) => item.href);
+
 describe('sidebar permission access', () => {
 	it('allows navigation items by permissions while preserving admin access', () => {
-		expect(itemAllowedByAccess(groups[0].items[1], [], ['users.read'])).toBe(true);
-		expect(itemAllowedByAccess(groups[0].items[1], ['admin'], [])).toBe(true);
-		expect(itemAllowedByAccess(groups[0].items[1], ['guru'], [])).toBe(false);
+		expect(itemAllowedByAccess(userItem, [], ['users.read'])).toBe(true);
+		expect(itemAllowedByAccess(userItem, ['admin'], [])).toBe(true);
+		expect(itemAllowedByAccess(userItem, ['guru'], [])).toBe(false);
 	});
 
-	it('keeps only authenticated basic items when permissions are absent', () => {
+	it('keeps only authenticated basic items when permissions are absent inside nested folders', () => {
 		const visible = filterSidebarNavGroupsByAccess(groups, ['guru'], []);
 
 		expect(visible).toHaveLength(1);
-		expect(visible[0].items.map((item) => item.href)).toEqual(['/settings/account']);
+		expect(visibleHrefs(visible)).toEqual(['/settings/account']);
 	});
 
 	it('keeps explicit portal role fallback separate from generic guru fallback', () => {
-		expect(itemAllowedByAccess(groups[0].items[3], ['siswa'], [])).toBe(true);
-		expect(itemAllowedByAccess(groups[0].items[3], ['guru'], [])).toBe(false);
+		expect(itemAllowedByAccess(portalItem, ['siswa'], [])).toBe(true);
+		expect(itemAllowedByAccess(portalItem, ['guru'], [])).toBe(false);
 	});
 
-	it('filters groups using permissions and keeps account basics', () => {
+	it('filters nested groups using permissions and keeps account basics', () => {
 		const visible = filterSidebarNavGroupsByAccess(groups, [], ['audit.read']);
 
 		expect(visible).toHaveLength(1);
-		expect(visible[0].items.map((item) => item.href)).toEqual(['/settings/account', '/settings/audit-logs']);
+		expect(visibleHrefs(visible)).toEqual(['/settings/account', '/settings/audit-logs']);
 	});
 
 	it('normalizes permission membership checks', () => {

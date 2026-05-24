@@ -8,6 +8,8 @@
 		label: string;
 		group: string;
 		pinned: boolean;
+		ancestors?: string[];
+		breadcrumb?: string[];
 	};
 
 	let {
@@ -33,11 +35,10 @@
 		const normalizedQuery = query.trim().toLowerCase();
 		const base = items.filter((item) => {
 			if (!normalizedQuery) return true;
-			return (
-				item.label.toLowerCase().includes(normalizedQuery) ||
-				item.group.toLowerCase().includes(normalizedQuery) ||
-				item.href.toLowerCase().includes(normalizedQuery)
-			);
+			const searchable = [item.label, item.group, item.href, ...(item.ancestors ?? []), ...(item.breadcrumb ?? [])]
+				.join(' ')
+				.toLowerCase();
+			return searchable.includes(normalizedQuery);
 		});
 		return [...base].sort((left, right) => {
 			const leftScore = Number(left.pinned) + Number(isActive(left.href)) * 3;
@@ -82,6 +83,11 @@
 		return isActive(href)
 			? 'border-primary/30 bg-accent text-accent-foreground'
 			: 'border-border bg-card hover:bg-muted/60';
+	}
+
+	function commandSubtitle(item: CommandItem) {
+		const crumb = item.breadcrumb?.length ? item.breadcrumb.join(' › ') : `${item.group} › ${item.label}`;
+		return `${crumb} · ${item.href}`;
 	}
 
 	function openPalette() {
@@ -139,7 +145,7 @@
 												Cepat
 											</span>
 										</div>
-										<p class="mt-1 text-xs text-muted-foreground">{item.group} · {item.href}</p>
+										<p class="mt-1 text-xs text-muted-foreground">{commandSubtitle(item)}</p>
 									</div>
 									<svg class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -176,7 +182,7 @@
 												Baru
 											</span>
 										</div>
-										<p class="mt-1 text-xs text-muted-foreground">{item.group} · {item.href}</p>
+										<p class="mt-1 text-xs text-muted-foreground">{commandSubtitle(item)}</p>
 									</div>
 									<svg class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -210,7 +216,7 @@
 												</span>
 											{/if}
 										</div>
-										<p class="mt-1 text-xs text-muted-foreground">{item.group} · {item.href}</p>
+										<p class="mt-1 text-xs text-muted-foreground">{commandSubtitle(item)}</p>
 									</div>
 									<svg class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -241,7 +247,7 @@
 											</span>
 										{/if}
 									</div>
-									<p class="mt-1 text-xs text-muted-foreground">{item.group} · {item.href}</p>
+									<p class="mt-1 text-xs text-muted-foreground">{commandSubtitle(item)}</p>
 								</div>
 								<svg class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />

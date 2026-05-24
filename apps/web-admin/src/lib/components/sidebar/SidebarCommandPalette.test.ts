@@ -45,7 +45,7 @@ describe('SidebarCommandPalette', () => {
 		await user.type(screen.getByPlaceholderText('Mis. Persiapan, Pelaksanaan, Inventaris, atau PUSAKA'), 'bank soal');
 
 		expect(screen.getByText('Tambah Soal')).toBeTruthy();
-		expect(screen.getByText('Bank Soal · /bank-soal/tambah')).toBeTruthy();
+		expect(screen.getByText('Bank Soal › Tambah Soal · /bank-soal/tambah')).toBeTruthy();
 		expect(document.body.textContent).not.toContain('/cbt/soal');
 		expect(document.body.textContent).not.toContain('/cbt/questions');
 		expect(document.body.textContent).not.toContain('?mode=');

@@ -12,6 +12,7 @@
 	import { fetchSidebarAttention } from '$lib/components/sidebar/sidebar-attention';
 	import { filterSidebarNavGroupsByAccess } from '$lib/components/sidebar/sidebar-access';
 	import { findActiveSidebarHref } from '$lib/components/sidebar/sidebar-active';
+	import { flattenSidebarNavGroups, sidebarBreadcrumbLabel } from '$lib/components/sidebar/sidebar-tree';
 	import { readClientJson } from '$lib/client/api';
 	import type { AccountIdentity } from '$lib/client/account';
 	import { defaultBranding, versionedAsset, type BrandingSettings } from '$lib/branding';
@@ -19,6 +20,7 @@
 		dashboardNavItem,
 		defaultPinnedByRole,
 		sidebarNavGroups,
+		type SidebarFlatItem,
 		type SidebarNavItem
 	} from '$lib/components/sidebar/sidebar-config';
 
@@ -66,20 +68,15 @@
 	let pinnedLoaded = $state(false);
 
 	const visibleNavItems = $derived([
-		{ ...dashboardNavItem, group: 'Akses Cepat' },
-		...nav.flatMap((section) =>
-			section.items.map((item) => ({
-				...item,
-				group: section.group,
-			}))
-		)
+		{ ...dashboardNavItem, group: 'Akses Cepat', ancestors: [], breadcrumb: ['Akses Cepat', dashboardNavItem.label] },
+		...flattenSidebarNavGroups(nav)
 	]);
 
 	const activeHref = $derived(findActiveSidebarHref(page.url.pathname, visibleNavItems));
 
-	const activeGroup = $derived(
-		nav.find((section) => section.items.some((item) => item.href === activeHref))?.group ?? 'Utama'
-	);
+	const activeItem = $derived(visibleNavItems.find((item) => item.href === activeHref) ?? null);
+
+	const activeGroup = $derived(activeItem?.group ?? 'Utama');
 
 	const visibleNavHrefSet = $derived(new Set(visibleNavItems.map((item) => item.href)));
 	const pinnableNavHrefSet = $derived(
@@ -174,7 +171,8 @@
 		markSidebarPrefsChanged();
 	}
 
-	function railTooltip(item: SidebarNavItem, group: string) {
+	function railTooltip(item: SidebarNavItem | SidebarFlatItem, group: string) {
+		if ('ancestors' in item) return sidebarBreadcrumbLabel(item);
 		return `${group} · ${item.label}`;
 	}
 
