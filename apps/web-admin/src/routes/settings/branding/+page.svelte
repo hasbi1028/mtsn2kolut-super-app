@@ -15,7 +15,7 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { toast } from '$lib/components/ui/sonner';
 	import { readClientApiData } from '$lib/client/api';
-	import { defaultBranding, normalizeBranding, versionedAsset, type BrandingSettings } from '$lib/branding';
+	import { appAttribution, defaultBranding, normalizeBranding, versionedAsset, type BrandingSettings } from '$lib/branding';
 
 	type Purpose = 'logo' | 'mark' | 'favicon' | 'apple_touch_icon' | 'pwa_icon_192' | 'pwa_icon_512' | 'formal_logo';
 	type AssetCard = { purpose: Purpose; title: string; hint: string; field: keyof BrandingSettings; min: string };
@@ -191,19 +191,39 @@
 					</div>
 				</div>
 
-				<Card.Root class="h-fit">
-					<Card.Header><Card.Title class="text-base">Pratinjau</Card.Title><Card.Description>Simulasi sidebar, browser tab, dan ikon PWA.</Card.Description></Card.Header>
-					<Card.Content class="space-y-4">
-						<div class="rounded-xl border p-4">
-							<div class="flex items-center gap-3"><img src={versionedAsset(branding.mark_url, branding.version)} alt="Mark" class="size-10 rounded-lg bg-white object-contain p-1" /><div><p class="font-semibold">{branding.short_name}</p><p class="text-xs text-muted-foreground">{branding.tagline}</p></div></div>
-						</div>
-						<div class="rounded-xl border p-4">
-							<p class="mb-2 text-xs font-medium text-muted-foreground">Tab Browser</p>
-							<div class="flex items-center gap-2 rounded-full bg-muted px-3 py-2 text-sm"><img src={versionedAsset(branding.favicon_url, branding.version)} alt="Favicon" class="size-4" />{branding.short_name}</div>
-						</div>
-						<div class="rounded-xl border p-4 text-sm text-muted-foreground">Manifest PWA otomatis memakai nama singkat, warna theme, dan ikon 192/512 dengan cache-busting version <code>{branding.version}</code>.</div>
-					</Card.Content>
-				</Card.Root>
+				<div class="space-y-4">
+					<Card.Root class="h-fit">
+						<Card.Header><Card.Title class="text-base">Pratinjau</Card.Title><Card.Description>Simulasi sidebar, browser tab, dan ikon PWA.</Card.Description></Card.Header>
+						<Card.Content class="space-y-4">
+							<div class="rounded-xl border p-4">
+								<div class="flex items-center gap-3"><img src={versionedAsset(branding.mark_url, branding.version)} alt="Mark" class="size-10 rounded-lg bg-white object-contain p-1" /><div><p class="font-semibold">{branding.short_name}</p><p class="text-xs text-muted-foreground">{branding.tagline}</p></div></div>
+							</div>
+							<div class="rounded-xl border p-4">
+								<p class="mb-2 text-xs font-medium text-muted-foreground">Tab Browser</p>
+								<div class="flex items-center gap-2 rounded-full bg-muted px-3 py-2 text-sm"><img src={versionedAsset(branding.favicon_url, branding.version)} alt="Favicon" class="size-4" />{branding.short_name}</div>
+							</div>
+							<div class="rounded-xl border p-4 text-sm text-muted-foreground">Manifest PWA otomatis memakai nama singkat, warna theme, dan ikon 192/512 dengan cache-busting version <code>{branding.version}</code>.</div>
+						</Card.Content>
+					</Card.Root>
+
+					<Card.Root class="h-fit border-border/80 bg-muted/20">
+						<Card.Header>
+							<Card.Title class="text-base">Tentang Aplikasi</Card.Title>
+							<Card.Description>Atribusi internal yang tampil halus tanpa mengubah identitas resmi madrasah.</Card.Description>
+						</Card.Header>
+						<Card.Content class="space-y-3 text-sm">
+							<div class="rounded-xl border bg-background/70 p-4">
+								<p class="font-semibold text-foreground">{appAttribution.productName}</p>
+								<p class="mt-1 text-xs leading-5 text-muted-foreground">{appAttribution.description}</p>
+							</div>
+							<div class="flex items-center justify-between gap-3 rounded-xl border bg-background/70 px-4 py-3">
+								<span class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Pengembang</span>
+								<span class="text-sm font-semibold text-foreground">{appAttribution.developerName}</span>
+							</div>
+							<p class="text-xs leading-5 text-muted-foreground">{appAttribution.formalDeveloperLabel}. Teks atribusi hanya ditampilkan pada area UI non-dokumen resmi.</p>
+						</Card.Content>
+					</Card.Root>
+				</div>
 			</div>
 		{/snippet}
 	</AsyncContent>

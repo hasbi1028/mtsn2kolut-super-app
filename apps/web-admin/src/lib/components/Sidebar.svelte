@@ -15,7 +15,7 @@
 	import { flattenSidebarNavGroups, sidebarBreadcrumbLabel } from '$lib/components/sidebar/sidebar-tree';
 	import { readClientJson } from '$lib/client/api';
 	import type { AccountIdentity } from '$lib/client/account';
-	import { defaultBranding, versionedAsset, type BrandingSettings } from '$lib/branding';
+	import { appAttribution, defaultBranding, versionedAsset, type BrandingSettings } from '$lib/branding';
 	import {
 		dashboardNavItem,
 		defaultPinnedByRole,
@@ -591,6 +591,12 @@
 				class="w-full"
 				buttonClass={desktopExpanded ? 'w-full justify-start' : 'w-full justify-center'}
 			/>
+		{/if}
+		{#if desktopExpanded}
+			<div class="rounded-xl border border-border/70 bg-muted/30 px-3 py-2 text-[10px] leading-4 text-muted-foreground/80" aria-label={`Atribusi aplikasi ${appAttribution.productName} ${appAttribution.shortLabel}`}>
+				<p class="truncate font-medium text-muted-foreground">{appAttribution.productName}</p>
+				<p class="truncate">{appAttribution.shortLabel}</p>
+			</div>
 		{/if}
 	</div>
 </aside>

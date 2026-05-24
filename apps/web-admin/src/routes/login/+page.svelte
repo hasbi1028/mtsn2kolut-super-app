@@ -4,6 +4,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import { appAttribution } from '$lib/branding';
 	import { navigating } from '$app/state';
 
 	let { form }: { form: ActionData } = $props();
@@ -124,6 +125,9 @@
 					<div class="mt-5 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm leading-6 text-warning">
 						Jangan gunakan perangkat bersama tanpa logout. Aktivitas penting seperti login, refresh, logout, dan revoke sesi dicatat untuk audit keamanan.
 					</div>
+					<p class="mt-4 text-center text-xs leading-5 text-muted-foreground" aria-label={`Atribusi aplikasi ${appAttribution.loginLabel}`}>
+						{appAttribution.loginLabel}
+					</p>
 				</div>
 			</section>
 		</div>

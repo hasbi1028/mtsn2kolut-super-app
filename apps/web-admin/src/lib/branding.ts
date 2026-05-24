@@ -30,6 +30,15 @@ export const defaultBranding: BrandingSettings = {
 	version: 'default'
 };
 
+export const appAttribution = {
+	productName: 'MTsN 2 Kolut Super App',
+	shortLabel: 'by HasbiGML',
+	loginLabel: 'Super App MTsN 2 Kolaka Utara · Powered by HasbiGML',
+	developerName: 'HasbiGML',
+	formalDeveloperLabel: 'Dikembangkan oleh HasbiGML',
+	description: 'Platform digital terpadu untuk mendukung layanan MTsN 2 Kolaka Utara.'
+} as const;
+
 export function normalizeBranding(value: Partial<BrandingSettings> | null | undefined): BrandingSettings {
 	return { ...defaultBranding, ...(value ?? {}) };
 }
