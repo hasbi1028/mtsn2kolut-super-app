@@ -185,7 +185,6 @@ func (f *fakeCbtEventStore) DeleteCbtExamEvent(ctx context.Context, id pgtype.UU
 	return 1, nil
 }
 
-
 func (f *fakeCbtEventStore) GetCbtEventSopState(ctx context.Context, id pgtype.UUID) (db.GetCbtEventSopStateRow, error) {
 	return db.GetCbtEventSopStateRow{SopState: "draft"}, nil
 }
@@ -400,20 +399,23 @@ func TestCbtEventListPropagatesErrors(t *testing.T) {
 }
 
 type fakeCbtPackageStore struct {
-	packagesRows  []db.ListCbtPackagesRow
-	packagesErr   error
-	questionsRows []db.ListCbtPackageQuestionsRow
-	questionsErr  error
-	usageCount    int32
-	usageErr      error
-	deleteID      pgtype.UUID
-	createArg     db.CreateCbtPackageParams
-	createErr     error
-	packageRow    db.CbtPackage
-	questionRow   db.GetCbtQuestionRow
-	questionErr   error
-	addArgs       []db.AddCbtPackageQuestionParams
-	addErr        error
+	packagesRows   []db.ListCbtPackagesRow
+	packagesErr    error
+	questionsRows  []db.ListCbtPackageQuestionsRow
+	questionsErr   error
+	usageCount     int32
+	usageErr       error
+	deleteID       pgtype.UUID
+	archiveID      pgtype.UUID
+	archiveActorID pgtype.UUID
+	archiveReason  string
+	createArg      db.CreateCbtPackageParams
+	createErr      error
+	packageRow     db.CbtPackage
+	questionRow    db.GetCbtQuestionRow
+	questionErr    error
+	addArgs        []db.AddCbtPackageQuestionParams
+	addErr         error
 }
 
 func (f *fakeCbtPackageStore) ListCbtPackages(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtPackagesRow, error) {
@@ -430,6 +432,13 @@ func (f *fakeCbtPackageStore) GetCbtPackageUsage(ctx context.Context, id pgtype.
 
 func (f *fakeCbtPackageStore) DeleteCbtPackage(ctx context.Context, id pgtype.UUID) (int64, error) {
 	f.deleteID = id
+	return 1, nil
+}
+
+func (f *fakeCbtPackageStore) ArchiveCbtPackage(ctx context.Context, arg db.ArchiveCbtPackageParams) (int64, error) {
+	f.archiveID = arg.ID
+	f.archiveActorID = arg.ArchivedBy
+	f.archiveReason = arg.ArchiveReason
 	return 1, nil
 }
 

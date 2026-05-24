@@ -54,6 +54,11 @@ type fakeCbtPackageService struct {
 
 	deleteID  pgtype.UUID
 	deleteErr error
+
+	archiveID     pgtype.UUID
+	archiveUserID pgtype.UUID
+	archiveReason string
+	archiveErr    error
 }
 
 func (f *fakeCbtPackageService) List(_ context.Context, eventID pgtype.UUID) ([]db.ListCbtPackagesRow, []db.ListCbtPackageQuestionsRow, error) {
@@ -101,6 +106,13 @@ func (f *fakeCbtPackageService) LockAndSnapshot(_ context.Context, packageID, lo
 func (f *fakeCbtPackageService) Delete(_ context.Context, id pgtype.UUID) error {
 	f.deleteID = id
 	return f.deleteErr
+}
+
+func (f *fakeCbtPackageService) Archive(_ context.Context, id, archivedBy pgtype.UUID, reason string) error {
+	f.archiveID = id
+	f.archiveUserID = archivedBy
+	f.archiveReason = reason
+	return f.archiveErr
 }
 
 func cbtPackageAuthedRequest(method, target, body string) *http.Request {

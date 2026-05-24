@@ -111,6 +111,10 @@
 	let showForm = $state(false);
 	let readinessFilter = $state<SessionReadinessFilter>('all');
 	let scheduleFilter = $state<SessionScheduleFilter>('all');
+	let sessionSearch = $state('');
+	let sessionStatusFilter = $state('all');
+	let sessionScopeFilter = $state('all');
+	let sessionPackageFilter = $state('all');
 
 	let fPackageId = $state('');
 	let fScopeType = $state('class');
@@ -452,6 +456,33 @@
 		if (filter === 'upcoming') return sessionScheduleState(session) === 'upcoming';
 		if (filter === 'overdue') return sessionScheduleState(session) === 'overdue';
 		return true;
+	}
+
+	function sessionMatchesStructuredFilters(session: ExamSession) {
+		const haystack = `${session.title} ${session.package_title} ${session.class_name} ${session.class_code} ${scopeSummary(session)}`.toLowerCase();
+		const term = sessionSearch.trim().toLowerCase();
+		if (term && !haystack.includes(term)) return false;
+		if (sessionStatusFilter !== 'all' && session.status !== sessionStatusFilter) return false;
+		if (sessionScopeFilter !== 'all' && session.scope_type !== sessionScopeFilter) return false;
+		if (sessionPackageFilter !== 'all' && session.package_id !== sessionPackageFilter) return false;
+		return true;
+	}
+
+	function resetSessionFilters() {
+		sessionSearch = '';
+		sessionStatusFilter = 'all';
+		sessionScopeFilter = 'all';
+		sessionPackageFilter = 'all';
+		setSessionReadinessFilter('all');
+		setSessionScheduleFilter('all');
+	}
+
+	function scopeFilterLabel(value: string) {
+		if (value === 'class') return 'Per kelas';
+		if (value === 'grade') return 'Per tingkat';
+		if (value === 'school') return 'Seluruh sekolah';
+		if (value === 'custom') return 'Khusus';
+		return value || 'Lainnya';
 	}
 
 	function scheduleStateLabel(state: SessionScheduleState) {
@@ -1259,10 +1290,12 @@
 			{@const overview = value as SessionsOverview}
 			{@const eventSessions = strictEventSessions(overview.sessions)}
 			{@const currentSessions = eventSessions}
+			{@const currentPackages = strictEventPackages(overview.packages)}
 			{@const hiddenSessions = hiddenSessionCount(overview.sessions)}
-			{@const scheduleScopedSessions = currentSessions.filter((session) => sessionMatchesScheduleFilter(session, scheduleFilter))}
-			{@const readinessScopedSessions = currentSessions.filter((session) => sessionMatchesReadinessFilter(session, readinessFilter))}
-			{@const visibleSessions = currentSessions.filter((session) => sessionMatchesReadinessFilter(session, readinessFilter) && sessionMatchesScheduleFilter(session, scheduleFilter))}
+			{@const baseFilteredSessions = currentSessions.filter(sessionMatchesStructuredFilters)}
+			{@const scheduleScopedSessions = baseFilteredSessions.filter((session) => sessionMatchesScheduleFilter(session, scheduleFilter))}
+			{@const readinessScopedSessions = baseFilteredSessions.filter((session) => sessionMatchesReadinessFilter(session, readinessFilter))}
+			{@const visibleSessions = baseFilteredSessions.filter((session) => sessionMatchesReadinessFilter(session, readinessFilter) && sessionMatchesScheduleFilter(session, scheduleFilter))}
 			{@const readinessFilterOptions = buildReadinessFilterOptions(scheduleScopedSessions)}
 			{@const readinessBoardCards = buildReadinessBoardCards(scheduleScopedSessions)}
 			{@const scheduleBoardCards = buildScheduleBoardCards(readinessScopedSessions)}
@@ -1346,6 +1379,34 @@
 							<span class="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{option.count}</span>
 						</button>
 					{/each}
+				</div>
+				<div class="rounded-2xl border border-border bg-muted/30 p-3">
+					<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.3fr_0.85fr_0.85fr_1.1fr_auto]">
+						<Input placeholder="Cari sesi atau paket..." bind:value={sessionSearch} />
+						<label class="sr-only" for="session-status-filter">Status sesi</label>
+						<select id="session-status-filter" class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={sessionStatusFilter}>
+							<option value="all">Status sesi</option>
+							{#each Object.entries(statusLabel) as [status, label] (status)}
+								<option value={status}>{label}</option>
+							{/each}
+						</select>
+						<label class="sr-only" for="session-scope-filter">Cakupan</label>
+						<select id="session-scope-filter" class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={sessionScopeFilter}>
+							<option value="all">Cakupan</option>
+							{#each Array.from(new Set(currentSessions.map((session) => session.scope_type || 'class'))) as scope (scope)}
+								<option value={scope}>{scopeFilterLabel(scope)}</option>
+							{/each}
+						</select>
+						<label class="sr-only" for="session-package-filter">Paket soal</label>
+						<select id="session-package-filter" class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={sessionPackageFilter}>
+							<option value="all">Paket soal</option>
+							{#each currentPackages as pkg (pkg.id)}
+								<option value={pkg.id}>{pkg.subject_code} — {pkg.title}</option>
+							{/each}
+						</select>
+						<Button variant="outline" size="sm" onclick={resetSessionFilters}>Reset Filter</Button>
+					</div>
+					<p class="mt-2 text-xs text-muted-foreground">Filter ini bekerja seperti Paket Soal: cari cepat, status, cakupan, paket soal, kesiapan, dan jadwal dapat dikombinasikan.</p>
 				</div>
 			</Card.Header>
 			<Card.Content class="p-0">

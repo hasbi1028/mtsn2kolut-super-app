@@ -48,6 +48,7 @@ type cbtPackageService interface {
 	ReplaceQuestions(ctx context.Context, input service.ReplaceCbtPackageQuestionsInput) (service.CbtPackageDetailResult, error)
 	Clone(ctx context.Context, input service.CloneCbtPackageInput) (service.CbtPackageDetailResult, error)
 	LockAndSnapshot(ctx context.Context, packageID, lockedBy pgtype.UUID, reason string) (service.CbtPackageSnapshotResult, error)
+	Archive(ctx context.Context, id, archivedBy pgtype.UUID, reason string) error
 	Delete(ctx context.Context, id pgtype.UUID) error
 }
 
@@ -370,6 +371,43 @@ func (h *CbtPackage) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	h.auditPackageEvent(r.Context(), "CBT_PACKAGE_DELETE", "cbt_package", pgUUIDString(id), nil)
 	api.NoContent(w)
+}
+
+func (h *CbtPackage) Archive(w http.ResponseWriter, r *http.Request) {
+	if !packageWriteAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID paket tidak valid")
+		return
+	}
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return
+	}
+	userID, err := authUserID(claims)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		api.BadRequest(w, "Data yang dikirim tidak valid")
+		return
+	}
+	if err := h.svc.Archive(r.Context(), id, userID, body.Reason); err != nil {
+		writeDomainOrInternal(w, err, "Arsipkan paket CBT tidak valid")
+		return
+	}
+	h.auditPackageEvent(r.Context(), "CBT_PACKAGE_ARCHIVE", "cbt_package", pgUUIDString(id), map[string]any{
+		"reason": body.Reason,
+	})
+	api.OK(w, map[string]any{"archived": true})
 }
 
 func packageWriteAllowed(r *http.Request) bool {

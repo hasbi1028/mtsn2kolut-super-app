@@ -24,6 +24,7 @@ type cbtPackageStore interface {
 	ListCbtPackageQuestions(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtPackageQuestionsRow, error)
 	GetCbtPackageUsage(ctx context.Context, id pgtype.UUID) (int32, error)
 	DeleteCbtPackage(ctx context.Context, id pgtype.UUID) (int64, error)
+	ArchiveCbtPackage(ctx context.Context, arg db.ArchiveCbtPackageParams) (int64, error)
 	WithTx(tx pgx.Tx) *db.Queries
 }
 
@@ -724,9 +725,27 @@ func (s *CbtPackage) Delete(ctx context.Context, id pgtype.UUID) error {
 		return err
 	}
 	if sessionCount > 0 {
-		return fmt.Errorf("%w: paket CBT sudah digunakan oleh sesi ujian dan tidak dapat dihapus", domain.ErrConflict)
+		return fmt.Errorf("%w: Paket tidak dapat dihapus permanen karena sudah dipakai %d sesi ujian. Gunakan Arsipkan agar riwayat sesi tetap aman.", domain.ErrConflict, sessionCount)
 	}
 	rows, err := s.q.DeleteCbtPackage(ctx, id)
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("%w: paket CBT tidak ditemukan atau sudah terkunci", domain.ErrConflict)
+	}
+	return nil
+}
+
+func (s *CbtPackage) Archive(ctx context.Context, id, archivedBy pgtype.UUID, reason string) error {
+	if strings.TrimSpace(reason) == "" {
+		reason = "Paket diarsipkan dari daftar paket asesmen"
+	}
+	rows, err := s.q.ArchiveCbtPackage(ctx, db.ArchiveCbtPackageParams{
+		ID:            id,
+		ArchivedBy:    archivedBy,
+		ArchiveReason: strings.TrimSpace(reason),
+	})
 	if err != nil {
 		return err
 	}

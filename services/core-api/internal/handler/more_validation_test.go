@@ -112,6 +112,10 @@ func (f *fakeCbtPackageHandlerService) Delete(ctx context.Context, id pgtype.UUI
 	return f.deleteErr
 }
 
+func (f *fakeCbtPackageHandlerService) Archive(ctx context.Context, id, archivedBy pgtype.UUID, reason string) error {
+	return nil
+}
+
 func TestCbtPackageHandlersForwardValidRequests(t *testing.T) {
 	packageID := handlerTestUUID(131)
 	eventID := handlerTestUUID(130)

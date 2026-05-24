@@ -47,6 +47,34 @@ func (q *Queries) AddCbtPackageQuestion(ctx context.Context, arg AddCbtPackageQu
 	return result.RowsAffected(), nil
 }
 
+const archiveCbtPackage = `-- name: ArchiveCbtPackage :execrows
+UPDATE cbt_packages
+SET is_active = FALSE,
+    composition_log = COALESCE(composition_log, '{}'::jsonb) || jsonb_build_object(
+      'archived', true,
+      'archived_at', NOW(),
+      'archived_by', $1::uuid,
+      'archive_reason', $2::text
+    ),
+    updated_at = NOW()
+WHERE id = $3::uuid
+  AND locked_at IS NULL
+`
+
+type ArchiveCbtPackageParams struct {
+	ArchivedBy    pgtype.UUID `json:"archived_by"`
+	ArchiveReason string      `json:"archive_reason"`
+	ID            pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) ArchiveCbtPackage(ctx context.Context, arg ArchiveCbtPackageParams) (int64, error) {
+	result, err := q.db.Exec(ctx, archiveCbtPackage, arg.ArchivedBy, arg.ArchiveReason, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const cloneCbtPackage = `-- name: CloneCbtPackage :one
 INSERT INTO cbt_packages (
   id, event_id, subject_id, title, description, duration_minutes,
@@ -917,6 +945,9 @@ SELECT p.id, p.event_id, p.subject_id, s.name AS subject_name, s.code AS subject
        COALESCE(p.draw_essay_count, 0)::int AS draw_essay_count,
        COALESCE(p.random_seed, '')::text AS random_seed,
        COALESCE(p.composition_log, '{}'::jsonb) AS composition_log,
+       COALESCE(p.composition_log->>'archived', 'false') = 'true' AS archived,
+       p.composition_log->>'archived_at' AS archived_at,
+       p.composition_log->>'archive_reason' AS archive_reason,
        p.locked_at, p.locked_by, p.lock_reason, p.snapshot_version,
        p.is_active,
        p.created_at, p.updated_at,
@@ -927,6 +958,7 @@ JOIN subjects s ON s.id = p.subject_id
 LEFT JOIN cbt_package_questions pq ON pq.package_id = p.id
 LEFT JOIN cbt_exam_sessions ses ON ses.package_id = p.id
 WHERE ($1::uuid IS NULL OR p.event_id = $1::uuid)
+  AND COALESCE(p.composition_log->>'archived', 'false') <> 'true'
 GROUP BY p.id, s.name, s.code
 ORDER BY p.created_at DESC
 `
@@ -947,6 +979,9 @@ type ListCbtPackagesRow struct {
 	DrawEssayCount     int32              `json:"draw_essay_count"`
 	RandomSeed         string             `json:"random_seed"`
 	CompositionLog     []byte             `json:"composition_log"`
+	Archived           bool               `json:"archived"`
+	ArchivedAt         interface{}        `json:"archived_at"`
+	ArchiveReason      interface{}        `json:"archive_reason"`
 	LockedAt           pgtype.Timestamptz `json:"locked_at"`
 	LockedBy           pgtype.UUID        `json:"locked_by"`
 	LockReason         string             `json:"lock_reason"`
@@ -983,6 +1018,9 @@ func (q *Queries) ListCbtPackages(ctx context.Context, eventID pgtype.UUID) ([]L
 			&i.DrawEssayCount,
 			&i.RandomSeed,
 			&i.CompositionLog,
+			&i.Archived,
+			&i.ArchivedAt,
+			&i.ArchiveReason,
 			&i.LockedAt,
 			&i.LockedBy,
 			&i.LockReason,

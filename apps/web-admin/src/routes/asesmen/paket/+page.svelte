@@ -45,6 +45,9 @@
     locked_at?: string | null;
     snapshot_version?: number;
     session_count?: number;
+    archived?: boolean;
+    archived_at?: string | null;
+    archive_reason?: string | null;
     draw_pg_count?: number;
     draw_essay_count?: number;
     event_id?: string | null;
@@ -1147,15 +1150,90 @@
     } catch (error) {
       setOperationState(
         "error",
-        "Paket Gagal Dihapus",
-        "Periksa kembali apakah paket masih dipakai oleh sesi aktif atau coba ulang beberapa saat lagi.",
+        "Paket tidak dapat dihapus",
+        "Paket yang sudah dipakai sesi tidak boleh dihapus permanen. Gunakan Arsipkan agar riwayat sesi, token, dan hasil ujian tetap aman.",
       );
       showError(
         mutationErrorMessage(
           error,
-          "Gagal menghapus paket. Periksa koneksi lalu coba lagi.",
+          "Tidak bisa dihapus. Jika paket sudah dipakai sesi, gunakan Arsipkan.",
         ),
       );
+    } finally {
+      deleteBusyId = "";
+    }
+  }
+
+
+
+  async function createRevisionPackage(id: string, title: string) {
+    if (
+      !(await confirmPhrase(
+        "Buat Revisi Paket",
+        `Paket "${title}" sudah terkunci. Sistem akan membuat salinan revisi agar riwayat paket lama tetap aman.`,
+        "REVISI",
+      ))
+    )
+      return;
+    bulkBusy = true;
+    try {
+      const res = await fetch(clientApiPath`/api/asesmen/packages/${id}/clone`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: `${title} - Revisi` }),
+      });
+      const detail = await readClientJson<{ package?: { id?: string; title?: string } }>(res);
+      setOperationState(
+        "success",
+        "Revisi Paket Dibuat",
+        `Salinan revisi paket "${detail.package?.title ?? `${title} - Revisi`}" siap dibuka dan disusun ulang.`,
+      );
+      showToast("Revisi paket dibuat");
+      await refreshPackages();
+      if (detail.package?.id) {
+        window.location.href = resolve(`/asesmen/paket/${detail.package.id}`);
+      }
+    } catch (error) {
+      setOperationState("error", "Revisi gagal dibuat", "Periksa koneksi atau coba ulang beberapa saat lagi.");
+      showError(mutationErrorMessage(error, "Gagal membuat revisi paket."));
+    } finally {
+      bulkBusy = false;
+    }
+  }
+
+  async function archivePackage(id: string, title: string, sessionCount = 0) {
+    if (
+      !(await confirmPhrase(
+        "Arsipkan Paket Ujian",
+        `Paket "${title}" sudah dipakai ${sessionCount} sesi. Paket akan disembunyikan dari daftar aktif, tetapi riwayat sesi dan hasil ujian tetap aman.`,
+        "ARSIPKAN",
+      ))
+    )
+      return;
+    deleteBusyId = id;
+    try {
+      const res = await fetch(clientApiPath`/api/asesmen/packages/${id}/archive`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reason: sessionCount > 0 ? `Dipakai ${sessionCount} sesi ujian` : "Diarsipkan operator",
+        }),
+      });
+      await readClientJson<unknown>(res);
+      setOperationState(
+        "success",
+        "Paket Diarsipkan",
+        `Paket "${title}" disembunyikan dari daftar aktif tanpa menghapus riwayat sesi.`,
+      );
+      showToast("Paket diarsipkan");
+      await refreshPackages();
+    } catch (error) {
+      setOperationState(
+        "error",
+        "Paket gagal diarsipkan",
+        "Periksa apakah paket terkunci atau coba ulang beberapa saat lagi.",
+      );
+      showError(mutationErrorMessage(error, "Gagal mengarsipkan paket."));
     } finally {
       deleteBusyId = "";
     }
@@ -1877,7 +1955,7 @@
                 </div>
               {:else}
                 <p class="rounded-xl border bg-background p-3 text-muted-foreground">
-                  Rincian soal paket belum tersedia pada daftar ini. Buka Kelola untuk menyusun isi paket.
+                  Rincian soal paket belum tersedia pada daftar ini. Buka halaman paket untuk menyusun isi paket.
                 </p>
               {/if}
             </section>
@@ -1916,7 +1994,7 @@
                   </ol>
                   {#if quality.questions.length > 12}
                     <p class="border-t border-border p-3 text-xs text-muted-foreground">
-                      +{quality.questions.length - 12} soal lainnya. Buka Kelola untuk melihat semua isi paket.
+                      +{quality.questions.length - 12} soal lainnya. Buka halaman paket untuk melihat semua isi paket.
                     </p>
                   {/if}
                 </div>
@@ -2269,19 +2347,30 @@
                           class="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted"
                           aria-expanded={isPackageExpanded(p.id)}
                           aria-controls={`package-detail-${p.id}`}
-                          aria-label={`${isPackageExpanded(p.id) ? "Tutup detail" : "Lihat detail"} paket ${p.title}`}
+                          aria-label={`${isPackageExpanded(p.id) ? "Tutup pratinjau" : "Pratinjau"} paket ${p.title}`}
                           onclick={() => togglePackageDetail(p.id)}
                         >
-                          {isPackageExpanded(p.id) ? "Tutup" : "Detail"}
+                          {isPackageExpanded(p.id) ? "Tutup" : "Pratinjau"}
                         </button>
                         <a
                           href={`${resolve("/asesmen/paket")}/${p.id}`}
                           class="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted"
-                          title="Kelola identitas, isi soal, blueprint, dan kunci paket dalam satu halaman"
+                          title="Buka halaman paket: identitas, isi soal, blueprint, dan kunci paket"
                         >
-                          Kelola
+                          Buka
                         </a>
-                        {#if readiness === "ready"}<LoadingButton
+                        {#if p.locked_at}
+                          <LoadingButton
+                            size="xs"
+                            variant="outline"
+                            onclick={() => createRevisionPackage(p.id, p.title)}
+                            loading={bulkBusy}
+                            loadingLabel="Membuat..."
+                            title="Paket terkunci; buat salinan revisi agar riwayat lama tetap aman"
+                          >
+                            Buat Revisi
+                          </LoadingButton>
+                        {:else if readiness === "ready"}<LoadingButton
                             size="xs"
                             variant="outline"
                             onclick={() => {
@@ -2291,17 +2380,31 @@
                             }}
                             loading={bulkBusy}>Lock</LoadingButton
                           >{/if}
-                        <LoadingButton
-                          variant="destructive"
-                          size="xs"
-                          onclick={() => deletePackage(p.id, p.title)}
-                          loading={deleteBusyId === p.id}
-                          disabled={deleteBusyId !== "" &&
-                            deleteBusyId !== p.id}
-                          loadingLabel="Menghapus..."
-                        >
-                          Hapus
-                        </LoadingButton>
+                        {#if Number(p.session_count ?? 0) > 0}
+                          <LoadingButton
+                            variant="outline"
+                            size="xs"
+                            onclick={() => archivePackage(p.id, p.title, Number(p.session_count ?? 0))}
+                            loading={deleteBusyId === p.id}
+                            disabled={deleteBusyId !== "" && deleteBusyId !== p.id}
+                            loadingLabel="Mengarsipkan..."
+                            title={`Paket sudah dipakai ${p.session_count} sesi, tidak dapat dihapus permanen. Gunakan Arsipkan.`}
+                          >
+                            Arsipkan
+                          </LoadingButton>
+                        {:else}
+                          <LoadingButton
+                            variant="destructive"
+                            size="xs"
+                            onclick={() => deletePackage(p.id, p.title)}
+                            loading={deleteBusyId === p.id}
+                            disabled={deleteBusyId !== "" && deleteBusyId !== p.id}
+                            loadingLabel="Menghapus..."
+                            title="Hapus permanen paket yang belum dipakai sesi"
+                          >
+                            Hapus
+                          </LoadingButton>
+                        {/if}
                       </div>
                     </Table.Cell>
                   </Table.Row>
@@ -2452,19 +2555,30 @@
                     class="inline-flex flex-1 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-semibold hover:bg-muted"
                     aria-expanded={isPackageExpanded(p.id)}
                     aria-controls={`package-mobile-detail-${p.id}`}
-                    aria-label={`${isPackageExpanded(p.id) ? "Tutup detail" : "Lihat detail"} paket ${p.title}`}
+                    aria-label={`${isPackageExpanded(p.id) ? "Tutup pratinjau" : "Pratinjau"} paket ${p.title}`}
                     onclick={() => togglePackageDetail(p.id)}
                   >
-                    {isPackageExpanded(p.id) ? "Tutup Detail" : "Detail"}
+                    {isPackageExpanded(p.id) ? "Tutup Pratinjau" : "Pratinjau"}
                   </button>
                   <a
                     href={`${resolve("/asesmen/paket")}/${p.id}`}
                     class="inline-flex flex-1 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-semibold hover:bg-muted"
-                    title="Kelola identitas, isi soal, blueprint, dan kunci paket dalam satu halaman"
+                    title="Buka halaman paket: identitas, isi soal, blueprint, dan kunci paket"
                   >
-                    Kelola
+                    Buka
                   </a>
-                  {#if readiness === "ready"}
+                  {#if p.locked_at}
+                    <LoadingButton
+                      size="sm"
+                      variant="outline"
+                      onclick={() => createRevisionPackage(p.id, p.title)}
+                      loading={bulkBusy}
+                      loadingLabel="Membuat..."
+                      title="Paket terkunci; buat salinan revisi agar riwayat lama tetap aman"
+                    >
+                      Buat Revisi
+                    </LoadingButton>
+                  {:else if readiness === "ready"}
                     <LoadingButton
                       size="sm"
                       variant="outline"
@@ -2478,17 +2592,33 @@
                       Lock
                     </LoadingButton>
                   {/if}
-                  <LoadingButton
-                    variant="destructive"
-                    size="sm"
-                    class="w-full"
-                    onclick={() => deletePackage(p.id, p.title)}
-                    loading={deleteBusyId === p.id}
-                    disabled={deleteBusyId !== "" && deleteBusyId !== p.id}
-                    loadingLabel="Menghapus..."
-                  >
-                    Hapus
-                  </LoadingButton>
+                  {#if Number(p.session_count ?? 0) > 0}
+                    <LoadingButton
+                      variant="outline"
+                      size="sm"
+                      class="w-full"
+                      onclick={() => archivePackage(p.id, p.title, Number(p.session_count ?? 0))}
+                      loading={deleteBusyId === p.id}
+                      disabled={deleteBusyId !== "" && deleteBusyId !== p.id}
+                      loadingLabel="Mengarsipkan..."
+                      title={`Paket sudah dipakai ${p.session_count} sesi, tidak dapat dihapus permanen. Gunakan Arsipkan.`}
+                    >
+                      Arsipkan
+                    </LoadingButton>
+                  {:else}
+                    <LoadingButton
+                      variant="destructive"
+                      size="sm"
+                      class="w-full"
+                      onclick={() => deletePackage(p.id, p.title)}
+                      loading={deleteBusyId === p.id}
+                      disabled={deleteBusyId !== "" && deleteBusyId !== p.id}
+                      loadingLabel="Menghapus..."
+                      title="Hapus permanen paket yang belum dipakai sesi"
+                    >
+                      Hapus
+                    </LoadingButton>
+                  {/if}
                 </div>
               </div>
             {:else}

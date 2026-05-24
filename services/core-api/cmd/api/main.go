@@ -516,6 +516,7 @@ func main() {
 		r.With(requireAsesmenPackageManage).Put("/api/cbt/packages/{id}/questions", packageH.ReplaceQuestions)
 		r.With(requireAsesmenPackageManage).Post("/api/cbt/packages/{id}/clone", packageH.Clone)
 		r.With(requireAsesmenPackageManage).Post("/api/cbt/packages/{id}/lock", packageH.Lock)
+		r.With(requireAsesmenPackageManage).Post("/api/cbt/packages/{id}/archive", packageH.Archive)
 		r.With(requireAsesmenPackageManage).Delete("/api/cbt/packages/{id}", packageH.Delete)
 
 		// CBT Events (kegiatan ujian) — admin manages, event members can read workflow readiness.
@@ -666,6 +667,7 @@ func main() {
 		r.With(requireAsesmenPackageManage).Put("/api/asesmen/packages/{id}/questions", packageH.ReplaceQuestions)
 		r.With(requireAsesmenPackageManage).Post("/api/asesmen/packages/{id}/clone", packageH.Clone)
 		r.With(requireAsesmenPackageManage).Post("/api/asesmen/packages/{id}/lock", packageH.Lock)
+		r.With(requireAsesmenPackageManage).Post("/api/asesmen/packages/{id}/archive", packageH.Archive)
 		r.With(requireAsesmenPackageManage).Delete("/api/asesmen/packages/{id}", packageH.Delete)
 		r.With(requireCbt).Get("/api/asesmen/readiness", eventH.Readiness)
 		r.With(requireCbt).Get("/api/asesmen/events", eventH.List)

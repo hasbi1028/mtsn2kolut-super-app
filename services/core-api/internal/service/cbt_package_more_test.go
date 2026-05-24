@@ -189,6 +189,10 @@ func (f *fakeCbtPackageDeleteStore) DeleteCbtPackage(_ context.Context, id pgtyp
 	return f.deleteRows, f.deleteErr
 }
 
+func (f *fakeCbtPackageDeleteStore) ArchiveCbtPackage(context.Context, db.ArchiveCbtPackageParams) (int64, error) {
+	return 1, nil
+}
+
 func (f *fakeCbtPackageDeleteStore) WithTx(pgx.Tx) *db.Queries { return nil }
 
 func TestCbtPackageDeleteErrorPaths(t *testing.T) {

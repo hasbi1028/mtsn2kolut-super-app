@@ -7,6 +7,9 @@ SELECT p.id, p.event_id, p.subject_id, s.name AS subject_name, s.code AS subject
        COALESCE(p.draw_essay_count, 0)::int AS draw_essay_count,
        COALESCE(p.random_seed, '')::text AS random_seed,
        COALESCE(p.composition_log, '{}'::jsonb) AS composition_log,
+       COALESCE(p.composition_log->>'archived', 'false') = 'true' AS archived,
+       p.composition_log->>'archived_at' AS archived_at,
+       p.composition_log->>'archive_reason' AS archive_reason,
        p.locked_at, p.locked_by, p.lock_reason, p.snapshot_version,
        p.is_active,
        p.created_at, p.updated_at,
@@ -17,6 +20,7 @@ JOIN subjects s ON s.id = p.subject_id
 LEFT JOIN cbt_package_questions pq ON pq.package_id = p.id
 LEFT JOIN cbt_exam_sessions ses ON ses.package_id = p.id
 WHERE (sqlc.arg(event_id)::uuid IS NULL OR p.event_id = sqlc.arg(event_id)::uuid)
+  AND COALESCE(p.composition_log->>'archived', 'false') <> 'true'
 GROUP BY p.id, s.name, s.code
 ORDER BY p.created_at DESC;
 
@@ -119,6 +123,19 @@ WHERE package_id = $1
     WHERE p.id = $1
       AND p.locked_at IS NULL
   );
+
+-- name: ArchiveCbtPackage :execrows
+UPDATE cbt_packages
+SET is_active = FALSE,
+    composition_log = COALESCE(composition_log, '{}'::jsonb) || jsonb_build_object(
+      'archived', true,
+      'archived_at', NOW(),
+      'archived_by', sqlc.arg(archived_by)::uuid,
+      'archive_reason', sqlc.arg(archive_reason)::text
+    ),
+    updated_at = NOW()
+WHERE id = sqlc.arg(id)::uuid
+  AND locked_at IS NULL;
 
 -- name: ListCbtPackageQuestions :many
 SELECT pq.package_id, pq.question_id, pq.position, pq.points,

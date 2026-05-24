@@ -41,6 +41,27 @@ func TestCbtPackageDeleteRejectsSessionUsage(t *testing.T) {
 	}
 }
 
+func TestCbtPackageArchiveAllowsSessionUsage(t *testing.T) {
+	packageID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
+	actorID := pgtype.UUID{Bytes: [16]byte{10}, Valid: true}
+	store := &fakeCbtPackageStore{usageCount: 3}
+	svc := &CbtPackage{q: store}
+
+	err := svc.Archive(context.Background(), packageID, actorID, "paket sudah dipakai sesi")
+	if err != nil {
+		t.Fatalf("Archive(used package) error = %v, want nil", err)
+	}
+	if store.archiveID != packageID {
+		t.Fatalf("Archive() package id = %v, want %v", store.archiveID, packageID)
+	}
+	if store.archiveActorID != actorID {
+		t.Fatalf("Archive() actor id = %v, want %v", store.archiveActorID, actorID)
+	}
+	if !strings.Contains(store.archiveReason, "dipakai") {
+		t.Fatalf("Archive() reason = %q, want operator reason", store.archiveReason)
+	}
+}
+
 func (f *fakeCbtPackageCreateStore) CreateCbtPackage(_ context.Context, arg db.CreateCbtPackageParams) (db.CbtPackage, error) {
 	f.createParams = arg
 	f.createCalls++
@@ -710,6 +731,10 @@ func (f *fakeCbtPackageSnapshotStore) DeleteCbtPackage(context.Context, pgtype.U
 	return 0, nil
 }
 
+func (f *fakeCbtPackageSnapshotStore) ArchiveCbtPackage(context.Context, db.ArchiveCbtPackageParams) (int64, error) {
+	return 0, nil
+}
+
 func (f *fakeCbtPackageSnapshotStore) WithTx(pgx.Tx) *db.Queries { return nil }
 
 func (f *fakeCbtPackageSnapshotStore) LockCbtPackageForSnapshot(_ context.Context, arg db.LockCbtPackageForSnapshotParams) (db.LockCbtPackageForSnapshotRow, error) {
@@ -764,6 +789,10 @@ func (f *fakeCbtPackageEditStore) GetCbtPackageUsage(context.Context, pgtype.UUI
 }
 
 func (f *fakeCbtPackageEditStore) DeleteCbtPackage(context.Context, pgtype.UUID) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeCbtPackageEditStore) ArchiveCbtPackage(context.Context, db.ArchiveCbtPackageParams) (int64, error) {
 	return 0, nil
 }
 
@@ -841,6 +870,10 @@ func (f *fakeCbtPackageReadinessStore) GetCbtPackageUsage(context.Context, pgtyp
 }
 
 func (f *fakeCbtPackageReadinessStore) DeleteCbtPackage(context.Context, pgtype.UUID) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeCbtPackageReadinessStore) ArchiveCbtPackage(context.Context, db.ArchiveCbtPackageParams) (int64, error) {
 	return 0, nil
 }
 
