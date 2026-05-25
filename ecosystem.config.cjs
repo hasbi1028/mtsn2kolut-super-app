@@ -21,11 +21,13 @@
 const backend = require('./deploy/pm2/backend.config.cjs');
 const web = require('./deploy/pm2/web.config.cjs');
 const worker = require('./deploy/pm2/worker.config.cjs');
+const cbtPortal = require('./deploy/pm2/cbt-portal.config.cjs');
 
 module.exports = {
   apps: [
     ...backend.apps,
     ...web.apps,
+    ...cbtPortal.apps,
     ...worker.apps
   ]
 };

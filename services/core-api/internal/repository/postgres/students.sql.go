@@ -77,6 +77,46 @@ func (q *Queries) DeleteStudent(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const getCbtPortalStudentByNisn = `-- name: GetCbtPortalStudentByNisn :one
+SELECT s.id, s.nis, s.nisn, s.nama, s.class_id,
+       COALESCE(c.name, '') AS class_name,
+       COALESCE(c.code, '') AS class_code,
+       s.is_active, s.status
+FROM students s
+LEFT JOIN school_classes c ON c.id = s.class_id
+WHERE btrim(s.nisn) = btrim($1)
+  AND s.is_active = TRUE
+`
+
+type GetCbtPortalStudentByNisnRow struct {
+	ID        pgtype.UUID       `json:"id"`
+	Nis       string            `json:"nis"`
+	Nisn      string            `json:"nisn"`
+	Nama      string            `json:"nama"`
+	ClassID   pgtype.UUID       `json:"class_id"`
+	ClassName string            `json:"class_name"`
+	ClassCode string            `json:"class_code"`
+	IsActive  bool              `json:"is_active"`
+	Status    StudentStatusEnum `json:"status"`
+}
+
+func (q *Queries) GetCbtPortalStudentByNisn(ctx context.Context, btrim string) (GetCbtPortalStudentByNisnRow, error) {
+	row := q.db.QueryRow(ctx, getCbtPortalStudentByNisn, btrim)
+	var i GetCbtPortalStudentByNisnRow
+	err := row.Scan(
+		&i.ID,
+		&i.Nis,
+		&i.Nisn,
+		&i.Nama,
+		&i.ClassID,
+		&i.ClassName,
+		&i.ClassCode,
+		&i.IsActive,
+		&i.Status,
+	)
+	return i, err
+}
+
 const getPortalStudentIDByUserID = `-- name: GetPortalStudentIDByUserID :one
 SELECT u.student_id
 FROM users u

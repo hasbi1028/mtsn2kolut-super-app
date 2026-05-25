@@ -62,7 +62,7 @@ INSERT INTO cbt_exam_sessions (
   allow_cross_grade, is_special_event, title, scheduled_start, scheduled_end, status
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-RETURNING id, package_id, class_id, title, scheduled_start, scheduled_end, status, created_at, updated_at, event_id, scope_type, scope_ref, mix_policy, assignment_mode, allow_cross_grade, is_special_event
+RETURNING id, package_id, class_id, title, scheduled_start, scheduled_end, status, created_at, updated_at, event_id, scope_type, scope_ref, mix_policy, assignment_mode, allow_cross_grade, is_special_event, access_mode, student_portal_direct_login_enabled, require_room_token_for_web, nisn_direct_login_enabled
 `
 
 type CreateCbtExamSessionParams struct {
@@ -115,6 +115,10 @@ func (q *Queries) CreateCbtExamSession(ctx context.Context, arg CreateCbtExamSes
 		&i.AssignmentMode,
 		&i.AllowCrossGrade,
 		&i.IsSpecialEvent,
+		&i.AccessMode,
+		&i.StudentPortalDirectLoginEnabled,
+		&i.RequireRoomTokenForWeb,
+		&i.NisnDirectLoginEnabled,
 	)
 	return i, err
 }
@@ -444,6 +448,148 @@ func (q *Queries) GetCbtExamSession(ctx context.Context, id pgtype.UUID) (GetCbt
 	return i, err
 }
 
+const getCbtPortalExamParticipant = `-- name: GetCbtPortalExamParticipant :one
+SELECT
+  ep.id, ep.session_id, ep.student_id,
+  ep.token, ep.room_id, ep.seat_no, ep.device_fingerprint, ep.question_order, ep.option_order, ep.question_draw_log,
+  ep.client_type, ep.browser_fingerprint_hash, ep.client_user_agent_hash,
+  ep.joined_at, ep.submitted_at, ep.score,
+  ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
+  ep.violation_count, ep.risk_score, ep.risk_level, ep.locked_at, ep.locked_reason,
+  ep.last_heartbeat,
+  COALESCE(r.room_token, '') AS room_token,
+  s.nis, s.nama, s.gender,
+  cs.status AS session_status,
+  cs.title AS session_title,
+  cs.scheduled_start, cs.scheduled_end,
+  cs.package_id,
+  p.title AS package_title,
+  p.duration_minutes,
+  p.randomize_questions,
+  p.randomize_options,
+  p.draw_pg_count,
+  p.draw_essay_count,
+  COALESCE(r.allow_web_fallback, false)::boolean AS room_allow_web_fallback,
+  COALESCE(cs.access_mode, 'secure_exam')::text AS access_mode,
+  COALESCE(cs.student_portal_direct_login_enabled, false)::boolean AS student_portal_direct_login_enabled,
+  COALESCE(cs.require_room_token_for_web, true)::boolean AS require_room_token_for_web,
+  COALESCE(cs.nisn_direct_login_enabled, false)::boolean AS nisn_direct_login_enabled
+FROM cbt_exam_participants ep
+JOIN students s ON s.id = ep.student_id
+JOIN cbt_exam_sessions cs ON cs.id = ep.session_id
+JOIN cbt_packages p ON p.id = cs.package_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE ep.id = $1
+  AND ep.student_id = $2
+  AND ep.token_revoked_at IS NULL
+`
+
+type GetCbtPortalExamParticipantParams struct {
+	ParticipantID pgtype.UUID `json:"participant_id"`
+	StudentID     pgtype.UUID `json:"student_id"`
+}
+
+type GetCbtPortalExamParticipantRow struct {
+	ID                              pgtype.UUID          `json:"id"`
+	SessionID                       pgtype.UUID          `json:"session_id"`
+	StudentID                       pgtype.UUID          `json:"student_id"`
+	Token                           string               `json:"token"`
+	RoomID                          pgtype.UUID          `json:"room_id"`
+	SeatNo                          pgtype.Int4          `json:"seat_no"`
+	DeviceFingerprint               pgtype.Text          `json:"device_fingerprint"`
+	QuestionOrder                   []byte               `json:"question_order"`
+	OptionOrder                     []byte               `json:"option_order"`
+	QuestionDrawLog                 []byte               `json:"question_draw_log"`
+	ClientType                      string               `json:"client_type"`
+	BrowserFingerprintHash          string               `json:"browser_fingerprint_hash"`
+	ClientUserAgentHash             string               `json:"client_user_agent_hash"`
+	JoinedAt                        pgtype.Timestamptz   `json:"joined_at"`
+	SubmittedAt                     pgtype.Timestamptz   `json:"submitted_at"`
+	Score                           pgtype.Numeric       `json:"score"`
+	AppSwitchCount                  int32                `json:"app_switch_count"`
+	ScreenshotAttempt               int32                `json:"screenshot_attempt"`
+	SuspiciousFlag                  bool                 `json:"suspicious_flag"`
+	ViolationCount                  int32                `json:"violation_count"`
+	RiskScore                       int32                `json:"risk_score"`
+	RiskLevel                       string               `json:"risk_level"`
+	LockedAt                        pgtype.Timestamptz   `json:"locked_at"`
+	LockedReason                    pgtype.Text          `json:"locked_reason"`
+	LastHeartbeat                   pgtype.Timestamptz   `json:"last_heartbeat"`
+	RoomToken                       string               `json:"room_token"`
+	Nis                             string               `json:"nis"`
+	Nama                            string               `json:"nama"`
+	Gender                          GenderEnum           `json:"gender"`
+	SessionStatus                   CbtSessionStatusEnum `json:"session_status"`
+	SessionTitle                    string               `json:"session_title"`
+	ScheduledStart                  pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd                    pgtype.Timestamptz   `json:"scheduled_end"`
+	PackageID                       pgtype.UUID          `json:"package_id"`
+	PackageTitle                    string               `json:"package_title"`
+	DurationMinutes                 int32                `json:"duration_minutes"`
+	RandomizeQuestions              bool                 `json:"randomize_questions"`
+	RandomizeOptions                bool                 `json:"randomize_options"`
+	DrawPgCount                     int32                `json:"draw_pg_count"`
+	DrawEssayCount                  int32                `json:"draw_essay_count"`
+	RoomAllowWebFallback            bool                 `json:"room_allow_web_fallback"`
+	AccessMode                      string               `json:"access_mode"`
+	StudentPortalDirectLoginEnabled bool                 `json:"student_portal_direct_login_enabled"`
+	RequireRoomTokenForWeb          bool                 `json:"require_room_token_for_web"`
+	NisnDirectLoginEnabled          bool                 `json:"nisn_direct_login_enabled"`
+}
+
+func (q *Queries) GetCbtPortalExamParticipant(ctx context.Context, arg GetCbtPortalExamParticipantParams) (GetCbtPortalExamParticipantRow, error) {
+	row := q.db.QueryRow(ctx, getCbtPortalExamParticipant, arg.ParticipantID, arg.StudentID)
+	var i GetCbtPortalExamParticipantRow
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.StudentID,
+		&i.Token,
+		&i.RoomID,
+		&i.SeatNo,
+		&i.DeviceFingerprint,
+		&i.QuestionOrder,
+		&i.OptionOrder,
+		&i.QuestionDrawLog,
+		&i.ClientType,
+		&i.BrowserFingerprintHash,
+		&i.ClientUserAgentHash,
+		&i.JoinedAt,
+		&i.SubmittedAt,
+		&i.Score,
+		&i.AppSwitchCount,
+		&i.ScreenshotAttempt,
+		&i.SuspiciousFlag,
+		&i.ViolationCount,
+		&i.RiskScore,
+		&i.RiskLevel,
+		&i.LockedAt,
+		&i.LockedReason,
+		&i.LastHeartbeat,
+		&i.RoomToken,
+		&i.Nis,
+		&i.Nama,
+		&i.Gender,
+		&i.SessionStatus,
+		&i.SessionTitle,
+		&i.ScheduledStart,
+		&i.ScheduledEnd,
+		&i.PackageID,
+		&i.PackageTitle,
+		&i.DurationMinutes,
+		&i.RandomizeQuestions,
+		&i.RandomizeOptions,
+		&i.DrawPgCount,
+		&i.DrawEssayCount,
+		&i.RoomAllowWebFallback,
+		&i.AccessMode,
+		&i.StudentPortalDirectLoginEnabled,
+		&i.RequireRoomTokenForWeb,
+		&i.NisnDirectLoginEnabled,
+	)
+	return i, err
+}
+
 const getCbtSessionGradeSyncPreflight = `-- name: GetCbtSessionGradeSyncPreflight :one
 SELECT
   ses.id AS session_id,
@@ -620,7 +766,11 @@ SELECT
   p.randomize_options,
   p.draw_pg_count,
   p.draw_essay_count,
-  COALESCE(r.allow_web_fallback, false)::boolean AS room_allow_web_fallback
+  COALESCE(r.allow_web_fallback, false)::boolean AS room_allow_web_fallback,
+  COALESCE(cs.access_mode, 'secure_exam')::text AS access_mode,
+  COALESCE(cs.student_portal_direct_login_enabled, false)::boolean AS student_portal_direct_login_enabled,
+  COALESCE(cs.require_room_token_for_web, true)::boolean AS require_room_token_for_web,
+  COALESCE(cs.nisn_direct_login_enabled, false)::boolean AS nisn_direct_login_enabled
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
 JOIN cbt_exam_sessions cs ON cs.id = ep.session_id
@@ -634,47 +784,51 @@ WHERE ep.token_revoked_at IS NULL
 `
 
 type GetParticipantByTokenRow struct {
-	ID                     pgtype.UUID          `json:"id"`
-	SessionID              pgtype.UUID          `json:"session_id"`
-	StudentID              pgtype.UUID          `json:"student_id"`
-	Token                  string               `json:"token"`
-	RoomID                 pgtype.UUID          `json:"room_id"`
-	SeatNo                 pgtype.Int4          `json:"seat_no"`
-	DeviceFingerprint      pgtype.Text          `json:"device_fingerprint"`
-	QuestionOrder          []byte               `json:"question_order"`
-	OptionOrder            []byte               `json:"option_order"`
-	QuestionDrawLog        []byte               `json:"question_draw_log"`
-	ClientType             string               `json:"client_type"`
-	BrowserFingerprintHash string               `json:"browser_fingerprint_hash"`
-	ClientUserAgentHash    string               `json:"client_user_agent_hash"`
-	JoinedAt               pgtype.Timestamptz   `json:"joined_at"`
-	SubmittedAt            pgtype.Timestamptz   `json:"submitted_at"`
-	Score                  pgtype.Numeric       `json:"score"`
-	AppSwitchCount         int32                `json:"app_switch_count"`
-	ScreenshotAttempt      int32                `json:"screenshot_attempt"`
-	SuspiciousFlag         bool                 `json:"suspicious_flag"`
-	ViolationCount         int32                `json:"violation_count"`
-	RiskScore              int32                `json:"risk_score"`
-	RiskLevel              string               `json:"risk_level"`
-	LockedAt               pgtype.Timestamptz   `json:"locked_at"`
-	LockedReason           pgtype.Text          `json:"locked_reason"`
-	LastHeartbeat          pgtype.Timestamptz   `json:"last_heartbeat"`
-	RoomToken              string               `json:"room_token"`
-	Nis                    string               `json:"nis"`
-	Nama                   string               `json:"nama"`
-	Gender                 GenderEnum           `json:"gender"`
-	SessionStatus          CbtSessionStatusEnum `json:"session_status"`
-	SessionTitle           string               `json:"session_title"`
-	ScheduledStart         pgtype.Timestamptz   `json:"scheduled_start"`
-	ScheduledEnd           pgtype.Timestamptz   `json:"scheduled_end"`
-	PackageID              pgtype.UUID          `json:"package_id"`
-	PackageTitle           string               `json:"package_title"`
-	DurationMinutes        int32                `json:"duration_minutes"`
-	RandomizeQuestions     bool                 `json:"randomize_questions"`
-	RandomizeOptions       bool                 `json:"randomize_options"`
-	DrawPgCount            int32                `json:"draw_pg_count"`
-	DrawEssayCount         int32                `json:"draw_essay_count"`
-	RoomAllowWebFallback   bool                 `json:"room_allow_web_fallback"`
+	ID                              pgtype.UUID          `json:"id"`
+	SessionID                       pgtype.UUID          `json:"session_id"`
+	StudentID                       pgtype.UUID          `json:"student_id"`
+	Token                           string               `json:"token"`
+	RoomID                          pgtype.UUID          `json:"room_id"`
+	SeatNo                          pgtype.Int4          `json:"seat_no"`
+	DeviceFingerprint               pgtype.Text          `json:"device_fingerprint"`
+	QuestionOrder                   []byte               `json:"question_order"`
+	OptionOrder                     []byte               `json:"option_order"`
+	QuestionDrawLog                 []byte               `json:"question_draw_log"`
+	ClientType                      string               `json:"client_type"`
+	BrowserFingerprintHash          string               `json:"browser_fingerprint_hash"`
+	ClientUserAgentHash             string               `json:"client_user_agent_hash"`
+	JoinedAt                        pgtype.Timestamptz   `json:"joined_at"`
+	SubmittedAt                     pgtype.Timestamptz   `json:"submitted_at"`
+	Score                           pgtype.Numeric       `json:"score"`
+	AppSwitchCount                  int32                `json:"app_switch_count"`
+	ScreenshotAttempt               int32                `json:"screenshot_attempt"`
+	SuspiciousFlag                  bool                 `json:"suspicious_flag"`
+	ViolationCount                  int32                `json:"violation_count"`
+	RiskScore                       int32                `json:"risk_score"`
+	RiskLevel                       string               `json:"risk_level"`
+	LockedAt                        pgtype.Timestamptz   `json:"locked_at"`
+	LockedReason                    pgtype.Text          `json:"locked_reason"`
+	LastHeartbeat                   pgtype.Timestamptz   `json:"last_heartbeat"`
+	RoomToken                       string               `json:"room_token"`
+	Nis                             string               `json:"nis"`
+	Nama                            string               `json:"nama"`
+	Gender                          GenderEnum           `json:"gender"`
+	SessionStatus                   CbtSessionStatusEnum `json:"session_status"`
+	SessionTitle                    string               `json:"session_title"`
+	ScheduledStart                  pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd                    pgtype.Timestamptz   `json:"scheduled_end"`
+	PackageID                       pgtype.UUID          `json:"package_id"`
+	PackageTitle                    string               `json:"package_title"`
+	DurationMinutes                 int32                `json:"duration_minutes"`
+	RandomizeQuestions              bool                 `json:"randomize_questions"`
+	RandomizeOptions                bool                 `json:"randomize_options"`
+	DrawPgCount                     int32                `json:"draw_pg_count"`
+	DrawEssayCount                  int32                `json:"draw_essay_count"`
+	RoomAllowWebFallback            bool                 `json:"room_allow_web_fallback"`
+	AccessMode                      string               `json:"access_mode"`
+	StudentPortalDirectLoginEnabled bool                 `json:"student_portal_direct_login_enabled"`
+	RequireRoomTokenForWeb          bool                 `json:"require_room_token_for_web"`
+	NisnDirectLoginEnabled          bool                 `json:"nisn_direct_login_enabled"`
 }
 
 func (q *Queries) GetParticipantByToken(ctx context.Context, digest string) (GetParticipantByTokenRow, error) {
@@ -722,6 +876,10 @@ func (q *Queries) GetParticipantByToken(ctx context.Context, digest string) (Get
 		&i.DrawPgCount,
 		&i.DrawEssayCount,
 		&i.RoomAllowWebFallback,
+		&i.AccessMode,
+		&i.StudentPortalDirectLoginEnabled,
+		&i.RequireRoomTokenForWeb,
+		&i.NisnDirectLoginEnabled,
 	)
 	return i, err
 }
@@ -1285,7 +1443,12 @@ SELECT
   p.title AS package_title,
   p.duration_minutes,
   COALESCE(r.room_name, '') AS room_name,
-  COALESCE(r.room_token, '') AS room_token
+  COALESCE(r.room_token, '') AS room_token,
+  COALESCE(s.access_mode, 'secure_exam')::text AS access_mode,
+  COALESCE(s.student_portal_direct_login_enabled, false)::boolean AS student_portal_direct_login_enabled,
+  COALESCE(s.require_room_token_for_web, true)::boolean AS require_room_token_for_web,
+  COALESCE(s.nisn_direct_login_enabled, false)::boolean AS nisn_direct_login_enabled,
+  COALESCE(r.allow_web_fallback, false)::boolean AS room_allow_web_fallback
 FROM cbt_exam_participants ep
 JOIN cbt_exam_sessions s ON s.id = ep.session_id
 JOIN cbt_packages p ON p.id = s.package_id
@@ -1300,22 +1463,27 @@ type GetStudentPortalCbtParticipantParams struct {
 }
 
 type GetStudentPortalCbtParticipantRow struct {
-	ParticipantID   pgtype.UUID          `json:"participant_id"`
-	SessionID       pgtype.UUID          `json:"session_id"`
-	StudentID       pgtype.UUID          `json:"student_id"`
-	Token           string               `json:"token"`
-	RoomID          pgtype.UUID          `json:"room_id"`
-	SeatNo          pgtype.Int4          `json:"seat_no"`
-	SubmittedAt     pgtype.Timestamptz   `json:"submitted_at"`
-	LockedAt        pgtype.Timestamptz   `json:"locked_at"`
-	SessionTitle    string               `json:"session_title"`
-	SessionStatus   CbtSessionStatusEnum `json:"session_status"`
-	ScheduledStart  pgtype.Timestamptz   `json:"scheduled_start"`
-	ScheduledEnd    pgtype.Timestamptz   `json:"scheduled_end"`
-	PackageTitle    string               `json:"package_title"`
-	DurationMinutes int32                `json:"duration_minutes"`
-	RoomName        string               `json:"room_name"`
-	RoomToken       string               `json:"room_token"`
+	ParticipantID                   pgtype.UUID          `json:"participant_id"`
+	SessionID                       pgtype.UUID          `json:"session_id"`
+	StudentID                       pgtype.UUID          `json:"student_id"`
+	Token                           string               `json:"token"`
+	RoomID                          pgtype.UUID          `json:"room_id"`
+	SeatNo                          pgtype.Int4          `json:"seat_no"`
+	SubmittedAt                     pgtype.Timestamptz   `json:"submitted_at"`
+	LockedAt                        pgtype.Timestamptz   `json:"locked_at"`
+	SessionTitle                    string               `json:"session_title"`
+	SessionStatus                   CbtSessionStatusEnum `json:"session_status"`
+	ScheduledStart                  pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd                    pgtype.Timestamptz   `json:"scheduled_end"`
+	PackageTitle                    string               `json:"package_title"`
+	DurationMinutes                 int32                `json:"duration_minutes"`
+	RoomName                        string               `json:"room_name"`
+	RoomToken                       string               `json:"room_token"`
+	AccessMode                      string               `json:"access_mode"`
+	StudentPortalDirectLoginEnabled bool                 `json:"student_portal_direct_login_enabled"`
+	RequireRoomTokenForWeb          bool                 `json:"require_room_token_for_web"`
+	NisnDirectLoginEnabled          bool                 `json:"nisn_direct_login_enabled"`
+	RoomAllowWebFallback            bool                 `json:"room_allow_web_fallback"`
 }
 
 func (q *Queries) GetStudentPortalCbtParticipant(ctx context.Context, arg GetStudentPortalCbtParticipantParams) (GetStudentPortalCbtParticipantRow, error) {
@@ -1338,6 +1506,11 @@ func (q *Queries) GetStudentPortalCbtParticipant(ctx context.Context, arg GetStu
 		&i.DurationMinutes,
 		&i.RoomName,
 		&i.RoomToken,
+		&i.AccessMode,
+		&i.StudentPortalDirectLoginEnabled,
+		&i.RequireRoomTokenForWeb,
+		&i.NisnDirectLoginEnabled,
+		&i.RoomAllowWebFallback,
 	)
 	return i, err
 }
@@ -2044,6 +2217,101 @@ func (q *Queries) ListCbtExamSessionsByTeacher(ctx context.Context, teacherEmplo
 	return items, nil
 }
 
+const listCbtPortalParticipantsByStudent = `-- name: ListCbtPortalParticipantsByStudent :many
+SELECT
+  ep.id AS participant_id,
+  ep.session_id,
+  ep.room_id,
+  ep.seat_no,
+  ep.submitted_at,
+  ep.locked_at,
+  s.title AS session_title,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end,
+  p.title AS package_title,
+  p.duration_minutes,
+  COALESCE(r.room_name, '') AS room_name,
+  COALESCE(s.access_mode, 'secure_exam')::text AS access_mode,
+  COALESCE(s.student_portal_direct_login_enabled, false)::boolean AS student_portal_direct_login_enabled,
+  COALESCE(s.require_room_token_for_web, true)::boolean AS require_room_token_for_web,
+  COALESCE(s.nisn_direct_login_enabled, false)::boolean AS nisn_direct_login_enabled,
+  COALESCE(r.allow_web_fallback, false)::boolean AS room_allow_web_fallback
+FROM cbt_exam_participants ep
+JOIN cbt_exam_sessions s ON s.id = ep.session_id
+JOIN cbt_packages p ON p.id = s.package_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE ep.student_id = $1
+  AND s.status <> 'cancelled'
+  AND COALESCE(s.nisn_direct_login_enabled, false) = TRUE
+  AND COALESCE(s.student_portal_direct_login_enabled, false) = TRUE
+  AND (
+    s.scheduled_end IS NULL
+    OR s.scheduled_end >= NOW() - INTERVAL '7 days'
+  )
+ORDER BY s.scheduled_start ASC NULLS LAST, s.title ASC
+`
+
+type ListCbtPortalParticipantsByStudentRow struct {
+	ParticipantID                   pgtype.UUID          `json:"participant_id"`
+	SessionID                       pgtype.UUID          `json:"session_id"`
+	RoomID                          pgtype.UUID          `json:"room_id"`
+	SeatNo                          pgtype.Int4          `json:"seat_no"`
+	SubmittedAt                     pgtype.Timestamptz   `json:"submitted_at"`
+	LockedAt                        pgtype.Timestamptz   `json:"locked_at"`
+	SessionTitle                    string               `json:"session_title"`
+	SessionStatus                   CbtSessionStatusEnum `json:"session_status"`
+	ScheduledStart                  pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd                    pgtype.Timestamptz   `json:"scheduled_end"`
+	PackageTitle                    string               `json:"package_title"`
+	DurationMinutes                 int32                `json:"duration_minutes"`
+	RoomName                        string               `json:"room_name"`
+	AccessMode                      string               `json:"access_mode"`
+	StudentPortalDirectLoginEnabled bool                 `json:"student_portal_direct_login_enabled"`
+	RequireRoomTokenForWeb          bool                 `json:"require_room_token_for_web"`
+	NisnDirectLoginEnabled          bool                 `json:"nisn_direct_login_enabled"`
+	RoomAllowWebFallback            bool                 `json:"room_allow_web_fallback"`
+}
+
+func (q *Queries) ListCbtPortalParticipantsByStudent(ctx context.Context, studentID pgtype.UUID) ([]ListCbtPortalParticipantsByStudentRow, error) {
+	rows, err := q.db.Query(ctx, listCbtPortalParticipantsByStudent, studentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtPortalParticipantsByStudentRow{}
+	for rows.Next() {
+		var i ListCbtPortalParticipantsByStudentRow
+		if err := rows.Scan(
+			&i.ParticipantID,
+			&i.SessionID,
+			&i.RoomID,
+			&i.SeatNo,
+			&i.SubmittedAt,
+			&i.LockedAt,
+			&i.SessionTitle,
+			&i.SessionStatus,
+			&i.ScheduledStart,
+			&i.ScheduledEnd,
+			&i.PackageTitle,
+			&i.DurationMinutes,
+			&i.RoomName,
+			&i.AccessMode,
+			&i.StudentPortalDirectLoginEnabled,
+			&i.RequireRoomTokenForWeb,
+			&i.NisnDirectLoginEnabled,
+			&i.RoomAllowWebFallback,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCbtSessionRemedialCandidates = `-- name: ListCbtSessionRemedialCandidates :many
 WITH items AS (
   SELECT
@@ -2514,7 +2782,12 @@ SELECT
   p.title AS package_title,
   p.duration_minutes,
   COALESCE(r.room_name, '') AS room_name,
-  COALESCE(r.room_token, '') AS room_token
+  COALESCE(r.room_token, '') AS room_token,
+  COALESCE(s.access_mode, 'secure_exam')::text AS access_mode,
+  COALESCE(s.student_portal_direct_login_enabled, false)::boolean AS student_portal_direct_login_enabled,
+  COALESCE(s.require_room_token_for_web, true)::boolean AS require_room_token_for_web,
+  COALESCE(s.nisn_direct_login_enabled, false)::boolean AS nisn_direct_login_enabled,
+  COALESCE(r.allow_web_fallback, false)::boolean AS room_allow_web_fallback
 FROM cbt_exam_participants ep
 JOIN cbt_exam_sessions s ON s.id = ep.session_id
 JOIN cbt_packages p ON p.id = s.package_id
@@ -2529,21 +2802,26 @@ ORDER BY s.scheduled_start ASC NULLS LAST, s.title ASC
 `
 
 type ListStudentPortalCbtScheduleRow struct {
-	ParticipantID   pgtype.UUID          `json:"participant_id"`
-	SessionID       pgtype.UUID          `json:"session_id"`
-	Token           string               `json:"token"`
-	RoomID          pgtype.UUID          `json:"room_id"`
-	SeatNo          pgtype.Int4          `json:"seat_no"`
-	SubmittedAt     pgtype.Timestamptz   `json:"submitted_at"`
-	LockedAt        pgtype.Timestamptz   `json:"locked_at"`
-	SessionTitle    string               `json:"session_title"`
-	SessionStatus   CbtSessionStatusEnum `json:"session_status"`
-	ScheduledStart  pgtype.Timestamptz   `json:"scheduled_start"`
-	ScheduledEnd    pgtype.Timestamptz   `json:"scheduled_end"`
-	PackageTitle    string               `json:"package_title"`
-	DurationMinutes int32                `json:"duration_minutes"`
-	RoomName        string               `json:"room_name"`
-	RoomToken       string               `json:"room_token"`
+	ParticipantID                   pgtype.UUID          `json:"participant_id"`
+	SessionID                       pgtype.UUID          `json:"session_id"`
+	Token                           string               `json:"token"`
+	RoomID                          pgtype.UUID          `json:"room_id"`
+	SeatNo                          pgtype.Int4          `json:"seat_no"`
+	SubmittedAt                     pgtype.Timestamptz   `json:"submitted_at"`
+	LockedAt                        pgtype.Timestamptz   `json:"locked_at"`
+	SessionTitle                    string               `json:"session_title"`
+	SessionStatus                   CbtSessionStatusEnum `json:"session_status"`
+	ScheduledStart                  pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd                    pgtype.Timestamptz   `json:"scheduled_end"`
+	PackageTitle                    string               `json:"package_title"`
+	DurationMinutes                 int32                `json:"duration_minutes"`
+	RoomName                        string               `json:"room_name"`
+	RoomToken                       string               `json:"room_token"`
+	AccessMode                      string               `json:"access_mode"`
+	StudentPortalDirectLoginEnabled bool                 `json:"student_portal_direct_login_enabled"`
+	RequireRoomTokenForWeb          bool                 `json:"require_room_token_for_web"`
+	NisnDirectLoginEnabled          bool                 `json:"nisn_direct_login_enabled"`
+	RoomAllowWebFallback            bool                 `json:"room_allow_web_fallback"`
 }
 
 func (q *Queries) ListStudentPortalCbtSchedule(ctx context.Context, studentID pgtype.UUID) ([]ListStudentPortalCbtScheduleRow, error) {
@@ -2571,6 +2849,11 @@ func (q *Queries) ListStudentPortalCbtSchedule(ctx context.Context, studentID pg
 			&i.DurationMinutes,
 			&i.RoomName,
 			&i.RoomToken,
+			&i.AccessMode,
+			&i.StudentPortalDirectLoginEnabled,
+			&i.RequireRoomTokenForWeb,
+			&i.NisnDirectLoginEnabled,
+			&i.RoomAllowWebFallback,
 		); err != nil {
 			return nil, err
 		}
@@ -2968,7 +3251,7 @@ SET scheduled_start = $2,
     scheduled_end = $3,
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, package_id, class_id, title, scheduled_start, scheduled_end, status, created_at, updated_at, event_id, scope_type, scope_ref, mix_policy, assignment_mode, allow_cross_grade, is_special_event
+RETURNING id, package_id, class_id, title, scheduled_start, scheduled_end, status, created_at, updated_at, event_id, scope_type, scope_ref, mix_policy, assignment_mode, allow_cross_grade, is_special_event, access_mode, student_portal_direct_login_enabled, require_room_token_for_web, nisn_direct_login_enabled
 `
 
 type UpdateCbtExamSessionScheduleParams struct {
@@ -2997,6 +3280,10 @@ func (q *Queries) UpdateCbtExamSessionSchedule(ctx context.Context, arg UpdateCb
 		&i.AssignmentMode,
 		&i.AllowCrossGrade,
 		&i.IsSpecialEvent,
+		&i.AccessMode,
+		&i.StudentPortalDirectLoginEnabled,
+		&i.RequireRoomTokenForWeb,
+		&i.NisnDirectLoginEnabled,
 	)
 	return i, err
 }
@@ -3005,7 +3292,7 @@ const updateCbtExamSessionStatus = `-- name: UpdateCbtExamSessionStatus :one
 UPDATE cbt_exam_sessions
 SET status = $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, package_id, class_id, title, scheduled_start, scheduled_end, status, created_at, updated_at, event_id, scope_type, scope_ref, mix_policy, assignment_mode, allow_cross_grade, is_special_event
+RETURNING id, package_id, class_id, title, scheduled_start, scheduled_end, status, created_at, updated_at, event_id, scope_type, scope_ref, mix_policy, assignment_mode, allow_cross_grade, is_special_event, access_mode, student_portal_direct_login_enabled, require_room_token_for_web, nisn_direct_login_enabled
 `
 
 type UpdateCbtExamSessionStatusParams struct {
@@ -3033,6 +3320,10 @@ func (q *Queries) UpdateCbtExamSessionStatus(ctx context.Context, arg UpdateCbtE
 		&i.AssignmentMode,
 		&i.AllowCrossGrade,
 		&i.IsSpecialEvent,
+		&i.AccessMode,
+		&i.StudentPortalDirectLoginEnabled,
+		&i.RequireRoomTokenForWeb,
+		&i.NisnDirectLoginEnabled,
 	)
 	return i, err
 }

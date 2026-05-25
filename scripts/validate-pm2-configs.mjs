@@ -10,6 +10,7 @@ const rootDir = path.resolve(new URL('..', import.meta.url).pathname);
 const expectedNames = [
   'mtsn2kolut-core-api',
   'mtsn2kolut-web-admin',
+  'mtsn2kolut-cbt-portal',
   'mtsn2kolut-pusaka-worker'
 ];
 
@@ -85,6 +86,7 @@ function validateApp(app) {
 const deployConfigs = [
   loadConfig('deploy/pm2/backend.config.cjs'),
   loadConfig('deploy/pm2/web.config.cjs'),
+  loadConfig('deploy/pm2/cbt-portal.config.cjs'),
   loadConfig('deploy/pm2/worker.config.cjs')
 ];
 const deployApps = deployConfigs.flatMap((config) => config.apps);

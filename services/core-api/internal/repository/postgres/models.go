@@ -1109,22 +1109,26 @@ type CbtExamRoom struct {
 }
 
 type CbtExamSession struct {
-	ID              pgtype.UUID          `json:"id"`
-	PackageID       pgtype.UUID          `json:"package_id"`
-	ClassID         pgtype.UUID          `json:"class_id"`
-	Title           string               `json:"title"`
-	ScheduledStart  pgtype.Timestamptz   `json:"scheduled_start"`
-	ScheduledEnd    pgtype.Timestamptz   `json:"scheduled_end"`
-	Status          CbtSessionStatusEnum `json:"status"`
-	CreatedAt       pgtype.Timestamptz   `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz   `json:"updated_at"`
-	EventID         pgtype.UUID          `json:"event_id"`
-	ScopeType       string               `json:"scope_type"`
-	ScopeRef        string               `json:"scope_ref"`
-	MixPolicy       string               `json:"mix_policy"`
-	AssignmentMode  string               `json:"assignment_mode"`
-	AllowCrossGrade bool                 `json:"allow_cross_grade"`
-	IsSpecialEvent  bool                 `json:"is_special_event"`
+	ID                              pgtype.UUID          `json:"id"`
+	PackageID                       pgtype.UUID          `json:"package_id"`
+	ClassID                         pgtype.UUID          `json:"class_id"`
+	Title                           string               `json:"title"`
+	ScheduledStart                  pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd                    pgtype.Timestamptz   `json:"scheduled_end"`
+	Status                          CbtSessionStatusEnum `json:"status"`
+	CreatedAt                       pgtype.Timestamptz   `json:"created_at"`
+	UpdatedAt                       pgtype.Timestamptz   `json:"updated_at"`
+	EventID                         pgtype.UUID          `json:"event_id"`
+	ScopeType                       string               `json:"scope_type"`
+	ScopeRef                        string               `json:"scope_ref"`
+	MixPolicy                       string               `json:"mix_policy"`
+	AssignmentMode                  string               `json:"assignment_mode"`
+	AllowCrossGrade                 bool                 `json:"allow_cross_grade"`
+	IsSpecialEvent                  bool                 `json:"is_special_event"`
+	AccessMode                      string               `json:"access_mode"`
+	StudentPortalDirectLoginEnabled bool                 `json:"student_portal_direct_login_enabled"`
+	RequireRoomTokenForWeb          bool                 `json:"require_room_token_for_web"`
+	NisnDirectLoginEnabled          bool                 `json:"nisn_direct_login_enabled"`
 }
 
 type CbtPackage struct {
@@ -1552,22 +1556,26 @@ type DocumentCycleObligation struct {
 }
 
 type Employee struct {
-	ID             pgtype.UUID        `json:"id"`
-	Nip            pgtype.Text        `json:"nip"`
-	Nama           string             `json:"nama"`
-	UnitKerja      string             `json:"unit_kerja"`
-	IsActive       bool               `json:"is_active"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	EmploymentType string             `json:"employment_type"`
-	TanggalLahir   pgtype.Date        `json:"tanggal_lahir"`
-	Phone          string             `json:"phone"`
-	Email          string             `json:"email"`
-	Address        string             `json:"address"`
-	PhotoUrl       string             `json:"photo_url"`
-	PegawaiUid     string             `json:"pegawai_uid"`
-	JenisKelamin   pgtype.Text        `json:"jenis_kelamin"`
-	TempatLahir    pgtype.Text        `json:"tempat_lahir"`
+	ID                 pgtype.UUID        `json:"id"`
+	Nip                pgtype.Text        `json:"nip"`
+	Nama               string             `json:"nama"`
+	UnitKerja          string             `json:"unit_kerja"`
+	IsActive           bool               `json:"is_active"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	EmploymentType     string             `json:"employment_type"`
+	TanggalLahir       pgtype.Date        `json:"tanggal_lahir"`
+	Phone              string             `json:"phone"`
+	Email              string             `json:"email"`
+	Address            string             `json:"address"`
+	PhotoUrl           string             `json:"photo_url"`
+	PegawaiUid         string             `json:"pegawai_uid"`
+	JenisKelamin       pgtype.Text        `json:"jenis_kelamin"`
+	TempatLahir        pgtype.Text        `json:"tempat_lahir"`
+	ExamSupervisorCode pgtype.Int4        `json:"exam_supervisor_code"`
+	DisplayNameSource  string             `json:"display_name_source"`
+	NameVerifiedAt     pgtype.Timestamptz `json:"name_verified_at"`
+	NameVerifiedBy     pgtype.UUID        `json:"name_verified_by"`
 }
 
 type EmployeeSchedule struct {

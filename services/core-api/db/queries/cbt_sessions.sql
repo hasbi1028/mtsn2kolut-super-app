@@ -141,7 +141,11 @@ SELECT
   p.randomize_options,
   p.draw_pg_count,
   p.draw_essay_count,
-  COALESCE(r.allow_web_fallback, false)::boolean AS room_allow_web_fallback
+  COALESCE(r.allow_web_fallback, false)::boolean AS room_allow_web_fallback,
+  COALESCE(cs.access_mode, 'secure_exam')::text AS access_mode,
+  COALESCE(cs.student_portal_direct_login_enabled, false)::boolean AS student_portal_direct_login_enabled,
+  COALESCE(cs.require_room_token_for_web, true)::boolean AS require_room_token_for_web,
+  COALESCE(cs.nisn_direct_login_enabled, false)::boolean AS nisn_direct_login_enabled
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
 JOIN cbt_exam_sessions cs ON cs.id = ep.session_id
@@ -558,7 +562,12 @@ SELECT
   p.title AS package_title,
   p.duration_minutes,
   COALESCE(r.room_name, '') AS room_name,
-  COALESCE(r.room_token, '') AS room_token
+  COALESCE(r.room_token, '') AS room_token,
+  COALESCE(s.access_mode, 'secure_exam')::text AS access_mode,
+  COALESCE(s.student_portal_direct_login_enabled, false)::boolean AS student_portal_direct_login_enabled,
+  COALESCE(s.require_room_token_for_web, true)::boolean AS require_room_token_for_web,
+  COALESCE(s.nisn_direct_login_enabled, false)::boolean AS nisn_direct_login_enabled,
+  COALESCE(r.allow_web_fallback, false)::boolean AS room_allow_web_fallback
 FROM cbt_exam_participants ep
 JOIN cbt_exam_sessions s ON s.id = ep.session_id
 JOIN cbt_packages p ON p.id = s.package_id
@@ -588,7 +597,12 @@ SELECT
   p.title AS package_title,
   p.duration_minutes,
   COALESCE(r.room_name, '') AS room_name,
-  COALESCE(r.room_token, '') AS room_token
+  COALESCE(r.room_token, '') AS room_token,
+  COALESCE(s.access_mode, 'secure_exam')::text AS access_mode,
+  COALESCE(s.student_portal_direct_login_enabled, false)::boolean AS student_portal_direct_login_enabled,
+  COALESCE(s.require_room_token_for_web, true)::boolean AS require_room_token_for_web,
+  COALESCE(s.nisn_direct_login_enabled, false)::boolean AS nisn_direct_login_enabled,
+  COALESCE(r.allow_web_fallback, false)::boolean AS room_allow_web_fallback
 FROM cbt_exam_participants ep
 JOIN cbt_exam_sessions s ON s.id = ep.session_id
 JOIN cbt_packages p ON p.id = s.package_id
@@ -1446,3 +1460,74 @@ WHERE ep.session_id = sqlc.arg(session_id)
   AND ep.score < sqlc.arg(threshold)::numeric
 GROUP BY ep.id, st.nis, st.nama, c.code, c.name
 ORDER BY ep.score ASC, st.nama ASC;
+
+
+-- name: ListCbtPortalParticipantsByStudent :many
+SELECT
+  ep.id AS participant_id,
+  ep.session_id,
+  ep.room_id,
+  ep.seat_no,
+  ep.submitted_at,
+  ep.locked_at,
+  s.title AS session_title,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end,
+  p.title AS package_title,
+  p.duration_minutes,
+  COALESCE(r.room_name, '') AS room_name,
+  COALESCE(s.access_mode, 'secure_exam')::text AS access_mode,
+  COALESCE(s.student_portal_direct_login_enabled, false)::boolean AS student_portal_direct_login_enabled,
+  COALESCE(s.require_room_token_for_web, true)::boolean AS require_room_token_for_web,
+  COALESCE(s.nisn_direct_login_enabled, false)::boolean AS nisn_direct_login_enabled,
+  COALESCE(r.allow_web_fallback, false)::boolean AS room_allow_web_fallback
+FROM cbt_exam_participants ep
+JOIN cbt_exam_sessions s ON s.id = ep.session_id
+JOIN cbt_packages p ON p.id = s.package_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE ep.student_id = $1
+  AND s.status <> 'cancelled'
+  AND COALESCE(s.nisn_direct_login_enabled, false) = TRUE
+  AND COALESCE(s.student_portal_direct_login_enabled, false) = TRUE
+  AND (
+    s.scheduled_end IS NULL
+    OR s.scheduled_end >= NOW() - INTERVAL '7 days'
+  )
+ORDER BY s.scheduled_start ASC NULLS LAST, s.title ASC;
+
+
+-- name: GetCbtPortalExamParticipant :one
+SELECT
+  ep.id, ep.session_id, ep.student_id,
+  ep.token, ep.room_id, ep.seat_no, ep.device_fingerprint, ep.question_order, ep.option_order, ep.question_draw_log,
+  ep.client_type, ep.browser_fingerprint_hash, ep.client_user_agent_hash,
+  ep.joined_at, ep.submitted_at, ep.score,
+  ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
+  ep.violation_count, ep.risk_score, ep.risk_level, ep.locked_at, ep.locked_reason,
+  ep.last_heartbeat,
+  COALESCE(r.room_token, '') AS room_token,
+  s.nis, s.nama, s.gender,
+  cs.status AS session_status,
+  cs.title AS session_title,
+  cs.scheduled_start, cs.scheduled_end,
+  cs.package_id,
+  p.title AS package_title,
+  p.duration_minutes,
+  p.randomize_questions,
+  p.randomize_options,
+  p.draw_pg_count,
+  p.draw_essay_count,
+  COALESCE(r.allow_web_fallback, false)::boolean AS room_allow_web_fallback,
+  COALESCE(cs.access_mode, 'secure_exam')::text AS access_mode,
+  COALESCE(cs.student_portal_direct_login_enabled, false)::boolean AS student_portal_direct_login_enabled,
+  COALESCE(cs.require_room_token_for_web, true)::boolean AS require_room_token_for_web,
+  COALESCE(cs.nisn_direct_login_enabled, false)::boolean AS nisn_direct_login_enabled
+FROM cbt_exam_participants ep
+JOIN students s ON s.id = ep.student_id
+JOIN cbt_exam_sessions cs ON cs.id = ep.session_id
+JOIN cbt_packages p ON p.id = cs.package_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE ep.id = sqlc.arg(participant_id)
+  AND ep.student_id = sqlc.arg(student_id)
+  AND ep.token_revoked_at IS NULL;

@@ -190,15 +190,57 @@ func (s *Exam) LoginWithClient(ctx context.Context, req ExamLoginRequest) (Login
 	if err != nil {
 		return LoginResult{}, ErrExamNotFound
 	}
-	if p.SessionStatus != db.CbtSessionStatusEnumActive {
-		return LoginResult{}, ErrExamNotActive
-	}
 	if !p.RoomID.Valid {
 		return LoginResult{}, ErrExamRoomRequired
 	}
 	if err := validateParticipantRoomToken(p, req.RoomToken); err != nil {
 		s.recordRoomTokenMismatch(ctx, p, req.LoginIP, err)
 		return LoginResult{}, err
+	}
+	return s.loginParticipant(ctx, p, req, deviceFingerprint, browserFingerprint, clientType, "login")
+}
+
+func (s *Exam) LoginCbtPortalDirect(ctx context.Context, participantID, studentID pgtype.UUID, deviceFingerprint, loginIP, browserFingerprint, userAgent string) (LoginResult, error) {
+	deviceFingerprint = strings.TrimSpace(deviceFingerprint)
+	browserFingerprint = strings.TrimSpace(browserFingerprint)
+	if deviceFingerprint == "" {
+		deviceFingerprint = browserFingerprint
+	}
+	if deviceFingerprint == "" {
+		return LoginResult{}, ErrDeviceRequired
+	}
+	store, ok := s.q.(interface {
+		GetCbtPortalExamParticipant(context.Context, db.GetCbtPortalExamParticipantParams) (db.GetCbtPortalExamParticipantRow, error)
+	})
+	if !ok {
+		return LoginResult{}, ErrExamNotFound
+	}
+	row, err := store.GetCbtPortalExamParticipant(ctx, db.GetCbtPortalExamParticipantParams{ParticipantID: participantID, StudentID: studentID})
+	if err != nil {
+		return LoginResult{}, ErrExamNotFound
+	}
+	p := cbtPortalExamParticipantToLoginRow(row)
+	if !p.NisnDirectLoginEnabled || !p.StudentPortalDirectLoginEnabled || p.RequireRoomTokenForWeb {
+		return LoginResult{}, ErrCbtPortalDisabled
+	}
+	if p.AccessMode != "simulation" && p.AccessMode != "web_fallback" {
+		return LoginResult{}, ErrCbtPortalDisabled
+	}
+	if p.RoomID.Valid && !p.RoomAllowWebFallback {
+		return LoginResult{}, ErrWebFallbackDisabled
+	}
+	return s.loginParticipant(ctx, p, ExamLoginRequest{
+		DeviceFingerprint:  deviceFingerprint,
+		LoginIP:            loginIP,
+		ClientType:         "cbt_portal",
+		BrowserFingerprint: browserFingerprint,
+		UserAgent:          userAgent,
+	}, deviceFingerprint, browserFingerprint, "cbt_portal", "cbt_portal_direct_login")
+}
+
+func (s *Exam) loginParticipant(ctx context.Context, p db.GetParticipantByTokenRow, req ExamLoginRequest, deviceFingerprint, browserFingerprint, clientType, loginEventType string) (LoginResult, error) {
+	if p.SessionStatus != db.CbtSessionStatusEnumActive {
+		return LoginResult{}, ErrExamNotActive
 	}
 	if clientType == "web_fallback" && !p.RoomAllowWebFallback {
 		return LoginResult{}, ErrWebFallbackDisabled
@@ -240,14 +282,14 @@ func (s *Exam) LoginWithClient(ctx context.Context, req ExamLoginRequest) (Login
 	// Log login event
 	_ = s.q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
 		ParticipantID: p.ID,
-		EventType:     "login",
+		EventType:     loginEventType,
 		EventData: marshalJSON(map[string]string{
 			"ip":          req.LoginIP,
 			"device_hash": hashString(deviceFingerprint),
 			"client_type": clientType,
 		}),
 	})
-	if clientType == "web_fallback" {
+	if clientType == "web_fallback" || clientType == "cbt_portal" {
 		_ = s.q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
 			ParticipantID: p.ID,
 			EventType:     "web_fallback_used",
@@ -278,25 +320,14 @@ func (s *Exam) LoginWithClient(ctx context.Context, req ExamLoginRequest) (Login
 		for i, q := range ordered {
 			ids[i] = pgUUIDString(q.ID)
 		}
-		orderJSON, err := json.Marshal(ids)
-		if err != nil {
-			return LoginResult{}, err
-		}
+		orderJSON := marshalJSON(ids)
 		optionOrder = ensureOptionOrder(ordered, optionOrder, p.RandomizeOptions)
-		optionOrderJSON := marshalJSON(optionOrder)
-		drawLogJSON := marshalJSON(map[string]any{
-			"draw_pg_count":         p.DrawPgCount,
-			"draw_essay_count":      p.DrawEssayCount,
-			"selected_question_ids": ids,
-			"randomize_questions":   p.RandomizeQuestions,
-			"randomize_options":     p.RandomizeOptions,
-		})
 		if runtimeStore, ok := s.q.(examRuntimePlanStore); ok {
 			if savedPlan, err := runtimeStore.SetParticipantRuntimePlanIfEmpty(ctx, db.SetParticipantRuntimePlanIfEmptyParams{
 				ID:              p.ID,
 				QuestionOrder:   orderJSON,
-				OptionOrder:     optionOrderJSON,
-				QuestionDrawLog: drawLogJSON,
+				OptionOrder:     marshalJSON(optionOrder),
+				QuestionDrawLog: marshalJSON([]string{}),
 			}); err == nil && len(savedPlan.QuestionOrder) > 0 {
 				ordered = orderQuestionsWithDraw(questions, savedPlan.QuestionOrder, false, 0, 0)
 				optionOrder = parseOptionOrder(savedPlan.OptionOrder)
@@ -359,6 +390,77 @@ func (s *Exam) LoginWithClient(ctx context.Context, req ExamLoginRequest) (Login
 	}
 
 	return result, nil
+}
+
+func (s *Exam) SubmitCbtPortalAnswer(ctx context.Context, participantID, studentID, questionID pgtype.UUID, answer string) error {
+	p, err := s.getCbtPortalParticipantForRuntime(ctx, participantID, studentID)
+	if err != nil {
+		return err
+	}
+	return s.SubmitAnswer(ctx, p, questionID, answer)
+}
+
+func (s *Exam) SubmitCbtPortalExam(ctx context.Context, participantID, studentID pgtype.UUID) error {
+	p, err := s.getCbtPortalParticipantForRuntime(ctx, participantID, studentID)
+	if err != nil {
+		return err
+	}
+	return s.Submit(ctx, p)
+}
+
+func (s *Exam) getCbtPortalParticipantForRuntime(ctx context.Context, participantID, studentID pgtype.UUID) (db.GetParticipantByTokenRow, error) {
+	store, ok := s.q.(interface {
+		GetCbtPortalExamParticipant(context.Context, db.GetCbtPortalExamParticipantParams) (db.GetCbtPortalExamParticipantRow, error)
+	})
+	if !ok {
+		return db.GetParticipantByTokenRow{}, ErrExamNotFound
+	}
+	row, err := store.GetCbtPortalExamParticipant(ctx, db.GetCbtPortalExamParticipantParams{ParticipantID: participantID, StudentID: studentID})
+	if err != nil {
+		return db.GetParticipantByTokenRow{}, ErrExamNotFound
+	}
+	p := cbtPortalExamParticipantToLoginRow(row)
+	if !p.NisnDirectLoginEnabled || !p.StudentPortalDirectLoginEnabled || p.RequireRoomTokenForWeb {
+		return db.GetParticipantByTokenRow{}, ErrCbtPortalDisabled
+	}
+	if p.AccessMode != "simulation" && p.AccessMode != "web_fallback" {
+		return db.GetParticipantByTokenRow{}, ErrCbtPortalDisabled
+	}
+	if p.SessionStatus != db.CbtSessionStatusEnumActive {
+		return db.GetParticipantByTokenRow{}, ErrExamNotActive
+	}
+	if p.SubmittedAt.Valid {
+		return db.GetParticipantByTokenRow{}, ErrExamAlreadySubmit
+	}
+	if p.LockedAt.Valid {
+		return db.GetParticipantByTokenRow{}, ErrExamLocked
+	}
+	if p.ScheduledEnd.Valid && time.Now().After(p.ScheduledEnd.Time) {
+		return db.GetParticipantByTokenRow{}, ErrExamWindowClosed
+	}
+	return p, nil
+}
+
+func cbtPortalExamParticipantToLoginRow(row db.GetCbtPortalExamParticipantRow) db.GetParticipantByTokenRow {
+	return db.GetParticipantByTokenRow{
+		ID: row.ID, SessionID: row.SessionID, StudentID: row.StudentID, Token: row.Token,
+		RoomID: row.RoomID, SeatNo: row.SeatNo, DeviceFingerprint: row.DeviceFingerprint,
+		QuestionOrder: row.QuestionOrder, OptionOrder: row.OptionOrder, QuestionDrawLog: row.QuestionDrawLog,
+		ClientType: row.ClientType, BrowserFingerprintHash: row.BrowserFingerprintHash, ClientUserAgentHash: row.ClientUserAgentHash,
+		JoinedAt: row.JoinedAt, SubmittedAt: row.SubmittedAt, Score: row.Score,
+		AppSwitchCount: row.AppSwitchCount, ScreenshotAttempt: row.ScreenshotAttempt, SuspiciousFlag: row.SuspiciousFlag,
+		ViolationCount: row.ViolationCount, RiskScore: row.RiskScore, RiskLevel: row.RiskLevel,
+		LockedAt: row.LockedAt, LockedReason: row.LockedReason, LastHeartbeat: row.LastHeartbeat,
+		RoomToken: row.RoomToken, Nis: row.Nis, Nama: row.Nama, Gender: row.Gender,
+		SessionStatus: row.SessionStatus, SessionTitle: row.SessionTitle, ScheduledStart: row.ScheduledStart,
+		ScheduledEnd: row.ScheduledEnd, PackageID: row.PackageID, PackageTitle: row.PackageTitle,
+		DurationMinutes: row.DurationMinutes, RandomizeQuestions: row.RandomizeQuestions,
+		RandomizeOptions: row.RandomizeOptions, DrawPgCount: row.DrawPgCount, DrawEssayCount: row.DrawEssayCount,
+		RoomAllowWebFallback: row.RoomAllowWebFallback, AccessMode: row.AccessMode,
+		StudentPortalDirectLoginEnabled: row.StudentPortalDirectLoginEnabled,
+		RequireRoomTokenForWeb:          row.RequireRoomTokenForWeb,
+		NisnDirectLoginEnabled:          row.NisnDirectLoginEnabled,
+	}
 }
 
 func validateParticipantRoomToken(p db.GetParticipantByTokenRow, roomToken string) error {
