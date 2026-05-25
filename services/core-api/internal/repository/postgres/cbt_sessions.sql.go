@@ -139,7 +139,7 @@ const enrollClassToSession = `-- name: EnrollClassToSession :exec
 INSERT INTO cbt_exam_participants (session_id, student_id, token, token_hash, token_hash_version, token_generated_at)
 SELECT $1, s.id, tok.token, encode(digest(tok.token, 'sha256'), 'hex'), 1, NOW()
 FROM students s
-CROSS JOIN LATERAL (SELECT encode(gen_random_bytes(16), 'hex') AS token) tok
+CROSS JOIN LATERAL (SELECT encode(gen_random_bytes(4), 'hex') AS token) tok
 WHERE s.class_id = $2 AND s.is_active = TRUE
 ON CONFLICT (session_id, student_id) DO NOTHING
 `
@@ -159,7 +159,7 @@ INSERT INTO cbt_exam_participants (session_id, student_id, token, token_hash, to
 SELECT $1, s.id, tok.token, encode(digest(tok.token, 'sha256'), 'hex'), 1, NOW()
 FROM students s
 JOIN school_classes c ON c.id = s.class_id
-CROSS JOIN LATERAL (SELECT encode(gen_random_bytes(16), 'hex') AS token) tok
+CROSS JOIN LATERAL (SELECT encode(gen_random_bytes(4), 'hex') AS token) tok
 WHERE c.level = $2 AND s.is_active = TRUE
 ON CONFLICT (session_id, student_id) DO NOTHING
 `
@@ -178,7 +178,7 @@ const enrollSchoolToSession = `-- name: EnrollSchoolToSession :exec
 INSERT INTO cbt_exam_participants (session_id, student_id, token, token_hash, token_hash_version, token_generated_at)
 SELECT $1, s.id, tok.token, encode(digest(tok.token, 'sha256'), 'hex'), 1, NOW()
 FROM students s
-CROSS JOIN LATERAL (SELECT encode(gen_random_bytes(16), 'hex') AS token) tok
+CROSS JOIN LATERAL (SELECT encode(gen_random_bytes(4), 'hex') AS token) tok
 WHERE s.is_active = TRUE
 ON CONFLICT (session_id, student_id) DO NOTHING
 `
@@ -352,13 +352,13 @@ func (q *Queries) ForceSubmitParticipant(ctx context.Context, arg ForceSubmitPar
 
 const generateTokensForSession = `-- name: GenerateTokensForSession :exec
 WITH generated AS (
-  SELECT ep.id, encode(gen_random_bytes(16), 'hex') AS token
+  SELECT ep.id, encode(gen_random_bytes(4), 'hex') AS token
   FROM cbt_exam_participants ep
   WHERE ep.session_id = $1
     AND (
       ep.token = ''
       OR ep.token IS NULL
-      OR ep.token !~ '^[0-9a-f]{32}$'
+      OR ep.token !~ '^[0-9a-f]{8}$'
       OR ep.token_hash = ''
       OR ep.token_hash_version = 0
     )
@@ -2917,7 +2917,7 @@ func (q *Queries) QuestionBelongsToParticipantPackage(ctx context.Context, arg Q
 
 const regenerateParticipantToken = `-- name: RegenerateParticipantToken :one
 WITH generated AS (
-  SELECT cbt_exam_participants.id, encode(gen_random_bytes(16), 'hex') AS token
+  SELECT cbt_exam_participants.id, encode(gen_random_bytes(4), 'hex') AS token
   FROM cbt_exam_participants
   JOIN cbt_exam_sessions s ON s.id = cbt_exam_participants.session_id
   WHERE cbt_exam_participants.id = $1
