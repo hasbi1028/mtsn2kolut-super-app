@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 const root = resolve(__dirname, '../../..');
 const packagePage = readFileSync(resolve(root, 'src/routes/asesmen/paket/+page.svelte'), 'utf8');
 const sessionPage = readFileSync(resolve(root, 'src/routes/asesmen/sesi/+page.svelte'), 'utf8');
+const newSessionPage = readFileSync(resolve(root, 'src/routes/asesmen/sesi/new/+page.svelte'), 'utf8');
 
 describe('assessment package and session operator UX', () => {
   it('uses Pratinjau/Buka labels and archive-aware package actions', () => {
@@ -27,5 +28,11 @@ describe('assessment package and session operator UX', () => {
     expect(sessionPage).toContain('sessionSearch');
     expect(sessionPage).toContain('sessionStatusFilter');
     expect(sessionPage).toContain('sessionPackageFilter');
+  });
+
+  it('blocks event-scoped packages from the global session form with operator guidance', () => {
+    expect(newSessionPage).toContain('Paket ini terikat ke Kegiatan Ujian');
+    expect(newSessionPage).toContain('paket kegiatan');
+    expect(newSessionPage).toContain('event_id ikut terkirim');
   });
 });

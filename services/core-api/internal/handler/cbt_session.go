@@ -573,6 +573,11 @@ func (h *CbtSession) Create(w http.ResponseWriter, r *http.Request) {
 		Status:          status,
 	})
 	if err != nil {
+		if errors.Is(err, domain.ErrBadRequest) {
+			message := strings.TrimPrefix(safeClientMessage(err, "Sesi CBT tidak valid"), "bad request: ")
+			api.BadRequest(w, message)
+			return
+		}
 		if errors.Is(err, domain.ErrConflict) {
 			message := strings.TrimPrefix(safeClientMessage(err, "Sesi CBT tidak valid"), "conflict: ")
 			api.Conflict(w, message)

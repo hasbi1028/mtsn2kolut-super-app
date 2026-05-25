@@ -166,6 +166,9 @@
 	function buildSessionReadinessIssues() {
 		const issues: string[] = [];
 		if (!fPackageId) issues.push('Pilih paket soal');
+		if (selectedPackage?.event_id && !eventId) {
+			issues.push('Paket ini terikat ke Kegiatan Ujian. Buka detail kegiatan lalu gunakan tombol Tambah Sesi agar sesi otomatis tertaut ke kegiatan yang sama.');
+		}
 		for (const issue of packageQualityIssues(fPackageId)) {
 			if (issue === 'paket nonaktif') issues.push('Paket soal tidak aktif');
 			else if (issue === 'paket kosong') issues.push('Paket belum memiliki soal');
@@ -344,10 +347,11 @@
 							<select id="session-package" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fPackageId}>
 								<option value="">-- Pilih Paket --</option>
 								{#each packages as pkg (pkg.id)}
-									<option value={pkg.id}>{pkg.title} ({pkg.subject_code}){pkg.is_active ? '' : ' - nonaktif'}</option>
+									<option value={pkg.id}>{pkg.title} ({pkg.subject_code}){pkg.event_id ? ' - paket kegiatan' : ''}{pkg.is_active ? '' : ' - nonaktif'}</option>
 								{/each}
 							</select>
 							{#if hiddenEventPackageCount > 0}<p class="mt-1 text-[11px] text-accent-foreground">{hiddenEventPackageCount} paket umum/kegiatan lain disembunyikan dari pilihan sesi kegiatan ini.</p>{/if}
+							{#if !eventId}<p class="mt-1 text-[11px] text-muted-foreground">Paket bertanda paket kegiatan harus dibuatkan sesi dari halaman detail kegiatan, bukan dari sesi global.</p>{/if}
 						</div>
 						{#if fPackageId}
 							{@const quality = selectedPackageQuality}
@@ -362,7 +366,7 @@
 										{#if quality.unpublishedCount > 0}<Badge class="border-destructive/30 bg-destructive/10 text-xs text-destructive">{quality.unpublishedCount} belum terbit</Badge>{/if}
 									</div>
 								</div>
-								{#if selectedPackage && !selectedPackage.is_active}<p class="mt-2 text-xs font-medium text-destructive">Paket nonaktif tidak boleh dijadikan sesi ujian.</p>{:else if quality.totalCount === 0}<p class="mt-2 text-xs font-medium text-destructive">Paket ini belum memiliki soal, sehingga sesi tidak bisa dibuat.</p>{:else if quality.unpublishedCount > 0}<p class="mt-2 text-xs font-medium text-destructive">Rapikan paket dulu. Aplikasi siswa hanya menyajikan soal terbit.</p>{:else if quality.missingCount > 0}<p class="mt-2 text-xs font-medium text-warning">Sesi masih boleh dibuat, tetapi {quality.missingCount} soal belum lengkap CP/TP/KD atau level kognitif.</p>{:else}<p class="mt-2 text-xs font-medium text-primary">Paket siap dipakai untuk draft sesi CBT.</p>{/if}
+								{#if selectedPackage?.event_id && !eventId}<p class="mt-2 text-xs font-medium text-destructive">Paket ini milik Kegiatan Ujian. Buka detail kegiatan terkait, lalu klik Tambah Sesi dari sana agar event_id ikut terkirim.</p>{:else if selectedPackage && !selectedPackage.is_active}<p class="mt-2 text-xs font-medium text-destructive">Paket nonaktif tidak boleh dijadikan sesi ujian.</p>{:else if quality.totalCount === 0}<p class="mt-2 text-xs font-medium text-destructive">Paket ini belum memiliki soal, sehingga sesi tidak bisa dibuat.</p>{:else if quality.unpublishedCount > 0}<p class="mt-2 text-xs font-medium text-destructive">Rapikan paket dulu. Aplikasi siswa hanya menyajikan soal terbit.</p>{:else if quality.missingCount > 0}<p class="mt-2 text-xs font-medium text-warning">Sesi masih boleh dibuat, tetapi {quality.missingCount} soal belum lengkap CP/TP/KD atau level kognitif.</p>{:else}<p class="mt-2 text-xs font-medium text-primary">Paket siap dipakai untuk draft sesi CBT.</p>{/if}
 							</div>
 						{/if}
 						<div>
