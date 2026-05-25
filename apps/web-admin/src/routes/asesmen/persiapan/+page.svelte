@@ -37,10 +37,10 @@
 		},
 		{
 			step: '02',
-			title: 'Buat Kegiatan Asesmen',
-			description: 'Daftarkan Kegiatan Asesmen agar sesi, peserta, dan kartu ujian punya konteks yang jelas.',
-			href: '/asesmen/kegiatan/new',
-			cta: 'Buat Kegiatan'
+			title: 'Kelola Kegiatan Asesmen',
+			description: 'Buka daftar Kegiatan Asesmen untuk membuat, memilih, atau melanjutkan kegiatan agar sesi, peserta, dan kartu ujian tetap dalam konteks yang jelas.',
+			href: '/asesmen/kegiatan',
+			cta: 'Kelola Kegiatan'
 		},
 		{
 			step: '03',
