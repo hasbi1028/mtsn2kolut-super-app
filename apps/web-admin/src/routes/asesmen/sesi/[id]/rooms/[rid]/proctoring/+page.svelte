@@ -1262,109 +1262,73 @@
 					</Card.Content>
 				</Card.Root>
 
-				<Card.Root class="border-primary/20">
-					<Card.Header>
-						<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-							<div>
-								<Card.Title>{room.room_name}</Card.Title>
-								<Card.Description>
-									{room.package_title} · {fmtDate(room.scheduled_start)} - {fmtDate(room.scheduled_end)}
-								</Card.Description>
-							</div>
-							<div class="flex flex-wrap items-center gap-2">
-								<Badge variant="outline" class="border-primary/20 text-primary">Token ruang {maskedRoomToken(room.room_token)}</Badge>
-								<Badge variant="outline">{room.session_status}</Badge>
-								<Badge variant="outline" class={room.allow_web_fallback ? 'border-warning/30 bg-warning/10 text-warning' : 'border-muted text-muted-foreground'}>
-									{room.allow_web_fallback ? 'Browser Darurat ON' : 'Browser Darurat OFF'}
-								</Badge>
-							</div>
+				<section class="overflow-hidden rounded-lg border border-border bg-card text-sm">
+					<div class="flex flex-col gap-2 border-b border-border px-3 py-2 md:flex-row md:items-center md:justify-between">
+						<div class="min-w-0">
+							<p class="font-semibold text-foreground">{room.room_name}</p>
+							<p class="truncate text-xs text-muted-foreground">{room.package_title} · {fmtDate(room.scheduled_start)} - {fmtDate(room.scheduled_end)}</p>
 						</div>
-					</Card.Header>
-					<Card.Content class="grid gap-4 md:grid-cols-4">
-						<div class="rounded-lg border border-border p-3">
-							<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lokasi</p>
-							<p class="mt-1 text-sm font-medium text-foreground">{room.school_room_code ? `${room.school_room_code} · ${room.school_room_name}` : 'Ruang manual sesi'}</p>
-							<p class="text-xs text-muted-foreground">{room.school_room_building || room.school_room_location_note || 'Lokasi belum dicatat'}</p>
-						</div>
-						<div class="rounded-lg border border-border p-3">
-							<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pengawas</p>
-							<div class="mt-1 space-y-1">
-								{#each proctors as proctor (proctor.id)}
-									<p class="text-sm text-foreground">{proctor.nama} <span class="text-xs text-muted-foreground">({proctor.role})</span></p>
-								{:else}
-									<p class="text-sm text-warning">Belum ada pengawas</p>
-								{/each}
-							</div>
-						</div>
-						<div class="rounded-lg border border-border p-3">
-							<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status Ruang</p>
-							<p class="mt-1 text-sm text-foreground">Durasi paket {room.duration_minutes} menit</p>
-							<p class="text-xs text-muted-foreground">{room.is_locked ? 'Ruang dikunci' : 'Ruang masih dapat diperbarui operator'}</p>
-						</div>
-						<div class={`rounded-lg border p-3 ${room.allow_web_fallback ? 'border-warning/30 bg-warning/5' : 'border-border'}`}>
-							<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Browser Darurat /ujian</p>
-							<p class="mt-1 text-sm font-semibold text-foreground">{room.allow_web_fallback ? 'Aktif untuk ruang ini' : 'Nonaktif (default aman)'}</p>
-							<p class="text-xs text-muted-foreground">{room.web_fallback_reason || 'Hanya aktif bila operator/pengawas memberi izin.'}</p>
-							<LoadingButton class="mt-3" size="sm" variant={room.allow_web_fallback ? 'outline' : 'default'} onclick={() => void updateRoomWebFallbackPolicy(!room?.allow_web_fallback)} loading={webFallbackBusy} loadingLabel="Menyimpan...">
-								{room.allow_web_fallback ? 'Nonaktifkan' : 'Aktifkan Darurat'}
+						<div class="flex flex-wrap items-center gap-1.5">
+							<Badge variant="outline" class="border-primary/20 text-primary">Token {maskedRoomToken(room.room_token)}</Badge>
+							<Badge variant="outline">{room.session_status}</Badge>
+							<LoadingButton size="sm" variant={room.allow_web_fallback ? 'outline' : 'default'} onclick={() => void updateRoomWebFallbackPolicy(!room?.allow_web_fallback)} loading={webFallbackBusy} loadingLabel="Menyimpan...">
+								{room.allow_web_fallback ? 'Matikan Browser' : 'Aktifkan Darurat'}
 							</LoadingButton>
 						</div>
-					</Card.Content>
-				</Card.Root>
+					</div>
+					<div class="divide-y divide-border text-xs md:grid md:grid-cols-4 md:divide-x md:divide-y-0">
+						<div class="px-3 py-2"><span class="text-muted-foreground">Lokasi</span><p class="font-medium text-foreground">{room.school_room_code ? `${room.school_room_code} · ${room.school_room_name}` : 'Ruang manual sesi'}</p><p class="text-muted-foreground">{room.school_room_building || room.school_room_location_note || 'Lokasi belum dicatat'}</p></div>
+						<div class="px-3 py-2"><span class="text-muted-foreground">Pengawas</span>{#each proctors as proctor (proctor.id)}<p class="font-medium text-foreground">{proctor.nama} <span class="text-muted-foreground">({proctor.role})</span></p>{:else}<p class="font-medium text-warning">Belum ada pengawas</p>{/each}</div>
+						<div class="px-3 py-2"><span class="text-muted-foreground">Status</span><p class="font-medium text-foreground">Durasi {room.duration_minutes} menit</p><p class="text-muted-foreground">{room.is_locked ? 'Ruang dikunci' : 'Masih dapat diperbarui'}</p></div>
+						<div class={`px-3 py-2 ${room.allow_web_fallback ? 'bg-warning/5' : ''}`}><span class="text-muted-foreground">Browser /ujian</span><p class="font-medium text-foreground">{room.allow_web_fallback ? 'Aktif' : 'Nonaktif'}</p><p class="line-clamp-2 text-muted-foreground">{room.web_fallback_reason || 'Hanya aktif bila diberi izin.'}</p></div>
+					</div>
+				</section>
 
-				<Card.Root class="border-primary/20">
-					<Card.Header class="pb-3">
-						<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-							<div>
-								<Card.Title>Mode Sederhana: Peserta Butuh Tindakan</Card.Title>
-								<Card.Description>Fokus hari-H untuk peserta terkunci, terputus, belum kirim, atau perlu atensi pengawas.</Card.Description>
-							</div>
-							<div class="flex flex-wrap gap-2" role="tablist" aria-label="Filter peserta ruang">
-								{#each participantFilters as filter}
-									<button type="button" role="tab" class={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${participantFilter === filter.key ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-muted-foreground hover:text-foreground'}`} aria-label={filter.aria} aria-selected={participantFilter === filter.key} onclick={() => (participantFilter = filter.key)}>
-										{filter.label} <span class="ml-1 opacity-80">{participantFilterCount(filter.key)}</span>
-									</button>
-								{/each}
-							</div>
+				<section class="overflow-hidden rounded-lg border border-border bg-card">
+					<div class="flex flex-col gap-2 border-b border-border px-3 py-2 md:flex-row md:items-center md:justify-between">
+						<div>
+							<p class="text-sm font-semibold text-foreground">Peserta Butuh Tindakan</p>
+							<p class="text-xs text-muted-foreground">Daftar ringkas peserta terkunci, terputus, belum kirim, atau perlu atensi.</p>
 						</div>
-					</Card.Header>
-					<Card.Content>
-						{#if filteredParticipants.length === 0}
-							<div class="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">Tidak ada peserta yang butuh tindakan pada filter ini.</div>
-						{:else}
-							<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-								{#each filteredParticipants as row (row.participant_id)}
-									<div class={`rounded-2xl border p-4 ${participantLocked(row) ? 'border-destructive/30 bg-destructive/5' : participantNeedsAttention(row) ? 'border-warning/30 bg-warning/5' : 'border-border bg-card'}`}>
-										<div class="flex items-start justify-between gap-3">
-											<div>
-												<p class="font-bold text-foreground">{row.nama}</p>
-												<p class="text-xs text-muted-foreground">{row.nis} · Meja {row.seat_no ?? '—'}</p>
-											</div>
-											<Badge variant="outline" class={riskClass(row)}>{participantAttentionLabel(row)}</Badge>
-							{#if row.client_type === 'web_fallback'}
-								<Badge variant="outline" class="border-warning/30 bg-warning/10 text-warning">Browser Darurat</Badge>
-							{/if}
-										</div>
-										<div class="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-											<div class="rounded-lg bg-muted p-2"><p class="font-bold">{heartbeatLabel(row)}</p><p class="text-muted-foreground">Koneksi</p></div>
-											<div class="rounded-lg bg-muted p-2"><p class="font-bold">{row.answered_count}</p><p class="text-muted-foreground">Jawab</p></div>
-											<div class="rounded-lg bg-muted p-2"><p class="font-bold">{row.submitted_at ? 'Ya' : 'Belum'}</p><p class="text-muted-foreground">Sudah kirim</p></div>
-										</div>
-										<div class="mt-3 flex flex-wrap justify-end gap-2">
-											<Button size="sm" variant="outline" onclick={() => void flagParticipant(row, !row.suspicious_flag)}>{row.suspicious_flag ? 'Bersihkan' : 'Periksa'}</Button>
-											<LoadingButton size="sm" variant="outline" onclick={() => void sendParticipantCommand(row, 'warning_message')} loading={actionBusyId === `command-warning_message-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `command-warning_message-${row.participant_id}`} loadingLabel="Mengirim...">Peringatkan</LoadingButton>
-											<LoadingButton size="sm" variant="outline" onclick={() => void sendParticipantCommand(row, 'reconnect')} loading={actionBusyId === `command-reconnect-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `command-reconnect-${row.participant_id}`} loadingLabel="Mengirim...">Instruksi masuk ulang</LoadingButton>
-											{#if participantLocked(row)}
-												<LoadingButton size="sm" onclick={() => void unlockParticipant(row)} loading={actionBusyId === `unlock-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `unlock-${row.participant_id}`} loadingLabel="Membuka...">Buka Kunci</LoadingButton>
-											{/if}
-											<LoadingButton size="sm" variant="outline" onclick={() => void resetAccess(row)} loading={actionBusyId === `reset-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `reset-${row.participant_id}`} loadingLabel="Mengatur...">Atur ulang akses</LoadingButton>
-										</div>
-									</div>
-								{/each}
-							</div>
-						{/if}
-					</Card.Content>
-				</Card.Root>
+						<div class="flex flex-wrap gap-1.5" role="tablist" aria-label="Filter peserta ruang">
+							{#each participantFilters as filter}
+								<button type="button" role="tab" class={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${participantFilter === filter.key ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-muted-foreground hover:text-foreground'}`} aria-label={filter.aria} aria-selected={participantFilter === filter.key} onclick={() => (participantFilter = filter.key)}>
+									{filter.label} <span class="ml-1 opacity-80">{participantFilterCount(filter.key)}</span>
+								</button>
+							{/each}
+						</div>
+					</div>
+					{#if filteredParticipants.length === 0}
+						<div class="p-4 text-center text-sm text-muted-foreground">Tidak ada peserta yang butuh tindakan pada filter ini.</div>
+					{:else}
+						<div class="overflow-x-auto">
+							<table class="min-w-[980px] w-full text-left text-xs">
+								<thead class="border-b border-border bg-muted/40 text-muted-foreground">
+									<tr>
+										<th class="px-3 py-2 font-semibold">Peserta</th>
+										<th class="px-3 py-2 font-semibold">Status</th>
+										<th class="px-3 py-2 font-semibold">Koneksi</th>
+										<th class="px-3 py-2 font-semibold">Jawab</th>
+										<th class="px-3 py-2 font-semibold">Kirim</th>
+										<th class="px-3 py-2 text-right font-semibold">Aksi</th>
+									</tr>
+								</thead>
+								<tbody class="divide-y divide-border">
+									{#each filteredParticipants as row (row.participant_id)}
+										<tr class={participantLocked(row) ? 'bg-destructive/5' : participantNeedsAttention(row) ? 'bg-warning/5' : ''}>
+											<td class="px-3 py-2"><p class="font-semibold text-foreground">{row.nama}</p><p class="text-muted-foreground">{row.nis} · Meja {row.seat_no ?? '—'}</p></td>
+											<td class="px-3 py-2"><Badge variant="outline" class={riskClass(row)}>{participantAttentionLabel(row)}</Badge>{#if row.client_type === 'web_fallback'} <Badge variant="outline" class="ml-1 border-warning/30 bg-warning/10 text-warning">Browser</Badge>{/if}</td>
+											<td class="px-3 py-2 font-semibold text-foreground">{heartbeatLabel(row)}</td>
+											<td class="px-3 py-2 font-semibold text-foreground">{row.answered_count}</td>
+											<td class="px-3 py-2 font-semibold text-foreground">{row.submitted_at ? 'Ya' : 'Belum'}</td>
+											<td class="px-3 py-2"><div class="flex flex-wrap justify-end gap-1.5"><Button size="sm" variant="outline" onclick={() => void flagParticipant(row, !row.suspicious_flag)}>{row.suspicious_flag ? 'Bersihkan' : 'Periksa'}</Button><LoadingButton size="sm" variant="outline" onclick={() => void sendParticipantCommand(row, 'warning_message')} loading={actionBusyId === `command-warning_message-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `command-warning_message-${row.participant_id}`} loadingLabel="Mengirim...">Peringatkan</LoadingButton><LoadingButton size="sm" variant="outline" onclick={() => void sendParticipantCommand(row, 'reconnect')} loading={actionBusyId === `command-reconnect-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `command-reconnect-${row.participant_id}`} loadingLabel="Mengirim...">Masuk Ulang</LoadingButton>{#if participantLocked(row)}<LoadingButton size="sm" onclick={() => void unlockParticipant(row)} loading={actionBusyId === `unlock-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `unlock-${row.participant_id}`} loadingLabel="Membuka...">Buka</LoadingButton>{/if}<LoadingButton size="sm" variant="outline" onclick={() => void resetAccess(row)} loading={actionBusyId === `reset-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `reset-${row.participant_id}`} loadingLabel="Mengatur...">Reset</LoadingButton></div></td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					{/if}
+				</section>
 
 				<Card.Root class="border-primary/20">
 					<Card.Header class="pb-3">
