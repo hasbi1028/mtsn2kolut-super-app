@@ -1944,7 +1944,7 @@ const listCbtExamSessions = `-- name: ListCbtExamSessions :many
 SELECT
   s.id, s.package_id, p.title AS package_title,
   p.locked_at AS package_locked_at, p.snapshot_version AS package_snapshot_version,
-  s.class_id, s.event_id,
+  s.class_id, s.event_id, COALESCE(e.title, '') AS event_title,
   COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
   s.scope_type, s.scope_ref, s.mix_policy, s.assignment_mode, s.allow_cross_grade, s.is_special_event,
   s.title, s.scheduled_start, s.scheduled_end, s.status,
@@ -1959,6 +1959,7 @@ SELECT
   COALESCE(rs.proctor_assignment_count, 0)::int AS proctor_assignment_count
 FROM cbt_exam_sessions s
 JOIN cbt_packages p ON p.id = s.package_id
+LEFT JOIN cbt_exam_events e ON e.id = s.event_id
 LEFT JOIN school_classes c ON c.id = s.class_id
 LEFT JOIN (
   SELECT
@@ -1996,6 +1997,7 @@ type ListCbtExamSessionsRow struct {
 	PackageSnapshotVersion     int32                `json:"package_snapshot_version"`
 	ClassID                    pgtype.UUID          `json:"class_id"`
 	EventID                    pgtype.UUID          `json:"event_id"`
+	EventTitle                 string               `json:"event_title"`
 	ClassName                  string               `json:"class_name"`
 	ClassCode                  string               `json:"class_code"`
 	ScopeType                  string               `json:"scope_type"`
@@ -2037,6 +2039,7 @@ func (q *Queries) ListCbtExamSessions(ctx context.Context) ([]ListCbtExamSession
 			&i.PackageSnapshotVersion,
 			&i.ClassID,
 			&i.EventID,
+			&i.EventTitle,
 			&i.ClassName,
 			&i.ClassCode,
 			&i.ScopeType,

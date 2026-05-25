@@ -25,6 +25,7 @@
 		title: string; scheduled_start: string; scheduled_end: string;
 		status: string; participant_count: number; created_at: string;
 		event_id?: string | null;
+		event_title?: string | null;
 		room_count: number; total_capacity: number;
 		assigned_participant_count: number; unassigned_participant_count: number;
 		missing_seat_count: number; rooms_without_proctor: number; proctor_assignment_count: number;
@@ -229,6 +230,17 @@
 		if (session.scope_type === 'school') return 'Seluruh sekolah';
 		if (session.scope_type === 'custom') return session.scope_ref || 'Peserta khusus';
 		return session.class_code || session.class_name || 'Per kelas';
+	}
+
+	function sessionContextLabel(session: ExamSession) {
+		if (session.event_id) return `Kegiatan: ${session.event_title || eventContext?.title || 'tertaut'}`;
+		return 'Mandiri';
+	}
+
+	function sessionContextClass(session: ExamSession) {
+		return session.event_id
+			? 'border-success/20 bg-success/10 text-success'
+			: 'border-warning/30 bg-warning/10 text-warning';
 	}
 
 	function mixPolicyLabel(value: string) {
@@ -935,8 +947,8 @@
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
 			<p class="text-xs font-semibold uppercase tracking-[0.16em] text-success">Kegiatan & Sesi</p>
-			<h1 class="text-2xl font-semibold text-foreground">Sesi Ujian</h1>
-			<p class="text-sm text-muted-foreground mt-1">Daftar sesi ujian sebagai bagian dari alur Kegiatan & Sesi{eventId ? ' untuk kegiatan ini' : ''}.</p>
+			<h1 class="text-2xl font-semibold text-foreground">{eventId ? 'Sesi Kegiatan' : 'Sesi Ujian Mandiri'}</h1>
+			<p class="text-sm text-muted-foreground mt-1">{eventId ? 'Hanya menampilkan sesi yang benar-benar tertaut ke kegiatan aktif.' : 'Menampilkan sesi global/mandiri. Sesi kegiatan sebaiknya dibuat dari detail Kegiatan agar tidak salah konteks.'}</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			{#if eventId}
@@ -1358,7 +1370,7 @@
 		<Card.Root class="overflow-hidden border-border shadow-sm">
 			<Card.Header class="space-y-3 pb-3">
 				<div class="flex flex-wrap items-center justify-between gap-2">
-					<Card.Title class="text-base">Sesi dalam Kegiatan ({visibleSessions.length}/{currentSessions.length})</Card.Title>
+					<Card.Title class="text-base">{eventId ? 'Sesi dalam Kegiatan' : 'Sesi Mandiri / Global'} ({visibleSessions.length}/{currentSessions.length})</Card.Title>
 					{#if readinessFilter !== 'all'}
 						<Button variant="outline" size="sm" onclick={() => setSessionReadinessFilter('all')}>
 							Reset Kesiapan
@@ -1436,6 +1448,10 @@
 							<Table.Row>
 								<Table.Cell class="font-medium max-w-48">
 									<p class="truncate">{s.title}</p>
+									<Badge variant="outline" class="mt-1 text-[11px] {sessionContextClass(s)}">{sessionContextLabel(s)}</Badge>
+									{#if !s.event_id && !eventId}
+										<p class="mt-1 text-[11px] text-warning">Tidak masuk arsip/kartu kegiatan.</p>
+									{/if}
 								</Table.Cell>
 								<Table.Cell class="max-w-44">
 									<p class="truncate text-sm text-muted-foreground">{s.package_title}</p>
@@ -1584,6 +1600,10 @@
 								<div class="min-w-0">
 									<p class="text-sm font-semibold text-foreground">{s.title}</p>
 									<p class="mt-1 text-xs text-muted-foreground">{s.package_title}</p>
+									<Badge variant="outline" class="mt-2 text-[11px] {sessionContextClass(s)}">{sessionContextLabel(s)}</Badge>
+									{#if !s.event_id && !eventId}
+										<p class="mt-1 text-[11px] text-warning">Sesi mandiri tidak masuk arsip/kartu kegiatan.</p>
+									{/if}
 								</div>
 								<Badge class={statusClass(s.status)}>{sessionActionLabel(s.status)}</Badge>
 							</div>
