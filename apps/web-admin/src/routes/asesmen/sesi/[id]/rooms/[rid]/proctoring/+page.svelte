@@ -1122,29 +1122,30 @@
 	<title>Panel Pengawas Ruang Ujian</title>
 </svelte:head>
 
-<div class="space-y-5">
-	<div class="sticky top-0 z-20 -mx-2 flex flex-col gap-3 border-b border-primary/20 bg-background/95 px-2 py-3 backdrop-blur md:flex-row md:items-start md:justify-between">
-		<div>
-			<a href={resolve(`/asesmen/sesi/${sessionId}`)} class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Kembali ke detail sesi</a>
-			<h1 class="mt-2 text-2xl font-bold tracking-tight text-foreground">Panel Pengawas Ruang</h1>
-			<p class="text-sm text-muted-foreground">{room?.session_title ?? 'Memuat sesi'} · {room?.room_name ?? 'Memuat ruang'}</p>
+<div class="space-y-3">
+	<div class="sticky top-0 z-20 -mx-2 flex flex-col gap-2 border-b border-border bg-background/95 px-2 py-2 backdrop-blur md:flex-row md:items-center md:justify-between">
+		<div class="min-w-0">
+			<a href={resolve(`/asesmen/sesi/${sessionId}`)} class="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Kembali ke detail sesi</a>
+			<div class="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+				<h1 class="text-lg font-bold tracking-tight text-foreground">Panel Pengawas</h1>
+				<span class="text-sm font-semibold text-muted-foreground">{room?.room_name ?? 'Memuat ruang'}</span>
+			</div>
+			<p class="truncate text-xs text-muted-foreground">{room?.session_title ?? 'Memuat sesi'}</p>
 		</div>
-		<div class="flex flex-wrap items-center gap-2">
+		<div class="flex flex-wrap items-center gap-1.5">
 			<Badge variant="outline" class={liveModeClass()}>{liveModeLabel()}</Badge>
 			<Badge variant="outline" class={lastProctorHeartbeatAt ? 'border-primary/20 bg-primary/10 text-primary' : 'border-warning/30 bg-warning/10 text-warning'}>
-				Pengawas {lastProctorHeartbeatAt ? `terhubung ${fmtDate(lastProctorHeartbeatAt)}` : 'menghubungkan'}
+				{lastProctorHeartbeatAt ? `Online ${fmtDate(lastProctorHeartbeatAt)}` : 'Menghubungkan'}
 			</Badge>
 			{#if backgroundBusy}
-				<Badge variant="outline" class="border-primary/20 text-primary">Memperbarui</Badge>
+				<Badge variant="outline" class="border-primary/20 text-primary">Update</Badge>
 			{/if}
-			<Button variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/proctoring/report`)}>
-				Berita Acara
+			<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/proctoring/report`)}>BA</Button>
+			<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/print-pack`)}>
+				<PrinterIcon class="mr-1.5 size-3.5" />
+				Cetak
 			</Button>
-			<Button variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/print-pack`)}>
-				<PrinterIcon class="mr-2 size-4" />
-				Paket Cetak
-			</Button>
-			<LoadingButton onclick={() => void refreshDashboard()} loading={refreshBusy} loadingLabel="Memuat...">
+			<LoadingButton size="sm" onclick={() => void refreshDashboard()} loading={refreshBusy} loadingLabel="Memuat...">
 				Muat Ulang
 			</LoadingButton>
 		</div>
@@ -1154,14 +1155,11 @@
 		<OperationStatusPanel {...operationState} />
 	{/if}
 
-	<div class="flex flex-col gap-3 rounded-2xl border border-border bg-card p-3 shadow-sm md:flex-row md:items-center md:justify-between">
-		<div>
-			<p class="text-sm font-bold text-foreground">Tampilan Pengawas Ruang</p>
-			<p class="text-xs text-muted-foreground">Tampilan hari-H menonjolkan prioritas tindakan, ringkasan serah terima, dan tombol cepat.</p>
-		</div>
-		<div class="inline-flex w-fit rounded-full border border-border bg-muted/50 p-1 text-xs font-semibold" role="tablist" aria-label="Mode tampilan pengawas">
-			<button type="button" role="tab" class={`rounded-full px-3 py-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${proctorViewMode === 'simple' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`} aria-selected={proctorViewMode === 'simple'} onclick={() => (proctorViewMode = 'simple')}>Tampilan Hari-H</button>
-			<button type="button" role="tab" class={`rounded-full px-3 py-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${proctorViewMode === 'complete' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`} aria-selected={proctorViewMode === 'complete'} onclick={() => (proctorViewMode = 'complete')}>Rincian Lengkap</button>
+	<div class="flex flex-col gap-2 rounded-xl border border-border bg-muted/20 px-3 py-2 md:flex-row md:items-center md:justify-between">
+		<p class="text-xs text-muted-foreground"><span class="font-semibold text-foreground">Mode pengawas:</span> prioritas, status kirim, dan serah terima.</p>
+		<div class="inline-flex w-fit rounded-full border border-border bg-background p-0.5 text-[11px] font-semibold" role="tablist" aria-label="Mode tampilan pengawas">
+			<button type="button" role="tab" class={`rounded-full px-2.5 py-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${proctorViewMode === 'simple' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`} aria-selected={proctorViewMode === 'simple'} onclick={() => (proctorViewMode = 'simple')}>Hari-H</button>
+			<button type="button" role="tab" class={`rounded-full px-2.5 py-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${proctorViewMode === 'complete' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`} aria-selected={proctorViewMode === 'complete'} onclick={() => (proctorViewMode = 'complete')}>Rinci</button>
 		</div>
 	</div>
 
@@ -1217,69 +1215,50 @@
 		{/snippet}
 
 		{#if room}
-				<div class="grid gap-3 md:grid-cols-4">
-					<Card.Root class="border-primary/20">
-						<Card.Header class="pb-2">
-							<Card.Title class="text-sm text-muted-foreground">Butuh tindakan</Card.Title>
-						</Card.Header>
-						<Card.Content>
-							<div class="text-2xl font-bold text-warning">{attentionParticipants.length}</div>
-							<p class="text-xs text-muted-foreground">{participantStats.locked} terkunci, {participantStats.highRisk} risiko tinggi</p>
-						</Card.Content>
-					</Card.Root>
-					<Card.Root class="border-primary/20">
-						<Card.Header class="pb-2">
-							<Card.Title class="text-sm text-muted-foreground">Waspada / Terputus</Card.Title>
-						</Card.Header>
-						<Card.Content>
-							<div class="text-2xl font-bold text-warning">{participantStats.stale + participantStats.offline}</div>
-							<p class="text-xs text-muted-foreground">Perlu dicek pengawas</p>
-						</Card.Content>
-					</Card.Root>
-					<Card.Root class={room.allow_web_fallback ? 'border-warning/30 bg-warning/5' : 'border-primary/20'}>
-						<Card.Header class="pb-2">
-							<Card.Title class="text-sm text-muted-foreground">Browser Darurat</Card.Title>
-						</Card.Header>
-						<Card.Content>
-							<div class="text-2xl font-bold text-warning">{participantStats.webFallback}</div>
-							<p class="text-xs text-muted-foreground">{room.allow_web_fallback ? 'Akses browser darurat aktif' : 'Nonaktif'}</p>
-						</Card.Content>
-					</Card.Root>
-					<Card.Root class="border-primary/20">
-						<Card.Header class="pb-2">
-								<Card.Title class="text-sm text-muted-foreground">Sudah kirim</Card.Title>
-						</Card.Header>
-						<Card.Content>
-							<div class="text-2xl font-bold text-foreground">{participantStats.submitted}</div>
-							<p class="text-xs text-muted-foreground">Dari {room.participant_count} peserta</p>
-						</Card.Content>
-					</Card.Root>
+				<div class="grid gap-2 md:grid-cols-4">
+					<div class="rounded-lg border border-border bg-card px-3 py-2">
+						<p class="text-[11px] text-muted-foreground">Butuh tindakan</p>
+						<div class="flex items-end justify-between gap-2"><span class="text-xl font-bold text-warning">{attentionParticipants.length}</span><span class="text-[11px] text-muted-foreground">{participantStats.locked} kunci · {participantStats.highRisk} risiko</span></div>
+					</div>
+					<div class="rounded-lg border border-border bg-card px-3 py-2">
+						<p class="text-[11px] text-muted-foreground">Waspada / terputus</p>
+						<div class="flex items-end justify-between gap-2"><span class="text-xl font-bold text-warning">{participantStats.stale + participantStats.offline}</span><span class="text-[11px] text-muted-foreground">cek pengawas</span></div>
+					</div>
+					<div class={`rounded-lg border px-3 py-2 ${room.allow_web_fallback ? 'border-warning/30 bg-warning/5' : 'border-border bg-card'}`}>
+						<p class="text-[11px] text-muted-foreground">Browser darurat</p>
+						<div class="flex items-end justify-between gap-2"><span class="text-xl font-bold text-warning">{participantStats.webFallback}</span><span class="text-[11px] text-muted-foreground">{room.allow_web_fallback ? 'aktif' : 'nonaktif'}</span></div>
+					</div>
+					<div class="rounded-lg border border-border bg-card px-3 py-2">
+						<p class="text-[11px] text-muted-foreground">Sudah kirim</p>
+						<div class="flex items-end justify-between gap-2"><span class="text-xl font-bold text-foreground">{participantStats.submitted}</span><span class="text-[11px] text-muted-foreground">/{room.participant_count} peserta</span></div>
+					</div>
 				</div>
 
 				<Card.Root class="border-primary/20">
-					<Card.Header class="pb-3">
-						<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+					<Card.Header class="px-4 py-3">
+						<div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
 							<div>
-								<Card.Title>Prioritas Tindakan Hari-H</Card.Title>
-								<Card.Description>Urutan cek cepat untuk pengawas ruang sebelum ujian ditutup atau serah terima dikunci.</Card.Description>
+								<Card.Title class="text-base">Prioritas Hari-H</Card.Title>
+								<Card.Description class="text-xs">Klik baris untuk membuka filter peserta terkait.</Card.Description>
 							</div>
 							<div class="flex flex-wrap gap-2">
-								<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/proctoring/report`)}>Buka Berita Acara</Button>
-								<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/print-pack`)}>Paket Cetak</Button>
+								<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/proctoring/report`)}>BA</Button>
+								<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/print-pack`)}>Cetak</Button>
 							</div>
 						</div>
 					</Card.Header>
-					<Card.Content class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-						{#each priorityCards as item (item.key)}
-							<button type="button" class={`rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${priorityCardClass(item.tone, item.count)}`} onclick={() => item.filter && (participantFilter = item.filter)} aria-label={`${item.label}: ${item.count}`}>
-								<p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{item.label}</p>
-								<p class={`mt-1 text-3xl font-bold ${priorityCountClass(item.tone, item.count)}`}>{item.count}</p>
-								<p class="mt-1 min-h-8 text-xs leading-4 text-muted-foreground">{item.detail}</p>
-								{#if item.filter}
-									<p class="mt-2 text-[11px] font-semibold text-primary">Lihat filter {participantFilters.find((filter) => filter.key === item.filter)?.label ?? 'atensi'}</p>
-								{/if}
-							</button>
-						{/each}
+					<Card.Content class="px-4 pb-4">
+						<div class="overflow-hidden rounded-lg border border-border">
+							{#each priorityCards as item (item.key)}
+								<button type="button" class={`grid w-full grid-cols-[minmax(0,1fr)_64px] items-center gap-3 border-b border-border px-3 py-2 text-left text-sm transition last:border-b-0 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${item.count > 0 ? '' : 'text-muted-foreground'}`} onclick={() => item.filter && (participantFilter = item.filter)} aria-label={`${item.label}: ${item.count}`}>
+									<span class="min-w-0">
+										<span class="block truncate font-semibold text-foreground">{item.label}</span>
+										<span class="block truncate text-xs text-muted-foreground">{item.detail}</span>
+									</span>
+									<span class={`text-right text-xl font-bold ${priorityCountClass(item.tone, item.count)}`}>{item.count}</span>
+								</button>
+							{/each}
+						</div>
 					</Card.Content>
 				</Card.Root>
 
