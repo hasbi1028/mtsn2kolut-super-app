@@ -32,6 +32,10 @@ tmp/
 /.playwright-mcp/
 /login-*.png
 /public-home-*.png
+/backups/
+/reports/
+/sketches/
+/:
 
 # Environment files
 .env
