@@ -52,3 +52,5 @@ Thumbs.db
 
 # Auto-generated
 apps/web-admin/README.md
+/.hermes/plans/
+/releases/mobile/cbt/

@@ -1,3 +1,5 @@
+// ignore_for_file: dead_code
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -99,12 +101,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Alamat server ujian'), findsOneWidget);
+    expect(find.text('Alamat perlu dicek pengawas/operator'), findsOneWidget);
     expect(
-      find.text('Alamat perlu dicek pengawas/operator'),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining('Pengawas/operator wajib memastikan alamat ini benar sebelum peserta login.'),
+      find.textContaining(
+        'Pengawas/operator wajib memastikan alamat ini benar sebelum peserta login.',
+      ),
       findsOneWidget,
     );
   });
@@ -134,7 +135,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('Alamat server siap digunakan'), findsOneWidget);
-    expect(find.textContaining('sesuai dengan arahan pengawas atau operator'), findsOneWidget);
+    expect(
+      find.textContaining('sesuai dengan arahan pengawas atau operator'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('login screen renders persistent guidance notice', (
@@ -781,37 +785,38 @@ void main() {
     expect(find.text('Aman'), findsWidgets);
   });
 
-  testWidgets('exam shell shows sync chip perlu sinkron when pending answers exist', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(1440, 2200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets(
+    'exam shell shows sync chip perlu sinkron when pending answers exist',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(
-      _TestApp(
-        child: ExamShellScreen(
-          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
-          examToken: 'abc12345',
-          deviceFingerprint: 'android:test',
-          autoStartRuntime: false,
-          restoredSnapshot: _sampleSnapshot(
-            pendingAnswers: const <String, String>{'question-1': 'B'},
+      await tester.pumpWidget(
+        _TestApp(
+          child: ExamShellScreen(
+            client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+            examToken: 'abc12345',
+            deviceFingerprint: 'android:test',
+            autoStartRuntime: false,
+            restoredSnapshot: _sampleSnapshot(
+              pendingAnswers: const <String, String>{'question-1': 'B'},
+            ),
+            initialPayload: _sampleLoginPayload(),
           ),
-          initialPayload: _sampleLoginPayload(),
         ),
-      ),
-    );
+      );
 
-    await tester.pump();
+      await tester.pump();
 
-    expect(find.text('Perlu sinkron'), findsWidgets);
-    expect(
-      find.textContaining('jawaban aman, perlu sinkron'),
-      findsOneWidget,
-    );
-  });
+      expect(find.text('Perlu sinkron'), findsWidgets);
+      expect(
+        find.textContaining('jawaban aman, perlu sinkron'),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('exam shell shows sync chip perlu pengawas for stale contact', (
     tester,
@@ -1402,10 +1407,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(
-      find.text('Tidak didukung aplikasi siswa'),
-      findsOneWidget,
-    );
+    expect(find.text('Tidak didukung aplikasi siswa'), findsOneWidget);
     expect(find.text('question_type: upload_answer'), findsOneWidget);
     expect(find.text('0 / 1'), findsOneWidget);
     expect(client.saveAnswerCount, 0);
@@ -1436,10 +1438,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(
-        find.text('Tidak didukung aplikasi siswa'),
-        findsOneWidget,
-      );
+      expect(find.text('Tidak didukung aplikasi siswa'), findsOneWidget);
       expect(find.text('question_type: upload_answer'), findsOneWidget);
       expect(find.text('0 / 1'), findsOneWidget);
       expect(find.text('1 / 1'), findsNothing);

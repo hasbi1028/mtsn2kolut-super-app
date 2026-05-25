@@ -34,8 +34,8 @@
 	const heroTitle = $derived(isAdminMode ? 'Hari-H Ujian Panitia' : 'Ruang Pengawasan Saya');
 	const heroSubtitle = $derived(
 		isAdminMode
-			? 'Kelola sesi, ruang, kartu, perangkat siswa, dan hasil dari satu layar kerja.'
-			: 'Buka ruang pengawasan, pantau peserta, cek perangkat siswa, lalu lihat hasil bila tersedia.'
+			? 'Kelola sesi, ruang, kartu, APK Flutter siswa, Browser Darurat, dan hasil dari satu layar kerja.'
+			: 'Buka ruang pengawasan, pantau peserta, cek APK Flutter siswa, lalu gunakan Browser Darurat hanya bila perlu.'
 	);
 
 	const dayTasks: DayTask[] = [
@@ -82,7 +82,7 @@
 		},
 		{
 			title: 'Perangkat Siswa',
-			description: 'Panduan aplikasi, koneksi, dan status perangkat siswa saat ujian.',
+			description: 'Jalur utama APK Flutter, Mode DEMO, dan Browser Darurat untuk perangkat yang tidak kompatibel.',
 			href: '/asesmen/aplikasi-siswa',
 			cta: 'Buka Panduan',
 			kind: 'support',

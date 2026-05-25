@@ -49,6 +49,7 @@ class ExamShellScreen extends StatefulWidget {
     this.initialIsSavingAnswer = false,
     this.initialErrorMessage,
     this.sessionStore,
+    this.demoMode = false,
   });
 
   final ExamApiClient client;
@@ -65,6 +66,7 @@ class ExamShellScreen extends StatefulWidget {
   final bool initialIsSavingAnswer;
   final String? initialErrorMessage;
   final ExamSessionStore? sessionStore;
+  final bool demoMode;
 
   @override
   State<ExamShellScreen> createState() => _ExamShellScreenState();
@@ -152,7 +154,14 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     );
     _consecutiveSyncFailures =
         widget.restoredSnapshot?.consecutiveSyncFailures ?? 0;
-    _serverNotice = widget.initialServerNotice;
+    _serverNotice = widget.demoMode
+        ? const ExamGuidanceNotice(
+            title: 'MODE DEMO — DATA CONTOH',
+            message:
+                'Jawaban disimpan lokal sementara di layar ini saja dan tidak dikirim ke server produksi.',
+            tone: ExamGuidanceTone.info,
+          )
+        : widget.initialServerNotice;
     _resumeCheckRequired = widget.initialResumeCheckRequired;
     _isResumingExam = widget.initialIsResumingExam;
     _isSyncingStatus = widget.initialIsSyncingStatus;
@@ -237,7 +246,8 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     final isNewSevereSignal =
         next.shouldBlockInteraction &&
         (!wasBlocking || previousReason != next.primaryReason);
-    final shouldCountViolation = isNewSevereSignal || shouldForceBlockingViolation;
+    final shouldCountViolation =
+        isNewSevereSignal || shouldForceBlockingViolation;
     final nextViolationCount = shouldCountViolation && !next.locked
         ? next.violationCount + 1
         : next.violationCount;
@@ -365,7 +375,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       }
       if (_timeRemainingSeconds <= 0) {
         timer.cancel();
-        _submit(autoSubmit: true);
+        if (!widget.demoMode) {
+          _submit(autoSubmit: true);
+        }
         return;
       }
       setState(() {
@@ -737,6 +749,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   }
 
   Future<void> _persistSnapshot() async {
+    if (widget.demoMode) {
+      return;
+    }
     await _sessionStore.saveSnapshot(
       ExamSessionSnapshot(
         baseUrl: widget.client.baseUrl,

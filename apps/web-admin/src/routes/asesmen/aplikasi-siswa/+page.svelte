@@ -95,7 +95,7 @@
 			]
 		},
 		{
-			title: 'Panduan BYOD',
+			title: 'Panduan Perangkat Siswa',
 			description: 'Bahan pengawas saat perlu menjelaskan status, kirim ujian, dan alur uji coba kepada siswa.',
 			links: [
 				{
@@ -109,7 +109,7 @@
 					description: 'Pemeriksaan singkat sebelum siswa menekan Kirim Ujian.'
 				},
 				{
-					label: 'Alur Uji Coba BYOD',
+					label: 'Alur Uji Coba APK',
 					href: '#trial-flow',
 					description: 'Urutan latihan untuk operator dan pengawas.'
 				}
@@ -147,7 +147,7 @@
 </script>
 
 <svelte:head>
-	<title>Panduan BYOD CBT — MTsN 2 Kolaka Utara</title>
+	<title>Perangkat Siswa CBT — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 <div class="space-y-6">
@@ -155,10 +155,9 @@
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-3">
 				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Modul 4 dari 5 · Pemantauan</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Panduan Aplikasi Siswa BYOD</h1>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Perangkat Siswa CBT</h1>
 				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
-					Mulai dari kebutuhan hari-H: buka sesi aktif, pantau panel ruang, lalu gunakan panduan status
-					hanya saat pengawas perlu membaca sinyal koneksi siswa.
+					Jalur utama siswa adalah APK Flutter CBT. Browser Darurat hanya dipakai jika perangkat tidak kompatibel atau APK gagal digunakan, dengan pengawasan wajib.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-3">
@@ -166,6 +165,7 @@
 				<Button href="/asesmen/sesi?schedule=today">Pantau Sesi Hari Ini</Button>
 				<Button href="/asesmen/pengawasan" variant="outline">Panel Ruang</Button>
 				<Button href="#status-guide" variant="outline">Panduan Status</Button>
+				<Button href="/ujian?demo=1" variant="outline">Demo Browser</Button>
 			</div>
 		</div>
 	</section>
@@ -174,7 +174,7 @@
 		<Card.Header class="p-4 pb-2">
 			<Card.Title class="text-base text-foreground">Pantau Ujian Dulu</Card.Title>
 			<Card.Description class="text-xs leading-5">
-				Tiga grup sederhana untuk pemantauan: hari-H dulu, panduan setelahnya, perangkat dan kesiapan sebagai dukungan.
+				Tiga grup sederhana: APK Flutter sebagai jalur utama, panduan status saat pengawasan, dan Browser Darurat hanya sebagai fallback terbatas.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="grid gap-3 p-4 lg:grid-cols-3">

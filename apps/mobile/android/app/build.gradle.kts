@@ -48,7 +48,9 @@ android {
         applicationId = "id.sch.mtsn2kolutara.mobile"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // Android 7.0+ baseline keeps APK compatibility broad while retaining
+        // modern Flutter/plugin support for the CBT anti-cheat runtime.
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

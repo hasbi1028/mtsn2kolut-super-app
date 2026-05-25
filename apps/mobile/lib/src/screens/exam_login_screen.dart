@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../device_fingerprint.dart';
+import '../demo_exam_data.dart';
 import '../exam_api.dart';
 import '../exam_error_messages.dart';
 import '../exam_format.dart';
@@ -189,7 +190,8 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
 
     if (roomToken.length < 4 || roomToken.length > 64) {
       setState(() {
-        _errorMessage = 'Token ruang tidak valid. Minta token ruang kepada pengawas.';
+        _errorMessage =
+            'Token ruang tidak valid. Minta token ruang kepada pengawas.';
         _errorNotice = null;
       });
       return;
@@ -271,6 +273,47 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
         _errorMessage = 'Tidak dapat terhubung ke server ujian.';
         _errorNotice = null;
       });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _startDemoMode() async {
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _errorNotice = null;
+    });
+    try {
+      final client = DemoExamApiClient();
+      final payload = buildDemoExamPayload();
+      if (!mounted) {
+        return;
+      }
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ExamShellScreen(
+            client: client,
+            examToken: kDemoExamToken,
+            roomToken: kDemoRoomToken,
+            initialPayload: payload,
+            deviceFingerprint: kDemoDeviceFingerprint,
+            autoStartRuntime: true,
+            demoMode: true,
+            initialServerNotice: const ExamGuidanceNotice(
+              title: 'MODE DEMO — DATA CONTOH',
+              message:
+                  'Mode ini memakai soal contoh lokal. Jawaban tidak dikirim ke server dan tidak menjadi nilai ujian.',
+              tone: ExamGuidanceTone.info,
+            ),
+            sessionStore: _sessionStore,
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -465,6 +508,12 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
               _ExamGuidancePanel(notice: _errorNotice!),
             ],
             const SizedBox(height: 12),
+            if (kCbtDemoModeEnabled) ...[
+              _DemoModePanel(
+                onStartDemo: _isSubmitting ? null : _startDemoMode,
+              ),
+              const SizedBox(height: 12),
+            ],
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
@@ -802,6 +851,60 @@ class _BaseUrlGuidance extends StatelessWidget {
                   style: theme.textTheme.bodySmall?.copyWith(height: 1.4),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DemoModePanel extends StatelessWidget {
+  const _DemoModePanel({required this.onStartDemo});
+
+  final VoidCallback? onStartDemo;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7E6),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFF59E0B)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.science_outlined, color: Color(0xFF92400E)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'MODE DEMO — DATA CONTOH',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF92400E),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Untuk tes cepat tampilan, alur pengerjaan, dan perilaku perangkat tanpa membuat simulasi/gladi. Jawaban tidak dikirim ke server.',
+            style: theme.textTheme.bodySmall?.copyWith(height: 1.45),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onStartDemo,
+              icon: const Icon(Icons.play_arrow_outlined),
+              label: const Text('Masuk Mode DEMO'),
             ),
           ),
         ],
