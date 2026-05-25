@@ -1,12 +1,20 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { MicroActionTable } from '$lib/components/ops';
 
-	type PelaksanaanRoute = '/asesmen/aplikasi-siswa' | '/asesmen/sesi' | '/asesmen/pengawasan' | '/asesmen/kegiatan' | '/asesmen/persiapan' | '/asesmen';
+	type PelaksanaanRoute =
+		| '/asesmen/aplikasi-siswa'
+		| '/asesmen/sesi'
+		| '/asesmen/pengawasan'
+		| '/asesmen/kegiatan'
+		| '/asesmen/persiapan'
+		| '/asesmen/hasil'
+		| '/asesmen';
+	type RoleMode = 'admin' | 'guru' | 'staf';
+	type TaskKind = 'primary' | 'support' | 'result';
 
 	type DayTask = {
 		title: string;
@@ -14,132 +22,161 @@
 		href: PelaksanaanRoute;
 		query?: string;
 		cta: string;
-		tone: 'monitor' | 'room' | 'guide' | 'print';
+		kind: TaskKind;
+		roles: RoleMode[];
 	};
 
 	const userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
 	const canAccess = $derived(userRoles.includes('admin') || userRoles.includes('guru') || userRoles.includes('staf'));
-	const canOpenPersiapan = $derived(userRoles.includes('admin') || userRoles.includes('guru'));
+	const roleMode = $derived<RoleMode>(userRoles.includes('admin') ? 'admin' : userRoles.includes('guru') ? 'guru' : 'staf');
+	const isAdminMode = $derived(roleMode === 'admin');
+	const roleName = $derived(isAdminMode ? 'Admin/Panitia' : roleMode === 'guru' ? 'Guru/Pengawas' : 'Staf/Operator');
+	const heroTitle = $derived(isAdminMode ? 'Hari-H Ujian Panitia' : 'Ruang Pengawasan Saya');
+	const heroSubtitle = $derived(
+		isAdminMode
+			? 'Kelola sesi, ruang, kartu, perangkat siswa, dan hasil dari satu layar kerja.'
+			: 'Buka ruang pengawasan, pantau peserta, cek perangkat siswa, lalu lihat hasil bila tersedia.'
+	);
 
-	const adminDayTasks: DayTask[] = [
+	const dayTasks: DayTask[] = [
 		{
-			title: 'Pantau Sesi Hari Ini',
-			description: 'Buka daftar sesi dengan fokus jadwal hari ini untuk memastikan ujian aktif dan token ujian terkendali.',
+			title: 'Persiapan',
+			description: 'Kembali ke checklist kegiatan, paket, sesi, ruang, peserta, dan token.',
+			href: '/asesmen/persiapan',
+			cta: 'Buka Persiapan',
+			kind: 'support',
+			roles: ['admin']
+		},
+		{
+			title: 'Sesi Hari Ini',
+			description: 'Lihat jadwal/sesi aktif dan status ujian yang sedang berjalan.',
 			href: '/asesmen/sesi',
 			query: '?schedule=today',
-			cta: 'Pantau Sesi',
-			tone: 'monitor'
+			cta: 'Buka Sesi',
+			kind: 'primary',
+			roles: ['admin']
 		},
 		{
-			title: 'Panel Ruang',
-			description: 'Masuk ke pantauan ruang untuk membantu pengawas membaca status peserta dan kebutuhan tindak lanjut.',
+			title: 'Pantau Ruang',
+			description: 'Buka daftar ruang, status peserta, dan atensi yang perlu ditangani.',
 			href: '/asesmen/pengawasan',
-			cta: 'Buka Ruang',
-			tone: 'room'
+			cta: 'Pantau Ruang',
+			kind: 'primary',
+			roles: ['admin', 'guru', 'staf']
 		},
 		{
-			title: 'Panduan BYOD',
-			description: 'Gunakan ringkasan status koneksi, kesiapan kirim ujian, dan panduan perangkat siswa saat ujian berlangsung.',
-			href: '/asesmen/aplikasi-siswa',
-			cta: 'Baca Panduan',
-			tone: 'guide'
+			title: 'Pantau Peserta',
+			description: 'Masuk ke panel ruang untuk melihat peserta terkunci, offline, atau belum kirim.',
+			href: '/asesmen/pengawasan',
+			cta: 'Buka Panel',
+			kind: 'primary',
+			roles: ['guru', 'staf']
 		},
 		{
-			title: 'Cetak Kartu via Kegiatan',
-			description: 'Cetak kartu ujian dari detail kegiatan agar kartu tetap mengikuti peserta dan sesi yang benar.',
+			title: 'Cetak Kartu Peserta',
+			description: 'Cetak kartu dari kegiatan ujian jika ada peserta yang membutuhkan salinan.',
 			href: '/asesmen/kegiatan',
 			cta: 'Pilih Kegiatan',
-			tone: 'print'
+			kind: 'support',
+			roles: ['admin']
+		},
+		{
+			title: 'Perangkat Siswa',
+			description: 'Panduan aplikasi, koneksi, dan status perangkat siswa saat ujian.',
+			href: '/asesmen/aplikasi-siswa',
+			cta: 'Buka Panduan',
+			kind: 'support',
+			roles: ['admin', 'guru', 'staf']
+		},
+		{
+			title: 'Hasil',
+			description: 'Buka rekap, nilai, dan hasil sesi setelah ujian selesai.',
+			href: '/asesmen/hasil',
+			cta: 'Lihat Hasil',
+			kind: 'result',
+			roles: ['admin', 'guru']
 		}
 	];
 
-	const operatorDayTasks: DayTask[] = [
-		{
-			title: 'Panel Ruang',
-			description: 'Masuk ke pantauan ruang untuk membantu pengawas membaca status peserta dan kebutuhan tindak lanjut.',
-			href: '/asesmen/pengawasan',
-			cta: 'Buka Ruang',
-			tone: 'room'
-		},
-		{
-			title: 'Panduan BYOD',
-			description: 'Gunakan ringkasan status koneksi, kesiapan kirim ujian, dan panduan perangkat siswa saat ujian berlangsung.',
-			href: '/asesmen/aplikasi-siswa',
-			cta: 'Baca Panduan',
-			tone: 'guide'
-		},
-		{
-			title: 'Panduan Status',
-			description: 'Samakan bahasa status Tersambung, Lokal, Waspada, Gangguan, dan Menurun untuk siswa dan pengawas.',
-			href: '/asesmen/aplikasi-siswa',
-			cta: 'Buka Panduan Status',
-			tone: 'monitor'
-		}
-	];
-
-	const dayTasks = $derived(userRoles.includes('admin') ? adminDayTasks : operatorDayTasks);
+	const visibleTasks = $derived(dayTasks.filter((task) => task.roles.includes(roleMode)));
+	const primaryTask = $derived(visibleTasks.find((task) => task.kind === 'primary') ?? visibleTasks[0]);
+	const secondaryTasks = $derived(visibleTasks.filter((task) => task !== primaryTask));
 	const dayTaskColumns = [
-		{ key: 'task', label: 'Tugas', class: 'min-w-64' },
-		{ key: 'focus', label: 'Fokus' },
-		{ key: 'tone', label: 'Tipe', headClass: 'text-right', class: 'text-right' },
+		{ key: 'task', label: 'Pekerjaan', class: 'min-w-56' },
+		{ key: 'focus', label: 'Fokus', class: 'min-w-[20rem]' },
+		{ key: 'kind', label: 'Jenis', headClass: 'text-right', class: 'text-right' }
 	];
 
-	function toneClass(tone: DayTask['tone']): string {
-		switch (tone) {
-			case 'monitor':
+	function taskHref(task: DayTask): string {
+		return `${resolve(task.href)}${task.query ?? ''}`;
+	}
+
+	function kindLabel(kind: TaskKind): string {
+		switch (kind) {
+			case 'primary':
+				return 'Utama';
+			case 'support':
+				return 'Bantuan';
+			case 'result':
+				return 'Akhir';
+		}
+	}
+
+	function kindClass(kind: TaskKind): string {
+		switch (kind) {
+			case 'primary':
 				return 'border-primary/20 bg-primary/10 text-primary';
-			case 'room':
-				return 'border-primary/20 bg-primary/10 text-primary';
-			case 'guide':
-				return 'border-primary/20 bg-primary/10 text-primary';
-			case 'print':
-				return 'border-warning/30 bg-warning/10 text-warning';
+			case 'support':
+				return 'border-border bg-muted text-muted-foreground';
+			case 'result':
+				return 'border-success/30 bg-success/10 text-success';
 		}
 	}
 </script>
 
 <svelte:head>
-	<title>Pelaksanaan Ujian CBT — MTsN 2 Kolaka Utara</title>
+	<title>Hari-H Ujian — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 {#if canAccess}
-	<div class="space-y-6">
-	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
-		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-			<div class="max-w-3xl space-y-3">
-				<div class="flex flex-wrap items-center gap-2">
-					<Badge class="border-primary/20 bg-card text-primary" variant="outline">CBT · Hari-H</Badge>
-					<Badge class="border-border bg-card text-muted-foreground" variant="outline">Tanpa perubahan data</Badge>
+	<div class="space-y-4">
+		<section class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+			<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+				<div class="min-w-0 space-y-2">
+					<div class="flex flex-wrap items-center gap-2">
+						<Badge class="border-primary/20 bg-primary/10 text-primary" variant="outline">Hari-H</Badge>
+						<Badge class="border-border bg-muted text-muted-foreground" variant="outline">{roleName}</Badge>
+					</div>
+					<h1 class="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">{heroTitle}</h1>
+					<p class="max-w-2xl text-sm leading-6 text-muted-foreground">{heroSubtitle}</p>
 				</div>
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Pelaksanaan Ujian CBT</h1>
-				<p class="max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
-					Fokus hari ujian dibuat ringkas: pantau sesi aktif, buka panel ruang, baca panduan BYOD, dan cetak kartu dari
-					Kegiatan Asesmen bila diperlukan.
-				</p>
-			</div>
-			<div class="flex flex-wrap gap-3">
-				{#if canOpenPersiapan}
-					<Button href={resolve('/asesmen/persiapan')} variant="outline">Kembali ke Persiapan</Button>
-				{:else}
-					<Button href={resolve('/asesmen')} variant="outline">Kembali ke Beranda</Button>
+				{#if primaryTask}
+					<div class="flex flex-wrap gap-2">
+						<Button href={taskHref(primaryTask)} size="sm">{primaryTask.cta}</Button>
+						<Button href={resolve('/asesmen')} variant="outline" size="sm">Beranda</Button>
+					</div>
 				{/if}
-				<Button href={resolve('/asesmen/aplikasi-siswa')}>Panduan BYOD</Button>
 			</div>
-		</div>
-	</section>
+		</section>
 
-	<section aria-labelledby="pelaksanaan-focus-title" class="grid gap-4 lg:grid-cols-[1fr_18rem]">
-		<div class="space-y-4">
-			<div>
-				<p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Tugas hari-H</p>
-				<h2 id="pelaksanaan-focus-title" class="mt-1 text-2xl font-semibold tracking-tight text-foreground">Buka yang diperlukan saat ujian berjalan</h2>
+		<section aria-labelledby="pelaksanaan-focus-title" class="space-y-3">
+			<div class="flex flex-wrap items-end justify-between gap-3">
+				<div>
+					<p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Alur hari-H</p>
+					<h2 id="pelaksanaan-focus-title" class="mt-1 text-xl font-semibold tracking-tight text-foreground">
+						{isAdminMode ? 'Kontrol panitia' : 'Tugas pengawasan'}
+					</h2>
+				</div>
+				<p class="max-w-md text-xs leading-5 text-muted-foreground">
+					{isAdminMode ? 'Admin melihat alur lengkap; guru/staf hanya melihat pekerjaan lapangan.' : 'Tampilan ini hanya menampilkan pekerjaan yang dibutuhkan pengawas.'}
+				</p>
 			</div>
 
 			<MicroActionTable
-				title="Tugas hari-H"
-				description="Baris aksi padat untuk membuka layar operasional yang paling sering dipakai saat ujian berjalan."
+				title={isAdminMode ? 'Pekerjaan Panitia' : 'Pekerjaan Pengawas'}
+				description={isAdminMode ? 'Satu layar untuk persiapan akhir, pelaksanaan, dan hasil.' : 'Fokus pada ruang, peserta, perangkat, dan hasil.'}
 				columns={dayTaskColumns}
-				rows={dayTasks}
+				rows={visibleTasks}
 				rowKey={(row) => (row as DayTask).title}
 				tableClass="min-w-[720px]"
 			>
@@ -150,56 +187,47 @@
 					{:else if column.key === 'focus'}
 						<p class="max-w-2xl text-xs leading-5 text-muted-foreground">{task.description}</p>
 					{:else}
-						<Badge class={toneClass(task.tone)} variant="outline">Hari-H</Badge>
+						<Badge class={kindClass(task.kind)} variant="outline">{kindLabel(task.kind)}</Badge>
 					{/if}
 				{/snippet}
 				{#snippet actions(row)}
 					{@const task = row as DayTask}
-					<Button href={`${resolve(task.href)}${task.query ?? ''}`} size="sm" variant="outline" class="border-primary/20 text-primary hover:bg-primary/10">{task.cta}</Button>
+					<Button href={taskHref(task)} size="xs" variant={task.kind === 'primary' ? 'default' : 'outline'} class={task.kind === 'primary' ? '' : 'border-primary/20 text-primary hover:bg-primary/10'}>{task.cta}</Button>
 				{/snippet}
 				{#snippet mobile(row)}
 					{@const task = row as DayTask}
 					<div class="space-y-2">
 						<div class="flex items-start justify-between gap-2">
-							<div>
+							<div class="min-w-0">
 								<p class="font-semibold text-foreground">{task.title}</p>
 								<p class="mt-1 text-xs leading-5 text-muted-foreground">{task.description}</p>
 							</div>
-							<Badge class={toneClass(task.tone)} variant="outline">Hari-H</Badge>
+							<Badge class={`${kindClass(task.kind)} shrink-0`} variant="outline">{kindLabel(task.kind)}</Badge>
 						</div>
-						<Button href={`${resolve(task.href)}${task.query ?? ''}`} size="sm" variant="outline" class="w-full border-primary/20 text-primary hover:bg-primary/10">{task.cta}</Button>
+						<Button href={taskHref(task)} size="sm" variant={task.kind === 'primary' ? 'default' : 'outline'} class={task.kind === 'primary' ? 'w-full' : 'w-full border-primary/20 text-primary hover:bg-primary/10'}>{task.cta}</Button>
 					</div>
 				{/snippet}
 			</MicroActionTable>
-		</div>
+		</section>
 
-		<Card.Root class="h-fit border-primary/20 bg-primary/10 shadow-sm">
-			<Card.Header>
-				<Card.Title class="text-lg text-foreground">Ritme operator</Card.Title>
-			<Card.Description class="leading-6">
-				{#if userRoles.includes('admin')}
-					Mulai dari sesi hari ini, lanjutkan ke ruang bila ada peserta bermasalah, lalu gunakan BYOD sebagai bahasa bersama
-					untuk siswa dan pengawas.
-				{:else}
-					Gunakan halaman ini untuk membuka panel ruang dan panduan BYOD tanpa masuk ke pengaturan sesi admin.
-				{/if}
-			</Card.Description>
-			</Card.Header>
-			<Card.Footer>
-				<Button href={resolve('/asesmen')} variant="outline" class="w-full border-primary/20 text-primary hover:bg-primary/10">Beranda Asesmen CBT</Button>
-			</Card.Footer>
-		</Card.Root>
-	</section>
-</div>
+		{#if secondaryTasks.length > 0}
+			<nav aria-label="Pintasan hari-H" class="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm shadow-sm">
+				<span class="font-medium text-muted-foreground">Pintasan:</span>
+				{#each secondaryTasks as task (task.title)}
+					<a href={taskHref(task)} class="rounded-md border border-border px-3 py-1.5 font-medium text-foreground hover:border-primary/30 hover:bg-primary/10">{task.title}</a>
+				{/each}
+			</nav>
+		{/if}
+	</div>
 {:else}
 	<div class="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 py-16 text-center">
 		<div class="max-w-lg rounded-2xl border border-border bg-card p-8 shadow-sm">
 			<h2 class="text-xl font-semibold text-foreground">Akses terbatas</h2>
 			<p class="mt-3 text-sm leading-6 text-muted-foreground">
-				Fase pelaksanaan CBT hanya tersedia untuk admin, guru, dan staf. Silakan kembali ke Beranda Asesmen CBT.
+				Halaman hari-H ujian hanya tersedia untuk admin, guru, dan staf. Silakan kembali ke Beranda Asesmen.
 			</p>
 			<div class="mt-6">
-				<Button href={resolve('/asesmen')} variant="outline">Kembali ke Beranda Asesmen CBT</Button>
+				<Button href={resolve('/asesmen')} variant="outline">Kembali ke Beranda Asesmen</Button>
 			</div>
 		</div>
 	</div>
