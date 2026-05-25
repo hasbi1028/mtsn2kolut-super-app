@@ -4,7 +4,7 @@
 	import type { RouteId } from '$app/types';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import { ContextStrip, MetricCard, MicroActionTable, PageHeader } from '$lib/components/ops';
+	import { ContextStrip, MicroActionTable, PageHeader } from '$lib/components/ops';
 	import { trackInternalAnalyticsEvent } from '$lib/analytics/internal-analytics';
 
 	type AppRole = 'admin' | 'guru' | 'staf' | 'kesiswaan' | 'siswa' | 'ortu';
@@ -41,15 +41,15 @@
 	const roleCopy: Record<LauncherRole, { name: string; description: string }> = {
 		admin: {
 			name: 'Admin Ujian',
-			description: 'Mulai dari persiapan asesmen, sesi ujian dan token ujian, pengawasan hari-H, lalu hasil.'
+			description: 'Siapkan ujian, pantau hari-H, lalu buka hasil dari satu alur ringkas.'
 		},
 		guru: {
 			name: 'Guru',
-			description: 'Ujian Berbasis Komputer dipakai untuk membaca persiapan, membantu pelaksanaan bila ditugaskan, dan membuka hasil. Penulisan soal ada di modul Bank Soal.'
+			description: 'Buka tugas pelaksanaan atau hasil jika sudah ditugaskan. Penulisan soal tetap di Bank Soal.'
 		},
 		staf: {
 			name: 'Staf',
-			description: 'Akses dibuat ringan untuk membantu Pengawasan Ruang dan membaca panduan BYOD.'
+			description: 'Fokus membantu pantauan ruang dan perangkat siswa saat ujian.'
 		}
 	};
 
@@ -102,17 +102,14 @@
 	];
 
 	const secondaryLinks: SecondaryLink[] = [
-		{ label: 'Buat Kegiatan', href: '/asesmen/kegiatan', roles: ['admin'] },
-		{ label: 'Cek Kesiapan', href: '/asesmen/persiapan', roles: ['admin', 'guru'] },
-		{ label: 'Buka Monitor', href: '/asesmen/pelaksanaan', roles: ['admin', 'guru', 'staf'] },
-		{ label: 'Lihat Hasil', href: '/asesmen/hasil', roles: ['admin', 'guru'] },
-		{ label: 'Panduan BYOD', href: '/asesmen/aplikasi-siswa', roles: ['admin', 'guru'] }
+		{ label: 'Pelaksanaan', href: '/asesmen/pelaksanaan', roles: ['admin', 'guru', 'staf'] },
+		{ label: 'Hasil', href: '/asesmen/hasil', roles: ['admin', 'guru'] }
 	];
 
 	const workflowColumns = [
-		{ key: 'workflow', label: 'Alur', class: 'min-w-[15rem]' },
+		{ key: 'workflow', label: 'Pekerjaan', class: 'min-w-[15rem]' },
 		{ key: 'status', label: 'Fase', class: 'w-32' },
-		{ key: 'description', label: 'Kebutuhan operasional', class: 'min-w-[22rem]' }
+		{ key: 'description', label: 'Catatan', class: 'min-w-[22rem]' }
 	];
 
 	const userRoles = $derived<KnownRole[]>(data.user?.roles ?? (data.user?.role ? [data.user.role] : []));
@@ -127,8 +124,8 @@
 	const visibleSecondaryLinks = $derived(secondaryLinks.filter((link) => link.roles.some((role) => roleSet.has(role))));
 	const roleName = $derived(launcherRole ? roleCopy[launcherRole].name : 'Peran ini');
 	const roleDescription = $derived(launcherRole ? roleCopy[launcherRole].description : 'Belum ada pintasan ujian untuk peran aktif ini. Gunakan menu utama sesuai tugas masing-masing.');
-	const primaryHref = $derived(launcherRole === 'admin' ? '/asesmen/kegiatan' : '/asesmen/pelaksanaan');
-	const primaryLabel = $derived(launcherRole === 'admin' ? 'Buat Kegiatan' : 'Buka Monitor');
+	const primaryHref = $derived(launcherRole === 'admin' ? '/asesmen/persiapan' : '/asesmen/pelaksanaan');
+	const primaryLabel = $derived(launcherRole === 'admin' ? 'Mulai Persiapan' : 'Buka Pelaksanaan');
 
 	function resolveLauncherRole(roleSetValue: ReadonlySet<KnownRole>): LauncherRole | undefined {
 		if (roleSetValue.has('admin')) return 'admin';
@@ -161,36 +158,27 @@
 		subtitle={`${roleName}: ${roleDescription}`}
 		context="MTsN 2 Kolaka Utara"
 		primaryAction={{ label: primaryLabel, href: primaryHref }}
-		secondaryAction={{ label: 'Aplikasi Siswa', href: resolve('/asesmen/aplikasi-siswa') }}
 	/>
 
 	<ContextStrip
 		items={[
-			{ label: 'Fokus', value: 'Hari Ini', tone: 'success' },
-			{ label: 'Alur', value: 'Persiapan → Monitor → Hasil → Arsip' },
+			{ label: 'Alur', value: 'Persiapan → Pelaksanaan → Hasil' },
 			{ label: 'Peran', value: roleName, tone: 'muted' }
 		]}
 	/>
-
-	<section class="grid gap-3 md:grid-cols-3" aria-label="Ringkasan operasional CBT">
-		<MetricCard label="Ujian hari ini" value="Cek" helper="Buka Monitor untuk melihat sesi aktif atau yang akan berjalan." tone="success" />
-		<MetricCard label="Sesi berjalan" value="Monitor" helper="Pengawas melihat peserta bermasalah lebih dulu pada hari-H." tone="warning" />
-		<MetricCard label="Perlu tindakan" value="Kesiapan" helper="Paket, peserta, ruang, token, BA, dan arsip dibaca per kegiatan." />
-	</section>
 
 	<section aria-labelledby="cbt-tasks-title" class="space-y-4">
 		<div class="flex flex-wrap items-end justify-between gap-3">
 			<div class="space-y-1">
 				<p class="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Alur kerja</p>
-				<h2 id="cbt-tasks-title" class="text-xl font-semibold tracking-tight text-foreground">Mulai dari kebutuhan operasional</h2>
+				<h2 id="cbt-tasks-title" class="text-xl font-semibold tracking-tight text-foreground">Pilih pekerjaan</h2>
 			</div>
-			<p class="text-sm text-muted-foreground">Fitur teknis tetap tersedia dari halaman detail.</p>
 		</div>
 
 		{#if visibleWorkflows.length > 0}
 			<MicroActionTable
-				title="Alur kerja CBT"
-				description="Pilih pintu kerja sesuai fase. Urutan dan akses tetap mengikuti peran aktif."
+				title="Pekerjaan Asesmen"
+				description="Pilih sesuai fase."
 				columns={workflowColumns}
 				rows={visibleWorkflows}
 				rowKey={(row) => (row as Workflow).href}
@@ -199,10 +187,7 @@
 				{#snippet cell(row, column)}
 					{@const task = row as Workflow}
 					{#if column.key === 'workflow'}
-						<div>
-							<p class="font-medium text-foreground">{task.title}</p>
-							<p class="mt-0.5 text-[11px] text-muted-foreground">Prioritas {workflowPriority(task, launcherRole)}</p>
-						</div>
+						<p class="font-medium text-foreground">{task.title}</p>
 					{:else if column.key === 'status'}
 						<Badge variant="outline" class="border-primary/20 bg-primary/10 text-xs text-primary">{task.status}</Badge>
 					{:else if column.key === 'description'}
@@ -240,7 +225,7 @@
 
 	{#if visibleSecondaryLinks.length > 0}
 		<nav aria-label="Aksi cepat CBT" class="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm shadow-sm">
-			<span class="font-medium text-muted-foreground">Aksi cepat:</span>
+			<span class="font-medium text-muted-foreground">Pintasan:</span>
 			{#each visibleSecondaryLinks as link (link.href)}
 				<a href={resolve(link.href)} class="rounded-md border border-border px-3 py-1.5 font-medium text-foreground hover:border-primary/30 hover:bg-primary/10">{link.label}</a>
 			{/each}

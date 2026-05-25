@@ -137,28 +137,14 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	{
 		group: 'Asesmen Ujian',
 		items: [
-			{ kind: 'folder', id: 'dashboard-persiapan', label: 'Dashboard & Persiapan', icon: 'grid', children: [
-				{ href: '/asesmen', label: 'Dashboard Ujian', icon: 'grid', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor', 'asesmen.result_read', 'asesmen.score'] },
-				{ href: '/asesmen/persiapan', label: 'Persiapan Ujian', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
-				{ href: '/asesmen/kegiatan', label: 'Kegiatan Ujian', icon: 'archive', roles: ['admin', 'guru'], permissions: ['asesmen.read', 'asesmen.event_manage'] },
-				{ href: '/asesmen/kegiatan/new', label: 'Tambah Kegiatan', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['asesmen.event_manage'] },
-				{ href: '/asesmen/paket', label: 'Paket Soal Ujian', icon: 'book-open', roles: ['admin', 'guru'], permissions: ['asesmen.read', 'asesmen.package_manage'] },
-				{ href: '/asesmen/paket/new', label: 'Tambah Paket', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['asesmen.package_manage'] },
-				{ href: '/asesmen/sesi', label: 'Sesi Ujian', icon: 'calendar', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor'] },
-				{ href: '/asesmen/sesi/new', label: 'Tambah Sesi', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['asesmen.event_manage'] }
-			]},
-			{ kind: 'folder', id: 'pelaksanaan-pengawasan', label: 'Pelaksanaan & Pengawasan', icon: 'activity', children: [
-				{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan Ujian', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
-				{ href: '/ujian/command-center', label: 'Command Center Ujian', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
-				{ href: '/asesmen/pengawasan', label: 'Pengawasan Ujian', icon: 'user-check', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] }
-			]},
-			{ kind: 'folder', id: 'hasil-aplikasi', label: 'Hasil & Aplikasi', icon: 'clipboard', children: [
-				{ href: '/asesmen/hasil', label: 'Hasil Ujian', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.result_read'] },
+			{ kind: 'folder', id: 'alur-utama-asesmen', label: 'Alur Utama', icon: 'grid', children: [
+				{ href: '/asesmen', label: 'Ringkasan Ujian', icon: 'grid', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor', 'asesmen.result_read', 'asesmen.score'] },
+				{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
+				{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
+				{ href: '/asesmen/pengawasan', label: 'Pantau Ruang', icon: 'user-check', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
+				{ href: '/asesmen/hasil', label: 'Hasil', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.result_read'] },
 				{ href: '/asesmen/non-tes', label: 'Penilaian Non-Tes', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.score'] },
-				{ href: '/asesmen/aplikasi-siswa', label: 'Aplikasi Siswa', icon: 'package', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor'] },
-				{ href: '/asesmen/aplikasi-siswa/matrix', label: 'Matrix Aplikasi', icon: 'layers', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor'] },
-				{ href: '/asesmen/aplikasi-siswa/release', label: 'Release Aplikasi', icon: 'package', roles: ['admin'], permissions: ['asesmen.read'] },
-				{ href: '/ujian', label: 'Halaman Ujian Publik', icon: 'play', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor'] }
+				{ href: '/asesmen/aplikasi-siswa', label: 'Panduan Perangkat', icon: 'package', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor'] }
 			]}
 		]
 	},

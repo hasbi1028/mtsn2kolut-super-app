@@ -38,7 +38,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 
 	it('supports 3-level breadcrumbs for nested sidebar leaves', () => {
 		expect(sidebarBreadcrumbLabel(byHref.get('/bank-soal/tambah')!)).toBe('Bank Soal › Kelola Soal › Tambah Soal');
-		expect(sidebarBreadcrumbLabel(byHref.get('/asesmen/paket')!)).toBe('Asesmen Ujian › Dashboard & Persiapan › Paket Soal Ujian');
+		expect(sidebarBreadcrumbLabel(byHref.get('/asesmen/pengawasan')!)).toBe('Asesmen Ujian › Alur Utama › Pantau Ruang');
 		expect(sidebarBreadcrumbLabel(byHref.get('/settings/backups')!)).toBe('Pengaturan › Sistem & Audit › Backup & Restore');
 	});
 
@@ -49,11 +49,12 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'/bank-soal/cetak',
 			'/bank-soal/mapel-kd',
 			'/bank-soal/laporan',
-			'/asesmen/paket',
-			'/asesmen/sesi',
-			'/asesmen/non-tes',
+			'/asesmen',
+			'/asesmen/persiapan',
+			'/asesmen/pelaksanaan',
 			'/asesmen/pengawasan',
-			'/asesmen/aplikasi-siswa/matrix',
+			'/asesmen/hasil',
+			'/asesmen/aplikasi-siswa',
 			'/governance/actions/calendar',
 			'/governance/actions/meeting-pack',
 			'/settings/maintenance'
@@ -66,21 +67,20 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(hrefsByGroup('Asesmen Ujian')).toEqual([
 			'/asesmen',
 			'/asesmen/persiapan',
-			'/asesmen/kegiatan',
-			'/asesmen/kegiatan/new',
-			'/asesmen/paket',
-			'/asesmen/paket/new',
-			'/asesmen/sesi',
-			'/asesmen/sesi/new',
 			'/asesmen/pelaksanaan',
 			'/asesmen/pengawasan',
 			'/asesmen/hasil',
 			'/asesmen/non-tes',
-			'/asesmen/aplikasi-siswa',
+			'/asesmen/aplikasi-siswa'
+		]);
+		expect(hrefsByGroup('Asesmen Ujian')).not.toEqual(expect.arrayContaining([
+			'/asesmen/kegiatan/new',
+			'/asesmen/paket/new',
+			'/asesmen/sesi/new',
 			'/asesmen/aplikasi-siswa/matrix',
 			'/asesmen/aplikasi-siswa/release',
 			'/ujian'
-		]);
+		]));
 		expect(hrefsByGroup('Asesmen Ujian').some((href) => href.startsWith('/bank-soal'))).toBe(false);
 	});
 
@@ -119,8 +119,10 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(byHref.get('/settings/rbac')?.permissions).toEqual(['roles.read']);
 		expect(byHref.get('/bank-soal/verifikasi')?.permissions).toEqual(['bank_soal.review', 'bank_soal.publish']);
 		expect(byHref.get('/bank-soal/analisis-butir')?.permissions).toEqual(['bank_soal.analytics']);
-		expect(byHref.get('/asesmen/kegiatan')?.permissions).toEqual(['asesmen.read', 'asesmen.event_manage']);
+		expect(byHref.get('/asesmen/persiapan')?.permissions).toEqual(['asesmen.read']);
 		expect(byHref.get('/asesmen/aplikasi-siswa')?.permissions).toEqual(['asesmen.read', 'asesmen.proctor']);
+		expect(byHref.get('/asesmen/aplikasi-siswa/matrix')).toBeUndefined();
+		expect(byHref.get('/asesmen/aplikasi-siswa/release')).toBeUndefined();
 	});
 
 	it('hides guru role-only academic, student, assessment, and bank-soal surfaces without permissions', () => {

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { MicroActionTable } from '$lib/components/ops';
@@ -31,29 +30,29 @@
 	const adminTasks: PreparationTask[] = [
 		{
 			step: '01',
-			title: 'Manajemen Paket',
-			description: 'Pilih soal siap pakai, atur komposisi, dan siapkan Paket Soal untuk Kegiatan Asesmen.',
-			href: '/asesmen/paket',
-			cta: 'Kelola Paket'
-		},
-		{
-			step: '02',
-			title: 'Kelola Kegiatan Asesmen',
-			description: 'Buka daftar Kegiatan Asesmen untuk membuat, memilih, atau melanjutkan kegiatan agar sesi, peserta, dan kartu ujian tetap dalam konteks yang jelas.',
+			title: 'Pilih Kegiatan',
+			description: 'Buat atau pilih kegiatan sebagai konteks ujian.',
 			href: '/asesmen/kegiatan',
 			cta: 'Kelola Kegiatan'
 		},
 		{
+			step: '02',
+			title: 'Siapkan Paket',
+			description: 'Pilih paket soal yang siap dipakai.',
+			href: '/asesmen/paket',
+			cta: 'Kelola Paket'
+		},
+		{
 			step: '03',
-			title: 'Atur Sesi/Token Ujian',
-			description: 'Tetapkan jadwal, ruang, peserta, dan token ujian sebelum ujian masuk hari pelaksanaan.',
+			title: 'Atur Sesi & Token',
+			description: 'Tetapkan jadwal, ruang, peserta, dan token.',
 			href: '/asesmen/sesi/new',
 			cta: 'Atur Sesi'
 		},
 		{
 			step: '04',
-			title: 'Lanjut Pelaksanaan',
-			description: 'Setelah paket, kegiatan, dan sesi siap, masuk ke ruang pemantauan hari-H.',
+			title: 'Masuk Pelaksanaan',
+			description: 'Pantau ruang ujian saat paket dan sesi sudah siap.',
 			href: '/asesmen/pelaksanaan',
 			cta: 'Ke Pelaksanaan'
 		}
@@ -79,9 +78,9 @@
 	const tasks = $derived(userRoles.includes('admin') ? adminTasks : guruTasks);
 
 	const taskColumns = [
-		{ key: 'step', label: 'Urutan', class: 'w-24' },
-		{ key: 'task', label: 'Tugas', class: 'min-w-[16rem]' },
-		{ key: 'description', label: 'Catatan operasional', class: 'min-w-[24rem]' }
+		{ key: 'step', label: '#', class: 'w-20' },
+		{ key: 'task', label: 'Pekerjaan', class: 'min-w-[16rem]' },
+		{ key: 'description', label: 'Catatan', class: 'min-w-[20rem]' }
 	];
 </script>
 
@@ -91,38 +90,33 @@
 
 {#if canAccess}
 	<div class="space-y-6">
-	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
-		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-			<div class="max-w-3xl space-y-3">
-				<div class="flex flex-wrap items-center gap-2">
-					<Badge class="border-primary/20 bg-card text-primary" variant="outline">Asesmen · Fase Persiapan</Badge>
-					<Badge class="border-border bg-card text-muted-foreground" variant="outline">Tanpa perubahan data</Badge>
-				</div>
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Persiapan Asesmen CBT</h1>
-				<p class="max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
-					Mulai dari pekerjaan operasional sebelum hari ujian: paket, kegiatan, sesi, token ujian, lalu pelaksanaan.
-					Penyusunan soal berada di modul Bank Soal, sementara CBT memakai soal terbit untuk paket dan sesi ujian.
+	<section class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+		<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+			<div class="max-w-3xl space-y-2">
+				<Badge class="border-primary/20 bg-primary/10 text-primary" variant="outline">Fase Persiapan</Badge>
+				<h1 class="text-2xl font-semibold tracking-tight text-foreground">Persiapan Asesmen</h1>
+				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
+					Siapkan kegiatan, paket, sesi, peserta, ruang, dan token sebelum ujian.
 				</p>
 			</div>
-			<div class="flex flex-wrap gap-3">
-				<Button href={resolve('/asesmen')} variant="outline">Beranda Asesmen</Button>
-				<Button href={resolve('/asesmen/pelaksanaan')}>Ke Pelaksanaan</Button>
+			<div class="flex flex-wrap gap-2">
+				<Button href={resolve('/asesmen')} variant="outline" size="sm">Beranda</Button>
+				{#if userRoles.includes('admin')}
+					<Button href={resolve('/asesmen/kegiatan')} size="sm">Kelola Kegiatan</Button>
+				{/if}
 			</div>
 		</div>
 	</section>
 
 	<section aria-labelledby="persiapan-tasks-title" class="space-y-4">
-		<div class="flex flex-wrap items-end justify-between gap-3">
-			<div>
-				<p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Daftar tugas</p>
-				<h2 id="persiapan-tasks-title" class="mt-1 text-2xl font-semibold tracking-tight text-foreground">Selesaikan berurutan</h2>
-			</div>
-			<p class="max-w-lg text-sm leading-6 text-muted-foreground">Daftar ini menjaga operator tetap fokus pada jalur persiapan asesmen tanpa masuk ke penyusunan soal.</p>
+		<div>
+			<p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Daftar tugas</p>
+			<h2 id="persiapan-tasks-title" class="mt-1 text-xl font-semibold tracking-tight text-foreground">Checklist Persiapan</h2>
 		</div>
 
 		<MicroActionTable
-			title="Daftar tugas persiapan"
-			description="Pekerjaan dibuat ringkas agar operator cepat memilih pintu kerja sebelum ujian."
+			title="Checklist Persiapan"
+			description="Pilih pekerjaan yang perlu diselesaikan."
 			columns={taskColumns}
 			rows={tasks}
 			rowKey={(row) => (row as PreparationTask).href}
@@ -160,20 +154,9 @@
 		</MicroActionTable>
 	</section>
 
-	<Card.Root class="border-primary/20 bg-primary/10 shadow-sm">
-		<Card.Header>
-			<Card.Title class="text-lg text-foreground">Prinsip fase persiapan</Card.Title>
-			<Card.Description>
-				{#if userRoles.includes('admin')}
-					Bank Soal berdiri sebagai modul terpisah. Di sini fokuskan pekerjaan pada paket, kegiatan, sesi,
-					ruang, peserta, token ujian, dan kesiapan masuk hari-H.
-				{:else}
-					Untuk guru, penyusunan dan verifikasi soal ada di modul Bank Soal. Halaman ini dipakai untuk membaca paket,
-					hasil, dan akses pelaksanaan jika ditugaskan.
-				{/if}
-			</Card.Description>
-		</Card.Header>
-	</Card.Root>
+	<p class="rounded-lg border border-dashed border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+		Catatan: penyusunan soal tetap berada di modul Bank Soal. Halaman ini hanya untuk alur ujian.
+	</p>
 </div>
 {:else}
 	<div class="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 py-16 text-center">
