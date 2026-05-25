@@ -1524,86 +1524,112 @@
 				]}
 			/>
 
-			<section class={`rounded-xl border p-4 shadow-sm ${commandCenterClass()}`} aria-label="Command Center Hari-H CBT">
-				<div class="flex flex-wrap items-start justify-between gap-3">
-					<div>
-						<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Command Center Hari-H</p>
-						<h2 class="mt-1 text-lg font-bold text-foreground">Grid 8 Ruang UAS</h2>
-						<p class="mt-1 text-sm text-muted-foreground">Pantau login, submit, koneksi, atensi pengawasan, token masked, dan handover dari satu layar operator.</p>
+			<section class={`rounded-lg border bg-background/95 p-3 shadow-sm ${commandCenterClass()}`} aria-label="Command Center Hari-H CBT">
+				<div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2">
+					<div class="min-w-0">
+						<div class="flex flex-wrap items-center gap-2">
+							<p class="text-base font-bold text-foreground">Grid 8 Ruang UAS</p>
+							<Badge variant="outline" class="text-[11px]">Update WITA {commandCenterLastUpdated}</Badge>
+							<Badge variant="outline" class="text-[11px]">Token masked</Badge>
+						</div>
+						<p class="mt-0.5 text-xs text-muted-foreground">Command center ringkas: ruang, submit, koneksi, atensi, dan serah-terima pengawas.</p>
 					</div>
-					<div class="flex flex-wrap gap-2">
+					<div class="flex flex-wrap gap-1.5">
 						<LoadingButton variant="outline" size="sm" onclick={() => void refreshCommandCenter()} loading={commandCenterBusy} loadingLabel="Memuat..." disabled={commandCenterBusy}>
-							↻ Refresh Live
+							↻ Refresh
 						</LoadingButton>
-						<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Masalah Aktif</Button>
-						<Button variant="outline" size="sm" onclick={() => switchTab('ruangan')}>Kelola Ruang</Button>
-						<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Cetak Semua Paket Ruang</Button>
+						<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Masalah</Button>
+						<Button variant="outline" size="sm" onclick={() => switchTab('ruangan')}>Ruang</Button>
+						<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Cetak Paket</Button>
 					</div>
 				</div>
 
-				<div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-					{#each commandCenterMetrics as metric (metric.label)}
-						<button type="button" class="rounded-lg border border-border bg-card p-3 text-left transition hover:border-primary/40 hover:bg-background" onclick={() => switchTab(metric.tab)}>
-							<p class="text-xs text-muted-foreground">{metric.label}</p>
-							<p class="mt-1 text-2xl font-bold text-foreground">{metric.value}</p>
-							<p class="mt-1 text-[11px] text-muted-foreground">{metric.helper}</p>
-						</button>
-					{/each}
+				<div class="mt-3 overflow-x-auto rounded-md border border-border bg-card/60">
+					<div class="grid min-w-[760px] grid-cols-6 divide-x divide-border text-xs">
+						{#each commandCenterMetrics as metric (metric.label)}
+							<button type="button" class="px-3 py-2 text-left transition hover:bg-muted/70" onclick={() => switchTab(metric.tab)}>
+								<p class="text-[11px] text-muted-foreground">{metric.label}</p>
+								<div class="mt-1 flex items-end justify-between gap-2">
+									<p class="text-lg font-bold leading-none text-foreground">{metric.value}</p>
+									<p class="max-w-[8rem] truncate text-[10px] text-muted-foreground" title={metric.helper}>{metric.helper}</p>
+								</div>
+							</button>
+						{/each}
+					</div>
 				</div>
 
-				<div class="mt-4 grid gap-4 xl:grid-cols-[1fr_22rem]">
-					<div>
-						<div class="mb-2 flex items-center justify-between gap-2">
-							<p class="text-sm font-semibold text-foreground">Status 8 Ruang</p>
-							<p class="text-xs text-muted-foreground">Update WITA {commandCenterLastUpdated}</p>
+				<div class="mt-3 grid gap-3 xl:grid-cols-[1fr_20rem]">
+					<div class="overflow-hidden rounded-md border border-border bg-card/70">
+						<div class="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+							<p class="text-sm font-semibold text-foreground">Status Ruang</p>
+							<p class="text-xs text-muted-foreground">{commandCenterRooms.length} ruang</p>
 						</div>
-						<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-							{#each commandCenterRooms as room (room.room_id)}
-								<Card.Root class="border-border bg-card">
-									<Card.Content class="space-y-3 p-3">
-										<div class="flex items-start justify-between gap-2">
-											<div>
-												<p class="text-sm font-semibold text-foreground">{room.room_name}</p>
-												<p class="text-[11px] text-muted-foreground">Pengawas: {room.primary_proctor_name || 'Belum ditugaskan'}</p>
-											</div>
-											<Badge variant="outline" class={commandRoomStatusClass(room.command_status)}>{commandRoomStatusLabel(room.command_status)}</Badge>
-										</div>
-										<div class="grid grid-cols-3 gap-2 text-center">
-											<div class="rounded-md bg-muted/50 p-2"><p class="text-[10px] text-muted-foreground">Login</p><p class="font-bold">{room.joined_count}/{room.participant_count}</p></div>
-											<div class="rounded-md bg-muted/50 p-2"><p class="text-[10px] text-muted-foreground">Submit</p><p class="font-bold">{room.submitted_count}/{room.participant_count}</p></div>
-											<div class="rounded-md bg-muted/50 p-2"><p class="text-[10px] text-muted-foreground">Offline</p><p class={room.offline > 0 ? 'font-bold text-destructive' : 'font-bold'}>{room.offline}</p></div>
-										</div>
-										<div class="flex flex-wrap gap-1 text-[11px]">
-											<Badge variant="outline">Token {room.masked_token}</Badge>
-											{#if room.missing_seat_count > 0}<Badge variant="outline" class="border-warning/30 text-warning">{room.missing_seat_count} meja kosong</Badge>{/if}
-											{#if room.suspicious_count > 0}<Badge variant="outline" class="border-destructive/30 text-destructive">{room.suspicious_count} atensi</Badge>{/if}
-											{#if room.handover_locked}<Badge variant="outline" class="border-success/30 text-success">Handover final</Badge>{/if}
-										</div>
-										<div class="flex flex-wrap gap-2">
-											<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${room.room_id}/proctoring`)}>Buka Ruang</Button>
-											<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${room.room_id}/print-pack`)}>Cetak Paket</Button>
-											<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Handover</Button>
-										</div>
-									</Card.Content>
-								</Card.Root>
-							{:else}
-								<div class="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground md:col-span-2 xl:col-span-4">Belum ada snapshot ruang. Klik Refresh Live atau buka tab Operasional.</div>
-							{/each}
+						<div class="overflow-x-auto">
+							<Table.Root class="min-w-[820px] text-xs">
+								<Table.Header>
+									<Table.Row class="bg-muted/50">
+										<Table.Head class="w-[180px]">Ruang</Table.Head>
+										<Table.Head>Pengawas</Table.Head>
+										<Table.Head class="text-center">Login</Table.Head>
+										<Table.Head class="text-center">Submit</Table.Head>
+										<Table.Head class="text-center">Offline</Table.Head>
+										<Table.Head>Catatan</Table.Head>
+										<Table.Head class="text-right">Aksi</Table.Head>
+									</Table.Row>
+								</Table.Header>
+								<Table.Body>
+									{#each commandCenterRooms as room (room.room_id)}
+										<Table.Row>
+											<Table.Cell>
+												<div class="flex items-center gap-2">
+													<p class="font-semibold text-foreground">{room.room_name}</p>
+													<Badge variant="outline" class={commandRoomStatusClass(room.command_status)}>{commandRoomStatusLabel(room.command_status)}</Badge>
+												</div>
+												<p class="mt-0.5 text-[11px] text-muted-foreground">Token {room.masked_token}</p>
+											</Table.Cell>
+											<Table.Cell class="text-muted-foreground">{room.primary_proctor_name || 'Belum ditugaskan'}</Table.Cell>
+											<Table.Cell class="text-center font-semibold">{room.joined_count}/{room.participant_count}</Table.Cell>
+											<Table.Cell class="text-center font-semibold">{room.submitted_count}/{room.participant_count}</Table.Cell>
+											<Table.Cell class={room.offline > 0 ? 'text-center font-semibold text-destructive' : 'text-center font-semibold'}>{room.offline}</Table.Cell>
+											<Table.Cell>
+												<div class="flex flex-wrap gap-1">
+													{#if room.missing_seat_count > 0}<Badge variant="outline" class="border-warning/30 text-warning">{room.missing_seat_count} meja kosong</Badge>{/if}
+													{#if room.suspicious_count > 0}<Badge variant="outline" class="border-destructive/30 text-destructive">{room.suspicious_count} atensi</Badge>{/if}
+													{#if room.handover_locked}<Badge variant="outline" class="border-success/30 text-success">Handover final</Badge>{/if}
+													{#if room.missing_seat_count === 0 && room.suspicious_count === 0 && !room.handover_locked}<span class="text-[11px] text-muted-foreground">—</span>{/if}
+												</div>
+											</Table.Cell>
+											<Table.Cell class="text-right">
+												<div class="flex justify-end gap-1">
+													<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${room.room_id}/proctoring`)}>Buka</Button>
+													<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${room.room_id}/print-pack`)}>Cetak</Button>
+													<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Handover</Button>
+												</div>
+											</Table.Cell>
+										</Table.Row>
+									{:else}
+										<Table.Row>
+											<Table.Cell colspan={7} class="py-6 text-center text-muted-foreground">Belum ada snapshot ruang. Klik Refresh atau buka tab Operasional.</Table.Cell>
+										</Table.Row>
+									{/each}
+								</Table.Body>
+							</Table.Root>
 						</div>
 					</div>
-					<aside class="rounded-lg border border-border bg-card p-3">
-						<div class="mb-3 flex items-center justify-between gap-2">
+
+					<aside class="rounded-md border border-border bg-card/70">
+						<div class="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
 							<p class="text-sm font-semibold text-foreground">Masalah Aktif</p>
 							<Badge variant="outline">{commandCenterIssues.length}</Badge>
 						</div>
-						<div class="space-y-2">
+						<div class="divide-y divide-border">
 							{#each commandCenterIssues.slice(0, 6) as issue (issue.id)}
-								<button type="button" class={`w-full rounded-md border p-2 text-left text-xs ${commandIssueClass(issue.severity)}`} onclick={() => switchTab((issue.actionTab as ActiveTab) ?? 'operasional')}>
+								<button type="button" class={`w-full px-3 py-2 text-left text-xs transition hover:bg-muted/70 ${commandIssueClass(issue.severity)}`} onclick={() => switchTab((issue.actionTab as ActiveTab) ?? 'operasional')}>
 									<p class="font-semibold">{issue.title}</p>
 									<p class="mt-0.5 text-[11px] opacity-80">{issue.description || 'Klik untuk membuka area tindak lanjut.'}</p>
 								</button>
 							{:else}
-								<p class="rounded-md border border-success/20 bg-success/10 p-3 text-sm text-success">Belum ada masalah aktif dari pantauan terbaru.</p>
+								<p class="px-3 py-3 text-sm text-success">Belum ada masalah aktif dari pantauan terbaru.</p>
 							{/each}
 						</div>
 					</aside>
