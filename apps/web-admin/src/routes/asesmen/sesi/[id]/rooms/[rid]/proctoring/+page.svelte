@@ -249,6 +249,7 @@
 	}));
 	let attentionParticipants = $derived(participants.filter(participantNeedsAttention));
 	let evidenceSummary = $derived.by(() => summarizeProctorEvidence({ participants, events, hasPrintPack: true }));
+	let evidenceTotal = $derived(PROCTOR_EVIDENCE_CATEGORIES.reduce((total, category) => total + evidenceSummary.counts[category], 0));
 	let unreviewedIncidentEvents = $derived(events.filter((event) => incidentNeedsReview(event)));
 	let priorityCards: PriorityCard[] = $derived.by(() => {
 		const disconnectedCount = participants.filter((row) => {
@@ -1330,22 +1331,31 @@
 					{/if}
 				</section>
 
-				<Card.Root class="border-primary/20">
-					<Card.Header class="pb-3">
-						<Card.Title>Bukti Pengawas</Card.Title>
-						<Card.Description>Ringkasan bukti ruang dari catatan koneksi, peringatan aplikasi, tindakan pengawas, dan paket unduh/cetak.</Card.Description>
-					</Card.Header>
-					<Card.Content class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-						{#each PROCTOR_EVIDENCE_CATEGORIES as category (category)}
-							<div class="rounded-lg border border-border bg-card p-3">
-								<p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{evidenceCategoryLabel(category)}</p>
-								<p class="mt-1 text-xl font-bold text-foreground">{evidenceSummary.counts[category]}</p>
-								<p class="text-[11px] text-muted-foreground">{evidenceCategoryDescription(category)}</p>
-								<p class="mt-1 text-[11px] text-muted-foreground">{evidenceSummary.missingCategories.includes(category) ? 'Belum ada bukti di data aktif' : 'Tercatat di bukti ruang'}</p>
-							</div>
-						{/each}
-					</Card.Content>
-				</Card.Root>
+				<section class="overflow-hidden rounded-lg border border-border bg-card">
+					<div class="flex flex-col gap-2 border-b border-border px-3 py-2 md:flex-row md:items-center md:justify-between">
+						<div>
+							<p class="text-sm font-semibold text-foreground">Bukti & Anti-Cheat</p>
+							<p class="text-xs text-muted-foreground">Semua indikator digabung dalam satu baris kerja agar tidak membebani pengawas.</p>
+						</div>
+						<div class="flex flex-wrap gap-1.5 text-xs">
+							<Badge variant="outline">Total bukti {evidenceTotal}</Badge>
+							<Badge variant="outline" class={evidenceSummary.missingCategories.length > 0 ? 'border-warning/30 bg-warning/10 text-warning' : 'border-primary/20 bg-primary/10 text-primary'}>{evidenceSummary.missingCategories.length > 0 ? `${evidenceSummary.missingCategories.length} belum ada` : 'Lengkap'}</Badge>
+						</div>
+					</div>
+					<div class="overflow-x-auto">
+						<div class="grid min-w-[920px] grid-cols-10 divide-x divide-border text-xs">
+							{#each PROCTOR_EVIDENCE_CATEGORIES as category (category)}
+								<div class={`px-3 py-2 ${evidenceSummary.counts[category] > 0 ? 'bg-primary/5' : ''}`} title={evidenceCategoryDescription(category)}>
+									<p class="truncate font-semibold uppercase tracking-wide text-muted-foreground">{evidenceCategoryLabel(category)}</p>
+									<div class="mt-1 flex items-center justify-between gap-2">
+										<span class="text-lg font-bold text-foreground">{evidenceSummary.counts[category]}</span>
+										<span class={evidenceSummary.missingCategories.includes(category) ? 'text-[11px] text-muted-foreground' : 'text-[11px] font-medium text-primary'}>{evidenceSummary.missingCategories.includes(category) ? 'kosong' : 'ada'}</span>
+									</div>
+								</div>
+							{/each}
+						</div>
+					</div>
+				</section>
 
 				<Card.Root class="border-primary/20">
 					<Card.Header class="pb-3">
