@@ -4,6 +4,7 @@
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { MicroActionTable } from '$lib/components/ops';
 
 	type PersiapanRoute =
 		| '/asesmen/paket'
@@ -76,6 +77,12 @@
 	];
 
 	const tasks = $derived(userRoles.includes('admin') ? adminTasks : guruTasks);
+
+	const taskColumns = [
+		{ key: 'step', label: 'Urutan', class: 'w-24' },
+		{ key: 'task', label: 'Tugas', class: 'min-w-[16rem]' },
+		{ key: 'description', label: 'Catatan operasional', class: 'min-w-[24rem]' }
+	];
 </script>
 
 <svelte:head>
@@ -110,25 +117,47 @@
 				<p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Daftar tugas</p>
 				<h2 id="persiapan-tasks-title" class="mt-1 text-2xl font-semibold tracking-tight text-foreground">Selesaikan berurutan</h2>
 			</div>
-			<p class="max-w-lg text-sm leading-6 text-muted-foreground">Kartu ini menjaga operator tetap fokus pada jalur persiapan asesmen tanpa masuk ke penyusunan soal.</p>
+			<p class="max-w-lg text-sm leading-6 text-muted-foreground">Daftar ini menjaga operator tetap fokus pada jalur persiapan asesmen tanpa masuk ke penyusunan soal.</p>
 		</div>
 
-		<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-			{#each tasks as task (task.href)}
-				<Card.Root class="flex h-full flex-col border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md">
-					<Card.Header class="space-y-4">
-						<span class="flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-lg font-semibold text-primary">{task.step}</span>
-						<div>
-							<Card.Title class="text-xl text-foreground">{task.title}</Card.Title>
-							<Card.Description class="mt-2 leading-6">{task.description}</Card.Description>
+		<MicroActionTable
+			title="Daftar tugas persiapan"
+			description="Pekerjaan dibuat ringkas agar operator cepat memilih pintu kerja sebelum ujian."
+			columns={taskColumns}
+			rows={tasks}
+			rowKey={(row) => (row as PreparationTask).href}
+			tableClass="min-w-[760px]"
+		>
+			{#snippet cell(row, column)}
+				{@const task = row as PreparationTask}
+				{#if column.key === 'step'}
+					<span class="inline-flex h-7 min-w-7 items-center justify-center rounded-md border border-primary/20 bg-primary/10 px-2 text-[11px] font-semibold text-primary">{task.step}</span>
+				{:else if column.key === 'task'}
+					<p class="font-medium text-foreground">{task.title}</p>
+				{:else if column.key === 'description'}
+					<p class="max-w-2xl leading-5 text-muted-foreground">{task.description}</p>
+				{/if}
+			{/snippet}
+			{#snippet actions(row)}
+				{@const task = row as PreparationTask}
+				<Button href={resolve(task.href)} variant="outline" size="xs" class="border-primary/20 text-primary hover:bg-primary/10">{task.cta}</Button>
+			{/snippet}
+			{#snippet mobile(row)}
+				{@const task = row as PreparationTask}
+				<div class="space-y-2 text-xs">
+					<div class="flex items-start gap-3">
+						<span class="inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 px-2 text-[11px] font-semibold text-primary">{task.step}</span>
+						<div class="min-w-0 flex-1">
+							<p class="font-medium text-foreground">{task.title}</p>
+							<p class="mt-1 leading-5 text-muted-foreground">{task.description}</p>
 						</div>
-					</Card.Header>
-					<Card.Footer class="mt-auto">
-						<Button href={resolve(task.href)} variant="outline" class="w-full border-primary/20 text-primary hover:bg-primary/10">{task.cta}</Button>
-					</Card.Footer>
-				</Card.Root>
-			{/each}
-		</div>
+					</div>
+					<div class="flex justify-end pt-1">
+						<Button href={resolve(task.href)} variant="outline" size="xs" class="border-primary/20 text-primary hover:bg-primary/10">{task.cta}</Button>
+					</div>
+				</div>
+			{/snippet}
+		</MicroActionTable>
 	</section>
 
 	<Card.Root class="border-primary/20 bg-primary/10 shadow-sm">

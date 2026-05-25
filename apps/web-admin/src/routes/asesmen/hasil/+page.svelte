@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import * as Card from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 
 	const userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
@@ -75,20 +74,17 @@
 			<Button href={resolve('/asesmen')} variant="outline">Kembali ke Beranda Asesmen CBT</Button>
 		</section>
 
-		<section class="grid gap-4 lg:grid-cols-3" aria-label="Pilihan Hasil CBT">
+		<section class="space-y-2" aria-label="Pilihan Hasil CBT">
 			{#each resultPaths as path (path.title)}
 				<a
 					href={resolve(path.href)}
-					class="group block h-full rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+					class="group flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm shadow-sm transition hover:border-primary/20 hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
 				>
-					<Card.Root
-						class="h-full border-border bg-card shadow-sm transition group-hover:border-primary/20 group-hover:shadow-md"
-					>
-						<Card.Header class="space-y-3 p-6">
-							<Card.Title class="text-2xl text-foreground">{path.title}</Card.Title>
-							<Card.Description class="text-sm leading-6">{path.description}</Card.Description>
-						</Card.Header>
-					</Card.Root>
+					<div class="min-w-0">
+						<p class="font-semibold text-foreground">{path.title}</p>
+						<p class="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">{path.description}</p>
+					</div>
+					<span class="shrink-0 text-xs font-semibold text-primary">Buka</span>
 				</a>
 			{/each}
 		</section>

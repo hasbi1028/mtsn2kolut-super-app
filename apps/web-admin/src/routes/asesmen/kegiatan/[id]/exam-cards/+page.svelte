@@ -7,6 +7,8 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { Badge } from '$lib/components/ui/badge';
+	import MicroActionTable from '$lib/components/ops/MicroActionTable.svelte';
 	import { fetchSchoolProfile, schoolAddressLine, type SchoolProfile } from '$lib/school-profile';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
 
@@ -34,6 +36,13 @@
 	};
 
 	const eventId = page.params.id ?? '';
+	const cardColumns = [
+		{ key: 'student', label: 'Peserta', class: 'min-w-[14rem]' },
+		{ key: 'session', label: 'Sesi' },
+		{ key: 'room', label: 'Ruang/Meja' },
+		{ key: 'token', label: 'Token' },
+		{ key: 'status', label: 'Status' },
+	];
 	let cardsPromise = $state<Promise<ExamCardPrintData> | null>(null);
 
 	async function fetchCardRows() {
@@ -85,6 +94,16 @@
 		if (missingRoom > 0) issues.push(`${missingRoom} peserta belum punya ruangan`);
 		if (missingSeat > 0) issues.push(`${missingSeat} peserta belum punya nomor meja`);
 		return issues;
+	}
+
+	function maskedToken(token: string) {
+		if (!token) return 'Belum ada';
+		if (token.length <= 4) return '••••';
+		return `${token.slice(0, 2)}••••${token.slice(-2)}`;
+	}
+
+	function cardReady(card: ExamCard) {
+		return Boolean(card.token && card.room_name && card.seat_no !== null && card.seat_no !== undefined);
 	}
 
 	onMount(() => {
@@ -181,12 +200,35 @@
 			</div>
 		{/if}
 
-		<div class="rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning print:hidden">
-			<p class="font-semibold">Token pada kartu ujian adalah kredensial rahasia peserta.</p>
-			<p class="mt-1">Cetak dan simpan kartu melalui panitia/pengawas resmi. Hindari membagikan file cetak ke grup umum, layar proyektor, atau kanal yang dapat diakses peserta lain.</p>
-		</div>
+		<MicroActionTable
+			title="Status kartu peserta"
+			description="Ringkasan layar memakai token tersamarkan; token lengkap tetap hanya tampil pada layout cetak."
+			columns={cardColumns}
+			rows={currentCards}
+			rowKey={(row) => (row as ExamCard).participant_id}
+			tableClass="min-w-[820px]"
+			class="print:hidden"
+			emptyTitle="Belum ada kartu ujian untuk dicetak."
+		>
+			{#snippet cell(row, column)}
+				{@const card = row as ExamCard}
+				{#if column.key === 'student'}
+					<div class="font-semibold text-foreground">{card.student_nama}</div>
+					<div class="text-xs text-muted-foreground">NIS {card.nis} · {card.class_code || 'Kelas belum ada'}</div>
+				{:else if column.key === 'session'}
+					<div class="font-medium text-foreground">{card.session_title}</div>
+					<div class="text-xs text-muted-foreground">{fmtDt(card.scheduled_start)}</div>
+				{:else if column.key === 'room'}
+					<span>{card.room_name || 'Belum ditentukan'} · Meja {card.seat_no ?? '—'}</span>
+				{:else if column.key === 'token'}
+					<span class="font-mono text-xs font-semibold text-muted-foreground">{maskedToken(card.token)}</span>
+				{:else}
+					<Badge variant="outline" class={cardReady(card) ? 'border-success/20 bg-success/10 text-success' : 'border-warning/30 bg-warning/10 text-warning'}>{cardReady(card) ? 'Siap cetak' : 'Perlu cek'}</Badge>
+				{/if}
+			{/snippet}
+		</MicroActionTable>
 
-		<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+		<div class="hidden gap-4 md:grid-cols-2 xl:grid-cols-3 print:grid">
 			{#each currentCards as card (card.participant_id)}
 				<article class="break-inside-avoid rounded-lg border border-primary/20 bg-card p-5 shadow-sm print:shadow-none">
 					<div class="border-b border-dashed border-primary/20 pb-3">

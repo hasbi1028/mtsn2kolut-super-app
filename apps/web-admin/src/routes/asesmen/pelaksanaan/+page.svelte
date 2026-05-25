@@ -4,6 +4,7 @@
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { MicroActionTable } from '$lib/components/ops';
 
 	type PelaksanaanRoute = '/asesmen/aplikasi-siswa' | '/asesmen/sesi' | '/asesmen/pengawasan' | '/asesmen/kegiatan' | '/asesmen/persiapan' | '/asesmen';
 
@@ -77,6 +78,11 @@
 	];
 
 	const dayTasks = $derived(userRoles.includes('admin') ? adminDayTasks : operatorDayTasks);
+	const dayTaskColumns = [
+		{ key: 'task', label: 'Tugas', class: 'min-w-64' },
+		{ key: 'focus', label: 'Fokus' },
+		{ key: 'tone', label: 'Tipe', headClass: 'text-right', class: 'text-right' },
+	];
 
 	function toneClass(tone: DayTask['tone']): string {
 		switch (tone) {
@@ -129,22 +135,42 @@
 				<h2 id="pelaksanaan-focus-title" class="mt-1 text-2xl font-semibold tracking-tight text-foreground">Buka yang diperlukan saat ujian berjalan</h2>
 			</div>
 
-			<div class="grid gap-4 md:grid-cols-2">
-				{#each dayTasks as task (task.title)}
-					<Card.Root class="flex h-full flex-col border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md">
-						<Card.Header class="space-y-3">
-							<Badge class={toneClass(task.tone)} variant="outline">Hari-H</Badge>
+			<MicroActionTable
+				title="Tugas hari-H"
+				description="Baris aksi padat untuk membuka layar operasional yang paling sering dipakai saat ujian berjalan."
+				columns={dayTaskColumns}
+				rows={dayTasks}
+				rowKey={(row) => (row as DayTask).title}
+				tableClass="min-w-[720px]"
+			>
+				{#snippet cell(row, column)}
+					{@const task = row as DayTask}
+					{#if column.key === 'task'}
+						<div class="font-semibold text-foreground">{task.title}</div>
+					{:else if column.key === 'focus'}
+						<p class="max-w-2xl text-xs leading-5 text-muted-foreground">{task.description}</p>
+					{:else}
+						<Badge class={toneClass(task.tone)} variant="outline">Hari-H</Badge>
+					{/if}
+				{/snippet}
+				{#snippet actions(row)}
+					{@const task = row as DayTask}
+					<Button href={`${resolve(task.href)}${task.query ?? ''}`} size="sm" variant="outline" class="border-primary/20 text-primary hover:bg-primary/10">{task.cta}</Button>
+				{/snippet}
+				{#snippet mobile(row)}
+					{@const task = row as DayTask}
+					<div class="space-y-2">
+						<div class="flex items-start justify-between gap-2">
 							<div>
-								<Card.Title class="text-xl text-foreground">{task.title}</Card.Title>
-								<Card.Description class="mt-2 leading-6">{task.description}</Card.Description>
+								<p class="font-semibold text-foreground">{task.title}</p>
+								<p class="mt-1 text-xs leading-5 text-muted-foreground">{task.description}</p>
 							</div>
-						</Card.Header>
-						<Card.Footer class="mt-auto">
-							<Button href={`${resolve(task.href)}${task.query ?? ''}`} variant="outline" class="w-full border-primary/20 text-primary hover:bg-primary/10">{task.cta}</Button>
-						</Card.Footer>
-					</Card.Root>
-				{/each}
-			</div>
+							<Badge class={toneClass(task.tone)} variant="outline">Hari-H</Badge>
+						</div>
+						<Button href={`${resolve(task.href)}${task.query ?? ''}`} size="sm" variant="outline" class="w-full border-primary/20 text-primary hover:bg-primary/10">{task.cta}</Button>
+					</div>
+				{/snippet}
+			</MicroActionTable>
 		</div>
 
 		<Card.Root class="h-fit border-primary/20 bg-primary/10 shadow-sm">

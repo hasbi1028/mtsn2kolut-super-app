@@ -2,7 +2,6 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
-	import * as Table from '$lib/components/ui/table';
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
@@ -10,6 +9,7 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import MicroActionTable from '$lib/components/ops/MicroActionTable.svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPath, readClientApiData, readClientJson } from '$lib/client/api';
 
@@ -57,6 +57,13 @@
 		{ value: 'active', label: 'Aktif' },
 		{ value: 'draft', label: 'Konsep' },
 		{ value: 'finished', label: 'Selesai' },
+	];
+	const eventColumns = [
+		{ key: 'event', label: 'Kegiatan', class: 'min-w-[16rem]' },
+		{ key: 'type', label: 'Tipe' },
+		{ key: 'scope', label: 'Cakupan' },
+		{ key: 'sessions', label: 'Sesi', class: 'text-center' },
+		{ key: 'status', label: 'Status' },
 	];
 
 	const typeLabel: Record<string, string> = {
@@ -452,114 +459,73 @@
 				</div>
 			</div>
 		</section>
-		<Card.Root class="overflow-hidden border-border shadow-sm">
-			<Card.Content class="p-0 overflow-x-auto">
-				<div class="hidden overflow-x-auto lg:block">
-					<Table.Root>
-						<Table.Header>
-							<Table.Row>
-								<Table.Head>Judul Kegiatan</Table.Head>
-								<Table.Head>Tipe</Table.Head>
-								<Table.Head>Cakupan</Table.Head>
-								<Table.Head class="text-center">Sesi</Table.Head>
-								<Table.Head>Status</Table.Head>
-								<Table.Head class="text-right">Aksi</Table.Head>
-							</Table.Row>
-						</Table.Header>
-						<Table.Body>
-							{#each visibleEvents as e (e.id)}
-								<Table.Row>
-									<Table.Cell>
-										<div class="font-medium text-foreground">{e.title}</div>
-										<div class="text-xs text-muted-foreground">{e.academic_year_name} · {e.target_levels?.length ? `Tingkat ${e.target_levels.join(', ')}` : 'Target mengikuti cakupan'}</div>
-									</Table.Cell>
-									<Table.Cell>
-										<Badge variant="outline" class="text-xs capitalize">{typeLabel[e.exam_type] ?? e.exam_type}</Badge>
-									</Table.Cell>
-									<Table.Cell class="text-sm text-muted-foreground">{scopeLabel[e.scope] ?? e.scope}</Table.Cell>
-									<Table.Cell class="text-center">
-										<div class="flex flex-col items-center gap-1">
-											<Badge variant="secondary">{e.session_count} Sesi</Badge>
-											<Badge class={questionReadinessClass(overview.questionReadiness[e.id])}>{questionReadinessLabel(overview.questionReadiness[e.id])}</Badge>
-										</div>
-									</Table.Cell>
-									<Table.Cell>
-										<Badge class={statusClass(e.status)}>
-											{statusLabel[e.status] ?? e.status}
-										</Badge>
-										<div class="mt-1 text-xs text-muted-foreground">{eventProgressLabel(e, overview.questionReadiness[e.id])}</div>
-									</Table.Cell>
-									<Table.Cell class="text-right">
-										<div class="flex flex-wrap justify-end gap-1.5">
-											<a href={resolve(`/asesmen/kegiatan/${e.id}`)} class="inline-flex items-center rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Kelola</a>
-											<LoadingButton variant="ghost" size="sm" class="text-muted-foreground" onclick={() => openEdit(e)}>Edit</LoadingButton>
-											<LoadingButton
-												variant="ghost"
-												size="sm"
-												class="text-destructive hover:bg-destructive/10 hover:text-destructive"
-												onclick={() => deleteEvent(e.id)}
-												loading={deleteBusyId === e.id}
-												loadingLabel="Menghapus..."
-												disabled={deleteBusyId !== '' && deleteBusyId !== e.id}
-											>Hapus</LoadingButton>
-										</div>
-									</Table.Cell>
-								</Table.Row>
-							{:else}
-								<Table.Row>
-									<Table.Cell colspan={6} class="text-center text-muted-foreground py-12">
-										{overview.events.length === 0 ? 'Belum ada kegiatan ujian.' : 'Tidak ada kegiatan pada filter ini.'}
-									</Table.Cell>
-								</Table.Row>
-							{/each}
-						</Table.Body>
-					</Table.Root>
-				</div>
-
-				<div class="grid gap-3 p-4 lg:hidden">
-					{#each visibleEvents as e (e.id)}
-						<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
-							<div class="flex items-start justify-between gap-3">
-								<div class="min-w-0">
-									<p class="text-sm font-semibold text-foreground">{e.title}</p>
-									<p class="mt-1 text-xs text-muted-foreground">{e.academic_year_name}</p>
-								</div>
-								<Badge class={statusClass(e.status)}>
-									{statusLabel[e.status] ?? e.status}
-								</Badge>
-							</div>
-							<div class="mt-3 flex flex-wrap items-center gap-2">
-								<Badge variant="outline" class="text-xs capitalize">{typeLabel[e.exam_type] ?? e.exam_type}</Badge>
-								<Badge variant="outline" class="text-xs">{scopeLabel[e.scope] ?? e.scope}</Badge>
-								{#if e.target_levels?.length}
-									<Badge variant="outline" class="text-xs">{e.target_levels.join(', ')}</Badge>
-								{/if}
-								<Badge variant="secondary">{e.session_count} sesi</Badge>
-								<Badge class={questionReadinessClass(overview.questionReadiness[e.id])}>{questionReadinessLabel(overview.questionReadiness[e.id])}</Badge>
-							</div>
-							<p class="mt-3 text-xs text-muted-foreground">{eventProgressLabel(e, overview.questionReadiness[e.id])}</p>
-							<div class="mt-4 grid grid-cols-2 gap-2">
-								<a href={resolve(`/asesmen/kegiatan/${e.id}`)} class="col-span-2 inline-flex items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Kelola</a>
-								<LoadingButton variant="ghost" size="sm" onclick={() => openEdit(e)}>Edit</LoadingButton>
-								<LoadingButton
-									variant="ghost"
-									size="sm"
-									class="text-destructive hover:bg-destructive/10 hover:text-destructive"
-									onclick={() => deleteEvent(e.id)}
-									loading={deleteBusyId === e.id}
-									loadingLabel="Menghapus..."
-									disabled={deleteBusyId !== '' && deleteBusyId !== e.id}
-								>Hapus</LoadingButton>
-							</div>
+		<MicroActionTable
+			title="Daftar kegiatan"
+			description="Tampilan ringkas untuk memindai status, sesi, kesiapan soal, dan aksi pengelolaan."
+			columns={eventColumns}
+			rows={visibleEvents}
+			rowKey={(row) => (row as CbtEvent).id}
+			tableClass="min-w-[860px]"
+			emptyTitle={overview.events.length === 0 ? 'Belum ada kegiatan ujian.' : 'Tidak ada kegiatan pada filter ini.'}
+		>
+			{#snippet cell(row, column)}
+				{@const e = row as CbtEvent}
+				{#if column.key === 'event'}
+					<div class="font-medium text-foreground">{e.title}</div>
+					<div class="text-xs text-muted-foreground">{e.academic_year_name} · {e.target_levels?.length ? `Tingkat ${e.target_levels.join(', ')}` : 'Target mengikuti cakupan'}</div>
+				{:else if column.key === 'type'}
+					<Badge variant="outline" class="text-xs capitalize">{typeLabel[e.exam_type] ?? e.exam_type}</Badge>
+				{:else if column.key === 'scope'}
+					<span class="text-sm text-muted-foreground">{scopeLabel[e.scope] ?? e.scope}</span>
+				{:else if column.key === 'sessions'}
+					<div class="flex flex-col items-center gap-1">
+						<Badge variant="secondary">{e.session_count} Sesi</Badge>
+						<Badge class={questionReadinessClass(overview.questionReadiness[e.id])}>{questionReadinessLabel(overview.questionReadiness[e.id])}</Badge>
+					</div>
+				{:else}
+					<Badge class={statusClass(e.status)}>{statusLabel[e.status] ?? e.status}</Badge>
+					<div class="mt-1 text-xs text-muted-foreground">{eventProgressLabel(e, overview.questionReadiness[e.id])}</div>
+				{/if}
+			{/snippet}
+			{#snippet actions(row)}
+				{@const e = row as CbtEvent}
+				<a href={resolve(`/asesmen/kegiatan/${e.id}`)} class="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90">Kelola</a>
+				<LoadingButton variant="ghost" size="sm" class="text-muted-foreground" onclick={() => openEdit(e)}>Edit</LoadingButton>
+				<LoadingButton
+					variant="ghost"
+					size="sm"
+					class="text-destructive hover:bg-destructive/10 hover:text-destructive"
+					onclick={() => deleteEvent(e.id)}
+					loading={deleteBusyId === e.id}
+					loadingLabel="Menghapus..."
+					disabled={deleteBusyId !== '' && deleteBusyId !== e.id}
+				>Hapus</LoadingButton>
+			{/snippet}
+			{#snippet mobile(row)}
+				{@const e = row as CbtEvent}
+				<div class="space-y-3">
+					<div class="flex items-start justify-between gap-3">
+						<div class="min-w-0">
+							<p class="text-sm font-semibold text-foreground">{e.title}</p>
+							<p class="mt-1 text-xs text-muted-foreground">{e.academic_year_name}</p>
 						</div>
-					{:else}
-						<div class="rounded-2xl border border-dashed border-border bg-muted/50 px-4 py-10 text-center text-sm text-muted-foreground">
-							{overview.events.length === 0 ? 'Belum ada kegiatan ujian.' : 'Tidak ada kegiatan pada filter ini.'}
-						</div>
-					{/each}
+						<Badge class={statusClass(e.status)}>{statusLabel[e.status] ?? e.status}</Badge>
+					</div>
+					<div class="flex flex-wrap items-center gap-2">
+						<Badge variant="outline" class="text-xs capitalize">{typeLabel[e.exam_type] ?? e.exam_type}</Badge>
+						<Badge variant="outline" class="text-xs">{scopeLabel[e.scope] ?? e.scope}</Badge>
+						<Badge variant="secondary">{e.session_count} sesi</Badge>
+						<Badge class={questionReadinessClass(overview.questionReadiness[e.id])}>{questionReadinessLabel(overview.questionReadiness[e.id])}</Badge>
+					</div>
+					<p class="text-xs text-muted-foreground">{eventProgressLabel(e, overview.questionReadiness[e.id])}</p>
+					<div class="flex flex-wrap gap-2">
+						<a href={resolve(`/asesmen/kegiatan/${e.id}`)} class="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90">Kelola</a>
+						<LoadingButton variant="ghost" size="sm" onclick={() => openEdit(e)}>Edit</LoadingButton>
+						<LoadingButton variant="ghost" size="sm" class="text-destructive hover:bg-destructive/10 hover:text-destructive" onclick={() => deleteEvent(e.id)} loading={deleteBusyId === e.id} loadingLabel="Menghapus..." disabled={deleteBusyId !== '' && deleteBusyId !== e.id}>Hapus</LoadingButton>
+					</div>
 				</div>
-			</Card.Content>
-		</Card.Root>
+			{/snippet}
+		</MicroActionTable>
 		{/snippet}
 	</AsyncContent>
 </div>

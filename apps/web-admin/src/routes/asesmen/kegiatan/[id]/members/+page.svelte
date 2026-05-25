@@ -2,13 +2,13 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import MicroActionTable from '$lib/components/ops/MicroActionTable.svelte';
 	import { toast } from '$lib/components/ui/sonner';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPath, readClientApiData, readClientJson } from '$lib/client/api';
@@ -45,6 +45,11 @@
 		{ value: 'korektor', label: 'Korektor', desc: 'Koreksi uraian' }
 	];
 	const subjectScopedRoles: SubjectScopedRole[] = ['pembuat_soal', 'reviewer', 'korektor'];
+	const memberColumns = [
+		{ key: 'name', label: 'Nama', class: 'min-w-[14rem]' },
+		{ key: 'role', label: 'Peran' },
+		{ key: 'subject', label: 'Mapel' },
+	];
 
 	let info = $state<CbtEvent | null>(null);
 	let subjects = $state<Subject[]>([]);
@@ -274,45 +279,39 @@
 				</div>
 			</section>
 
-			<section class="rounded-xl border border-border bg-card shadow-sm">
-				<div class="flex flex-col gap-3 border-b border-border p-4 md:flex-row md:items-center md:justify-between">
+			<section class="space-y-3">
+				<div class="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 shadow-sm md:flex-row md:items-center md:justify-between">
 					<div>
 						<h2 class="text-base font-semibold text-foreground">Daftar Penugasan</h2>
 						<p class="text-sm text-muted-foreground">{members.length} orang terhubung dengan kegiatan ini.</p>
 					</div>
 					<Input placeholder="Cari nama/peran/mapel..." bind:value={search} class="h-9 md:w-72" />
 				</div>
-				<div class="overflow-x-auto">
-					<Table.Root>
-						<Table.Header>
-							<Table.Row class="bg-muted/50">
-								<Table.Head>Nama</Table.Head>
-								<Table.Head>Peran</Table.Head>
-								<Table.Head>Mapel</Table.Head>
-								<Table.Head class="text-right">Aksi</Table.Head>
-							</Table.Row>
-						</Table.Header>
-						<Table.Body>
-							{#each filteredMembers as member (member.id)}
-								<Table.Row>
-									<Table.Cell class="font-medium text-foreground">
-										{memberDisplayName(member)}
-										{@const secondary = memberSecondaryLabel(member)}
-										{#if secondary}<div class="text-xs font-normal text-muted-foreground">{secondary}</div>{/if}
-									</Table.Cell>
-									<Table.Cell><span class="rounded bg-success/10 px-2 py-1 text-xs font-semibold text-success">{roleLabel(member.role)}</span></Table.Cell>
-									<Table.Cell class="text-sm text-muted-foreground">{subjectLabel(member)}</Table.Cell>
-									<Table.Cell class="text-right">
-										<Button variant="outline" size="sm" class="mr-2 h-8" onclick={() => editMember(member)}>Edit</Button>
-										<LoadingButton variant="outline" size="sm" class="h-8 border-destructive/30 text-destructive hover:bg-destructive/10" onclick={() => void deleteMember(member)} loading={deletingId === member.id} loadingLabel="Hapus..." disabled={deletingId !== ''}>Hapus</LoadingButton>
-									</Table.Cell>
-								</Table.Row>
-							{:else}
-								<Table.Row><Table.Cell colspan={4} class="py-10 text-center text-sm text-muted-foreground">Belum ada penugasan.</Table.Cell></Table.Row>
-							{/each}
-						</Table.Body>
-					</Table.Root>
-				</div>
+				<MicroActionTable
+					columns={memberColumns}
+					rows={filteredMembers}
+					rowKey={(row) => (row as EventMember).id}
+					emptyTitle="Belum ada penugasan."
+					tableClass="min-w-[640px]"
+				>
+					{#snippet cell(row, column)}
+						{@const member = row as EventMember}
+						{#if column.key === 'name'}
+							<div class="font-medium text-foreground">{memberDisplayName(member)}</div>
+							{@const secondary = memberSecondaryLabel(member)}
+							{#if secondary}<div class="text-xs font-normal text-muted-foreground">{secondary}</div>{/if}
+						{:else if column.key === 'role'}
+							<span class="rounded bg-success/10 px-2 py-1 text-xs font-semibold text-success">{roleLabel(member.role)}</span>
+						{:else}
+							<span class="text-sm text-muted-foreground">{subjectLabel(member)}</span>
+						{/if}
+					{/snippet}
+					{#snippet actions(row)}
+						{@const member = row as EventMember}
+						<Button variant="outline" size="sm" class="h-8" onclick={() => editMember(member)}>Edit</Button>
+						<LoadingButton variant="outline" size="sm" class="h-8 border-destructive/30 text-destructive hover:bg-destructive/10" onclick={() => void deleteMember(member)} loading={deletingId === member.id} loadingLabel="Hapus..." disabled={deletingId !== ''}>Hapus</LoadingButton>
+					{/snippet}
+				</MicroActionTable>
 			</section>
 		{/snippet}
 	</AsyncContent>

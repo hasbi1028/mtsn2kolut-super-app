@@ -5,13 +5,14 @@
 	import ShieldCheckIcon from '@lucide/svelte/icons/shield-check';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
-	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import * as Table from '$lib/components/ui/table';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { MicroActionTable } from '$lib/components/ops';
 	import { readClientApiData } from '$lib/client/api';
 
 	type ProctorRoom = {
@@ -55,6 +56,14 @@
 		{ value: 'scheduled', label: 'Terjadwal' },
 		{ value: 'draft', label: 'Konsep' },
 		{ value: 'finished', label: 'Selesai' },
+	];
+	const roomColumns = [
+		{ key: 'room', label: 'Ruang', class: 'min-w-52' },
+		{ key: 'session', label: 'Sesi', class: 'min-w-64' },
+		{ key: 'status', label: 'Status', class: 'min-w-44' },
+		{ key: 'progress', label: 'Peserta', headClass: 'text-center', class: 'text-center' },
+		{ key: 'risk', label: 'Atensi', headClass: 'text-center', class: 'text-center' },
+		{ key: 'proctor', label: 'Pengawas', class: 'max-w-64' },
 	];
 
 	let roomsPromise = $state<Promise<ProctorRoom[]> | null>(null);

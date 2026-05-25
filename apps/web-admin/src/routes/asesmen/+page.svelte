@@ -2,8 +2,9 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import type { RouteId } from '$app/types';
+	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import { ContextStrip, MetricCard, PageHeader, WorkflowCard } from '$lib/components/ops';
+	import { ContextStrip, MetricCard, MicroActionTable, PageHeader } from '$lib/components/ops';
 	import { trackInternalAnalyticsEvent } from '$lib/analytics/internal-analytics';
 
 	type AppRole = 'admin' | 'guru' | 'staf' | 'kesiswaan' | 'siswa' | 'ortu';
@@ -108,6 +109,12 @@
 		{ label: 'Panduan BYOD', href: '/asesmen/aplikasi-siswa', roles: ['admin', 'guru'] }
 	];
 
+	const workflowColumns = [
+		{ key: 'workflow', label: 'Alur', class: 'min-w-[15rem]' },
+		{ key: 'status', label: 'Fase', class: 'w-32' },
+		{ key: 'description', label: 'Kebutuhan operasional', class: 'min-w-[22rem]' }
+	];
+
 	const userRoles = $derived<KnownRole[]>(data.user?.roles ?? (data.user?.role ? [data.user.role] : []));
 	const roleSet = $derived(new Set<KnownRole>(userRoles));
 	const launcherRole = $derived<LauncherRole | undefined>(resolveLauncherRole(roleSet));
@@ -181,17 +188,47 @@
 		</div>
 
 		{#if visibleWorkflows.length > 0}
-			<div class="grid auto-rows-fr gap-3 md:grid-cols-2 xl:grid-cols-4">
-				{#each visibleWorkflows as task (task.title)}
-					<WorkflowCard
-						title={task.title}
-						description={task.description}
-						href={resolve(task.href)}
-						status={task.status}
-						actionLabel={task.actionLabel}
-					/>
-				{/each}
-			</div>
+			<MicroActionTable
+				title="Alur kerja CBT"
+				description="Pilih pintu kerja sesuai fase. Urutan dan akses tetap mengikuti peran aktif."
+				columns={workflowColumns}
+				rows={visibleWorkflows}
+				rowKey={(row) => (row as Workflow).href}
+				tableClass="min-w-[780px]"
+			>
+				{#snippet cell(row, column)}
+					{@const task = row as Workflow}
+					{#if column.key === 'workflow'}
+						<div>
+							<p class="font-medium text-foreground">{task.title}</p>
+							<p class="mt-0.5 text-[11px] text-muted-foreground">Prioritas {workflowPriority(task, launcherRole)}</p>
+						</div>
+					{:else if column.key === 'status'}
+						<Badge variant="outline" class="border-primary/20 bg-primary/10 text-xs text-primary">{task.status}</Badge>
+					{:else if column.key === 'description'}
+						<p class="max-w-2xl leading-5 text-muted-foreground">{task.description}</p>
+					{/if}
+				{/snippet}
+				{#snippet actions(row)}
+					{@const task = row as Workflow}
+					<Button href={resolve(task.href)} variant="outline" size="xs" class="border-primary/20 text-primary hover:bg-primary/10">{task.actionLabel}</Button>
+				{/snippet}
+				{#snippet mobile(row)}
+					{@const task = row as Workflow}
+					<div class="space-y-2 text-xs">
+						<div class="flex items-start justify-between gap-3">
+							<div>
+								<p class="font-medium text-foreground">{task.title}</p>
+								<p class="mt-1 leading-5 text-muted-foreground">{task.description}</p>
+							</div>
+							<Badge variant="outline" class="shrink-0 border-primary/20 bg-primary/10 text-xs text-primary">{task.status}</Badge>
+						</div>
+						<div class="flex justify-end pt-1">
+							<Button href={resolve(task.href)} variant="outline" size="xs" class="border-primary/20 text-primary hover:bg-primary/10">{task.actionLabel}</Button>
+						</div>
+					</div>
+				{/snippet}
+			</MicroActionTable>
 		{:else}
 			<section class="rounded-lg border border-dashed border-border bg-muted/50 p-5">
 				<h2 class="text-lg font-semibold text-foreground">Tidak ada tugas CBT untuk peran ini</h2>

@@ -15,6 +15,7 @@
   import { Input } from "$lib/components/ui/input";
   import { Textarea } from "$lib/components/ui/textarea";
   import LoadingButton from "$lib/components/LoadingButton.svelte";
+  import MicroActionTable from "$lib/components/ops/MicroActionTable.svelte";
   import AsyncContent from "$lib/components/AsyncContent.svelte";
   import { TablePagination } from "$lib/components/ui/pagination";
   import { toast } from "$lib/components/ui/sonner";
@@ -113,6 +114,14 @@
     items?: PoolQuestion[];
     meta?: { total?: number };
   };
+
+  const packageQuestionColumns = [
+    { key: "number", label: "No", headClass: "w-12", class: "w-12" },
+    { key: "question", label: "Soal", class: "min-w-[280px]" },
+    { key: "type", label: "Bentuk", class: "min-w-[100px]" },
+    { key: "points", label: "Bobot", class: "w-24" },
+    { key: "quality", label: "Mutu", class: "min-w-[120px]" },
+  ];
 
   const packageId = page.params.id ?? "";
   let detailPromise = $state<Promise<DetailPayload> | null>(null);
@@ -849,6 +858,76 @@
           {/each}
         </div>
 
+        {#snippet packageQuestionCell(rowValue: unknown, column: { key: string }, i: number)}
+                {@const row = rowValue as PackageQuestion}
+                {#if column.key === "number"}
+                  <span class="font-semibold text-muted-foreground">#{i + 1}</span>
+                {:else if column.key === "question"}
+                  <div class="min-w-0">
+                    <p class="font-mono text-xs font-semibold text-primary">
+                      {row.question_code || row.question_id}
+                    </p>
+                    <p class="mt-1 line-clamp-2 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                      {row.question_text}
+                    </p>
+                  </div>
+                {:else if column.key === "type"}
+                  <Badge variant="outline" class="text-xs">{typeLabel(row.question_type)}</Badge>
+                {:else if column.key === "points"}
+                  <Input
+                    class="h-8 w-20 text-right text-xs"
+                    type="number"
+                    value={row.points}
+                    min="1"
+                    max="100"
+                    disabled={isLocked}
+                    oninput={(e) => setPoints(i, Number((e.currentTarget as HTMLInputElement).value))}
+                  />
+                {:else if column.key === "quality"}
+                  {#if hasMetadataGap(row)}
+                    <Badge class="bg-warning/10 text-warning border-warning/30 text-xs">Metadata kurang</Badge>
+                  {:else}
+                    <Badge variant="outline" class="text-xs">OK</Badge>
+                  {/if}
+                {/if}
+        {/snippet}
+
+        {#snippet packageQuestionActions(rowValue: unknown, i: number)}
+                <button
+                  class="rounded border px-2 py-1 text-xs"
+                  disabled={isLocked || i === 0}
+                  onclick={() => moveRow(i, -1)}>↑</button
+                ><button
+                  class="rounded border px-2 py-1 text-xs"
+                  disabled={isLocked || i === rows.length - 1}
+                  onclick={() => moveRow(i, 1)}>↓</button
+                ><button
+                  class="rounded border px-2 py-1 text-xs text-destructive"
+                  disabled={isLocked}
+                  onclick={() => removeRow(i)}>Hapus</button
+                >
+        {/snippet}
+
+        {#snippet packageQuestionMobile(rowValue: unknown, i: number)}
+                {@const row = rowValue as PackageQuestion}
+                <div class="space-y-2 text-xs">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                      {@render packageQuestionCell(row, packageQuestionColumns[0], i)}
+                      {@render packageQuestionCell(row, packageQuestionColumns[1], i)}
+                    </div>
+                    {@render packageQuestionCell(row, packageQuestionColumns[4], i)}
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    {@render packageQuestionCell(row, packageQuestionColumns[2], i)}
+                    <span class="text-muted-foreground">Bobot</span>
+                    {@render packageQuestionCell(row, packageQuestionColumns[3], i)}
+                  </div>
+                  <div class="flex flex-wrap gap-1.5 pt-1">{@render packageQuestionActions(row, i)}</div>
+                </div>
+        {/snippet}
+
+
         {#if activeTab === "questions"}
           <Card.Root
             ><Card.Header
@@ -868,75 +947,17 @@
                   >Autofill Target dari Soal Terbit</button
                 >
               </div>
-              <div class="overflow-x-auto">
-                <Table.Root
-                  ><Table.Header
-                    ><Table.Row
-                      ><Table.Head>No</Table.Head><Table.Head>Soal</Table.Head
-                      ><Table.Head>Bentuk</Table.Head><Table.Head
-                        >Bobot</Table.Head
-                      ><Table.Head>Mutu</Table.Head><Table.Head>Aksi</Table.Head
-                      ></Table.Row
-                    ></Table.Header
-                  ><Table.Body>
-                    {#each rows as row, i (row.question_id)}<Table.Row
-                        ><Table.Cell>{i + 1}</Table.Cell><Table.Cell
-                          ><p class="font-medium">
-                            {row.question_code || row.question_id}
-                          </p>
-                          <p class="line-clamp-2 text-xs text-muted-foreground">
-                            {row.question_text}
-                          </p></Table.Cell
-                        ><Table.Cell>{typeLabel(row.question_type)}</Table.Cell
-                        ><Table.Cell
-                          ><Input
-                            class="w-20"
-                            type="number"
-                            value={row.points}
-                            min="1"
-                            max="100"
-                            disabled={isLocked}
-                            oninput={(e) =>
-                              setPoints(
-                                i,
-                                Number(
-                                  (e.currentTarget as HTMLInputElement).value,
-                                ),
-                              )}
-                          /></Table.Cell
-                        ><Table.Cell
-                          >{#if hasMetadataGap(row)}<Badge
-                              class="bg-warning/10 text-warning border-warning/30"
-                              >Metadata kurang</Badge
-                            >{:else}<Badge variant="outline">OK</Badge
-                            >{/if}</Table.Cell
-                        ><Table.Cell
-                          ><div class="flex gap-1">
-                            <button
-                              class="rounded border px-2 py-1 text-xs"
-                              disabled={isLocked || i === 0}
-                              onclick={() => moveRow(i, -1)}>↑</button
-                            ><button
-                              class="rounded border px-2 py-1 text-xs"
-                              disabled={isLocked || i === rows.length - 1}
-                              onclick={() => moveRow(i, 1)}>↓</button
-                            ><button
-                              class="rounded border px-2 py-1 text-xs text-destructive"
-                              disabled={isLocked}
-                              onclick={() => removeRow(i)}>Hapus</button
-                            >
-                          </div></Table.Cell
-                        ></Table.Row
-                      >{:else}<Table.Row
-                        ><Table.Cell
-                          colspan={6}
-                          class="py-8 text-center text-muted-foreground"
-                          >Belum ada soal dalam paket.</Table.Cell
-                        ></Table.Row
-                      >{/each}
-                  </Table.Body></Table.Root
-                >
-              </div>
+              <MicroActionTable
+                rows={rows}
+                columns={packageQuestionColumns}
+                rowKey={(row) => (row as PackageQuestion).question_id}
+                cell={packageQuestionCell}
+                actions={packageQuestionActions}
+                mobile={packageQuestionMobile}
+                tableClass="min-w-[760px]"
+                emptyTitle="Belum ada soal dalam paket."
+                emptyDescription="Tambahkan soal dari Bank Soal atau gunakan autofill target."
+              />
             </Card.Content></Card.Root
           >
         {:else if activeTab === "pool"}

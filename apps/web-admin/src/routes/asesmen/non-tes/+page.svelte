@@ -9,6 +9,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import MicroActionTable from '$lib/components/ops/MicroActionTable.svelte';
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { confirmChallenge } from '$lib/confirm-dialog';
@@ -120,6 +121,14 @@
 		{ value: 'closed', label: 'Ditutup' },
 		{ value: 'archived', label: 'Arsip' },
 	] as const;
+
+	const assessmentListColumns = [
+		{ key: 'assessment', label: 'Asesmen', class: 'min-w-64' },
+		{ key: 'subject', label: 'Mapel' },
+		{ key: 'type', label: 'Bentuk' },
+		{ key: 'status', label: 'Status' },
+		{ key: 'progress', label: 'Progress', class: 'min-w-56' },
+	];
 
 	let assessments = $state<NonTestAssessment[]>([]);
 	let subjects = $state<Subject[]>([]);
@@ -909,151 +918,81 @@
 		{#snippet children(value)}
 			{@const overview = value as AssessmentOverview}
 			{@const currentAssessments = overview.assessments}
-			<Card.Root class="overflow-hidden border-border shadow-sm">
-				<Card.Header class="pb-2">
-					<div class="flex flex-wrap items-start justify-between gap-2">
-						<div>
-							<Card.Title class="text-base">Daftar Asesmen ({overview.totalItems})</Card.Title>
-							<Card.Description>Semua item di sini dinilai manual dan tidak masuk pelaksanaan ujian berkode.</Card.Description>
-						</div>
-						{#if filterNeedsSync}
-							<Badge class="border border-warning/30 bg-warning/15 text-warning">Filter Perlu Sinkron</Badge>
-						{/if}
-					</div>
-				</Card.Header>
-				<Card.Content class="p-0">
-					<div class="hidden overflow-x-auto lg:block">
-						<Table.Root>
-							<Table.Header>
-								<Table.Row>
-									<Table.Head>Asesmen</Table.Head>
-									<Table.Head>Mapel</Table.Head>
-									<Table.Head>Bentuk</Table.Head>
-									<Table.Head>Status</Table.Head>
-									<Table.Head>Progress</Table.Head>
-									<Table.Head></Table.Head>
-								</Table.Row>
-							</Table.Header>
-							<Table.Body>
-								{#each currentAssessments as item (item.id)}
-									<Table.Row>
-										<Table.Cell>
-											<div>
-												<p class="font-medium text-foreground">{item.title}</p>
-												<p class="mt-0.5 text-xs text-muted-foreground">
-													{item.class_name || 'Lintas kelas'} · Bobot {item.weight} · Skor {item.max_score}
-												</p>
-											</div>
-										</Table.Cell>
-										<Table.Cell>
-											<Badge variant="outline" class="text-xs">{item.subject_code}</Badge>
-										</Table.Cell>
-										<Table.Cell class="text-sm text-foreground">{assessmentTypeLabel(item.assessment_type)}</Table.Cell>
-										<Table.Cell>
-											<Badge class={`border text-xs ${statusBadgeClass(item.status)}`}>{statusLabel(item.status)}</Badge>
-										</Table.Cell>
-										<Table.Cell class="text-sm text-muted-foreground">
-											<div class="space-y-1">
-												<p>{item.reviewed_submissions}/{item.total_submissions} dinilai</p>
-												<Badge class={`border text-xs ${gradeSyncBadgeClass(item)}`}>{gradeSyncLabel(item)}</Badge>
-												<p class="max-w-56 text-xs leading-5 text-muted-foreground">{gradeSyncDescription(item)}</p>
-											</div>
-										</Table.Cell>
-										<Table.Cell>
-											<div class="flex flex-wrap justify-end gap-2">
-												<LoadingButton variant="outline" size="xs" onclick={() => openScoringPanel(item)}>
-													{selectedAssessment?.id === item.id ? 'Dibuka' : 'Nilai'}
-												</LoadingButton>
-												<LoadingButton
-													variant="outline"
-													size="xs"
-													onclick={() => syncToGrade(item)}
-													loading={syncingGradeId === item.id}
-													disabled={!canSyncGrade(item) || (syncingGradeId !== '' && syncingGradeId !== item.id)}
-													loadingLabel="Kirim..."
-												>
-													Kirim Nilai
-												</LoadingButton>
-												<LoadingButton
-													variant="outline"
-													size="xs"
-													onclick={() => generateSubmissions(item)}
-													loading={generatingId === item.id}
-													disabled={!item.class_id || (generatingId !== '' && generatingId !== item.id)}
-													loadingLabel="Menyiapkan..."
-												>
-													Siapkan Siswa
-												</LoadingButton>
-												<LoadingButton variant="outline" size="xs" onclick={() => editAssessment(item)}>Edit</LoadingButton>
-												<LoadingButton
-													variant="destructive"
-													size="xs"
-													onclick={() => deleteAssessment(item)}
-													loading={deleteBusyId === item.id}
-													disabled={deleteBusyId !== '' && deleteBusyId !== item.id}
-													loadingLabel="Hapus..."
-												>
-													Hapus
-												</LoadingButton>
-											</div>
-										</Table.Cell>
-									</Table.Row>
-								{:else}
-									<Table.Row>
-										<Table.Cell colspan={6} class="py-8 text-center text-muted-foreground">Belum ada asesmen non-tes.</Table.Cell>
-									</Table.Row>
-								{/each}
-							</Table.Body>
-						</Table.Root>
-					</div>
-
-					<div class="space-y-3 p-4 lg:hidden">
-						{#each currentAssessments as item (item.id)}
-							<div class="rounded-lg border border-border p-3">
-								<div class="flex items-start justify-between gap-3">
-									<div>
-										<p class="font-medium text-foreground">{item.title}</p>
-										<p class="mt-1 text-xs text-muted-foreground">{item.subject_code} · {assessmentTypeLabel(item.assessment_type)}</p>
-									</div>
-									<Badge class={`border text-xs ${statusBadgeClass(item.status)}`}>{statusLabel(item.status)}</Badge>
-								</div>
-								<div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-									<span>{item.reviewed_submissions}/{item.total_submissions} dinilai</span>
-									<Badge class={`border text-xs ${gradeSyncBadgeClass(item)}`}>{gradeSyncLabel(item)}</Badge>
-								</div>
-								<p class="mt-2 text-xs leading-5 text-muted-foreground">{gradeSyncDescription(item)}</p>
-								<div class="mt-3 flex flex-wrap justify-end gap-2">
-									<LoadingButton variant="outline" size="xs" onclick={() => openScoringPanel(item)}>Nilai</LoadingButton>
-									<LoadingButton
-										variant="outline"
-										size="xs"
-										onclick={() => syncToGrade(item)}
-										loading={syncingGradeId === item.id}
-										disabled={!canSyncGrade(item) || (syncingGradeId !== '' && syncingGradeId !== item.id)}
-										loadingLabel="Kirim..."
-									>
-										Kirim
-									</LoadingButton>
-									<LoadingButton
-										variant="outline"
-										size="xs"
-										onclick={() => generateSubmissions(item)}
-										loading={generatingId === item.id}
-										disabled={!item.class_id || (generatingId !== '' && generatingId !== item.id)}
-										loadingLabel="Siap..."
-									>
-										Siswa
-									</LoadingButton>
-									<LoadingButton variant="outline" size="xs" onclick={() => editAssessment(item)}>Edit</LoadingButton>
-									<LoadingButton variant="destructive" size="xs" onclick={() => deleteAssessment(item)} loading={deleteBusyId === item.id}>Hapus</LoadingButton>
-								</div>
+			<div class="space-y-2">
+				{#if filterNeedsSync}
+					<Badge class="border border-warning/30 bg-warning/15 text-warning">Filter Perlu Sinkron</Badge>
+				{/if}
+				<MicroActionTable
+					title={`Daftar Asesmen (${overview.totalItems})`}
+					description="Semua item di sini dinilai manual dan tidak masuk pelaksanaan ujian berkode."
+					columns={assessmentListColumns}
+					rows={currentAssessments}
+					rowKey={(row) => (row as NonTestAssessment).id}
+					emptyTitle="Belum ada asesmen non-tes."
+					tableClass="min-w-[860px]"
+				>
+					{#snippet cell(row, column)}
+						{@const item = row as NonTestAssessment}
+						{#if column.key === 'assessment'}
+							<div>
+								<p class="font-medium text-foreground">{item.title}</p>
+								<p class="mt-0.5 text-xs text-muted-foreground">
+									{item.class_name || 'Lintas kelas'} · Bobot {item.weight} · Skor {item.max_score}
+								</p>
 							</div>
-						{:else}
-							<p class="py-6 text-center text-sm text-muted-foreground">Belum ada asesmen non-tes.</p>
-						{/each}
-					</div>
-				</Card.Content>
-			</Card.Root>
+						{:else if column.key === 'subject'}
+							<Badge variant="outline" class="text-xs">{item.subject_code}</Badge>
+						{:else if column.key === 'type'}
+							<span class="text-foreground">{assessmentTypeLabel(item.assessment_type)}</span>
+						{:else if column.key === 'status'}
+							<Badge class={`border text-xs ${statusBadgeClass(item.status)}`}>{statusLabel(item.status)}</Badge>
+						{:else if column.key === 'progress'}
+							<div class="space-y-1 text-muted-foreground">
+								<p>{item.reviewed_submissions}/{item.total_submissions} dinilai</p>
+								<Badge class={`border text-xs ${gradeSyncBadgeClass(item)}`}>{gradeSyncLabel(item)}</Badge>
+								<p class="max-w-56 text-xs leading-5 text-muted-foreground">{gradeSyncDescription(item)}</p>
+							</div>
+						{/if}
+					{/snippet}
+					{#snippet actions(row)}
+						{@const item = row as NonTestAssessment}
+						<LoadingButton variant="outline" size="xs" onclick={() => openScoringPanel(item)}>
+							{selectedAssessment?.id === item.id ? 'Dibuka' : 'Nilai'}
+						</LoadingButton>
+						<LoadingButton
+							variant="outline"
+							size="xs"
+							onclick={() => syncToGrade(item)}
+							loading={syncingGradeId === item.id}
+							disabled={!canSyncGrade(item) || (syncingGradeId !== '' && syncingGradeId !== item.id)}
+							loadingLabel="Kirim..."
+						>
+							Kirim Nilai
+						</LoadingButton>
+						<LoadingButton
+							variant="outline"
+							size="xs"
+							onclick={() => generateSubmissions(item)}
+							loading={generatingId === item.id}
+							disabled={!item.class_id || (generatingId !== '' && generatingId !== item.id)}
+							loadingLabel="Menyiapkan..."
+						>
+							Siapkan Siswa
+						</LoadingButton>
+						<LoadingButton variant="outline" size="xs" onclick={() => editAssessment(item)}>Edit</LoadingButton>
+						<LoadingButton
+							variant="destructive"
+							size="xs"
+							onclick={() => deleteAssessment(item)}
+							loading={deleteBusyId === item.id}
+							disabled={deleteBusyId !== '' && deleteBusyId !== item.id}
+							loadingLabel="Hapus..."
+						>
+							Hapus
+						</LoadingButton>
+					{/snippet}
+				</MicroActionTable>
+			</div>
 		{/snippet}
 	</AsyncContent>
 

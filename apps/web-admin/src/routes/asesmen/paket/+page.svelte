@@ -4,8 +4,8 @@
   import { page } from "$app/state";
   import { resolve } from "$app/paths";
   import * as Card from "$lib/components/ui/card";
-  import * as Table from "$lib/components/ui/table";
   import { Input } from "$lib/components/ui/input";
+  import MicroActionTable from "$lib/components/ops/MicroActionTable.svelte";
   import { Textarea } from "$lib/components/ui/textarea";
   import { Badge } from "$lib/components/ui/badge";
   import { toast } from "$lib/components/ui/sonner";
@@ -149,6 +149,14 @@
 
   const questionPageSize = 100;
   const maxQuestionPages = 20;
+  const packageTableColumns = [
+    { key: "select", label: "", headClass: "w-10", class: "w-10" },
+    { key: "package", label: "Paket", class: "min-w-[240px]" },
+    { key: "composition", label: "Komposisi", class: "min-w-[220px]" },
+    { key: "readiness", label: "Kesiapan", class: "min-w-[140px]" },
+    { key: "quality", label: "Mutu", class: "min-w-[220px]" },
+    { key: "status", label: "Status", class: "min-w-[120px]" },
+  ];
 
   let packages = $state<CbtPackage[]>([]);
   let packageQuestions = $state<PackageQuestion[]>([]);
@@ -2003,6 +2011,188 @@
           </div>
         {/snippet}
 
+          {#snippet packageActions(row: unknown)}
+            {@const p = row as CbtPackage}
+            {@const quality = packageQualitySummary(p.id)}
+            {@const readiness = packageReadinessStatus(p, quality)}
+            <button
+              type="button"
+              class="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted"
+              aria-expanded={isPackageExpanded(p.id)}
+              aria-controls={`package-detail-${p.id}`}
+              aria-label={`${isPackageExpanded(p.id) ? "Tutup pratinjau" : "Pratinjau"} paket ${p.title}`}
+              onclick={() => togglePackageDetail(p.id)}
+            >
+              {isPackageExpanded(p.id) ? "Tutup" : "Pratinjau"}
+            </button>
+            <a
+              href={`${resolve("/asesmen/paket")}/${p.id}`}
+              class="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted"
+              title="Buka halaman paket: identitas, isi soal, blueprint, dan kunci paket"
+            >
+              Buka
+            </a>
+            {#if p.locked_at}
+              <LoadingButton
+                size="xs"
+                variant="outline"
+                onclick={() => createRevisionPackage(p.id, p.title)}
+                loading={bulkBusy}
+                loadingLabel="Membuat..."
+                title="Paket terkunci; buat salinan revisi agar riwayat lama tetap aman"
+              >
+                Buat Revisi
+              </LoadingButton>
+            {:else if readiness === "ready"}
+              <LoadingButton
+                size="xs"
+                variant="outline"
+                onclick={() => {
+                  selectedPackageIds.clear();
+                  selectedPackageIds.add(p.id);
+                  void bulkLockSelected();
+                }}
+                loading={bulkBusy}>Lock</LoadingButton
+              >
+            {/if}
+            {#if Number(p.session_count ?? 0) > 0}
+              <LoadingButton
+                variant="outline"
+                size="xs"
+                onclick={() => archivePackage(p.id, p.title, Number(p.session_count ?? 0))}
+                loading={deleteBusyId === p.id}
+                disabled={deleteBusyId !== "" && deleteBusyId !== p.id}
+                loadingLabel="Mengarsipkan..."
+                title={`Paket sudah dipakai ${p.session_count} sesi, tidak dapat dihapus permanen. Gunakan Arsipkan.`}
+              >
+                Arsipkan
+              </LoadingButton>
+            {:else}
+              <LoadingButton
+                variant="destructive"
+                size="xs"
+                onclick={() => deletePackage(p.id, p.title)}
+                loading={deleteBusyId === p.id}
+                disabled={deleteBusyId !== "" && deleteBusyId !== p.id}
+                loadingLabel="Menghapus..."
+                title="Hapus permanen paket yang belum dipakai sesi"
+              >
+                Hapus
+              </LoadingButton>
+            {/if}
+          {/snippet}
+
+          {#snippet packageCell(row: unknown, column: { key: string })}
+            {@const p = row as CbtPackage}
+            {@const quality = packageQualitySummary(p.id)}
+            {@const progress = packageProgress(p, quality)}
+            {@const readiness = packageReadinessStatus(p, quality)}
+            {#if column.key === "select"}
+              <input
+                type="checkbox"
+                class="rounded"
+                checked={selectedPackageIds.has(p.id)}
+                onchange={() => togglePackageSelection(p.id)}
+                aria-label={`Pilih paket ${p.title}`}
+              />
+            {:else if column.key === "package"}
+              <div class="space-y-1">
+                <p class="font-semibold text-foreground">{p.title}</p>
+                <p class="text-[11px] text-muted-foreground">
+                  {p.subject_name} ({p.subject_code}) · {p.duration_minutes} menit
+                </p>
+                {#if p.description}
+                  <p class="line-clamp-1 text-[11px] text-muted-foreground">{p.description}</p>
+                {/if}
+              </div>
+            {:else if column.key === "composition"}
+              <div class="space-y-1.5">
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <Badge variant="secondary" class="text-xs">{p.question_count} soal</Badge>
+                  {#if quality.totalPoints > 0}
+                    <Badge variant="outline" class="text-xs">{quality.totalPoints} poin</Badge>
+                  {/if}
+                </div>
+                {#if showUtsMode}
+                  <div class="min-w-28">
+                    <div class="h-1.5 rounded-full bg-muted">
+                      <div class="h-1.5 rounded-full bg-primary" style={`width: ${Math.min(100, progress.percent)}%`}></div>
+                    </div>
+                    <p class="mt-1 text-[11px] text-muted-foreground">
+                      {progress.pgCount}/{packageTargets(p).pg} PG · {progress.essayCount}/{packageTargets(p).essay} Essay
+                    </p>
+                  </div>
+                {/if}
+              </div>
+            {:else if column.key === "readiness"}
+              <div class="space-y-1">
+                <Badge class={`text-xs ${readinessBadgeClass(readiness)}`}>{readinessLabel(readiness)}</Badge>
+                {#if Number(p.session_count ?? 0) > 0}
+                  <p class="text-[11px] text-muted-foreground">{p.session_count} sesi</p>
+                {/if}
+              </div>
+            {:else if column.key === "quality"}
+              {#if quality.questions.length === 0}
+                <span class="text-xs text-muted-foreground">Belum ada rincian</span>
+              {:else}
+                <div class="flex max-w-sm flex-wrap gap-1">
+                  {#each quality.typeBuckets.slice(0, 2) as bucket (bucket.label)}
+                    <Badge variant="outline" class="bg-card text-[11px]">{bucket.label}: {bucket.count}</Badge>
+                  {/each}
+                  {#if quality.hotsCount > 0}
+                    <Badge class="border-warning/30 bg-warning/10 text-warning text-[11px]">{quality.hotsCount} HOTS</Badge>
+                  {/if}
+                  {#if quality.missingCount > 0}
+                    <Badge class="border-warning/30 bg-warning/10 text-warning text-[11px]">{quality.missingCount} metadata</Badge>
+                  {/if}
+                  {#if quality.unpublishedCount > 0}
+                    <Badge class="border-destructive/30 bg-destructive/10 text-destructive text-[11px]">{quality.unpublishedCount} belum terbit</Badge>
+                  {/if}
+                </div>
+              {/if}
+            {:else if column.key === "status"}
+              <div class="flex flex-wrap gap-1">
+                {#if p.is_active}
+                  <Badge class="bg-primary/15 text-primary border-primary/20 text-xs">Aktif</Badge>
+                {:else}
+                  <Badge variant="secondary" class="text-xs">Nonaktif</Badge>
+                {/if}
+                {#if p.randomize_questions}
+                  <Badge class="bg-primary/10 text-primary border-primary/20 text-xs">Acak</Badge>
+                {/if}
+                {#if p.locked_at}
+                  <Badge variant="outline" class="text-xs">Terkunci</Badge>
+                {/if}
+              </div>
+            {/if}
+          {/snippet}
+
+          {#snippet packageMobile(row: unknown)}
+            {@const p = row as CbtPackage}
+            {@const quality = packageQualitySummary(p.id)}
+            {@const progress = packageProgress(p, quality)}
+            {@const readiness = packageReadinessStatus(p, quality)}
+            <div class="space-y-3 text-xs">
+              <div class="flex items-start gap-3">
+                {@render packageCell(p, packageTableColumns[0])}
+                <div class="min-w-0 flex-1">{@render packageCell(p, packageTableColumns[1])}</div>
+              </div>
+              <div class="grid gap-3 sm:grid-cols-2">
+                {@render packageCell(p, packageTableColumns[2])}
+                {@render packageCell(p, packageTableColumns[3])}
+              </div>
+              {@render packageCell(p, packageTableColumns[4])}
+              {@render packageCell(p, packageTableColumns[5])}
+              {#if isPackageExpanded(p.id)}
+                <div id={`package-mobile-detail-${p.id}`} class="pt-1" role="region">
+                  {@render packageDetailPanel(p, quality, progress, readiness)}
+                </div>
+              {/if}
+              <div class="flex flex-wrap gap-1.5 pt-1">{@render packageActions(p)}</div>
+            </div>
+          {/snippet}
+
+
 
       <Card.Root
         id="paket-saya"
@@ -2203,432 +2393,32 @@
           {/if}
         </Card.Header>
         <Card.Content class="p-0">
-          <div class="hidden overflow-x-auto lg:block">
-            <Table.Root class="min-w-[1120px]">
-              <Table.Header>
-                <Table.Row>
-                  <Table.Head class="w-10"></Table.Head>
-                  <Table.Head>Nama Paket</Table.Head>
-                  <Table.Head>Mapel</Table.Head>
-                  <Table.Head>Durasi</Table.Head>
-                  <Table.Head>Jml Soal</Table.Head>
-                  <Table.Head>Progress</Table.Head>
-                  <Table.Head>Readiness</Table.Head>
-                  <Table.Head>Mutu Paket</Table.Head>
-                  <Table.Head>Acak</Table.Head>
-                  <Table.Head>Status</Table.Head>
-                  <Table.Head></Table.Head>
-                </Table.Row>
-              </Table.Header>
-              <Table.Body>
-                {#each paginatedPackages as p (p.id)}
-                  {@const quality = packageQualitySummary(p.id)}
-                  {@const progress = packageProgress(p, quality)}
-                  {@const readiness = packageReadinessStatus(p, quality)}
-                  <Table.Row>
-                    <Table.Cell
-                      ><input
-                        type="checkbox"
-                        class="rounded"
-                        checked={selectedPackageIds.has(p.id)}
-                        onchange={() => togglePackageSelection(p.id)}
-                      /></Table.Cell
-                    >
-                    <Table.Cell class="font-medium">{p.title}</Table.Cell>
-                    <Table.Cell>
-                      <Badge variant="outline" class="text-xs"
-                        >{p.subject_code}</Badge
-                      >
-                    </Table.Cell>
-                    <Table.Cell class="text-muted-foreground"
-                      >{p.duration_minutes} mnt</Table.Cell
-                    >
-                    <Table.Cell>
-                      <span class="font-mono text-sm">{p.question_count}</span>
-                      {#if quality.totalPoints > 0}
-                        <span class="ml-1 text-xs text-muted-foreground"
-                          >/{quality.totalPoints} poin</span
-                        >
-                      {/if}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div class="min-w-28">
-                        <div class="h-2 rounded-full bg-muted">
-                          <div
-                            class="h-2 rounded-full bg-primary"
-                            style={`width: ${Math.min(100, progress.percent)}%`}
-                          ></div>
-                        </div>
-                        <p class="mt-1 text-xs text-muted-foreground">
-                          {progress.pgCount}/{packageTargets(p).pg} PG · {progress.essayCount}/{packageTargets(
-                            p,
-                          ).essay} Essay
-                        </p>
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell
-                      ><Badge
-                        class={`text-xs ${readinessBadgeClass(readiness)}`}
-                        >{readinessLabel(readiness)}</Badge
-                      >{#if Number(p.session_count ?? 0) > 0}<p
-                          class="mt-1 text-[11px] text-muted-foreground"
-                        >
-                          {p.session_count} sesi
-                        </p>{/if}</Table.Cell
-                    >
-                    <Table.Cell>
-                      {#if quality.questions.length === 0}
-                        <span class="text-xs text-muted-foreground"
-                          >Belum ada rincian</span
-                        >
-                      {:else}
-                        <details class="max-w-sm text-xs text-muted-foreground">
-                          <summary
-                            class="cursor-pointer font-medium text-foreground"
-                          >
-                            {quality.typeBuckets
-                              .slice(0, 2)
-                              .map(
-                                (bucket) => `${bucket.label}: ${bucket.count}`,
-                              )
-                              .join(", ")}
-                          </summary>
-                          <div
-                            class="mt-2 space-y-1 rounded-md border border-border bg-muted/50 p-2 leading-5"
-                          >
-                            <p>
-                              Bentuk: {quality.typeBuckets
-                                .map(
-                                  (bucket) =>
-                                    `${bucket.label}: ${bucket.count}`,
-                                )
-                                .join(", ")}
-                            </p>
-                            <p>
-                              Level: {quality.cognitiveBuckets
-                                .map(
-                                  (bucket) =>
-                                    `${bucket.label}: ${bucket.count}`,
-                                )
-                                .join(", ")}
-                            </p>
-                            <p>
-                              HOTS {quality.hotsCount}, metadata kurang {quality.missingCount},
-                              belum terbit {quality.unpublishedCount}.
-                            </p>
-                          </div>
-                        </details>
-                      {/if}
-                    </Table.Cell>
-                    <Table.Cell>
-                      {#if p.randomize_questions}
-                        <Badge
-                          class="bg-primary/15 text-primary border-primary/20 text-xs"
-                          >Ya</Badge
-                        >
-                      {:else}
-                        <Badge variant="secondary" class="text-xs">Tidak</Badge>
-                      {/if}
-                    </Table.Cell>
-                    <Table.Cell>
-                      {#if p.is_active}
-                        <Badge
-                          class="bg-primary/15 text-primary border-primary/20"
-                          >Aktif</Badge
-                        >
-                      {:else}
-                        <Badge variant="secondary">Nonaktif</Badge>
-                      {/if}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div class="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          class="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted"
-                          aria-expanded={isPackageExpanded(p.id)}
-                          aria-controls={`package-detail-${p.id}`}
-                          aria-label={`${isPackageExpanded(p.id) ? "Tutup pratinjau" : "Pratinjau"} paket ${p.title}`}
-                          onclick={() => togglePackageDetail(p.id)}
-                        >
-                          {isPackageExpanded(p.id) ? "Tutup" : "Pratinjau"}
-                        </button>
-                        <a
-                          href={`${resolve("/asesmen/paket")}/${p.id}`}
-                          class="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted"
-                          title="Buka halaman paket: identitas, isi soal, blueprint, dan kunci paket"
-                        >
-                          Buka
-                        </a>
-                        {#if p.locked_at}
-                          <LoadingButton
-                            size="xs"
-                            variant="outline"
-                            onclick={() => createRevisionPackage(p.id, p.title)}
-                            loading={bulkBusy}
-                            loadingLabel="Membuat..."
-                            title="Paket terkunci; buat salinan revisi agar riwayat lama tetap aman"
-                          >
-                            Buat Revisi
-                          </LoadingButton>
-                        {:else if readiness === "ready"}<LoadingButton
-                            size="xs"
-                            variant="outline"
-                            onclick={() => {
-                              selectedPackageIds.clear();
-                              selectedPackageIds.add(p.id);
-                              void bulkLockSelected();
-                            }}
-                            loading={bulkBusy}>Lock</LoadingButton
-                          >{/if}
-                        {#if Number(p.session_count ?? 0) > 0}
-                          <LoadingButton
-                            variant="outline"
-                            size="xs"
-                            onclick={() => archivePackage(p.id, p.title, Number(p.session_count ?? 0))}
-                            loading={deleteBusyId === p.id}
-                            disabled={deleteBusyId !== "" && deleteBusyId !== p.id}
-                            loadingLabel="Mengarsipkan..."
-                            title={`Paket sudah dipakai ${p.session_count} sesi, tidak dapat dihapus permanen. Gunakan Arsipkan.`}
-                          >
-                            Arsipkan
-                          </LoadingButton>
-                        {:else}
-                          <LoadingButton
-                            variant="destructive"
-                            size="xs"
-                            onclick={() => deletePackage(p.id, p.title)}
-                            loading={deleteBusyId === p.id}
-                            disabled={deleteBusyId !== "" && deleteBusyId !== p.id}
-                            loadingLabel="Menghapus..."
-                            title="Hapus permanen paket yang belum dipakai sesi"
-                          >
-                            Hapus
-                          </LoadingButton>
-                        {/if}
-                      </div>
-                    </Table.Cell>
-                  </Table.Row>
-                  {#if isPackageExpanded(p.id)}
-                    <Table.Row id={`package-detail-${p.id}`} class="bg-muted/10">
-                      <Table.Cell colspan={11} class="p-4">
-                        {@render packageDetailPanel(p, quality, progress, readiness)}
-                      </Table.Cell>
-                    </Table.Row>
-                  {/if}
-                {:else}
-                  <Table.Row>
-                    <Table.Cell
-                      colspan={11}
-                      class="text-center text-muted-foreground py-8"
-                      >Tidak ada paket sesuai filter</Table.Cell
-                    >
-                  </Table.Row>
-                {/each}
-              </Table.Body>
-            </Table.Root>
-          </div>
+          <MicroActionTable
+            rows={paginatedPackages}
+            columns={packageTableColumns}
+            rowKey={(row) => (row as CbtPackage).id}
+            cell={packageCell}
+            actions={packageActions}
+            mobile={packageMobile}
+            tableClass="min-w-[1050px]"
+            emptyTitle="Tidak ada paket sesuai filter"
+            emptyDescription="Ubah filter atau buat paket baru."
+            class="rounded-none border-x-0 shadow-none"
+          />
 
-          <div class="grid gap-3 p-4 lg:hidden">
-            {#each paginatedPackages as p (p.id)}
-              {@const quality = packageQualitySummary(p.id)}
-              {@const progress = packageProgress(p, quality)}
-              {@const readiness = packageReadinessStatus(p, quality)}
-              <div
-                class="rounded-2xl border border-border bg-card p-4 shadow-sm"
-              >
-                <div class="flex items-start justify-between gap-3">
-                  <input
-                    type="checkbox"
-                    class="mt-1 rounded"
-                    checked={selectedPackageIds.has(p.id)}
-                    onchange={() => togglePackageSelection(p.id)}
-                  />
-                  <div class="min-w-0 flex-1">
-                    <p class="text-sm font-semibold text-foreground">
-                      {p.title}
-                    </p>
-                    <p class="mt-1 text-xs text-muted-foreground">
-                      {p.subject_name} ({p.subject_code})
-                    </p>
-                  </div>
-                  {#if p.is_active}
-                    <Badge class="bg-primary/15 text-primary border-primary/20"
-                      >Aktif</Badge
-                    >
-                  {:else}
-                    <Badge variant="secondary">Nonaktif</Badge>
-                  {/if}
-                </div>
-                <div class="mt-3 flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" class="text-xs"
-                    >{p.duration_minutes} menit</Badge
-                  >
-                  <Badge variant="secondary">{p.question_count} soal</Badge>
-                  {#if quality.totalPoints > 0}
-                    <Badge variant="outline" class="text-xs"
-                      >{quality.totalPoints} poin</Badge
-                    >
-                  {/if}
-                  {#if p.randomize_questions}
-                    <Badge
-                      class="bg-primary/10 text-primary border-primary/20 text-xs"
-                      >Acak</Badge
-                    >
-                  {/if}
-                  <Badge class={`text-xs ${readinessBadgeClass(readiness)}`}
-                    >{readinessLabel(readiness)}</Badge
-                  >
-                  {#if Number(p.session_count ?? 0) > 0}<Badge
-                      variant="outline"
-                      class="text-xs">{p.session_count} sesi</Badge
-                    >{/if}
-                </div>
-                {#if showUtsMode}<div class="mt-3">
-                    <div class="h-2 rounded-full bg-muted">
-                      <div
-                        class="h-2 rounded-full bg-primary"
-                        style={`width: ${Math.min(100, progress.percent)}%`}
-                      ></div>
-                    </div>
-                    <p class="mt-1 text-xs text-muted-foreground">
-                      {progress.pgCount}/{packageTargets(p).pg} PG · {progress.essayCount}/{packageTargets(
-                        p,
-                      ).essay} Essay
-                    </p>
-                  </div>{/if}
-                <details
-                  class="mt-3 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground"
-                >
-                  <summary class="cursor-pointer font-medium text-foreground"
-                    >Mutu paket</summary
-                  >
-                  <div class="mt-2 flex flex-wrap items-center gap-1.5">
-                    {#if quality.questions.length === 0}
-                      <span class="text-xs text-muted-foreground"
-                        >Rincian mutu belum tersedia</span
-                      >
-                    {:else}
-                      {#each quality.typeBuckets.slice(0, 3) as bucket (bucket.label)}
-                        <Badge variant="outline" class="bg-card text-xs"
-                          >{bucket.label}: {bucket.count}</Badge
-                        >
-                      {/each}
-                      {#each quality.cognitiveBuckets.slice(0, 1) as bucket (bucket.label)}
-                        <Badge variant="secondary" class="text-xs"
-                          >{bucket.label}: {bucket.count}</Badge
-                        >
-                      {/each}
-                      {#if quality.hotsCount > 0}
-                        <Badge
-                          class="border-warning/30 bg-warning/10 text-warning text-xs"
-                          >{quality.hotsCount} HOTS</Badge
-                        >
-                      {/if}
-                      {#if quality.missingCount > 0}
-                        <Badge
-                          class="border-warning/30 bg-warning/10 text-warning text-xs"
-                          >{quality.missingCount} metadata kurang</Badge
-                        >
-                      {/if}
-                      {#if quality.unpublishedCount > 0}
-                        <Badge
-                          class="border-destructive/30 bg-destructive/10 text-destructive text-xs"
-                          >{quality.unpublishedCount} belum terbit</Badge
-                        >
-                      {/if}
-                    {/if}
-                  </div>
-                </details>
-                {#if p.description}
-                  <p class="mt-3 text-sm text-muted-foreground">
-                    {p.description}
-                  </p>
-                {/if}
-                {#if isPackageExpanded(p.id)}
-                  <div id={`package-mobile-detail-${p.id}`} class="mt-4" role="region">
-                    {@render packageDetailPanel(p, quality, progress, readiness)}
-                  </div>
-                {/if}
-                <div class="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    class="inline-flex flex-1 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-semibold hover:bg-muted"
-                    aria-expanded={isPackageExpanded(p.id)}
-                    aria-controls={`package-mobile-detail-${p.id}`}
-                    aria-label={`${isPackageExpanded(p.id) ? "Tutup pratinjau" : "Pratinjau"} paket ${p.title}`}
-                    onclick={() => togglePackageDetail(p.id)}
-                  >
-                    {isPackageExpanded(p.id) ? "Tutup Pratinjau" : "Pratinjau"}
-                  </button>
-                  <a
-                    href={`${resolve("/asesmen/paket")}/${p.id}`}
-                    class="inline-flex flex-1 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-semibold hover:bg-muted"
-                    title="Buka halaman paket: identitas, isi soal, blueprint, dan kunci paket"
-                  >
-                    Buka
-                  </a>
-                  {#if p.locked_at}
-                    <LoadingButton
-                      size="sm"
-                      variant="outline"
-                      onclick={() => createRevisionPackage(p.id, p.title)}
-                      loading={bulkBusy}
-                      loadingLabel="Membuat..."
-                      title="Paket terkunci; buat salinan revisi agar riwayat lama tetap aman"
-                    >
-                      Buat Revisi
-                    </LoadingButton>
-                  {:else if readiness === "ready"}
-                    <LoadingButton
-                      size="sm"
-                      variant="outline"
-                      onclick={() => {
-                        selectedPackageIds.clear();
-                        selectedPackageIds.add(p.id);
-                        void bulkLockSelected();
-                      }}
-                      loading={bulkBusy}
-                    >
-                      Lock
-                    </LoadingButton>
-                  {/if}
-                  {#if Number(p.session_count ?? 0) > 0}
-                    <LoadingButton
-                      variant="outline"
-                      size="sm"
-                      class="w-full"
-                      onclick={() => archivePackage(p.id, p.title, Number(p.session_count ?? 0))}
-                      loading={deleteBusyId === p.id}
-                      disabled={deleteBusyId !== "" && deleteBusyId !== p.id}
-                      loadingLabel="Mengarsipkan..."
-                      title={`Paket sudah dipakai ${p.session_count} sesi, tidak dapat dihapus permanen. Gunakan Arsipkan.`}
-                    >
-                      Arsipkan
-                    </LoadingButton>
-                  {:else}
-                    <LoadingButton
-                      variant="destructive"
-                      size="sm"
-                      class="w-full"
-                      onclick={() => deletePackage(p.id, p.title)}
-                      loading={deleteBusyId === p.id}
-                      disabled={deleteBusyId !== "" && deleteBusyId !== p.id}
-                      loadingLabel="Menghapus..."
-                      title="Hapus permanen paket yang belum dipakai sesi"
-                    >
-                      Hapus
-                    </LoadingButton>
-                  {/if}
-                </div>
-              </div>
-            {:else}
-              <div
-                class="rounded-2xl border border-dashed border-border bg-muted/50 px-4 py-10 text-center text-sm text-muted-foreground"
-              >
-                Tidak ada paket sesuai filter
-              </div>
-            {/each}
-          </div>
+          {#if paginatedPackages.some((pkg) => isPackageExpanded(pkg.id))}
+            <div class="space-y-3 border-t border-border bg-muted/10 p-3">
+              {#each paginatedPackages.filter((pkg) => isPackageExpanded(pkg.id)) as p (p.id)}
+                {@const quality = packageQualitySummary(p.id)}
+                {@const progress = packageProgress(p, quality)}
+                {@const readiness = packageReadinessStatus(p, quality)}
+                <section id={`package-detail-${p.id}`} class="hidden md:block">
+                  {@render packageDetailPanel(p, quality, progress, readiness)}
+                </section>
+              {/each}
+            </div>
+          {/if}
+
           <div class="border-t border-border p-3">
             <TablePagination
               page={safePackagePage}

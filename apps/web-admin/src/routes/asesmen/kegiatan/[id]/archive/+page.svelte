@@ -13,6 +13,7 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import MicroActionTable from '$lib/components/ops/MicroActionTable.svelte';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
 	import { listApprovals, assessmentApprovalLabels, type AssessmentApprovalRecord } from '$lib/asesmen/approval-client';
 
@@ -51,6 +52,21 @@
 	const archiveApprovalTypes = ['package_ready', 'participants_rooms_ready', 'tokens_cards_ready', 'results_verified', 'final_archive'] as const;
 	type ArchiveApprovalType = (typeof archiveApprovalTypes)[number];
 	type ArchiveChecklistItem = { label: string; helper: string; href: string; ready: boolean };
+	const checklistColumns = [
+		{ key: 'item', label: 'Dokumen', class: 'min-w-[16rem]' },
+		{ key: 'status', label: 'Status' },
+	];
+	const approvalColumns = [
+		{ key: 'approval', label: 'Pengesahan', class: 'min-w-[16rem]' },
+		{ key: 'status', label: 'Status' },
+		{ key: 'actor', label: 'Aktor/Waktu' },
+	];
+	const sessionColumns = [
+		{ key: 'session', label: 'Sesi', class: 'min-w-[14rem]' },
+		{ key: 'status', label: 'Status' },
+		{ key: 'participants', label: 'Peserta' },
+		{ key: 'rooms', label: 'Ruang' },
+	];
 	let archivePromise = $state<Promise<ArchiveData> | null>(null);
 
 	async function optionalApiData<T>(path: string, fallback: T): Promise<T> {

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
-	import * as Table from '$lib/components/ui/table';
+	import MicroActionTable from '$lib/components/ops/MicroActionTable.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 
@@ -68,6 +68,18 @@
 		'Kirim ujian hanya dilakukan saat koneksi kembali sehat.'
 	];
 
+	const deviceColumns = [
+		{ key: 'device', label: 'Perangkat', class: 'min-w-44' },
+		{ key: 'spec', label: 'Spesifikasi' },
+		{ key: 'connection', label: 'Koneksi' },
+		{ key: 'install', label: 'Pasang' },
+		{ key: 'login', label: 'Masuk' },
+		{ key: 'restore', label: 'Pulihkan' },
+		{ key: 'audio', label: 'Audio' },
+		{ key: 'submit', label: 'Kirim' },
+		{ key: 'note', label: 'Catatan', class: 'min-w-56' }
+	];
+
 	function badgeClass(value: string) {
 		if (value === 'Lulus') return 'border-primary/20 bg-primary/10 text-primary';
 		if (value === 'Perlu perhatian') return 'border-warning/30 bg-warning/10 text-warning';
@@ -116,56 +128,63 @@
 	</Card.Root>
 
 	<div class="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-		<Card.Root class="border-border shadow-sm">
-			<Card.Header>
-				<Card.Title class="text-lg text-foreground">Contoh Tabel Perangkat</Card.Title>
-				<Card.Description>
-					Baris di bawah adalah contoh format, bukan hasil sertifikasi perangkat resmi sekolah.
-				</Card.Description>
-			</Card.Header>
-			<Card.Content class="space-y-4">
-				<div class="overflow-x-auto rounded-2xl border border-border">
-					<Table.Root>
-						<Table.Header>
-							<Table.Row>
-								<Table.Head>Vendor</Table.Head>
-								<Table.Head>Model</Table.Head>
-								<Table.Head>Android</Table.Head>
-								<Table.Head>RAM</Table.Head>
-								<Table.Head>Koneksi</Table.Head>
-								<Table.Head>Pasang</Table.Head>
-								<Table.Head>Masuk</Table.Head>
-								<Table.Head>Pulihkan</Table.Head>
-								<Table.Head>Audio</Table.Head>
-								<Table.Head>Kirim</Table.Head>
-								<Table.Head>Catatan</Table.Head>
-							</Table.Row>
-						</Table.Header>
-						<Table.Body>
-							{#each templateRows as row (row.vendor + row.model)}
-								<Table.Row>
-									<Table.Cell class="font-medium text-foreground">{row.vendor}</Table.Cell>
-									<Table.Cell>{row.model}</Table.Cell>
-									<Table.Cell>{row.android}</Table.Cell>
-									<Table.Cell>{row.ram}</Table.Cell>
-									<Table.Cell>{row.connection}</Table.Cell>
-									<Table.Cell><Badge class={badgeClass(row.install)}>{row.install}</Badge></Table.Cell>
-									<Table.Cell><Badge class={badgeClass(row.login)}>{row.login}</Badge></Table.Cell>
-									<Table.Cell><Badge class={badgeClass(row.restore)}>{row.restore}</Badge></Table.Cell>
-									<Table.Cell><Badge class={badgeClass(row.audio)}>{row.audio}</Badge></Table.Cell>
-									<Table.Cell><Badge class={badgeClass(row.submit)}>{row.submit}</Badge></Table.Cell>
-									<Table.Cell class="min-w-56 text-sm text-muted-foreground">{row.note}</Table.Cell>
-								</Table.Row>
-							{/each}
-						</Table.Body>
-					</Table.Root>
-				</div>
-				<p class="text-xs leading-5 text-muted-foreground">
-					Format sumber resminya tetap ada di <span class="font-mono">apps/mobile/DEVICE_TEST_MATRIX.md</span>.
-					Halaman ini disediakan agar pengawas dan operator bisa membaca struktur penilaian tanpa keluar dari web admin.
-				</p>
-			</Card.Content>
-		</Card.Root>
+		<div class="space-y-3">
+			<MicroActionTable
+				title="Contoh Tabel Perangkat"
+				description="Baris di bawah adalah contoh format, bukan hasil sertifikasi perangkat resmi sekolah."
+				columns={deviceColumns}
+				rows={templateRows}
+				rowKey={(row) => `${(row as DeviceRow).vendor}-${(row as DeviceRow).model}`}
+				tableClass="min-w-[980px]"
+			>
+				{#snippet cell(row, column)}
+					{@const device = row as DeviceRow}
+					{#if column.key === 'device'}
+						<div>
+							<p class="font-medium text-foreground">{device.vendor}</p>
+							<p class="text-xs text-muted-foreground">{device.model}</p>
+						</div>
+					{:else if column.key === 'spec'}
+						<span>{device.android} · {device.ram}</span>
+					{:else if column.key === 'connection'}
+						<span>{device.connection}</span>
+					{:else if column.key === 'install'}
+						<Badge class={badgeClass(device.install)}>{device.install}</Badge>
+					{:else if column.key === 'login'}
+						<Badge class={badgeClass(device.login)}>{device.login}</Badge>
+					{:else if column.key === 'restore'}
+						<Badge class={badgeClass(device.restore)}>{device.restore}</Badge>
+					{:else if column.key === 'audio'}
+						<Badge class={badgeClass(device.audio)}>{device.audio}</Badge>
+					{:else if column.key === 'submit'}
+						<Badge class={badgeClass(device.submit)}>{device.submit}</Badge>
+					{:else if column.key === 'note'}
+						<span class="text-muted-foreground">{device.note}</span>
+					{/if}
+				{/snippet}
+				{#snippet mobile(row)}
+					{@const device = row as DeviceRow}
+					<div class="space-y-2 text-xs">
+						<div>
+							<p class="font-medium text-foreground">{device.vendor} {device.model}</p>
+							<p class="text-muted-foreground">Android {device.android} · {device.ram} · {device.connection}</p>
+						</div>
+						<div class="flex flex-wrap gap-1.5">
+							<Badge class={badgeClass(device.install)}>Pasang: {device.install}</Badge>
+							<Badge class={badgeClass(device.login)}>Masuk: {device.login}</Badge>
+							<Badge class={badgeClass(device.restore)}>Pulihkan: {device.restore}</Badge>
+							<Badge class={badgeClass(device.audio)}>Audio: {device.audio}</Badge>
+							<Badge class={badgeClass(device.submit)}>Kirim: {device.submit}</Badge>
+						</div>
+						<p class="leading-5 text-muted-foreground">{device.note}</p>
+					</div>
+				{/snippet}
+			</MicroActionTable>
+			<p class="text-xs leading-5 text-muted-foreground">
+				Format sumber resminya tetap ada di <span class="font-mono">apps/mobile/DEVICE_TEST_MATRIX.md</span>.
+				Halaman ini disediakan agar pengawas dan operator bisa membaca struktur penilaian tanpa keluar dari web admin.
+			</p>
+		</div>
 
 		<div class="space-y-6">
 			<Card.Root class="border-border shadow-sm">

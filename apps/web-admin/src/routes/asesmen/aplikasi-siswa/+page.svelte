@@ -171,22 +171,25 @@
 	</section>
 
 	<Card.Root class="border-primary/20 bg-primary/10 shadow-sm">
-		<Card.Header>
-			<Card.Title class="text-lg text-foreground">Pantau Ujian Dulu</Card.Title>
-			<Card.Description>
+		<Card.Header class="p-4 pb-2">
+			<Card.Title class="text-base text-foreground">Pantau Ujian Dulu</Card.Title>
+			<Card.Description class="text-xs leading-5">
 				Tiga grup sederhana untuk pemantauan: hari-H dulu, panduan setelahnya, perangkat dan kesiapan sebagai dukungan.
 			</Card.Description>
 		</Card.Header>
-		<Card.Content class="grid gap-4 lg:grid-cols-3">
+		<Card.Content class="grid gap-3 p-4 lg:grid-cols-3">
 			{#each monitoringGroups as group (group.title)}
-				<div class="rounded-2xl border border-primary/20 bg-card p-4 shadow-sm">
+				<div class="rounded-lg border border-primary/20 bg-card p-3 shadow-sm">
 					<p class="text-sm font-semibold text-primary">{group.title}</p>
-					<p class="mt-1 text-sm leading-6 text-muted-foreground">{group.description}</p>
-					<div class="mt-4 space-y-2">
+					<p class="mt-1 text-xs leading-5 text-muted-foreground">{group.description}</p>
+					<div class="mt-3 space-y-1.5">
 						{#each group.links as link (link.href)}
-							<a href={resolve((link.href.startsWith('#') ? `/asesmen/aplikasi-siswa${link.href}` : link.href) as '/')} class="block rounded-xl border border-primary/20 bg-primary/10 px-3 py-2 text-sm transition hover:border-primary/20 hover:bg-primary/10">
-								<span class="font-semibold text-primary">{link.label}</span>
-								<span class="mt-1 block leading-5 text-muted-foreground">{link.description}</span>
+							<a href={resolve((link.href.startsWith('#') ? `/asesmen/aplikasi-siswa${link.href}` : link.href) as '/')} class="flex items-start justify-between gap-3 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-xs transition hover:border-primary/30 hover:bg-primary/15">
+								<span>
+									<span class="font-semibold text-primary">{link.label}</span>
+									<span class="mt-0.5 block leading-5 text-muted-foreground">{link.description}</span>
+								</span>
+								<span class="shrink-0 font-semibold text-primary">Buka</span>
 							</a>
 						{/each}
 					</div>
@@ -203,15 +206,15 @@
 					Gunakan arti status ini saat mendampingi siswa. Fokus utamanya adalah kapan pengawas cukup memantau dan kapan harus menahan kirim ujian.
 				</Card.Description>
 			</Card.Header>
-			<Card.Content class="space-y-4">
+			<Card.Content class="space-y-2">
 				{#each statuses as status (status.label)}
-					<div class="rounded-2xl border border-border bg-card p-4">
-						<div class="flex flex-wrap items-center gap-3">
+					<div class="rounded-lg border border-border bg-card p-3 text-sm">
+						<div class="flex flex-wrap items-start gap-2">
 							<Badge class={badgeClass(status.tone)}>{status.label}</Badge>
-							<p class="text-sm font-medium text-foreground">{status.meaning}</p>
+							<p class="min-w-0 flex-1 font-medium leading-5 text-foreground">{status.meaning}</p>
 						</div>
-						<p class="mt-3 text-sm leading-6 text-muted-foreground">
-							<span class="font-semibold text-foreground">Tindakan pengawas:</span> {status.intervention}
+						<p class="mt-2 text-xs leading-5 text-muted-foreground">
+							<span class="font-semibold text-foreground">Tindakan:</span> {status.intervention}
 						</p>
 					</div>
 				{/each}
