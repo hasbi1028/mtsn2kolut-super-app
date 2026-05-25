@@ -24,14 +24,25 @@ func (q *Queries) ClearParticipantSeatsForSession(ctx context.Context, sessionID
 }
 
 const createCbtExamRoom = `-- name: CreateCbtExamRoom :one
-INSERT INTO cbt_exam_rooms (
-  session_id, school_room_id, room_name, room_name_snapshot, capacity
+WITH room_seq AS (
+  SELECT COALESCE(COUNT(*), 0)::int + 1 AS ordinal
+  FROM cbt_exam_rooms
+  WHERE session_id = $1
+), generated AS (
+  SELECT
+    'R' || LPAD(room_seq.ordinal::text, 2, '0') || '-' || UPPER(SUBSTRING(encode(gen_random_bytes(3), 'hex') FROM 1 FOR 4)) AS room_token
+  FROM room_seq
 )
-VALUES (
+INSERT INTO cbt_exam_rooms (
+  session_id, school_room_id, room_name, room_name_snapshot, capacity,
+  room_token, room_token_hash, room_token_hash_version, room_token_generated_at
+)
+SELECT
   $1, $2, $3,
   COALESCE(NULLIF($4::TEXT, ''), $3::TEXT),
-  $5
-)
+  $5,
+  generated.room_token, encode(digest(generated.room_token, 'sha256'), 'hex'), 1, NOW()
+FROM generated
 RETURNING id, session_id, room_name, capacity, created_at, school_room_id, room_name_snapshot, capacity_override, room_token, status, is_locked, updated_at, room_token_hash, room_token_hash_version, room_token_generated_at, room_token_revealed_at, room_token_revoked_at, allow_web_fallback, web_fallback_enabled_at, web_fallback_enabled_by, web_fallback_reason, web_fallback_disabled_at
 `
 

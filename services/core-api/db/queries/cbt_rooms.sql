@@ -43,14 +43,25 @@ WHERE r.session_id = $1
 ORDER BY r.room_name ASC;
 
 -- name: CreateCbtExamRoom :one
-INSERT INTO cbt_exam_rooms (
-  session_id, school_room_id, room_name, room_name_snapshot, capacity
+WITH room_seq AS (
+  SELECT COALESCE(COUNT(*), 0)::int + 1 AS ordinal
+  FROM cbt_exam_rooms
+  WHERE session_id = sqlc.arg(session_id)
+), generated AS (
+  SELECT
+    'R' || LPAD(room_seq.ordinal::text, 2, '0') || '-' || UPPER(SUBSTRING(encode(gen_random_bytes(3), 'hex') FROM 1 FOR 4)) AS room_token
+  FROM room_seq
 )
-VALUES (
+INSERT INTO cbt_exam_rooms (
+  session_id, school_room_id, room_name, room_name_snapshot, capacity,
+  room_token, room_token_hash, room_token_hash_version, room_token_generated_at
+)
+SELECT
   sqlc.arg(session_id), sqlc.arg(school_room_id), sqlc.arg(room_name),
   COALESCE(NULLIF(sqlc.arg(room_name_snapshot)::TEXT, ''), sqlc.arg(room_name)::TEXT),
-  sqlc.arg(capacity)
-)
+  sqlc.arg(capacity),
+  generated.room_token, encode(digest(generated.room_token, 'sha256'), 'hex'), 1, NOW()
+FROM generated
 RETURNING *;
 
 -- name: UpdateCbtRoomWebFallbackPolicy :one
