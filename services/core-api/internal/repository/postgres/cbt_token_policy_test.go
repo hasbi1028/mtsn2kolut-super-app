@@ -23,3 +23,20 @@ func TestCbtParticipantTokenGenerationUsesEightHexCharacters(t *testing.T) {
 		}
 	}
 }
+
+func TestCbtParticipantEnrollTokenGenerationIsCorrelatedPerStudent(t *testing.T) {
+	queries := map[string]string{
+		"EnrollClassToSession":  enrollClassToSession,
+		"EnrollGradeToSession":  enrollGradeToSession,
+		"EnrollSchoolToSession": enrollSchoolToSession,
+	}
+
+	for name, query := range queries {
+		if strings.Contains(query, "CROSS JOIN LATERAL (SELECT encode(gen_random_bytes(4), 'hex') AS token)") {
+			t.Fatalf("%s must not use an uncorrelated lateral token subquery; it reuses one token for every enrolled student: %s", name, query)
+		}
+		if !strings.Contains(query, "s.id::text") {
+			t.Fatalf("%s must correlate token generation to each student row: %s", name, query)
+		}
+	}
+}

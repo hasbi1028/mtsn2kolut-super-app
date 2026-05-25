@@ -159,26 +159,32 @@ WHERE ep.token_revoked_at IS NULL
 
 -- name: EnrollClassToSession :exec
 INSERT INTO cbt_exam_participants (session_id, student_id, token, token_hash, token_hash_version, token_generated_at)
-SELECT $1, s.id, tok.token, encode(digest(tok.token, 'sha256'), 'hex'), 1, NOW()
+SELECT sqlc.arg(session_id)::uuid, s.id, tok.token, encode(digest(tok.token, 'sha256'), 'hex'), 1, NOW()
 FROM students s
-CROSS JOIN LATERAL (SELECT encode(gen_random_bytes(4), 'hex') AS token) tok
-WHERE s.class_id = $2 AND s.is_active = TRUE
+CROSS JOIN LATERAL (
+  SELECT SUBSTRING(encode(digest(s.id::text || ':' || sqlc.arg(session_id)::text || ':' || encode(gen_random_bytes(4), 'hex'), 'sha256'), 'hex') FROM 1 FOR 8) AS token
+) tok
+WHERE s.class_id = sqlc.arg(class_id) AND s.is_active = TRUE
 ON CONFLICT (session_id, student_id) DO NOTHING;
 
 -- name: EnrollGradeToSession :exec
 INSERT INTO cbt_exam_participants (session_id, student_id, token, token_hash, token_hash_version, token_generated_at)
-SELECT $1, s.id, tok.token, encode(digest(tok.token, 'sha256'), 'hex'), 1, NOW()
+SELECT sqlc.arg(session_id)::uuid, s.id, tok.token, encode(digest(tok.token, 'sha256'), 'hex'), 1, NOW()
 FROM students s
 JOIN school_classes c ON c.id = s.class_id
-CROSS JOIN LATERAL (SELECT encode(gen_random_bytes(4), 'hex') AS token) tok
-WHERE c.level = $2 AND s.is_active = TRUE
+CROSS JOIN LATERAL (
+  SELECT SUBSTRING(encode(digest(s.id::text || ':' || sqlc.arg(session_id)::text || ':' || encode(gen_random_bytes(4), 'hex'), 'sha256'), 'hex') FROM 1 FOR 8) AS token
+) tok
+WHERE c.level = sqlc.arg(level) AND s.is_active = TRUE
 ON CONFLICT (session_id, student_id) DO NOTHING;
 
 -- name: EnrollSchoolToSession :exec
 INSERT INTO cbt_exam_participants (session_id, student_id, token, token_hash, token_hash_version, token_generated_at)
-SELECT $1, s.id, tok.token, encode(digest(tok.token, 'sha256'), 'hex'), 1, NOW()
+SELECT sqlc.arg(session_id)::uuid, s.id, tok.token, encode(digest(tok.token, 'sha256'), 'hex'), 1, NOW()
 FROM students s
-CROSS JOIN LATERAL (SELECT encode(gen_random_bytes(4), 'hex') AS token) tok
+CROSS JOIN LATERAL (
+  SELECT SUBSTRING(encode(digest(s.id::text || ':' || sqlc.arg(session_id)::text || ':' || encode(gen_random_bytes(4), 'hex'), 'sha256'), 'hex') FROM 1 FOR 8) AS token
+) tok
 WHERE s.is_active = TRUE
 ON CONFLICT (session_id, student_id) DO NOTHING;
 
