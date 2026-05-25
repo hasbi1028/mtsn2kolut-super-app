@@ -900,96 +900,108 @@
 				</Table.Root>
 				</div>
 
-				<div class="grid gap-3 p-4 lg:hidden">
+				<div class="grid min-w-0 gap-2 p-2 sm:p-3 lg:hidden">
 					{#each paginatedStudents as s (s.id)}
 						{@const activeKey = lifecycleKey(s.id, 'active')}
 						{@const alumniKey = lifecycleKey(s.id, 'alumni')}
 						{@const mutatedKey = lifecycleKey(s.id, 'mutated')}
 						{@const accountCandidate = studentAccountCandidate(s)}
-						<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
-							<div class="flex items-start justify-between gap-3">
-								<div class="flex min-w-0 items-start gap-3">
-									<input
-										type="checkbox"
-										checked={selectedStudentIds.has(s.id)}
-										aria-label={`Pilih ${s.nama}`}
-										onchange={(event) => handleStudentSelectionChange(event, s.id)}
-										class="mt-1 rounded accent-green-700"
-									/>
-									<div class="min-w-0">
-										<p class="text-sm font-semibold text-foreground">{s.nama}</p>
-										<p class="mt-1 font-mono text-xs text-muted-foreground">NIS {s.nis}{s.nisn ? ` • NISN ${s.nisn}` : ''}</p>
+						<div class="min-w-0 rounded-xl border border-border bg-card p-3 shadow-sm">
+							<div class="flex min-w-0 items-start gap-2">
+								<input
+									type="checkbox"
+									checked={selectedStudentIds.has(s.id)}
+									aria-label={`Pilih ${s.nama}`}
+									onchange={(event) => handleStudentSelectionChange(event, s.id)}
+									class="mt-1 h-4 w-4 shrink-0 rounded accent-green-700"
+								/>
+								<div class="min-w-0 flex-1">
+									<div class="flex min-w-0 items-start justify-between gap-2">
+										<div class="min-w-0">
+											<p class="truncate text-sm font-semibold leading-5 text-foreground" title={s.nama}>{s.nama}</p>
+											<p class="mt-0.5 truncate font-mono text-[11px] text-muted-foreground" title={`NIS ${s.nis}${s.nisn ? ` • NISN ${s.nisn}` : ''}`}>
+												NIS {s.nis}{s.nisn ? ` • NISN ${s.nisn}` : ''}
+											</p>
+										</div>
+										{#if s.is_active}
+											<Badge class="shrink-0 border-primary/20 bg-primary/15 text-primary">Aktif</Badge>
+										{:else}
+											<Badge variant="secondary" class="shrink-0">Nonaktif</Badge>
+										{/if}
+									</div>
+
+									<div class="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
+										<Badge variant="outline" class="text-[11px]">{s.gender === 'L' ? 'L' : 'P'}</Badge>
+										<Badge variant="outline" class="max-w-[5.5rem] truncate text-[11px]" title={studentClassLabel(s)}>{studentClassLabel(s)}</Badge>
+										<Badge class={`${lifecycleBadgeClass(s.status)} text-[11px]`}>{s.status}</Badge>
+										<Badge class={`${accountStatusClass(accountCandidate)} text-[11px]`}>{accountStatusLabel(accountCandidate)}</Badge>
+									</div>
+
+									<div class="mt-2 grid gap-1 text-[11px] text-muted-foreground">
+										<p class="truncate" title={`Username ${accountCandidate?.generated_username || '—'}`}>Username: <span class="font-mono">{accountCandidate?.generated_username || '—'}</span></p>
+										<p class="truncate" title={`Peran ${accountCandidate?.role || '—'}`}>Peran: {accountCandidate?.role || '—'}</p>
+										<p class="truncate" title={parentSummary(s)}>{parentSummary(s)}</p>
+										{#if s.linked_parent_count > 0}
+											<p class="truncate text-primary" title="Relasi orang tua terhubung ke akun orang tua">Relasi orang tua aktif</p>
+										{/if}
+									</div>
+
+									<div class="mt-3 grid grid-cols-3 gap-1.5">
+										<LoadingButton
+											variant="outline"
+											size="sm"
+											class="h-8 px-2 text-xs"
+											onclick={() => updateLifecycle(s, 'active')}
+											loading={lifecycleBusyKey === activeKey}
+											loadingLabel="..."
+											disabled={deleteBusyId !== '' || (lifecycleBusyKey !== '' && lifecycleBusyKey !== activeKey)}
+										>Aktif</LoadingButton>
+										<LoadingButton
+											variant="outline"
+											size="sm"
+											class="h-8 px-2 text-xs"
+											onclick={() => updateLifecycle(s, 'alumni')}
+											loading={lifecycleBusyKey === alumniKey}
+											loadingLabel="..."
+											disabled={deleteBusyId !== '' || (lifecycleBusyKey !== '' && lifecycleBusyKey !== alumniKey)}
+										>Alumni</LoadingButton>
+										<LoadingButton
+											variant="outline"
+											size="sm"
+											class="h-8 px-2 text-xs"
+											onclick={() => updateLifecycle(s, 'mutated')}
+											loading={lifecycleBusyKey === mutatedKey}
+											loadingLabel="..."
+											disabled={deleteBusyId !== '' || (lifecycleBusyKey !== '' && lifecycleBusyKey !== mutatedKey)}
+										>Mutasi</LoadingButton>
+										<Button variant="outline" size="sm" class="h-8 px-2 text-xs" onclick={() => openEdit(s)}>Edit</Button>
+										<LoadingButton
+											variant="destructive"
+											size="sm"
+											class="col-span-2 h-8 px-2 text-xs"
+											onclick={() => deleteStudent(s.id, s.nama)}
+											loading={deleteBusyId === s.id}
+											loadingLabel="Menghapus..."
+											disabled={lifecycleBusyKey !== '' || (deleteBusyId !== '' && deleteBusyId !== s.id)}
+										>Hapus</LoadingButton>
 									</div>
 								</div>
-								{#if s.is_active}
-									<Badge class="bg-primary/15 text-primary border-primary/20">Aktif</Badge>
-								{:else}
-									<Badge variant="secondary">Nonaktif</Badge>
-								{/if}
-							</div>
-							<div class="mt-3 flex flex-wrap items-center gap-2">
-								<Badge variant="outline" class="text-xs">{s.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</Badge>
-								<Badge variant="outline" class="text-xs">{studentClassLabel(s)}</Badge>
-								<Badge class={lifecycleBadgeClass(s.status)}>{s.status}</Badge>
-								<Badge class={accountStatusClass(accountCandidate)}>{accountStatusLabel(accountCandidate)}</Badge>
-							</div>
-							<p class="mt-2 font-mono text-xs text-muted-foreground">
-								Username {accountCandidate?.generated_username || '—'} · Peran {accountCandidate?.role || '—'}
-							</p>
-							<p class="mt-3 text-sm text-muted-foreground">{parentSummary(s)}</p>
-							{#if s.linked_parent_count > 0}
-								<p class="mt-1 text-xs text-primary">Relasi orang tua terhubung ke akun orang tua</p>
-							{/if}
-							<div class="mt-4 grid grid-cols-2 gap-2">
-								<LoadingButton
-									variant="outline"
-									size="sm"
-									onclick={() => updateLifecycle(s, 'active')}
-									loading={lifecycleBusyKey === activeKey}
-									loadingLabel="Memproses..."
-									disabled={deleteBusyId !== '' || (lifecycleBusyKey !== '' && lifecycleBusyKey !== activeKey)}
-								>Aktif</LoadingButton>
-								<LoadingButton
-									variant="outline"
-									size="sm"
-									onclick={() => updateLifecycle(s, 'alumni')}
-									loading={lifecycleBusyKey === alumniKey}
-									loadingLabel="Memproses..."
-									disabled={deleteBusyId !== '' || (lifecycleBusyKey !== '' && lifecycleBusyKey !== alumniKey)}
-								>Alumni</LoadingButton>
-								<LoadingButton
-									variant="outline"
-									size="sm"
-									onclick={() => updateLifecycle(s, 'mutated')}
-									loading={lifecycleBusyKey === mutatedKey}
-									loadingLabel="Memproses..."
-									disabled={deleteBusyId !== '' || (lifecycleBusyKey !== '' && lifecycleBusyKey !== mutatedKey)}
-								>Mutasi</LoadingButton>
-								<Button variant="outline" size="sm" onclick={() => openEdit(s)}>Edit</Button>
-								<LoadingButton
-									variant="destructive"
-									size="sm"
-									onclick={() => deleteStudent(s.id, s.nama)}
-									loading={deleteBusyId === s.id}
-									loadingLabel="Menghapus..."
-									disabled={lifecycleBusyKey !== '' || (deleteBusyId !== '' && deleteBusyId !== s.id)}
-								>Hapus</LoadingButton>
 							</div>
 						</div>
 					{:else}
-							<EmptyStatePanel
-								eyebrow={search ? 'Filter Tidak Menemukan Hasil' : 'Mulai Data Pokok'}
-								title={search ? 'Tidak ada siswa yang cocok' : 'Belum ada data siswa'}
-								description={search
-									? 'Ubah kata kunci pencarian atau reset filter untuk melihat kembali seluruh daftar siswa.'
-									: 'Tambahkan siswa pertama dari panel ini agar data akademik dan akun orang tua bisa mulai berjalan.'}
-							>
-								{#if search}
-									<Button variant="outline" size="sm" onclick={() => { search = ''; currentPage = 1; }}>Reset pencarian</Button>
-								{:else}
-									<Button size="sm" onclick={openCreate}>Tambah siswa pertama</Button>
-								{/if}
-							</EmptyStatePanel>
+						<EmptyStatePanel
+							eyebrow={search ? 'Filter Tidak Menemukan Hasil' : 'Mulai Data Pokok'}
+							title={search ? 'Tidak ada siswa yang cocok' : 'Belum ada data siswa'}
+							description={search
+								? 'Ubah kata kunci pencarian atau reset filter untuk melihat kembali seluruh daftar siswa.'
+								: 'Tambahkan siswa pertama dari panel ini agar data akademik dan akun orang tua bisa mulai berjalan.'}
+						>
+							{#if search}
+								<Button variant="outline" size="sm" onclick={() => { search = ''; currentPage = 1; }}>Reset pencarian</Button>
+							{:else}
+								<Button size="sm" onclick={openCreate}>Tambah siswa pertama</Button>
+							{/if}
+						</EmptyStatePanel>
 					{/each}
 				</div>
 				<div class="border-t border-border p-3">
