@@ -252,7 +252,7 @@ JOIN cbt_exam_sessions cs ON cs.id = ep.session_id
 JOIN cbt_packages p ON p.id = cs.package_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 LEFT JOIN LATERAL (
-  SELECT id, status, failed_attempts, created_at, expires_at, revoked_at, verified_at
+  SELECT id, status, failed_attempts, created_at, expires_at, revoked_at, verified_at, token_hash, pin_hash
   FROM cbt_exam_access_cards ac
   WHERE ac.card_type = 'participant'
     AND ac.participant_id = ep.id
@@ -389,7 +389,7 @@ LEFT JOIN LATERAL (
   WHERE rp.exam_room_id = r.id
 ) pa ON TRUE
 LEFT JOIN LATERAL (
-  SELECT id, status, failed_attempts, created_at, expires_at, revoked_at, verified_at
+  SELECT id, status, failed_attempts, created_at, expires_at, revoked_at, verified_at, token_hash, pin_hash
   FROM cbt_exam_access_cards ac
   WHERE ac.card_type = 'proctor'
     AND ac.room_id = r.id
