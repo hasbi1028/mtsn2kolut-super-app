@@ -24,30 +24,6 @@
 	};
 	type PortalStep = 'login' | 'confirm' | 'waiting' | 'exam';
 
-	const demoQuestions: Question[] = [
-		{
-			id: 'demo-informatika-1',
-			type: 'multiple_choice',
-			text: 'Dalam Informatika, data yang dikirim dari browser ke server melalui jaringan sebaiknya dilindungi dengan...',
-			options: [
-				{ label: 'A', text: 'Enkripsi dan autentikasi yang sesuai' },
-				{ label: 'B', text: 'Membagikan PIN kepada teman' },
-				{ label: 'C', text: 'Menonaktifkan semua pembaruan keamanan' },
-				{ label: 'D', text: 'Menyimpan kata sandi di catatan umum' }
-			]
-		},
-		{
-			id: 'demo-informatika-2',
-			type: 'short_answer',
-			text: 'Tuliskan satu contoh jejak digital yang dapat tercatat saat peserta memakai Portal Ujian Web.'
-		},
-		{
-			id: 'demo-informatika-3',
-			type: 'essay',
-			text: 'Jelaskan mengapa sinkronisasi jawaban bertahap penting dalam sistem ujian berbasis web.'
-		}
-	];
-
 	let cardToken = $state('');
 	let pin = $state('');
 	let examToken = $state('');
@@ -66,7 +42,6 @@
 	let submitted = $state(false);
 	let telemetry = $state<string[]>([]);
 
-	let demoMode = $derived($page.url.searchParams.get('demo') === '1');
 	let queryCard = $derived($page.url.searchParams.get('card') ?? $page.url.searchParams.get('token') ?? '');
 	let questions = $derived(payload?.questions ?? []);
 	let answeredCount = $derived(Object.values(answers).filter((answer) => answer.trim().length > 0).length);
@@ -149,19 +124,6 @@
 		try {
 			const fingerprint = deviceFingerprint.trim() || makeFingerprint();
 			deviceFingerprint = fingerprint;
-			if (demoMode) {
-				payload = {
-					student: { nama: 'Siswa Demo Portal', nis: 'DEMO-WEB', class_code: 'IX Demo', room_name: 'Ruang Simulasi', seat_no: 12 },
-					session: { title: 'MODE DEMO Portal Ujian Peserta', subject: 'Informatika — Contoh lokal', status: 'waiting' },
-					questions: demoQuestions,
-					total_questions: demoQuestions.length,
-					time_remaining_seconds: 45 * 60
-				};
-				portalStep = 'confirm';
-				addTelemetry('Demo dibuka — tidak ada API produksi yang dipanggil');
-				return;
-			}
-
 			if (showLegacyTokenLogin) {
 				const response = await fetch('/api/exam/login', {
 					method: 'POST',
@@ -201,7 +163,7 @@
 
 	async function confirmIdentity() {
 		if (!payload) return;
-		if (authenticatedByCard && !demoMode) {
+		if (authenticatedByCard) {
 			await startPortalExam();
 			return;
 		}
@@ -242,19 +204,8 @@
 		}
 	}
 
-	function enterDemoExamFromWaiting() {
-		if (!demoMode) return;
-		if (payload?.session) payload.session.status = 'running';
-		portalStep = 'exam';
-		addTelemetry('Demo: pengawas membuka ujian');
-	}
-
 	async function saveAnswer(questionId: string, answer: string) {
 		answers = { ...answers, [questionId]: answer };
-		if (demoMode) {
-			addTelemetry(`Demo menyimpan jawaban ${questionId} secara lokal`);
-			return;
-		}
 		pendingAnswers = { ...pendingAnswers, [questionId]: answer };
 		try {
 			const response = await fetch(authenticatedByCard ? `/api/cbt-portal/participants/${encodeURIComponent(activeParticipantId)}/answer` : '/api/exam/answer', {
@@ -287,8 +238,7 @@
 		loading = true;
 		errorMessage = '';
 		try {
-			if (!demoMode) {
-				const response = await fetch(authenticatedByCard ? `/api/cbt-portal/participants/${encodeURIComponent(activeParticipantId)}/submit` : '/api/exam/submit', {
+			const response = await fetch(authenticatedByCard ? `/api/cbt-portal/participants/${encodeURIComponent(activeParticipantId)}/submit` : '/api/exam/submit', {
 					method: 'POST',
 					headers: authenticatedByCard
 						? { 'content-type': 'application/json', authorization: `Bearer ${portalAuthToken}` }
@@ -299,10 +249,9 @@
 						},
 					body: '{}'
 				});
-				if (!response.ok) throw new Error('Ujian gagal dikumpulkan');
-			}
+			if (!response.ok) throw new Error('Ujian gagal dikumpulkan');
 			submitted = true;
-			addTelemetry(demoMode ? 'Demo selesai lokal' : 'Ujian dikumpulkan');
+			addTelemetry('Ujian dikumpulkan');
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Submit gagal';
 		} finally {
@@ -318,8 +267,8 @@
 	$effect(() => {
 		if (!browser) return;
 		deviceFingerprint = deviceFingerprint || makeFingerprint();
-		const onBlur = () => addTelemetry(demoMode ? 'Demo: halaman ujian tidak aktif sesaat' : 'Halaman ujian tidak aktif sesaat');
-		const onFocus = () => addTelemetry(demoMode ? 'Demo: halaman ujian aktif kembali' : 'Halaman ujian aktif kembali');
+		const onBlur = () => addTelemetry('Halaman ujian tidak aktif sesaat');
+		const onFocus = () => addTelemetry('Halaman ujian aktif kembali');
 		const onOffline = () => addTelemetry('Koneksi terputus, jawaban disimpan sementara');
 		const onOnline = () => addTelemetry('Koneksi kembali tersambung');
 		window.addEventListener('blur', onBlur);
@@ -336,18 +285,16 @@
 </script>
 
 <svelte:head>
-	<title>{demoMode ? 'MODE DEMO Portal Ujian' : 'Portal Ujian Peserta'} — MTsN 2 Kolaka Utara</title>
+	<title>Portal Ujian Peserta — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 <main class="min-h-screen bg-slate-950 px-4 py-5 text-slate-100">
 	<section class="mx-auto max-w-5xl space-y-4">
 		<header class="rounded-2xl border border-emerald-300/20 bg-white/10 p-4">
 			<p class="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">MTsN 2 Kolaka Utara</p>
-			<h1 class="mt-2 text-2xl font-bold">{demoMode ? 'MODE DEMO Portal Ujian Peserta' : 'Portal Ujian Peserta'}</h1>
+			<h1 class="mt-2 text-2xl font-bold">Portal Ujian Peserta</h1>
 			<p class="mt-2 max-w-3xl text-sm text-slate-200/85">
-				{demoMode
-					? 'Mode DEMO meniru alur ujian nyata dengan soal contoh Informatika lokal. Jawaban tidak dikirim ke server dan tidak menjadi nilai.'
-					: 'Scan QR pada Kartu Peserta Ujian, masukkan PIN, cek identitas, lalu tunggu pengawas membuka ujian.'}
+				Scan QR pada Kartu Peserta Ujian, masukkan PIN, cek identitas, lalu tunggu pengawas membuka ujian.
 			</p>
 		</header>
 
@@ -358,7 +305,7 @@
 		{#if submitted}
 			<section class="rounded-2xl bg-white p-5 text-slate-950">
 				<h2 class="text-xl font-bold">Selesai</h2>
-				<p class="mt-2 text-sm text-slate-600">{demoMode ? 'Mode demo selesai lokal.' : 'Ujian telah dikumpulkan.'}</p>
+				<p class="mt-2 text-sm text-slate-600">Ujian telah dikumpulkan.</p>
 				<button class="mt-4 rounded-lg border px-4 py-2 text-sm font-semibold" onclick={() => { payload = null; submitted = false; portalStep = 'login'; }}>Kembali</button>
 			</section>
 		{:else if payload && portalStep === 'confirm'}
@@ -383,9 +330,7 @@
 				<h2 class="mt-4 text-2xl font-bold">Ujian belum dimulai</h2>
 				<p class="mx-auto mt-2 max-w-xl text-sm text-slate-600">Identitas sudah benar. Tetap di halaman ini dan tunggu pengawas menekan tombol <b>Mulai Ujian</b>. Jangan menutup browser.</p>
 				<div class="mt-4 rounded-xl bg-slate-100 p-3 text-sm"><b>{studentName}</b> · {session.title ?? 'Sesi Ujian'} · {student.room_name ?? 'Ruang belum tercatat'}</div>
-				{#if demoMode}
-					<button class="mt-4 w-full rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white" onclick={enterDemoExamFromWaiting}>Demo: Simulasikan Pengawas Mulai Ujian</button>
-				{:else if authenticatedByCard}
+				{#if authenticatedByCard}
 					<button class="mt-4 w-full rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white disabled:opacity-60" disabled={loading} onclick={startPortalExam}>{loading ? 'Mengecek...' : 'Cek Lagi: Pengawas Sudah Mulai'}</button>
 				{/if}
 			</section>
@@ -393,7 +338,7 @@
 			<section class="rounded-2xl bg-white p-4 text-slate-950">
 				<div class="flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-center sm:justify-between">
 					<div>
-						<p class="text-xs font-semibold uppercase text-emerald-700">{demoMode ? 'MODE DEMO — DATA CONTOH' : 'Portal Ujian Peserta'}</p>
+						<p class="text-xs font-semibold uppercase text-emerald-700">Portal Ujian Peserta</p>
 						<h2 class="text-xl font-bold">{session.title ?? session.subject ?? 'Sesi Ujian'}</h2>
 						<p class="text-sm text-slate-600">{studentName} · {answeredCount}/{questions.length} terjawab</p>
 					</div>
@@ -420,15 +365,14 @@
 						</article>
 					{/each}
 				</div>
-				<div class="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">{demoMode ? 'Mode DEMO: jawaban disimpan lokal di halaman ini saja. Simulasi/Gladi resmi harus memakai kegiatan dan paket server.' : 'Jawaban disimpan bertahap. Jika koneksi putus, tetap di halaman ini dan panggil pengawas.'}</div>
+				<div class="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">Jawaban disimpan bertahap. Jika koneksi putus, tetap di halaman ini dan panggil pengawas.</div>
 				<button class="mt-4 w-full rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white disabled:opacity-60" disabled={loading} onclick={submitExam}>Kumpulkan</button>
 			</section>
 		{:else}
 			<section class="rounded-2xl bg-white p-5 text-slate-950">
-				<h2 class="text-xl font-bold">{demoMode ? 'Mulai DEMO' : 'Masuk dengan Kartu Peserta Ujian'}</h2>
-				<p class="mt-1 text-sm text-slate-600">{demoMode ? 'Tidak perlu QR/PIN. Klik mulai untuk memakai soal contoh Informatika lokal; tidak ada API atau database yang dimutasi.' : 'Scan QR pada kartu. Jika kamera perangkat tidak tersedia, ketik kode kartu dan PIN secara manual.'}</p>
-				{#if !demoMode}
-					{#if showLegacyTokenLogin}
+				<h2 class="text-xl font-bold">Masuk dengan Kartu Peserta Ujian</h2>
+				<p class="mt-1 text-sm text-slate-600">Scan QR pada kartu. Jika kamera perangkat tidak tersedia, ketik kode kartu dan PIN secara manual.</p>
+				{#if showLegacyTokenLogin}
 						<div class="mt-4 grid gap-3 sm:grid-cols-2">
 							<label class="space-y-1 text-sm font-medium">Token Ujian<input class="w-full rounded-lg border px-3 py-2" bind:value={examToken} autocomplete="off" /></label>
 							<label class="space-y-1 text-sm font-medium">Token Ruang<input class="w-full rounded-lg border px-3 py-2" bind:value={roomToken} autocomplete="off" /></label>
@@ -438,14 +382,10 @@
 							<label class="space-y-1 text-sm font-medium">Kode Kartu / QR Token<input class="w-full rounded-lg border px-3 py-2" bind:value={cardToken} autocomplete="off" placeholder="Terisi otomatis setelah scan QR" /></label>
 							<label class="space-y-1 text-sm font-medium">PIN<input class="w-full rounded-lg border px-3 py-2 text-center text-xl tracking-[0.4em]" bind:value={pin} inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="••••" /></label>
 						</div>
-					{/if}
 				{/if}
-				<button class="mt-4 w-full rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white disabled:opacity-60" disabled={loading} onclick={portalLogin}>{loading ? 'Memproses...' : demoMode ? 'Mulai Mode DEMO' : 'Lanjutkan'}</button>
+				<button class="mt-4 w-full rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white disabled:opacity-60" disabled={loading} onclick={portalLogin}>{loading ? 'Memproses...' : 'Lanjutkan'}</button>
 				<div class="mt-3 flex flex-col gap-2 text-center text-sm sm:flex-row sm:justify-center">
-					{#if !demoMode}
-						<button class="text-emerald-700 underline" type="button" onclick={() => (showLegacyTokenLogin = !showLegacyTokenLogin)}>{showLegacyTokenLogin ? 'Kembali ke QR + PIN' : 'Mode bantuan pengawas: token lama'}</button>
-						<a class="text-emerald-700 underline" href="/ujian?demo=1">Buka Mode DEMO</a>
-					{/if}
+					<button class="text-emerald-700 underline" type="button" onclick={() => (showLegacyTokenLogin = !showLegacyTokenLogin)}>{showLegacyTokenLogin ? 'Kembali ke QR + PIN' : 'Mode bantuan pengawas: token lama'}</button>
 				</div>
 			</section>
 		{/if}

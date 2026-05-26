@@ -236,7 +236,15 @@ SELECT
   ac.created_at AS card_created_at,
   ac.expires_at AS card_expires_at,
   ac.revoked_at AS card_revoked_at,
-  ac.verified_at AS card_verified_at
+  ac.verified_at AS card_verified_at,
+  (CASE WHEN ac.id IS NOT NULL
+          AND btrim(ep.token) <> ''
+          AND ac.token_hash = encode(digest(btrim(ep.token), 'sha256'), 'hex')
+        THEN btrim(ep.token) ELSE '' END)::text AS print_token,
+  (CASE WHEN ac.id IS NOT NULL
+          AND btrim(ep.token) <> ''
+          AND ac.pin_hash = encode(digest(upper(right(btrim(ep.token), 4)), 'sha256'), 'hex')
+        THEN upper(right(btrim(ep.token), 4)) ELSE '' END)::text AS print_pin
 FROM cbt_exam_participants ep
 JOIN students st ON st.id = ep.student_id
 LEFT JOIN school_classes sc ON sc.id = st.class_id
@@ -289,6 +297,8 @@ type ListCbtParticipantAccessCardTargetsByEventRow struct {
 	CardExpiresAt  pgtype.Timestamptz `json:"card_expires_at"`
 	CardRevokedAt  pgtype.Timestamptz `json:"card_revoked_at"`
 	CardVerifiedAt pgtype.Timestamptz `json:"card_verified_at"`
+	PrintToken     string             `json:"print_token"`
+	PrintPin       string             `json:"print_pin"`
 }
 
 func (q *Queries) ListCbtParticipantAccessCardTargetsByEvent(ctx context.Context, arg ListCbtParticipantAccessCardTargetsByEventParams) ([]ListCbtParticipantAccessCardTargetsByEventRow, error) {
@@ -324,6 +334,8 @@ func (q *Queries) ListCbtParticipantAccessCardTargetsByEvent(ctx context.Context
 			&i.CardExpiresAt,
 			&i.CardRevokedAt,
 			&i.CardVerifiedAt,
+			&i.PrintToken,
+			&i.PrintPin,
 		); err != nil {
 			return nil, err
 		}
@@ -356,7 +368,15 @@ SELECT
   ac.created_at AS card_created_at,
   ac.expires_at AS card_expires_at,
   ac.revoked_at AS card_revoked_at,
-  ac.verified_at AS card_verified_at
+  ac.verified_at AS card_verified_at,
+  (CASE WHEN ac.id IS NOT NULL
+          AND btrim(r.room_token) <> ''
+          AND ac.token_hash = encode(digest(btrim(r.room_token), 'sha256'), 'hex')
+        THEN btrim(r.room_token) ELSE '' END)::text AS print_token,
+  (CASE WHEN ac.id IS NOT NULL
+          AND btrim(r.room_token) <> ''
+          AND ac.pin_hash = encode(digest(upper(right(regexp_replace(btrim(r.room_token), '[^A-Za-z0-9]', '', 'g'), 4)), 'sha256'), 'hex')
+        THEN upper(right(regexp_replace(btrim(r.room_token), '[^A-Za-z0-9]', '', 'g'), 4)) ELSE '' END)::text AS print_pin
 FROM cbt_exam_rooms r
 JOIN cbt_exam_sessions cs ON cs.id = r.session_id
 JOIN cbt_packages p ON p.id = cs.package_id
@@ -411,6 +431,8 @@ type ListCbtProctorAccessCardTargetsByEventRow struct {
 	CardExpiresAt  pgtype.Timestamptz `json:"card_expires_at"`
 	CardRevokedAt  pgtype.Timestamptz `json:"card_revoked_at"`
 	CardVerifiedAt pgtype.Timestamptz `json:"card_verified_at"`
+	PrintToken     string             `json:"print_token"`
+	PrintPin       string             `json:"print_pin"`
 }
 
 func (q *Queries) ListCbtProctorAccessCardTargetsByEvent(ctx context.Context, arg ListCbtProctorAccessCardTargetsByEventParams) ([]ListCbtProctorAccessCardTargetsByEventRow, error) {
@@ -443,6 +465,8 @@ func (q *Queries) ListCbtProctorAccessCardTargetsByEvent(ctx context.Context, ar
 			&i.CardExpiresAt,
 			&i.CardRevokedAt,
 			&i.CardVerifiedAt,
+			&i.PrintToken,
+			&i.PrintPin,
 		); err != nil {
 			return nil, err
 		}
