@@ -1028,6 +1028,31 @@ type CbtEventSubjectTarget struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
+type CbtExamAccessCard struct {
+	ID                pgtype.UUID        `json:"id"`
+	CardType          string             `json:"card_type"`
+	EventID           pgtype.UUID        `json:"event_id"`
+	SessionID         pgtype.UUID        `json:"session_id"`
+	RoomID            pgtype.UUID        `json:"room_id"`
+	ParticipantID     pgtype.UUID        `json:"participant_id"`
+	RoomProctorID     pgtype.UUID        `json:"room_proctor_id"`
+	AssignedUserID    pgtype.UUID        `json:"assigned_user_id"`
+	TokenHash         string             `json:"token_hash"`
+	PinHash           string             `json:"pin_hash"`
+	TokenHashVersion  int32              `json:"token_hash_version"`
+	PinHashVersion    int32              `json:"pin_hash_version"`
+	Status            string             `json:"status"`
+	FailedAttempts    int32              `json:"failed_attempts"`
+	MaxFailedAttempts int32              `json:"max_failed_attempts"`
+	LastFailedAt      pgtype.Timestamptz `json:"last_failed_at"`
+	VerifiedAt        pgtype.Timestamptz `json:"verified_at"`
+	ExpiresAt         pgtype.Timestamptz `json:"expires_at"`
+	RevokedAt         pgtype.Timestamptz `json:"revoked_at"`
+	GeneratedBy       pgtype.UUID        `json:"generated_by"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CbtExamEvent struct {
 	ID                pgtype.UUID        `json:"id"`
 	Title             string             `json:"title"`

@@ -1,12 +1,20 @@
 # CBT Runtime
 
-## Jalur utama
+## Jalur resmi tahun ini
 
-- Client utama siswa untuk ujian resmi adalah Flutter APK di `apps/mobile`.
-- APK Flutter mendukung kontrol perangkat yang lebih kuat daripada browser: fokus layar, deteksi app switch/split-screen best effort, device fingerprint, heartbeat, penyimpanan jawaban, dan telemetry anti-cheat.
-- Build rilis yang disiapkan:
-  - Split ABI: `app-arm64-v8a-release.apk`, `app-armeabi-v7a-release.apk`, `app-x86_64-release.apk` jika dibutuhkan emulator.
-  - Universal: `app-release.apk` untuk distribusi sederhana.
+- Runtime operasional resmi untuk ujian siswa tahun ini adalah **Portal Ujian Web** di SvelteKit (`/ujian`).
+- Portal Ujian Web dipakai bersama portal pengawasan web, kartu/QR/PIN, dan panel ruang agar peserta/pengawas cukup membuka web sekolah tanpa instalasi APK.
+- Istilah lama `Browser Darurat` masih dapat muncul pada kontrak/internal rollout lama, tetapi secara operasional copy siswa/pengawas harus menyebut **Portal Ujian Web**.
+- Kontrol anti-cheat web tetap bersifat best effort: fokus layar, fullscreen, visibility/focus telemetry, heartbeat, penyimpanan jawaban lokal sementara, dan pengawasan ruang wajib.
+
+## Flutter APK Android
+
+- Source Flutter APK di `apps/mobile` dan artifact rilis tetap disimpan untuk arsip, audit, demo teknis, dan tahap lanjutan.
+- APK Flutter **tidak aktif sebagai jalur operasional resmi tahun ini** kecuali ada keputusan tertulis baru dari admin/operator.
+- Download center APK tetap tersedia sebagai arsip/nonaktif agar artifact lama bisa diverifikasi, tetapi tidak boleh dipromosikan sebagai jalur masuk ujian siswa tahun ini.
+- Build yang tersimpan:
+  - Split ABI: `app-arm64-v8a-release.apk`, `app-armeabi-v7a-release.apk`, `app-x86_64-release.apk` jika dibutuhkan emulator/uji teknis.
+  - Universal: `app-release.apk` untuk arsip atau distribusi uji terbatas tahap lanjutan.
 
 ## CBT Portal dedicated
 
@@ -20,13 +28,12 @@ pm2 start start.sh --name mtsn2kolut-cbt-portal --update-env
 pm2 save
 ```
 
-## Browser Darurat
+## Portal Ujian Web / istilah lama Browser Darurat
 
-- Browser fallback tersedia melalui route web-admin `/ujian`.
-- Ini bukan pengganti keamanan Flutter APK.
-- Gunakan hanya saat APK tidak dapat dipakai pada perangkat tertentu dan pengawas mengizinkan.
-- Label operasional: **Mode Darurat / Browser — Pengawasan Wajib**.
-- Login real memakai Token Ujian + Token Ruang dan mengirim `client_type=web_fallback` ke backend.
+- Portal Ujian Web tersedia melalui route web-admin `/ujian` dan menjadi runtime siswa resmi tahun ini.
+- Label operasional: **Portal Ujian Web — Pengawasan Wajib**.
+- Jika backend/telemetry masih memakai `client_type=web_fallback`, perlakukan itu sebagai nama kompatibilitas internal, bukan copy UI untuk siswa/pengawas.
+- Login dan credential mengikuti rollout yang berlaku (QR+PIN/kartu ujian saat siap; token lama hanya sebagai kompatibilitas transisi).
 
 ## Mode DEMO Flutter
 

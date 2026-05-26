@@ -1,6 +1,8 @@
-# Device Test Matrix — BYOD CBT
+# Device Test Matrix — BYOD CBT (arsip/nonaktif)
 
 Gunakan matriks ini saat uji perangkat Android siswa. Tujuannya agar hasil uji bisa dibandingkan antar vendor, versi Android, dan jenis koneksi.
+
+**Status operasional tahun ini:** Portal Ujian Web (`/ujian`) adalah runtime resmi siswa. Matriks APK ini dipertahankan untuk arsip, bukti artifact, uji teknis internal, dan tahap lanjutan; bukan daftar perangkat wajib untuk hari-H tahun ini.
 
 Status: sinkron Phase 24 Anti-Cheat BYOD Evidence Completion + Phase 30 Mobile RC Build and Release Package per 2026-05-08. Matriks ini dipakai bersama release checklist dan prosedur BYOD; hasilnya menjadi bukti operasional, bukan jaminan kiosk penuh.
 

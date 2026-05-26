@@ -1,6 +1,8 @@
-# Release Checklist — Flutter CBT BYOD
+# Release Checklist — Flutter CBT BYOD (arsip/nonaktif)
 
 Checklist ini untuk operator sekolah saat menyiapkan APK Android internal bagi siswa BYOD dan menjalankan Phase 5 rehearsal.
+
+**Status operasional tahun ini:** Portal Ujian Web (`/ujian`) adalah runtime resmi siswa. Checklist Flutter APK ini dipertahankan untuk arsip, verifikasi artifact, uji teknis internal, dan tahap lanjutan. Jangan gunakan checklist ini untuk mengaktifkan APK sebagai jalur utama ujian tanpa keputusan operasional baru.
 
 Status: sinkron Phase 30 Mobile RC Build and Release Package per 2026-05-08. Gunakan bersama `docs/exam-api.md`, `docs/cbt-proposal-integration-phase-5.md`, `docs/cbt-proposal-integration-phase-13.md`, `docs/cbt-proposal-integration-phase-23-26.md`, `docs/cbt-proposal-integration-phase-27-30.md`, `docs/cbt-smoke-checklist.md`, dan `docs/cbt-operator-runbook.md`.
 
@@ -12,6 +14,7 @@ Status: sinkron Phase 30 Mobile RC Build and Release Package per 2026-05-08. Gun
 - [ ] Tidak membawa PocketBase, SQLite, atau Alpine menjadi runtime CBT.
 - [ ] Flutter berbicara langsung ke `services/core-api` melalui `/api/exam/*`, bukan melalui SvelteKit BFF.
 - [ ] BYOD tidak setara kiosk penuh; device-owner bukan baseline untuk perangkat siswa pribadi.
+- [ ] Portal Ujian Web tetap dicatat sebagai runtime resmi tahun ini; APK Flutter hanya arsip/nonaktif/tahap lanjutan.
 
 ## Phase 13 Mobile Release Candidate and Device Matrix
 
@@ -145,7 +148,9 @@ build/app/outputs/flutter-apk/app-release.apk
 - [ ] smoke admin/guru di `docs/cbt-smoke-checklist.md` tidak menemukan kebocoran token/kunci jawaban
 - [ ] Flutter tetap memakai `/api/exam/*`; tidak ada runtime siswa melalui route login/status di namespace `/api/cbt`
 
-## Distribusi Internal
+## Distribusi Internal — nonaktif tahun ini
+
+Distribusi APK ke siswa tidak menjadi alur utama tahun ini. Gunakan bagian ini hanya untuk arsip atau uji teknis tahap lanjutan; alur operasional siswa diarahkan ke Portal Ujian Web.
 
 - [ ] bagikan APK hanya lewat kanal resmi sekolah
 - [ ] pusat download resmi dicek di `/asesmen/aplikasi-siswa/release`

@@ -1,6 +1,8 @@
-# Operator Quick Start — Uji BYOD CBT
+# Operator Quick Start — Uji BYOD CBT (arsip/nonaktif)
 
 Panduan singkat ini ditujukan untuk pengawas atau operator sekolah saat mendampingi uji coba APK CBT di perangkat Android milik siswa.
+
+**Status operasional tahun ini:** Portal Ujian Web (`/ujian`) adalah runtime resmi siswa. Panduan APK ini dipertahankan sebagai arsip/tahap lanjutan; jangan jadikan instruksi utama pengawas atau siswa tahun ini.
 
 Status: sinkron per 2026-05-03. Panduan ini untuk BYOD; jangan menyampaikan bahwa aplikasi memberi jaminan kiosk penuh.
 

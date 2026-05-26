@@ -1,6 +1,8 @@
-# Mobile APK Release Center
+# Mobile APK Release Center — Arsip Nonaktif
 
-Release Center ini menyajikan APK CBT Mobile terbaru lewat SvelteKit web-admin yang berjalan di port `8021` dan diteruskan oleh cloudflared. Tidak ada konfigurasi Nginx yang dibutuhkan.
+Release Center ini menyajikan artifact APK CBT Mobile lewat SvelteKit web-admin yang berjalan di port `8021` dan diteruskan oleh cloudflared. Tidak ada konfigurasi Nginx yang dibutuhkan.
+
+**Status operasional tahun ini:** Portal Ujian Web (`/ujian`) adalah runtime resmi siswa. Source dan artifact Flutter APK tetap disimpan sebagai arsip/nonaktif untuk audit, verifikasi checksum, demo teknis, dan tahap lanjutan. Jangan mengarahkan siswa mengunduh APK dari halaman ini sebagai jalur utama ujian tahun ini kecuali ada keputusan operasional baru.
 
 ## URL produksi
 
@@ -27,7 +29,9 @@ Release Center ini menyajikan APK CBT Mobile terbaru lewat SvelteKit web-admin y
 
 Folder ini berada di luar source web-admin agar APK baru bisa dipublish tanpa rebuild web.
 
-## Workflow rilis APK baru
+## Workflow rilis APK baru / arsip tahap lanjutan
+
+Workflow ini hanya untuk publish artifact APK arsip, uji teknis internal, atau tahap lanjutan. Untuk operasi ujian tahun ini, arahkan siswa ke Portal Ujian Web (`/ujian`) dan portal pengawasan web.
 
 Dari root repo:
 
@@ -105,10 +109,10 @@ scripts/publish-mobile-apk.sh \
 
 Setelah script selesai:
 
-- `latest-arm64.apk` langsung berubah.
+- `latest-arm64.apk` langsung berubah sebagai artifact arsip/nonaktif.
 - `latest.json` langsung berubah.
 - QR code langsung berubah jika URL berubah.
-- Dashboard release otomatis membaca metadata baru.
+- Dashboard release otomatis membaca metadata baru dengan label arsip/nonaktif.
 - Tidak perlu `npm run build`.
 - Tidak perlu restart PM2 web-admin.
 
@@ -136,12 +140,13 @@ content-disposition: attachment; filename="mtsn2kolut-cbt-latest-arm64.apk"
 3. Update `latest.json`, `latest-arm64.sha256`, dan `latest-qr.svg` dengan `scripts/publish-mobile-apk.sh --apk <file-history> --commit <commit-lama> --expected-sha256 <sha> ...` jika ingin metadata ikut konsisten.
 4. Verifikasi URL publik.
 
-## Batasan keamanan
+## Batasan keamanan dan copy distribusi
 
 - Dashboard release tetap berada di area login web-admin.
-- Endpoint APK/manifest/QR dibuat public by URL agar siswa/pengawas bisa scan dan download cepat.
-- APK resmi hanya dari domain `mtsn2kolut.sch.id`.
+- Endpoint APK/manifest/QR dibuat public by URL untuk kebutuhan arsip/verifikasi dan tahap lanjutan, bukan instruksi utama siswa tahun ini.
+- Artifact APK yang tersimpan hanya boleh berasal dari domain `mtsn2kolut.sch.id`.
 - Jangan distribusikan APK dari sumber lain.
+- Copy operasional untuk siswa/pengawas harus menyebut **Portal Ujian Web** sebagai jalur resmi tahun ini.
 
 ## Boundary deploy
 

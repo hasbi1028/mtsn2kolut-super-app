@@ -179,6 +179,7 @@
 	let handoverLoadBusy = $state(false);
 	let handoverBusy = $state(false);
 	let handoverLockBusy = $state(false);
+	let sessionStatusBusy = $state(false);
 	let webFallbackBusy = $state(false);
 	let refreshBusy = $state(false);
 	let backgroundBusy = $state(false);
@@ -222,6 +223,12 @@
 			if (row.client_type === 'web_fallback') webFallback += 1;
 		}
 		return { online, stale, offline, submitted, locked, highRisk, webFallback };
+	});
+	let roomSignal = $derived.by<'green' | 'yellow' | 'red'>(() => {
+		if (!room) return 'yellow';
+		if (participantStats.locked > 0 || participantStats.highRisk > 0) return 'red';
+		if (participantStats.stale + participantStats.offline > 0 || room.suspicious_count > 0 || room.missing_seat_count > 0) return 'yellow';
+		return 'green';
 	});
 	const participantFilters: Array<{ key: ParticipantFilter; label: string; aria: string }> = [
 		{ key: 'attention', label: 'Butuh Tindakan', aria: 'Filter peserta: Butuh Tindakan' },
@@ -468,6 +475,41 @@
 		if (liveMode === 'sse') return 'border-primary/20 bg-primary/10 text-primary';
 		if (liveMode === 'connecting') return 'border-warning/30 bg-warning/10 text-warning';
 		return 'border-destructive/30 bg-destructive/10 text-destructive';
+	}
+
+	function simpleSignalLabel() {
+		if (roomSignal === 'green') return 'Hijau · Aman';
+		if (roomSignal === 'yellow') return 'Kuning · Perlu Dicek';
+		return 'Merah · Butuh Bantuan';
+	}
+
+	function simpleSignalClass() {
+		if (roomSignal === 'green') return 'border-primary/20 bg-primary/10 text-primary';
+		if (roomSignal === 'yellow') return 'border-warning/30 bg-warning/10 text-warning';
+		return 'border-destructive/30 bg-destructive/10 text-destructive';
+	}
+
+	function simpleStatusMessage() {
+		if (!room) return 'Memuat data ruang.';
+		if (room.session_status !== 'active') return 'Ujian belum dibuka. Tekan tombol Mulai Ujian saat peserta sudah siap.';
+		if (roomSignal === 'green') return 'Ujian berjalan aman. Lanjut pantau peserta sampai selesai.';
+		if (roomSignal === 'yellow') return 'Ada peserta/jaringan yang perlu dicek. Buka daftar peserta bermasalah.';
+		return 'Ada masalah penting. Tekan Hubungi Admin dan tunggu arahan operator.';
+	}
+
+	function adminHelpText() {
+		if (!room) return 'Saya pengawas ujian membutuhkan bantuan admin.';
+		return `Mohon bantuan admin CBT. Ruang: ${room.room_name}. Sesi: ${room.session_title}. Status: ${simpleSignalLabel()}. Atensi: ${attentionParticipants.length}.`;
+	}
+
+	async function contactAdmin() {
+		const text = adminHelpText();
+		try {
+			await navigator.clipboard?.writeText(text);
+			toast.success('Pesan bantuan disalin. Kirim ke admin/operator CBT.');
+		} catch {
+			toast.info(text);
+		}
 	}
 
 	async function loadHandover() {
@@ -1042,6 +1084,30 @@
 		}
 	}
 
+	async function updateSessionStatus(status: 'active' | 'finished') {
+		const label = status === 'active' ? 'Mulai Ujian' : 'Tutup Ujian';
+		sessionStatusBusy = true;
+		try {
+			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/status`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ status }),
+			});
+			await readClientJson<unknown>(res);
+			operationState = {
+				tone: status === 'active' ? 'success' : 'warning',
+				title: status === 'active' ? 'Ujian Dimulai' : 'Ujian Ditutup',
+				message: status === 'active' ? 'Portal ujian peserta sudah dibuka untuk sesi ini.' : 'Sesi ujian ditandai selesai. Pastikan berita acara/serah terima lengkap.'
+			};
+			toast.success(`${label} berhasil.`);
+			await refreshDashboard(true);
+		} catch (error) {
+			toast.error(detailErrorMessage(error));
+		} finally {
+			sessionStatusBusy = false;
+		}
+	}
+
 	function handoverPayload() {
 		return {
 			attendance_checked: handover?.attendance_checked === true,
@@ -1135,20 +1201,24 @@
 		</div>
 		<div class="flex flex-wrap items-center gap-1.5">
 			<Badge variant="outline" class={liveModeClass()}>{liveModeLabel()}</Badge>
-			<Badge variant="outline" class={lastProctorHeartbeatAt ? 'border-primary/20 bg-primary/10 text-primary' : 'border-warning/30 bg-warning/10 text-warning'}>
-				{lastProctorHeartbeatAt ? `Online ${fmtDate(lastProctorHeartbeatAt)}` : 'Menghubungkan'}
-			</Badge>
+			<Badge variant="outline" class={simpleSignalClass()}>{simpleSignalLabel()}</Badge>
 			{#if backgroundBusy}
 				<Badge variant="outline" class="border-primary/20 text-primary">Update</Badge>
 			{/if}
-			<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/proctoring/report`)}>BA</Button>
-			<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/print-pack`)}>
-				<PrinterIcon class="mr-1.5 size-3.5" />
-				Cetak
-			</Button>
-			<LoadingButton size="sm" onclick={() => void refreshDashboard()} loading={refreshBusy} loadingLabel="Memuat...">
-				Muat Ulang
-			</LoadingButton>
+			<Button variant="outline" size="sm" onclick={() => void contactAdmin()}>Hubungi Admin</Button>
+			{#if proctorViewMode === 'complete'}
+				<Badge variant="outline" class={lastProctorHeartbeatAt ? 'border-primary/20 bg-primary/10 text-primary' : 'border-warning/30 bg-warning/10 text-warning'}>
+					{lastProctorHeartbeatAt ? `Online ${fmtDate(lastProctorHeartbeatAt)}` : 'Menghubungkan'}
+				</Badge>
+				<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/proctoring/report`)}>BA</Button>
+				<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/print-pack`)}>
+					<PrinterIcon class="mr-1.5 size-3.5" />
+					Cetak
+				</Button>
+				<LoadingButton size="sm" onclick={() => void refreshDashboard()} loading={refreshBusy} loadingLabel="Memuat...">
+					Muat Ulang
+				</LoadingButton>
+			{/if}
 		</div>
 	</div>
 
@@ -1157,7 +1227,12 @@
 	{/if}
 
 	<div class="flex flex-col gap-2 rounded-xl border border-border bg-muted/20 px-3 py-2 md:flex-row md:items-center md:justify-between">
-		<p class="text-xs text-muted-foreground"><span class="font-semibold text-foreground">Mode pengawas:</span> prioritas, status kirim, dan serah terima.</p>
+		<div>
+			<p class="text-xs text-muted-foreground"><span class="font-semibold text-foreground">Mode Sederhana/Hari-H:</span> pengawas cukup menekan Mulai Ujian, melihat warna status, dan Hubungi Admin bila perlu.</p>
+			{#if proctorViewMode === 'complete'}
+				<p class="mt-1 text-[11px] text-muted-foreground">Mode Rinci untuk admin/operator: tombol teknis, bukti, token, ekspor, dan pengaturan darurat.</p>
+			{/if}
+		</div>
 		<div class="inline-flex w-fit rounded-full border border-border bg-background p-0.5 text-[11px] font-semibold" role="tablist" aria-label="Mode tampilan pengawas">
 			<button type="button" role="tab" class={`rounded-full px-2.5 py-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${proctorViewMode === 'simple' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`} aria-selected={proctorViewMode === 'simple'} onclick={() => (proctorViewMode = 'simple')}>Hari-H</button>
 			<button type="button" role="tab" class={`rounded-full px-2.5 py-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${proctorViewMode === 'complete' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`} aria-selected={proctorViewMode === 'complete'} onclick={() => (proctorViewMode = 'complete')}>Rinci</button>
@@ -1216,6 +1291,39 @@
 		{/snippet}
 
 		{#if room}
+				<section class={`rounded-2xl border p-4 shadow-sm md:p-5 ${simpleSignalClass()}`}>
+					<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-center">
+						<div class="space-y-3">
+							<div class="flex flex-wrap items-center gap-2">
+								<Badge variant="outline" class={simpleSignalClass()}>{simpleSignalLabel()}</Badge>
+								<Badge variant="outline" class="border-border bg-card text-foreground">{room.session_status === 'active' ? 'Ujian sudah berjalan' : 'Belum dimulai'}</Badge>
+							</div>
+							<div>
+								<h2 class="text-2xl font-bold tracking-tight text-foreground md:text-3xl">Portal Pengawasan</h2>
+								<p class="mt-1 text-sm text-muted-foreground">{room.room_name} · {room.package_title} · {fmtDate(room.scheduled_start)}</p>
+							</div>
+							<p class="text-sm font-medium text-foreground">{simpleStatusMessage()}</p>
+							<div class="grid gap-2 text-sm sm:grid-cols-3">
+								<div class="rounded-lg border border-border bg-card/80 p-3"><p class="text-xs text-muted-foreground">Peserta siap</p><p class="text-xl font-bold text-foreground">{room.participant_count}</p></div>
+								<div class="rounded-lg border border-border bg-card/80 p-3"><p class="text-xs text-muted-foreground">Terhubung</p><p class="text-xl font-bold text-primary">{participantStats.online}</p></div>
+								<div class="rounded-lg border border-border bg-card/80 p-3"><p class="text-xs text-muted-foreground">Perlu dicek</p><p class="text-xl font-bold text-warning">{attentionParticipants.length}</p></div>
+							</div>
+						</div>
+						<div class="space-y-2">
+							<LoadingButton class="h-16 w-full text-lg font-bold" onclick={() => void updateSessionStatus('active')} loading={sessionStatusBusy} disabled={room.session_status === 'active' || sessionStatusBusy} loadingLabel="Membuka ujian...">
+								Mulai Ujian
+							</LoadingButton>
+							<Button class="w-full" variant="outline" onclick={() => (participantFilter = 'attention')}>Lihat Peserta Bermasalah</Button>
+							<Button class="w-full" variant={roomSignal === 'red' ? 'destructive' : 'outline'} onclick={() => void contactAdmin()}>Hubungi Admin</Button>
+							{#if proctorViewMode === 'complete'}
+								<LoadingButton class="w-full" variant="outline" onclick={() => void updateSessionStatus('finished')} loading={sessionStatusBusy} disabled={room.session_status === 'finished' || sessionStatusBusy} loadingLabel="Menutup...">
+									Tutup Ujian
+								</LoadingButton>
+							{/if}
+						</div>
+					</div>
+				</section>
+
 				<div class="grid gap-2 md:grid-cols-4">
 					<div class="rounded-lg border border-border bg-card px-3 py-2">
 						<p class="text-[11px] text-muted-foreground">Butuh tindakan</p>
@@ -1270,11 +1378,13 @@
 							<p class="truncate text-xs text-muted-foreground">{room.package_title} · {fmtDate(room.scheduled_start)} - {fmtDate(room.scheduled_end)}</p>
 						</div>
 						<div class="flex flex-wrap items-center gap-1.5">
-							<Badge variant="outline" class="border-primary/20 text-primary">Token {maskedRoomToken(room.room_token)}</Badge>
 							<Badge variant="outline">{room.session_status}</Badge>
-							<LoadingButton size="sm" variant={room.allow_web_fallback ? 'outline' : 'default'} onclick={() => void updateRoomWebFallbackPolicy(!room?.allow_web_fallback)} loading={webFallbackBusy} loadingLabel="Menyimpan...">
-								{room.allow_web_fallback ? 'Matikan Browser' : 'Aktifkan Darurat'}
-							</LoadingButton>
+							{#if proctorViewMode === 'complete'}
+								<Badge variant="outline" class="border-primary/20 text-primary">Token {maskedRoomToken(room.room_token)}</Badge>
+								<LoadingButton size="sm" variant={room.allow_web_fallback ? 'outline' : 'default'} onclick={() => void updateRoomWebFallbackPolicy(!room?.allow_web_fallback)} loading={webFallbackBusy} loadingLabel="Menyimpan...">
+									{room.allow_web_fallback ? 'Matikan Browser' : 'Aktifkan Darurat'}
+								</LoadingButton>
+							{/if}
 						</div>
 					</div>
 					<div class="divide-y divide-border text-xs md:grid md:grid-cols-4 md:divide-x md:divide-y-0">
@@ -1322,7 +1432,7 @@
 											<td class="px-3 py-2 font-semibold text-foreground">{heartbeatLabel(row)}</td>
 											<td class="px-3 py-2 font-semibold text-foreground">{row.answered_count}</td>
 											<td class="px-3 py-2 font-semibold text-foreground">{row.submitted_at ? 'Ya' : 'Belum'}</td>
-											<td class="px-3 py-2"><div class="flex flex-wrap justify-end gap-1.5"><Button size="sm" variant="outline" onclick={() => void flagParticipant(row, !row.suspicious_flag)}>{row.suspicious_flag ? 'Bersihkan' : 'Periksa'}</Button><LoadingButton size="sm" variant="outline" onclick={() => void sendParticipantCommand(row, 'warning_message')} loading={actionBusyId === `command-warning_message-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `command-warning_message-${row.participant_id}`} loadingLabel="Mengirim...">Peringatkan</LoadingButton><LoadingButton size="sm" variant="outline" onclick={() => void sendParticipantCommand(row, 'reconnect')} loading={actionBusyId === `command-reconnect-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `command-reconnect-${row.participant_id}`} loadingLabel="Mengirim...">Masuk Ulang</LoadingButton>{#if participantLocked(row)}<LoadingButton size="sm" onclick={() => void unlockParticipant(row)} loading={actionBusyId === `unlock-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `unlock-${row.participant_id}`} loadingLabel="Membuka...">Buka</LoadingButton>{/if}<LoadingButton size="sm" variant="outline" onclick={() => void resetAccess(row)} loading={actionBusyId === `reset-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `reset-${row.participant_id}`} loadingLabel="Mengatur...">Reset</LoadingButton></div></td>
+											<td class="px-3 py-2"><div class="flex flex-wrap justify-end gap-1.5"><Button size="sm" variant="outline" onclick={() => void flagParticipant(row, !row.suspicious_flag)}>{row.suspicious_flag ? 'Sudah Dicek' : 'Periksa'}</Button>{#if proctorViewMode === 'complete'}<LoadingButton size="sm" variant="outline" onclick={() => void sendParticipantCommand(row, 'warning_message')} loading={actionBusyId === `command-warning_message-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `command-warning_message-${row.participant_id}`} loadingLabel="Mengirim...">Peringatkan</LoadingButton><LoadingButton size="sm" variant="outline" onclick={() => void sendParticipantCommand(row, 'reconnect')} loading={actionBusyId === `command-reconnect-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `command-reconnect-${row.participant_id}`} loadingLabel="Mengirim...">Masuk Ulang</LoadingButton>{#if participantLocked(row)}<LoadingButton size="sm" onclick={() => void unlockParticipant(row)} loading={actionBusyId === `unlock-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `unlock-${row.participant_id}`} loadingLabel="Membuka...">Buka</LoadingButton>{/if}<LoadingButton size="sm" variant="outline" onclick={() => void resetAccess(row)} loading={actionBusyId === `reset-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `reset-${row.participant_id}`} loadingLabel="Mengatur...">Reset</LoadingButton>{/if}</div></td>
 										</tr>
 									{/each}
 								</tbody>

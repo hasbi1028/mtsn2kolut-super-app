@@ -1,6 +1,8 @@
-# Prosedur Uji Coba BYOD CBT
+# Prosedur Uji Coba BYOD CBT (arsip/nonaktif)
 
 Dokumen ini untuk uji lapangan APK CBT pada perangkat Android milik siswa.
+
+**Status operasional tahun ini:** Portal Ujian Web (`/ujian`) adalah runtime resmi siswa. Prosedur APK ini dipertahankan untuk arsip, demo teknis, dan tahap lanjutan; jangan jadikan prosedur hari-H utama tahun ini.
 
 Status: sinkron per 2026-05-03. Uji ini wajib diperlakukan sebagai rehearsal BYOD, bukan validasi kiosk penuh.
 

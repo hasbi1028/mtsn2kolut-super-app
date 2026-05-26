@@ -65,7 +65,7 @@
 	];
 
 	const trialFlow = [
-		'Sebelum sesi, pastikan APK terpasang dan alamat layanan sistem yang dipakai benar.',
+		'Sebelum sesi, pastikan Portal Ujian Web /ujian dapat dibuka dari browser siswa dan alamat layanan sistem benar.',
 		'Saat masuk ujian, cek apakah ada kartu pemulihan sesi dan perhatikan label kesehatan sesi terakhir.',
 		'Selama ujian, pantau penanda status di bagian atas aplikasi dan panel kesehatan koneksi di layar siswa.',
 		'Saat gangguan disimulasikan, minta siswa tetap berada di layar ujian sampai sinkron pulih.',
@@ -96,7 +96,7 @@
 		},
 		{
 			title: 'Panduan Perangkat Siswa',
-			description: 'Bahan pengawas saat perlu menjelaskan status, kirim ujian, dan alur uji coba kepada siswa.',
+				description: 'Bahan pengawas saat perlu menjelaskan status, kirim ujian, dan alur Portal Ujian Web kepada siswa.',
 			links: [
 				{
 					label: 'Arti Status Koneksi',
@@ -109,7 +109,7 @@
 					description: 'Pemeriksaan singkat sebelum siswa menekan Kirim Ujian.'
 				},
 				{
-					label: 'Alur Uji Coba APK',
+					label: 'Alur Uji Coba Portal Web',
 					href: '#trial-flow',
 					description: 'Urutan latihan untuk operator dan pengawas.'
 				}
@@ -117,7 +117,7 @@
 		},
 		{
 			title: 'Perangkat & Kesiapan',
-			description: 'Dibuka setelah kebutuhan pemantauan terpenuhi: tabel perangkat dan daftar pemeriksaan rilis.',
+				description: 'Dibuka setelah kebutuhan pemantauan terpenuhi: kesiapan browser/perangkat dan arsip APK nonaktif.',
 			links: [
 				{
 					label: 'Tabel Perangkat',
@@ -125,9 +125,9 @@
 					description: 'Bandingkan vendor, model, koneksi, pemulihan sesi, audio, dan kirim ujian.'
 				},
 				{
-					label: 'Daftar Pemeriksaan Rilis',
+					label: 'Arsip Rilis APK',
 					href: '/asesmen/aplikasi-siswa/release',
-					description: 'Cek kesiapan layanan sistem, APK, operator, dan bahan rilis.'
+					description: 'Cek arsip APK nonaktif/tahap lanjutan dan bahan rilis lama.'
 				}
 			]
 		}
@@ -157,7 +157,7 @@
 				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Modul 4 dari 5 · Pemantauan</p>
 				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Perangkat Siswa CBT</h1>
 				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
-					Jalur utama siswa adalah APK Flutter CBT. Browser Darurat hanya dipakai jika perangkat tidak kompatibel atau APK gagal digunakan, dengan pengawasan wajib.
+					Jalur resmi siswa tahun ini adalah Portal Ujian Web di /ujian. Flutter APK tetap disimpan sebagai arsip nonaktif/tahap lanjutan, bukan instruksi utama siswa.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-3">
@@ -174,7 +174,7 @@
 		<Card.Header class="p-4 pb-2">
 			<Card.Title class="text-base text-foreground">Pantau Ujian Dulu</Card.Title>
 			<Card.Description class="text-xs leading-5">
-				Tiga grup sederhana: APK Flutter sebagai jalur utama, panduan status saat pengawasan, dan Browser Darurat hanya sebagai fallback terbatas.
+				Tiga grup sederhana: Portal Ujian Web sebagai jalur resmi, panduan status saat pengawasan, dan arsip Flutter APK sebagai tahap lanjutan nonaktif.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="grid gap-3 p-4 lg:grid-cols-3">
@@ -245,7 +245,7 @@
 				<Card.Header>
 					<Card.Title class="text-lg text-foreground">Alur Uji Coba BYOD</Card.Title>
 					<Card.Description>
-						Gunakan urutan ini saat uji coba perangkat siswa agar hasil antar pengawas tetap konsisten.
+						Gunakan urutan ini saat uji Portal Ujian Web pada perangkat siswa agar hasil antar pengawas tetap konsisten.
 					</Card.Description>
 				</Card.Header>
 				<Card.Content>
@@ -266,21 +266,21 @@
 		<Card.Header>
 			<Card.Title class="text-lg text-foreground">Artefak Operasional</Card.Title>
 			<Card.Description>
-				Gunakan dokumen ini di daftar panduan yang sama untuk uji coba lapangan dan pemeriksaan kesesuaian layanan sistem dengan aplikasi siswa.
+				Gunakan dokumen ini di daftar panduan yang sama untuk uji coba lapangan Portal Ujian Web dan arsip APK tahap lanjutan.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="grid gap-4 lg:grid-cols-5">
 			<div class="rounded-2xl border border-border bg-muted/50 p-4">
-				<p class="text-sm font-semibold text-foreground">Panduan Cepat Operator</p>
+				<p class="text-sm font-semibold text-foreground">Panduan Cepat Operator APK (arsip)</p>
 				<p class="mt-2 text-sm leading-6 text-muted-foreground">
-					Panduan singkat pengawas saat mendampingi siswa, termasuk arti status dan langkah saat koneksi mulai terganggu.
+					Panduan lama APK untuk arsip/tahap lanjutan. Operasi tahun ini memakai Portal Ujian Web.
 				</p>
 				<p class="mt-3 font-mono text-xs text-muted-foreground">apps/mobile/OPERATOR_QUICKSTART.md</p>
 			</div>
 			<div class="rounded-2xl border border-border bg-muted/50 p-4">
-				<p class="text-sm font-semibold text-foreground">Prosedur Uji Coba BYOD</p>
+				<p class="text-sm font-semibold text-foreground">Prosedur Uji Coba BYOD APK (arsip)</p>
 				<p class="mt-2 text-sm leading-6 text-muted-foreground">
-					Prosedur lengkap untuk operator, pengawas, siswa, simulasi gangguan, dan keputusan kesiapan kirim ujian.
+					Prosedur lengkap APK dipertahankan sebagai arsip/tahap lanjutan; bukan SOP utama tahun ini.
 				</p>
 				<p class="mt-3 font-mono text-xs text-muted-foreground">apps/mobile/BYOD_TRIAL_PROCEDURE.md</p>
 			</div>
@@ -301,7 +301,7 @@
 			<div class="rounded-2xl border border-border bg-muted/50 p-4">
 				<p class="text-sm font-semibold text-foreground">Kesiapan Rilis di Admin</p>
 				<p class="mt-2 text-sm leading-6 text-muted-foreground">
-					Buka ringkasan layanan sistem, aplikasi siswa, dan daftar pemeriksaan rilis sebelum perubahan layanan ujian atau APK dinyatakan siap uji lapangan.
+					Buka ringkasan layanan sistem, Portal Ujian Web, dan arsip rilis APK sebelum perubahan layanan ujian dinyatakan siap uji lapangan.
 				</p>
 				<p class="mt-3 font-mono text-xs text-muted-foreground">/asesmen/aplikasi-siswa/release</p>
 			</div>

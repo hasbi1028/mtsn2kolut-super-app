@@ -61,9 +61,9 @@
 	];
 
 	const focusChecks = [
-		'APK bisa dipasang tanpa langkah aneh tambahan.',
-		'Masuk dengan kode ujian berhasil pada koneksi yang dipakai siswa.',
-		'Pemulihan sesi tetap berjalan setelah aplikasi ditutup lalu dibuka lagi.',
+		'Portal Ujian Web /ujian bisa dibuka tanpa instalasi APK.',
+		'Masuk ujian web berhasil pada koneksi yang dipakai siswa.',
+		'Pemulihan/sinkron sesi web tetap berjalan setelah tab/browser terganggu sesuai kemampuan browser.',
 		'Status Waspada dan Menurun muncul sesuai simulasi gangguan.',
 		'Kirim ujian hanya dilakukan saat koneksi kembali sehat.'
 	];
@@ -98,8 +98,8 @@
 				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Perangkat & Kesiapan · Pemantauan</p>
 				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Perbandingan Perangkat BYOD</h1>
 				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
-					Bagian pendukung setelah pemantauan hari-H. Gunakan untuk membaca kesiapan perangkat siswa:
-					pemasangan, masuk ujian, pemulihan sesi, media, koneksi, dan kirim ujian.
+					Bagian pendukung setelah pemantauan hari-H. Runtime resmi siswa tahun ini adalah Portal Ujian Web;
+					gunakan halaman ini untuk membaca kesiapan browser/perangkat, media, koneksi, dan kirim ujian. APK Flutter hanya arsip nonaktif/tahap lanjutan.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-3">
@@ -122,7 +122,7 @@
 			</div>
 			<div>
 				<p class="text-sm font-semibold text-primary">Perangkat & Kesiapan</p>
-				<p class="mt-1 text-sm leading-6 text-muted-foreground">Halaman ini hanya untuk pembanding perangkat dan catatan kesiapan teknis.</p>
+				<p class="mt-1 text-sm leading-6 text-muted-foreground">Halaman ini hanya untuk pembanding perangkat/browser dan catatan teknis; APK Flutter nonaktif tahun ini.</p>
 			</div>
 		</Card.Content>
 	</Card.Root>
@@ -181,7 +181,7 @@
 				{/snippet}
 			</MicroActionTable>
 			<p class="text-xs leading-5 text-muted-foreground">
-				Format sumber resminya tetap ada di <span class="font-mono">apps/mobile/DEVICE_TEST_MATRIX.md</span>.
+				Format sumber APK lama tetap ada sebagai arsip di <span class="font-mono">apps/mobile/DEVICE_TEST_MATRIX.md</span>.
 				Halaman ini disediakan agar pengawas dan operator bisa membaca struktur penilaian tanpa keluar dari web admin.
 			</p>
 		</div>
@@ -191,7 +191,7 @@
 				<Card.Header>
 					<Card.Title class="text-lg text-foreground">Fokus Uji Minimal</Card.Title>
 					<Card.Description>
-						Lima poin ini yang paling penting saat membandingkan perangkat siswa sebelum masuk uji yang lebih besar.
+						Lima poin ini yang paling penting saat membandingkan perangkat/browser siswa untuk Portal Ujian Web.
 					</Card.Description>
 				</Card.Header>
 				<Card.Content>

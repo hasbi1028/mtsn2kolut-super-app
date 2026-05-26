@@ -188,7 +188,19 @@
 		if (room.proctor_count === 0) issues.push('pengawas belum ada');
 		if (room.missing_seat_count > 0) issues.push(`${room.missing_seat_count} meja belum lengkap`);
 		if (room.suspicious_count > 0) issues.push(`${room.suspicious_count} peserta atensi`);
-		return issues.length > 0 ? issues.join(', ') : 'Siap dipantau';
+		return issues.length > 0 ? issues.join(', ') : 'Hijau · Aman';
+	}
+
+	function simpleSignalLabel(room: ProctorRoom) {
+		if (room.suspicious_count > 0) return 'Merah · Butuh bantuan';
+		if (room.missing_seat_count > 0 || room.proctor_count === 0 || room.online_count < room.participant_count) return 'Kuning · Perlu dicek';
+		return 'Hijau · Aman';
+	}
+
+	function simpleSignalClass(room: ProctorRoom) {
+		if (room.suspicious_count > 0) return 'border-destructive/30 bg-destructive/10 text-destructive';
+		if (room.missing_seat_count > 0 || room.proctor_count === 0 || room.online_count < room.participant_count) return 'border-warning/30 bg-warning/10 text-warning';
+		return 'border-primary/20 bg-primary/10 text-primary';
 	}
 
 	function attentionClass(room: ProctorRoom) {
@@ -238,9 +250,9 @@
 			<section class="flex flex-col gap-4 border-b border-primary/20 pb-5 lg:flex-row lg:items-end lg:justify-between">
 				<div class="max-w-3xl space-y-2">
 					<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Asesmen CBT / Pengawasan Ruang</p>
-					<h1 class="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Pengawasan Ruang</h1>
+					<h1 class="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Portal Pengawasan</h1>
 					<p class="text-sm leading-6 text-muted-foreground">
-						Satu layar untuk menemukan ruang ujian yang perlu dipantau, membuka panel langsung, dan kembali ke Panduan BYOD saat butuh panduan status.
+						Mode Sederhana/Hari-H untuk pengawas: pilih ruang, tekan tombol besar Mulai Ujian, pantau label hijau/kuning/merah, dan gunakan Hubungi Admin bila butuh bantuan.
 					</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
@@ -316,6 +328,7 @@
 							<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 								<div class="min-w-0 space-y-2">
 									<div class="flex flex-wrap items-center gap-2">
+										<Badge variant="outline" class={simpleSignalClass(room)}>{simpleSignalLabel(room)}</Badge>
 										<Badge variant="outline" class={statusClass(room.session_status)}>{statusLabel(room.session_status)}</Badge>
 										<Badge variant="outline" class={attentionClass(room)}>{readinessText(room)}</Badge>
 										{#if room.actor_role}
@@ -361,9 +374,12 @@
 							</div>
 
 							<div class="mt-4 flex flex-wrap gap-2">
-								<Button href={resolve(`/asesmen/sesi/${room.session_id}/rooms/${room.id}/proctoring`)}>
+								<Button class="h-12 px-5 text-base font-bold" href={resolve(`/asesmen/sesi/${room.session_id}/rooms/${room.id}/proctoring`)}>
 									<ActivityIcon class="mr-2 size-4" />
-									Panel
+									Mulai Ujian
+								</Button>
+								<Button href={resolve(`/asesmen/sesi/${room.session_id}/rooms/${room.id}/proctoring`)} variant="outline">
+									Panel Rinci
 								</Button>
 								<Button href={resolve(`/asesmen/sesi/${room.session_id}/rooms/${room.id}/print-pack`)} variant="outline">
 									<PrinterIcon class="mr-2 size-4" />

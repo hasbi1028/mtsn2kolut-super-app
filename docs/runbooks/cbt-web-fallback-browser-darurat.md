@@ -1,42 +1,43 @@
-# SOP CBT Web/PWA Fallback — Browser Darurat
+# SOP Portal Ujian Web — runtime resmi tahun ini
 
-Status: implementasi fitur, belum deploy produksi.
+Status: copy operasional web-first. Route `/ujian` diposisikan sebagai **Portal Ujian Web** resmi untuk tahun ini; istilah `Browser Darurat` hanya tersisa sebagai nama legacy/internal pada kontrak lama.
 
 ## Prinsip
 
-- Flutter Android/Windows tetap jalur utama ujian resmi.
-- `/ujian` adalah jalur cadangan darurat, bukan pengganti aplikasi native.
-- Default OFF per ruang ujian.
-- Hanya operator/admin/pengawas berwenang yang boleh mengaktifkan dari panel pengawas ruang.
-- Wajib alasan aktivasi/nonaktivasi agar audit ruang jelas.
+- `/ujian` adalah jalur operasional resmi siswa tahun ini.
+- Portal Ujian Web dipakai dengan pengawasan ruang, kartu/QR/PIN saat rollout siap, dan panel pengawas web.
+- Flutter Android/Windows disimpan sebagai source/artifact nonaktif untuk arsip dan tahap lanjutan; jangan jadikan instruksi utama siswa tahun ini.
+- Jika toggle lama `allow_web_fallback` masih dipakai, anggap sebagai kontrol kompatibilitas internal untuk mengizinkan Portal Ujian Web per ruang.
+- Hanya operator/admin/pengawas berwenang yang boleh membuka/menutup akses web dari panel pengawas ruang bila kontrol ruang masih aktif.
+- Wajib alasan aktivasi/nonaktivasi agar audit ruang jelas selama masa transisi.
 - Anti-cheat browser hanya best-effort: pindah tab, kehilangan fokus, keluar fullscreen, dan koneksi buruk dicatat sebagai telemetry; tidak diklaim setara aplikasi native.
 
 ## Kapan dipakai
 
-Gunakan Browser Darurat hanya untuk:
+Gunakan Portal Ujian Web untuk:
 
-1. Perangkat peserta tidak bisa memasang/menjalankan APK CBT.
-2. Build Windows/lab bermasalah pada hari-H.
-3. Perangkat cadangan hanya memiliki browser modern.
+1. Ujian resmi tahun ini melalui web sekolah.
+2. Perangkat siswa/lab yang memiliki browser modern.
+3. Alur kartu/QR/PIN siswa dan portal pengawasan web.
 4. Simulasi/pilot terbatas dengan pengawasan langsung.
 
-Jangan gunakan untuk ujian resmi besar sebagai jalur default.
+Jangan mengarahkan siswa memasang Flutter APK sebagai default tahun ini kecuali ada keputusan operasional baru.
 
 ## Alur operator/pengawas
 
 1. Buka panel pengawas ruang: `/asesmen/sesi/{session_id}/rooms/{room_id}/proctoring`.
 2. Pastikan peserta, ruang, dan token ruang benar.
-3. Pada kartu `Browser Darurat /ujian`, klik `Aktifkan Darurat`.
-4. Isi alasan, contoh: `APK gagal dibuka di perangkat peserta; disetujui pengawas ruang`.
-5. Berikan URL `/ujian`, token ujian peserta, dan token ruang kepada peserta bermasalah saja.
-6. Awasi peserta secara fisik. Panel menandai peserta `Browser Darurat` lewat `client_type = web_fallback`.
+3. Pada kartu kontrol web lama (`Browser Darurat /ujian` bila label belum diganti), aktifkan akses Portal Ujian Web untuk ruang sesuai SOP.
+4. Isi alasan, contoh: `Portal Ujian Web dibuka untuk ruang sesuai runtime resmi tahun ini`.
+5. Berikan URL `/ujian` dan credential yang berlaku (QR+PIN/kartu ujian; token lama hanya saat transisi) kepada peserta.
+6. Awasi peserta secara fisik. Jika panel masih menandai `client_type = web_fallback`, baca sebagai peserta Portal Ujian Web.
 7. Setelah kondisi normal atau ujian selesai, klik `Nonaktifkan` dan isi alasan penutupan.
 
 ## Alur peserta
 
-1. Buka `/ujian` hanya atas arahan pengawas.
-2. Masukkan token ujian dan token ruang.
-3. Klik `Masuk Mode Browser Darurat`.
+1. Buka `/ujian` atas arahan pengawas atau dari QR kartu ujian.
+2. Masukkan credential yang berlaku untuk sesi (QR+PIN/kartu ujian saat tersedia; token ujian/token ruang hanya pada masa transisi).
+3. Klik tombol masuk Portal Ujian Web.
 4. Klik `Masuk Fullscreen` bila browser mengizinkan.
 5. Jawab soal. Jika koneksi putus, jangan tutup browser; jawaban tertunda disimpan pada `sessionStorage` browser dan dikirim ulang otomatis.
 6. Submit hanya saat indikator jawaban lokal/pending kosong.
@@ -62,7 +63,7 @@ Jangan gunakan untuk ujian resmi besar sebagai jalur default.
 
 1. Nonaktifkan Browser Darurat dari panel ruang.
 2. Jika perlu darurat backend: set `allow_web_fallback = false` untuk ruang terkait melalui prosedur DBA/operator yang disetujui.
-3. Arahkan peserta kembali ke Flutter Android/Windows.
+3. Arahkan peserta ke perangkat/browser cadangan atau prosedur manual yang disetujui; Flutter Android/Windows tetap opsi tahap lanjutan/nonaktif kecuali diputuskan ulang.
 4. Catat alasan rollback pada berita acara ruang.
 
 ## Acceptance check

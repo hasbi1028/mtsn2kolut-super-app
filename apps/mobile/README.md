@@ -1,10 +1,10 @@
-# Flutter CBT Client
+# Flutter CBT Client — arsip/tahap lanjutan
 
 Flutter Android client untuk peserta CBT MTs Negeri 2 Kolaka Utara.
 
-Status: sinkron per 2026-05-03. Aplikasi ini adalah client/APK BYOD, bukan service VPS.
+Status: sinkron per 2026-05-03; copy operasional diperbarui untuk web-first. Aplikasi ini adalah client/APK BYOD, bukan service VPS. **Untuk tahun ini runtime resmi siswa adalah Portal Ujian Web (`/ujian`); Flutter APK disimpan nonaktif sebagai source/artifact arsip, demo teknis, dan tahap lanjutan.**
 
-## Fokus MVP
+## Fokus MVP historis / tahap lanjutan
 
 - login token peserta ke backend Go, termasuk token hex 32 karakter dari backend produksi
 - render soal pilihan ganda dan uraian
@@ -52,7 +52,7 @@ flutter run -d linux --dart-define=API_BASE_URL=http://127.0.0.1:8080
 
 Catatan:
 
-- target utama produksi tetap Android BYOD
+- target produksi tahun ini adalah Portal Ujian Web; Android BYOD APK tidak aktif sebagai jalur resmi
 - Linux desktop hanya untuk preview lokal, demo operator, dan debugging cepat
 - desktop Linux membutuhkan dependency sistem GStreamer untuk plugin audio
 
@@ -65,16 +65,16 @@ flutter analyze
 flutter test
 ```
 
-## Build APK Internal
+## Build APK Internal / arsip
 
-Build ini ditujukan untuk uji coba internal BYOD, bukan distribusi Play Store.
+Build ini ditujukan untuk uji coba internal BYOD, arsip, atau tahap lanjutan, bukan distribusi Play Store dan bukan instruksi siswa untuk ujian resmi tahun ini.
 
 Release signing tidak menyimpan rahasia di repo. Siapkan salah satu opsi berikut sebelum build rilis resmi:
 
 - `android/key.properties` lokal yang sudah diabaikan Git, berisi `storeFile`, `storePassword`, `keyAlias`, dan `keyPassword`
 - environment variable `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, dan `ANDROID_KEY_PASSWORD`
 
-Jika konfigurasi signing tidak ada, Gradle hanya memakai debug signing agar build lokal tidak rusak. APK seperti itu tidak boleh dipakai untuk distribusi ujian resmi.
+Jika konfigurasi signing tidak ada, Gradle hanya memakai debug signing agar build lokal tidak rusak. APK seperti itu tidak boleh dipakai untuk distribusi ujian resmi. Pada tahun ini, distribusi operasional siswa diarahkan ke Portal Ujian Web.
 
 ```bash
 cd apps/mobile
@@ -87,7 +87,9 @@ Hasil build:
 build/app/outputs/flutter-apk/app-release.apk
 ```
 
-## Distribusi Internal ke Siswa/Pengawas
+## Distribusi Internal ke Siswa/Pengawas — nonaktif tahun ini
+
+Bagian ini dipertahankan sebagai arsip prosedur lama/tahap lanjutan. Untuk operasi tahun ini, arahkan siswa dan pengawas ke Portal Ujian Web (`/ujian`) dan portal pengawasan web, bukan instalasi APK.
 
 Langkah yang disarankan:
 

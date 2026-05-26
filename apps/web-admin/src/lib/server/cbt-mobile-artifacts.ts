@@ -10,35 +10,35 @@ const NO_STORE = 'no-store, max-age=0';
 const CBT_ARTIFACTS = [
 	{
 		fileName: 'cbt-flutter-universal-release.apk',
-		label: 'APK Universal Release',
-		description: 'Pilihan termudah untuk panitia: cocok untuk arm64, armeabi-v7a, dan x86_64; ukuran lebih besar.',
+		label: 'Arsip APK Universal Release (nonaktif)',
+		description: 'Artifact Flutter tahap lanjutan/nonaktif; cocok untuk arm64, armeabi-v7a, dan x86_64; bukan jalur resmi ujian tahun ini.',
 		variant: 'release',
 		abi: 'universal',
-		recommendedFor: 'Distribusi umum ketika arsitektur HP siswa belum diketahui.'
+		recommendedFor: 'Arsip/verifikasi atau uji teknis internal; siswa diarahkan ke Portal Ujian Web.'
 	},
 	{
 		fileName: 'cbt-flutter-arm64-v8a-release.apk',
-		label: 'APK arm64-v8a Release',
-		description: 'APK release lebih kecil untuk mayoritas HP Android 64-bit modern.',
+		label: 'Arsip APK arm64-v8a Release (nonaktif)',
+		description: 'Artifact Flutter tahap lanjutan/nonaktif untuk mayoritas HP Android 64-bit modern; bukan jalur resmi ujian tahun ini.',
 		variant: 'release',
 		abi: 'arm64-v8a',
-		recommendedFor: 'HP Android baru/umum yang mendukung 64-bit.'
+		recommendedFor: 'Arsip/verifikasi atau uji teknis internal pada HP Android 64-bit.'
 	},
 	{
 		fileName: 'cbt-flutter-armeabi-v7a-release.apk',
-		label: 'APK armeabi-v7a Release',
-		description: 'APK release untuk sebagian HP lama 32-bit yang tidak bisa memasang arm64.',
+		label: 'Arsip APK armeabi-v7a Release (nonaktif)',
+		description: 'Artifact Flutter tahap lanjutan/nonaktif untuk sebagian HP lama 32-bit yang tidak bisa memasang arm64.',
 		variant: 'release',
 		abi: 'armeabi-v7a',
-		recommendedFor: 'HP lama 32-bit; gunakan jika universal/arm64 tidak sesuai.'
+		recommendedFor: 'Arsip/verifikasi atau uji teknis internal pada HP lama 32-bit.'
 	},
 	{
 		fileName: 'cbt-flutter-demo-debug.apk',
-		label: 'APK DEMO Debug',
+		label: 'Arsip APK DEMO Debug (nonaktif)',
 		description: 'Build khusus uji manual cepat dengan tombol Masuk Mode DEMO; tidak untuk ujian resmi.',
 		variant: 'demo-debug',
 		abi: 'universal',
-		recommendedFor: 'Tes manual UI/alur soal tanpa membuat simulasi atau gladi.'
+		recommendedFor: 'Demo teknis tahap lanjutan; operasi tahun ini memakai Portal Ujian Web.'
 	},
 	{
 		fileName: 'SHA256SUMS.txt',
@@ -110,9 +110,9 @@ export async function listCbtMobileArtifacts(event: RequestEvent) {
 	}
 
 	return {
-		title: 'Download Center APK CBT',
-		primaryClient: 'Flutter APK',
-		fallbackClient: 'Browser Darurat /ujian',
+		title: 'Arsip Download APK CBT (nonaktif)',
+		primaryClient: 'Portal Ujian Web /ujian',
+		fallbackClient: 'Flutter APK arsip/tahap lanjutan',
 		demoWebUrl: '/ujian?demo=1',
 		artifactDir: CBT_RELEASE_DIR,
 		generatedAt: new Date().toISOString(),

@@ -60,20 +60,20 @@
 	];
 
 	const mobileChecks = [
-		'Pemeriksaan kode aplikasi siswa lulus.',
-		'Tes aplikasi siswa lulus.',
-		'Masuk dengan kode ujian berhasil pada APK rilis terbaru.',
-		'Pemulihan sesi masih berjalan pada perangkat uji utama.',
-		'Kirim ujian berhasil saat koneksi sehat.',
-		'Status `Waspada` dan `Menurun` masih muncul sesuai simulasi gangguan.'
+		'Portal Ujian Web /ujian tetap menjadi jalur resmi siswa tahun ini.',
+		'Pemeriksaan kode APK hanya dilakukan untuk arsip/tahap lanjutan.',
+		'Tes APK tidak dipakai sebagai syarat membuka ujian resmi tahun ini.',
+		'Artifact APK yang tersimpan diberi label nonaktif/arsip.',
+		'Jika APK diuji internal, hasilnya dicatat terpisah dari SOP hari-H Portal Web.',
+		'Status `Waspada` dan `Menurun` tetap divalidasi pada Portal Ujian Web sesuai simulasi gangguan.'
 	];
 
 	const rolloutChecks = [
-		'APK rilis sudah dibagikan lewat kanal resmi sekolah.',
+		'Siswa diarahkan ke Portal Ujian Web /ujian, bukan instalasi APK.',
 		'Pengawas sudah membaca Panduan Cepat Operator.',
 		'Perangkat uji tercatat di Tabel Uji Perangkat.',
 		'Prosedur uji coba BYOD sudah diikuti untuk gelombang uji yang akan berjalan.',
-		'Tidak ada perubahan layanan ujian yang belum diperiksa terhadap kesesuaian aplikasi siswa.'
+		'Tidak ada perubahan layanan ujian yang belum diperiksa terhadap kesesuaian Portal Ujian Web.'
 	];
 
 	const releaseArtifacts = [
@@ -90,17 +90,17 @@
 		{
 			title: 'Daftar Pemeriksaan Rilis',
 			path: 'apps/mobile/RELEASE_CHECKLIST.md',
-			description: 'Daftar pemeriksaan operasional rilis, verifikasi, dan distribusi APK internal.'
+			description: 'Arsip daftar pemeriksaan operasional rilis, verifikasi, dan distribusi APK internal nonaktif.'
 		},
 		{
-			title: 'Pusat Rilis APK Siswa',
+			title: 'Pusat Arsip APK Siswa',
 			path: 'docs/mobile-apk-release-center.md',
-			description: 'Panduan menerbitkan APK terbaru ke alamat layanan sistem tanpa membangun ulang web.'
+			description: 'Panduan menyimpan/publish artifact APK sebagai arsip nonaktif tanpa membangun ulang web.'
 		},
 		{
 			title: 'Panduan Cepat Operator',
 			path: 'apps/mobile/OPERATOR_QUICKSTART.md',
-			description: 'Panduan singkat pengawas saat siswa mulai ujian dan ketika koneksi mulai bermasalah.'
+			description: 'Arsip panduan APK lama; operasi tahun ini memakai Portal Ujian Web.'
 		}
 	];
 
@@ -165,9 +165,9 @@
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-3">
 				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Perangkat & Kesiapan · Pemantauan</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Daftar Pemeriksaan Rilis Aplikasi Siswa BYOD</h1>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Arsip Rilis APK Aplikasi Siswa</h1>
 				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
-					Bagian pendukung sebelum layanan ujian atau APK aplikasi siswa dipakai di gelombang berikutnya.
+					Portal Ujian Web /ujian adalah runtime resmi siswa tahun ini. APK Flutter tetap tersedia di sini sebagai arsip nonaktif/tahap lanjutan.
 					Pemantauan hari-H tetap dimulai dari sesi aktif dan panel ruang.
 				</p>
 			</div>
@@ -184,13 +184,13 @@
 			<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
 				<div>
 					<div class="flex flex-wrap items-center gap-2">
-						<Badge class="border-primary/20 bg-primary/10 text-primary">APK Resmi</Badge>
-						<Badge class="border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">Rilis utama</Badge>
+						<Badge class="border-primary/20 bg-primary/10 text-primary">Arsip APK</Badge>
+						<Badge class="border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300">Nonaktif tahun ini</Badge>
 						<Badge class="border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300">Pengawasan aktif</Badge>
 					</div>
-					<Card.Title class="mt-3 text-xl text-foreground">Unduh APK Aplikasi Siswa Terbaru</Card.Title>
+					<Card.Title class="mt-3 text-xl text-foreground">Arsip Unduhan APK Aplikasi Siswa</Card.Title>
 					<Card.Description>
-						Data diambil otomatis dari data rilis layanan sistem. Jika APK baru diterbitkan, info dan tautan ini ikut berubah tanpa edit halaman.
+						Data diambil otomatis dari data rilis layanan sistem. Tautan dipertahankan untuk arsip/verifikasi; siswa tahun ini diarahkan ke Portal Ujian Web.
 					</Card.Description>
 				</div>
 				{#if release}
@@ -229,24 +229,24 @@
 					</div>
 
 					<div class="flex flex-wrap gap-3">
-						<Button href={release.download_url} class="h-10" download>Unduh APK Terbaru</Button>
+						<Button href={release.download_url} class="h-10" download>Unduh Arsip APK</Button>
 						<Button href={release.checksum_url} class="h-10" variant="outline" download>Unduh Data Pemeriksaan</Button>
 						<Button class="h-10" variant="outline" onclick={copyDownloadLink}>{copied ? 'Tautan Tersalin' : 'Salin Tautan'}</Button>
 					</div>
 
 					<div class="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-900 dark:text-amber-100">
-						<p class="font-semibold">Sumber resmi APK</p>
-						<p>Pasang hanya dari domain <span class="font-mono">{release.server_url}</span>. Jangan gunakan APK dari sumber lain.</p>
+						<p class="font-semibold">Arsip APK nonaktif</p>
+						<p>Portal Ujian Web adalah jalur resmi tahun ini. Artifact APK hanya boleh diverifikasi dari domain <span class="font-mono">{release.server_url}</span>; jangan jadikan instruksi siswa tanpa keputusan baru.</p>
 					</div>
 				</div>
 				<div class="flex flex-col items-center justify-center rounded-2xl border border-border bg-muted/30 p-4 text-center">
 					<img src={release.qr_url} alt="QR unduh APK CBT Mobile" class="h-44 w-44 rounded-xl bg-white p-2" />
-					<p class="mt-3 text-sm font-semibold text-foreground">Pindai untuk unduh</p>
+					<p class="mt-3 text-sm font-semibold text-foreground">QR arsip APK</p>
 					<p class="mt-1 break-all text-xs leading-5 text-muted-foreground">{release.absolute_download_url}</p>
 				</div>
 			{:else}
 				<div class="lg:col-span-2 rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-sm leading-6 text-muted-foreground">
-					<p class="font-semibold text-foreground">Data rilis APK belum terbaca.</p>
+					<p class="font-semibold text-foreground">Data arsip APK belum terbaca.</p>
 					<p class="mt-1">{releaseError || 'Memuat data rilis terbaru dari layanan sistem...'}</p>
 				</div>
 			{/if}
@@ -259,13 +259,13 @@
 			<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
 				<div>
 					<div class="flex flex-wrap items-center gap-2">
-						<Badge class="border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">Download Center</Badge>
-						<Badge class="border-primary/20 bg-primary/10 text-primary">Flutter Utama</Badge>
-						<Badge class="border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300">Demo & Browser Darurat</Badge>
+						<Badge class="border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">Arsip Download</Badge>
+						<Badge class="border-primary/20 bg-primary/10 text-primary">Portal Web Resmi</Badge>
+						<Badge class="border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300">Flutter Nonaktif</Badge>
 					</div>
-					<Card.Title class="mt-3 text-xl text-foreground">Download Center APK CBT</Card.Title>
+					<Card.Title class="mt-3 text-xl text-foreground">Arsip Download APK CBT</Card.Title>
 					<Card.Description>
-						Semua hasil build CBT terbaru disajikan dari server web-admin: universal, ABI spesifik, APK DEMO, dan checksum.
+						Artifact Flutter disajikan dari server web-admin sebagai arsip nonaktif: universal, ABI spesifik, APK DEMO, dan checksum. Operasi siswa tahun ini memakai Portal Ujian Web.
 					</Card.Description>
 				</div>
 				<Button href="/ujian?demo=1" variant="outline">Buka Demo Browser</Button>
@@ -309,11 +309,11 @@
 				</div>
 				<div class="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-900 dark:text-amber-100">
 					<p class="font-semibold">Catatan distribusi</p>
-					<p>Gunakan APK release untuk ujian resmi. APK DEMO debug hanya untuk tes manual cepat; jangan dibagikan sebagai APK ujian resmi.</p>
+					<p>Jangan gunakan APK sebagai jalur resmi tahun ini. Gunakan Portal Ujian Web /ujian; APK release dan APK DEMO hanya untuk arsip, verifikasi, atau tahap lanjutan.</p>
 				</div>
 			{:else}
 				<div class="rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-sm leading-6 text-muted-foreground">
-					<p class="font-semibold text-foreground">Artifact APK CBT belum terbaca.</p>
+					<p class="font-semibold text-foreground">Artifact arsip APK CBT belum terbaca.</p>
 					<p class="mt-1">{cbtArtifactsError || 'Memuat daftar artifact APK CBT dari server...'}</p>
 				</div>
 			{/if}
@@ -332,7 +332,7 @@
 			</div>
 			<div>
 				<p class="text-sm font-semibold text-primary">Perangkat & Kesiapan</p>
-				<p class="mt-1 text-sm leading-6 text-muted-foreground">Halaman ini fokus pada kesiapan layanan sistem, APK, operator, dan bahan rilis.</p>
+				<p class="mt-1 text-sm leading-6 text-muted-foreground">Halaman ini fokus pada arsip APK nonaktif, operator, dan bahan rilis lama; runtime resmi adalah Portal Ujian Web.</p>
 			</div>
 		</Card.Content>
 	</Card.Root>
@@ -359,9 +359,9 @@
 
 		<Card.Root class="border-border shadow-sm">
 			<Card.Header>
-				<Card.Title class="text-lg text-foreground">Pemeriksaan APK</Card.Title>
+				<Card.Title class="text-lg text-foreground">Pemeriksaan APK Arsip</Card.Title>
 				<Card.Description>
-					Pastikan aplikasi siswa dan uji perangkat inti masih sehat sebelum APK diteruskan ke lapangan.
+					Pastikan artifact APK hanya diperlakukan sebagai arsip/nonaktif atau tahap lanjutan, bukan rute hari-H tahun ini.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content>
@@ -400,7 +400,7 @@
 		<Card.Header>
 			<Card.Title class="text-lg text-foreground">Artefak Rilis yang Harus Dicek</Card.Title>
 			<Card.Description>
-				Buka dokumen-dokumen ini sebelum menyatakan perubahan layanan sistem atau APK aplikasi siswa aman untuk gelombang BYOD berikutnya.
+				Buka dokumen-dokumen ini sebelum menyatakan perubahan layanan sistem aman untuk Portal Ujian Web atau sebelum mengarsipkan artifact APK tahap lanjutan.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="grid gap-4 lg:grid-cols-2">
