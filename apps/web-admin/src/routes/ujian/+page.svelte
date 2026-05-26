@@ -53,6 +53,8 @@
 	function friendlyError(error: unknown) {
 		const message = error instanceof Error ? error.message : String(error || '');
 		const lower = message.toLowerCase();
+		if (lower.includes('terikat perangkat') || lower.includes('device mismatch') || lower.includes('another device')) return 'Akun ujian sudah terikat perangkat lain. Minta pengawas/admin membuka ulang akses peserta.';
+		if (lower.includes('terkunci') || lower.includes('locked')) return 'Akses ujian terkunci oleh kebijakan pengawasan. Silakan panggil pengawas.';
 		if (lower.includes('pin') || lower.includes('invalid') || lower.includes('token') || lower.includes('unauthorized')) return 'Kartu ujian tidak cocok atau PIN salah. Silakan panggil pengawas.';
 		if (lower.includes('not active') || lower.includes('belum') || lower.includes('session')) return 'Ujian belum dibuka oleh pengawas. Silakan tunggu di ruangan.';
 		if (lower.includes('network') || lower.includes('fetch') || lower.includes('502')) return 'Koneksi ke layanan ujian sedang bermasalah. Coba lagi atau panggil pengawas.';

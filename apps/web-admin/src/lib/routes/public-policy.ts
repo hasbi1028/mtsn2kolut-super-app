@@ -13,6 +13,7 @@ const PUBLIC_API_EXACT_PATHS = [
 
 const PUBLIC_API_PREFIXES = [
 	'/api/exam/',
+	'/api/cbt-portal/',
 	'/api/branding/file/',
 	'/releases/mobile/',
 	'/api/public/site/pages/',

@@ -16,6 +16,7 @@ describe('route access helpers', () => {
 	it('matches public paths and prefixes', () => {
 		expect(isPublicPath('/')).toBe(true);
 		expect(isPublicPath('/berita/arsip-kegiatan')).toBe(true);
+		expect(isPublicPath('/api/cbt-portal/participants/participant-1/start')).toBe(true);
 		expect(isPublicPath('/beritaship')).toBe(false);
 		expect(isPublicPath('/dashboard')).toBe(false);
 	});
