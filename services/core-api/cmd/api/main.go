@@ -237,6 +237,10 @@ func main() {
 	r.With(cbtPortalLoginRateLimit).Post("/api/cbt-portal/login", cbtPortalH.Login)
 	r.Get("/api/cbt-portal/schedule", cbtPortalH.Schedule)
 	r.Post("/api/cbt-portal/participants/{participantID}/start", cbtPortalH.Start)
+	r.Get("/api/cbt-portal/participants/{participantID}/commands", cbtPortalH.Commands)
+	r.Post("/api/cbt-portal/participants/{participantID}/commands/{cid}/ack", cbtPortalH.AcknowledgeCommand)
+	r.Post("/api/cbt-portal/participants/{participantID}/heartbeat", cbtPortalH.Heartbeat)
+	r.Post("/api/cbt-portal/participants/{participantID}/event", cbtPortalH.Event)
 	r.Post("/api/cbt-portal/participants/{participantID}/answer", cbtPortalH.Answer)
 	r.Post("/api/cbt-portal/participants/{participantID}/submit", cbtPortalH.Submit)
 	r.With(examRuntimeRateLimit).Group(func(r chi.Router) {

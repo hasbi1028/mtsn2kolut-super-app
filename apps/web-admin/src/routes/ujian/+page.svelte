@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
+	import { onDestroy } from 'svelte';
 
 	type Question = {
 		id: string;
@@ -41,6 +42,8 @@
 	let pendingAnswers = $state<Record<string, string>>({});
 	let submitted = $state(false);
 	let telemetry = $state<string[]>([]);
+	let participantPollInterval: ReturnType<typeof setInterval> | undefined;
+	let seenCommandIds = $state(new Set<string>());
 
 	let queryCard = $derived($page.url.searchParams.get('card') ?? $page.url.searchParams.get('token') ?? '');
 	let questions = $derived(payload?.questions ?? []);
@@ -79,6 +82,7 @@
 		activeParticipantId = '';
 		portalAuthToken = '';
 		authenticatedByCard = false;
+		stopParticipantRuntimePolling();
 	}
 
 	function normalizePortalPayload(body: unknown): ExamPayload {
@@ -200,6 +204,7 @@
 				if (response.status === 403 || response.status === 423 || message.toLowerCase().includes('belum')) {
 					portalStep = 'waiting';
 					addTelemetry('Identitas dikonfirmasi — menunggu pengawas membuka ujian');
+					startParticipantRuntimePolling();
 					return;
 				}
 				throw new Error(message);
@@ -207,11 +212,84 @@
 			payload = normalizePortalPayload(body);
 			portalStep = 'exam';
 			addTelemetry('Identitas dikonfirmasi — ujian dibuka');
+			startParticipantRuntimePolling();
 		} catch (error) {
 			errorMessage = friendlyError(error);
 		} finally {
 			loading = false;
 		}
+	}
+
+
+	function portalAuthHeaders() {
+		return { 'content-type': 'application/json', authorization: `Bearer ${portalAuthToken}` };
+	}
+
+	function startParticipantRuntimePolling() {
+		if (!browser || !authenticatedByCard || !portalAuthToken || !activeParticipantId) return;
+		stopParticipantRuntimePolling();
+		void sendPortalHeartbeat();
+		void pollPortalCommands();
+		participantPollInterval = setInterval(() => {
+			void sendPortalHeartbeat();
+			void pollPortalCommands();
+		}, 5000);
+	}
+
+	function stopParticipantRuntimePolling() {
+		if (participantPollInterval) clearInterval(participantPollInterval);
+		participantPollInterval = undefined;
+	}
+
+	async function sendPortalHeartbeat() {
+		if (!authenticatedByCard || !portalAuthToken || !activeParticipantId) return;
+		await fetch(`/api/cbt-portal/participants/${encodeURIComponent(activeParticipantId)}/heartbeat`, {
+			method: 'POST',
+			headers: portalAuthHeaders(),
+			body: '{}'
+		}).catch(() => undefined);
+	}
+
+	async function reportPortalEvent(eventType: string, data: Record<string, unknown> = {}) {
+		if (!authenticatedByCard || !portalAuthToken || !activeParticipantId) return;
+		await fetch(`/api/cbt-portal/participants/${encodeURIComponent(activeParticipantId)}/event`, {
+			method: 'POST',
+			headers: portalAuthHeaders(),
+			body: JSON.stringify({ event_type: eventType, data: { ...data, client_time: new Date().toISOString(), portal_step: portalStep } })
+		}).catch(() => undefined);
+	}
+
+	async function pollPortalCommands() {
+		if (!authenticatedByCard || !portalAuthToken || !activeParticipantId) return;
+		try {
+			const response = await fetch(`/api/cbt-portal/participants/${encodeURIComponent(activeParticipantId)}/commands`, {
+				headers: { authorization: `Bearer ${portalAuthToken}` }
+			});
+			const body = await response.json().catch(() => ({}));
+			if (!response.ok) return;
+			const commands = ((body.data?.commands ?? body.commands ?? []) as Array<{ id: string; message?: string; type?: string; issued_at?: string }>);
+			const known = new Set(seenCommandIds);
+			for (const command of commands) {
+				if (!command.id || known.has(command.id)) continue;
+				known.add(command.id);
+				const message = command.message || 'Ada instruksi dari pengawas. Ikuti arahan pengawas ruang.';
+				addTelemetry(`Instruksi pengawas diterima — ${message}`);
+				window.alert(`Instruksi Pengawas:\n\n${message}`);
+				void acknowledgePortalCommand(command.id);
+			}
+			seenCommandIds = known;
+		} catch {
+			// polling command bersifat tambahan; jangan ganggu ujian.
+		}
+	}
+
+	async function acknowledgePortalCommand(commandId: string) {
+		if (!authenticatedByCard || !portalAuthToken || !activeParticipantId) return;
+		await fetch(`/api/cbt-portal/participants/${encodeURIComponent(activeParticipantId)}/commands/${encodeURIComponent(commandId)}/ack`, {
+			method: 'POST',
+			headers: portalAuthHeaders(),
+			body: JSON.stringify({ status: 'seen' })
+		}).catch(() => undefined);
 	}
 
 	async function saveAnswer(questionId: string, answer: string) {
@@ -261,6 +339,7 @@
 				});
 			if (!response.ok) throw new Error('Ujian gagal dikumpulkan');
 			submitted = true;
+			stopParticipantRuntimePolling();
 			addTelemetry('Ujian dikumpulkan');
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Submit gagal';
@@ -277,21 +356,26 @@
 	$effect(() => {
 		if (!browser) return;
 		deviceFingerprint = deviceFingerprint || makeFingerprint();
-		const onBlur = () => addTelemetry('Halaman ujian tidak aktif sesaat');
-		const onFocus = () => addTelemetry('Halaman ujian aktif kembali');
+		const onBlur = () => { addTelemetry('Halaman ujian tidak aktif sesaat'); void reportPortalEvent('web_focus_lost', { reason: 'window_blur' }); };
+		const onFocus = () => { addTelemetry('Halaman ujian aktif kembali'); void reportPortalEvent('web_focus_restored', { reason: 'window_focus' }); };
 		const onOffline = () => addTelemetry('Koneksi terputus, jawaban disimpan sementara');
 		const onOnline = () => addTelemetry('Koneksi kembali tersambung');
+		const onVisibility = () => void reportPortalEvent(document.hidden ? 'web_visibility_hidden' : 'web_visibility_visible', { reason: document.hidden ? 'document_hidden' : 'document_visible' });
 		window.addEventListener('blur', onBlur);
 		window.addEventListener('focus', onFocus);
 		window.addEventListener('offline', onOffline);
 		window.addEventListener('online', onOnline);
+		document.addEventListener('visibilitychange', onVisibility);
 		return () => {
 			window.removeEventListener('blur', onBlur);
 			window.removeEventListener('focus', onFocus);
 			window.removeEventListener('offline', onOffline);
 			window.removeEventListener('online', onOnline);
+			document.removeEventListener('visibilitychange', onVisibility);
 		};
 	});
+
+	onDestroy(() => stopParticipantRuntimePolling());
 </script>
 
 <svelte:head>
