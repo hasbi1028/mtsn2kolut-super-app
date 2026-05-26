@@ -260,6 +260,38 @@ async function upsertSubject(client) {
   );
 }
 
+async function upsertTeacher(client) {
+  return one(
+    client,
+    `
+      INSERT INTO employees (nip, nama, unit_kerja, is_active, employment_type, pegawai_uid, jenis_kelamin)
+      VALUES ('199901012026011001', 'Guru Seed CBT Mobile', 'MTsN 2 Kolaka Utara', TRUE, 'pns', '9990000000001', 'L')
+      ON CONFLICT (pegawai_uid) DO UPDATE
+      SET nama = EXCLUDED.nama,
+          unit_kerja = EXCLUDED.unit_kerja,
+          is_active = TRUE,
+          employment_type = EXCLUDED.employment_type,
+          updated_at = NOW()
+      RETURNING id
+    `,
+  );
+}
+
+async function upsertClassSubjectAssignment(client, classId, subjectId, teacherEmployeeId) {
+  return one(
+    client,
+    `
+      INSERT INTO class_subject_assignments (class_id, subject_id, teacher_employee_id)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (class_id, subject_id) DO UPDATE
+      SET teacher_employee_id = EXCLUDED.teacher_employee_id,
+          updated_at = NOW()
+      RETURNING id
+    `,
+    [classId, subjectId, teacherEmployeeId],
+  );
+}
+
 async function upsertStudents(client, classId) {
   const rows = [];
   for (const student of seedConfig.participants) {
@@ -335,7 +367,7 @@ async function upsertQuestion(client, subjectId, question) {
             explanation_html = $17,
             rubric_html = $18,
             academic_phase = 'D',
-            grade_level = 7,
+            target_level = 'VII',
             cp_ref = 'CP-SEED-CBT-MOBILE',
             tp_ref = 'TP-SEED-CBT-MOBILE',
             kd_ref = 'KD-SEED-CBT-MOBILE',
@@ -365,7 +397,7 @@ async function upsertQuestion(client, subjectId, question) {
         option_a, option_b, option_c, option_d, option_e,
         answer_key, explanation, difficulty, status,
         stem_html, stimulus_html, explanation_html, rubric_html,
-        academic_phase, grade_level, cp_ref, tp_ref, kd_ref, indicator_ref,
+        academic_phase, target_level, cp_ref, tp_ref, kd_ref, indicator_ref,
         material_topic, cognitive_level, hots_flag, media_asset_ids,
         workflow_status, version, author_username, approver_username,
         approved_at, writer_notes
@@ -375,7 +407,7 @@ async function upsertQuestion(client, subjectId, question) {
         $6, $7, $8, $9, $10,
         $11, $12, $13, 'published',
         $14, $15, $16, $17,
-        'D', 7, 'CP-SEED-CBT-MOBILE', 'TP-SEED-CBT-MOBILE',
+        'D', 'VII', 'CP-SEED-CBT-MOBILE', 'TP-SEED-CBT-MOBILE',
         'KD-SEED-CBT-MOBILE', 'IND-SEED-CBT-MOBILE',
         $18, $19, $20, '[]'::jsonb,
         'approved', 1, 'mobile-cbt-seeder', 'mobile-cbt-seeder',
@@ -633,6 +665,10 @@ async function upsertSession(client, packageId, classId, eventId, startAt, endAt
             assignment_mode = 'manual',
             allow_cross_grade = FALSE,
             is_special_event = FALSE,
+            access_mode = 'simulation',
+            student_portal_direct_login_enabled = TRUE,
+            require_room_token_for_web = FALSE,
+            nisn_direct_login_enabled = TRUE,
             updated_at = NOW()
         WHERE id = $1
         RETURNING id
@@ -646,11 +682,12 @@ async function upsertSession(client, packageId, classId, eventId, startAt, endAt
     `
       INSERT INTO cbt_exam_sessions (
         package_id, event_id, class_id, scope_type, scope_ref, mix_policy, assignment_mode,
-        allow_cross_grade, is_special_event, title, scheduled_start, scheduled_end, status
+        allow_cross_grade, is_special_event, access_mode, student_portal_direct_login_enabled,
+        require_room_token_for_web, nisn_direct_login_enabled, title, scheduled_start, scheduled_end, status
       )
       VALUES (
         $1, $2, $3, 'class', $4, 'same_class', 'manual',
-        FALSE, FALSE, $5, $6, $7, 'active'
+        FALSE, FALSE, 'simulation', TRUE, FALSE, TRUE, $5, $6, $7, 'active'
       )
       RETURNING id
     `,
@@ -662,10 +699,13 @@ async function upsertRoom(client, sessionId) {
   return one(
     client,
     `
-      INSERT INTO cbt_exam_rooms (session_id, room_name, capacity)
-      VALUES ($1, $2, 30)
+      INSERT INTO cbt_exam_rooms (session_id, room_name, capacity, room_token, status, allow_web_fallback)
+      VALUES ($1, $2, 30, 'ROOM2501', 'active', TRUE)
       ON CONFLICT (session_id, room_name) DO UPDATE
-      SET capacity = EXCLUDED.capacity
+      SET capacity = EXCLUDED.capacity,
+          room_token = EXCLUDED.room_token,
+          status = 'active',
+          allow_web_fallback = TRUE
       RETURNING id, room_name
     `,
     [sessionId, seedConfig.session.roomName],
@@ -915,6 +955,8 @@ async function main() {
     const academicYear = await upsertAcademicYear(client);
     const schoolClass = await upsertSchoolClass(client, academicYear.id);
     const subject = await upsertSubject(client);
+    const teacher = await upsertTeacher(client);
+    await upsertClassSubjectAssignment(client, schoolClass.id, subject.id, teacher.id);
     const event = await upsertEvent(client, academicYear.id);
     await upsertQuestionRequirement(client, event.id, subject.id);
     const students = await upsertStudents(client, schoolClass.id);

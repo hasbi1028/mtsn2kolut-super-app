@@ -81,7 +81,15 @@
 
 	function normalizePortalPayload(body: unknown): ExamPayload {
 		const wrapped = body as { data?: ExamPayload; payload?: ExamPayload };
-		return wrapped?.data ?? wrapped?.payload ?? (body as ExamPayload);
+		const source = wrapped?.data ?? wrapped?.payload ?? (body as ExamPayload);
+		return {
+			...source,
+			questions: (source.questions ?? []).map((question) => ({
+				...question,
+				text: question.text ?? (question as Question & { question_text?: string }).question_text ?? '',
+				type: question.type ?? (question as Question & { question_type?: Question['type'] }).question_type ?? 'multiple_choice'
+			}))
+		};
 	}
 
 	function normalizeCardVerifyPayload(body: unknown): ExamPayload {

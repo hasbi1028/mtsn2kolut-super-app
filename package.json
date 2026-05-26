@@ -26,6 +26,7 @@
     "security:scan-secrets": "python3 scripts/scan-secrets.py",
     "security:scan-secrets:staged": "python3 scripts/scan-secrets.py --staged",
     "smoke:web:asesmen-cbt:opsi0": "npm --prefix apps/web-admin run smoke:asesmen-cbt:opsi0",
+    "e2e:web:asesmen-cbt:pg-essay": "npm --prefix apps/web-admin run e2e:asesmen-cbt:pg-essay",
     "test:web": "npm --prefix apps/web-admin run test:unit",
     "build:cbt-portal": "npm --prefix apps/cbt-portal run build",
     "check:cbt-portal": "npm --prefix apps/cbt-portal run check"

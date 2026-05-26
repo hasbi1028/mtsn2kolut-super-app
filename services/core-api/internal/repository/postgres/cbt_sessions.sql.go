@@ -609,7 +609,7 @@ SELECT
   sub.code AS subject_code,
   csa.id AS grade_assignment_id,
   latest.grade_component_id,
-  latest.status AS latest_sync_status,
+  COALESCE(latest.status, '') AS latest_sync_status,
   latest.created_at AS latest_sync_at,
   COALESCE(participant_summary.participant_count, 0)::int AS participant_count,
   COALESCE(participant_summary.submitted_count, 0)::int AS submitted_count,
