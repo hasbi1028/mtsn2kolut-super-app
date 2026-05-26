@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import type { PageData } from './$types';
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
@@ -103,13 +104,19 @@
 		}
 	];
 
+	let { data }: { data: PageData } = $props();
+
 	let release = $state<MobileReleaseManifest | null>(null);
-	let cbtArtifacts = $state<CbtMobileArtifactManifest | null>(null);
+	let cbtArtifacts = $derived<CbtMobileArtifactManifest | null>(data.cbtArtifacts);
 	let releaseError = $state('');
-	let cbtArtifactsError = $state('');
+	let cbtArtifactsError = $derived(data.cbtArtifactsError);
 	let copied = $state(false);
 
 	onMount(async () => {
+		await refreshLegacyRelease();
+	});
+
+	async function refreshLegacyRelease() {
 		try {
 			const response = await fetch('/releases/mobile/latest.json', { cache: 'no-store' });
 			if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -117,7 +124,7 @@
 		} catch (error) {
 			releaseError = error instanceof Error ? error.message : 'Data rilis belum tersedia.';
 		}
-	});
+	}
 
 	function formatBytes(bytes: number) {
 		if (!Number.isFinite(bytes) || bytes <= 0) return '-';
