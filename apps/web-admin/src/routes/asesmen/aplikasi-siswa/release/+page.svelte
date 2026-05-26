@@ -4,6 +4,30 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 
+
+	type CbtMobileArtifact = {
+		fileName: string;
+		label: string;
+		description: string;
+		variant: string;
+		abi: string;
+		recommendedFor: string;
+		sizeBytes: number;
+		updatedAt: string;
+		sha256: string;
+		downloadUrl: string;
+		absoluteDownloadUrl: string;
+	};
+
+	type CbtMobileArtifactManifest = {
+		title: string;
+		primaryClient: string;
+		fallbackClient: string;
+		demoWebUrl: string;
+		generatedAt: string;
+		artifacts: CbtMobileArtifact[];
+	};
+
 	type MobileReleaseManifest = {
 		app_name: string;
 		channel: string;
@@ -80,7 +104,9 @@
 	];
 
 	let release = $state<MobileReleaseManifest | null>(null);
+	let cbtArtifacts = $state<CbtMobileArtifactManifest | null>(null);
 	let releaseError = $state('');
+	let cbtArtifactsError = $state('');
 	let copied = $state(false);
 
 	onMount(async () => {
@@ -215,6 +241,73 @@
 				<div class="lg:col-span-2 rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-sm leading-6 text-muted-foreground">
 					<p class="font-semibold text-foreground">Data rilis APK belum terbaca.</p>
 					<p class="mt-1">{releaseError || 'Memuat data rilis terbaru dari layanan sistem...'}</p>
+				</div>
+			{/if}
+		</Card.Content>
+	</Card.Root>
+
+
+	<Card.Root class="overflow-hidden border-emerald-500/20 shadow-sm">
+		<Card.Header class="bg-gradient-to-r from-emerald-500/10 via-card to-card">
+			<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+				<div>
+					<div class="flex flex-wrap items-center gap-2">
+						<Badge class="border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">Download Center</Badge>
+						<Badge class="border-primary/20 bg-primary/10 text-primary">Flutter Utama</Badge>
+						<Badge class="border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300">Demo & Browser Darurat</Badge>
+					</div>
+					<Card.Title class="mt-3 text-xl text-foreground">Download Center APK CBT</Card.Title>
+					<Card.Description>
+						Semua hasil build CBT terbaru disajikan dari server web-admin: universal, ABI spesifik, APK DEMO, dan checksum.
+					</Card.Description>
+				</div>
+				<Button href="/ujian?demo=1" variant="outline">Buka Demo Browser</Button>
+			</div>
+		</Card.Header>
+		<Card.Content class="space-y-4 pt-6">
+			{#if cbtArtifacts && cbtArtifacts.artifacts.length > 0}
+				<div class="grid gap-3 lg:grid-cols-2">
+					{#each cbtArtifacts.artifacts as artifact (artifact.fileName)}
+						<div class="min-w-0 rounded-2xl border border-border bg-muted/30 p-4">
+							<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+								<div class="min-w-0 space-y-2">
+									<div class="flex flex-wrap items-center gap-2">
+										<Badge class="border-border bg-background text-foreground">{artifact.abi}</Badge>
+										<Badge class="border-border bg-background text-muted-foreground">{artifact.variant}</Badge>
+									</div>
+									<p class="truncate text-sm font-semibold text-foreground">{artifact.label}</p>
+									<p class="text-sm leading-6 text-muted-foreground">{artifact.description}</p>
+								</div>
+								<Button href={artifact.downloadUrl} download class="shrink-0">Unduh</Button>
+							</div>
+							<div class="mt-4 grid gap-3 text-xs text-muted-foreground sm:grid-cols-3">
+								<div>
+									<p class="font-semibold uppercase tracking-wide">Ukuran</p>
+									<p class="mt-1 text-foreground">{formatBytes(artifact.sizeBytes)}</p>
+								</div>
+								<div>
+									<p class="font-semibold uppercase tracking-wide">Update</p>
+									<p class="mt-1 text-foreground">{formatDate(artifact.updatedAt)}</p>
+								</div>
+								<div>
+									<p class="font-semibold uppercase tracking-wide">Pemakaian</p>
+									<p class="mt-1 text-foreground">{artifact.recommendedFor}</p>
+								</div>
+							</div>
+							{#if artifact.sha256}
+								<p class="mt-3 break-all rounded-xl bg-background px-3 py-2 font-mono text-[11px] leading-5 text-muted-foreground">SHA256: {artifact.sha256}</p>
+							{/if}
+						</div>
+					{/each}
+				</div>
+				<div class="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-900 dark:text-amber-100">
+					<p class="font-semibold">Catatan distribusi</p>
+					<p>Gunakan APK release untuk ujian resmi. APK DEMO debug hanya untuk tes manual cepat; jangan dibagikan sebagai APK ujian resmi.</p>
+				</div>
+			{:else}
+				<div class="rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-sm leading-6 text-muted-foreground">
+					<p class="font-semibold text-foreground">Artifact APK CBT belum terbaca.</p>
+					<p class="mt-1">{cbtArtifactsError || 'Memuat daftar artifact APK CBT dari server...'}</p>
 				</div>
 			{/if}
 		</Card.Content>
