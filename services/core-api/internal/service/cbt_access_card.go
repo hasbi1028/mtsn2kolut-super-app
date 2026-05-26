@@ -26,7 +26,7 @@ type cbtAccessCardStore interface {
 	ListCbtParticipantAccessCardTargetsByEvent(ctx context.Context, arg db.ListCbtParticipantAccessCardTargetsByEventParams) ([]db.ListCbtParticipantAccessCardTargetsByEventRow, error)
 	ListCbtProctorAccessCardTargetsByEvent(ctx context.Context, arg db.ListCbtProctorAccessCardTargetsByEventParams) ([]db.ListCbtProctorAccessCardTargetsByEventRow, error)
 	RevokeActiveParticipantAccessCards(ctx context.Context, participantID pgtype.UUID) error
-	RevokeActiveProctorAccessCards(ctx context.Context, roomProctorID pgtype.UUID) error
+	RevokeActiveProctorAccessCards(ctx context.Context, roomID pgtype.UUID) error
 	CreateCbtExamAccessCard(ctx context.Context, arg db.CreateCbtExamAccessCardParams) (db.CbtExamAccessCard, error)
 	GetCbtAccessCardByTokenHash(ctx context.Context, tokenHash string) (db.GetCbtAccessCardByTokenHashRow, error)
 	MarkCbtAccessCardVerified(ctx context.Context, id pgtype.UUID) error
@@ -82,11 +82,11 @@ type CbtParticipantAccessCard struct {
 
 type CbtProctorAccessCard struct {
 	CardID         *string `json:"card_id,omitempty"`
-	RoomProctorID  string  `json:"room_proctor_id"`
+	RoomProctorID  *string `json:"room_proctor_id,omitempty"`
 	RoomID         string  `json:"room_id"`
 	SessionID      string  `json:"session_id"`
 	EventID        string  `json:"event_id"`
-	EmployeeID     string  `json:"employee_id"`
+	EmployeeID     *string `json:"employee_id,omitempty"`
 	EmployeeName   string  `json:"employee_name"`
 	NIP            string  `json:"nip"`
 	ProctorRole    string  `json:"proctor_role"`
@@ -217,10 +217,10 @@ func (s *CbtAccessCard) IssueProctorCards(ctx context.Context, in CbtAccessCardI
 		if err != nil {
 			return nil, err
 		}
-		if err := s.q.RevokeActiveProctorAccessCards(ctx, row.RoomProctorID); err != nil {
+		if err := s.q.RevokeActiveProctorAccessCards(ctx, row.RoomID); err != nil {
 			return nil, err
 		}
-		card, err := s.q.CreateCbtExamAccessCard(ctx, db.CreateCbtExamAccessCardParams{CardType: "proctor", EventID: row.EventID, SessionID: row.SessionID, RoomID: row.RoomID, RoomProctorID: row.RoomProctorID, TokenHash: hashCardSecret(token), PinHash: hashCardSecret(pin), ExpiresAt: expiresAt, GeneratedBy: in.GeneratedBy})
+		card, err := s.q.CreateCbtExamAccessCard(ctx, db.CreateCbtExamAccessCardParams{CardType: "proctor", EventID: row.EventID, SessionID: row.SessionID, RoomID: row.RoomID, TokenHash: hashCardSecret(token), PinHash: hashCardSecret(pin), ExpiresAt: expiresAt, GeneratedBy: in.GeneratedBy})
 		if err != nil {
 			return nil, err
 		}
@@ -316,7 +316,7 @@ func participantCardDTO(row db.ListCbtParticipantAccessCardTargetsByEventRow, to
 }
 
 func proctorCardDTO(row db.ListCbtProctorAccessCardTargetsByEventRow, token, pin string) CbtProctorAccessCard {
-	return CbtProctorAccessCard{CardID: uuidStringPtr(row.CardID), RoomProctorID: pgUUIDString(row.RoomProctorID), RoomID: pgUUIDString(row.RoomID), SessionID: pgUUIDString(row.SessionID), EventID: pgUUIDString(row.EventID), EmployeeID: pgUUIDString(row.EmployeeID), EmployeeName: row.EmployeeName, NIP: row.Nip.String, ProctorRole: row.ProctorRole, RoomName: row.RoomName, SessionTitle: firstNonEmpty(row.SessionTitle, row.PackageTitle, "Sesi CBT"), PackageTitle: row.PackageTitle, ScheduledStart: timeString(row.ScheduledStart), ScheduledEnd: timeString(row.ScheduledEnd), Status: firstNonEmpty(row.CardStatus, "not_issued"), FailedAttempts: row.FailedAttempts, CardCreatedAt: timeString(row.CardCreatedAt), CardExpiresAt: timeString(row.CardExpiresAt), CardVerifiedAt: timeString(row.CardVerifiedAt), Token: token, PIN: pin}
+	return CbtProctorAccessCard{CardID: uuidStringPtr(row.CardID), RoomProctorID: uuidStringPtr(row.RoomProctorID), RoomID: pgUUIDString(row.RoomID), SessionID: pgUUIDString(row.SessionID), EventID: pgUUIDString(row.EventID), EmployeeID: uuidStringPtr(row.EmployeeID), EmployeeName: row.EmployeeName, NIP: row.Nip, ProctorRole: row.ProctorRole, RoomName: row.RoomName, SessionTitle: firstNonEmpty(row.SessionTitle, row.PackageTitle, "Sesi CBT"), PackageTitle: row.PackageTitle, ScheduledStart: timeString(row.ScheduledStart), ScheduledEnd: timeString(row.ScheduledEnd), Status: firstNonEmpty(row.CardStatus, "not_issued"), FailedAttempts: row.FailedAttempts, CardCreatedAt: timeString(row.CardCreatedAt), CardExpiresAt: timeString(row.CardExpiresAt), CardVerifiedAt: timeString(row.CardVerifiedAt), Token: token, PIN: pin}
 }
 
 func verifyResultDTO(row db.GetCbtAccessCardByTokenHashRow) CbtAccessCardVerifyResult {

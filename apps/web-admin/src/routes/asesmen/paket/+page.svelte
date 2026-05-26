@@ -1276,7 +1276,8 @@
         </h1>
         <p class="max-w-2xl text-sm leading-6 text-muted-foreground">
           Pilih soal terbit dari Bank Soal, masukkan ke paket, lalu pakai paket
-          itu saat membuat sesi event.
+          itu saat membuat sesi event. Untuk Simulasi/Gladi/Ujian nyata, gunakan
+          paket/kegiatan server; DEMO lokal hanya memakai contoh tanpa mutasi data.
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
@@ -1363,14 +1364,17 @@
         </p>
         <p>
           Pilihan soal tetap memakai penyaring Bank Soal yang dapat dipakai
-          ulang, ditambah soal khusus kegiatan ini saja.
+          ulang, ditambah soal khusus kegiatan ini saja. Jika seed sistem
+          Informatika tersedia, gunakan sebagai pool/paket awal melalui alur
+          paket resmi, bukan melalui Mode DEMO.
         </p>
       {:else}
         <p>
           <span class="font-semibold text-warning">Paket umum:</span> dapat dipakai
-          sebagai templat yang dapat dipakai ulang atau paket mandiri. Jika bekerja
-          dari Kegiatan Ujian, buka pembuat paket dari kegiatan agar paket otomatis
-          tertaut kegiatan.
+          sebagai templat yang dapat dipakai ulang atau paket mandiri. Jika seed
+          sistem Informatika tersedia, jadikan sumber awal melalui Bank Soal/paket
+          resmi untuk Simulasi/Gladi/Ujian nyata. Jika bekerja dari Kegiatan Ujian,
+          buka pembuat paket dari kegiatan agar paket otomatis tertaut kegiatan.
         </p>
       {/if}
       {#if hiddenEventPackageCount > 0}

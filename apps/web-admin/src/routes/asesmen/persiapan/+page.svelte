@@ -38,7 +38,7 @@
 		{
 			step: '02',
 			title: 'Siapkan Paket',
-			description: 'Pilih paket soal yang siap dipakai.',
+			description: 'Pilih paket soal yang siap dipakai. Untuk Simulasi/Gladi, gunakan paket server dari Bank Soal; seed sistem Informatika dapat dijadikan pool awal bila tersedia.',
 			href: '/asesmen/paket',
 			cta: 'Kelola Paket'
 		},
@@ -155,7 +155,7 @@
 	</section>
 
 	<p class="rounded-lg border border-dashed border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-		Catatan: penyusunan soal tetap berada di modul Bank Soal. Halaman ini hanya untuk alur ujian.
+		Catatan: penyusunan soal tetap berada di modul Bank Soal. DEMO hanya contoh lokal; Simulasi/Gladi/Ujian nyata harus memakai kegiatan, paket, dan sesi server.
 	</p>
 </div>
 {:else}

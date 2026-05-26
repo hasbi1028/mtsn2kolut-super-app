@@ -101,8 +101,14 @@ SELECT
   ep.seat_no,
   ac.room_proctor_id,
   rp.employee_id AS proctor_employee_id,
-  COALESCE(emp.nama, '') AS proctor_name,
-  COALESCE(rp.role, '') AS proctor_role,
+  (CASE
+    WHEN ac.card_type = 'proctor' THEN COALESCE(emp.nama, pa.employee_names, 'Lembar Pengawas Ruang')
+    ELSE COALESCE(emp.nama, '')
+  END)::text AS proctor_name,
+  (CASE
+    WHEN ac.card_type = 'proctor' THEN COALESCE(rp.role::text, pa.proctor_roles, 'pengawas_ruang')
+    ELSE COALESCE(rp.role::text, '')
+  END)::text AS proctor_role,
   p.title AS package_title,
   p.duration_minutes,
   ac.pin_hash,
@@ -122,6 +128,14 @@ LEFT JOIN students st ON st.id = ep.student_id
 LEFT JOIN school_classes sc ON sc.id = st.class_id
 LEFT JOIN cbt_room_proctors rp ON rp.id = ac.room_proctor_id
 LEFT JOIN employees emp ON emp.id = rp.employee_id
+LEFT JOIN LATERAL (
+  SELECT
+    string_agg(e.nama, ', ' ORDER BY e.nama) FILTER (WHERE e.id IS NOT NULL) AS employee_names,
+    string_agg(DISTINCT crp.role::text, ', ' ORDER BY crp.role::text) FILTER (WHERE crp.role IS NOT NULL AND crp.role::text <> '') AS proctor_roles
+  FROM cbt_room_proctors crp
+  JOIN employees e ON e.id = crp.employee_id
+  WHERE crp.exam_room_id = ac.room_id
+) pa ON TRUE
 WHERE ac.token_hash = $1
 `
 
@@ -323,14 +337,14 @@ func (q *Queries) ListCbtParticipantAccessCardTargetsByEvent(ctx context.Context
 
 const listCbtProctorAccessCardTargetsByEvent = `-- name: ListCbtProctorAccessCardTargetsByEvent :many
 SELECT
-  rp.id AS room_proctor_id,
-  rp.exam_room_id AS room_id,
+  NULL::uuid AS room_proctor_id,
+  r.id AS room_id,
   r.session_id,
   cs.event_id,
-  rp.employee_id,
-  emp.nama AS employee_name,
-  emp.nip,
-  rp.role AS proctor_role,
+  NULL::uuid AS employee_id,
+  COALESCE(pa.employee_names, 'Lembar Pengawas Ruang')::text AS employee_name,
+  ''::text AS nip,
+  COALESCE(pa.proctor_roles, 'pengawas_ruang')::text AS proctor_role,
   r.room_name,
   cs.title AS session_title,
   cs.scheduled_start,
@@ -343,16 +357,22 @@ SELECT
   ac.expires_at AS card_expires_at,
   ac.revoked_at AS card_revoked_at,
   ac.verified_at AS card_verified_at
-FROM cbt_room_proctors rp
-JOIN cbt_exam_rooms r ON r.id = rp.exam_room_id
+FROM cbt_exam_rooms r
 JOIN cbt_exam_sessions cs ON cs.id = r.session_id
 JOIN cbt_packages p ON p.id = cs.package_id
-JOIN employees emp ON emp.id = rp.employee_id
+LEFT JOIN LATERAL (
+  SELECT
+    string_agg(emp.nama, ', ' ORDER BY emp.nama) FILTER (WHERE emp.id IS NOT NULL) AS employee_names,
+    string_agg(DISTINCT rp.role::text, ', ' ORDER BY rp.role::text) FILTER (WHERE rp.role IS NOT NULL AND rp.role::text <> '') AS proctor_roles
+  FROM cbt_room_proctors rp
+  JOIN employees emp ON emp.id = rp.employee_id
+  WHERE rp.exam_room_id = r.id
+) pa ON TRUE
 LEFT JOIN LATERAL (
   SELECT id, status, failed_attempts, created_at, expires_at, revoked_at, verified_at
   FROM cbt_exam_access_cards ac
   WHERE ac.card_type = 'proctor'
-    AND ac.room_proctor_id = rp.id
+    AND ac.room_id = r.id
     AND ac.revoked_at IS NULL
     AND ac.status = 'active'
   ORDER BY ac.created_at DESC
@@ -361,7 +381,7 @@ LEFT JOIN LATERAL (
 WHERE cs.event_id = $1
   AND ($2::uuid IS NULL OR r.session_id = $2::uuid)
   AND ($3::uuid IS NULL OR r.id = $3::uuid)
-ORDER BY cs.scheduled_start ASC, r.room_name ASC, emp.nama ASC
+ORDER BY cs.scheduled_start ASC, r.room_name ASC
 `
 
 type ListCbtProctorAccessCardTargetsByEventParams struct {
@@ -377,7 +397,7 @@ type ListCbtProctorAccessCardTargetsByEventRow struct {
 	EventID        pgtype.UUID        `json:"event_id"`
 	EmployeeID     pgtype.UUID        `json:"employee_id"`
 	EmployeeName   string             `json:"employee_name"`
-	Nip            pgtype.Text        `json:"nip"`
+	Nip            string             `json:"nip"`
 	ProctorRole    string             `json:"proctor_role"`
 	RoomName       string             `json:"room_name"`
 	SessionTitle   string             `json:"session_title"`
@@ -485,12 +505,12 @@ const revokeActiveProctorAccessCards = `-- name: RevokeActiveProctorAccessCards 
 UPDATE cbt_exam_access_cards
 SET status = 'revoked', revoked_at = NOW(), updated_at = NOW()
 WHERE card_type = 'proctor'
-  AND room_proctor_id = $1
+  AND room_id = $1
   AND revoked_at IS NULL
   AND status = 'active'
 `
 
-func (q *Queries) RevokeActiveProctorAccessCards(ctx context.Context, roomProctorID pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, revokeActiveProctorAccessCards, roomProctorID)
+func (q *Queries) RevokeActiveProctorAccessCards(ctx context.Context, roomID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, revokeActiveProctorAccessCards, roomID)
 	return err
 }

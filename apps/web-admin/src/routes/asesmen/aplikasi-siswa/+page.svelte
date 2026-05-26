@@ -66,7 +66,8 @@
 
 	const trialFlow = [
 		'Sebelum sesi, pastikan Portal Ujian Web /ujian dapat dibuka dari browser siswa dan alamat layanan sistem benar.',
-		'Saat masuk ujian, cek apakah ada kartu pemulihan sesi dan perhatikan label kesehatan sesi terakhir.',
+		'Untuk cek UI cepat, gunakan /ujian?demo=1 dengan soal contoh Informatika lokal; ini tidak menggantikan Simulasi/Gladi dan tidak menyentuh API/DB.',
+		'Saat masuk ujian nyata, cek apakah ada kartu pemulihan sesi dan perhatikan label kesehatan sesi terakhir.',
 		'Selama ujian, pantau penanda status di bagian atas aplikasi dan panel kesehatan koneksi di layar siswa.',
 		'Saat gangguan disimulasikan, minta siswa tetap berada di layar ujian sampai sinkron pulih.',
 		'Sebelum kirim ujian, ulangi daftar pemeriksaan pengawas dan jangan izinkan kirim jika status masih Menurun.'
@@ -165,7 +166,7 @@
 				<Button href="/asesmen/sesi?schedule=today">Pantau Sesi Hari Ini</Button>
 				<Button href="/asesmen/pengawasan" variant="outline">Panel Ruang</Button>
 				<Button href="#status-guide" variant="outline">Panduan Status</Button>
-				<Button href="/ujian?demo=1" variant="outline">Demo Browser</Button>
+				<Button href="/ujian?demo=1" variant="outline">Demo Browser Lokal</Button>
 			</div>
 		</div>
 	</section>

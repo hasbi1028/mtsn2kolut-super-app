@@ -26,25 +26,25 @@
 
 	const demoQuestions: Question[] = [
 		{
-			id: 'demo-web-1',
+			id: 'demo-informatika-1',
 			type: 'multiple_choice',
-			text: 'Langkah pertama peserta untuk masuk Portal Ujian Peserta adalah...',
+			text: 'Dalam Informatika, data yang dikirim dari browser ke server melalui jaringan sebaiknya dilindungi dengan...',
 			options: [
-				{ label: 'A', text: 'Scan QR pada kartu ujian lalu memasukkan PIN' },
-				{ label: 'B', text: 'Membuka tab lain untuk mencari jawaban' },
-				{ label: 'C', text: 'Meminta token ruang ke teman' },
-				{ label: 'D', text: 'Menunggu ujian selesai' }
+				{ label: 'A', text: 'Enkripsi dan autentikasi yang sesuai' },
+				{ label: 'B', text: 'Membagikan PIN kepada teman' },
+				{ label: 'C', text: 'Menonaktifkan semua pembaruan keamanan' },
+				{ label: 'D', text: 'Menyimpan kata sandi di catatan umum' }
 			]
 		},
 		{
-			id: 'demo-web-2',
+			id: 'demo-informatika-2',
 			type: 'short_answer',
-			text: 'Tuliskan satu hal yang wajib dilakukan peserta jika QR/PIN tidak cocok.'
+			text: 'Tuliskan satu contoh jejak digital yang dapat tercatat saat peserta memakai Portal Ujian Web.'
 		},
 		{
-			id: 'demo-web-3',
+			id: 'demo-informatika-3',
 			type: 'essay',
-			text: 'Jelaskan mengapa peserta perlu memastikan identitas sebelum masuk ujian.'
+			text: 'Jelaskan mengapa sinkronisasi jawaban bertahap penting dalam sistem ujian berbasis web.'
 		}
 	];
 
@@ -152,7 +152,7 @@
 			if (demoMode) {
 				payload = {
 					student: { nama: 'Siswa Demo Portal', nis: 'DEMO-WEB', class_code: 'IX Demo', room_name: 'Ruang Simulasi', seat_no: 12 },
-					session: { title: 'MODE DEMO Portal Ujian Peserta', subject: 'Simulasi CBT', status: 'waiting' },
+					session: { title: 'MODE DEMO Portal Ujian Peserta', subject: 'Informatika — Contoh lokal', status: 'waiting' },
 					questions: demoQuestions,
 					total_questions: demoQuestions.length,
 					time_remaining_seconds: 45 * 60
@@ -346,7 +346,7 @@
 			<h1 class="mt-2 text-2xl font-bold">{demoMode ? 'MODE DEMO Portal Ujian Peserta' : 'Portal Ujian Peserta'}</h1>
 			<p class="mt-2 max-w-3xl text-sm text-slate-200/85">
 				{demoMode
-					? 'Data contoh lokal untuk tes cepat tampilan dan alur. Jawaban tidak dikirim ke server dan tidak menjadi nilai.'
+					? 'Mode DEMO meniru alur ujian nyata dengan soal contoh Informatika lokal. Jawaban tidak dikirim ke server dan tidak menjadi nilai.'
 					: 'Scan QR pada Kartu Peserta Ujian, masukkan PIN, cek identitas, lalu tunggu pengawas membuka ujian.'}
 			</p>
 		</header>
@@ -420,13 +420,13 @@
 						</article>
 					{/each}
 				</div>
-				<div class="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">Jawaban disimpan bertahap. Jika koneksi putus, tetap di halaman ini dan panggil pengawas.</div>
+				<div class="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">{demoMode ? 'Mode DEMO: jawaban disimpan lokal di halaman ini saja. Simulasi/Gladi resmi harus memakai kegiatan dan paket server.' : 'Jawaban disimpan bertahap. Jika koneksi putus, tetap di halaman ini dan panggil pengawas.'}</div>
 				<button class="mt-4 w-full rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white disabled:opacity-60" disabled={loading} onclick={submitExam}>Kumpulkan</button>
 			</section>
 		{:else}
 			<section class="rounded-2xl bg-white p-5 text-slate-950">
 				<h2 class="text-xl font-bold">{demoMode ? 'Mulai DEMO' : 'Masuk dengan Kartu Peserta Ujian'}</h2>
-				<p class="mt-1 text-sm text-slate-600">{demoMode ? 'Tidak perlu QR/PIN. Klik mulai untuk memakai soal contoh.' : 'Scan QR pada kartu. Jika kamera perangkat tidak tersedia, ketik kode kartu dan PIN secara manual.'}</p>
+				<p class="mt-1 text-sm text-slate-600">{demoMode ? 'Tidak perlu QR/PIN. Klik mulai untuk memakai soal contoh Informatika lokal; tidak ada API atau database yang dimutasi.' : 'Scan QR pada kartu. Jika kamera perangkat tidak tersedia, ketik kode kartu dan PIN secara manual.'}</p>
 				{#if !demoMode}
 					{#if showLegacyTokenLogin}
 						<div class="mt-4 grid gap-3 sm:grid-cols-2">

@@ -184,10 +184,10 @@
 				description: 'Ruang ini memprioritaskan informasi yang langsung dibutuhkan siswa setelah login.',
 				primary: [
 					{ label: 'Portal Siswa', href: '/portal/siswa', description: 'Buka data profil, kelas, dan informasi akademik siswa.' },
-					{ label: 'Download Aplikasi CBT', href: '/releases/mobile/latest-arm64.apk', description: 'Unduh aplikasi resmi untuk mengikuti asesmen CBT.', variant: 'outline' }
+					{ label: 'Portal Ujian Web', href: '/ujian', description: 'Jalur resmi ujian siswa tahun ini tanpa instalasi APK.', variant: 'outline' }
 				],
 				secondary: [
-					{ label: 'QR Aplikasi CBT', href: '/releases/mobile/latest-qr.svg', description: 'Buka QR code unduhan aplikasi siswa.' }
+					{ label: 'Arsip APK CBT', href: '/asesmen/aplikasi-siswa/release', description: 'Arsip APK nonaktif/tahap lanjutan, bukan instruksi utama ujian.' }
 				],
 				watchlist: ['Cek jadwal belajar terbaru.', 'Pastikan sesi ujian dan ruang CBT sudah benar.', 'Hubungi wali kelas jika data profil belum sesuai.']
 			};
@@ -199,12 +199,12 @@
 				description: 'Dirancang agar orang tua cepat melihat anak terhubung, jadwal, dan informasi penting madrasah.',
 				primary: [
 					{ label: 'Portal Orang Tua', href: '/portal/orang-tua', description: 'Pantau data anak dan jadwal yang terhubung.' },
-					{ label: 'Download Aplikasi CBT', href: '/releases/mobile/latest-arm64.apk', description: 'Siapkan aplikasi CBT untuk perangkat siswa.', variant: 'outline' }
+					{ label: 'Portal Ujian Web', href: '/ujian', description: 'Jalur resmi ujian siswa tahun ini; tidak perlu instalasi APK.', variant: 'outline' }
 				],
 				secondary: [
 					{ label: 'Pengumuman', href: '/pengumuman', description: 'Lihat pengumuman resmi madrasah.' }
 				],
-				watchlist: ['Pastikan semua anak sudah terhubung ke akun orang tua.', 'Cek jadwal anak secara berkala.', 'Simpan link aplikasi CBT jika madrasah membuka asesmen.']
+				watchlist: ['Pastikan semua anak sudah terhubung ke akun orang tua.', 'Cek jadwal anak secara berkala.', 'Simpan informasi Portal Ujian Web jika madrasah membuka asesmen.']
 			};
 		}
 		if (isGuru) {
@@ -468,26 +468,26 @@
 			<Card.Content class="grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center md:p-6">
 				<div class="space-y-3">
 					<div class="flex flex-wrap items-center gap-2">
-						<Badge class="border-primary/20 bg-primary/10 text-primary">Aplikasi Siswa CBT</Badge>
-						<Badge variant="outline">Terlihat untuk semua role</Badge>
+						<Badge class="border-primary/20 bg-primary/10 text-primary">Portal Ujian Web</Badge>
+						<Badge variant="outline">Jalur resmi tahun ini</Badge>
 					</div>
 					<div>
-						<h2 class="text-lg font-semibold tracking-tight text-foreground">Download Center Aplikasi Siswa</h2>
+						<h2 class="text-lg font-semibold tracking-tight text-foreground">Portal Ujian Web Siswa</h2>
 						<p class="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-							Ambil APK resmi CBT Mobile dari dashboard utama. Link ini bisa dibuka oleh admin, guru, staf, siswa, dan orang tua setelah login.
+							Arahkan siswa ke Portal Ujian Web /ujian. APK Flutter tetap tersedia sebagai arsip nonaktif/tahap lanjutan, bukan instruksi utama ujian tahun ini.
 						</p>
 					</div>
 					<div class="flex flex-wrap gap-2">
-						<Button size="sm" href="/releases/mobile/latest-arm64.apk" download>Download APK Terbaru</Button>
-						<Button size="sm" variant="outline" href="/releases/mobile/latest-qr.svg">Buka QR Code</Button>
-						<Button size="sm" variant="outline" href="/asesmen/aplikasi-siswa/release">Detail Release Center</Button>
+						<Button size="sm" href="/ujian">Buka Portal Ujian Web</Button>
+						<Button size="sm" variant="outline" href="/ujian?demo=1">Demo Lokal</Button>
+						<Button size="sm" variant="outline" href="/asesmen/aplikasi-siswa/release">Arsip APK</Button>
 					</div>
 				</div>
 				<div class="flex items-center gap-3 rounded-2xl border border-border bg-background/80 p-3 text-sm text-muted-foreground">
-					<img src="/releases/mobile/latest-qr.svg" alt="QR download APK CBT Mobile" class="h-20 w-20 rounded-lg bg-white p-1" />
+					<img src="/releases/mobile/latest-qr.svg" alt="QR arsip APK CBT Mobile" class="h-20 w-20 rounded-lg bg-white p-1" />
 					<div class="hidden max-w-48 sm:block">
-						<p class="font-semibold text-foreground">Scan untuk install</p>
-						<p class="mt-1 break-all text-xs leading-5">mtsn2kolut.sch.id/releases/mobile/latest-arm64.apk</p>
+						<p class="font-semibold text-foreground">Arsip APK nonaktif</p>
+						<p class="mt-1 break-all text-xs leading-5">Bukan jalur masuk ujian resmi tahun ini.</p>
 					</div>
 				</div>
 			</Card.Content>

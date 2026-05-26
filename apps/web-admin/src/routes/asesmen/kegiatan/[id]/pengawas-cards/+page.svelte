@@ -55,7 +55,7 @@
 
 	async function fetchSupervisorCards() {
 		const response = await fetch(clientApiPath`/api/asesmen/events/${eventId}/supervisor-access-cards`);
-		const payload = await readClientApiData<unknown>(response, 'Gagal memuat kartu pengawas QR+PIN');
+		const payload = await readClientApiData<unknown>(response, 'Gagal memuat lembar pengawas ruang QR+PIN');
 		const rows = Array.isArray(payload)
 			? payload
 			: payload && typeof payload === 'object' && Array.isArray((payload as { cards?: unknown[] }).cards)
@@ -65,7 +65,7 @@
 	}
 
 	async function issueSupervisorCards(regenerate = false) {
-		if (regenerate && !confirm('Reset ulang semua QR+PIN kartu pengawas kegiatan ini? PIN lama tidak berlaku.')) return;
+		if (regenerate && !confirm('Reset ulang semua QR+PIN lembar pengawas ruang kegiatan ini? PIN lama tidak berlaku.')) return;
 		issueBusy = true;
 		try {
 			const response = await fetch(clientApiPath`/api/asesmen/events/${eventId}/supervisor-access-cards/issue`, {
@@ -73,7 +73,7 @@
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ regenerate, expires_hours: 0 })
 			});
-			const payload = await readClientApiData<unknown>(response, 'Gagal menerbitkan kartu pengawas QR+PIN');
+			const payload = await readClientApiData<unknown>(response, 'Gagal menerbitkan lembar pengawas ruang QR+PIN');
 			const rows = Array.isArray(payload)
 				? payload
 				: payload && typeof payload === 'object' && Array.isArray((payload as { cards?: unknown[] }).cards)
@@ -104,8 +104,8 @@
 			pin: String(card.pin ?? ''),
 			portalUrl,
 			qrDataUrl: token ? await QRCode.toDataURL(portalUrl, { margin: 1, width: 160 }) : '',
-			proctorName: String(card.employee_name ?? 'Pengawas Ruang'),
-			proctorRole: String(card.proctor_role ?? 'utama'),
+			proctorName: String(card.employee_name ?? 'Lembar Pengawas Ruang'),
+			proctorRole: String(card.proctor_role ?? 'pengawas_ruang'),
 			participantCount: 0,
 			status: String(card.status ?? 'not_issued'),
 			token,
@@ -164,7 +164,7 @@
 	}
 
 	function roleLabel(role: string) {
-		const labels: Record<string, string> = { utama: 'Pengawas utama', pendamping: 'Pengawas pendamping', cadangan: 'Pengawas cadangan' };
+		const labels: Record<string, string> = { pengawas_ruang: 'Akses ruang fleksibel', utama: 'Pengawas utama', pendamping: 'Pengawas pendamping', cadangan: 'Pengawas cadangan' };
 		return labels[role] ?? role;
 	}
 
@@ -174,12 +174,12 @@
 	}
 
 	function errorMessage(error: unknown) {
-		return error instanceof Error && error.message.trim() ? error.message : 'Kartu pengawas belum dapat dimuat.';
+		return error instanceof Error && error.message.trim() ? error.message : 'Lembar pengawas ruang belum dapat dimuat.';
 	}
 </script>
 
 <svelte:head>
-	<title>Kartu Pengawas Ujian</title>
+	<title>Lembar Pengawas Ruang</title>
 </svelte:head>
 
 <AsyncContent promise={cardsPromise}>
@@ -196,7 +196,7 @@
 
 	{#snippet failed(error, reset)}
 		<div class="mx-auto max-w-7xl p-6">
-			<RecoveryPanel title="Kartu Pengawas Belum Tersaji" message={errorMessage(error)} onRetry={() => { reset?.(); loadCards(); }} />
+			<RecoveryPanel title="Lembar Pengawas Ruang Belum Tersaji" message={errorMessage(error)} onRetry={() => { reset?.(); loadCards(); }} />
 		</div>
 	{/snippet}
 
@@ -205,8 +205,8 @@
 		<div class="mx-auto max-w-7xl space-y-6 p-6 print:p-0">
 			<div class="flex flex-col gap-3 print:hidden md:flex-row md:items-center md:justify-between">
 				<div>
-					<h1 class="text-2xl font-semibold text-foreground">Kartu Pengawas Ujian</h1>
-					<p class="text-sm text-muted-foreground">Cetak QR Portal Pengawasan + PIN singkat untuk pengawas ruang.</p>
+					<h1 class="text-2xl font-semibold text-foreground">Lembar Pengawas Ruang</h1>
+					<p class="text-sm text-muted-foreground">Cetak satu QR+PIN per ruang. Lembar ini tidak melekat ke nama pengawas sehingga guru pengganti tetap bisa masuk ruang yang sama.</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
 					<Button href={resolve(`/asesmen/kegiatan/${eventId}`)} variant="outline">Kembali ke Kegiatan</Button>
@@ -218,12 +218,12 @@
 
 			{#if data.cards.length === 0}
 				<div class="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm text-warning print:hidden">
-					<p class="font-semibold">Belum ada kartu pengawas.</p>
-					<p class="mt-1">Pastikan kegiatan memiliki sesi, ruang, dan penugasan pengawas. Jika pengawas belum ditugaskan, kartu placeholder ruang tidak dibuat karena belum ada ruang.</p>
+					<p class="font-semibold">Belum ada lembar pengawas ruang.</p>
+					<p class="mt-1">Pastikan kegiatan memiliki sesi dan ruang. Lembar diterbitkan per ruang agar tetap fleksibel bila pengawas berhalangan.</p>
 				</div>
 			{:else}
 				<div class="rounded-xl border border-primary/20 bg-primary/10 p-4 text-sm text-primary print:hidden">
-					{data.cards.length} kartu pengawas termuat. Jika PIN/QR belum tampil, klik Terbitkan QR+PIN lalu langsung cetak hasil terbitan.
+					{data.cards.length} lembar pengawas ruang termuat. Jika PIN/QR belum tampil, klik Terbitkan QR+PIN lalu langsung cetak hasil terbitan.
 				</div>
 			{/if}
 
@@ -234,13 +234,14 @@
 							<p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{data.schoolProfile.ministry_line}</p>
 							<p class="mt-1 text-sm font-semibold uppercase text-foreground">{data.schoolProfile.name}</p>
 							<p class="mt-1 text-[11px] leading-4 text-muted-foreground">{schoolAddressLine(data.schoolProfile) || data.schoolProfile.office_line}</p>
-							<h2 class="mt-2 text-lg font-semibold text-foreground">KARTU PENGAWAS UJIAN</h2>
+							<h2 class="mt-2 text-lg font-semibold text-foreground">LEMBAR PENGAWAS RUANG</h2>
 							<p class="text-sm text-muted-foreground">{card.eventTitle}</p>
 						</div>
 
 						<div class="mt-4 grid gap-4 sm:grid-cols-[1fr_150px]">
 							<div class="space-y-1.5 text-sm text-foreground">
-								<p><span class="font-medium">Nama Pengawas:</span> {card.proctorName}</p>
+								<p><span class="font-medium">Akses:</span> Lembar ruang, bukan akun personal</p>
+								<p><span class="font-medium">Pengawas tercatat:</span> {card.proctorName}</p>
 								<p><span class="font-medium">Tugas:</span> {roleLabel(card.proctorRole)}</p>
 								<p><span class="font-medium">Ruang:</span> {card.roomName}</p>
 								<p><span class="font-medium">Sesi:</span> {card.sessionTitle}</p>
@@ -255,12 +256,12 @@
 						</div>
 
 						<div class="mt-4 rounded-md bg-primary/10 px-4 py-3">
-							<p class="text-xs uppercase tracking-[0.2em] text-primary">PIN Pengawas</p>
+							<p class="text-xs uppercase tracking-[0.2em] text-primary">PIN Ruang</p>
 							<p class="mt-1 font-mono text-2xl font-bold text-primary">{card.pin}</p>
 						</div>
 
 						<ol class="mt-4 list-decimal space-y-1 pl-5 text-xs leading-5 text-muted-foreground">
-							<li>Scan QR untuk membuka Portal Pengawasan ruang.</li>
+							<li>Scan QR pada lembar ini untuk membuka Portal Pengawasan ruang.</li>
 							<li>Tekan tombol besar <span class="font-semibold text-foreground">Mulai Ujian</span> saat peserta siap.</li>
 							<li>Jika muncul merah/masalah, tekan <span class="font-semibold text-foreground">Hubungi Admin</span>.</li>
 						</ol>
