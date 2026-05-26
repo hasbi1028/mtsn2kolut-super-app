@@ -104,17 +104,17 @@
 					}}
 					title={!desktopExpanded ? itemTooltip(node, ancestors) : undefined}
 					aria-current={isActive(node.href) ? 'page' : undefined}
-					class={`flex min-w-0 flex-1 items-center rounded-md py-1.5 text-sm font-medium transition-colors
+					class={`relative flex min-w-0 flex-1 items-center rounded-lg py-1.5 text-sm font-medium transition-all
 						${desktopExpanded ? 'gap-2.5 px-2' : 'gap-2.5 px-2 lg:justify-center lg:px-0'}
 						${isActive(node.href)
-							? 'bg-accent text-accent-foreground'
-							: 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+							? 'bg-[var(--gold)]/15 text-foreground shadow-sm ring-1 ring-[var(--gold)]/20 before:absolute before:inset-y-1 before:left-0 before:w-1 before:rounded-full before:bg-[var(--gold)]'
+							: 'text-muted-foreground hover:bg-[var(--gold)]/10 hover:text-foreground'}`}
 					style={desktopExpanded ? `padding-left: ${0.5 + depth * 0.65}rem` : undefined}
 				>
 					<SidebarIcon name={node.icon} active={isActive(node.href)} />
 					<span class={`truncate ${desktopExpanded ? 'inline' : 'inline lg:hidden'}`}>{node.label}</span>
 					{#if navBadge(node.href) > 0 && desktopExpanded}
-						<span class="ml-auto rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
+						<span class="ml-auto rounded-full bg-[var(--gold)]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--gold)]">
 							{navBadge(node.href)}
 						</span>
 					{/if}
@@ -122,7 +122,7 @@
 				{#if node.pinnable !== false}
 					<button
 						type="button"
-						class={`shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-warning/10 hover:text-warning ${desktopExpanded ? 'inline-flex' : 'inline-flex lg:hidden'}`}
+						class={`shrink-0 rounded-md p-1 text-[var(--gold)] transition-colors hover:bg-[var(--gold)]/10 ${desktopExpanded ? 'inline-flex' : 'inline-flex lg:hidden'}`}
 						onclick={() => togglePin(node.href)}
 						aria-label={pinButtonLabel(node)}
 					>
@@ -144,13 +144,13 @@
 <div>
 	<button
 		type="button"
-		class={`mb-1 flex w-full items-center rounded-md px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-muted ${desktopExpanded ? 'flex' : 'flex lg:hidden'}`}
+		class={`parchment-texture page-enter mb-1 flex w-full items-center rounded-lg px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-[0.18em] text-primary transition-colors hover:bg-[var(--gold)]/10 ${desktopExpanded ? 'flex' : 'flex lg:hidden'}`}
 		onclick={() => toggleGroup(section.group)}
 		aria-expanded={isGroupOpen(section.group)}
 	>
 		<span class="truncate">{section.group}</span>
 		{#if groupBadge(section.group) > 0 && desktopExpanded}
-			<span class="ml-2 rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-normal text-warning">
+			<span class="ml-2 rounded-full bg-[var(--gold)]/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-normal text-[var(--gold)]">
 				{groupBadge(section.group)}
 			</span>
 		{/if}

@@ -45,11 +45,11 @@
 	const keyFor = (row: unknown, index: number) => rowKey?.(row, index) ?? String(index);
 </script>
 
-<section class={cn('overflow-hidden rounded-lg border border-border bg-card shadow-sm', className)}>
+<section class={cn('overflow-hidden rounded-[1.15rem] border border-[var(--gold)]/20 bg-card shadow-sm shadow-primary/5', className)}>
 	{#if title || description}
-		<div class="border-b border-border bg-muted/20 px-3 py-2">
+		<div class="border-b border-[var(--gold)]/15 bg-primary/5 px-3 py-2">
 			{#if title}
-				<h2 class="text-sm font-semibold text-foreground">{title}</h2>
+				<h2 class="font-[var(--font-display)] text-base font-semibold text-foreground">{title}</h2>
 			{/if}
 			{#if description}
 				<p class="mt-0.5 text-xs leading-5 text-muted-foreground">{description}</p>
@@ -61,9 +61,9 @@
 		<div class="hidden overflow-x-auto md:block">
 			<Table.Root class={cn('text-xs', tableClass)}>
 				<Table.Header>
-					<Table.Row class="bg-muted/40 hover:bg-muted/40">
+					<Table.Row class="bg-primary/5 hover:bg-primary/5">
 						{#each columns as column (column.key)}
-							<Table.Head class={cn('h-8 px-3 text-[11px] uppercase tracking-wide text-muted-foreground', column.headClass)}>
+							<Table.Head class={cn('h-8 border-b border-[var(--gold)]/15 px-3 text-[11px] uppercase tracking-[0.16em] text-muted-foreground', column.headClass)}>
 								{column.label}
 							</Table.Head>
 						{/each}
@@ -74,7 +74,7 @@
 				</Table.Header>
 				<Table.Body>
 					{#each rows as row, index (keyFor(row, index))}
-						<Table.Row class="hover:bg-muted/30">
+						<Table.Row class="transition-colors hover:bg-primary/5">
 							{#each columns as column (column.key)}
 								<Table.Cell class={cn('px-3 py-2 align-top', column.class)}>
 									{@render cell(row, column, index)}

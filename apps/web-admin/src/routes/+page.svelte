@@ -407,21 +407,25 @@
 	<PublicHome home={data.publicHome} />
 {:else}
 	<div class="space-y-6">
-		<div class="overflow-hidden rounded-[1.75rem] border border-border bg-card shadow-sm">
-			<div class="grid gap-5 p-5 md:grid-cols-[1fr_auto] md:p-6">
-				<div>
-					<p class="text-xs font-semibold uppercase tracking-[0.26em] text-primary">{dashboardEyebrow}</p>
-					<h1 class="mt-3 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">{dashboardTitle}</h1>
-					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{dashboardDescription}</p>
+		<div class="dashboard-hero overflow-hidden rounded-[1.75rem] border border-emerald-950/15 shadow-sm">
+			<div class="relative grid gap-5 p-5 md:grid-cols-[1fr_auto] md:p-6">
+				<div class="min-w-0">
+					<div class="flex flex-wrap items-center gap-2">
+						<p class="text-xs font-semibold uppercase tracking-[0.26em] text-emerald-50/90">{dashboardEyebrow}</p>
+						<span class="rounded-full bg-amber-200/20 px-2 py-0.5 text-[10px] font-semibold text-amber-50 ring-1 ring-amber-100/25">Dashboard</span>
+					</div>
+					<h1 class="mt-3 font-[var(--font-display)] text-2xl font-semibold tracking-tight text-white sm:text-3xl">{dashboardTitle}</h1>
+					<p class="mt-2 max-w-3xl text-sm leading-6 text-emerald-50/85">{dashboardDescription}</p>
 					<div class="mt-4 flex flex-wrap gap-2">
-						<Badge class="border-primary/20 bg-primary/10 text-primary">Role: {dashboardRoleLabel}</Badge>
-						<Badge variant="outline">MTsN 2 Kolaka Utara</Badge>
-						<Badge variant="outline">WITA</Badge>
+						<Badge class="border-white/25 bg-white/15 text-white shadow-sm">Role: {dashboardRoleLabel}</Badge>
+						<Badge class="border-white/25 bg-white/10 text-emerald-50">MTsN 2 Kolaka Utara</Badge>
+						<Badge class="border-white/25 bg-white/10 text-emerald-50">WITA</Badge>
 					</div>
 				</div>
 				<div class="flex items-end md:min-w-48 md:justify-end">
 					<LoadingButton
 						variant="outline"
+						class="min-w-44 border-white/35 !bg-white !text-emerald-950 shadow-sm hover:!bg-emerald-50 hover:!text-emerald-950 disabled:!bg-white/90 disabled:!text-emerald-950 disabled:!opacity-100"
 						loading={dashboardRefreshBusy}
 						loadingLabel="Memuat..."
 						onclick={() => void retryDashboard()}
@@ -431,17 +435,17 @@
 			</div>
 		</div>
 
-		<Card.Root class="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card shadow-sm">
+		<Card.Root class="parchment-texture page-enter overflow-hidden border-[var(--gold)]/30 shadow-sm">
 			<Card.Content class="grid gap-5 p-5 lg:grid-cols-[1.15fr,0.85fr] lg:items-start md:p-6">
 				<div class="space-y-4">
 					<div>
 						<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">{roleHome.eyebrow}</p>
-						<h2 class="mt-2 text-xl font-semibold tracking-tight text-foreground">{roleHome.title}</h2>
+						<h2 class="mt-2 font-[var(--font-display)] text-xl font-semibold tracking-tight text-foreground">{roleHome.title}</h2>
 						<p class="mt-2 text-sm leading-6 text-muted-foreground">{roleHome.description}</p>
 					</div>
 					<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
 						{#each roleHome.primary as action (`primary-${action.href}`)}
-							<a href={action.href} class="rounded-2xl border border-primary/20 bg-background/80 p-4 text-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm">
+							<a href={action.href} class="rounded-2xl border border-[var(--gold)]/30 bg-background/80 p-4 text-sm transition-all hover:-translate-y-0.5 hover:border-[var(--gold)]/50 hover:shadow-sm">
 								<span class="font-semibold text-foreground">{action.label}</span>
 								<span class="mt-1 block text-xs leading-5 text-muted-foreground">{action.description}</span>
 							</a>
@@ -453,7 +457,7 @@
 						{/each}
 					</div>
 				</div>
-				<div class="rounded-2xl border border-border bg-background/80 p-4">
+				<div class="rounded-2xl border border-[var(--gold)]/30 bg-background/80 p-4">
 					<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Perhatian hari ini</p>
 					<ul class="mt-3 space-y-3 text-sm text-muted-foreground">
 						{#each roleHome.watchlist as item (`watch-${item}`)}
@@ -464,26 +468,26 @@
 			</Card.Content>
 		</Card.Root>
 
-		<Card.Root class="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card shadow-sm">
+		<Card.Root class="parchment-texture page-enter overflow-hidden border-[var(--gold)]/30 shadow-sm">
 			<Card.Content class="grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center md:p-6">
 				<div class="space-y-3">
 					<div class="flex flex-wrap items-center gap-2">
-						<Badge class="border-primary/20 bg-primary/10 text-primary">Portal Ujian Web</Badge>
+						<Badge class="border-[var(--gold)]/30 bg-[var(--gold)]/10 text-[var(--gold)]">Portal Ujian Web</Badge>
 						<Badge variant="outline">Jalur resmi tahun ini</Badge>
 					</div>
 					<div>
-						<h2 class="text-lg font-semibold tracking-tight text-foreground">Portal Ujian Web Siswa</h2>
+						<h2 class="font-[var(--font-display)] text-lg font-semibold tracking-tight text-foreground">Portal Ujian Web Siswa</h2>
 						<p class="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
 							Arahkan siswa ke Portal Ujian Web /ujian. APK Flutter tetap tersedia sebagai arsip nonaktif/tahap lanjutan, bukan instruksi utama ujian tahun ini.
 						</p>
 					</div>
 					<div class="flex flex-wrap gap-2">
-						<Button size="sm" href="/ujian">Buka Portal Ujian Web</Button>
+						<Button size="sm" class="bg-[var(--gold)] text-[var(--gold-foreground)] hover:bg-[var(--gold)]/90" href="/ujian">Buka Portal Ujian Web</Button>
 						<Button size="sm" variant="outline" href="/ujian?demo=1">Demo Lokal</Button>
 						<Button size="sm" variant="outline" href="/asesmen/aplikasi-siswa/release">Arsip APK</Button>
 					</div>
 				</div>
-				<div class="flex items-center gap-3 rounded-2xl border border-border bg-background/80 p-3 text-sm text-muted-foreground">
+				<div class="flex items-center gap-3 rounded-2xl border border-[var(--gold)]/30 bg-background/80 p-3 text-sm text-muted-foreground">
 					<img src="/releases/mobile/latest-qr.svg" alt="QR arsip APK CBT Mobile" class="h-20 w-20 rounded-lg bg-white p-1" />
 					<div class="hidden max-w-48 sm:block">
 						<p class="font-semibold text-foreground">Arsip APK nonaktif</p>
@@ -538,16 +542,12 @@
 						</Card.Root>
 					{/each}
 				</div>
-		{:else if isAdmin}
+{:else if isAdmin}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-					{#each Array.from({ length: 4 }) as _, index (`admin-stat-skeleton-${index}`)}
-						<Card.Root class="border-border">
-							<Card.Content class="space-y-2 pt-4">
-								<Skeleton class="h-4 w-28" />
-								<Skeleton class="h-8 w-16" />
-							</Card.Content>
-						</Card.Root>
-					{/each}
+			<Card.Root class="page-enter border-[var(--gold)]/30 shadow-sm"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Siswa</p><p class="mt-1 text-3xl font-bold text-primary">—</p></Card.Content></Card.Root>
+			<Card.Root class="page-enter border-[var(--gold)]/30 shadow-sm"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Kelas Aktif</p><p class="mt-1 text-3xl font-bold text-primary">—</p></Card.Content></Card.Root>
+			<Card.Root class="page-enter border-[var(--gold)]/30 shadow-sm"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Mapel Aktif</p><p class="mt-1 text-3xl font-bold text-primary">—</p></Card.Content></Card.Root>
+			<Card.Root class="page-enter border-[var(--gold)]/30 shadow-sm"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Tahun Ajaran</p><p class="mt-1 text-3xl font-bold text-primary">—</p></Card.Content></Card.Root>
 				</div>
 			{/if}
 		{/snippet}
@@ -773,10 +773,10 @@
 
 			{#if isGuru && guruStats}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sesi CBT Berjalan</p><p class="mt-1 text-3xl font-bold text-success">{guruStats.active_sessions}</p></Card.Content></Card.Root>
-			<Card.Root class="border-warning/30"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Esai Belum Dikoreksi</p><p class="mt-1 text-3xl font-bold text-warning">{guruStats.ungraded_essays}</p></Card.Content></Card.Root>
-			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Siswa Terpantau</p><p class="mt-1 text-3xl font-bold text-success">{guruStats.my_students}</p></Card.Content></Card.Root>
-			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Mapel Diampu</p><p class="mt-1 text-3xl font-bold text-success">{guruStats.my_subjects}</p></Card.Content></Card.Root>
+			<Card.Root class="page-enter border-[var(--gold)]/30 shadow-sm"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sesi CBT Berjalan</p><p class="mt-1 text-3xl font-bold text-primary">{guruStats.active_sessions}</p></Card.Content></Card.Root>
+			<Card.Root class="page-enter border-[var(--gold)]/30 shadow-sm"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Esai Belum Dikoreksi</p><p class="mt-1 text-3xl font-bold text-[var(--gold)]">{guruStats.ungraded_essays}</p></Card.Content></Card.Root>
+			<Card.Root class="page-enter border-[var(--gold)]/30 shadow-sm"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Siswa Terpantau</p><p class="mt-1 text-3xl font-bold text-primary">{guruStats.my_students}</p></Card.Content></Card.Root>
+			<Card.Root class="page-enter border-[var(--gold)]/30 shadow-sm"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Mapel Diampu</p><p class="mt-1 text-3xl font-bold text-primary">{guruStats.my_subjects}</p></Card.Content></Card.Root>
 				</div>
 
 				<Card.Root class="border-border">
@@ -815,9 +815,9 @@
 			{/if}
 
 			{#if bankSoal}
-				<Card.Root class="border-primary/20">
+				<Card.Root class="parchment-texture page-enter overflow-hidden border-[var(--gold)]/30 shadow-sm">
 					<Card.Header>
-						<Card.Title class="text-base">Bank Soal</Card.Title>
+						<Card.Title class="font-[var(--font-display)] text-base">Bank Soal</Card.Title>
 						<Card.Description>Shortcut yang tersedia mengikuti permission Bank Soal pada akun ini.</Card.Description>
 					</Card.Header>
 					<Card.Content>
@@ -839,17 +839,17 @@
 
 			{#if isAdmin}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Siswa</p><p class="mt-1 text-3xl font-bold text-success">{academicStats?.total_students ?? '—'}</p></Card.Content></Card.Root>
-			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Kelas Aktif</p><p class="mt-1 text-3xl font-bold text-success">{academicStats?.total_classes ?? '—'}</p></Card.Content></Card.Root>
-			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Mapel Aktif</p><p class="mt-1 text-3xl font-bold text-success">{academicStats?.total_subjects ?? '—'}</p></Card.Content></Card.Root>
-			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Tahun Ajaran</p><p class="mt-1 text-3xl font-bold text-success">{academicStats?.total_years ?? '—'}</p></Card.Content></Card.Root>
+			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Siswa</p><p class="mt-1 text-3xl font-bold text-success">—</p></Card.Content></Card.Root>
+			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Kelas Aktif</p><p class="mt-1 text-3xl font-bold text-success">—</p></Card.Content></Card.Root>
+			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Mapel Aktif</p><p class="mt-1 text-3xl font-bold text-success">—</p></Card.Content></Card.Root>
+			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Tahun Ajaran</p><p class="mt-1 text-3xl font-bold text-success">—</p></Card.Content></Card.Root>
 				</div>
 			{/if}
 
 			{#if isStaff}
-				<Card.Root class="border-border">
+				<Card.Root class="parchment-texture page-enter overflow-hidden border-[var(--gold)]/30 shadow-sm">
 			<Card.Header>
-				<Card.Title class="text-base">Akses Cepat Staf</Card.Title>
+				<Card.Title class="font-[var(--font-display)] text-base">Akses Cepat Staf</Card.Title>
 				<Card.Description>Menu yang paling sering dipakai untuk layanan data orang tua dan siswa.</Card.Description>
 			</Card.Header>
 			<Card.Content>
@@ -863,11 +863,11 @@
 			{/if}
 
 			{#if isAdmin}
-				<Card.Root class="border-border">
+				<Card.Root class="parchment-texture page-enter overflow-hidden border-[var(--gold)]/30 shadow-sm">
 			<Card.Header class="pb-3">
 				<div class="flex items-center justify-between">
 					<div>
-						<Card.Title class="text-base">Integrasi PUSAKA Kemenag</Card.Title>
+						<Card.Title class="font-[var(--font-display)] text-base">Integrasi PUSAKA Kemenag</Card.Title>
 						<Card.Description>Sinkronisasi data kehadiran pegawai dari sistem pemerintah.</Card.Description>
 					</div>
 					<Badge variant="outline" class="text-xs">Eksternal</Badge>

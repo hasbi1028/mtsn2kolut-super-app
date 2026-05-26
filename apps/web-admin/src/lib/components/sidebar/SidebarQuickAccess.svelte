@@ -34,8 +34,8 @@
 </script>
 
 {#if items.length > 0}
-	<div>
-		<p class={`mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground ${desktopExpanded ? 'block' : 'block lg:hidden'}`}>
+	<div class="parchment-texture page-enter rounded-xl border border-[var(--gold)]/30 bg-card/50">
+		<p class={`mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-primary ${desktopExpanded ? 'block' : 'block lg:hidden'}`}>
 			Akses Cepat
 		</p>
 		<ul class="space-y-0.5">
@@ -49,11 +49,11 @@
 								closeMobile();
 							}}
 							title={!desktopExpanded ? railTooltip(item, item.group) : undefined}
-							class={`flex min-w-0 flex-1 items-center rounded-md py-1.5 text-sm font-medium transition-colors
+							class={`flex min-w-0 flex-1 items-center rounded-md py-1.5 text-sm font-medium transition-all
 								${desktopExpanded ? 'gap-2.5 px-2' : 'gap-2.5 px-2 lg:justify-center lg:px-0'}
 								${isActive(item.href)
-									? 'bg-accent text-accent-foreground'
-									: 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+									? 'bg-[var(--gold)]/15 text-foreground'
+									: 'text-muted-foreground hover:bg-[var(--gold)]/10 hover:text-foreground'}`}
 						>
 							<SidebarIcon name={item.icon} active={isActive(item.href)} />
 							<span class={`truncate ${desktopExpanded ? 'inline' : 'inline lg:hidden'}`}>{item.label}</span>
@@ -63,7 +63,7 @@
 								<div class="flex items-center gap-0.5">
 									<button
 										type="button"
-										class="inline-flex rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+										class="inline-flex rounded-md p-1 text-muted-foreground transition-colors hover:bg-[var(--gold)]/10 hover:text-[var(--gold)] disabled:cursor-not-allowed disabled:opacity-40"
 										onclick={() => movePinned(item.href, -1)}
 										disabled={!canMovePinned(item.href, -1)}
 										aria-label={`Naikkan ${item.label} dalam akses cepat`}
@@ -74,7 +74,7 @@
 									</button>
 									<button
 										type="button"
-										class="inline-flex rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+										class="inline-flex rounded-md p-1 text-muted-foreground transition-colors hover:bg-[var(--gold)]/10 hover:text-[var(--gold)] disabled:cursor-not-allowed disabled:opacity-40"
 										onclick={() => movePinned(item.href, 1)}
 										disabled={!canMovePinned(item.href, 1)}
 										aria-label={`Turunkan ${item.label} dalam akses cepat`}
@@ -87,7 +87,7 @@
 							{/if}
 							<button
 								type="button"
-								class={`shrink-0 rounded-md p-1 text-warning hover:bg-warning/10 hover:text-warning ${desktopExpanded ? 'inline-flex' : 'inline-flex lg:hidden'}`}
+								class={`shrink-0 rounded-md p-1 text-[var(--gold)] hover:bg-[var(--gold)]/10 ${desktopExpanded ? 'inline-flex' : 'inline-flex lg:hidden'}`}
 								onclick={() => togglePin(item.href)}
 								aria-label={pinButtonLabel(item)}
 							>

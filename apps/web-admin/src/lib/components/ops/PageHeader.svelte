@@ -33,7 +33,7 @@
 	} = $props();
 </script>
 
-<section class={cn('rounded-xl border border-border bg-card p-4 shadow-sm md:p-5', className)}>
+<section class={cn('parchment-texture page-enter rounded-[1.35rem] border border-[var(--gold)]/20 bg-card p-4 shadow-sm shadow-primary/5 md:p-5', className)}>
 	<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 		<div class="min-w-0 space-y-2">
 			{#if eyebrow || context}
@@ -42,12 +42,12 @@
 						<span class="text-primary">{eyebrow}</span>
 					{/if}
 					{#if context}
-						<span class="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-muted-foreground">{context}</span>
+						<span class="rounded-full border border-[var(--gold)]/20 bg-[var(--gold)]/10 px-2.5 py-1 text-muted-foreground">{context}</span>
 					{/if}
 				</div>
 			{/if}
 			<div>
-				<h1 class="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">{title}</h1>
+				<h1 class="font-[var(--font-display)] text-3xl font-semibold tracking-tight text-foreground md:text-4xl">{title}</h1>
 				{#if subtitle}
 					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{subtitle}</p>
 				{/if}
