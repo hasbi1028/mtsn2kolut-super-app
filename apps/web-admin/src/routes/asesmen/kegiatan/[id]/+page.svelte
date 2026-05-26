@@ -84,7 +84,9 @@
 		| `/asesmen/sesi?event_id=${string}&readiness=not_ready`
 		| `/asesmen/sesi?event_id=${string}&readiness=needs_rooms`
 		| `/asesmen/sesi?event_id=${string}&readiness=needs_proctors`
+		| `/asesmen/kegiatan/${string}/cetak`
 		| `/asesmen/kegiatan/${string}/exam-cards`
+		| `/asesmen/kegiatan/${string}/pengawas-cards`
 		| `/asesmen/kegiatan/${string}#hasil`
 		| `/asesmen/kegiatan/${string}/archive`;
 	type ChecklistItem = {
@@ -399,7 +401,7 @@
 			{ label: 'Paket Kegiatan', helper: 'Prioritas persiapan: paket yang tertaut kegiatan agar sesi ujian bisa memakai paket yang tepat', count: countFrom(overview?.package_count, packageFallback), href: `/asesmen/paket?event_id=${eventId}`, action: 'Kelola paket kegiatan' },
 			{ label: 'Sesi/Jadwal', helper: 'Sesi, status, dan jadwal operasional', count: countFrom(overview?.session_count, sessionFallback), href: `/asesmen/sesi?event_id=${eventId}`, action: 'Kelola sesi' },
 			{ label: 'Ruang/Pengawas/Kursi', helper: roomIssues > 0 ? `${roomIssues} sesi masih perlu dirapikan${proctorIssues > 0 ? `, ${proctorIssues} butuh pengawas` : ''}` : 'Cek ruang, pengawas, kapasitas, dan nomor meja', count: countFrom(overview?.room_count, detail.sessions.length > 0 ? detail.sessions.reduce((sum, session) => sum + (session.room_count ?? 0), 0) : null), href: `/asesmen/sesi?event_id=${eventId}&readiness=not_ready`, action: 'Cek ruang' },
-			{ label: 'Token/Kartu', helper: 'Token ujian peserta dan kartu ujian siap cetak', count: countFrom(overview?.token_count ?? overview?.card_count, null), href: `/asesmen/kegiatan/${eventId}/exam-cards`, action: 'Cetak kartu' },
+			{ label: 'Token/Kartu', helper: 'Dokumen & Cetak: kartu peserta, QR+PIN, lembar pengawas ruang, dan validasi kesiapan cetak', count: countFrom(overview?.token_count ?? overview?.card_count, null), href: `/asesmen/kegiatan/${eventId}/cetak`, action: 'Buka Dokumen & Cetak' },
 			{ label: 'Hasil', helper: 'Rekap nilai gabungan tersedia di tab Hasil', count: countFrom(overview?.result_count, detail.results.length), href: `/asesmen/kegiatan/${eventId}#hasil`, action: 'Buka tab hasil' },
 			{ label: 'Arsip', helper: 'Checklist kartu, daftar hadir, berita acara, hasil, insiden, dan catatan tindakan ringkas', count: null, href: `/asesmen/kegiatan/${eventId}/archive`, action: 'Buka checklist arsip' },
 		];

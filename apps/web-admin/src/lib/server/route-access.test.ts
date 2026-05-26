@@ -75,7 +75,9 @@ describe('route access helpers', () => {
 		expect(isAdminOnlyPath('/api/bank-soal/questions')).toBe(false);
 		expect(isAdminOnlyPath('/api/bank-soal/questions/export')).toBe(false);
 		expect(isAdminOnlyPath('/asesmen/kegiatan')).toBe(true);
+		expect(isAdminOnlyPath('/asesmen/kegiatan/event-1/cetak')).toBe(true);
 		expect(isAdminOnlyPath('/asesmen/kegiatan/event-1/exam-cards')).toBe(true);
+		expect(isAdminOnlyPath('/asesmen/kegiatan/event-1/pengawas-cards')).toBe(true);
 		expect(isAdminOnlyPath('/api/asesmen/events/event-1')).toBe(true);
 		expect(isAdminOnlyPath('/api/bank-soal/soal-support/subjects')).toBe(false);
 		expect(isBankSoalPath('/bank-soal/analisis-butir')).toBe(true);
@@ -358,6 +360,12 @@ describe('route access helpers', () => {
 		expect(requiredPermissionsForPath('/api/bank-soal/assets', 'POST')).toEqual(['bank_soal.create', 'bank_soal.update']);
 		expect(requiredPermissionsForPath('/api/academic/rombel/class-1/timetable-slots/slot-1/journal-session', 'POST')).toEqual(['journal.manage', 'journal.manage_all']);
 		expect(requiredPermissionsForPath('/api/asesmen/packages', 'POST')).toEqual(['asesmen.package_manage']);
+		expect(requiredPermissionsForPath('/asesmen/kegiatan/event-1/cetak', 'GET')).toEqual(['asesmen.read']);
+		expect(requiredPermissionsForPath('/asesmen/kegiatan/event-1/pengawas-cards', 'GET')).toEqual(['asesmen.read']);
+		expect(requiredPermissionsForPath('/api/asesmen/events/event-1/exam-access-cards', 'GET')).toEqual(['asesmen.read']);
+		expect(requiredPermissionsForPath('/api/asesmen/events/event-1/exam-access-cards/issue', 'POST')).toEqual(['asesmen.event_manage']);
+		expect(requiredPermissionsForPath('/api/asesmen/events/event-1/supervisor-access-cards', 'GET')).toEqual(['asesmen.read']);
+		expect(requiredPermissionsForPath('/api/asesmen/events/event-1/supervisor-access-cards/issue', 'POST')).toEqual(['asesmen.event_manage']);
 		expect(requiredPermissionsForPath('/api/asesmen/events/event-1', 'PATCH')).toEqual(['asesmen.event_manage']);
 		expect(requiredPermissionsForPath('/asesmen/non-tes', 'GET')).toEqual(['asesmen.read']);
 		expect(requiredPermissionsForPath('/api/asesmen/non-test-assessments/nta-1', 'PATCH')).toEqual(['asesmen.score']);

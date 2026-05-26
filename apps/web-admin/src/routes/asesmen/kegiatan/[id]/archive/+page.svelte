@@ -167,6 +167,7 @@
 				</div>
 				<div class="flex flex-wrap gap-2">
 					<Button variant="secondary" href={resolve(`/asesmen/kegiatan/${eventId}`)}>Kembali ke Kegiatan</Button>
+					<Button variant="secondary" href={resolve(`/asesmen/kegiatan/${eventId}/cetak`)}>Dokumen & Cetak</Button>
 					<Button variant="secondary" href={resolve(`/asesmen/kegiatan/${eventId}/exam-cards`)}>Kartu Ujian</Button>
 				</div>
 			</div>
