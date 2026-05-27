@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 
 	type ApiEnvelope<T> = { data?: T; items?: T; error?: string; message?: string } | T;
@@ -51,6 +52,13 @@
 		allow_cross_grade: mixPolicy === 'mixed_scope',
 		is_special_event: mixPolicy === 'mixed_scope'
 	});
+	let userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
+	let userPermissions = $derived((page.data.user?.permissions ?? []).map((permission) => permission.trim()).filter(Boolean));
+	let canOpenResults = $derived(
+		userRoles.includes('admin')
+			|| userRoles.includes('guru')
+			|| userPermissions.includes('asesmen.result_read')
+	);
 
 	onMount(() => {
 		void loadData();
@@ -202,8 +210,10 @@
 				</div>
 				<div class="flex flex-wrap gap-2 text-sm font-bold">
 					<a class="rounded-xl bg-emerald-700 px-3 py-2 text-white" href="/asesmen/persiapan">Persiapan</a>
-					<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/pelaksanaan">Hari Ujian</a>
-					<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/hasil">Hasil</a>
+					<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/pelaksanaan">Pelaksanaan</a>
+					{#if canOpenResults}
+						<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/hasil">Hasil</a>
+					{/if}
 					<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/panitia">Mode Lengkap Panitia</a>
 				</div>
 			</div>

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 
@@ -32,6 +33,15 @@
 		{ label: 'Mode Lengkap Panitia', href: '/asesmen/panitia' }
 	];
 
+	const roles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
+	const permissions = $derived((page.data.user?.permissions ?? []).map((permission) => permission.trim()).filter(Boolean));
+	const canOpenPanitiaTools = $derived(
+		roles.includes('admin')
+			|| permissions.includes('asesmen.operator')
+			|| permissions.includes('asesmen.event_manage')
+			|| permissions.includes('asesmen.package_manage')
+	);
+
 	function badgeClass(tone: StatusTone) {
 		if (tone === 'good') return 'border-primary/20 bg-primary/10 text-primary';
 		if (tone === 'warning') return 'border-warning/30 bg-warning/10 text-warning';
@@ -54,7 +64,8 @@
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
-				<Button href={resolve('/asesmen/ruang-saya')} size="sm">Buka Ruang Saya</Button>
+				<Button href={resolve('/asesmen/pelaksanaan')} size="sm">Buka Pelaksanaan</Button>
+				<Button href={resolve('/asesmen/ruang-saya')} variant="outline" size="sm">Buka Ruang Saya</Button>
 				<Button href="/ujian?demo=1" variant="outline" size="sm">Latihan Lokal</Button>
 			</div>
 		</div>
@@ -94,11 +105,13 @@
 			<p>
 				Fitur teknis seperti uji perangkat, arsip aplikasi, dan pengaturan lanjutan dipindahkan ke Mode Lengkap Panitia agar tidak membingungkan pengawas.
 			</p>
-			<div class="flex flex-wrap gap-2">
-				{#each adminLinks as link (link.href)}
-					<a class="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:border-primary/30 hover:bg-primary/10" href={resolve(link.href as '/')}>{link.label}</a>
-				{/each}
-			</div>
+			{#if canOpenPanitiaTools}
+				<div class="flex flex-wrap gap-2">
+					{#each adminLinks as link (link.href)}
+						<a class="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:border-primary/30 hover:bg-primary/10" href={resolve(link.href as '/')}>{link.label}</a>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	</section>
 </div>

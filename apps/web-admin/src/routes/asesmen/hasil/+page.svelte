@@ -11,9 +11,11 @@
 	import MicroActionTable from '$lib/components/ops/MicroActionTable.svelte';
 
 	type ResultRoute =
+		| '/asesmen/ringkas'
 		| '/asesmen/kegiatan'
 		| '/asesmen/sesi'
 		| '/asesmen/pelaksanaan'
+		| '/asesmen/ruang-saya'
 		| '/asesmen/aplikasi-siswa'
 		| '/asesmen'
 		| '/asesmen/pengawasan'
@@ -48,6 +50,12 @@
 	const isResultReader = $derived(userPermissions.includes('asesmen.result_read'));
 	const isProctor = $derived(userPermissions.includes('asesmen.proctor'));
 	const canAccess = $derived(isResultReader || userRoles.includes('admin') || userRoles.includes('guru'));
+	const canOpenRingkasan = $derived(
+		userRoles.includes('admin')
+			|| userPermissions.includes('asesmen.operator')
+			|| userPermissions.includes('asesmen.event_manage')
+			|| userPermissions.includes('asesmen.package_manage')
+	);
 	const resultRows = $derived<ResultRow[]>(
 		isOperator
 			? [
@@ -59,7 +67,7 @@
 					coverage: 'Per kegiatan · hasil gabungan · finalisasi',
 					href: '/asesmen/kegiatan',
 					action: 'Buka Daftar Kegiatan',
-					secondaryHref: '/asesmen',
+					secondaryHref: '/asesmen/ringkas',
 					secondaryAction: 'Kembali ke Ringkasan',
 					icon: BarChart3Icon
 				},
@@ -71,8 +79,8 @@
 					coverage: 'Per sesi · BA · analisis soal',
 					href: '/asesmen/sesi',
 					action: 'Buka Daftar Sesi',
-					secondaryHref: '/asesmen/pengawasan',
-					secondaryAction: 'Buka Pengawasan',
+					secondaryHref: '/asesmen/ruang-saya',
+					secondaryAction: 'Buka Ruang Saya',
 					icon: FileTextIcon
 				},
 				{
@@ -97,8 +105,8 @@
 					coverage: 'Per kegiatan · rekap akhir',
 					href: '/asesmen/kegiatan',
 					action: 'Buka Kegiatan',
-					secondaryHref: '/asesmen',
-					secondaryAction: 'Kembali ke Beranda',
+					secondaryHref: '/asesmen/ringkas',
+					secondaryAction: 'Kembali ke Ringkasan',
 					icon: BarChart3Icon
 				},
 				{
@@ -121,8 +129,8 @@
 					coverage: 'BA sesi · analisis · arsip final',
 					href: '/asesmen/sesi',
 					action: 'Buka Sesi',
-					secondaryHref: '/asesmen/pengawasan',
-					secondaryAction: 'Buka Pengawasan',
+					secondaryHref: '/asesmen/ruang-saya',
+					secondaryAction: 'Buka Ruang Saya',
 					icon: ClipboardCheckIcon
 				}
 			]
@@ -140,7 +148,7 @@
 </script>
 
 <svelte:head>
-	<title>Hasil Asesmen CBT — MTsN 2 Kolaka Utara</title>
+	<title>Hasil & Penutupan Ujian — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 {#if canAccess}
@@ -155,7 +163,9 @@
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
-				<Button href={resolve('/asesmen')} variant="outline">Kembali ke Beranda Asesmen</Button>
+				{#if canOpenRingkasan}
+					<Button href={resolve('/asesmen/ringkas')} variant="outline">Kembali ke Ringkasan</Button>
+				{/if}
 				{#if isOperator}
 					<Badge variant="outline" class="border-primary/20 bg-primary/10 text-primary">Mode operator/panitia</Badge>
 				{:else}
@@ -207,7 +217,7 @@
 				Halaman hasil hanya tersedia untuk akun yang diberi akses baca hasil asesmen.
 			</p>
 			<div class="mt-6">
-				<a href={resolve('/asesmen')} class="inline-flex rounded-md border border-primary/20 bg-card px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/10">Kembali ke Beranda Ujian</a>
+				<a href={resolve('/asesmen/ringkas')} class="inline-flex rounded-md border border-primary/20 bg-card px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/10">Kembali ke Ringkasan</a>
 			</div>
 		</div>
 	</div>

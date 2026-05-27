@@ -198,7 +198,7 @@
 </script>
 
 <svelte:head>
-	<title>Pengawasan Ruang — MTsN 2 Kolut</title>
+	<title>Ruang Saya — MTsN 2 Kolut</title>
 </svelte:head>
 
 <AsyncContent promise={roomsPromise} onerror={handleRenderError}>
@@ -243,6 +243,7 @@
 					</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
+					<Button href={resolve('/asesmen/pelaksanaan')} variant="outline">Kembali ke Pelaksanaan</Button>
 					<Button href={resolve('/asesmen/aplikasi-siswa')} variant="outline">Panduan Perangkat</Button>
 				</div>
 			</section>

@@ -74,7 +74,7 @@
 </script>
 
 <svelte:head>
-	<title>Persiapan Asesmen CBT — MTsN 2 Kolaka Utara</title>
+	<title>Persiapan Ujian — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 {#if canAccess}
@@ -82,10 +82,10 @@
 	<section class="rounded-2xl border border-border bg-card p-4 shadow-sm">
 		<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-2">
-				<Badge class="border-primary/20 bg-primary/10 text-primary" variant="outline">Fase Persiapan</Badge>
-				<h1 class="text-2xl font-semibold tracking-tight text-foreground">Persiapan Asesmen</h1>
+				<Badge class="border-primary/20 bg-primary/10 text-primary" variant="outline">Ujian Digital · Persiapan</Badge>
+				<h1 class="text-2xl font-semibold tracking-tight text-foreground">Persiapan Ujian</h1>
 				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
-					Siapkan kegiatan, paket, sesi, peserta, ruang, dan token sebelum ujian.
+					Siapkan kegiatan, paket, sesi, peserta, ruang, dan kode akses sebelum hari ujian.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">

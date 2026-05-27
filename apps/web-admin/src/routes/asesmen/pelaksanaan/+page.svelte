@@ -36,18 +36,23 @@
 			|| userPermissions.includes('asesmen.package_manage')
 	);
 	const hasProctorLane = $derived(userPermissions.includes('asesmen.proctor'));
+	const canOpenResults = $derived(
+		userRoles.includes('admin')
+			|| userRoles.includes('guru')
+			|| userPermissions.includes('asesmen.result_read')
+	);
 	const canAccess = $derived(hasOperatorLane || hasProctorLane);
 	const roleMode = $derived<RoleMode>(hasOperatorLane ? 'admin' : userRoles.includes('guru') ? 'guru' : 'staf');
 	const isAdminMode = $derived(roleMode === 'admin');
 	const roleName = $derived(isAdminMode ? 'Admin/Panitia' : roleMode === 'guru' ? 'Guru/Pengawas' : 'Staf/Operator');
-	const heroTitle = $derived(isAdminMode ? 'Hari-H Ujian Panitia' : 'Ruang Pengawasan Saya');
+	const heroTitle = $derived(isAdminMode ? 'Pelaksanaan Ujian' : 'Ruang Saya & Pengawasan');
 	const heroSubtitle = $derived(
 		isAdminMode
 			? 'Kelola sesi, ruang, kartu peserta, perangkat siswa, mode cadangan, dan hasil dari satu layar kerja.'
 			: 'Buka ruang pengawasan, pantau peserta, cek perangkat siswa, lalu gunakan mode cadangan hanya bila perlu.'
 	);
 
-	const dayTasks: DayTask[] = [
+	const dayTasks = $derived<DayTask[]>([
 		{
 			title: 'Persiapan',
 			description: 'Kembali ke checklist kegiatan, paket, sesi, ruang, peserta, dan token.',
@@ -96,16 +101,19 @@
 			cta: 'Buka Panduan',
 			kind: 'support',
 			roles: ['admin', 'guru', 'staf']
-		},
-		{
-			title: 'Hasil',
-			description: 'Buka rekap, nilai, dan hasil sesi setelah ujian selesai.',
-			href: '/asesmen/hasil',
-			cta: 'Lihat Hasil',
-			kind: 'result',
-			roles: ['admin', 'guru']
 		}
-	];
+	].concat(
+		canOpenResults
+			? [{
+				title: 'Hasil',
+				description: 'Buka rekap, nilai, dan hasil sesi setelah ujian selesai.',
+				href: '/asesmen/hasil' as const,
+				cta: 'Lihat Hasil',
+				kind: 'result' as const,
+				roles: ['admin', 'guru'] as RoleMode[]
+			}]
+			: []
+	));
 
 	const visibleTasks = $derived(dayTasks.filter((task) => task.roles.includes(roleMode)));
 	const primaryTask = $derived(visibleTasks.find((task) => task.kind === 'primary') ?? visibleTasks[0]);
@@ -144,7 +152,7 @@
 </script>
 
 <svelte:head>
-	<title>Hari-H Ujian — MTsN 2 Kolaka Utara</title>
+	<title>Pelaksanaan Ujian — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 {#if canAccess}
@@ -162,7 +170,7 @@
 				{#if primaryTask}
 					<div class="flex flex-wrap gap-2">
 						<Button href={taskHref(primaryTask)} size="sm">{primaryTask.cta}</Button>
-						<Button href={resolve('/asesmen')} variant="outline" size="sm">Beranda</Button>
+						<Button href={resolve('/asesmen/ringkas')} variant="outline" size="sm">Ringkasan</Button>
 					</div>
 				{/if}
 			</div>

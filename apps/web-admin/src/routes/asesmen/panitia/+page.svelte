@@ -8,6 +8,7 @@
 	type PanitiaRoute =
 		| '/asesmen/ringkas'
 		| '/asesmen/persiapan'
+		| '/asesmen/pelaksanaan'
 		| '/asesmen/kegiatan'
 		| '/asesmen/paket'
 		| '/asesmen/sesi'
@@ -35,20 +36,28 @@
 			|| permissions.includes('asesmen.event_manage')
 			|| permissions.includes('asesmen.package_manage')
 	);
+	const canOpenResults = $derived(
+		roles.includes('admin')
+			|| roles.includes('guru')
+			|| permissions.includes('asesmen.result_read')
+	);
 
-	const tools: AdminTool[] = [
+	const tools = $derived<AdminTool[]>([
 		{ phase: 'Ringkas', title: 'Meja Kerja Panitia', description: 'Ringkasan sesi, paket, dan pembagian ruang.', href: '/asesmen/ringkas', cta: 'Buka Ringkas', level: 'utama' },
 		{ phase: 'Pra', title: 'Persiapan Ujian', description: 'Checklist kegiatan, paket, jadwal, peserta, ruang, token, dan kartu.', href: '/asesmen/persiapan', cta: 'Buka Persiapan', level: 'utama' },
 		{ phase: 'Data', title: 'Kegiatan Ujian', description: 'Kelola identitas kegiatan, anggota, kartu, dan arsip kegiatan.', href: '/asesmen/kegiatan', cta: 'Kelola Kegiatan', level: 'teknis' },
 		{ phase: 'Data', title: 'Paket Ujian', description: 'Pilih dan kelola paket soal siap ujian.', href: '/asesmen/paket', cta: 'Kelola Paket', level: 'teknis' },
 		{ phase: 'Jadwal', title: 'Jadwal/Sesi Ujian', description: 'Atur sesi, peserta, ruang, kursi, token, dan status pelaksanaan.', href: '/asesmen/sesi', cta: 'Kelola Sesi', level: 'teknis' },
-		{ phase: 'Hari-H', title: 'Ruang Pengawasan', description: 'Pantau ruang berjalan dan atensi peserta.', href: '/asesmen/pengawasan', cta: 'Pantau Ruang', level: 'utama' },
+		{ phase: 'Hari-H', title: 'Pelaksanaan & Pantau Ruang', description: 'Masuk ke alur hari-H, ruang berjalan, dan atensi peserta.', href: '/asesmen/pelaksanaan', cta: 'Buka Pelaksanaan', level: 'utama' },
 		{ phase: 'Perangkat', title: 'Panduan Perangkat Siswa', description: 'Panduan Portal Ujian Web, latihan lokal, dan mode cadangan.', href: '/asesmen/aplikasi-siswa', cta: 'Buka Panduan', level: 'utama' },
 		{ phase: 'Perangkat', title: 'Uji Perangkat', description: 'Tabel uji perangkat untuk operator saat simulasi.', href: '/asesmen/aplikasi-siswa/matrix', cta: 'Buka Uji Perangkat', level: 'lanjutan' },
 		{ phase: 'Perangkat', title: 'Arsip Rilis Aplikasi', description: 'Arsip rilis aplikasi siswa untuk panitia teknis.', href: '/asesmen/aplikasi-siswa/release', cta: 'Buka Arsip', level: 'lanjutan' },
-		{ phase: 'Akhir', title: 'Hasil & Arsip', description: 'Rekap nilai, hasil, berita acara, dan unduhan akhir.', href: '/asesmen/hasil', cta: 'Buka Hasil', level: 'utama' },
 		{ phase: 'Lainnya', title: 'Penilaian Non-Tes', description: 'Workflow terpisah dari ujian digital; gunakan hanya bila panitia membutuhkan.', href: '/asesmen/non-tes', cta: 'Buka Non-Tes', level: 'lanjutan' }
-	];
+	].concat(
+		canOpenResults
+			? [{ phase: 'Akhir', title: 'Hasil & Arsip', description: 'Rekap nilai, hasil, berita acara, dan unduhan akhir.', href: '/asesmen/hasil', cta: 'Buka Hasil', level: 'utama' as const }]
+			: []
+	));
 
 	const columns = [
 		{ key: 'tool', label: 'Fitur', class: 'min-w-[16rem]' },
@@ -80,8 +89,8 @@
 					</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
-					<Button href={resolve('/asesmen/ringkas')} size="sm">Kembali ke Ringkas</Button>
-					<Button href={resolve('/asesmen/pengawasan')} variant="outline" size="sm">Pantau Ruang</Button>
+					<Button href={resolve('/asesmen/ringkas')} size="sm">Kembali ke Ringkasan</Button>
+					<Button href={resolve('/asesmen/pelaksanaan')} variant="outline" size="sm">Buka Pelaksanaan</Button>
 				</div>
 			</div>
 		</section>
