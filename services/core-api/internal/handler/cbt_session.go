@@ -58,6 +58,8 @@ type cbtSessionService interface {
 	ListRooms(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamRoomsRow, error)
 	CreateRoom(ctx context.Context, sessionID pgtype.UUID, roomName string, capacity int32) (db.CbtExamRoom, error)
 	DeleteRoom(ctx context.Context, roomID pgtype.UUID) error
+	PreviewRoomAssignment(ctx context.Context, sessionID pgtype.UUID, input service.CbtRoomAssignmentInput) (service.CbtRoomAssignmentPreview, error)
+	ApplyRoomAssignment(ctx context.Context, sessionID pgtype.UUID, input service.CbtRoomAssignmentInput) (service.CbtRoomAssignmentPreview, error)
 	ShuffleRooms(ctx context.Context, sessionID pgtype.UUID) error
 	GetProctoringStatus(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionProctoringStatusRow, error)
 	SetSuspiciousFlag(ctx context.Context, participantID pgtype.UUID, flag bool) error
@@ -1298,6 +1300,68 @@ func (h *CbtSession) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.NoContent(w)
+}
+
+func (h *CbtSession) PreviewRoomAssignment(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID sesi ujian tidak valid")
+		return
+	}
+	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
+		return
+	}
+	var body service.CbtRoomAssignmentInput
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+			api.BadRequest(w, "Data pembagian ruang tidak valid")
+			return
+		}
+	}
+	preview, err := h.svc.PreviewRoomAssignment(r.Context(), sessionID, body)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Pratinjau pembagian ruang tidak dapat dibuat")
+		return
+	}
+	api.OK(w, preview)
+}
+
+func (h *CbtSession) ApplyRoomAssignment(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID sesi ujian tidak valid")
+		return
+	}
+	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
+		return
+	}
+	var body service.CbtRoomAssignmentInput
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "Data pembagian ruang tidak valid")
+		return
+	}
+	preview, err := h.svc.ApplyRoomAssignment(r.Context(), sessionID, body)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Pembagian ruang tidak dapat disimpan")
+		return
+	}
+	h.auditEvent(r.Context(), "CBT_ROOM_ASSIGNMENT_APPLY", "cbt_exam_session", pgUUIDString(sessionID), map[string]any{
+		"mix_policy":        preview.Summary.MixPolicy,
+		"assignment_mode":   preview.Summary.AssignmentMode,
+		"allow_cross_grade": preview.Summary.AllowCrossGrade,
+		"is_special_event":  preview.Summary.IsSpecialEvent,
+		"assigned_count":    preview.Summary.AssignedCount,
+		"unassigned_count":  preview.Summary.UnassignedCount,
+	})
+	api.OK(w, preview)
 }
 
 func (h *CbtSession) ShuffleRooms(w http.ResponseWriter, r *http.Request) {

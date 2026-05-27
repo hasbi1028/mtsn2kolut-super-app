@@ -603,6 +603,8 @@ func main() {
 		r.With(requireCbt).Get("/api/cbt/sessions/{id}/rooms/{rid}/proctors", sessionH.ListRoomProctors)
 		r.With(requireAdmin).Put("/api/cbt/sessions/{id}/rooms/{rid}/proctors", sessionH.ReplaceRoomProctors)
 		r.With(requireAdmin).Delete("/api/cbt/sessions/{id}/rooms/{rid}", sessionH.DeleteRoom)
+		r.With(requireAdmin).Post("/api/cbt/sessions/{id}/rooms/assignment-preview", sessionH.PreviewRoomAssignment)
+		r.With(requireAdmin).Post("/api/cbt/sessions/{id}/rooms/assignment", sessionH.ApplyRoomAssignment)
 		r.With(requireAdmin).Post("/api/cbt/sessions/{id}/shuffle-rooms", sessionH.ShuffleRooms)
 		r.With(requireCbt).Get("/api/cbt/sessions/{id}/minutes", sessionH.GetMinutes)
 
@@ -753,6 +755,8 @@ func main() {
 		r.With(requireCbt).Get("/api/asesmen/sessions/{id}/rooms/{rid}/proctors", sessionH.ListRoomProctors)
 		r.With(requireAdmin).Put("/api/asesmen/sessions/{id}/rooms/{rid}/proctors", sessionH.ReplaceRoomProctors)
 		r.With(requireAdmin).Delete("/api/asesmen/sessions/{id}/rooms/{rid}", sessionH.DeleteRoom)
+		r.With(requireAdmin).Post("/api/asesmen/sessions/{id}/rooms/assignment-preview", sessionH.PreviewRoomAssignment)
+		r.With(requireAdmin).Post("/api/asesmen/sessions/{id}/rooms/assignment", sessionH.ApplyRoomAssignment)
 		r.With(requireAdmin).Post("/api/asesmen/sessions/{id}/shuffle-rooms", sessionH.ShuffleRooms)
 		r.With(requireCbt).Get("/api/asesmen/sessions/{id}/minutes", sessionH.GetMinutes)
 		r.With(requireAdmin).Post("/api/asesmen/sessions/{id}/score", sessionH.ScoreSession)

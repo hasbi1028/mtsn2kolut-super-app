@@ -592,6 +592,19 @@ func (f *fakeCbtSessionService) DeleteRoom(_ context.Context, roomID pgtype.UUID
 	return f.deleteRoomErr
 }
 
+func (f *fakeCbtSessionService) PreviewRoomAssignment(_ context.Context, sessionID pgtype.UUID, input service.CbtRoomAssignmentInput) (service.CbtRoomAssignmentPreview, error) {
+	f.shuffleSessionID = sessionID
+	return service.CbtRoomAssignmentPreview{Summary: service.CbtRoomAssignmentSummary{RoomCount: 8, MixPolicy: input.MixPolicy, AssignmentMode: input.AssignmentMode}}, nil
+}
+
+func (f *fakeCbtSessionService) ApplyRoomAssignment(_ context.Context, sessionID pgtype.UUID, input service.CbtRoomAssignmentInput) (service.CbtRoomAssignmentPreview, error) {
+	f.shuffleSessionID = sessionID
+	if f.shuffleErr != nil {
+		return service.CbtRoomAssignmentPreview{}, f.shuffleErr
+	}
+	return service.CbtRoomAssignmentPreview{Summary: service.CbtRoomAssignmentSummary{RoomCount: 8, AssignedCount: 8, MixPolicy: input.MixPolicy, AssignmentMode: input.AssignmentMode}}, nil
+}
+
 func (f *fakeCbtSessionService) ShuffleRooms(_ context.Context, sessionID pgtype.UUID) error {
 	f.shuffleSessionID = sessionID
 	return f.shuffleErr

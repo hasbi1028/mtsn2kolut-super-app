@@ -137,6 +137,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	{
 		group: 'Asesmen Ujian',
 		items: [
+			{ href: '/asesmen/ringkas', label: 'Ringkas', icon: 'grid', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read'] },
 			{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
 			{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
 			{ href: '/asesmen/hasil', label: 'Hasil', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.result_read'] }

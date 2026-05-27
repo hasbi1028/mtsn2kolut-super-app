@@ -49,6 +49,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'/bank-soal/cetak',
 			'/bank-soal/mapel-kd',
 			'/bank-soal/laporan',
+			'/asesmen/ringkas',
 			'/asesmen/persiapan',
 			'/asesmen/pelaksanaan',
 			'/asesmen/hasil',
@@ -62,6 +63,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 
 	it('keeps assessment navigation aligned to preparation, execution, and result workflows', () => {
 		expect(hrefsByGroup('Asesmen Ujian')).toEqual([
+			'/asesmen/ringkas',
 			'/asesmen/persiapan',
 			'/asesmen/pelaksanaan',
 			'/asesmen/hasil'

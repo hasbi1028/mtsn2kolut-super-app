@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -553,6 +554,62 @@ func TestCbtSessionShuffleRoomsMixedScopeCrossGradeRequiresSpecialAllow(t *testi
 	}
 	if len(store.assignRoomArgs) != 2 || store.assignRoomArgs[0].RoomID != roomA || store.assignRoomArgs[1].RoomID != roomA {
 		t.Fatalf("shuffleRooms(special allow cross-grade) assignments = %+v, want both grades in single room", store.assignRoomArgs)
+	}
+}
+
+func TestCbtSessionRoomAssignmentPreviewMixedScopeEightRooms(t *testing.T) {
+	sessionID := cbtSessionTestUUID(170)
+	rooms := make([]db.ListCbtExamRoomsRow, 0, 8)
+	for i := 0; i < 8; i++ {
+		rooms = append(rooms, db.ListCbtExamRoomsRow{ID: cbtSessionTestUUID(byte(171 + i)), RoomName: "Ruang " + strconv.Itoa(i+1), Capacity: 4})
+	}
+	participants := []db.ListParticipantsByRoomRow{
+		{ID: cbtSessionTestUUID(180), Nama: "A", ClassLevel: "VII", ClassCode: "VII-A"},
+		{ID: cbtSessionTestUUID(181), Nama: "B", ClassLevel: "VIII", ClassCode: "VIII-A"},
+		{ID: cbtSessionTestUUID(182), Nama: "C", ClassLevel: "IX", ClassCode: "IX-A"},
+		{ID: cbtSessionTestUUID(183), Nama: "D", ClassLevel: "VII", ClassCode: "VII-B"},
+		{ID: cbtSessionTestUUID(184), Nama: "E", ClassLevel: "VIII", ClassCode: "VIII-B"},
+		{ID: cbtSessionTestUUID(185), Nama: "F", ClassLevel: "IX", ClassCode: "IX-B"},
+		{ID: cbtSessionTestUUID(186), Nama: "G", ClassLevel: "VII", ClassCode: "VII-C"},
+		{ID: cbtSessionTestUUID(187), Nama: "H", ClassLevel: "VIII", ClassCode: "VIII-C"},
+	}
+	session := db.GetCbtExamSessionRow{ID: sessionID, Status: db.CbtSessionStatusEnumScheduled, MixPolicy: "mixed_scope", AssignmentMode: "random_balanced", IsSpecialEvent: true, AllowCrossGrade: true}
+
+	preview, err := buildCbtRoomAssignmentPreview(session, participants, rooms, CbtRoomAssignmentInput{MixPolicy: "mixed_scope", AssignmentMode: "random_balanced", IsSpecialEvent: true, AllowCrossGrade: true})
+	if err != nil {
+		t.Fatalf("buildCbtRoomAssignmentPreview() error = %v", err)
+	}
+	if preview.Summary.RoomCount != 8 || preview.Summary.ParticipantCount != 8 || preview.Summary.CapacityTotal != 32 || preview.Summary.UnassignedCount != 0 {
+		t.Fatalf("preview summary = %+v, want 8 rooms, 8 participants, capacity 32, 0 unassigned", preview.Summary)
+	}
+	usedRooms := 0
+	for _, room := range preview.Rooms {
+		if room.ParticipantCount > 0 {
+			usedRooms++
+		}
+		if room.ParticipantCount > 1 {
+			t.Fatalf("preview room %s has %d participants, want balanced spread across 8 rooms", room.RoomName, room.ParticipantCount)
+		}
+	}
+	if usedRooms != 8 {
+		t.Fatalf("preview used rooms = %d, want all 8 rooms used", usedRooms)
+	}
+	if len(preview.Warnings) == 0 {
+		t.Fatalf("preview warnings empty, want cross-grade warning")
+	}
+}
+
+func TestCbtSessionRoomAssignmentPreviewBlocksMixedScopeWithoutSpecialAllow(t *testing.T) {
+	session := db.GetCbtExamSessionRow{ID: cbtSessionTestUUID(190), Status: db.CbtSessionStatusEnumScheduled, MixPolicy: "mixed_scope", AssignmentMode: "random_balanced", IsSpecialEvent: false, AllowCrossGrade: false}
+	participants := []db.ListParticipantsByRoomRow{
+		{ID: cbtSessionTestUUID(191), ClassLevel: "VII", ClassCode: "VII-A"},
+		{ID: cbtSessionTestUUID(192), ClassLevel: "VIII", ClassCode: "VIII-A"},
+	}
+	rooms := []db.ListCbtExamRoomsRow{{ID: cbtSessionTestUUID(193), RoomName: "Ruang 1", Capacity: 2}}
+
+	_, err := buildCbtRoomAssignmentPreview(session, participants, rooms, CbtRoomAssignmentInput{MixPolicy: "mixed_scope", AssignmentMode: "random_balanced"})
+	if !errors.Is(err, domain.ErrBadRequest) || !strings.Contains(err.Error(), "sesi khusus") {
+		t.Fatalf("buildCbtRoomAssignmentPreview() error = %v, want bad request sesi khusus", err)
 	}
 }
 
