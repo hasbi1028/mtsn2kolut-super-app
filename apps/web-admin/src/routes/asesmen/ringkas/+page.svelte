@@ -202,7 +202,9 @@
 				</div>
 				<div class="flex flex-wrap gap-2 text-sm font-bold">
 					<a class="rounded-xl bg-emerald-700 px-3 py-2 text-white" href="/asesmen/persiapan">Persiapan</a>
-					<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen">Mode Lengkap</a>
+					<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/pelaksanaan">Hari Ujian</a>
+					<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/hasil">Hasil</a>
+					<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/kegiatan">Mode Lengkap</a>
 				</div>
 			</div>
 		</header>

@@ -12,9 +12,11 @@
 	type CbtRoute = Extract<
 		RouteId,
 		| '/'
+		| '/asesmen/ringkas'
 		| '/asesmen/persiapan'
 		| '/asesmen/kegiatan'
 		| '/asesmen/pelaksanaan'
+		| '/asesmen/pengawasan'
 		| '/asesmen/hasil'
 		| '/asesmen/aplikasi-siswa'
 		| '/asesmen/kegiatan'
@@ -64,45 +66,55 @@
 
 	const workflows: Workflow[] = [
 		{
-			title: 'Persiapan Ujian',
-			description: 'Cek kegiatan, paket, peserta, sesi, ruang, token, dan kartu sebelum hari-H.',
+			title: 'Ringkasan Ujian',
+			description: 'Buka halaman kerja ringkas untuk melihat sesi, paket, dan pembagian 8 ruang.',
+			href: '/asesmen/ringkas',
+			actionLabel: 'Buka Ringkasan',
+			status: 'Utama',
+			roles: ['admin', 'guru', 'staf'],
+			priority: { admin: 1, guru: 1, staf: 1 }
+		},
+		{
+			title: 'Persiapan',
+			description: 'Siapkan kegiatan, paket, jadwal, peserta, ruang, token, dan kartu sebelum ujian.',
 			href: '/asesmen/persiapan',
 			actionLabel: 'Buka Persiapan',
 			status: 'Pra ujian',
 			roles: ['admin', 'guru'],
-			priority: { admin: 1, guru: 1 }
+			priority: { admin: 2, guru: 2 }
 		},
 		{
-			title: 'Monitor Ujian',
-			description: 'Pantau sesi aktif, ruang pengawasan, peserta bermasalah, dan insiden.',
+			title: 'Pelaksanaan',
+			description: 'Pantau sesi berjalan dan arahkan pengawas ke halaman pantau ruang.',
 			href: '/asesmen/pelaksanaan',
-			actionLabel: 'Buka Monitor',
+			actionLabel: 'Buka Pelaksanaan',
 			status: 'Hari-H',
-			roles: ['admin', 'staf'],
-			priority: { admin: 2, staf: 1 }
+			roles: ['admin', 'guru', 'staf'],
+			priority: { admin: 3, guru: 3, staf: 2 }
 		},
 		{
-			title: 'Hasil & Berita Acara',
-			description: 'Buka rekap jawaban, koreksi, nilai, berita acara, dan unduhan operasional.',
+			title: 'Pantau Ruang',
+			description: 'Masuk ke daftar ruang, peserta perlu dibantu, dan catatan pengawasan.',
+			href: '/asesmen/pengawasan',
+			actionLabel: 'Pantau Ruang',
+			status: 'Ruang',
+			roles: ['admin', 'guru', 'staf'],
+			priority: { admin: 4, guru: 4, staf: 3 }
+		},
+		{
+			title: 'Hasil',
+			description: 'Lihat rekap jawaban, koreksi, nilai, berita acara, dan unduhan akhir.',
 			href: '/asesmen/hasil',
 			actionLabel: 'Buka Hasil',
 			status: 'Pasca ujian',
 			roles: ['admin', 'guru'],
-			priority: { admin: 3, guru: 2 }
-		},
-		{
-			title: 'Arsip',
-			description: 'Kunci dokumen final, cek pengesahan, dan simpan bukti kegiatan asesmen.',
-			href: '/asesmen/kegiatan',
-			actionLabel: 'Buka Kegiatan',
-			status: 'Dokumen',
-			roles: ['admin'],
-			priority: { admin: 4 }
+			priority: { admin: 5, guru: 5 }
 		}
 	];
 
 	const secondaryLinks: SecondaryLink[] = [
-		{ label: 'Pelaksanaan', href: '/asesmen/pelaksanaan', roles: ['admin', 'guru', 'staf'] },
+		{ label: 'Persiapan', href: '/asesmen/persiapan', roles: ['admin', 'guru'] },
+		{ label: 'Pantau Ruang', href: '/asesmen/pengawasan', roles: ['admin', 'guru', 'staf'] },
 		{ label: 'Hasil', href: '/asesmen/hasil', roles: ['admin', 'guru'] }
 	];
 
@@ -124,8 +136,8 @@
 	const visibleSecondaryLinks = $derived(secondaryLinks.filter((link) => link.roles.some((role) => roleSet.has(role))));
 	const roleName = $derived(launcherRole ? roleCopy[launcherRole].name : 'Peran ini');
 	const roleDescription = $derived(launcherRole ? roleCopy[launcherRole].description : 'Belum ada pintasan ujian untuk peran aktif ini. Gunakan menu utama sesuai tugas masing-masing.');
-	const primaryHref = $derived(launcherRole === 'admin' ? '/asesmen/persiapan' : '/asesmen/pelaksanaan');
-	const primaryLabel = $derived(launcherRole === 'admin' ? 'Mulai Persiapan' : 'Buka Pelaksanaan');
+	const primaryHref = $derived(launcherRole === 'admin' ? '/asesmen/ringkas' : '/asesmen/pelaksanaan');
+	const primaryLabel = $derived(launcherRole === 'admin' ? 'Buka Ringkasan' : 'Buka Pelaksanaan');
 
 	function resolveLauncherRole(roleSetValue: ReadonlySet<KnownRole>): LauncherRole | undefined {
 		if (roleSetValue.has('admin')) return 'admin';
@@ -153,16 +165,16 @@
 
 <div class="space-y-5">
 	<PageHeader
-		eyebrow="Hari Ini / Dashboard CBT"
-		title="Asesmen CBT"
+		eyebrow="Asesmen / Alur Utama"
+		title="Asesmen Ujian"
 		subtitle={`${roleName}: ${roleDescription}`}
-		context="MTsN 2 Kolaka Utara"
+		context="Persiapan → Pelaksanaan → Pantau Ruang → Hasil"
 		primaryAction={{ label: primaryLabel, href: primaryHref }}
 	/>
 
 	<ContextStrip
 		items={[
-			{ label: 'Alur', value: 'Persiapan → Pelaksanaan → Hasil' },
+			{ label: 'Alur', value: 'Ringkas → Persiapan → Hari-H → Hasil' },
 			{ label: 'Peran', value: roleName, tone: 'muted' }
 		]}
 	/>

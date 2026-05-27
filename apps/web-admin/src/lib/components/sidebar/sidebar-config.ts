@@ -137,10 +137,14 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	{
 		group: 'Asesmen Ujian',
 		items: [
-			{ href: '/asesmen/ringkas', label: 'Ringkas', icon: 'grid', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read'] },
-			{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
-			{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
-			{ href: '/asesmen/hasil', label: 'Hasil', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.result_read'] }
+			{ kind: 'folder', id: 'asesmen-alur-utama', label: 'Alur Utama', icon: 'grid', children: [
+				{ href: '/asesmen/ringkas', label: 'Ringkasan Ujian', icon: 'grid', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read'] },
+				{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
+				{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
+				{ href: '/asesmen/pengawasan', label: 'Pantau Ruang', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
+				{ href: '/asesmen/hasil', label: 'Hasil', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.result_read'] },
+				{ href: '/asesmen/aplikasi-siswa', label: 'Panduan Perangkat', icon: 'book-open', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read'] }
+			]}
 		]
 	},
 	{
@@ -243,7 +247,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 ];
 
 export const defaultPinnedByRole: Record<string, string[]> = {
-	admin: ['/akademik/kesiapan', '/akademik/rombel', '/akademik/jadwal', '/grades/rapor', '/asesmen/persiapan'],
+	admin: ['/akademik/kesiapan', '/akademik/rombel', '/akademik/jadwal', '/grades/rapor', '/asesmen/ringkas'],
 	guru: ['/journal', '/grades', '/grades/rapor', '/bank-soal', '/akademik/jadwal'],
 	staf: ['/document-cycles', '/inventory', '/library'],
 	kesiswaan: ['/students', '/akademik/rombel', '/parents', '/kesiswaan'],

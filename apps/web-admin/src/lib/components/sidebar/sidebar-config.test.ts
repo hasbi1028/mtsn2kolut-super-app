@@ -38,7 +38,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 
 	it('supports 3-level breadcrumbs for nested sidebar leaves', () => {
 		expect(sidebarBreadcrumbLabel(byHref.get('/bank-soal/tambah')!)).toBe('Bank Soal › Kelola Soal › Tambah Soal');
-		expect(sidebarBreadcrumbLabel(byHref.get('/asesmen/persiapan')!)).toBe('Asesmen Ujian › Persiapan');
+		expect(sidebarBreadcrumbLabel(byHref.get('/asesmen/pengawasan')!)).toBe('Asesmen Ujian › Alur Utama › Pantau Ruang');
 		expect(sidebarBreadcrumbLabel(byHref.get('/settings/backups')!)).toBe('Pengaturan › Sistem & Audit › Backup & Restore');
 	});
 
@@ -52,7 +52,9 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'/asesmen/ringkas',
 			'/asesmen/persiapan',
 			'/asesmen/pelaksanaan',
+			'/asesmen/pengawasan',
 			'/asesmen/hasil',
+			'/asesmen/aplikasi-siswa',
 			'/governance/actions/calendar',
 			'/governance/actions/meeting-pack',
 			'/settings/maintenance'
@@ -66,7 +68,17 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'/asesmen/ringkas',
 			'/asesmen/persiapan',
 			'/asesmen/pelaksanaan',
-			'/asesmen/hasil'
+			'/asesmen/pengawasan',
+			'/asesmen/hasil',
+			'/asesmen/aplikasi-siswa'
+		]);
+		expect(labelsByGroup('Asesmen Ujian')).toEqual([
+			'Ringkasan Ujian',
+			'Persiapan',
+			'Pelaksanaan',
+			'Pantau Ruang',
+			'Hasil',
+			'Panduan Perangkat'
 		]);
 		expect(hrefsByGroup('Asesmen Ujian')).not.toEqual(expect.arrayContaining([
 			'/asesmen/kegiatan/new',
@@ -75,9 +87,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'/asesmen/aplikasi-siswa/matrix',
 			'/asesmen/aplikasi-siswa/release',
 			'/asesmen',
-			'/asesmen/pengawasan',
 			'/asesmen/non-tes',
-			'/asesmen/aplikasi-siswa',
 			'/ujian'
 		]));
 		expect(hrefsByGroup('Asesmen Ujian').some((href) => href.startsWith('/bank-soal'))).toBe(false);
@@ -120,10 +130,10 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(byHref.get('/bank-soal/analisis-butir')?.permissions).toEqual(['bank_soal.analytics']);
 		expect(byHref.get('/asesmen/persiapan')?.permissions).toEqual(['asesmen.read']);
 		expect(byHref.get('/asesmen/pelaksanaan')?.permissions).toEqual(['asesmen.proctor']);
+		expect(byHref.get('/asesmen/pengawasan')?.permissions).toEqual(['asesmen.proctor']);
+		expect(byHref.get('/asesmen/aplikasi-siswa')?.permissions).toEqual(['asesmen.read']);
 		expect(byHref.get('/asesmen')).toBeUndefined();
-		expect(byHref.get('/asesmen/pengawasan')).toBeUndefined();
 		expect(byHref.get('/asesmen/non-tes')).toBeUndefined();
-		expect(byHref.get('/asesmen/aplikasi-siswa')).toBeUndefined();
 		expect(byHref.get('/asesmen/aplikasi-siswa/matrix')).toBeUndefined();
 		expect(byHref.get('/asesmen/aplikasi-siswa/release')).toBeUndefined();
 	});
