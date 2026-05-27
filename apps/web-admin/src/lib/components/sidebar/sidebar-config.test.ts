@@ -130,7 +130,8 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(byHref.get('/bank-soal/analisis-butir')?.permissions).toEqual(['bank_soal.analytics']);
 		expect(byHref.get('/asesmen/ringkas')?.permissions).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
 		expect(byHref.get('/asesmen/persiapan')?.permissions).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
-		expect(byHref.get('/asesmen/pelaksanaan')?.permissions).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
+		expect(byHref.get('/asesmen/pelaksanaan')?.permissions).toEqual(['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
+		expect(byHref.get('/asesmen/hasil')?.permissions).toEqual(['asesmen.result_read']);
 		expect(byHref.get('/asesmen/ruang-saya')?.permissions).toEqual(['asesmen.proctor']);
 		expect(byHref.get('/asesmen/pengawasan')).toBeUndefined();
 		expect(byHref.get('/asesmen')).toBeUndefined();
@@ -148,6 +149,15 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(visibleHrefs).not.toContain('/asesmen/pelaksanaan');
 	});
 
+
+	it('shows result entry only for result readers or admin fallback', () => {
+		const visibleHrefs = flattenSidebarNavGroups(
+			filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], ['asesmen.result_read'])
+		).map((item) => item.href);
+		expect(visibleHrefs).toEqual(expect.arrayContaining(['/asesmen/hasil', '/settings/account']));
+		expect(visibleHrefs).not.toContain('/asesmen/ringkas');
+	});
+
 	it('shows Bank Soal read/create surfaces for a guru with matching permissions', () => {
 		const visibleHrefs = flattenSidebarNavGroups(
 			filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], ['bank_soal.read', 'bank_soal.create'])
@@ -160,8 +170,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		const visibleHrefs = flattenSidebarNavGroups(
 			filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], ['asesmen.proctor'])
 		).map((item) => item.href);
-		expect(visibleHrefs).toEqual(expect.arrayContaining(['/asesmen/ruang-saya', '/settings/account']));
-		expect(visibleHrefs).not.toContain('/asesmen/pelaksanaan');
+		expect(visibleHrefs).toEqual(expect.arrayContaining(['/asesmen/pelaksanaan', '/asesmen/ruang-saya', '/settings/account']));
 		expect(visibleHrefs).not.toContain('/asesmen/ringkas');
 		expect(visibleHrefs).not.toContain('/asesmen/persiapan');
 	});

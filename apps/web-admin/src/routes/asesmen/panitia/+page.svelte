@@ -36,13 +36,9 @@
 			|| permissions.includes('asesmen.event_manage')
 			|| permissions.includes('asesmen.package_manage')
 	);
-	const canOpenResults = $derived(
-		roles.includes('admin')
-			|| roles.includes('guru')
-			|| permissions.includes('asesmen.result_read')
-	);
+	const canOpenResults = $derived(roles.includes('admin') || permissions.includes('asesmen.result_read'));
 
-	const tools = $derived<AdminTool[]>([
+	const baseTools: AdminTool[] = [
 		{ phase: 'Ringkas', title: 'Meja Kerja Panitia', description: 'Ringkasan sesi, paket, dan pembagian ruang.', href: '/asesmen/ringkas', cta: 'Buka Ringkas', level: 'utama' },
 		{ phase: 'Pra', title: 'Persiapan Ujian', description: 'Checklist kegiatan, paket, jadwal, peserta, ruang, token, dan kartu.', href: '/asesmen/persiapan', cta: 'Buka Persiapan', level: 'utama' },
 		{ phase: 'Data', title: 'Kegiatan Ujian', description: 'Kelola identitas kegiatan, anggota, kartu, dan arsip kegiatan.', href: '/asesmen/kegiatan', cta: 'Kelola Kegiatan', level: 'teknis' },
@@ -53,11 +49,16 @@
 		{ phase: 'Perangkat', title: 'Uji Perangkat', description: 'Tabel uji perangkat untuk operator saat simulasi.', href: '/asesmen/aplikasi-siswa/matrix', cta: 'Buka Uji Perangkat', level: 'lanjutan' },
 		{ phase: 'Perangkat', title: 'Arsip Rilis Aplikasi', description: 'Arsip rilis aplikasi siswa untuk panitia teknis.', href: '/asesmen/aplikasi-siswa/release', cta: 'Buka Arsip', level: 'lanjutan' },
 		{ phase: 'Lainnya', title: 'Penilaian Non-Tes', description: 'Workflow terpisah dari ujian digital; gunakan hanya bila panitia membutuhkan.', href: '/asesmen/non-tes', cta: 'Buka Non-Tes', level: 'lanjutan' }
-	].concat(
+	];
+
+	const tools = $derived<AdminTool[]>(
 		canOpenResults
-			? [{ phase: 'Akhir', title: 'Hasil & Arsip', description: 'Rekap nilai, hasil, berita acara, dan unduhan akhir.', href: '/asesmen/hasil', cta: 'Buka Hasil', level: 'utama' as const }]
-			: []
-	));
+			? [
+				...baseTools,
+				{ phase: 'Akhir', title: 'Hasil & Arsip', description: 'Rekap nilai, hasil, berita acara, dan unduhan akhir.', href: '/asesmen/hasil', cta: 'Buka Hasil', level: 'utama' }
+			]
+			: baseTools
+	);
 
 	const columns = [
 		{ key: 'tool', label: 'Fitur', class: 'min-w-[16rem]' },
@@ -120,7 +121,7 @@
 							<p class="font-semibold text-foreground">{tool.title}</p>
 							<p class="mt-1 leading-5 text-muted-foreground">{tool.description}</p>
 						</div>
-						<Badge class={levelClass(tool.level)} variant="outline">{tool.phase}</Badge>
+						<Badge class={levelClass(tool.level)} variant="outline">{tool.level}</Badge>
 					</div>
 					<Button href={resolve(tool.href)} size="sm" variant="outline" class="w-full">{tool.cta}</Button>
 				</div>

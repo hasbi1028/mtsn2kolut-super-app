@@ -54,11 +54,7 @@
 	});
 	let userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
 	let userPermissions = $derived((page.data.user?.permissions ?? []).map((permission) => permission.trim()).filter(Boolean));
-	let canOpenResults = $derived(
-		userRoles.includes('admin')
-			|| userRoles.includes('guru')
-			|| userPermissions.includes('asesmen.result_read')
-	);
+	let canOpenResults = $derived(userRoles.includes('admin') || userPermissions.includes('asesmen.result_read'));
 
 	onMount(() => {
 		void loadData();
@@ -204,9 +200,9 @@
 		<header class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 			<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 				<div>
-					<p class="text-xs font-bold uppercase tracking-[0.22em] text-emerald-700">Asesmen/Ujian Digital</p>
+					<p class="text-xs font-bold uppercase tracking-[0.22em] text-emerald-700">Ujian Digital</p>
 					<h1 class="mt-1 text-2xl font-black tracking-tight md:text-3xl">Ringkasan Ujian</h1>
-					<p class="mt-1 max-w-2xl text-sm text-slate-600">Satu halaman untuk membuka persiapan, hari ujian, hasil, dan pembagian 8 ruang tanpa berpindah ke terlalu banyak menu.</p>
+					<p class="mt-1 max-w-2xl text-sm text-slate-600">Satu halaman untuk membuka persiapan, pelaksanaan, hasil, dan pembagian 8 ruang tanpa berpindah ke terlalu banyak menu.</p>
 				</div>
 				<div class="flex flex-wrap gap-2 text-sm font-bold">
 					<a class="rounded-xl bg-emerald-700 px-3 py-2 text-white" href="/asesmen/persiapan">Persiapan</a>
@@ -214,7 +210,6 @@
 					{#if canOpenResults}
 						<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/hasil">Hasil</a>
 					{/if}
-					<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/panitia">Mode Lengkap Panitia</a>
 				</div>
 			</div>
 		</header>
@@ -223,7 +218,7 @@
 		{#if successMessage}<div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">{successMessage}</div>{/if}
 
 		{#if loading}
-			<div class="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">Memuat ringkasan asesmen...</div>
+			<div class="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">Memuat ringkasan ujian...</div>
 		{:else}
 			<section class="grid gap-3 md:grid-cols-3">
 				<div class="rounded-2xl border border-slate-200 bg-white p-4">
@@ -232,7 +227,7 @@
 					<p class="text-sm text-slate-600">sesi ujian tercatat</p>
 				</div>
 				<div class="rounded-2xl border border-slate-200 bg-white p-4">
-					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Hari Ujian</p>
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Pelaksanaan</p>
 					<p class="mt-2 text-3xl font-black">{todaySessions.length}</p>
 					<p class="text-sm text-slate-600">sesi hari ini</p>
 				</div>
@@ -251,7 +246,7 @@
 								<h2 class="text-lg font-black">Langkah cepat panitia</h2>
 								<p class="text-sm text-slate-600">Buka sesi terdekat, lalu lanjutkan ke ruang, kartu, atau arsip sesuai kebutuhan.</p>
 							</div>
-							<a class="rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold" href="/asesmen/sesi">Pilih Sesi</a>
+							<a class="rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold" href="/asesmen/pelaksanaan">Buka Pelaksanaan</a>
 						</div>
 						<div class="mt-3 divide-y divide-slate-100">
 							{#each latestSessions as session (session.id)}
@@ -337,7 +332,6 @@
 					{/if}
 
 					<div class="mt-4 flex flex-wrap gap-2 text-xs font-bold">
-						<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/sesi">Kelola Sesi Lengkap</a>
 						<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/panitia">Mode Lengkap Panitia</a>
 					</div>
 				</aside>

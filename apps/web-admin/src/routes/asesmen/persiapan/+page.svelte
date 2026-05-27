@@ -150,7 +150,7 @@
 		<div class="max-w-lg rounded-2xl border border-border bg-card p-8 shadow-sm">
 			<h2 class="text-xl font-semibold text-foreground">Akses terbatas</h2>
 			<p class="mt-3 text-sm leading-6 text-muted-foreground">
-				Fase persiapan asesmen hanya tersedia untuk panitia/operator. Silakan kembali ke ringkasan atau gunakan menu asesmen lain sesuai tugas.
+				Fase persiapan ujian hanya tersedia untuk panitia/operator. Silakan kembali ke ringkasan atau gunakan menu asesmen lain sesuai tugas.
 			</p>
 			<div class="mt-6">
 				<Button href={resolve('/asesmen/ringkas')} variant="outline">Kembali ke Ringkasan</Button>

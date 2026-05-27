@@ -137,12 +137,17 @@ describe('route access helpers', () => {
 		expect(requiredPermissionsForPath('/asesmen/ringkas', 'GET')).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
 		expect(requiredPermissionsForPath('/asesmen/persiapan', 'GET')).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
 		expect(requiredPermissionsForPath('/asesmen/pelaksanaan', 'GET')).toEqual(['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
+		expect(requiredPermissionsForPath('/asesmen', 'GET')).toEqual(['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.result_read']);
 		expect(requiredPermissionsForPath('/ujian/command-center', 'GET')).toEqual(['asesmen.proctor']);
 		expect(canAccessProtectedRoute(assessmentOperator, '/asesmen/ringkas', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(assessmentOperator, '/asesmen/persiapan', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(assessmentOperator, '/asesmen/pelaksanaan', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(user, '/asesmen/ringkas', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute(user, '/asesmen/persiapan', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute(user, '/asesmen', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute(assessmentOperator, '/asesmen', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ ...user, permissions: ['asesmen.proctor'] }, '/asesmen', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ ...user, permissions: ['asesmen.result_read'] }, '/asesmen', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: ['asesmen.proctor'] }, '/ujian/command-center', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(user, '/ujian/command-center', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute(user, '/asesmen/kegiatan', 'GET')).toBe(true);

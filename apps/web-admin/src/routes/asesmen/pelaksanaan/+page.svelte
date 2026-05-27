@@ -13,7 +13,7 @@
 		| '/asesmen/kegiatan'
 		| '/asesmen/persiapan'
 		| '/asesmen/hasil'
-		| '/asesmen';
+		| '/asesmen/ringkas';
 	type RoleMode = 'admin' | 'guru' | 'staf';
 	type TaskKind = 'primary' | 'support' | 'result';
 
@@ -36,23 +36,19 @@
 			|| userPermissions.includes('asesmen.package_manage')
 	);
 	const hasProctorLane = $derived(userPermissions.includes('asesmen.proctor'));
-	const canOpenResults = $derived(
-		userRoles.includes('admin')
-			|| userRoles.includes('guru')
-			|| userPermissions.includes('asesmen.result_read')
-	);
+	const canOpenResults = $derived(userRoles.includes('admin') || userPermissions.includes('asesmen.result_read'));
 	const canAccess = $derived(hasOperatorLane || hasProctorLane);
 	const roleMode = $derived<RoleMode>(hasOperatorLane ? 'admin' : userRoles.includes('guru') ? 'guru' : 'staf');
 	const isAdminMode = $derived(roleMode === 'admin');
 	const roleName = $derived(isAdminMode ? 'Admin/Panitia' : roleMode === 'guru' ? 'Guru/Pengawas' : 'Staf/Operator');
-	const heroTitle = $derived(isAdminMode ? 'Pelaksanaan Ujian' : 'Ruang Saya & Pengawasan');
+	const heroTitle = $derived(isAdminMode ? 'Pelaksanaan Ujian' : 'Ruang Saya');
 	const heroSubtitle = $derived(
 		isAdminMode
 			? 'Kelola sesi, ruang, kartu peserta, perangkat siswa, mode cadangan, dan hasil dari satu layar kerja.'
-			: 'Buka ruang pengawasan, pantau peserta, cek perangkat siswa, lalu gunakan mode cadangan hanya bila perlu.'
+			: 'Buka ruang yang ditugaskan, pantau peserta, cek perangkat siswa, lalu hubungi panitia bila perlu.'
 	);
 
-	const dayTasks = $derived<DayTask[]>([
+	const baseDayTasks: DayTask[] = [
 		{
 			title: 'Persiapan',
 			description: 'Kembali ke checklist kegiatan, paket, sesi, ruang, peserta, dan token.',
@@ -79,14 +75,6 @@
 			roles: ['admin', 'guru', 'staf']
 		},
 		{
-			title: 'Pantau Peserta',
-			description: 'Masuk ke ruang untuk melihat peserta yang perlu dibantu atau belum mengirim.',
-			href: '/asesmen/ruang-saya',
-			cta: 'Buka Panel',
-			kind: 'primary',
-			roles: ['guru', 'staf']
-		},
-		{
 			title: 'Cetak Kartu Peserta',
 			description: 'Cetak kartu dari kegiatan ujian jika ada peserta yang membutuhkan salinan.',
 			href: '/asesmen/kegiatan',
@@ -102,18 +90,23 @@
 			kind: 'support',
 			roles: ['admin', 'guru', 'staf']
 		}
-	].concat(
+	];
+
+	const dayTasks = $derived<DayTask[]>(
 		canOpenResults
-			? [{
-				title: 'Hasil',
-				description: 'Buka rekap, nilai, dan hasil sesi setelah ujian selesai.',
-				href: '/asesmen/hasil' as const,
-				cta: 'Lihat Hasil',
-				kind: 'result' as const,
-				roles: ['admin', 'guru'] as RoleMode[]
-			}]
-			: []
-	));
+			? [
+				...baseDayTasks,
+				{
+					title: 'Hasil',
+					description: 'Buka rekap, nilai, dan hasil sesi setelah ujian selesai.',
+					href: '/asesmen/hasil',
+					cta: 'Lihat Hasil',
+					kind: 'result',
+					roles: ['admin', 'guru', 'staf']
+				}
+			]
+			: baseDayTasks
+	);
 
 	const visibleTasks = $derived(dayTasks.filter((task) => task.roles.includes(roleMode)));
 	const primaryTask = $derived(visibleTasks.find((task) => task.kind === 'primary') ?? visibleTasks[0]);
@@ -161,7 +154,7 @@
 			<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
 				<div class="min-w-0 space-y-2">
 					<div class="flex flex-wrap items-center gap-2">
-						<Badge class="border-primary/20 bg-primary/10 text-primary" variant="outline">Hari-H</Badge>
+						<Badge class="border-primary/20 bg-primary/10 text-primary" variant="outline">Ujian Digital</Badge>
 						<Badge class="border-border bg-muted text-muted-foreground" variant="outline">{roleName}</Badge>
 					</div>
 					<h1 class="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">{heroTitle}</h1>
@@ -170,7 +163,7 @@
 				{#if primaryTask}
 					<div class="flex flex-wrap gap-2">
 						<Button href={taskHref(primaryTask)} size="sm">{primaryTask.cta}</Button>
-						<Button href={resolve('/asesmen/ringkas')} variant="outline" size="sm">Ringkasan</Button>
+						<Button href={resolve('/asesmen/ringkas')} variant="outline" size="sm">Kembali ke Ringkasan</Button>
 					</div>
 				{/if}
 			</div>
@@ -179,7 +172,7 @@
 		<section aria-labelledby="pelaksanaan-focus-title" class="space-y-3">
 			<div class="flex flex-wrap items-end justify-between gap-3">
 				<div>
-					<p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Alur hari-H</p>
+					<p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Alur Pelaksanaan</p>
 					<h2 id="pelaksanaan-focus-title" class="mt-1 text-xl font-semibold tracking-tight text-foreground">
 						{isAdminMode ? 'Kontrol panitia' : 'Tugas pengawasan'}
 					</h2>
@@ -241,10 +234,10 @@
 		<div class="max-w-lg rounded-2xl border border-border bg-card p-8 shadow-sm">
 			<h2 class="text-xl font-semibold text-foreground">Akses terbatas</h2>
 			<p class="mt-3 text-sm leading-6 text-muted-foreground">
-				Halaman hari-H ujian hanya tersedia untuk admin, guru, dan staf. Silakan kembali ke Beranda Asesmen.
+				Halaman pelaksanaan ujian hanya tersedia untuk panitia atau pengawas yang diberi akses. Silakan kembali ke Ringkasan.
 			</p>
 			<div class="mt-6">
-				<Button href={resolve('/asesmen')} variant="outline">Kembali ke Beranda Asesmen</Button>
+				<Button href={resolve('/asesmen/ringkas')} variant="outline">Kembali ke Ringkasan</Button>
 			</div>
 		</div>
 	</div>

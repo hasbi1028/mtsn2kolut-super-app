@@ -280,7 +280,7 @@ function asesmenPermission(pathname: string, method: string): string[] | undefin
 	if (matchesPathSegment(pathname, '/asesmen/sesi') || matchesPathSegment(pathname, '/api/asesmen/sessions')) {
 		return isReadMethod(method) ? ['asesmen.read'] : ['asesmen.proctor'];
 	}
-	if (matchesPathSegment(pathname, '/asesmen')) return ['asesmen.read'];
+	if (matchesPathSegment(pathname, '/asesmen')) return [...ASSESSMENT_DAY_OF_PERMISSIONS, 'asesmen.result_read'];
 	return undefined;
 }
 
