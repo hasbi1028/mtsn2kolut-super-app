@@ -175,6 +175,21 @@ func TestExamRecordClientEventTelemetryDedupAndTechnicalDoNotRaiseRisk(t *testin
 	if store.riskArg.PendingAnswerCount != 7 || store.riskArg.SyncState != "pending" || store.proctorEvents[0].RiskDelta != 0 {
 		t.Fatalf("technical sync/event = %+v event %+v", store.riskArg, store.proctorEvents[0])
 	}
+
+	store = &fakeExamTelemetryStore{
+		state:    db.GetCbtParticipantRiskForUpdateRow{RiskScore: 0, RiskLevel: "normal", SyncState: "synced"},
+		dedupErr: pgx.ErrNoRows,
+	}
+	svc = &Exam{q: store}
+	if err := svc.RecordClientEvent(ctx, participantID, "web_focus_lost", map[string]any{"reason": "window_blur"}); err != nil {
+		t.Fatalf("RecordClientEvent(web_focus_lost) error = %v", err)
+	}
+	if store.riskArg.AppSwitchIncrement != 1 || store.riskArg.ScreenshotIncrement != 0 {
+		t.Fatalf("web focus lost counters = %+v, want app switch increment only", store.riskArg)
+	}
+	if store.proctorEvents[0].EventType != "web_focus_lost" {
+		t.Fatalf("web focus event = %q, want web_focus_lost", store.proctorEvents[0].EventType)
+	}
 }
 
 func TestExamRecordClientEventTelemetryPropagatesStoreErrors(t *testing.T) {

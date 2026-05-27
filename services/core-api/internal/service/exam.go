@@ -542,10 +542,10 @@ func (s *Exam) RecordClientEvent(ctx context.Context, participantID pgtype.UUID,
 		return recordProctorTelemetryWithStore(ctx, q, participantID, normalized, data, time.Now())
 	}
 	decision := ClassifyProctorSeverity(normalized, data)
-	switch decision.Category {
-	case "app_switch":
+	if shouldIncrementAppSwitchCounter(decision) {
 		_ = s.q.IncrementParticipantAppSwitch(ctx, participantID)
-	case "screenshot":
+	}
+	if decision.Category == "screenshot" {
 		_ = s.q.IncrementParticipantScreenshot(ctx, participantID)
 	}
 	if decision.RiskDelta > 0 && decision.Severity != ProctorSeverityTechnical {
@@ -631,7 +631,7 @@ func recordProctorTelemetryWithStore(ctx context.Context, q examProctorTelemetry
 	}
 	syncState := normalizeSyncState(stringFromAny(cleanData["sync_state"]), pendingAnswerCount, state.SyncState)
 	appSwitchIncrement := int32(0)
-	if decision.Category == "app_switch" && !deduped {
+	if shouldIncrementAppSwitchCounter(decision) && !deduped {
 		appSwitchIncrement = 1
 	}
 	screenshotIncrement := int32(0)
@@ -712,6 +712,18 @@ func proctorEventDataWithDecision(data map[string]any, decision SeverityDecision
 	payload["requires_note"] = decision.RequiresNote
 	payload["deduped"] = deduped
 	return payload
+}
+
+func shouldIncrementAppSwitchCounter(decision SeverityDecision) bool {
+	if decision.Category == "app_switch" {
+		return true
+	}
+	switch decision.EventType {
+	case "web_focus_lost", "web_visibility_hidden", "web_fullscreen_exit":
+		return true
+	default:
+		return false
+	}
 }
 
 func timestampFromProctorData(data map[string]any, fallback time.Time) time.Time {
