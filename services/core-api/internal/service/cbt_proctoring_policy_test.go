@@ -48,6 +48,9 @@ func TestCbtProctoringPolicyClassifiesWhitelistedTelemetry(t *testing.T) {
 		{"offline_mass", nil, "offline_mass", ProctorSeverityTechnical, 0, false},
 		{"pending_sync", nil, "pending_sync", ProctorSeverityTechnical, 0, false},
 		{"submit_blocked_pending_sync", nil, "submit_held_pending_sync", ProctorSeverityTechnical, 0, false},
+		{"copy_attempt", nil, "copy_attempt", ProctorSeverityWarning, 10, false},
+		{"paste_attempt", nil, "paste_attempt", ProctorSeverityMedium, 20, false},
+		{"right_click", nil, "context_menu_attempt", ProctorSeverityWarning, 5, false},
 	}
 	for _, tc := range cases {
 		got := ClassifyProctorSeverity(tc.raw, tc.data)

@@ -52,6 +52,12 @@ var proctorEventAliases = map[string]string{
 	"submit_blocked_pending_sync":      "submit_held_pending_sync",
 	"auto_submit_blocked_pending_sync": "submit_held_pending_sync",
 	"browser_darurat":                  "web_fallback_used",
+	"copy":                             "copy_attempt",
+	"paste":                            "paste_attempt",
+	"cut":                              "cut_attempt",
+	"context_menu":                     "context_menu_attempt",
+	"right_click":                      "context_menu_attempt",
+	"drop":                             "drop_attempt",
 }
 
 var proctorEventWhitelist = map[string]SeverityDecision{
@@ -117,6 +123,24 @@ var proctorEventWhitelist = map[string]SeverityDecision{
 	},
 	"submit_held_pending_sync": {
 		EventType: "submit_held_pending_sync", Severity: ProctorSeverityTechnical, Category: "sync", RequiresNote: true, AudioKey: "technical", LabelID: "submit_held_pending_sync", MessageID: "submit_ditahan_sinkronisasi",
+	},
+	"copy_attempt": {
+		EventType: "copy_attempt", Severity: ProctorSeverityWarning, Category: "clipboard", RiskDelta: 10, AudioKey: "warning", LabelID: "copy_attempt", MessageID: "percobaan_salin_diblokir",
+	},
+	"cut_attempt": {
+		EventType: "cut_attempt", Severity: ProctorSeverityWarning, Category: "clipboard", RiskDelta: 10, AudioKey: "warning", LabelID: "cut_attempt", MessageID: "percobaan_potong_diblokir",
+	},
+	"paste_attempt": {
+		EventType: "paste_attempt", Severity: ProctorSeverityMedium, Category: "clipboard", RiskDelta: 20, RequiresNote: true, AudioKey: "medium", LabelID: "paste_attempt", MessageID: "percobaan_tempel_diblokir",
+	},
+	"context_menu_attempt": {
+		EventType: "context_menu_attempt", Severity: ProctorSeverityWarning, Category: "clipboard", RiskDelta: 5, AudioKey: "warning", LabelID: "context_menu_attempt", MessageID: "menu_konteks_diblokir",
+	},
+	"drop_attempt": {
+		EventType: "drop_attempt", Severity: ProctorSeverityMedium, Category: "clipboard", RiskDelta: 15, RequiresNote: true, AudioKey: "medium", LabelID: "drop_attempt", MessageID: "drag_drop_diblokir",
+	},
+	"anti_cheat_keyboard_shortcut": {
+		EventType: "anti_cheat_keyboard_shortcut", Severity: ProctorSeverityWarning, Category: "clipboard", RiskDelta: 5, AudioKey: "warning", LabelID: "anti_cheat_keyboard_shortcut", MessageID: "pintasan_keyboard_diblokir",
 	},
 	"web_fallback_used": {
 		EventType: "web_fallback_used", Severity: ProctorSeverityInfo, Category: "web_fallback", AudioKey: "none", LabelID: "web_fallback_used", MessageID: "browser_darurat_digunakan",

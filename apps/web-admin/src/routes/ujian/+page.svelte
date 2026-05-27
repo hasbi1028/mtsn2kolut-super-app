@@ -391,6 +391,55 @@
 		activeQuestionIndex = Math.min(Math.max(activeQuestionIndex + delta, 0), Math.max(questions.length - 1, 0));
 	}
 
+	function isExamRuntime() {
+		return portalStep === 'exam' && Boolean(payload) && !submitted;
+	}
+
+	function eventTargetName(target: EventTarget | null) {
+		if (!(target instanceof HTMLElement)) return 'unknown';
+		return target.tagName.toLowerCase();
+	}
+
+	function isEditableTarget(target: EventTarget | null) {
+		return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || (target instanceof HTMLElement && target.isContentEditable);
+	}
+
+	function blockExamClipboard(event: Event, eventType: 'copy_attempt' | 'cut_attempt' | 'paste_attempt' | 'context_menu_attempt' | 'drop_attempt') {
+		if (!isExamRuntime()) return;
+		event.preventDefault();
+		event.stopPropagation();
+		const target = eventTargetName(event.target);
+		const label = eventType === 'paste_attempt' ? 'Tempel/paste diblokir' : eventType === 'copy_attempt' ? 'Salin/copy diblokir' : eventType === 'cut_attempt' ? 'Potong/cut diblokir' : eventType === 'drop_attempt' ? 'Tarik-lepas teks diblokir' : 'Menu klik kanan/tahan diblokir';
+		addTelemetry(label);
+		void reportPortalEvent(eventType, { reason: eventType, target, blocked: true });
+	}
+
+	function blockExamSelection(event: Event) {
+		if (!isExamRuntime() || isEditableTarget(event.target)) return;
+		event.preventDefault();
+	}
+
+	function blockPasteBeforeInput(event: InputEvent) {
+		if (!isExamRuntime()) return;
+		if (event.inputType === 'insertFromPaste' || event.inputType === 'insertFromDrop') {
+			blockExamClipboard(event, event.inputType === 'insertFromPaste' ? 'paste_attempt' : 'drop_attempt');
+		}
+	}
+
+	function blockExamShortcut(event: KeyboardEvent) {
+		if (!isExamRuntime()) return;
+		const key = event.key.toLowerCase();
+		if ((event.ctrlKey || event.metaKey) && ['c', 'x', 'v', 'a', 's', 'p'].includes(key)) {
+			event.preventDefault();
+			event.stopPropagation();
+			if (key === 'v') void reportPortalEvent('paste_attempt', { reason: 'keyboard_shortcut', blocked: true });
+			else if (key === 'c') void reportPortalEvent('copy_attempt', { reason: 'keyboard_shortcut', blocked: true });
+			else if (key === 'x') void reportPortalEvent('cut_attempt', { reason: 'keyboard_shortcut', blocked: true });
+			else void reportPortalEvent('anti_cheat_keyboard_shortcut', { reason: `ctrl_${key}`, blocked: true });
+			addTelemetry('Pintasan keyboard diblokir');
+		}
+	}
+
 	$effect(() => {
 		const token = queryCard;
 		if (token && !cardToken) cardToken = token;
@@ -405,17 +454,38 @@
 		const onOffline = () => addTelemetry('Koneksi terputus, jawaban disimpan sementara');
 		const onOnline = () => addTelemetry('Koneksi kembali tersambung');
 		const onVisibility = () => void reportPortalEvent(document.hidden ? 'web_visibility_hidden' : 'web_visibility_visible', { reason: document.hidden ? 'document_hidden' : 'document_visible' });
+		const onCopy = (event: ClipboardEvent) => blockExamClipboard(event, 'copy_attempt');
+		const onCut = (event: ClipboardEvent) => blockExamClipboard(event, 'cut_attempt');
+		const onPaste = (event: ClipboardEvent) => blockExamClipboard(event, 'paste_attempt');
+		const onContextMenu = (event: MouseEvent) => blockExamClipboard(event, 'context_menu_attempt');
+		const onDrop = (event: DragEvent) => blockExamClipboard(event, 'drop_attempt');
 		window.addEventListener('blur', onBlur);
 		window.addEventListener('focus', onFocus);
 		window.addEventListener('offline', onOffline);
 		window.addEventListener('online', onOnline);
+		window.addEventListener('keydown', blockExamShortcut, true);
 		document.addEventListener('visibilitychange', onVisibility);
+		document.addEventListener('copy', onCopy, true);
+		document.addEventListener('cut', onCut, true);
+		document.addEventListener('paste', onPaste, true);
+		document.addEventListener('contextmenu', onContextMenu, true);
+		document.addEventListener('drop', onDrop, true);
+		document.addEventListener('selectstart', blockExamSelection, true);
+		document.addEventListener('beforeinput', blockPasteBeforeInput, true);
 		return () => {
 			window.removeEventListener('blur', onBlur);
 			window.removeEventListener('focus', onFocus);
 			window.removeEventListener('offline', onOffline);
 			window.removeEventListener('online', onOnline);
+			window.removeEventListener('keydown', blockExamShortcut, true);
 			document.removeEventListener('visibilitychange', onVisibility);
+			document.removeEventListener('copy', onCopy, true);
+			document.removeEventListener('cut', onCut, true);
+			document.removeEventListener('paste', onPaste, true);
+			document.removeEventListener('contextmenu', onContextMenu, true);
+			document.removeEventListener('drop', onDrop, true);
+			document.removeEventListener('selectstart', blockExamSelection, true);
+			document.removeEventListener('beforeinput', blockPasteBeforeInput, true);
 		};
 	});
 
@@ -478,7 +548,7 @@
 					{/if}
 				</section>
 			{:else if payload && portalStep === 'exam'}
-				<section class="space-y-4">
+				<section class="space-y-4 select-none" data-exam-anti-cheat-scope="active">
 					<div class="sticky top-0 z-10 -mx-4 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
 						<div class="flex items-center justify-between gap-3">
 							<div class="min-w-0">
@@ -495,7 +565,7 @@
 								<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{currentQuestion.type === 'multiple_choice' ? 'Pilihan Ganda' : 'Uraian'}</p>
 								{#if doubtfulQuestions.has(currentQuestion.id)}<span class="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-900">Ragu-ragu</span>{/if}
 							</div>
-							<p class="mt-3 whitespace-pre-wrap text-base font-semibold leading-7">{currentQuestion.text}</p>
+							<p class="mt-3 whitespace-pre-wrap text-base font-semibold leading-7 select-none">{currentQuestion.text}</p>
 							{#if currentQuestion.options?.length}
 								<div class="mt-4 grid gap-2">
 									{#each currentQuestion.options as option}
@@ -506,13 +576,13 @@
 									{/each}
 								</div>
 							{:else}
-								<textarea class="mt-4 min-h-40 w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-950" placeholder="Tulis jawaban..." value={answers[currentQuestion.id] ?? ''} onblur={(event) => saveAnswer(currentQuestion.id, event.currentTarget.value)}></textarea>
+								<textarea class="mt-4 min-h-40 w-full select-text rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-950" placeholder="Tulis jawaban..." value={answers[currentQuestion.id] ?? ''} onpaste={(event) => blockExamClipboard(event, 'paste_attempt')} ondrop={(event) => blockExamClipboard(event, 'drop_attempt')} onblur={(event) => saveAnswer(currentQuestion.id, event.currentTarget.value)}></textarea>
 							{/if}
 							<p class="mt-3 rounded-xl bg-slate-50 p-2 text-xs text-slate-600">{pendingAnswers[currentQuestion.id] ? 'Aman lokal, menunggu sinkron' : answers[currentQuestion.id] ? 'Tersimpan' : 'Belum dijawab'}</p>
 						</article>
 					{/if}
 
-					<div class="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">Tetap berada di halaman ujian. Jika koneksi tidak stabil, jawaban disimpan sementara dan akan dikirim ulang saat tersambung.</div>
+					<div class="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">Tetap berada di halaman ujian. Copy, paste, klik kanan/tahan, dan drag teks dinonaktifkan serta dicatat ke pengawas. Jika koneksi tidak stabil, jawaban disimpan sementara dan akan dikirim ulang saat tersambung.</div>
 				</section>
 			{:else}
 				<section class="space-y-4">

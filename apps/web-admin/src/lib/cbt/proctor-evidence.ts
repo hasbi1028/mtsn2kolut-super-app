@@ -174,6 +174,12 @@ const PROCTOR_EVENT_TYPE_LABELS: Record<string, string> = {
 	web_pending_answer_flushed: 'Jawaban browser terkirim',
 	web_connection_degraded: 'Koneksi browser menurun',
 	web_connection_restored: 'Koneksi browser pulih',
+	copy_attempt: 'Percobaan salin/copy diblokir',
+	cut_attempt: 'Percobaan potong/cut diblokir',
+	paste_attempt: 'Percobaan tempel/paste diblokir',
+	context_menu_attempt: 'Menu klik kanan/tahan diblokir',
+	drop_attempt: 'Drag/drop teks diblokir',
+	anti_cheat_keyboard_shortcut: 'Pintasan keyboard diblokir',
 	proctor_reset_access: 'Reset akses',
 	proctor_unlock: 'Buka kunci peserta',
 	proctor_acknowledge: 'Tandai diperiksa',
@@ -223,6 +229,12 @@ const FORMAL_VALUE_LABELS: Record<string, string> = {
 	picture_in_picture: 'Jendela mengambang',
 	focus_lost: 'Fokus aplikasi hilang',
 	screenshot_attempt: 'Percobaan tangkap layar',
+	copy_attempt: 'Percobaan salin/copy',
+	cut_attempt: 'Percobaan potong/cut',
+	paste_attempt: 'Percobaan tempel/paste',
+	context_menu_attempt: 'Menu klik kanan/tahan',
+	drop_attempt: 'Drag/drop teks',
+	anti_cheat_keyboard_shortcut: 'Pintasan keyboard',
 	app_switch: 'Keluar/kembali aplikasi',
 	anti_cheat_locked: 'Akses dikunci karena pelanggaran'
 };
@@ -257,6 +269,7 @@ export function classifyProctorEvent(event: ProctorEvidenceEvent): ProctorEviden
 		eventType === 'student_portal_room_token_mismatch'
 	) return 'device_mismatch';
 	if (eventType === 'student_portal_token_reveal') return 'export_print';
+	if (['copy_attempt', 'cut_attempt', 'paste_attempt', 'context_menu_attempt', 'drop_attempt', 'anti_cheat_keyboard_shortcut'].includes(eventType)) return 'anti_cheat';
 	if (eventType === 'submit_guard' || eventType === 'submit_held_pending_sync' || eventType === 'pending_sync' || eventType === 'web_pending_answer_saved') return 'submit_guard';
 	if (
 		eventType === 'anti_cheat_violation' ||
