@@ -99,7 +99,7 @@
 
 	async function fetchRooms() {
 		const response = await fetch('/api/asesmen/proctoring/my-rooms');
-		const payload = await readClientApiData<ProctorRoom[]>(response, 'Gagal memuat ruang pengawas');
+		const payload = await readClientApiData<ProctorRoom[]>(response, 'Gagal memuat ruang saya');
 		rooms = Array.isArray(payload) ? payload : [];
 		return rooms;
 	}
@@ -111,7 +111,7 @@
 
 	function roomsErrorMessage(error: unknown) {
 		if (error instanceof Error && error.message.trim()) return error.message;
-		return 'Gagal memuat ruang pengawas';
+		return 'Gagal memuat ruang saya';
 	}
 
 	function handleRenderError(error: unknown) {
@@ -224,7 +224,7 @@
 	{#snippet failed(error, reset)}
 		<div class="p-4 md:p-6">
 			<RecoveryPanel
-				title="Ruang Pengawas Belum Tersaji"
+				title="Ruang Saya Belum Tersaji"
 				message={roomsErrorMessage(error)}
 				onRetry={() => retryRooms(reset)}
 			/>
@@ -236,10 +236,10 @@
 		<div class="space-y-5 p-4 md:p-6">
 			<section class="flex flex-col gap-4 border-b border-primary/20 pb-5 lg:flex-row lg:items-end lg:justify-between">
 				<div class="max-w-3xl space-y-2">
-					<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Asesmen CBT / Pengawasan Ruang</p>
-					<h1 class="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Portal Pengawasan</h1>
+					<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Ujian Digital / Ruang Saya</p>
+					<h1 class="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Ruang Saya</h1>
 					<p class="text-sm leading-6 text-muted-foreground">
-						Mode Sederhana/Hari-H untuk pengawas: pilih ruang, tekan tombol besar Mulai Ujian, pantau label hijau/kuning/merah, dan gunakan Hubungi Admin bila butuh bantuan.
+						Halaman sederhana untuk pengawas: pilih ruang, lihat kode ruang, pantau label hijau/kuning/merah, lalu tekan tombol besar Mulai Ujian.
 					</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
@@ -299,8 +299,8 @@
 
 			{#if loadedRooms.length === 0}
 				<EmptyStatePanel
-					title="Belum Ada Ruang Pengawas"
-					description="Ruang akan muncul setelah operator menetapkan pengawas pada tab Ruangan di detail sesi ujian."
+					title="Belum Ada Ruang Saya"
+					description="Ruang akan muncul setelah panitia menetapkan pengawas untuk sesi ujian."
 				/>
 			{:else if filteredRooms.length === 0}
 				<EmptyStatePanel

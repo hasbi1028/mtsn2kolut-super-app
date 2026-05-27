@@ -256,6 +256,8 @@ function asesmenPermission(pathname: string, method: string): string[] | undefin
 	if (matchesPathSegment(pathname, '/asesmen/non-tes') || matchesPathSegment(pathname, '/api/asesmen/non-test-assessments')) {
 		return isReadMethod(method) ? ['asesmen.read'] : ['asesmen.score'];
 	}
+	if (matchesPathSegment(pathname, '/asesmen/panitia')) return ['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage'];
+	if (matchesPathSegment(pathname, '/asesmen/ruang-saya')) return ['asesmen.proctor'];
 	if (matchesPathSegment(pathname, '/asesmen/aplikasi-siswa')) return ['asesmen.read'];
 	if (matchesPathSegment(pathname, '/api/asesmen/proctoring')) return ['asesmen.proctor'];
 	if (matchesPathSegment(pathname, '/api/asesmen/approvals')) {

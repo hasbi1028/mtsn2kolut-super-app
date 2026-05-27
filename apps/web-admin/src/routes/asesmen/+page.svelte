@@ -16,7 +16,9 @@
 		| '/asesmen/persiapan'
 		| '/asesmen/kegiatan'
 		| '/asesmen/pelaksanaan'
+		| '/asesmen/ruang-saya'
 		| '/asesmen/pengawasan'
+		| '/asesmen/panitia'
 		| '/asesmen/hasil'
 		| '/asesmen/aplikasi-siswa'
 		| '/asesmen/kegiatan'
@@ -67,12 +69,12 @@
 	const workflows: Workflow[] = [
 		{
 			title: 'Ringkasan Ujian',
-			description: 'Buka halaman kerja ringkas untuk melihat sesi, paket, dan pembagian 8 ruang.',
+			description: 'Halaman kerja panitia untuk melihat sesi, paket, dan pembagian ruang.',
 			href: '/asesmen/ringkas',
 			actionLabel: 'Buka Ringkasan',
 			status: 'Utama',
-			roles: ['admin', 'guru', 'staf'],
-			priority: { admin: 1, guru: 1, staf: 1 }
+			roles: ['admin'],
+			priority: { admin: 1 }
 		},
 		{
 			title: 'Persiapan',
@@ -80,8 +82,8 @@
 			href: '/asesmen/persiapan',
 			actionLabel: 'Buka Persiapan',
 			status: 'Pra ujian',
-			roles: ['admin', 'guru'],
-			priority: { admin: 2, guru: 2 }
+			roles: ['admin'],
+			priority: { admin: 2 }
 		},
 		{
 			title: 'Pelaksanaan',
@@ -93,13 +95,13 @@
 			priority: { admin: 3, guru: 3, staf: 2 }
 		},
 		{
-			title: 'Pantau Ruang',
-			description: 'Masuk ke daftar ruang, peserta perlu dibantu, dan catatan pengawasan.',
-			href: '/asesmen/pengawasan',
-			actionLabel: 'Pantau Ruang',
+			title: 'Ruang Saya',
+			description: 'Masuk ke ruang yang ditugaskan, lihat kode ruang, status peserta, dan tombol mulai ujian.',
+			href: '/asesmen/ruang-saya',
+			actionLabel: 'Buka Ruang Saya',
 			status: 'Ruang',
 			roles: ['admin', 'guru', 'staf'],
-			priority: { admin: 4, guru: 4, staf: 3 }
+			priority: { admin: 4, guru: 1, staf: 1 }
 		},
 		{
 			title: 'Hasil',
@@ -113,8 +115,9 @@
 	];
 
 	const secondaryLinks: SecondaryLink[] = [
-		{ label: 'Persiapan', href: '/asesmen/persiapan', roles: ['admin', 'guru'] },
-		{ label: 'Pantau Ruang', href: '/asesmen/pengawasan', roles: ['admin', 'guru', 'staf'] },
+		{ label: 'Persiapan', href: '/asesmen/persiapan', roles: ['admin'] },
+		{ label: 'Mode Lengkap Panitia', href: '/asesmen/panitia', roles: ['admin'] },
+		{ label: 'Ruang Saya', href: '/asesmen/ruang-saya', roles: ['admin', 'guru', 'staf'] },
 		{ label: 'Hasil', href: '/asesmen/hasil', roles: ['admin', 'guru'] }
 	];
 
@@ -136,8 +139,8 @@
 	const visibleSecondaryLinks = $derived(secondaryLinks.filter((link) => link.roles.some((role) => roleSet.has(role))));
 	const roleName = $derived(launcherRole ? roleCopy[launcherRole].name : 'Peran ini');
 	const roleDescription = $derived(launcherRole ? roleCopy[launcherRole].description : 'Belum ada pintasan ujian untuk peran aktif ini. Gunakan menu utama sesuai tugas masing-masing.');
-	const primaryHref = $derived(launcherRole === 'admin' ? '/asesmen/ringkas' : '/asesmen/pelaksanaan');
-	const primaryLabel = $derived(launcherRole === 'admin' ? 'Buka Ringkasan' : 'Buka Pelaksanaan');
+	const primaryHref = $derived(launcherRole === 'admin' ? '/asesmen/ringkas' : '/asesmen/ruang-saya');
+	const primaryLabel = $derived(launcherRole === 'admin' ? 'Buka Ringkasan' : 'Buka Ruang Saya');
 
 	function resolveLauncherRole(roleSetValue: ReadonlySet<KnownRole>): LauncherRole | undefined {
 		if (roleSetValue.has('admin')) return 'admin';
@@ -160,7 +163,7 @@
 </script>
 
 <svelte:head>
-	<title>Beranda Asesmen CBT — MTsN 2 Kolaka Utara</title>
+	<title>Beranda Ujian Digital — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 <div class="space-y-5">
@@ -168,13 +171,13 @@
 		eyebrow="Asesmen / Alur Utama"
 		title="Asesmen Ujian"
 		subtitle={`${roleName}: ${roleDescription}`}
-		context="Persiapan → Pelaksanaan → Pantau Ruang → Hasil"
+		context="Ringkas → Persiapan → Ruang Saya → Hasil"
 		primaryAction={{ label: primaryLabel, href: primaryHref }}
 	/>
 
 	<ContextStrip
 		items={[
-			{ label: 'Alur', value: 'Ringkas → Persiapan → Hari-H → Hasil' },
+			{ label: 'Alur', value: 'Ringkas → Persiapan → Ruang Saya → Hasil' },
 			{ label: 'Peran', value: roleName, tone: 'muted' }
 		]}
 	/>
@@ -228,7 +231,7 @@
 			</MicroActionTable>
 		{:else}
 			<section class="rounded-lg border border-dashed border-border bg-muted/50 p-5">
-				<h2 class="text-lg font-semibold text-foreground">Tidak ada tugas CBT untuk peran ini</h2>
+				<h2 class="text-lg font-semibold text-foreground">Tidak ada tugas ujian digital untuk peran ini</h2>
 				<p class="mt-2 text-sm text-muted-foreground">Halaman ini tidak membuka modul yang tidak relevan dengan peran aktif.</p>
 				<Button href={resolve('/')} variant="outline" class="mt-4">Kembali ke Beranda</Button>
 			</section>
@@ -236,7 +239,7 @@
 	</section>
 
 	{#if visibleSecondaryLinks.length > 0}
-		<nav aria-label="Aksi cepat CBT" class="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm shadow-sm">
+		<nav aria-label="Aksi cepat ujian digital" class="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm shadow-sm">
 			<span class="font-medium text-muted-foreground">Pintasan:</span>
 			{#each visibleSecondaryLinks as link (link.href)}
 				<a href={resolve(link.href)} class="rounded-md border border-border px-3 py-1.5 font-medium text-foreground hover:border-primary/30 hover:bg-primary/10">{link.label}</a>

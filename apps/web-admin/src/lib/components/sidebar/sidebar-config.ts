@@ -138,10 +138,10 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		group: 'Asesmen Ujian',
 		items: [
 			{ kind: 'folder', id: 'asesmen-alur-utama', label: 'Alur Utama', icon: 'grid', children: [
-				{ href: '/asesmen/ringkas', label: 'Ringkasan Ujian', icon: 'grid', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read'] },
-				{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
-				{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
-				{ href: '/asesmen/pengawasan', label: 'Pantau Ruang', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
+				{ href: '/asesmen/ringkas', label: 'Ringkasan Ujian', icon: 'grid', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage'] },
+				{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage'] },
+				{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', roleFallbacks: ['admin'], permissions: ['asesmen.proctor'] },
+				{ href: '/asesmen/ruang-saya', label: 'Ruang Saya', icon: 'activity', roleFallbacks: ['admin'], permissions: ['asesmen.proctor'] },
 				{ href: '/asesmen/hasil', label: 'Hasil', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.result_read'] }
 			]}
 		]

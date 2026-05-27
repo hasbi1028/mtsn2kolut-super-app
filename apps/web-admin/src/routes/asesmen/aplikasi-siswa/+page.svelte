@@ -1,8 +1,7 @@
 <script lang="ts">
-	import * as Card from '$lib/components/ui/card';
+	import { resolve } from '$app/paths';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import { resolve } from '$app/paths';
 
 	type StatusTone = 'good' | 'warning' | 'danger';
 
@@ -12,300 +11,94 @@
 		meaning: string;
 		intervention: string;
 	};
-	type QuickLink = {
-		label: string;
-		href: string;
-		description: string;
-	};
-	type QuickLinkGroup = {
-		title: string;
-		description: string;
-		links: QuickLink[];
-	};
 
 	const statuses: StatusGuide[] = [
-		{
-			label: 'Tersambung',
-			tone: 'good',
-			meaning: 'Perangkat baru saja berkomunikasi baik dengan layanan sistem dan tidak ada jawaban lokal yang tertahan.',
-			intervention: 'Siswa dapat lanjut mengerjakan soal seperti biasa.'
-		},
-		{
-			label: 'Lokal',
-			tone: 'warning',
-			meaning: 'Sebagian jawaban masih aman di perangkat dan menunggu sinkron ulang.',
-			intervention: 'Minta siswa tetap di layar ujian dan pantau sampai sinkron kembali normal.'
-		},
-		{
-			label: 'Waspada',
-			tone: 'warning',
-			meaning: 'Kontak layanan sistem mulai lama. Belum tentu gagal, tetapi perangkat perlu memperbarui status.',
-			intervention: 'Minta siswa menekan sinkron ulang dan pastikan koneksi masih sehat.'
-		},
-		{
-			label: 'Gangguan',
-			tone: 'danger',
-			meaning: 'Aplikasi baru saja gagal menyimpan jawaban atau memperbarui status ke layanan sistem.',
-			intervention: 'Pantau jaringan, jangan buru-buru mengirim ujian, lalu coba sinkron ulang.'
-		},
-		{
-			label: 'Menurun',
-			tone: 'danger',
-			meaning: 'Gangguan sinkron sudah berulang. Kirim ujian manual memang ditahan sampai sesi cukup pulih.',
-			intervention: 'Pengawas harus intervensi. Siswa tetap di layar ujian sampai status membaik.'
-		}
+		{ label: 'Hijau', tone: 'good', meaning: 'Perangkat tersambung dan tidak ada jawaban lokal yang tertahan.', intervention: 'Siswa dapat lanjut mengerjakan seperti biasa.' },
+		{ label: 'Kuning', tone: 'warning', meaning: 'Koneksi atau sinkronisasi perlu dipantau.', intervention: 'Minta siswa tetap di layar ujian dan tunggu status pulih.' },
+		{ label: 'Merah', tone: 'danger', meaning: 'Perangkat perlu bantuan pengawas/panitia.', intervention: 'Jangan izinkan kirim ujian sebelum panitia memastikan data aman.' }
 	];
 
-	const preSubmitChecklist = [
-		'Status bukan Menurun.',
-		'Tidak ada jawaban lokal yang masih menunggu sinkron.',
-		'Pembaruan status terakhir berhasil.',
-		'Perangkat yang dipakai masih sama dengan perangkat saat masuk ujian.',
-		'Siswa tetap berada di layar ujian sebelum menekan Kirim Ujian.'
+	const steps = [
+		'Buka Portal Ujian Web di alamat /ujian pada perangkat siswa.',
+		'Masukkan token peserta dan kode ruang sesuai kartu/pengawas.',
+		'Pastikan status perangkat Hijau sebelum siswa mulai mengerjakan.',
+		'Jika status Kuning atau Merah, siswa tetap di layar ujian dan pengawas menghubungi panitia.',
+		'Sebelum kirim ujian, pastikan tidak ada jawaban yang masih menunggu sinkron.'
 	];
 
-	const trialFlow = [
-		'Sebelum sesi, pastikan Portal Ujian Web /ujian dapat dibuka dari browser siswa dan alamat layanan sistem benar.',
-		'Untuk cek UI cepat, gunakan /ujian?demo=1 dengan soal contoh Informatika lokal; ini tidak menggantikan Simulasi/Gladi dan tidak menyentuh API/DB.',
-		'Saat masuk ujian nyata, cek apakah ada kartu pemulihan sesi dan perhatikan label kesehatan sesi terakhir.',
-		'Selama ujian, pantau penanda status di bagian atas aplikasi dan panel kesehatan koneksi di layar siswa.',
-		'Saat gangguan disimulasikan, minta siswa tetap berada di layar ujian sampai sinkron pulih.',
-		'Sebelum kirim ujian, ulangi daftar pemeriksaan pengawas dan jangan izinkan kirim jika status masih Menurun.'
-	];
-
-	const monitoringGroups: QuickLinkGroup[] = [
-		{
-			title: 'Pantau Ujian',
-			description: 'Aksi utama hari-H: buka sesi hari ini, ruang pengawas, dan status koneksi siswa.',
-			links: [
-				{
-					label: 'Sesi Hari Ini / Aktif',
-					href: '/asesmen/sesi?schedule=today',
-					description: 'Daftar sesi yang perlu dipantau hari ini.'
-				},
-				{
-					label: 'Panel Ruang',
-					href: '/asesmen/pengawasan',
-					description: 'Buka rekap ruang dan pengawasan ujian untuk panel langsung.'
-				},
-				{
-					label: 'Panduan Status',
-					href: '#status-guide',
-					description: 'Arti Tersambung, Lokal, Waspada, Gangguan, dan Menurun.'
-				}
-			]
-		},
-		{
-			title: 'Panduan Perangkat Siswa',
-				description: 'Bahan pengawas saat perlu menjelaskan status, kirim ujian, dan alur Portal Ujian Web kepada siswa.',
-			links: [
-				{
-					label: 'Arti Status Koneksi',
-					href: '#status-guide',
-					description: 'Makna penanda status aplikasi siswa dan tindakan pengawas.'
-				},
-				{
-					label: 'Daftar Pemeriksaan Kirim',
-					href: '#submit-checklist',
-					description: 'Pemeriksaan singkat sebelum siswa menekan Kirim Ujian.'
-				},
-				{
-					label: 'Alur Uji Coba Portal Web',
-					href: '#trial-flow',
-					description: 'Urutan latihan untuk operator dan pengawas.'
-				}
-			]
-		},
-		{
-			title: 'Perangkat & Kesiapan',
-				description: 'Dibuka setelah kebutuhan pemantauan terpenuhi: kesiapan browser/perangkat dan arsip APK nonaktif.',
-			links: [
-				{
-					label: 'Tabel Perangkat',
-					href: '/asesmen/aplikasi-siswa/matrix',
-					description: 'Bandingkan vendor, model, koneksi, pemulihan sesi, audio, dan kirim ujian.'
-				},
-				{
-					label: 'Arsip Rilis APK',
-					href: '/asesmen/aplikasi-siswa/release',
-					description: 'Cek arsip APK nonaktif/tahap lanjutan dan bahan rilis lama.'
-				}
-			]
-		}
+	const adminLinks = [
+		{ label: 'Uji Perangkat', href: '/asesmen/aplikasi-siswa/matrix' },
+		{ label: 'Arsip Rilis Aplikasi', href: '/asesmen/aplikasi-siswa/release' },
+		{ label: 'Mode Lengkap Panitia', href: '/asesmen/panitia' }
 	];
 
 	function badgeClass(tone: StatusTone) {
-		switch (tone) {
-			case 'good':
-				return 'border-primary/20 bg-primary/10 text-primary';
-			case 'warning':
-				return 'border-warning/30 bg-warning/10 text-warning';
-			case 'danger':
-				return 'border-destructive/30 bg-destructive/10 text-destructive';
-		}
+		if (tone === 'good') return 'border-primary/20 bg-primary/10 text-primary';
+		if (tone === 'warning') return 'border-warning/30 bg-warning/10 text-warning';
+		return 'border-destructive/30 bg-destructive/10 text-destructive';
 	}
-
 </script>
 
 <svelte:head>
-	<title>Perangkat Siswa CBT — MTsN 2 Kolaka Utara</title>
+	<title>Panduan Perangkat Siswa — MTsN 2 Kolut</title>
 </svelte:head>
 
-<div class="space-y-6">
-	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
-		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-			<div class="max-w-3xl space-y-3">
-				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Modul 4 dari 5 · Pemantauan</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Perangkat Siswa CBT</h1>
-				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
-					Jalur resmi siswa tahun ini adalah Portal Ujian Web di /ujian. Flutter APK tetap disimpan sebagai arsip nonaktif/tahap lanjutan, bukan instruksi utama siswa.
+<div class="space-y-5">
+	<section class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+		<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+			<div class="max-w-3xl space-y-2">
+				<Badge class="border-primary/20 bg-primary/10 text-primary" variant="outline">Panduan Pengawas</Badge>
+				<h1 class="text-2xl font-semibold tracking-tight text-foreground">Panduan Perangkat Siswa</h1>
+				<p class="text-sm leading-6 text-muted-foreground">
+					Jalur utama siswa adalah Portal Ujian Web. Halaman ini sengaja ringkas agar guru/pengawas cukup tahu langkah masuk, arti status, dan kapan menghubungi panitia.
 				</p>
 			</div>
-			<div class="flex flex-wrap gap-3">
-				<Button href={resolve('/asesmen')} variant="outline">Beranda Ujian</Button>
-				<Button href="/asesmen/sesi?schedule=today">Pantau Sesi Hari Ini</Button>
-				<Button href="/asesmen/pengawasan" variant="outline">Panel Ruang</Button>
-				<Button href="#status-guide" variant="outline">Panduan Status</Button>
-				<Button href="/ujian?demo=1" variant="outline">Demo Browser Lokal</Button>
+			<div class="flex flex-wrap gap-2">
+				<Button href={resolve('/asesmen/ruang-saya')} size="sm">Buka Ruang Saya</Button>
+				<Button href="/ujian?demo=1" variant="outline" size="sm">Latihan Lokal</Button>
 			</div>
 		</div>
 	</section>
 
-	<Card.Root class="border-primary/20 bg-primary/10 shadow-sm">
-		<Card.Header class="p-4 pb-2">
-			<Card.Title class="text-base text-foreground">Pantau Ujian Dulu</Card.Title>
-			<Card.Description class="text-xs leading-5">
-				Tiga grup sederhana: Portal Ujian Web sebagai jalur resmi, panduan status saat pengawasan, dan arsip Flutter APK sebagai tahap lanjutan nonaktif.
-			</Card.Description>
-		</Card.Header>
-		<Card.Content class="grid gap-3 p-4 lg:grid-cols-3">
-			{#each monitoringGroups as group (group.title)}
-				<div class="rounded-lg border border-primary/20 bg-card p-3 shadow-sm">
-					<p class="text-sm font-semibold text-primary">{group.title}</p>
-					<p class="mt-1 text-xs leading-5 text-muted-foreground">{group.description}</p>
-					<div class="mt-3 space-y-1.5">
-						{#each group.links as link (link.href)}
-							<a href={resolve((link.href.startsWith('#') ? `/asesmen/aplikasi-siswa${link.href}` : link.href) as '/')} class="flex items-start justify-between gap-3 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-xs transition hover:border-primary/30 hover:bg-primary/15">
-								<span>
-									<span class="font-semibold text-primary">{link.label}</span>
-									<span class="mt-0.5 block leading-5 text-muted-foreground">{link.description}</span>
-								</span>
-								<span class="shrink-0 font-semibold text-primary">Buka</span>
-							</a>
-						{/each}
-					</div>
-				</div>
-			{/each}
-		</Card.Content>
-	</Card.Root>
+	<section class="grid gap-4 lg:grid-cols-[1fr_0.8fr]">
+		<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+			<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Langkah Pengawas</p>
+			<h2 class="mt-1 text-lg font-semibold text-foreground">Saat Siswa Masuk Ujian</h2>
+			<ol class="mt-4 space-y-3">
+				{#each steps as step, index (step)}
+					<li class="flex gap-3 rounded-xl border border-border bg-muted/40 px-3 py-2 text-sm leading-6 text-foreground">
+						<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">{index + 1}</span>
+						<span>{step}</span>
+					</li>
+				{/each}
+			</ol>
+		</div>
 
-	<div class="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-		<Card.Root id="status-guide" class="border-border shadow-sm">
-			<Card.Header>
-				<Card.Title class="text-lg text-foreground">Arti Status Koneksi Aplikasi Siswa</Card.Title>
-				<Card.Description>
-					Gunakan arti status ini saat mendampingi siswa. Fokus utamanya adalah kapan pengawas cukup memantau dan kapan harus menahan kirim ujian.
-				</Card.Description>
-			</Card.Header>
-			<Card.Content class="space-y-2">
+		<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+			<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Status</p>
+			<h2 class="mt-1 text-lg font-semibold text-foreground">Arti Warna Perangkat</h2>
+			<div class="mt-4 space-y-3">
 				{#each statuses as status (status.label)}
-					<div class="rounded-lg border border-border bg-card p-3 text-sm">
-						<div class="flex flex-wrap items-start gap-2">
-							<Badge class={badgeClass(status.tone)}>{status.label}</Badge>
-							<p class="min-w-0 flex-1 font-medium leading-5 text-foreground">{status.meaning}</p>
-						</div>
-						<p class="mt-2 text-xs leading-5 text-muted-foreground">
-							<span class="font-semibold text-foreground">Tindakan:</span> {status.intervention}
-						</p>
+					<div class="rounded-xl border border-border bg-muted/30 p-3 text-sm">
+						<Badge class={badgeClass(status.tone)} variant="outline">{status.label}</Badge>
+						<p class="mt-2 font-medium leading-5 text-foreground">{status.meaning}</p>
+						<p class="mt-1 text-xs leading-5 text-muted-foreground"><span class="font-semibold text-foreground">Tindakan:</span> {status.intervention}</p>
 					</div>
 				{/each}
-			</Card.Content>
-		</Card.Root>
-
-		<div class="space-y-6">
-			<Card.Root id="submit-checklist" class="border-border shadow-sm">
-				<Card.Header>
-					<Card.Title class="text-lg text-foreground">Daftar Pemeriksaan Sebelum Kirim</Card.Title>
-					<Card.Description>
-						Lima pemeriksaan singkat ini sebaiknya selalu diulang sebelum pengawas mengizinkan siswa menekan kirim ujian.
-					</Card.Description>
-				</Card.Header>
-				<Card.Content>
-					<ul class="space-y-3">
-						{#each preSubmitChecklist as item (item)}
-							<li class="flex gap-3 rounded-2xl border border-border bg-muted/50 px-4 py-3 text-sm leading-6 text-foreground">
-								<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">OK</span>
-								<span>{item}</span>
-							</li>
-						{/each}
-					</ul>
-				</Card.Content>
-			</Card.Root>
-
-			<Card.Root id="trial-flow" class="border-border shadow-sm">
-				<Card.Header>
-					<Card.Title class="text-lg text-foreground">Alur Uji Coba BYOD</Card.Title>
-					<Card.Description>
-						Gunakan urutan ini saat uji Portal Ujian Web pada perangkat siswa agar hasil antar pengawas tetap konsisten.
-					</Card.Description>
-				</Card.Header>
-				<Card.Content>
-					<ol class="space-y-3">
-						{#each trialFlow as item, index (item)}
-							<li class="flex gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-sm leading-6 text-foreground">
-								<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background">{index + 1}</span>
-								<span>{item}</span>
-							</li>
-						{/each}
-					</ol>
-				</Card.Content>
-			</Card.Root>
+			</div>
 		</div>
-	</div>
+	</section>
 
-	<Card.Root class="border-border shadow-sm">
-		<Card.Header>
-			<Card.Title class="text-lg text-foreground">Artefak Operasional</Card.Title>
-			<Card.Description>
-				Gunakan dokumen ini di daftar panduan yang sama untuk uji coba lapangan Portal Ujian Web dan arsip APK tahap lanjutan.
-			</Card.Description>
-		</Card.Header>
-		<Card.Content class="grid gap-4 lg:grid-cols-5">
-			<div class="rounded-2xl border border-border bg-muted/50 p-4">
-				<p class="text-sm font-semibold text-foreground">Panduan Cepat Operator APK (arsip)</p>
-				<p class="mt-2 text-sm leading-6 text-muted-foreground">
-					Panduan lama APK untuk arsip/tahap lanjutan. Operasi tahun ini memakai Portal Ujian Web.
-				</p>
-				<p class="mt-3 font-mono text-xs text-muted-foreground">apps/mobile/OPERATOR_QUICKSTART.md</p>
+	<section class="rounded-2xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+		<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+			<p>
+				Fitur teknis seperti uji perangkat, arsip aplikasi, dan pengaturan lanjutan dipindahkan ke Mode Lengkap Panitia agar tidak membingungkan pengawas.
+			</p>
+			<div class="flex flex-wrap gap-2">
+				{#each adminLinks as link (link.href)}
+					<a class="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:border-primary/30 hover:bg-primary/10" href={resolve(link.href as '/')}>{link.label}</a>
+				{/each}
 			</div>
-			<div class="rounded-2xl border border-border bg-muted/50 p-4">
-				<p class="text-sm font-semibold text-foreground">Prosedur Uji Coba BYOD APK (arsip)</p>
-				<p class="mt-2 text-sm leading-6 text-muted-foreground">
-					Prosedur lengkap APK dipertahankan sebagai arsip/tahap lanjutan; bukan SOP utama tahun ini.
-				</p>
-				<p class="mt-3 font-mono text-xs text-muted-foreground">apps/mobile/BYOD_TRIAL_PROCEDURE.md</p>
-			</div>
-			<div class="rounded-2xl border border-border bg-muted/50 p-4">
-				<p class="text-sm font-semibold text-foreground">Tabel Uji Perangkat</p>
-				<p class="mt-2 text-sm leading-6 text-muted-foreground">
-					Tabel vendor dan model perangkat untuk mencatat hasil uji pemasangan, pemulihan sesi, audio, gambar, dan kirim ujian.
-				</p>
-				<p class="mt-3 font-mono text-xs text-muted-foreground">apps/mobile/DEVICE_TEST_MATRIX.md</p>
-			</div>
-			<div class="rounded-2xl border border-border bg-muted/50 p-4">
-				<p class="text-sm font-semibold text-foreground">Ringkasan Tabel di Admin</p>
-				<p class="mt-2 text-sm leading-6 text-muted-foreground">
-					Gunakan halaman tabel perangkat di admin untuk membaca struktur evaluasi vendor tanpa keluar dari beranda.
-				</p>
-				<p class="mt-3 font-mono text-xs text-muted-foreground">/asesmen/aplikasi-siswa/matrix</p>
-			</div>
-			<div class="rounded-2xl border border-border bg-muted/50 p-4">
-				<p class="text-sm font-semibold text-foreground">Kesiapan Rilis di Admin</p>
-				<p class="mt-2 text-sm leading-6 text-muted-foreground">
-					Buka ringkasan layanan sistem, Portal Ujian Web, dan arsip rilis APK sebelum perubahan layanan ujian dinyatakan siap uji lapangan.
-				</p>
-				<p class="mt-3 font-mono text-xs text-muted-foreground">/asesmen/aplikasi-siswa/release</p>
-			</div>
-		</Card.Content>
-	</Card.Root>
+		</div>
+	</section>
 </div>

@@ -8,6 +8,7 @@
 	type PelaksanaanRoute =
 		| '/asesmen/aplikasi-siswa'
 		| '/asesmen/sesi'
+		| '/asesmen/ruang-saya'
 		| '/asesmen/pengawasan'
 		| '/asesmen/kegiatan'
 		| '/asesmen/persiapan'
@@ -34,8 +35,8 @@
 	const heroTitle = $derived(isAdminMode ? 'Hari-H Ujian Panitia' : 'Ruang Pengawasan Saya');
 	const heroSubtitle = $derived(
 		isAdminMode
-			? 'Kelola sesi, ruang, kartu, APK Flutter siswa, Browser Darurat, dan hasil dari satu layar kerja.'
-			: 'Buka ruang pengawasan, pantau peserta, cek APK Flutter siswa, lalu gunakan Browser Darurat hanya bila perlu.'
+			? 'Kelola sesi, ruang, kartu peserta, perangkat siswa, mode cadangan, dan hasil dari satu layar kerja.'
+			: 'Buka ruang pengawasan, pantau peserta, cek perangkat siswa, lalu gunakan mode cadangan hanya bila perlu.'
 	);
 
 	const dayTasks: DayTask[] = [
@@ -57,17 +58,17 @@
 			roles: ['admin']
 		},
 		{
-			title: 'Pantau Ruang',
-			description: 'Buka daftar ruang, status peserta, dan atensi yang perlu ditangani.',
-			href: '/asesmen/pengawasan',
-			cta: 'Pantau Ruang',
+			title: 'Ruang Saya',
+			description: 'Buka daftar ruang yang ditugaskan, status peserta, dan atensi yang perlu ditangani.',
+			href: '/asesmen/ruang-saya',
+			cta: 'Buka Ruang Saya',
 			kind: 'primary',
 			roles: ['admin', 'guru', 'staf']
 		},
 		{
 			title: 'Pantau Peserta',
-			description: 'Masuk ke panel ruang untuk melihat peserta terkunci, offline, atau belum kirim.',
-			href: '/asesmen/pengawasan',
+			description: 'Masuk ke ruang untuk melihat peserta yang perlu dibantu atau belum mengirim.',
+			href: '/asesmen/ruang-saya',
 			cta: 'Buka Panel',
 			kind: 'primary',
 			roles: ['guru', 'staf']
@@ -82,7 +83,7 @@
 		},
 		{
 			title: 'Perangkat Siswa',
-			description: 'Jalur utama APK Flutter, Mode DEMO, dan Browser Darurat untuk perangkat yang tidak kompatibel.',
+			description: 'Panduan Portal Ujian Siswa, latihan lokal, dan mode cadangan untuk perangkat bermasalah.',
 			href: '/asesmen/aplikasi-siswa',
 			cta: 'Buka Panduan',
 			kind: 'support',
