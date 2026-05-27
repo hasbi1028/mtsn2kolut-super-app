@@ -21,6 +21,8 @@ type fakeCbtApprovalStore struct {
 	revokeArg db.RevokeCbtApprovalRecordParams
 	revokeRow db.CbtApprovalRecord
 	revokeErr error
+	eventRow  db.GetCbtEventOverviewSummaryRow
+	eventErr  error
 }
 
 func (f *fakeCbtApprovalStore) ListCbtApprovalRecords(ctx context.Context, arg db.ListCbtApprovalRecordsParams) ([]db.ListCbtApprovalRecordsRow, error) {
@@ -36,6 +38,13 @@ func (f *fakeCbtApprovalStore) CreateCbtApprovalRecord(ctx context.Context, arg 
 func (f *fakeCbtApprovalStore) RevokeCbtApprovalRecord(ctx context.Context, arg db.RevokeCbtApprovalRecordParams) (db.CbtApprovalRecord, error) {
 	f.revokeArg = arg
 	return f.revokeRow, f.revokeErr
+}
+
+func (f *fakeCbtApprovalStore) GetCbtEventOverviewSummary(ctx context.Context, id pgtype.UUID) (db.GetCbtEventOverviewSummaryRow, error) {
+	if !f.eventRow.ID.Valid {
+		f.eventRow.ID = id
+	}
+	return f.eventRow, f.eventErr
 }
 
 func TestCbtApprovalListFiltersAndNormalizesNilRows(t *testing.T) {
@@ -71,6 +80,7 @@ func TestCbtApprovalApproveValidatesAndDelegatesTrimmedInput(t *testing.T) {
 	store := &fakeCbtApprovalStore{createRow: wantRow}
 	svc := NewCbtApproval(nil)
 	svc.q = store
+	svc.events = store
 
 	got, err := svc.Approve(context.Background(), SaveCbtApprovalInput{
 		EntityType: " package ", EntityID: entityID, ApprovalType: " package_ready ", Notes: " siap ", ActorUserID: actorID,
@@ -94,6 +104,7 @@ func TestCbtApprovalApproveAndRevokeRejectInvalidInputs(t *testing.T) {
 	actorID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000000105")
 	svc := NewCbtApproval(nil)
 	svc.q = &fakeCbtApprovalStore{}
+	svc.events = svc.q.(*fakeCbtApprovalStore)
 
 	cases := []struct {
 		name string
@@ -128,6 +139,7 @@ func TestCbtApprovalRevokeDelegatesTrimmedNotes(t *testing.T) {
 	store := &fakeCbtApprovalStore{revokeRow: db.CbtApprovalRecord{ID: approvalID, RevokedBy: actorID, Notes: "cabut"}}
 	svc := NewCbtApproval(nil)
 	svc.q = store
+	svc.events = store
 
 	got, err := svc.Revoke(context.Background(), approvalID, actorID, " cabut ")
 	if err != nil {
@@ -138,5 +150,74 @@ func TestCbtApprovalRevokeDelegatesTrimmedNotes(t *testing.T) {
 	}
 	if store.revokeArg.ID != approvalID || store.revokeArg.RevokedBy != actorID || store.revokeArg.Notes != "cabut" {
 		t.Fatalf("Revoke arg = %+v, want trimmed notes and UUIDs", store.revokeArg)
+	}
+}
+
+func TestCbtApprovalApproveRejectsEventMilestonesBeforeReady(t *testing.T) {
+	entityID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000000108")
+	actorID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000000109")
+	store := &fakeCbtApprovalStore{
+		eventRow: db.GetCbtEventOverviewSummaryRow{
+			ID:                  entityID,
+			Status:              "active",
+			TargetQuestionCount: 10,
+			PublishedQuestions:  10,
+			PackageCount:        1,
+			ActivePackageCount:  1,
+			SessionCount:        0,
+		},
+	}
+	svc := NewCbtApproval(nil)
+	svc.q = store
+	svc.events = store
+
+	_, err := svc.Approve(context.Background(), SaveCbtApprovalInput{
+		EntityType:   "event",
+		EntityID:     entityID,
+		ApprovalType: "participants_rooms_ready",
+		ActorUserID:  actorID,
+	})
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("Approve(blocked event milestone) error = %v, want ErrConflict", err)
+	}
+}
+
+func TestCbtApprovalApproveAllowsReadyEventMilestones(t *testing.T) {
+	entityID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000000110")
+	actorID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000000111")
+	store := &fakeCbtApprovalStore{
+		createRow: db.CbtApprovalRecord{EntityType: "event", EntityID: entityID, ApprovalType: "final_archive"},
+		eventRow: db.GetCbtEventOverviewSummaryRow{
+			ID:                         entityID,
+			Status:                     "finished",
+			TargetQuestionCount:        10,
+			PublishedQuestions:         10,
+			PackageCount:               1,
+			ActivePackageCount:         1,
+			SessionCount:               1,
+			RoomCount:                  1,
+			ParticipantCount:           4,
+			TokenReadyCount:            4,
+			SubmittedCount:             4,
+			ScoredCount:                4,
+			UnassignedParticipantCount: 0,
+			MissingSeatCount:           0,
+			RoomsWithoutProctor:        0,
+		},
+	}
+	svc := NewCbtApproval(nil)
+	svc.q = store
+	svc.events = store
+
+	if _, err := svc.Approve(context.Background(), SaveCbtApprovalInput{
+		EntityType:   "event",
+		EntityID:     entityID,
+		ApprovalType: "final_archive",
+		ActorUserID:  actorID,
+	}); err != nil {
+		t.Fatalf("Approve(ready final archive) error = %v", err)
+	}
+	if store.createArg.EntityType != "event" || store.createArg.ApprovalType != "final_archive" {
+		t.Fatalf("create arg = %+v, want delegated approval write", store.createArg)
 	}
 }

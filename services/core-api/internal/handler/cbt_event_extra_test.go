@@ -9,6 +9,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
@@ -149,6 +150,8 @@ func TestCbtEventReadinessCoverageHandlersMapServiceErrors(t *testing.T) {
 	}{
 		{name: "overview", handler: (*CbtEvent).Overview, svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, overviewErr: boom}, path: "/api/cbt/events/" + eventID.String() + "/overview", wantStatus: http.StatusInternalServerError},
 		{name: "sop readiness", handler: (*CbtEvent).SopReadiness, svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, sopErr: boom}, path: "/api/cbt/events/" + eventID.String() + "/sop-readiness", wantStatus: http.StatusInternalServerError},
+		{name: "sop detail", handler: (*CbtEvent).SopDetail, svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, sopDetailErr: boom}, path: "/api/cbt/events/" + eventID.String() + "/sop", wantStatus: http.StatusInternalServerError},
+		{name: "sop transitions", handler: (*CbtEvent).ListSopTransitions, svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, sopTransitionsErr: boom}, path: "/api/cbt/events/" + eventID.String() + "/transitions", wantStatus: http.StatusInternalServerError},
 		{name: "packages", handler: (*CbtEvent).ListPackages, svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, packagesErr: boom}, path: "/api/cbt/events/" + eventID.String() + "/packages", wantStatus: http.StatusInternalServerError},
 		{name: "sessions", handler: (*CbtEvent).ListSessions, svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, sessionsErr: boom}, path: "/api/cbt/events/" + eventID.String() + "/sessions", wantStatus: http.StatusInternalServerError},
 		{name: "question completeness", handler: (*CbtEvent).QuestionCompleteness, svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, completenessErr: boom}, path: "/api/cbt/events/" + eventID.String() + "/question-completeness", wantStatus: http.StatusInternalServerError},
@@ -176,6 +179,8 @@ func TestCbtEventReadinessCoverageHandlersRejectInvalidIDs(t *testing.T) {
 	}{
 		{name: "overview", handler: (*CbtEvent).Overview, path: "/api/cbt/events/bad/overview"},
 		{name: "sop readiness", handler: (*CbtEvent).SopReadiness, path: "/api/cbt/events/bad/sop-readiness"},
+		{name: "sop detail", handler: (*CbtEvent).SopDetail, path: "/api/cbt/events/bad/sop"},
+		{name: "sop transitions", handler: (*CbtEvent).ListSopTransitions, path: "/api/cbt/events/bad/transitions"},
 		{name: "packages", handler: (*CbtEvent).ListPackages, path: "/api/cbt/events/bad/packages"},
 		{name: "sessions", handler: (*CbtEvent).ListSessions, path: "/api/cbt/events/bad/sessions"},
 		{name: "question completeness", handler: (*CbtEvent).QuestionCompleteness, path: "/api/cbt/events/bad/question-completeness"},
@@ -192,6 +197,30 @@ func TestCbtEventReadinessCoverageHandlersRejectInvalidIDs(t *testing.T) {
 				t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
 			}
 		})
+	}
+}
+
+func TestCbtEventTransitionSopRejectsInvalidPayloadsAndMapsServiceErrors(t *testing.T) {
+	eventID := handlerTestUUID(173)
+	h := &CbtEvent{svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}}}
+
+	rec := httptest.NewRecorder()
+	h.TransitionSop(rec, withRouteParam(adminRequest(http.MethodPost, "/api/cbt/events/bad/transition", `{}`), "id", "bad"))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("TransitionSop(bad id) status = %d, want 400", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	h.TransitionSop(rec, withRouteParam(adminRequest(http.MethodPost, "/api/cbt/events/"+eventID.String()+"/transition", `{"to_state":`), "id", eventID.String()))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("TransitionSop(bad json) status = %d, want 400", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	fake := &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, sopTransitionErr: domain.ErrConflict}
+	(&CbtEvent{svc: fake}).TransitionSop(rec, withRouteParam(adminRequest(http.MethodPost, "/api/cbt/events/"+eventID.String()+"/transition", `{"to_state":"package_ready"}`), "id", eventID.String()))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("TransitionSop(conflict) status = %d, want 409; body=%s", rec.Code, rec.Body.String())
 	}
 }
 

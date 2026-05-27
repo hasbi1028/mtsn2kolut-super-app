@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -44,16 +43,17 @@ func (h *BankSoalReport) Export(w http.ResponseWriter, r *http.Request) {
 			Report  string                        `json:"report"`
 			Filters service.BankSoalReportFilters `json:"filters"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
-			if strings.TrimSpace(body.Format) != "" {
-				format = body.Format
-			}
-			if strings.TrimSpace(body.Report) != "" {
-				body.Filters.Report = body.Report
-			}
-			if strings.TrimSpace(body.Filters.Report) != "" {
-				filters = body.Filters
-			}
+		if !decodeOptionalJSON(w, r, &body, 16<<10) {
+			return
+		}
+		if strings.TrimSpace(body.Format) != "" {
+			format = body.Format
+		}
+		if strings.TrimSpace(body.Report) != "" {
+			body.Filters.Report = body.Report
+		}
+		if strings.TrimSpace(body.Filters.Report) != "" {
+			filters = body.Filters
 		}
 	}
 	export, err := h.svc.Export(r.Context(), filters, format, cbtQuestionActorFromRequest(r))

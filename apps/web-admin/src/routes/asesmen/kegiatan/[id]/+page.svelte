@@ -633,6 +633,10 @@
 		return timeline.find((stage) => stage.key === milestone.stageKey)?.status ?? 'blocked';
 	}
 
+	function approvalStageReady(status: SopStageStatus) {
+		return status === 'ready';
+	}
+
 	async function approveMilestone(approvalType: EventApprovalType) {
 		approvalBusyType = approvalType;
 		try {
@@ -875,7 +879,7 @@
 			{@const currentSopAction = currentSopNextAction(detail, sopTimeline)}
 			{@const sopIssues = sopPanelIssues(detail, sopTimeline, checklist)}
 			{@const sopTransitionHistory = sopHistory(detail)}
-			{@const sopBackendAvailable = Boolean(detail.sopDetail || detail.sopReadiness || detail.sopTransitions.length)}
+			{@const sopBackendAvailable = detail.sopDetail?.report_only === false}
 			{@const blockingItems = checklist.filter((item) => item.tone === 'warning')}
 			{@const readyCount = checklist.filter((item) => item.tone === 'success').length}
 			<PageHeader
@@ -919,9 +923,9 @@
 								<Card.Title class="text-base">Panel SOP Kegiatan</Card.Title>
 								<Card.Description>Ringkasan tahap formal, tindakan berikutnya, catatan perhatian, dan riwayat transisi jika layanan SOP sudah tersedia.</Card.Description>
 							</div>
-							<Badge variant="outline" class={sopBackendAvailable ? 'border-primary/20 bg-primary/10 text-primary' : 'border-warning/30 bg-warning/10 text-warning'}>
-								{sopBackendAvailable ? 'Terhubung data SOP' : 'Mode laporan kesiapan'}
-							</Badge>
+								<Badge variant="outline" class={sopBackendAvailable ? 'border-primary/20 bg-primary/10 text-primary' : 'border-warning/30 bg-warning/10 text-warning'}>
+									{sopBackendAvailable ? 'Workflow SOP formal aktif' : 'Mode laporan kesiapan'}
+								</Badge>
 						</div>
 					</Card.Header>
 					<Card.Content class="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
@@ -932,7 +936,7 @@
 									<p class="text-lg font-semibold text-foreground">{currentSopLabel(detail, sopTimeline)}</p>
 									{#if currentSop}<Badge variant="outline" class={sopStageClass(currentSop.status)}>{sopStatusLabels[currentSop.status]}</Badge>{/if}
 								</div>
-								<p class="mt-2 text-sm leading-6 text-muted-foreground">{currentSop?.description ?? 'Tahap formal belum tercatat dari backend; panel memakai ringkasan kesiapan yang sudah tersedia.'}</p>
+									<p class="mt-2 text-sm leading-6 text-muted-foreground">{currentSop?.description ?? 'Tahap formal belum tercatat dari backend; panel hanya memakai ringkasan kesiapan yang tersedia.'}</p>
 							</div>
 							<div class="rounded-xl border border-border bg-muted/30 p-4">
 								<p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Tindakan Berikutnya</p>
@@ -975,9 +979,9 @@
 											{#if item.note}<p class="mt-1 leading-5">{item.note}</p>{/if}
 										</div>
 									{:else}
-										<p class="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">Riwayat transisi formal belum tersedia. Panel tetap menampilkan mode laporan berdasarkan kesiapan dan pengesahan yang ada.</p>
-									{/each}
-								</div>
+											<p class="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">Riwayat transisi formal belum tersedia. Panel tetap menampilkan mode laporan berdasarkan kesiapan yang terbaca dari sistem.</p>
+										{/each}
+									</div>
 							</div>
 						</div>
 					</Card.Content>
@@ -1111,7 +1115,7 @@
 						<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
 							<div>
 								<Card.Title class="text-base">Pengesahan SOP</Card.Title>
-								<Card.Description>Pengesahan ini mencatat riwayat formal, belum memblokir alur lama.</Card.Description>
+									<Card.Description>Pengesahan mengikuti gate kesiapan SOP dan dicatat sebagai jejak formal kegiatan.</Card.Description>
 							</div>
 							<a href={resolve(`/asesmen/kegiatan/${eventId}/archive`)} class="inline-flex rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15">Buka Arsip</a>
 						</div>
@@ -1121,10 +1125,11 @@
 							<p class="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">Catatan pengesahan SOP belum dapat dimuat untuk sesi ini. Pengelolaan pengesahan formal tersedia melalui akses admin.</p>
 						{/if}
 						<div class="grid gap-3 lg:grid-cols-2">
-							{#each sopApprovalMilestones as milestone (milestone.approvalType)}
-								{@const record = approvalRecordFor(detail.approvals, milestone.approvalType)}
-								{@const stageStatus = approvalStageStatus(sopTimeline, milestone)}
-								<div class="rounded-xl border border-border bg-card p-4">
+								{#each sopApprovalMilestones as milestone (milestone.approvalType)}
+									{@const record = approvalRecordFor(detail.approvals, milestone.approvalType)}
+									{@const stageStatus = approvalStageStatus(sopTimeline, milestone)}
+									{@const stageReady = approvalStageReady(stageStatus)}
+									<div class="rounded-xl border border-border bg-card p-4">
 									<div class="flex flex-wrap items-start justify-between gap-3">
 										<div class="min-w-0">
 											<p class="text-sm font-semibold text-foreground">{assessmentApprovalLabels[milestone.approvalType]}</p>
@@ -1135,13 +1140,16 @@
 											<Badge variant="outline" class={approvalStatusClass(record)}>{approvalStatusLabel(record)}</Badge>
 										</div>
 									</div>
-									<div class="mt-3 grid gap-2 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground sm:grid-cols-2">
-										<p><span class="font-semibold text-foreground">Aktor:</span> {approvalActor(record)}</p>
-										<p><span class="font-semibold text-foreground">Waktu:</span> {approvalTime(record)}</p>
-									</div>
-									{#if record?.notes}
-										<p class="mt-3 rounded-lg border border-border bg-muted/30 p-3 text-xs leading-5 text-muted-foreground"><span class="font-semibold text-foreground">Catatan:</span> {record.notes}</p>
-									{/if}
+										<div class="mt-3 grid gap-2 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground sm:grid-cols-2">
+											<p><span class="font-semibold text-foreground">Aktor:</span> {approvalActor(record)}</p>
+											<p><span class="font-semibold text-foreground">Waktu:</span> {approvalTime(record)}</p>
+										</div>
+										{#if !record && !stageReady}
+											<p class="mt-3 rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs leading-5 text-warning">Pengesahan belum bisa dicatat karena tahap SOP ini belum berstatus siap.</p>
+										{/if}
+										{#if record?.notes}
+											<p class="mt-3 rounded-lg border border-border bg-muted/30 p-3 text-xs leading-5 text-muted-foreground"><span class="font-semibold text-foreground">Catatan:</span> {record.notes}</p>
+										{/if}
 									{#if detail.approvalsAvailable}
 										<label class="mt-3 block space-y-1 text-xs font-medium text-muted-foreground" for={`approval-note-${milestone.approvalType}`}>
 											Catatan pengesahan/cabut
@@ -1165,15 +1173,15 @@
 													label="Cabut pengesahan"
 												/>
 											{:else}
-												<LoadingButton
-													size="sm"
-													onclick={() => approveMilestone(milestone.approvalType)}
-													loading={approvalBusyType === milestone.approvalType}
-													loadingLabel="Mengesahkan..."
-													disabled={approvalBusyType !== null && approvalBusyType !== milestone.approvalType}
-													label="Sahkan"
-												/>
-											{/if}
+													<LoadingButton
+														size="sm"
+														onclick={() => approveMilestone(milestone.approvalType)}
+														loading={approvalBusyType === milestone.approvalType}
+														loadingLabel="Mengesahkan..."
+														disabled={!stageReady || (approvalBusyType !== null && approvalBusyType !== milestone.approvalType)}
+														label="Sahkan"
+													/>
+												{/if}
 										</div>
 									{/if}
 								</div>

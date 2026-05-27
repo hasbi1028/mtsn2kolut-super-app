@@ -2,7 +2,11 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -143,6 +147,32 @@ type CbtSopReadiness struct {
 	Stages  []CbtSopStageReadiness `json:"stages"`
 }
 
+type CbtSopTransitionRecord struct {
+	ID        string `json:"id"`
+	FromStage string `json:"from_stage"`
+	ToStage   string `json:"to_stage"`
+	ActorID   string `json:"actor_id,omitempty"`
+	Note      string `json:"note,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
+}
+
+type CbtSopDetail struct {
+	EventID           string                   `json:"event_id"`
+	CurrentStage      string                   `json:"current_stage"`
+	CurrentStageLabel string                   `json:"current_stage_label"`
+	NextAction        *CbtSopNextAction        `json:"next_action,omitempty"`
+	Blockers          []string                 `json:"blockers"`
+	Warnings          []string                 `json:"warnings"`
+	Transitions       []CbtSopTransitionRecord `json:"transitions"`
+	ReportOnly        bool                     `json:"report_only"`
+}
+
+type TransitionCbtEventSopInput struct {
+	ToState     string
+	Note        string
+	ActorUserID pgtype.UUID
+}
+
 func (s *CbtEvent) Overview(ctx context.Context, id pgtype.UUID) (CbtEventOverview, error) {
 	summary, err := s.q.GetCbtEventOverviewSummary(ctx, id)
 	if err != nil {
@@ -187,6 +217,111 @@ func (s *CbtEvent) SopReadiness(ctx context.Context, id pgtype.UUID) (CbtSopRead
 		return CbtSopReadiness{}, err
 	}
 	return buildCbtSopReadiness(overview), nil
+}
+
+func (s *CbtEvent) SopDetail(ctx context.Context, id pgtype.UUID) (CbtSopDetail, error) {
+	overview, err := s.Overview(ctx, id)
+	if err != nil {
+		return CbtSopDetail{}, err
+	}
+	stateRow, err := s.q.GetCbtEventSopState(ctx, id)
+	if err != nil {
+		return CbtSopDetail{}, err
+	}
+	transitions, err := s.ListSopTransitions(ctx, id)
+	if err != nil {
+		return CbtSopDetail{}, err
+	}
+	return buildCbtSopDetail(overview, stateRow, transitions), nil
+}
+
+func (s *CbtEvent) ListSopTransitions(ctx context.Context, id pgtype.UUID) ([]CbtSopTransitionRecord, error) {
+	rows, err := s.q.ListCbtEventSopTransitions(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []CbtSopTransitionRecord{}, nil
+	}
+	out := make([]CbtSopTransitionRecord, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, serializeCbtSopTransition(row))
+	}
+	return out, nil
+}
+
+func (s *CbtEvent) TransitionSop(ctx context.Context, id pgtype.UUID, in TransitionCbtEventSopInput) (CbtSopDetail, error) {
+	if !id.Valid {
+		return CbtSopDetail{}, fmt.Errorf("%w: kegiatan asesmen tidak valid", domain.ErrBadRequest)
+	}
+	if !in.ActorUserID.Valid {
+		return CbtSopDetail{}, fmt.Errorf("%w: aktor SOP tidak valid", domain.ErrUnauthorized)
+	}
+	targetState := normalizeCbtSopState(in.ToState)
+	if !validCbtSopState(targetState) || targetState == "cancelled" && strings.TrimSpace(in.Note) == "" {
+		return CbtSopDetail{}, fmt.Errorf("%w: tujuan tahap SOP tidak valid", domain.ErrBadRequest)
+	}
+
+	overview, err := s.Overview(ctx, id)
+	if err != nil {
+		return CbtSopDetail{}, err
+	}
+	stateRow, err := s.q.GetCbtEventSopState(ctx, id)
+	if err != nil {
+		return CbtSopDetail{}, err
+	}
+	currentState := normalizeCbtSopState(stateRow.SopState)
+	if currentState == "" {
+		currentState = "draft"
+	}
+	if targetState == currentState {
+		return CbtSopDetail{}, fmt.Errorf("%w: tahap SOP sudah berada pada posisi yang sama", domain.ErrConflict)
+	}
+	if !canTransitionCbtSopState(currentState, targetState) {
+		return CbtSopDetail{}, fmt.Errorf("%w: perpindahan tahap SOP tidak diizinkan", domain.ErrConflict)
+	}
+
+	readiness := buildCbtSopReadiness(overview)
+	blockers, warnings := evaluateCbtSopGate(overview, targetState)
+	if len(blockers) > 0 {
+		return CbtSopDetail{}, errorsForSopBlockers(blockers)
+	}
+	snapshot, err := json.Marshal(map[string]any{
+		"from_state": currentState,
+		"to_state":   targetState,
+		"readiness":  readiness,
+		"warnings":   warnings,
+	})
+	if err != nil {
+		return CbtSopDetail{}, err
+	}
+	if _, err := s.q.UpdateCbtEventSopState(ctx, db.UpdateCbtEventSopStateParams{
+		ID:                id,
+		SopState:          targetState,
+		SopStateUpdatedBy: in.ActorUserID,
+		SopStateNote:      strings.TrimSpace(in.Note),
+	}); err != nil {
+		return CbtSopDetail{}, err
+	}
+	if _, err := s.q.InsertCbtEventSopTransition(ctx, db.InsertCbtEventSopTransitionParams{
+		EventID:      id,
+		FromState:    currentState,
+		ToState:      targetState,
+		ActorID:      in.ActorUserID,
+		Note:         strings.TrimSpace(in.Note),
+		GateSnapshot: snapshot,
+	}); err != nil {
+		return CbtSopDetail{}, err
+	}
+	transitions, err := s.ListSopTransitions(ctx, id)
+	if err != nil {
+		return CbtSopDetail{}, err
+	}
+	return buildCbtSopDetail(overview, db.GetCbtEventSopStateRow{
+		EventID:      id,
+		SopState:     targetState,
+		SopStateNote: strings.TrimSpace(in.Note),
+	}, transitions), nil
 }
 
 func (s *CbtEvent) ListPackages(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventPackagesRow, error) {
@@ -612,6 +747,222 @@ func buildCbtSopReadiness(overview CbtEventOverview) CbtSopReadiness {
 			),
 		},
 	}
+}
+
+var cbtSopStates = []string{
+	"draft",
+	"question_authoring",
+	"question_verification",
+	"package_ready",
+	"participants_rooms_ready",
+	"tokens_cards_ready",
+	"execution",
+	"grading",
+	"result_verification",
+	"final_archive",
+	"cancelled",
+}
+
+func normalizeCbtSopState(value string) string {
+	return strings.TrimSpace(strings.ToLower(value))
+}
+
+func validCbtSopState(value string) bool {
+	for _, state := range cbtSopStates {
+		if state == value {
+			return true
+		}
+	}
+	return false
+}
+
+func canTransitionCbtSopState(fromState, toState string) bool {
+	if fromState == "" || toState == "" || fromState == toState {
+		return false
+	}
+	if toState == "cancelled" {
+		return fromState != "final_archive" && fromState != "cancelled"
+	}
+	order := map[string]int{
+		"draft":                    0,
+		"question_authoring":       1,
+		"question_verification":    2,
+		"package_ready":            3,
+		"participants_rooms_ready": 4,
+		"tokens_cards_ready":       5,
+		"execution":                6,
+		"grading":                  7,
+		"result_verification":      8,
+		"final_archive":            9,
+	}
+	fromOrder, okFrom := order[fromState]
+	toOrder, okTo := order[toState]
+	return okFrom && okTo && toOrder == fromOrder+1
+}
+
+func evaluateCbtSopGate(overview CbtEventOverview, targetState string) ([]string, []string) {
+	summary := overview.Event
+	readiness := overview.Readiness
+	switch targetState {
+	case "draft", "question_authoring":
+		return nil, nil
+	case "question_verification":
+		if readiness.AuthoringReady {
+			return nil, nil
+		}
+		return []string{"jumlah soal terbit belum memenuhi target kegiatan"}, nil
+	case "package_ready":
+		if readiness.PackageReady {
+			return nil, nil
+		}
+		return []string{"paket aktif yang siap dipakai belum lengkap"}, nil
+	case "participants_rooms_ready":
+		blockers := make([]string, 0, 4)
+		if !readiness.SessionReady {
+			blockers = append(blockers, "belum ada sesi ujian untuk kegiatan")
+		}
+		if summary.ParticipantCount == 0 {
+			blockers = append(blockers, "belum ada peserta kegiatan")
+		}
+		if !readiness.RoomReady {
+			if summary.UnassignedParticipantCount > 0 {
+				blockers = append(blockers, fmt.Sprintf("%d peserta belum masuk ruang", summary.UnassignedParticipantCount))
+			}
+			if summary.MissingSeatCount > 0 {
+				blockers = append(blockers, fmt.Sprintf("%d peserta belum memiliki nomor kursi", summary.MissingSeatCount))
+			}
+			if summary.RoomsWithoutProctor > 0 {
+				blockers = append(blockers, fmt.Sprintf("%d ruang belum memiliki pengawas/proktor", summary.RoomsWithoutProctor))
+			}
+			if summary.RoomCount == 0 {
+				blockers = append(blockers, "belum ada ruang ujian yang disiapkan")
+			}
+		}
+		return blockers, nil
+	case "tokens_cards_ready":
+		blockers := make([]string, 0, 3)
+		if !readiness.TokenReady {
+			blockers = append(blockers, fmt.Sprintf("%d token peserta belum siap", maxInt32(summary.ParticipantCount-summary.TokenReadyCount, 0)))
+		}
+		if !readiness.CardReady {
+			blockers = append(blockers, "kartu ujian belum siap dicetak final")
+		}
+		return blockers, nil
+	case "execution":
+		blockers := make([]string, 0, 3)
+		if !readiness.TokenReady || !readiness.CardReady {
+			blockers = append(blockers, "token dan kartu ujian belum siap final")
+		}
+		if summary.SessionCount == 0 {
+			blockers = append(blockers, "belum ada sesi ujian untuk dijalankan")
+		}
+		return blockers, nil
+	case "grading":
+		if summary.SubmittedCount > 0 {
+			return nil, nil
+		}
+		return []string{"belum ada jawaban peserta yang terkirim untuk dinilai"}, nil
+	case "result_verification":
+		if readiness.ResultsReady {
+			return nil, nil
+		}
+		return []string{"hasil belum lengkap dinilai atau masih ada kiriman yang belum selesai dikoreksi"}, nil
+	case "final_archive":
+		blockers := make([]string, 0, 2)
+		if !readiness.ResultsReady {
+			blockers = append(blockers, "hasil belum lengkap diverifikasi")
+		}
+		if summary.Status != "finished" {
+			blockers = append(blockers, "status kegiatan belum selesai/final")
+		}
+		return blockers, nil
+	default:
+		return []string{"tahap SOP tidak dikenali"}, nil
+	}
+}
+
+func errorsForSopBlockers(blockers []string) error {
+	return errors.Join(domain.ErrConflict, errors.New(strings.Join(blockers, "; ")))
+}
+
+func findCbtSopStage(readiness CbtSopReadiness, key string) *CbtSopStageReadiness {
+	for i := range readiness.Stages {
+		if readiness.Stages[i].Key == key {
+			return &readiness.Stages[i]
+		}
+	}
+	return nil
+}
+
+func cbtSopStageLabel(key string) string {
+	switch key {
+	case "draft":
+		return "Draft"
+	case "question_authoring":
+		return "Pengisian Soal"
+	case "question_verification":
+		return "Telaah/Verifikasi Soal"
+	case "package_ready":
+		return "Paket Siap"
+	case "participants_rooms_ready":
+		return "Peserta & Ruang Siap"
+	case "tokens_cards_ready":
+		return "Token & Kartu Siap"
+	case "execution":
+		return "Pelaksanaan"
+	case "grading":
+		return "Koreksi"
+	case "result_verification":
+		return "Verifikasi Hasil"
+	case "final_archive":
+		return "Final & Arsip"
+	case "cancelled":
+		return "Dibatalkan"
+	default:
+		return key
+	}
+}
+
+func buildCbtSopDetail(overview CbtEventOverview, stateRow db.GetCbtEventSopStateRow, transitions []CbtSopTransitionRecord) CbtSopDetail {
+	readiness := buildCbtSopReadiness(overview)
+	currentState := normalizeCbtSopState(stateRow.SopState)
+	if !validCbtSopState(currentState) {
+		currentState = "draft"
+	}
+	blockers, warnings := evaluateCbtSopGate(overview, currentState)
+	var nextAction *CbtSopNextAction
+	if stage := findCbtSopStage(readiness, currentState); stage != nil && len(stage.NextActions) > 0 {
+		action := stage.NextActions[0]
+		nextAction = &action
+	}
+	return CbtSopDetail{
+		EventID:           uuidString(stateRow.EventID),
+		CurrentStage:      currentState,
+		CurrentStageLabel: cbtSopStageLabel(currentState),
+		NextAction:        nextAction,
+		Blockers:          blockers,
+		Warnings:          warnings,
+		Transitions:       transitions,
+		ReportOnly:        false,
+	}
+}
+
+func serializeCbtSopTransition(row db.CbtEventSopTransition) CbtSopTransitionRecord {
+	return CbtSopTransitionRecord{
+		ID:        uuidString(row.ID),
+		FromStage: row.FromState,
+		ToStage:   row.ToState,
+		ActorID:   uuidString(row.ActorID),
+		Note:      strings.TrimSpace(row.Note),
+		CreatedAt: timestamptzString(row.CreatedAt),
+	}
+}
+
+func timestamptzString(value pgtype.Timestamptz) string {
+	if !value.Valid {
+		return ""
+	}
+	return value.Time.Format(time.RFC3339)
 }
 
 func (s *CbtEvent) Update(ctx context.Context, id pgtype.UUID, in CreateCbtEventInput) (db.CbtExamEvent, error) {

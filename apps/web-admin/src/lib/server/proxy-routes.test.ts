@@ -219,6 +219,64 @@ describe('api proxy route handlers', () => {
 		await expect(res.json()).resolves.toEqual({ username: 'guru.ipa', contact: { phone: '0812' } });
 	});
 
+	it('uses optional request JSON parsing for system backup runs', async () => {
+		const mod = await import('../../routes/api/system/backups/+server');
+		const request = new Request('http://localhost/api/system/backups', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ reason: 'before deploy' })
+		});
+		const event = createEvent({
+			request,
+			locals: {
+				user: { id: '1', username: 'admin', role: 'admin', roles: ['admin'] }
+			}
+		});
+		proxyPostMock.mockResolvedValueOnce({ id: 'job-1' });
+
+		const res = await mod.POST(event as never);
+
+		expect(readOptionalRequestJsonMock).toHaveBeenCalledWith(request, {});
+		expect(proxyPostMock).toHaveBeenCalledWith('/api/system/backups/run', { reason: 'before deploy' });
+		expect(res.status).toBe(200);
+	});
+
+	it('uses strict request JSON parsing for maintenance window mutations', async () => {
+		const createMod = await import('../../routes/api/system/maintenance/windows/+server');
+		const updateMod = await import('../../routes/api/system/maintenance/windows/[id]/+server');
+		const postRequest = new Request('http://localhost/api/system/maintenance/windows', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ title: 'Upgrade' })
+		});
+		const putRequest = new Request('http://localhost/api/system/maintenance/windows/win-1', {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ title: 'Upgrade 2' })
+		});
+		proxyPostMock.mockResolvedValueOnce({ id: 'win-1' });
+		proxyPutMock.mockResolvedValueOnce({ id: 'win-1' });
+
+		await createMod.POST(createEvent({
+			request: postRequest,
+			locals: {
+				user: { id: '1', username: 'admin', role: 'admin', roles: ['admin'] }
+			}
+		}) as never);
+		await updateMod.PUT(createEvent({
+			request: putRequest,
+			params: { id: 'win-1' },
+			locals: {
+				user: { id: '1', username: 'admin', role: 'admin', roles: ['admin'] }
+			}
+		}) as never);
+
+		expect(readRequestJsonMock).toHaveBeenCalledWith(postRequest);
+		expect(readRequestJsonMock).toHaveBeenCalledWith(putRequest);
+		expect(proxyPostMock).toHaveBeenCalledWith('/api/system/maintenance/windows', { title: 'Upgrade' });
+		expect(proxyPutMock).toHaveBeenCalledWith('/api/system/maintenance/windows/win-1', { title: 'Upgrade 2' });
+	});
+
 	it('rejects unauthenticated internal analytics ingestion requests before proxying', async () => {
 		const mod = await import('../../routes/api/internal-analytics/events/+server');
 		const request = new Request('http://localhost/api/internal-analytics/events', {
@@ -1875,6 +1933,33 @@ describe('api proxy route handlers', () => {
 		await sessionsMod.POST(createEvent({ request: sessionRequest }) as never);
 
 		expect(proxyPostMock).toHaveBeenCalledWith(backendCbtPath('/sessions'), expect.objectContaining({ event_id: 'event-1' }));
+	});
+
+	it('proxies Asesmen SOP detail, transitions, and transition mutations through backend assessment paths', async () => {
+		const sopMod = await import('../../routes/api/asesmen/events/[id]/sop/+server');
+		const transitionsMod = await import('../../routes/api/asesmen/events/[id]/transitions/+server');
+		const transitionMod = await import('../../routes/api/asesmen/events/[id]/transition/+server');
+		proxyGetMock.mockResolvedValueOnce({ current_stage: 'package_ready' });
+		proxyGetMock.mockResolvedValueOnce([{ id: 'transition-1', to_stage: 'package_ready' }]);
+
+		await sopMod.GET(createEvent({ params: { id: 'event 1 2026' } }) as never);
+		await transitionsMod.GET(createEvent({ params: { id: 'event 1 2026' } }) as never);
+
+		expect(proxyGetMock).toHaveBeenNthCalledWith(1, backendCbtApiPath`/events/${'event 1 2026'}/sop`);
+		expect(proxyGetMock).toHaveBeenNthCalledWith(2, backendCbtApiPath`/events/${'event 1 2026'}/transitions`);
+
+		const transitionRequest = new Request('http://localhost/api/asesmen/events/event-1/transition', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ to_stage: 'package_ready', note: 'siap panitia' })
+		});
+		proxyPostMock.mockResolvedValueOnce({ current_stage: 'package_ready' });
+		await transitionMod.POST(createEvent({ params: { id: 'event-1' }, request: transitionRequest }) as never);
+
+		expect(proxyPostMock).toHaveBeenCalledWith(
+			backendCbtApiPath`/events/${'event-1'}/transition`,
+			expect.objectContaining({ to_stage: 'package_ready', note: 'siap panitia' })
+		);
 	});
 
 	it('does not append blank query markers for audit and website list proxies', async () => {

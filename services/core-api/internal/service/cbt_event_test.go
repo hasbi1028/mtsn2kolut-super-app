@@ -39,6 +39,10 @@ type fakeCbtEventStore7A struct {
 	updateStatusRow db.CbtExamEvent
 	updateEventRow  db.CbtExamEvent
 	deleteEventRows int64
+	sopStateRow     db.GetCbtEventSopStateRow
+	lastSopStateArg db.UpdateCbtEventSopStateParams
+	lastSopInsert   db.InsertCbtEventSopTransitionParams
+	sopTransitions  []db.CbtEventSopTransition
 
 	membersRows         []db.ListCbtEventMembersRow
 	membersByUserRows   []db.CbtEventMember
@@ -118,16 +122,24 @@ func (f *fakeCbtEventStore7A) DeleteCbtExamEvent(ctx context.Context, id pgtype.
 }
 
 func (f *fakeCbtEventStore7A) GetCbtEventSopState(ctx context.Context, id pgtype.UUID) (db.GetCbtEventSopStateRow, error) {
-	return db.GetCbtEventSopStateRow{SopState: "draft"}, f.err
+	if !f.sopStateRow.EventID.Valid {
+		f.sopStateRow.EventID = id
+	}
+	if strings.TrimSpace(f.sopStateRow.SopState) == "" {
+		f.sopStateRow.SopState = "draft"
+	}
+	return f.sopStateRow, f.err
 }
 func (f *fakeCbtEventStore7A) UpdateCbtEventSopState(ctx context.Context, arg db.UpdateCbtEventSopStateParams) (db.UpdateCbtEventSopStateRow, error) {
-	return db.UpdateCbtEventSopStateRow{SopState: arg.SopState}, f.err
+	f.lastSopStateArg = arg
+	return db.UpdateCbtEventSopStateRow{EventID: arg.ID, SopState: arg.SopState, SopStateUpdatedBy: arg.SopStateUpdatedBy, SopStateNote: arg.SopStateNote}, f.err
 }
 func (f *fakeCbtEventStore7A) InsertCbtEventSopTransition(ctx context.Context, arg db.InsertCbtEventSopTransitionParams) (db.CbtEventSopTransition, error) {
+	f.lastSopInsert = arg
 	return db.CbtEventSopTransition{EventID: arg.EventID, FromState: arg.FromState, ToState: arg.ToState, Note: arg.Note, GateSnapshot: arg.GateSnapshot}, f.err
 }
 func (f *fakeCbtEventStore7A) ListCbtEventSopTransitions(ctx context.Context, eventID pgtype.UUID) ([]db.CbtEventSopTransition, error) {
-	return []db.CbtEventSopTransition{}, f.err
+	return f.sopTransitions, f.err
 }
 
 func (f *fakeCbtEventStore7A) ListCbtEventMembers(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventMembersRow, error) {
@@ -328,6 +340,106 @@ func TestCbtEventSopReadinessBuildsStageStatuses(t *testing.T) {
 	assertStage("grading", CbtSopStageWarning, 2, 3)
 	assertStage("result_verification", CbtSopStageWarning, 0, 1)
 	assertStage("final_archive", CbtSopStageWarning, 0, 0)
+}
+
+func TestCbtEventSopDetailAndTransitionsUsePersistedState(t *testing.T) {
+	ctx := context.Background()
+	eventID := cbtEventTestUUID(41)
+	actorID := cbtEventTestUUID(42)
+	store := &fakeCbtEventStore7A{
+		overviewRow: db.GetCbtEventOverviewSummaryRow{
+			ID:                         eventID,
+			Status:                     "finished",
+			MemberCount:                2,
+			TargetQuestionCount:        10,
+			PublishedQuestions:         10,
+			PackageCount:               1,
+			ActivePackageCount:         1,
+			SessionCount:               1,
+			RoomCount:                  1,
+			ParticipantCount:           3,
+			TokenReadyCount:            3,
+			SubmittedCount:             3,
+			ScoredCount:                3,
+			RoomsWithoutProctor:        0,
+			UnassignedParticipantCount: 0,
+			MissingSeatCount:           0,
+		},
+		sopStateRow: db.GetCbtEventSopStateRow{EventID: eventID, SopState: "package_ready"},
+		sopTransitions: []db.CbtEventSopTransition{
+			{ID: cbtEventTestUUID(43), EventID: eventID, FromState: "draft", ToState: "question_authoring"},
+		},
+	}
+	svc := &CbtEvent{q: store}
+
+	detail, err := svc.SopDetail(ctx, eventID)
+	if err != nil {
+		t.Fatalf("SopDetail() error = %v", err)
+	}
+	if detail.CurrentStage != "package_ready" || detail.CurrentStageLabel != "Paket Siap" || detail.ReportOnly {
+		t.Fatalf("SopDetail() = %+v, want persisted stage and report_only=false", detail)
+	}
+	if len(detail.Transitions) != 1 || detail.Transitions[0].ToStage != "question_authoring" {
+		t.Fatalf("SopDetail() transitions = %+v, want persisted transition", detail.Transitions)
+	}
+
+	gotTransitions, err := svc.ListSopTransitions(ctx, eventID)
+	if err != nil {
+		t.Fatalf("ListSopTransitions() error = %v", err)
+	}
+	if len(gotTransitions) != 1 || gotTransitions[0].ID == "" {
+		t.Fatalf("ListSopTransitions() = %+v, want serialized rows", gotTransitions)
+	}
+
+	updated, err := svc.TransitionSop(ctx, eventID, TransitionCbtEventSopInput{
+		ToState:     "participants_rooms_ready",
+		Note:        "siap ruang",
+		ActorUserID: actorID,
+	})
+	if err != nil {
+		t.Fatalf("TransitionSop() error = %v", err)
+	}
+	if store.lastSopStateArg.SopState != "participants_rooms_ready" || store.lastSopStateArg.SopStateUpdatedBy != actorID {
+		t.Fatalf("UpdateCbtEventSopState arg = %+v, want persisted target/actor", store.lastSopStateArg)
+	}
+	if store.lastSopInsert.FromState != "package_ready" || store.lastSopInsert.ToState != "participants_rooms_ready" || store.lastSopInsert.ActorID != actorID {
+		t.Fatalf("InsertCbtEventSopTransition arg = %+v, want transition persisted", store.lastSopInsert)
+	}
+	if updated.CurrentStage != "participants_rooms_ready" {
+		t.Fatalf("TransitionSop() detail = %+v, want updated stage", updated)
+	}
+}
+
+func TestCbtEventTransitionSopRejectsInvalidOrBlockedMoves(t *testing.T) {
+	ctx := context.Background()
+	eventID := cbtEventTestUUID(51)
+	actorID := cbtEventTestUUID(52)
+	store := &fakeCbtEventStore7A{
+		overviewRow: db.GetCbtEventOverviewSummaryRow{
+			ID:                  eventID,
+			Status:              "active",
+			TargetQuestionCount: 10,
+			PublishedQuestions:  10,
+			PackageCount:        1,
+			ActivePackageCount:  1,
+			SessionCount:        0,
+		},
+		sopStateRow: db.GetCbtEventSopStateRow{EventID: eventID, SopState: "package_ready"},
+	}
+	svc := &CbtEvent{q: store}
+
+	if _, err := svc.TransitionSop(ctx, eventID, TransitionCbtEventSopInput{ToState: "question_verification", ActorUserID: actorID}); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("TransitionSop(backward) error = %v, want ErrConflict", err)
+	}
+	if _, err := svc.TransitionSop(ctx, eventID, TransitionCbtEventSopInput{ToState: "participants_rooms_ready", ActorUserID: actorID}); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("TransitionSop(blocked) error = %v, want ErrConflict", err)
+	}
+	if _, err := svc.TransitionSop(ctx, eventID, TransitionCbtEventSopInput{ToState: "bogus", ActorUserID: actorID}); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("TransitionSop(bad state) error = %v, want ErrBadRequest", err)
+	}
+	if _, err := svc.TransitionSop(ctx, eventID, TransitionCbtEventSopInput{ToState: "cancelled", ActorUserID: actorID}); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("TransitionSop(cancel without note) error = %v, want ErrBadRequest", err)
+	}
 }
 
 func TestCbtEventMemberMethodsPassThroughParams(t *testing.T) {

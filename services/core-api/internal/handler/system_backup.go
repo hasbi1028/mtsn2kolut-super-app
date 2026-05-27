@@ -2,9 +2,7 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"os"
 
@@ -63,12 +61,8 @@ func (h *SystemBackup) OffsiteStatus(w http.ResponseWriter, r *http.Request) {
 
 func (h *SystemBackup) RunManual(w http.ResponseWriter, r *http.Request) {
 	var req service.SystemBackupRunRequest
-	if r.Body != nil {
-		defer r.Body.Close()
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
-			api.BadRequest(w, "payload backup tidak valid")
-			return
-		}
+	if !decodeOptionalJSON(w, r, &req, 8<<10) {
+		return
 	}
 	job, err := h.svc.RunManual(r.Context(), req)
 	if err != nil {

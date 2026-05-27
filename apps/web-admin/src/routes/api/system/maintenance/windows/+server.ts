@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { handleRouteError, proxy } from '$lib/server/api';
+import { handleRouteError, proxy, readRequestJson } from '$lib/server/api';
 
 export const GET: RequestHandler = async (event) => {
 	try {
@@ -12,7 +12,7 @@ export const GET: RequestHandler = async (event) => {
 
 export const POST: RequestHandler = async (event) => {
 	try {
-		const body = await event.request.json();
+		const body = await readRequestJson<Record<string, unknown>>(event.request);
 		const data = await proxy(event).post('/api/system/maintenance/windows', body);
 		return Response.json({ data }, { status: 201 });
 	} catch (error) {

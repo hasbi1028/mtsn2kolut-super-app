@@ -26,6 +26,9 @@ type cbtEventService interface {
 	Get(ctx context.Context, id pgtype.UUID) (db.GetCbtExamEventRow, error)
 	Overview(ctx context.Context, id pgtype.UUID) (service.CbtEventOverview, error)
 	SopReadiness(ctx context.Context, id pgtype.UUID) (service.CbtSopReadiness, error)
+	SopDetail(ctx context.Context, id pgtype.UUID) (service.CbtSopDetail, error)
+	ListSopTransitions(ctx context.Context, id pgtype.UUID) ([]service.CbtSopTransitionRecord, error)
+	TransitionSop(ctx context.Context, id pgtype.UUID, in service.TransitionCbtEventSopInput) (service.CbtSopDetail, error)
 	ListPackages(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventPackagesRow, error)
 	ListSessions(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventSessionsReadinessRow, error)
 	QuestionCompleteness(ctx context.Context, eventID pgtype.UUID) (service.CbtQuestionCompleteness, error)
@@ -138,6 +141,92 @@ func (h *CbtEvent) SopReadiness(w http.ResponseWriter, r *http.Request) {
 	row, err := h.svc.SopReadiness(r.Context(), id)
 	if err != nil {
 		api.Internal(w, err)
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *CbtEvent) SopDetail(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID data tidak valid")
+		return
+	}
+	if !h.requireEventReadAccess(w, r, id) {
+		return
+	}
+	row, err := h.svc.SopDetail(r.Context(), id)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Detail SOP kegiatan belum tersedia")
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *CbtEvent) ListSopTransitions(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID data tidak valid")
+		return
+	}
+	if !h.requireEventReadAccess(w, r, id) {
+		return
+	}
+	rows, err := h.svc.ListSopTransitions(r.Context(), id)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Riwayat transisi SOP belum tersedia")
+		return
+	}
+	api.OK(w, rows)
+}
+
+func (h *CbtEvent) TransitionSop(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return
+	}
+	actorID, err := authUserID(claims)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "ID data tidak valid")
+		return
+	}
+	var body struct {
+		ToState string `json:"to_state"`
+		ToStage string `json:"to_stage"`
+		Note    string `json:"note"`
+	}
+	if !decodeJSON(w, r, &body, defaultJSONBodyLimit) {
+		return
+	}
+	targetState := strings.TrimSpace(body.ToState)
+	if targetState == "" {
+		targetState = strings.TrimSpace(body.ToStage)
+	}
+	row, err := h.svc.TransitionSop(r.Context(), id, service.TransitionCbtEventSopInput{
+		ToState:     targetState,
+		Note:        body.Note,
+		ActorUserID: actorID,
+	})
+	if err != nil {
+		writeDomainOrInternal(w, err, "Transisi SOP kegiatan tidak valid")
 		return
 	}
 	api.OK(w, row)

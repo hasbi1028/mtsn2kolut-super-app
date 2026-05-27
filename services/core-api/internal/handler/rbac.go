@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -80,8 +79,7 @@ func (h *RBAC) CreateRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req service.RBACRoleInput
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.BadRequest(w, "payload tidak valid")
+	if !decodeJSON(w, r, &req, 16<<10, disallowUnknownJSONFields) {
 		return
 	}
 	actorID, err := currentActorUUID(r)
@@ -108,8 +106,7 @@ func (h *RBAC) UpdateRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req service.RBACRoleInput
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.BadRequest(w, "payload tidak valid")
+	if !decodeJSON(w, r, &req, 16<<10, disallowUnknownJSONFields) {
 		return
 	}
 	actorID, err := currentActorUUID(r)
@@ -140,8 +137,7 @@ func (h *RBAC) SetRoleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req updateRBACStatusRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.BadRequest(w, "payload tidak valid")
+	if !decodeJSON(w, r, &req, 8<<10, disallowUnknownJSONFields) {
 		return
 	}
 	actorID, err := currentActorUUID(r)
@@ -162,8 +158,7 @@ func (h *RBAC) CreatePermission(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req service.RBACPermissionInput
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.BadRequest(w, "payload tidak valid")
+	if !decodeJSON(w, r, &req, 16<<10, disallowUnknownJSONFields) {
 		return
 	}
 	actorID, err := currentActorUUID(r)
@@ -190,8 +185,7 @@ func (h *RBAC) UpdatePermission(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req service.RBACPermissionInput
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.BadRequest(w, "payload tidak valid")
+	if !decodeJSON(w, r, &req, 16<<10, disallowUnknownJSONFields) {
 		return
 	}
 	actorID, err := currentActorUUID(r)
@@ -218,8 +212,7 @@ func (h *RBAC) SetPermissionStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req updateRBACStatusRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.BadRequest(w, "payload tidak valid")
+	if !decodeJSON(w, r, &req, 8<<10, disallowUnknownJSONFields) {
 		return
 	}
 	actorID, err := currentActorUUID(r)
@@ -249,8 +242,7 @@ func (h *RBAC) UpdateRolePermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req updateRolePermissionsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.BadRequest(w, "payload tidak valid")
+	if !decodeJSON(w, r, &req, 16<<10, disallowUnknownJSONFields) {
 		return
 	}
 	if len(req.Permissions) == 0 {
@@ -284,8 +276,7 @@ func (h *RBAC) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req updateUserRolesRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.BadRequest(w, "payload tidak valid")
+	if !decodeJSON(w, r, &req, 16<<10, disallowUnknownJSONFields) {
 		return
 	}
 	if len(req.Roles) == 0 {

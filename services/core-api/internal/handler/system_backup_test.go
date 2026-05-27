@@ -219,6 +219,14 @@ func TestSystemBackupActionErrors(t *testing.T) {
 	}
 }
 
+func TestSystemBackupRunManualRejectsMultipleJSONObjects(t *testing.T) {
+	rec := httptest.NewRecorder()
+	NewSystemBackup(&fakeSystemBackupService{}).RunManual(rec, httptest.NewRequest(http.MethodPost, "/api/system/backups/run", strings.NewReader(`{"reason":"a"}{"reason":"b"}`)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
 func TestSystemBackupHandlerDownloadStreamsAttachment(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "pusaka_20260513_000001.dump")

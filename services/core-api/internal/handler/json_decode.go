@@ -40,6 +40,31 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any, limit int64, op
 	return true
 }
 
+func decodeOptionalJSON(w http.ResponseWriter, r *http.Request, dst any, limit int64, opts ...decodeJSONOption) bool {
+	if limit <= 0 {
+		limit = defaultJSONBodyLimit
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
+	dec := json.NewDecoder(r.Body)
+	for _, opt := range opts {
+		if opt != nil {
+			opt(dec)
+		}
+	}
+	if err := dec.Decode(dst); err != nil {
+		if errors.Is(err, io.EOF) {
+			return true
+		}
+		api.BadRequest(w, decodeJSONErrorMessage(err))
+		return false
+	}
+	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		api.BadRequest(w, "Payload JSON hanya boleh berisi satu objek")
+		return false
+	}
+	return true
+}
+
 func decodeJSONErrorMessage(err error) string {
 	var syntaxErr *json.SyntaxError
 	var typeErr *json.UnmarshalTypeError

@@ -31,6 +31,16 @@ type fakeCbtEventService struct {
 	sopID                         pgtype.UUID
 	sopRow                        service.CbtSopReadiness
 	sopErr                        error
+	sopDetailID                   pgtype.UUID
+	sopDetailRow                  service.CbtSopDetail
+	sopDetailErr                  error
+	sopTransitionsID              pgtype.UUID
+	sopTransitionsRows            []service.CbtSopTransitionRecord
+	sopTransitionsErr             error
+	sopTransitionID               pgtype.UUID
+	sopTransitionInput            service.TransitionCbtEventSopInput
+	sopTransitionRow              service.CbtSopDetail
+	sopTransitionErr              error
 	packagesID                    pgtype.UUID
 	packagesRows                  []db.ListCbtEventPackagesRow
 	packagesErr                   error
@@ -119,6 +129,22 @@ func (f *fakeCbtEventService) Overview(_ context.Context, id pgtype.UUID) (servi
 func (f *fakeCbtEventService) SopReadiness(_ context.Context, id pgtype.UUID) (service.CbtSopReadiness, error) {
 	f.sopID = id
 	return f.sopRow, f.sopErr
+}
+
+func (f *fakeCbtEventService) SopDetail(_ context.Context, id pgtype.UUID) (service.CbtSopDetail, error) {
+	f.sopDetailID = id
+	return f.sopDetailRow, f.sopDetailErr
+}
+
+func (f *fakeCbtEventService) ListSopTransitions(_ context.Context, id pgtype.UUID) ([]service.CbtSopTransitionRecord, error) {
+	f.sopTransitionsID = id
+	return f.sopTransitionsRows, f.sopTransitionsErr
+}
+
+func (f *fakeCbtEventService) TransitionSop(_ context.Context, id pgtype.UUID, in service.TransitionCbtEventSopInput) (service.CbtSopDetail, error) {
+	f.sopTransitionID = id
+	f.sopTransitionInput = in
+	return f.sopTransitionRow, f.sopTransitionErr
 }
 
 func (f *fakeCbtEventService) ListPackages(_ context.Context, eventID pgtype.UUID) ([]db.ListCbtEventPackagesRow, error) {
@@ -317,11 +343,13 @@ func TestCbtEventReadinessAndCoverageHandlers(t *testing.T) {
 			{ID: otherID, Title: "Selesai", Status: "completed"},
 			{ID: eventID, Title: "Aktif", Status: "active"},
 		},
-		overviewRow:     service.CbtEventOverview{Event: db.GetCbtEventOverviewSummaryRow{ID: eventID, Title: "Aktif"}},
-		sopRow:          service.CbtSopReadiness{EventID: eventID.String(), Stages: []service.CbtSopStageReadiness{{Key: "authoring", Status: service.CbtSopStageReady}}},
-		packagesRows:    []db.ListCbtEventPackagesRow{{ID: handlerTestUUID(26), EventID: eventID, Title: "Paket A"}},
-		sessionsRows:    []db.ListCbtEventSessionsReadinessRow{{ID: handlerTestUUID(27), EventID: eventID, Title: "Sesi 1"}},
-		completenessRow: service.CbtQuestionCompleteness{Summary: service.CbtQuestionCompletenessSummary{TotalRows: 1, CompleteRows: 1}, Rows: []service.CbtQuestionCompletenessRow{{Level: "VII", Complete: true}}},
+		overviewRow:        service.CbtEventOverview{Event: db.GetCbtEventOverviewSummaryRow{ID: eventID, Title: "Aktif"}},
+		sopRow:             service.CbtSopReadiness{EventID: eventID.String(), Stages: []service.CbtSopStageReadiness{{Key: "authoring", Status: service.CbtSopStageReady}}},
+		sopDetailRow:       service.CbtSopDetail{EventID: eventID.String(), CurrentStage: "package_ready", CurrentStageLabel: "Paket Siap", ReportOnly: false},
+		sopTransitionsRows: []service.CbtSopTransitionRecord{{ID: handlerTestUUID(28).String(), FromStage: "draft", ToStage: "question_authoring"}},
+		packagesRows:       []db.ListCbtEventPackagesRow{{ID: handlerTestUUID(26), EventID: eventID, Title: "Paket A"}},
+		sessionsRows:       []db.ListCbtEventSessionsReadinessRow{{ID: handlerTestUUID(27), EventID: eventID, Title: "Sesi 1"}},
+		completenessRow:    service.CbtQuestionCompleteness{Summary: service.CbtQuestionCompletenessSummary{TotalRows: 1, CompleteRows: 1}, Rows: []service.CbtQuestionCompletenessRow{{Level: "VII", Complete: true}}},
 	}
 	h := &CbtEvent{svc: fake}
 
@@ -340,6 +368,16 @@ func TestCbtEventReadinessAndCoverageHandlers(t *testing.T) {
 		{name: "sop readiness", handler: h.SopReadiness, path: "/api/cbt/events/" + eventID.String() + "/sop-readiness", routeParam: true, check: func(t *testing.T) {
 			if fake.sopID != eventID {
 				t.Fatalf("SopReadiness id = %v, want %v", fake.sopID, eventID)
+			}
+		}},
+		{name: "sop detail", handler: h.SopDetail, path: "/api/cbt/events/" + eventID.String() + "/sop", routeParam: true, check: func(t *testing.T) {
+			if fake.sopDetailID != eventID {
+				t.Fatalf("SopDetail id = %v, want %v", fake.sopDetailID, eventID)
+			}
+		}},
+		{name: "sop transitions", handler: h.ListSopTransitions, path: "/api/cbt/events/" + eventID.String() + "/transitions", routeParam: true, check: func(t *testing.T) {
+			if fake.sopTransitionsID != eventID {
+				t.Fatalf("ListSopTransitions id = %v, want %v", fake.sopTransitionsID, eventID)
 			}
 		}},
 		{name: "packages", handler: h.ListPackages, path: "/api/cbt/events/" + eventID.String() + "/packages", routeParam: true, check: func(t *testing.T) {
@@ -376,6 +414,29 @@ func TestCbtEventReadinessAndCoverageHandlers(t *testing.T) {
 			}
 			tt.check(t)
 		})
+	}
+}
+
+func TestCbtEventTransitionSopHandlerParsesActorAndBody(t *testing.T) {
+	eventID := handlerTestUUID(29)
+	actorID := handlerTestUUID(1)
+	fake := &fakeCbtEventService{
+		CbtEvent:         &service.CbtEvent{},
+		sopTransitionRow: service.CbtSopDetail{EventID: eventID.String(), CurrentStage: "package_ready", CurrentStageLabel: "Paket Siap"},
+	}
+	h := &CbtEvent{svc: fake}
+
+	rec := httptest.NewRecorder()
+	req := withRouteParam(adminRequest(http.MethodPost, "/api/cbt/events/"+eventID.String()+"/transition", `{"to_stage":"package_ready","note":"siap panitia"}`), "id", eventID.String())
+	h.TransitionSop(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("TransitionSop() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.sopTransitionID != eventID {
+		t.Fatalf("TransitionSop id = %v, want %v", fake.sopTransitionID, eventID)
+	}
+	if fake.sopTransitionInput.ToState != "package_ready" || fake.sopTransitionInput.Note != "siap panitia" || fake.sopTransitionInput.ActorUserID != actorID {
+		t.Fatalf("TransitionSop input = %+v, want stage/note/actor", fake.sopTransitionInput)
 	}
 }
 

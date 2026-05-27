@@ -142,7 +142,9 @@ func TestSystemMaintenanceValidationAndErrors(t *testing.T) {
 		want int
 	}{
 		{"create invalid json", h.CreateWindow, httptest.NewRequest(http.MethodPost, "/api/system/maintenance/windows", strings.NewReader(`{`)), http.StatusBadRequest},
+		{"create multiple objects", h.CreateWindow, httptest.NewRequest(http.MethodPost, "/api/system/maintenance/windows", strings.NewReader(`{"title":"x"}{"title":"y"}`)), http.StatusBadRequest},
 		{"update invalid id", h.UpdateWindow, withRouteParam(httptest.NewRequest(http.MethodPatch, "/api/system/maintenance/windows/bad", strings.NewReader(`{}`)), "id", "bad"), http.StatusBadRequest},
+		{"update unknown field", h.UpdateWindow, withRouteParam(httptest.NewRequest(http.MethodPatch, "/api/system/maintenance/windows/"+windowID.String(), strings.NewReader(`{"title":"x","unexpected":true}`)), "id", windowID.String()), http.StatusBadRequest},
 		{"activate invalid id", h.ActivateWindow, withRouteParam(httptest.NewRequest(http.MethodPost, "/api/system/maintenance/windows/bad/activate", strings.NewReader(`{}`)), "id", "bad"), http.StatusBadRequest},
 		{"deactivate invalid id", h.DeactivateWindow, withRouteParam(httptest.NewRequest(http.MethodPost, "/api/system/maintenance/windows/bad/deactivate", strings.NewReader(`{}`)), "id", "bad"), http.StatusBadRequest},
 		{"create service bad request", h.CreateWindow, httptest.NewRequest(http.MethodPost, "/api/system/maintenance/windows", strings.NewReader(`{"title":"x"}`)), http.StatusBadRequest},

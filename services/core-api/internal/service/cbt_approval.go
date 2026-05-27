@@ -17,12 +17,17 @@ type cbtApprovalStore interface {
 	RevokeCbtApprovalRecord(ctx context.Context, arg db.RevokeCbtApprovalRecordParams) (db.CbtApprovalRecord, error)
 }
 
+type cbtApprovalEventGateStore interface {
+	GetCbtEventOverviewSummary(ctx context.Context, id pgtype.UUID) (db.GetCbtEventOverviewSummaryRow, error)
+}
+
 type CbtApproval struct {
-	q cbtApprovalStore
+	q      cbtApprovalStore
+	events cbtApprovalEventGateStore
 }
 
 func NewCbtApproval(q *db.Queries) *CbtApproval {
-	return &CbtApproval{q: q}
+	return &CbtApproval{q: q, events: q}
 }
 
 type ListCbtApprovalInput struct {
@@ -59,6 +64,9 @@ func (s *CbtApproval) List(ctx context.Context, in ListCbtApprovalInput) ([]db.L
 func (s *CbtApproval) Approve(ctx context.Context, in SaveCbtApprovalInput) (db.CbtApprovalRecord, error) {
 	in = normalizeCbtApprovalInput(in)
 	if err := validateCbtApprovalInput(in); err != nil {
+		return db.CbtApprovalRecord{}, err
+	}
+	if err := s.validateApprovalGate(ctx, in); err != nil {
 		return db.CbtApprovalRecord{}, err
 	}
 	return s.q.CreateCbtApprovalRecord(ctx, db.CreateCbtApprovalRecordParams{
@@ -122,5 +130,45 @@ func validCbtApprovalType(value string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func (s *CbtApproval) validateApprovalGate(ctx context.Context, in SaveCbtApprovalInput) error {
+	if in.EntityType != "event" || s.events == nil {
+		return nil
+	}
+	summary, err := s.events.GetCbtEventOverviewSummary(ctx, in.EntityID)
+	if err != nil {
+		return err
+	}
+	readiness, _ := buildCbtEventReadiness(summary, nil)
+	switch in.ApprovalType {
+	case "package_ready":
+		if readiness.PackageReady {
+			return nil
+		}
+		return errors.Join(domain.ErrConflict, errors.New("pengesahan paket hanya boleh dicatat saat paket kegiatan sudah siap"))
+	case "participants_rooms_ready":
+		if readiness.SessionReady && readiness.RoomReady {
+			return nil
+		}
+		return errors.Join(domain.ErrConflict, errors.New("pengesahan peserta dan ruang hanya boleh dicatat saat sesi, ruang, kursi, dan pengawas sudah siap"))
+	case "tokens_cards_ready":
+		if readiness.TokenReady && readiness.CardReady {
+			return nil
+		}
+		return errors.Join(domain.ErrConflict, errors.New("pengesahan token dan kartu hanya boleh dicatat saat token dan kartu final sudah siap"))
+	case "results_verified":
+		if readiness.ResultsReady {
+			return nil
+		}
+		return errors.Join(domain.ErrConflict, errors.New("pengesahan hasil hanya boleh dicatat saat semua kiriman sudah selesai dinilai"))
+	case "final_archive":
+		if readiness.ResultsReady && strings.TrimSpace(summary.Status) == "finished" {
+			return nil
+		}
+		return errors.Join(domain.ErrConflict, errors.New("pengesahan arsip akhir hanya boleh dicatat saat kegiatan selesai dan hasil sudah diverifikasi"))
+	default:
+		return nil
 	}
 }

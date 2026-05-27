@@ -160,12 +160,7 @@ func (h *SystemMaintenance) ListAuditLogs(w http.ResponseWriter, r *http.Request
 
 func decodeMaintenanceWindowRequest(w http.ResponseWriter, r *http.Request) (maintenanceWindowRequest, bool) {
 	var req maintenanceWindowRequest
-	defer r.Body.Close()
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.BadRequest(w, "payload maintenance tidak valid")
-		return req, false
-	}
-	return req, true
+	return req, decodeJSON(w, r, &req, 32<<10, disallowUnknownJSONFields)
 }
 
 func decodeMaintenanceReason(r *http.Request) string {
