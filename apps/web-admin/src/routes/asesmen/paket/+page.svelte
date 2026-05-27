@@ -1366,7 +1366,7 @@
           Pilihan soal tetap memakai penyaring Bank Soal yang dapat dipakai
           ulang, ditambah soal khusus kegiatan ini saja. Jika seed sistem
           Informatika tersedia, gunakan sebagai pool/paket awal melalui alur
-          paket resmi, bukan melalui Mode DEMO.
+          paket resmi, bukan melalui Latihan Lokal.
         </p>
       {:else}
         <p>

@@ -283,8 +283,8 @@
 							<p><span class="font-medium">Peserta:</span> {card.participantCount}</p>
 						</div>
 						<div class="text-center">
-							{#if card.qrDataUrl}<img class="mx-auto size-36 rounded border border-border bg-white p-1" src={card.qrDataUrl} alt={`QR Portal Pengawasan ${card.roomName}`} />{:else}<div class="mx-auto grid size-36 place-items-center rounded border border-warning/30 bg-warning/10 p-2 text-xs font-semibold text-warning">QR belum tersedia</div>{/if}
-							<Badge variant="outline" class="mt-2 border-primary/20 bg-primary/10 text-primary">Portal Pengawasan</Badge>
+							{#if card.qrDataUrl}<img class="mx-auto size-36 rounded border border-border bg-white p-1" src={card.qrDataUrl} alt={`QR Ruang Saya ${card.roomName}`} />{:else}<div class="mx-auto grid size-36 place-items-center rounded border border-warning/30 bg-warning/10 p-2 text-xs font-semibold text-warning">QR belum tersedia</div>{/if}
+							<Badge variant="outline" class="mt-2 border-primary/20 bg-primary/10 text-primary">Ruang Saya</Badge>
 						</div>
 					</div>
 					<div class="mt-4 rounded-md bg-primary/10 px-4 py-3">
@@ -292,7 +292,7 @@
 						<p class="mt-1 font-mono text-2xl font-bold text-primary">{card.pin || '—'}</p>
 					</div>
 					<ol class="mt-4 list-decimal space-y-1 pl-5 text-xs leading-5 text-muted-foreground">
-						<li>Scan QR pada lembar ini untuk membuka Portal Pengawasan ruang.</li>
+						<li>Scan QR pada lembar ini untuk membuka Ruang Saya.</li>
 						<li>Tekan tombol besar <span class="font-semibold text-foreground">Mulai Ujian</span> saat peserta siap.</li>
 						<li>Jika muncul merah/masalah, tekan <span class="font-semibold text-foreground">Hubungi Admin</span>.</li>
 					</ol>

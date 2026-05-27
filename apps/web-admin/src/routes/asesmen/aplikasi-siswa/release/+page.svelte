@@ -165,9 +165,9 @@
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-3">
 				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Perangkat & Kesiapan · Pemantauan</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Arsip Rilis APK Aplikasi Siswa</h1>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Arsip Rilis Aplikasi Siswa</h1>
 				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
-					Portal Ujian Web /ujian adalah runtime resmi siswa tahun ini. APK Flutter tetap tersedia di sini sebagai arsip nonaktif/tahap lanjutan.
+					Portal Ujian Web /ujian adalah runtime resmi siswa tahun ini. Aplikasi lama tetap tersedia di sini sebagai arsip nonaktif/tahap lanjutan.
 					Pemantauan hari-H tetap dimulai dari sesi aktif dan panel ruang.
 				</p>
 			</div>

@@ -44,7 +44,7 @@
 		{ phase: 'Data', title: 'Kegiatan Ujian', description: 'Kelola identitas kegiatan, anggota, kartu, dan arsip kegiatan.', href: '/asesmen/kegiatan', cta: 'Kelola Kegiatan', level: 'teknis' },
 		{ phase: 'Data', title: 'Paket Ujian', description: 'Pilih dan kelola paket soal siap ujian.', href: '/asesmen/paket', cta: 'Kelola Paket', level: 'teknis' },
 		{ phase: 'Jadwal', title: 'Jadwal/Sesi Ujian', description: 'Atur sesi, peserta, ruang, kursi, token, dan status pelaksanaan.', href: '/asesmen/sesi', cta: 'Kelola Sesi', level: 'teknis' },
-		{ phase: 'Hari-H', title: 'Pelaksanaan & Pantau Ruang', description: 'Masuk ke alur hari-H, ruang berjalan, dan atensi peserta.', href: '/asesmen/pelaksanaan', cta: 'Buka Pelaksanaan', level: 'utama' },
+		{ phase: 'Pelaksanaan', title: 'Pelaksanaan Ujian', description: 'Masuk ke alur ruang berjalan, atensi peserta, dan serah terima.', href: '/asesmen/pelaksanaan', cta: 'Buka Pelaksanaan', level: 'utama' },
 		{ phase: 'Perangkat', title: 'Panduan Perangkat Siswa', description: 'Panduan Portal Ujian Web, latihan lokal, dan mode cadangan.', href: '/asesmen/aplikasi-siswa', cta: 'Buka Panduan', level: 'utama' },
 		{ phase: 'Perangkat', title: 'Uji Perangkat', description: 'Tabel uji perangkat untuk operator saat simulasi.', href: '/asesmen/aplikasi-siswa/matrix', cta: 'Buka Uji Perangkat', level: 'lanjutan' },
 		{ phase: 'Perangkat', title: 'Arsip Rilis Aplikasi', description: 'Arsip rilis aplikasi siswa untuk panitia teknis.', href: '/asesmen/aplikasi-siswa/release', cta: 'Buka Arsip', level: 'lanjutan' },

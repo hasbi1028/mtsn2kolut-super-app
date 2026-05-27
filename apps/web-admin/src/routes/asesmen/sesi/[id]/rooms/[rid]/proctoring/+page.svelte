@@ -1048,17 +1048,17 @@
 
 	async function updateRoomWebFallbackPolicy(allow: boolean) {
 		const defaultReason = allow
-			? 'Mode darurat browser diaktifkan karena perangkat/aplikasi peserta bermasalah dan sudah disetujui pengawas.'
-			: 'Mode darurat browser dinonaktifkan setelah kondisi ruang kembali normal.';
+			? 'Mode Cadangan diaktifkan karena perangkat peserta bermasalah dan sudah disetujui pengawas.'
+			: 'Mode Cadangan dinonaktifkan setelah kondisi ruang kembali normal.';
 		const result = await openActionDialog({
-			title: 'Akses browser darurat',
+			title: 'Akses Mode Cadangan',
 			description: allow
-				? 'Akses browser darurat hanya untuk kondisi darurat/perangkat bermasalah. Peserta yang memakai browser wajib diawasi dan tercatat.'
-				: 'Peserta baru tidak dapat login lewat halaman ujian browser setelah dinonaktifkan. Peserta yang sudah masuk tetap perlu dipantau sampai selesai.',
-			confirmLabel: allow ? 'Aktifkan Browser Darurat' : 'Nonaktifkan Browser Darurat',
-			textLabel: allow ? 'Alasan mengaktifkan Browser Darurat' : 'Alasan menonaktifkan Browser Darurat',
+				? 'Mode Cadangan hanya untuk kondisi perangkat bermasalah. Peserta yang memakainya wajib diawasi dan tercatat.'
+				: 'Peserta baru tidak dapat memakai Mode Cadangan setelah dinonaktifkan. Peserta yang sudah masuk tetap perlu dipantau sampai selesai.',
+			confirmLabel: allow ? 'Aktifkan Mode Cadangan' : 'Nonaktifkan Mode Cadangan',
+			textLabel: allow ? 'Alasan mengaktifkan Mode Cadangan' : 'Alasan menonaktifkan Mode Cadangan',
 			defaultText: room?.web_fallback_reason || defaultReason,
-			placeholder: 'Tuliskan alasan dan arahan pengawasan browser darurat.',
+			placeholder: 'Tuliskan alasan dan arahan pengawasan Mode Cadangan.',
 			includeReason: true,
 		});
 		if (!result || !result.notes.trim()) return;
@@ -1073,8 +1073,8 @@
 			await readClientJson<unknown>(res);
 			operationState = {
 				tone: allow ? 'warning' : 'success',
-				title: allow ? 'Browser Darurat Aktif' : 'Browser Darurat Nonaktif',
-				message: allow ? 'Halaman ujian browser dapat dipakai peserta ruang ini atas arahan pengawas.' : 'Akses browser darurat ruang sudah ditutup.'
+				title: allow ? 'Mode Cadangan Aktif' : 'Mode Cadangan Nonaktif',
+				message: allow ? 'Mode Cadangan dapat dipakai peserta ruang ini atas arahan pengawas.' : 'Mode Cadangan ruang sudah ditutup.'
 			};
 			await refreshDashboard(true);
 		} catch (error) {
@@ -1299,7 +1299,7 @@
 								<Badge variant="outline" class="border-border bg-card text-foreground">{room.session_status === 'active' ? 'Ujian sudah berjalan' : 'Belum dimulai'}</Badge>
 							</div>
 							<div>
-								<h2 class="text-2xl font-bold tracking-tight text-foreground md:text-3xl">Portal Pengawasan</h2>
+								<h2 class="text-2xl font-bold tracking-tight text-foreground md:text-3xl">Ruang Saya</h2>
 								<p class="mt-1 text-sm text-muted-foreground">{room.room_name} · {room.package_title} · {fmtDate(room.scheduled_start)}</p>
 							</div>
 							<p class="text-sm font-medium text-foreground">{simpleStatusMessage()}</p>

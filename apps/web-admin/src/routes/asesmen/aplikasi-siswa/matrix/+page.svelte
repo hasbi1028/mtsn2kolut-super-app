@@ -99,7 +99,7 @@
 				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Perbandingan Perangkat BYOD</h1>
 				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
 					Bagian pendukung setelah pemantauan hari-H. Runtime resmi siswa tahun ini adalah Portal Ujian Web;
-					gunakan halaman ini untuk membaca kesiapan browser/perangkat, media, koneksi, dan kirim ujian. APK Flutter hanya arsip nonaktif/tahap lanjutan.
+					gunakan halaman ini untuk membaca kesiapan browser/perangkat, media, koneksi, dan kirim ujian. Aplikasi lama hanya arsip nonaktif/tahap lanjutan.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-3">
@@ -122,7 +122,7 @@
 			</div>
 			<div>
 				<p class="text-sm font-semibold text-primary">Perangkat & Kesiapan</p>
-				<p class="mt-1 text-sm leading-6 text-muted-foreground">Halaman ini hanya untuk pembanding perangkat/browser dan catatan teknis; APK Flutter nonaktif tahun ini.</p>
+				<p class="mt-1 text-sm leading-6 text-muted-foreground">Halaman ini hanya untuk pembanding perangkat/browser dan catatan teknis; Aplikasi lama nonaktif tahun ini.</p>
 			</div>
 		</Card.Content>
 	</Card.Root>
