@@ -137,15 +137,9 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	{
 		group: 'Asesmen Ujian',
 		items: [
-			{ kind: 'folder', id: 'alur-utama-asesmen', label: 'Alur Utama', icon: 'grid', children: [
-				{ href: '/asesmen', label: 'Ringkasan Ujian', icon: 'grid', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor', 'asesmen.result_read', 'asesmen.score'] },
-				{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
-				{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
-				{ href: '/asesmen/pengawasan', label: 'Pantau Ruang', icon: 'user-check', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
-				{ href: '/asesmen/hasil', label: 'Hasil', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.result_read'] },
-				{ href: '/asesmen/non-tes', label: 'Penilaian Non-Tes', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.score'] },
-				{ href: '/asesmen/aplikasi-siswa', label: 'Panduan Perangkat', icon: 'package', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor'] }
-			]}
+			{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
+			{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
+			{ href: '/asesmen/hasil', label: 'Hasil', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.result_read'] }
 		]
 	},
 	{
