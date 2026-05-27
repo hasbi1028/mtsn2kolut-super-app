@@ -409,7 +409,7 @@
 	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-2">
-				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Keranjang Soal CBT</p>
+				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Keranjang Soal Ujian Digital</p>
 				<h1 class="text-3xl font-semibold tracking-tight text-foreground">{eventId ? 'Buat Paket Kegiatan' : 'Buat Paket Soal'}</h1>
 				<p class="text-sm leading-6 text-muted-foreground">Pilih soal terbit dari Bank Soal, atur bobot, lalu simpan paket untuk dipakai saat membuat sesi.</p>
 			</div>

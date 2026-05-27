@@ -240,7 +240,7 @@
 					</div>
 				</div>
 				<div class="flex flex-col items-center justify-center rounded-2xl border border-border bg-muted/30 p-4 text-center">
-					<img src={release.qr_url} alt="QR unduh APK CBT Mobile" class="h-44 w-44 rounded-xl bg-white p-2" />
+					<img src={release.qr_url} alt="QR unduh APK Aplikasi Siswa" class="h-44 w-44 rounded-xl bg-white p-2" />
 					<p class="mt-3 text-sm font-semibold text-foreground">QR arsip APK</p>
 					<p class="mt-1 break-all text-xs leading-5 text-muted-foreground">{release.absolute_download_url}</p>
 				</div>
@@ -263,7 +263,7 @@
 						<Badge class="border-primary/20 bg-primary/10 text-primary">Portal Web Resmi</Badge>
 						<Badge class="border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300">Flutter Nonaktif</Badge>
 					</div>
-					<Card.Title class="mt-3 text-xl text-foreground">Arsip Download APK CBT</Card.Title>
+					<Card.Title class="mt-3 text-xl text-foreground">Arsip Download APK Aplikasi Siswa</Card.Title>
 					<Card.Description>
 						Artifact Flutter disajikan dari server web-admin sebagai arsip nonaktif: universal, ABI spesifik, APK DEMO, dan checksum. Operasi siswa tahun ini memakai Portal Ujian Web.
 					</Card.Description>
@@ -313,8 +313,8 @@
 				</div>
 			{:else}
 				<div class="rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-sm leading-6 text-muted-foreground">
-					<p class="font-semibold text-foreground">Artifact arsip APK CBT belum terbaca.</p>
-					<p class="mt-1">{cbtArtifactsError || 'Memuat daftar artifact APK CBT dari server...'}</p>
+					<p class="font-semibold text-foreground">Artifact arsip APK aplikasi siswa belum terbaca.</p>
+					<p class="mt-1">{cbtArtifactsError || 'Memuat daftar artifact APK aplikasi siswa dari server...'}</p>
 				</div>
 			{/if}
 		</Card.Content>

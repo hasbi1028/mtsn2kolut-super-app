@@ -137,13 +137,12 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	{
 		group: 'Asesmen Ujian',
 		items: [
-			{ kind: 'folder', id: 'asesmen-alur-utama', label: 'Alur Utama', icon: 'grid', children: [
-				{ href: '/asesmen/ringkas', label: 'Ringkasan Ujian', icon: 'grid', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage'] },
-				{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage'] },
-				{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', roleFallbacks: ['admin'], permissions: ['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage'] },
-				{ href: '/asesmen/ruang-saya', label: 'Ruang Saya', icon: 'activity', roleFallbacks: ['admin'], permissions: ['asesmen.proctor'] },
-				{ href: '/asesmen/hasil', label: 'Hasil', icon: 'clipboard', roleFallbacks: ['admin'], permissions: ['asesmen.result_read'] }
-			]}
+				{ kind: 'folder', id: 'asesmen-alur-utama', label: 'Alur Utama', icon: 'grid', children: [
+					{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage'] },
+					{ href: '/asesmen/pelaksanaan', label: 'Hari-H', icon: 'activity', roleFallbacks: ['admin'], permissions: ['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage'] },
+					{ href: '/asesmen/ruang-saya', label: 'Ruang Saya', icon: 'activity', roleFallbacks: ['admin'], permissions: ['asesmen.proctor'] },
+					{ href: '/asesmen/hasil', label: 'Hasil', icon: 'clipboard', roleFallbacks: ['admin'], permissions: ['asesmen.result_read', 'asesmen.result_manage'] }
+				]}
 		]
 	},
 	{
@@ -246,7 +245,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 ];
 
 export const defaultPinnedByRole: Record<string, string[]> = {
-	admin: ['/akademik/kesiapan', '/akademik/rombel', '/akademik/jadwal', '/grades/rapor', '/asesmen/ringkas'],
+	admin: ['/akademik/kesiapan', '/akademik/rombel', '/akademik/jadwal', '/grades/rapor', '/asesmen/persiapan'],
 	guru: ['/journal', '/grades', '/grades/rapor', '/bank-soal', '/akademik/jadwal'],
 	staf: ['/document-cycles', '/inventory', '/library'],
 	kesiswaan: ['/students', '/akademik/rombel', '/parents', '/kesiswaan'],

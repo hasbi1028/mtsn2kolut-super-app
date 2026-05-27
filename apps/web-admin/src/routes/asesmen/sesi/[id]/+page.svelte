@@ -1524,7 +1524,7 @@
 				]}
 			/>
 
-			<section class={`rounded-lg border bg-background/95 p-3 shadow-sm ${commandCenterClass()}`} aria-label="Command Center Hari-H CBT">
+			<section class={`rounded-lg border bg-background/95 p-3 shadow-sm ${commandCenterClass()}`} aria-label="Command Center Hari-H Ujian Digital">
 				<div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2">
 					<div class="min-w-0">
 						<div class="flex flex-wrap items-center gap-2">

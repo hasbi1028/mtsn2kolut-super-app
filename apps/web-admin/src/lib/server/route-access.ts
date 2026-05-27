@@ -240,9 +240,18 @@ function isSensitiveAssessmentReadPath(pathname: string): boolean {
 		|| /^\/api\/asesmen\/sessions\/[^/]+\/audit-logs\/?$/.test(cleanPath);
 }
 
-const ASSESSMENT_OPERATOR_PERMISSIONS = ['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage'] as const;
+const ASSESSMENT_OPERATOR_PERMISSIONS = [
+	'asesmen.operator',
+	'asesmen.event_manage',
+	'asesmen.package_manage',
+	'asesmen.session_manage',
+	'asesmen.participant_manage'
+] as const;
 const ASSESSMENT_DAY_OF_PERMISSIONS = ['asesmen.proctor', ...ASSESSMENT_OPERATOR_PERMISSIONS] as const;
 const ASSESSMENT_GUIDE_PERMISSIONS = [...ASSESSMENT_DAY_OF_PERMISSIONS] as const;
+const ASSESSMENT_SESSION_MANAGE_PERMISSIONS = ['asesmen.session_manage', 'asesmen.operator'] as const;
+const ASSESSMENT_PARTICIPANT_MANAGE_PERMISSIONS = ['asesmen.participant_manage'] as const;
+const ASSESSMENT_RESULT_PERMISSIONS = ['asesmen.result_read', 'asesmen.result_manage'] as const;
 
 function asesmenPermission(pathname: string, method: string): string[] | undefined {
 	if (matchesPathSegment(pathname, '/asesmen/ringkas')) return [...ASSESSMENT_OPERATOR_PERMISSIONS];
@@ -250,15 +259,53 @@ function asesmenPermission(pathname: string, method: string): string[] | undefin
 	if (matchesPathSegment(pathname, '/asesmen/pelaksanaan')) return [...ASSESSMENT_DAY_OF_PERMISSIONS];
 	if (matchesPathSegment(pathname, '/asesmen/aplikasi-siswa/release')) return [...ASSESSMENT_OPERATOR_PERMISSIONS];
 	if (matchesPathSegment(pathname, '/asesmen/aplikasi-siswa/matrix')) return [...ASSESSMENT_OPERATOR_PERMISSIONS];
-	if (matchesPathSegment(pathname, '/asesmen/hasil')) return ['asesmen.result_read'];
+	if (matchesPathSegment(pathname, '/asesmen/hasil')) return [...ASSESSMENT_RESULT_PERMISSIONS];
 	if (matchesPathSegment(pathname, '/ujian/command-center') || matchesPathSegment(pathname, '/asesmen/pengawasan')) return ['asesmen.proctor'];
 	if (/^\/api\/asesmen\/events\/[^/]+\/results\/?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/(results|item-analysis|operational-recap)\/?$/.test(pathname)) {
-		return ['asesmen.result_read'];
+		return [...ASSESSMENT_RESULT_PERMISSIONS];
+	}
+	if (/^\/api\/asesmen\/sessions\/[^/]+\/(grade-sync-preflight|remedial-candidates)\/?$/.test(pathname)) {
+		return [...ASSESSMENT_RESULT_PERMISSIONS];
 	}
 	if (/^\/api\/asesmen\/sessions\/[^/]+\/(ungraded-essays|score)\/?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/answers\/[^/]+\/grade-essay\/?$/.test(pathname)) {
 		return ['asesmen.score'];
 	}
-	if (/^\/api\/asesmen\/sessions\/[^/]+\/proctoring(?:\/.*)?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/rooms\/[^/]+\/proctoring(?:\/.*)?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/audit-logs\/?$/.test(pathname)) {
+	if (/^\/api\/asesmen\/sessions\/[^/]+\/rooms\/(assignment|assignment-preview)\/?$/.test(pathname)) {
+		return [];
+	}
+	if (/^\/api\/asesmen\/sessions\/[^/]+\/rooms\/readiness\/?$/.test(pathname)) {
+		return ['asesmen.read'];
+	}
+	if (/^\/api\/asesmen\/sessions\/[^/]+\/rooms\/[^/]+\/participants\/[^/]+(?:\/(flag|reset-access|unlock|acknowledge|incident-action|command|force-submit))?\/?$/.test(pathname)) {
+		return ['asesmen.proctor'];
+	}
+	if (/^\/api\/asesmen\/sessions\/[^/]+\/participants\/[^/]+\/(flag|force-submit|proctor-actions)\/?$/.test(pathname)) {
+		return ['asesmen.proctor'];
+	}
+	if (/^\/api\/asesmen\/sessions\/[^/]+\/participants\/[^/]+\/answer\/?$/.test(pathname)) {
+		return [];
+	}
+	if (/^\/api\/asesmen\/sessions\/[^/]+\/participants\/[^/]+\/answers\/?$/.test(pathname)) {
+		return ['asesmen.read'];
+	}
+	if (/^\/api\/asesmen\/sessions\/[^/]+\/participants(?:\/.*)?$/.test(pathname)) {
+		if (isReadMethod(method)) return ['asesmen.read'];
+		return [...ASSESSMENT_PARTICIPANT_MANAGE_PERMISSIONS];
+	}
+	if (/^\/api\/asesmen\/sessions\/[^/]+\/(generate-tokens|seats\/auto|enroll|enroll-grade|enroll-school)\/?$/.test(pathname)) {
+		if (isReadMethod(method)) return ['asesmen.read'];
+		return [...ASSESSMENT_PARTICIPANT_MANAGE_PERMISSIONS];
+	}
+	if (/^\/api\/asesmen\/sessions\/[^/]+\/(shuffle-rooms|finalize-overdue)\/?$/.test(pathname)) {
+		return [];
+	}
+	if (
+		/^\/api\/asesmen\/sessions\/[^/]+\/(status|schedule)\/?$/.test(pathname)
+	) {
+		if (isReadMethod(method)) return ['asesmen.read'];
+		return [...ASSESSMENT_SESSION_MANAGE_PERMISSIONS];
+	}
+	if (/^\/api\/asesmen\/sessions\/[^/]+\/proctoring(?:\/.*)?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/rooms\/[^/]+\/proctoring(?:\/.*)?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/rooms\/[^/]+\/(web-fallback|print-pack|handover(?:\/lock)?)\/?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/audit-logs\/?$/.test(pathname)) {
 		return ['asesmen.proctor'];
 	}
 	if (matchesPathSegment(pathname, '/asesmen/non-tes') || matchesPathSegment(pathname, '/api/asesmen/non-test-assessments')) {
@@ -278,9 +325,9 @@ function asesmenPermission(pathname: string, method: string): string[] | undefin
 		return isReadMethod(method) ? ['asesmen.read'] : ['asesmen.event_manage'];
 	}
 	if (matchesPathSegment(pathname, '/asesmen/sesi') || matchesPathSegment(pathname, '/api/asesmen/sessions')) {
-		return isReadMethod(method) ? ['asesmen.read'] : ['asesmen.proctor'];
+		return isReadMethod(method) ? ['asesmen.read'] : [...ASSESSMENT_SESSION_MANAGE_PERMISSIONS];
 	}
-	if (matchesPathSegment(pathname, '/asesmen')) return [...ASSESSMENT_DAY_OF_PERMISSIONS, 'asesmen.result_read'];
+	if (matchesPathSegment(pathname, '/asesmen')) return [...ASSESSMENT_DAY_OF_PERMISSIONS, ...ASSESSMENT_RESULT_PERMISSIONS];
 	return undefined;
 }
 

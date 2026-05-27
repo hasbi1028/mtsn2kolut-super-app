@@ -204,7 +204,7 @@
 	onMount(load);
 </script>
 
-<svelte:head><title>Penugasan CBT — {info?.title ?? 'Kegiatan'}</title></svelte:head>
+<svelte:head><title>Penugasan Asesmen — {info?.title ?? 'Kegiatan'}</title></svelte:head>
 
 <div class="space-y-6 p-6">
 	<div class="flex items-center gap-2 text-sm text-muted-foreground">
@@ -232,7 +232,7 @@
 				<div>
 					<p class="text-xs font-bold uppercase tracking-[0.18em] text-success">Panitia & Penugasan Soal</p>
 					<h1 class="mt-1 text-2xl font-semibold text-foreground">{current.info.title}</h1>
-					<p class="mt-1 text-sm text-muted-foreground">Kelola pembuat soal, reviewer, proktor, pengawas, dan korektor untuk kegiatan CBT ini.</p>
+					<p class="mt-1 text-sm text-muted-foreground">Kelola pembuat soal, reviewer, proktor, pengawas, dan korektor untuk kegiatan asesmen ini.</p>
 				</div>
 				<a href={resolve(`/bank-soal/tambah?event_id=${eventId}`)} class="inline-flex rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Buka Komposer Bank Soal</a>
 			</div>

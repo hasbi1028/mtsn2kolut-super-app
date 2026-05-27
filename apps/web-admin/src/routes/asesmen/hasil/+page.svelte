@@ -42,9 +42,10 @@
 	const isOperator = $derived(
 		userPermissions.includes('asesmen.operator') ||
 		userPermissions.includes('asesmen.event_manage') ||
-		userPermissions.includes('asesmen.package_manage')
+		userPermissions.includes('asesmen.package_manage') ||
+		userPermissions.includes('asesmen.session_manage')
 	);
-	const isResultReader = $derived(userPermissions.includes('asesmen.result_read'));
+	const isResultReader = $derived(userPermissions.includes('asesmen.result_read') || userPermissions.includes('asesmen.result_manage'));
 	const isProctor = $derived(userPermissions.includes('asesmen.proctor'));
 	const canAccess = $derived(isResultReader || userRoles.includes('admin'));
 	const canOpenRingkasan = $derived(
@@ -52,6 +53,7 @@
 			|| userPermissions.includes('asesmen.operator')
 			|| userPermissions.includes('asesmen.event_manage')
 			|| userPermissions.includes('asesmen.package_manage')
+			|| userPermissions.includes('asesmen.session_manage')
 	);
 	const resultRows = $derived<ResultRow[]>(
 		isOperator

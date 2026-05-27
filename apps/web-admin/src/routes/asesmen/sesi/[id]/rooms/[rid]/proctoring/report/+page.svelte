@@ -141,7 +141,7 @@
 	}
 </script>
 
-<svelte:head><title>Berita Acara Ruang CBT</title></svelte:head>
+<svelte:head><title>Berita Acara Ruang Ujian Digital</title></svelte:head>
 
 <div class="mx-auto max-w-7xl space-y-6 p-4 md:p-6 print:max-w-none print:p-0">
 	<div class="flex flex-wrap items-start justify-between gap-3 print:hidden">
@@ -175,7 +175,7 @@
 
 		<Card.Root class="print:border-0 print:shadow-none">
 			<Card.Header class="border-b print:break-after-avoid print:text-center">
-				<Card.Title>Berita Acara Pengawasan CBT Ruang</Card.Title>
+				<Card.Title>Berita Acara Pengawasan Ujian Digital Ruang</Card.Title>
 				<Card.Description>{room?.session_title} · {room?.room_name} · dicetak {fmtDate(new Date().toISOString())}</Card.Description>
 			</Card.Header>
 			<Card.Content class="space-y-6 print:space-y-4 print:p-0 print:text-[11px]">

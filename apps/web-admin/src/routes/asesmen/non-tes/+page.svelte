@@ -664,12 +664,12 @@
 	});
 </script>
 
-<svelte:head><title>Asesmen Non-Tes CBT — MTsN 2 Kolut</title></svelte:head>
+<svelte:head><title>Asesmen Non-Tes — MTsN 2 Kolut</title></svelte:head>
 
 <div class="space-y-5">
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">CBT / Penilaian Manual</p>
+			<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Asesmen / Penilaian Manual</p>
 			<h1 class="mt-1 text-2xl font-semibold text-foreground">Asesmen Non-Tes</h1>
 			<p class="mt-1 max-w-3xl text-sm text-muted-foreground">
 				Kelola praktik, portofolio, proyek, penugasan, dan observasi tanpa mencampurnya dengan bank soal ujian berkode.

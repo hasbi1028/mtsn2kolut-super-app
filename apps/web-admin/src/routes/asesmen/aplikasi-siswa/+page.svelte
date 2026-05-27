@@ -29,8 +29,7 @@
 
 	const adminLinks = [
 		{ label: 'Uji Perangkat', href: '/asesmen/aplikasi-siswa/matrix' },
-		{ label: 'Arsip Rilis Aplikasi', href: '/asesmen/aplikasi-siswa/release' },
-		{ label: 'Mode Lengkap Panitia', href: '/asesmen/panitia' }
+		{ label: 'Arsip Rilis Aplikasi', href: '/asesmen/aplikasi-siswa/release' }
 	];
 
 	const roles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
@@ -40,6 +39,7 @@
 			|| permissions.includes('asesmen.operator')
 			|| permissions.includes('asesmen.event_manage')
 			|| permissions.includes('asesmen.package_manage')
+			|| permissions.includes('asesmen.session_manage')
 	);
 
 	function badgeClass(tone: StatusTone) {

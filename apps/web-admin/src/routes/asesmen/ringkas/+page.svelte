@@ -16,42 +16,17 @@
 		unassigned_participant_count?: number;
 	};
 	type PackageRow = { id: string; title?: string; subject?: string; level?: string; question_count?: number; status?: string };
-	type AssignmentPreview = {
-		summary: {
-			participant_count: number;
-			room_count: number;
-			capacity_total: number;
-			assigned_count: number;
-			unassigned_count: number;
-			mix_policy: string;
-			assignment_mode: string;
-			allow_cross_grade: boolean;
-			is_special_event: boolean;
-		};
-		rooms: Array<{ room_id: string; room_name: string; capacity: number; participant_count: number; levels: Record<string, number>; classes: string[] }>;
-		warnings?: string[];
-	};
 
 	let loading = $state(true);
-	let working = $state(false);
 	let errorMessage = $state('');
-	let successMessage = $state('');
 	let sessions = $state<SessionRow[]>([]);
 	let packages = $state<PackageRow[]>([]);
-	let selectedSessionId = $state('');
-	let mixPolicy = $state<'same_class' | 'same_grade' | 'mixed_scope'>('mixed_scope');
-	let preview = $state<AssignmentPreview | null>(null);
 
-	let selectedSession = $derived(sessions.find((session) => session.id === selectedSessionId) ?? sessions[0]);
 	let latestSessions = $derived(sessions.slice(0, 5));
 	let latestPackages = $derived(packages.slice(0, 5));
 	let todaySessions = $derived(sessions.filter((session) => isToday(session.scheduled_start)).slice(0, 5));
-	let assignmentPayload = $derived({
-		mix_policy: mixPolicy,
-		assignment_mode: 'random_balanced',
-		allow_cross_grade: mixPolicy === 'mixed_scope',
-		is_special_event: mixPolicy === 'mixed_scope'
-	});
+	let unassignedParticipantCount = $derived(sessions.reduce((sum, session) => sum + (session.unassigned_participant_count ?? 0), 0));
+	let runningSessions = $derived(sessions.filter((session) => (session.status ?? session.session_status) === 'active').length);
 	let userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
 	let userPermissions = $derived((page.data.user?.permissions ?? []).map((permission) => permission.trim()).filter(Boolean));
 	let canOpenResults = $derived(userRoles.includes('admin') || userPermissions.includes('asesmen.result_read'));
@@ -63,7 +38,6 @@
 	async function loadData() {
 		loading = true;
 		errorMessage = '';
-		successMessage = '';
 		try {
 			const [sessionResult, packageResult] = await Promise.allSettled([
 				fetchWithTimeout('/api/asesmen/sessions').then((response) => readJson<SessionRow[]>(response)),
@@ -82,7 +56,6 @@
 				packages = [];
 				errors.push(`Paket: ${friendlyLoadError(packageResult.reason)}`);
 			}
-			selectedSessionId = sessions[0]?.id ?? '';
 			if (errors.length > 0) {
 				errorMessage = `Sebagian data belum termuat. ${errors.join(' · ')}`;
 			}
@@ -117,50 +90,6 @@
 		return body as T;
 	}
 
-	async function previewRooms() {
-		if (!selectedSession?.id) {
-			errorMessage = 'Pilih sesi ujian terlebih dahulu.';
-			return;
-		}
-		working = true;
-		errorMessage = '';
-		successMessage = '';
-		try {
-			preview = await fetchWithTimeout(`/api/asesmen/sessions/${encodeURIComponent(selectedSession.id)}/rooms/assignment-preview`, {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify(assignmentPayload)
-			}).then((response) => readJson<AssignmentPreview>(response));
-			successMessage = 'Pratinjau pembagian ruang siap diperiksa.';
-		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Pratinjau pembagian ruang gagal.';
-		} finally {
-			working = false;
-		}
-	}
-
-	async function applyRooms() {
-		if (!selectedSession?.id || !preview) return;
-		const ok = window.confirm('Simpan pembagian ruang dan nomor kursi sesuai pratinjau ini? Pembagian lama pada sesi ini akan diganti.');
-		if (!ok) return;
-		working = true;
-		errorMessage = '';
-		successMessage = '';
-		try {
-			preview = await fetchWithTimeout(`/api/asesmen/sessions/${encodeURIComponent(selectedSession.id)}/rooms/assignment`, {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify(assignmentPayload)
-			}).then((response) => readJson<AssignmentPreview>(response));
-			successMessage = 'Pembagian ruang dan nomor kursi berhasil disimpan.';
-			await loadData();
-		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Pembagian ruang gagal disimpan.';
-		} finally {
-			working = false;
-		}
-	}
-
 	function isToday(value?: string) {
 		if (!value) return false;
 		const date = new Date(value);
@@ -184,10 +113,19 @@
 		return 'Draft';
 	}
 
-	function modeLabel(value: string) {
-		if (value === 'same_class') return 'Per Kelas';
-		if (value === 'same_grade') return 'Campur Satu Tingkat';
-		return 'Campur Lintas Tingkat';
+	function readinessLabel() {
+		if (sessions.length === 0) return 'Belum ada sesi';
+		if (unassignedParticipantCount > 0) return 'Perlu penempatan peserta';
+		if (runningSessions > 0) return 'Sedang berjalan';
+		if (todaySessions.length > 0) return 'Siap hari ini';
+		return 'Terkendali';
+	}
+
+	function readinessClass() {
+		if (sessions.length === 0) return 'bg-slate-100 text-slate-700';
+		if (unassignedParticipantCount > 0) return 'bg-amber-100 text-amber-900';
+		if (runningSessions > 0) return 'bg-emerald-100 text-emerald-800';
+		return 'bg-slate-100 text-slate-700';
 	}
 </script>
 
@@ -202,7 +140,7 @@
 				<div>
 					<p class="text-xs font-bold uppercase tracking-[0.22em] text-emerald-700">Ujian Digital</p>
 					<h1 class="mt-1 text-2xl font-black tracking-tight md:text-3xl">Ringkasan Ujian</h1>
-					<p class="mt-1 max-w-2xl text-sm text-slate-600">Satu halaman untuk membuka persiapan, pelaksanaan, hasil, dan pembagian 8 ruang tanpa berpindah ke terlalu banyak menu.</p>
+					<p class="mt-1 max-w-2xl text-sm text-slate-600">Satu halaman baca untuk melihat kondisi asesmen dan membuka alur kerja yang tepat.</p>
 				</div>
 				<div class="flex flex-wrap gap-2 text-sm font-bold">
 					<a class="rounded-xl bg-emerald-700 px-3 py-2 text-white" href="/asesmen/persiapan">Persiapan</a>
@@ -215,8 +153,6 @@
 		</header>
 
 		{#if errorMessage}<div class="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">{errorMessage}</div>{/if}
-		{#if successMessage}<div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">{successMessage}</div>{/if}
-
 		{#if loading}
 			<div class="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">Memuat ringkasan ujian...</div>
 		{:else}
@@ -228,13 +164,13 @@
 				</div>
 				<div class="rounded-2xl border border-slate-200 bg-white p-4">
 					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Pelaksanaan</p>
-					<p class="mt-2 text-3xl font-black">{todaySessions.length}</p>
-					<p class="text-sm text-slate-600">sesi hari ini</p>
+					<p class="mt-2 text-3xl font-black">{runningSessions}</p>
+					<p class="text-sm text-slate-600">sesi sedang berjalan</p>
 				</div>
 				<div class="rounded-2xl border border-slate-200 bg-white p-4">
-					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Paket</p>
-					<p class="mt-2 text-3xl font-black">{packages.length}</p>
-					<p class="text-sm text-slate-600">paket ujian tersedia</p>
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Kesiapan</p>
+					<p class="mt-2 text-3xl font-black">{unassignedParticipantCount}</p>
+					<p class="text-sm text-slate-600">peserta belum ditempatkan</p>
 				</div>
 			</section>
 
@@ -280,59 +216,24 @@
 				</div>
 
 				<aside class="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm">
-					<p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Jadwal & Ruang</p>
-					<h2 class="mt-1 text-xl font-black">Atur Pembagian 8 Ruang</h2>
-					<p class="mt-1 text-sm text-slate-600">Pilih sesi, tentukan pola campur peserta, cek pratinjau, lalu simpan pembagian kursi.</p>
-
-					<label class="mt-4 block space-y-1 text-sm font-bold">
-						<span>Sesi ujian</span>
-						<select class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2" bind:value={selectedSessionId} onchange={() => (preview = null)}>
-							{#each sessions as session (session.id)}<option value={session.id}>{session.title ?? 'Sesi Ujian'} · {fmtDate(session.scheduled_start)}</option>{/each}
-						</select>
-					</label>
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Status alur</p>
+					<div class="mt-2 flex flex-wrap items-center gap-2">
+						<h2 class="text-xl font-black">Arah kerja berikutnya</h2>
+						<span class={`rounded-full px-2.5 py-1 text-xs font-bold ${readinessClass()}`}>{readinessLabel()}</span>
+					</div>
+					<p class="mt-2 text-sm leading-6 text-slate-600">
+						Ringkasan ini tidak menyimpan perubahan. Pembagian ruang, peserta, token, dan status sesi dikerjakan dari Persiapan atau Sesi agar keputusan teknis tidak tersebar.
+					</p>
 
 					<div class="mt-4 grid gap-2">
-						<p class="text-sm font-bold">Mode pembagian</p>
-						{#each [
-							{ value: 'same_class', title: 'Tetap per Kelas', desc: 'Peserta tetap mengikuti rombel asal.' },
-							{ value: 'same_grade', title: 'Campur Satu Tingkat', desc: 'Rombel boleh bercampur, tetapi tingkat tetap dipisah.' },
-							{ value: 'mixed_scope', title: 'Campur Lintas Tingkat', desc: 'VII, VIII, IX dapat bercampur. Pakai hanya bila diputuskan panitia.' }
-						] as option}
-							<label class="flex gap-3 rounded-xl border p-3 text-sm {mixPolicy === option.value ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'}">
-								<input type="radio" bind:group={mixPolicy} value={option.value} onchange={() => (preview = null)} />
-								<span><b>{option.title}</b><br /><span class="text-xs text-slate-600">{option.desc}</span></span>
-							</label>
-						{/each}
+						<a class="rounded-xl bg-emerald-700 px-3 py-3 text-center text-sm font-black text-white" href="/asesmen/persiapan">Buka Persiapan</a>
+						<a class="rounded-xl border border-slate-300 bg-white px-3 py-3 text-center text-sm font-bold text-slate-900" href="/asesmen/sesi">Kelola Sesi</a>
+						<a class="rounded-xl border border-slate-300 bg-white px-3 py-3 text-center text-sm font-bold text-slate-900" href="/asesmen/pelaksanaan">Masuk Hari-H</a>
 					</div>
 
-					{#if mixPolicy === 'mixed_scope'}
-						<div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-950">Campur lintas tingkat hanya untuk keputusan panitia. Sistem akan menandai sesi khusus dan izin campur tingkat; periksa pratinjau sebelum menyimpan.</div>
-					{/if}
-
-					<div class="mt-4 grid grid-cols-2 gap-2">
-						<button class="min-h-12 rounded-xl bg-emerald-700 px-3 text-sm font-black text-white disabled:opacity-60" disabled={working || !selectedSession} onclick={previewRooms}>{working ? 'Memproses...' : 'Lihat Pratinjau'}</button>
-						<button class="min-h-12 rounded-xl bg-slate-900 px-3 text-sm font-black text-white disabled:opacity-50" disabled={working || !preview || (preview.summary.unassigned_count ?? 0) > 0} onclick={applyRooms}>Simpan Pembagian</button>
-					</div>
-
-					{#if preview}
-						<div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-							<p class="text-sm font-black">Pratinjau {modeLabel(preview.summary.mix_policy)} · {preview.summary.assigned_count}/{preview.summary.participant_count} peserta</p>
-							<p class="mt-1 text-xs text-slate-600">{preview.summary.room_count} ruang · kapasitas {preview.summary.capacity_total} kursi · belum ditempatkan {preview.summary.unassigned_count}</p>
-							{#if preview.warnings?.length}<ul class="mt-2 space-y-1 text-xs font-semibold text-amber-800">{#each preview.warnings as warning}<li>• {warning}</li>{/each}</ul>{/if}
-							<div class="mt-3 grid gap-2 sm:grid-cols-2">
-								{#each preview.rooms as room (room.room_id)}
-									<div class="rounded-xl border border-slate-200 bg-white p-3 text-xs">
-										<p class="font-black">{room.room_name}</p>
-										<p class="text-slate-600">{room.participant_count}/{room.capacity} peserta</p>
-										<p class="mt-1 text-slate-500">{Object.entries(room.levels).map(([k, v]) => `${k}: ${v}`).join(', ') || 'Kosong'}</p>
-									</div>
-								{/each}
-							</div>
-						</div>
-					{/if}
-
-					<div class="mt-4 flex flex-wrap gap-2 text-xs font-bold">
-						<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/panitia">Mode Lengkap Panitia</a>
+					<div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
+						<p class="font-bold text-slate-900">Batas sederhana:</p>
+						<p>Bank Soal untuk menyusun soal. Persiapan untuk menyiapkan kegiatan dan sesi. Hari-H untuk pengawas. Hasil untuk rekap dan penutupan.</p>
 					</div>
 				</aside>
 			</section>

@@ -122,12 +122,12 @@
 	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-2">
-				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Alur Pembuatan CBT</p>
+				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Alur Pembuatan Asesmen</p>
 				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Buat Kegiatan Asesmen</h1>
 				<p class="text-sm leading-6 text-muted-foreground">Isi identitas kegiatan sekali, lalu lanjutkan ke paket, sesi, peserta, dan kode ujian dari daftar kegiatan.</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
-				<Button href={resolve('/asesmen/persiapan')} variant="outline">Persiapan CBT</Button>
+				<Button href={resolve('/asesmen/persiapan')} variant="outline">Persiapan Asesmen</Button>
 				<Button href={resolve('/asesmen/kegiatan')} variant="outline">Batal</Button>
 			</div>
 		</div>

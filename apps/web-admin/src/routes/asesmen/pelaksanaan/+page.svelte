@@ -34,6 +34,8 @@
 			|| userPermissions.includes('asesmen.operator')
 			|| userPermissions.includes('asesmen.event_manage')
 			|| userPermissions.includes('asesmen.package_manage')
+			|| userPermissions.includes('asesmen.session_manage')
+			|| userPermissions.includes('asesmen.participant_manage')
 	);
 	const hasProctorLane = $derived(userPermissions.includes('asesmen.proctor'));
 	const canOpenResults = $derived(userRoles.includes('admin') || userPermissions.includes('asesmen.result_read'));

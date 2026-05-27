@@ -499,14 +499,14 @@
 
 	function adminHelpText() {
 		if (!room) return 'Saya pengawas ujian membutuhkan bantuan admin.';
-		return `Mohon bantuan admin CBT. Ruang: ${room.room_name}. Sesi: ${room.session_title}. Status: ${simpleSignalLabel()}. Atensi: ${attentionParticipants.length}.`;
+		return `Mohon bantuan admin ujian digital. Ruang: ${room.room_name}. Sesi: ${room.session_title}. Status: ${simpleSignalLabel()}. Atensi: ${attentionParticipants.length}.`;
 	}
 
 	async function contactAdmin() {
 		const text = adminHelpText();
 		try {
 			await navigator.clipboard?.writeText(text);
-			toast.success('Pesan bantuan disalin. Kirim ke admin/operator CBT.');
+			toast.success('Pesan bantuan disalin. Kirim ke admin/operator ujian digital.');
 		} catch {
 			toast.info(text);
 		}

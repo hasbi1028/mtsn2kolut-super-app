@@ -10,7 +10,7 @@ export const load: PageServerLoad = async (event) => {
 	} catch (error) {
 		return {
 			cbtArtifacts: null,
-			cbtArtifactsError: error instanceof Error ? error.message : 'Artifact APK CBT belum tersedia.'
+			cbtArtifactsError: error instanceof Error ? error.message : 'Artifact APK aplikasi siswa belum tersedia.'
 		};
 	}
 };

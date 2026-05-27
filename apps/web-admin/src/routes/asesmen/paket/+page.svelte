@@ -1269,7 +1269,7 @@
         <p
           class="text-xs font-semibold uppercase tracking-[0.2em] text-primary"
         >
-          Keranjang Soal CBT
+          Keranjang Soal Ujian Digital
         </p>
         <h1 class="text-3xl font-semibold tracking-tight text-foreground">
           {eventId ? "Paket Soal Kegiatan" : "Paket Soal"}

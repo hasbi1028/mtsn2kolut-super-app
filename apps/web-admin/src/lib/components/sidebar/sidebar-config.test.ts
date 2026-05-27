@@ -49,7 +49,6 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'/bank-soal/cetak',
 			'/bank-soal/mapel-kd',
 			'/bank-soal/laporan',
-			'/asesmen/ringkas',
 			'/asesmen/persiapan',
 			'/asesmen/pelaksanaan',
 			'/asesmen/ruang-saya',
@@ -64,16 +63,14 @@ describe('sidebar 3-level full route coverage configuration', () => {
 
 	it('keeps assessment navigation aligned to preparation, execution, and result workflows', () => {
 		expect(hrefsByGroup('Asesmen Ujian')).toEqual([
-			'/asesmen/ringkas',
 			'/asesmen/persiapan',
 			'/asesmen/pelaksanaan',
 			'/asesmen/ruang-saya',
 			'/asesmen/hasil'
 		]);
 		expect(labelsByGroup('Asesmen Ujian')).toEqual([
-			'Ringkasan Ujian',
 			'Persiapan',
-			'Pelaksanaan',
+			'Hari-H',
 			'Ruang Saya',
 			'Hasil',
 		]);
@@ -128,10 +125,10 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(byHref.get('/settings/rbac')?.permissions).toEqual(['roles.read']);
 		expect(byHref.get('/bank-soal/verifikasi')?.permissions).toEqual(['bank_soal.review', 'bank_soal.publish']);
 		expect(byHref.get('/bank-soal/analisis-butir')?.permissions).toEqual(['bank_soal.analytics']);
-		expect(byHref.get('/asesmen/ringkas')?.permissions).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
-		expect(byHref.get('/asesmen/persiapan')?.permissions).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
-		expect(byHref.get('/asesmen/pelaksanaan')?.permissions).toEqual(['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
-		expect(byHref.get('/asesmen/hasil')?.permissions).toEqual(['asesmen.result_read']);
+		expect(byHref.get('/asesmen/ringkas')).toBeUndefined();
+		expect(byHref.get('/asesmen/persiapan')?.permissions).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage']);
+		expect(byHref.get('/asesmen/pelaksanaan')?.permissions).toEqual(['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage']);
+		expect(byHref.get('/asesmen/hasil')?.permissions).toEqual(['asesmen.result_read', 'asesmen.result_manage']);
 		expect(byHref.get('/asesmen/ruang-saya')?.permissions).toEqual(['asesmen.proctor']);
 		expect(byHref.get('/asesmen/pengawasan')).toBeUndefined();
 		expect(byHref.get('/asesmen')).toBeUndefined();
@@ -150,12 +147,17 @@ describe('sidebar 3-level full route coverage configuration', () => {
 	});
 
 
-	it('shows result entry only for result readers or admin fallback', () => {
-		const visibleHrefs = flattenSidebarNavGroups(
+	it('shows result entry only for result readers/managers or admin fallback', () => {
+		const readerHrefs = flattenSidebarNavGroups(
 			filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], ['asesmen.result_read'])
 		).map((item) => item.href);
-		expect(visibleHrefs).toEqual(expect.arrayContaining(['/asesmen/hasil', '/settings/account']));
-		expect(visibleHrefs).not.toContain('/asesmen/ringkas');
+		const managerHrefs = flattenSidebarNavGroups(
+			filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], ['asesmen.result_manage'])
+		).map((item) => item.href);
+		expect(readerHrefs).toEqual(expect.arrayContaining(['/asesmen/hasil', '/settings/account']));
+		expect(managerHrefs).toEqual(expect.arrayContaining(['/asesmen/hasil', '/settings/account']));
+		expect(readerHrefs).not.toContain('/asesmen/persiapan');
+		expect(managerHrefs).not.toContain('/asesmen/persiapan');
 	});
 
 	it('shows Bank Soal read/create surfaces for a guru with matching permissions', () => {
@@ -179,7 +181,8 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		const visibleHrefs = flattenSidebarNavGroups(
 			filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], ['asesmen.operator'])
 		).map((item) => item.href);
-		expect(visibleHrefs).toEqual(expect.arrayContaining(['/asesmen/ringkas', '/asesmen/persiapan', '/asesmen/pelaksanaan', '/settings/account']));
+		expect(visibleHrefs).toEqual(expect.arrayContaining(['/asesmen/persiapan', '/asesmen/pelaksanaan', '/settings/account']));
+		expect(visibleHrefs).not.toContain('/asesmen/ringkas');
 		expect(visibleHrefs).not.toContain('/asesmen/ruang-saya');
 	});
 

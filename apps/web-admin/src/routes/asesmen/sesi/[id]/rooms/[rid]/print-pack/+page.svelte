@@ -173,7 +173,7 @@
 </script>
 
 <svelte:head>
-	<title>Paket Pengawas Ruang CBT</title>
+	<title>Paket Pengawas Ruang Ujian Digital</title>
 </svelte:head>
 
 <AsyncContent promise={printPackPromise} onerror={handlePrintPackRenderError}>
@@ -218,7 +218,7 @@
 						<ArrowLeftIcon class="size-3.5" />
 						Kembali ke panel ruang
 					</a>
-					<h1 class="mt-2 text-2xl font-semibold tracking-tight">Paket Pengawas Ruang CBT</h1>
+					<h1 class="mt-2 text-2xl font-semibold tracking-tight">Paket Pengawas Ruang Ujian Digital</h1>
 					<p class="text-sm text-muted-foreground">Daftar hadir, kode ujian, denah meja, kontak operator, dan daftar pemeriksaan kesiapan.</p>
 				</div>
 				<Button onclick={() => window.print()}>
@@ -243,7 +243,7 @@
 
 			<section class="grid gap-4 border border-border bg-card p-5 print:grid-cols-[minmax(0,1fr)_220px]">
 				<div>
-					<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Paket Pengawas Ruang CBT</p>
+					<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Paket Pengawas Ruang Ujian Digital</p>
 					<h2 class="mt-2 text-xl font-bold uppercase">{room.session_title}</h2>
 					<div class="mt-4 grid gap-2 text-sm md:grid-cols-2">
 						<p><span class="font-semibold">Paket:</span> {room.package_title}</p>
@@ -314,7 +314,7 @@
 				<div class="border border-border bg-card p-4">
 					<h3 class="text-sm font-bold uppercase tracking-[0.16em]">Kontak Operator</h3>
 					<div class="mt-3 space-y-3 text-xs">
-						<p class="border-b border-border pb-2">Operator CBT: ........................................</p>
+						<p class="border-b border-border pb-2">Operator ujian digital: ........................................</p>
 						<p class="border-b border-border pb-2">Nomor HP: ............................................</p>
 						<p class="border-b border-border pb-2">Waktu eskalasi: ......................................</p>
 						<p class="min-h-16 border border-border p-2 text-muted-foreground">Catatan gangguan / arahan operator</p>

@@ -12,7 +12,7 @@ const ASESMEN_TOP_SEGMENTS = new Set(['events', 'packages', 'sessions', 'non-tes
 
 function normalizeInternalPath(path: string): string {
 	if (path.includes('?') || path.includes('#') || path.includes('\\')) {
-		throw new Error('cbt backend path must be a relative API path without query, hash, or backslash');
+		throw new Error('asesmen backend path must be a relative API path without query, hash, or backslash');
 	}
 	const normalizedPath = path.startsWith('/') ? path : `/${path}`;
 	const lowerPath = normalizedPath.toLowerCase();
@@ -22,11 +22,11 @@ function normalizeInternalPath(path: string): string {
 		|| lowerPath.includes('%2f')
 		|| lowerPath.includes('%5c')
 	) {
-		throw new Error('cbt backend path contains unsafe traversal or encoded separators');
+		throw new Error('asesmen backend path contains unsafe traversal or encoded separators');
 	}
 	const segments = normalizedPath.slice(1).split('/');
 	if (segments.length === 0 || !segments[0] || segments.some((segment) => segment === '.' || segment === '..')) {
-		throw new Error('cbt backend path must contain safe non-empty segments');
+		throw new Error('asesmen backend path must contain safe non-empty segments');
 	}
 	return normalizedPath;
 }
@@ -40,7 +40,7 @@ function dispatchPrefix(path: string): string {
 	if (ASESMEN_TOP_SEGMENTS.has(firstSegment)) {
 		return ASESMEN_PREFIX;
 	}
-	throw new Error(`unsupported CBT backend path segment: ${firstSegment}`);
+	throw new Error(`unsupported asesmen or bank-soal backend path segment: ${firstSegment}`);
 }
 
 export function cbtBackendPath(path: string): string {

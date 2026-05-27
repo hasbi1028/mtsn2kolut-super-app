@@ -1039,7 +1039,7 @@
 							{:else if quality.missingCount > 0}
 								<p class="mt-2 text-xs font-medium text-warning">Sesi masih boleh dibuat, tetapi {quality.missingCount} soal belum lengkap CP/TP/KD atau level kognitif.</p>
 							{:else}
-								<p class="mt-2 text-xs font-medium text-primary">Paket siap dipakai untuk konsep sesi CBT.</p>
+								<p class="mt-2 text-xs font-medium text-primary">Paket siap dipakai untuk konsep sesi ujian digital.</p>
 							{/if}
 						</div>
 					{/if}
@@ -1337,7 +1337,7 @@
 				<div class="flex flex-wrap items-center justify-between gap-2">
 					<div>
 						<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Jadwal Sesi</p>
-						<p class="mt-0.5 text-xs text-muted-foreground">Urutan waktu pelaksanaan CBT</p>
+						<p class="mt-0.5 text-xs text-muted-foreground">Urutan waktu pelaksanaan ujian digital</p>
 					</div>
 					{#if scheduleFilter !== 'all'}
 						<Button variant="outline" size="sm" onclick={() => setSessionScheduleFilter('all')}>

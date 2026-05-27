@@ -35,11 +35,13 @@
 			|| permissions.includes('asesmen.operator')
 			|| permissions.includes('asesmen.event_manage')
 			|| permissions.includes('asesmen.package_manage')
+			|| permissions.includes('asesmen.session_manage')
+			|| permissions.includes('asesmen.participant_manage')
 	);
 	const canOpenResults = $derived(roles.includes('admin') || permissions.includes('asesmen.result_read'));
 
 	const baseTools: AdminTool[] = [
-		{ phase: 'Ringkas', title: 'Meja Kerja Panitia', description: 'Ringkasan sesi, paket, dan pembagian ruang.', href: '/asesmen/ringkas', cta: 'Buka Ringkas', level: 'utama' },
+		{ phase: 'Ringkas', title: 'Ringkasan Panitia', description: 'Status sesi, paket, dan kesiapan tanpa aksi teknis.', href: '/asesmen/ringkas', cta: 'Buka Ringkasan', level: 'utama' },
 		{ phase: 'Pra', title: 'Persiapan Ujian', description: 'Checklist kegiatan, paket, jadwal, peserta, ruang, token, dan kartu.', href: '/asesmen/persiapan', cta: 'Buka Persiapan', level: 'utama' },
 		{ phase: 'Data', title: 'Kegiatan Ujian', description: 'Kelola identitas kegiatan, anggota, kartu, dan arsip kegiatan.', href: '/asesmen/kegiatan', cta: 'Kelola Kegiatan', level: 'teknis' },
 		{ phase: 'Data', title: 'Paket Ujian', description: 'Pilih dan kelola paket soal siap ujian.', href: '/asesmen/paket', cta: 'Kelola Paket', level: 'teknis' },

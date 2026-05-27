@@ -143,7 +143,7 @@
 			id: String(card.room_proctor_id ?? card.card_id ?? `${card.session_id}-${card.room_id}`),
 			eventTitle: String(card.event_title ?? 'Kegiatan Ujian'),
 			sessionId: String(card.session_id ?? ''),
-			sessionTitle: String(card.session_title ?? 'Sesi CBT'),
+			sessionTitle: String(card.session_title ?? 'Sesi Ujian Digital'),
 			scheduledStart: String(card.scheduled_start ?? ''),
 			packageTitle: String(card.package_title ?? ''),
 			roomId: String(card.room_id ?? ''),
