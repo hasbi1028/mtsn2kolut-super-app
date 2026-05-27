@@ -59,19 +59,47 @@
 	async function loadData() {
 		loading = true;
 		errorMessage = '';
+		successMessage = '';
 		try {
-			const [sessionPayload, packagePayload] = await Promise.all([
-				fetch('/api/asesmen/sessions').then((response) => readJson<SessionRow[]>(response)),
-				fetch('/api/asesmen/packages').then((response) => readJson<PackageRow[]>(response))
+			const [sessionResult, packageResult] = await Promise.allSettled([
+				fetchWithTimeout('/api/asesmen/sessions').then((response) => readJson<SessionRow[]>(response)),
+				fetchWithTimeout('/api/asesmen/packages').then((response) => readJson<PackageRow[]>(response))
 			]);
-			sessions = sessionPayload ?? [];
-			packages = packagePayload ?? [];
+			const errors: string[] = [];
+			if (sessionResult.status === 'fulfilled') {
+				sessions = Array.isArray(sessionResult.value) ? sessionResult.value : [];
+			} else {
+				sessions = [];
+				errors.push(`Sesi: ${friendlyLoadError(sessionResult.reason)}`);
+			}
+			if (packageResult.status === 'fulfilled') {
+				packages = Array.isArray(packageResult.value) ? packageResult.value : [];
+			} else {
+				packages = [];
+				errors.push(`Paket: ${friendlyLoadError(packageResult.reason)}`);
+			}
 			selectedSessionId = sessions[0]?.id ?? '';
-		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Data asesmen ringkas belum dapat dimuat.';
+			if (errors.length > 0) {
+				errorMessage = `Sebagian data belum termuat. ${errors.join(' · ')}`;
+			}
 		} finally {
 			loading = false;
 		}
+	}
+
+	async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 10000) {
+		const controller = new AbortController();
+		const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+		try {
+			return await fetch(url, { ...init, signal: controller.signal });
+		} finally {
+			window.clearTimeout(timer);
+		}
+	}
+
+	function friendlyLoadError(error: unknown) {
+		if (error instanceof DOMException && error.name === 'AbortError') return 'koneksi terlalu lama, coba muat ulang';
+		return error instanceof Error ? error.message : 'gagal dimuat';
 	}
 
 	async function readJson<T>(response: Response): Promise<T> {
@@ -94,7 +122,7 @@
 		errorMessage = '';
 		successMessage = '';
 		try {
-			preview = await fetch(`/api/asesmen/sessions/${encodeURIComponent(selectedSession.id)}/rooms/assignment-preview`, {
+			preview = await fetchWithTimeout(`/api/asesmen/sessions/${encodeURIComponent(selectedSession.id)}/rooms/assignment-preview`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(assignmentPayload)
@@ -115,7 +143,7 @@
 		errorMessage = '';
 		successMessage = '';
 		try {
-			preview = await fetch(`/api/asesmen/sessions/${encodeURIComponent(selectedSession.id)}/rooms/assignment`, {
+			preview = await fetchWithTimeout(`/api/asesmen/sessions/${encodeURIComponent(selectedSession.id)}/rooms/assignment`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(assignmentPayload)
