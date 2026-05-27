@@ -123,6 +123,7 @@ describe('route access helpers', () => {
 
 	it('allows protected routes by dynamic permissions before legacy role fallback', () => {
 		const user = { id: '1', username: 'operator', role: '', roles: [], permissions: ['users.read', 'bank_soal.read', 'asesmen.read', 'profile_changes.review'] };
+		const assessmentOperator = { ...user, permissions: [...user.permissions, 'asesmen.operator'] };
 
 		expect(canAccessProtectedRoute(user, '/settings/users', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: [...user.permissions, 'roles.read'] }, '/settings/rbac', 'GET')).toBe(true);
@@ -133,7 +134,15 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/api/auth/account', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/api/auth/account/change-request-fields', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(user, '/bank-soal/daftar', 'GET')).toBe(true);
+		expect(requiredPermissionsForPath('/asesmen/ringkas', 'GET')).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
+		expect(requiredPermissionsForPath('/asesmen/persiapan', 'GET')).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
+		expect(requiredPermissionsForPath('/asesmen/pelaksanaan', 'GET')).toEqual(['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
 		expect(requiredPermissionsForPath('/ujian/command-center', 'GET')).toEqual(['asesmen.proctor']);
+		expect(canAccessProtectedRoute(assessmentOperator, '/asesmen/ringkas', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(assessmentOperator, '/asesmen/persiapan', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(assessmentOperator, '/asesmen/pelaksanaan', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(user, '/asesmen/ringkas', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute(user, '/asesmen/persiapan', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute({ ...user, permissions: ['asesmen.proctor'] }, '/ujian/command-center', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(user, '/ujian/command-center', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute(user, '/asesmen/kegiatan', 'GET')).toBe(true);
@@ -231,25 +240,22 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute({ ...mustChangeUser, must_change_password: false }, '/portal/siswa', 'GET')).toBe(true);
 	});
 
-	it('keeps APK download release center visible for every authenticated role', () => {
-		const users = [
-			{ id: '1', username: 'admin', role: 'admin', roles: ['admin'], permissions: [] },
-			{ id: '2', username: 'guru', role: 'guru', roles: ['guru'], permissions: [] },
-			{ id: '3', username: 'staf', role: 'staf', roles: ['staf'], permissions: [] },
-			{ id: '4', username: 'siswa', role: 'siswa', roles: ['siswa'], permissions: [] },
-			{ id: '5', username: 'ortu', role: 'ortu', roles: ['ortu'], permissions: [] }
-		];
+	it('keeps release center and device matrix in the panitia/operator-only access tier', () => {
+		const operator = { id: '1', username: 'operator', role: '', roles: [], permissions: ['asesmen.operator'] };
+		const proctor = { id: '2', username: 'proctor', role: '', roles: [], permissions: ['asesmen.proctor'] };
+		const plainGuru = { id: '3', username: 'guru', role: 'guru', roles: ['guru'], permissions: [] };
 
 		expect(isPublicPath('/asesmen/aplikasi-siswa/release')).toBe(false);
-		expect(requiredPermissionsForPath('/asesmen/aplikasi-siswa/release', 'GET')).toEqual([]);
+		expect(requiredPermissionsForPath('/asesmen/aplikasi-siswa/release', 'GET')).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
+		expect(requiredPermissionsForPath('/asesmen/aplikasi-siswa/matrix', 'GET')).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
+		expect(requiredPermissionsForPath('/asesmen/aplikasi-siswa', 'GET')).toEqual(['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
 		expect(canAccessProtectedRoute(undefined, '/asesmen/aplikasi-siswa/release', 'GET')).toBe(false);
-		expect(users.map((user) => canAccessProtectedRoute(user, '/asesmen/aplikasi-siswa/release', 'GET'))).toEqual([
-			true,
-			true,
-			true,
-			true,
-			true
-		]);
+		expect(canAccessProtectedRoute(operator, '/asesmen/aplikasi-siswa/release', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(operator, '/asesmen/aplikasi-siswa/matrix', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(operator, '/asesmen/aplikasi-siswa', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(proctor, '/asesmen/aplikasi-siswa', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(proctor, '/asesmen/aplikasi-siswa/release', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute(plainGuru, '/asesmen/aplikasi-siswa', 'GET')).toBe(false);
 	});
 
 	it('keeps mutation route checks permission-specific', () => {
@@ -302,6 +308,8 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute(reader, '/api/asesmen/sessions/session-1/ungraded-essays', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute(reader, '/asesmen/hasil', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute({ ...reader, permissions: ['asesmen.result_read'] }, '/asesmen/hasil', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ ...reader, permissions: ['asesmen.proctor'] }, '/asesmen/pelaksanaan', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ ...reader, permissions: ['asesmen.proctor'] }, '/asesmen/ruang-saya', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...reader, permissions: ['asesmen.result_read'] }, '/api/asesmen/sessions/session-1/results', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...reader, permissions: ['asesmen.proctor'] }, '/asesmen/pengawasan', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...reader, permissions: ['asesmen.proctor'] }, '/api/asesmen/sessions/session-1/proctoring/events', 'GET')).toBe(true);
@@ -369,6 +377,8 @@ describe('route access helpers', () => {
 		expect(requiredPermissionsForPath('/api/asesmen/events/event-1/supervisor-access-cards/issue', 'POST')).toEqual(['asesmen.event_manage']);
 		expect(requiredPermissionsForPath('/api/asesmen/events/event-1', 'PATCH')).toEqual(['asesmen.event_manage']);
 		expect(requiredPermissionsForPath('/asesmen/non-tes', 'GET')).toEqual(['asesmen.read']);
+		expect(requiredPermissionsForPath('/asesmen/pelaksanaan', 'GET')).toEqual(['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
+		expect(requiredPermissionsForPath('/asesmen/ruang-saya', 'GET')).toEqual(['asesmen.proctor']);
 		expect(requiredPermissionsForPath('/api/asesmen/non-test-assessments/nta-1', 'PATCH')).toEqual(['asesmen.score']);
 		expect(requiredPermissionsForPath('/api/asesmen/proctoring/my-rooms', 'GET')).toEqual(['asesmen.proctor']);
 		expect(requiredPermissionsForPath('/api/asesmen/sessions/session-1/results', 'GET')).toEqual(['asesmen.result_read']);

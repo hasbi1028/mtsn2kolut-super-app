@@ -1,5 +1,6 @@
 import { redirect } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
 
-export function load() {
+export const load: PageServerLoad = () => {
 	throw redirect(307, '/asesmen/pengawasan');
-}
+};

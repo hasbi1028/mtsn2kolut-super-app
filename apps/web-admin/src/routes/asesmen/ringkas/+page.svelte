@@ -188,7 +188,7 @@
 </script>
 
 <svelte:head>
-	<title>Asesmen Ringkas — MTsN 2 Kolaka Utara</title>
+	<title>Ringkasan Ujian — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 <main class="min-h-dvh bg-slate-50 px-4 py-5 text-slate-950 md:px-6">
@@ -197,8 +197,8 @@
 			<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 				<div>
 					<p class="text-xs font-bold uppercase tracking-[0.22em] text-emerald-700">Asesmen/Ujian Digital</p>
-					<h1 class="mt-1 text-2xl font-black tracking-tight md:text-3xl">Asesmen Ringkas</h1>
-					<p class="mt-1 max-w-2xl text-sm text-slate-600">Satu halaman untuk melihat persiapan, hari ujian, hasil, dan pembagian 8 ruang tanpa masuk banyak menu.</p>
+					<h1 class="mt-1 text-2xl font-black tracking-tight md:text-3xl">Ringkasan Ujian</h1>
+					<p class="mt-1 max-w-2xl text-sm text-slate-600">Satu halaman untuk membuka persiapan, hari ujian, hasil, dan pembagian 8 ruang tanpa berpindah ke terlalu banyak menu.</p>
 				</div>
 				<div class="flex flex-wrap gap-2 text-sm font-bold">
 					<a class="rounded-xl bg-emerald-700 px-3 py-2 text-white" href="/asesmen/persiapan">Persiapan</a>
@@ -238,10 +238,10 @@
 					<div class="rounded-2xl border border-slate-200 bg-white p-4">
 						<div class="flex items-center justify-between gap-3">
 							<div>
-								<h2 class="text-lg font-black">Lanjutkan pekerjaan</h2>
-								<p class="text-sm text-slate-600">Mulai dari sesi terdekat, lalu atur ruang dan cetak kartu.</p>
+								<h2 class="text-lg font-black">Langkah cepat panitia</h2>
+								<p class="text-sm text-slate-600">Buka sesi terdekat, lalu lanjutkan ke ruang, kartu, atau arsip sesuai kebutuhan.</p>
 							</div>
-							<a class="rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold" href="/asesmen/sesi">Lihat Semua</a>
+							<a class="rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold" href="/asesmen/sesi">Pilih Sesi</a>
 						</div>
 						<div class="mt-3 divide-y divide-slate-100">
 							{#each latestSessions as session (session.id)}
@@ -258,7 +258,7 @@
 					</div>
 
 					<div class="rounded-2xl border border-slate-200 bg-white p-4">
-						<h2 class="text-lg font-black">Paket terbaru</h2>
+						<h2 class="text-lg font-black">Paket siap dipakai</h2>
 						<div class="mt-3 divide-y divide-slate-100">
 							{#each latestPackages as pkg (pkg.id)}
 								<article class="flex items-center justify-between gap-3 py-3">
@@ -276,8 +276,8 @@
 
 				<aside class="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm">
 					<p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Jadwal & Ruang</p>
-					<h2 class="mt-1 text-xl font-black">Pembagian Peserta 8 Ruang</h2>
-					<p class="mt-1 text-sm text-slate-600">Pilih sesi, mode campur, pratinjau, lalu simpan pembagian ruang dan nomor kursi.</p>
+					<h2 class="mt-1 text-xl font-black">Atur Pembagian 8 Ruang</h2>
+					<p class="mt-1 text-sm text-slate-600">Pilih sesi, tentukan pola campur peserta, cek pratinjau, lalu simpan pembagian kursi.</p>
 
 					<label class="mt-4 block space-y-1 text-sm font-bold">
 						<span>Sesi ujian</span>
@@ -289,9 +289,9 @@
 					<div class="mt-4 grid gap-2">
 						<p class="text-sm font-bold">Mode pembagian</p>
 						{#each [
-							{ value: 'same_class', title: 'Per Kelas', desc: 'Satu ruang berisi satu rombel.' },
-							{ value: 'same_grade', title: 'Campur Satu Tingkat', desc: 'Rombel boleh bercampur, tingkat tetap dipisah.' },
-							{ value: 'mixed_scope', title: 'Campur Lintas Tingkat', desc: 'VII, VIII, IX dapat bercampur. Sesi khusus.' }
+							{ value: 'same_class', title: 'Tetap per Kelas', desc: 'Peserta tetap mengikuti rombel asal.' },
+							{ value: 'same_grade', title: 'Campur Satu Tingkat', desc: 'Rombel boleh bercampur, tetapi tingkat tetap dipisah.' },
+							{ value: 'mixed_scope', title: 'Campur Lintas Tingkat', desc: 'VII, VIII, IX dapat bercampur. Pakai hanya bila diputuskan panitia.' }
 						] as option}
 							<label class="flex gap-3 rounded-xl border p-3 text-sm {mixPolicy === option.value ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'}">
 								<input type="radio" bind:group={mixPolicy} value={option.value} onchange={() => (preview = null)} />
@@ -301,17 +301,17 @@
 					</div>
 
 					{#if mixPolicy === 'mixed_scope'}
-						<div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-950">Campur lintas tingkat otomatis dikirim sebagai sesi khusus dan izin campur tingkat. Periksa pratinjau sebelum menyimpan.</div>
+						<div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-950">Campur lintas tingkat hanya untuk keputusan panitia. Sistem akan menandai sesi khusus dan izin campur tingkat; periksa pratinjau sebelum menyimpan.</div>
 					{/if}
 
 					<div class="mt-4 grid grid-cols-2 gap-2">
-						<button class="min-h-12 rounded-xl bg-emerald-700 px-3 text-sm font-black text-white disabled:opacity-60" disabled={working || !selectedSession} onclick={previewRooms}>{working ? 'Memproses...' : 'Pratinjau'}</button>
-						<button class="min-h-12 rounded-xl bg-slate-900 px-3 text-sm font-black text-white disabled:opacity-50" disabled={working || !preview || (preview.summary.unassigned_count ?? 0) > 0} onclick={applyRooms}>Acak & Simpan</button>
+						<button class="min-h-12 rounded-xl bg-emerald-700 px-3 text-sm font-black text-white disabled:opacity-60" disabled={working || !selectedSession} onclick={previewRooms}>{working ? 'Memproses...' : 'Lihat Pratinjau'}</button>
+						<button class="min-h-12 rounded-xl bg-slate-900 px-3 text-sm font-black text-white disabled:opacity-50" disabled={working || !preview || (preview.summary.unassigned_count ?? 0) > 0} onclick={applyRooms}>Simpan Pembagian</button>
 					</div>
 
 					{#if preview}
 						<div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-							<p class="text-sm font-black">{modeLabel(preview.summary.mix_policy)} · {preview.summary.assigned_count}/{preview.summary.participant_count} peserta</p>
+							<p class="text-sm font-black">Pratinjau {modeLabel(preview.summary.mix_policy)} · {preview.summary.assigned_count}/{preview.summary.participant_count} peserta</p>
 							<p class="mt-1 text-xs text-slate-600">{preview.summary.room_count} ruang · kapasitas {preview.summary.capacity_total} kursi · belum ditempatkan {preview.summary.unassigned_count}</p>
 							{#if preview.warnings?.length}<ul class="mt-2 space-y-1 text-xs font-semibold text-amber-800">{#each preview.warnings as warning}<li>• {warning}</li>{/each}</ul>{/if}
 							<div class="mt-3 grid gap-2 sm:grid-cols-2">
@@ -325,6 +325,11 @@
 							</div>
 						</div>
 					{/if}
+
+					<div class="mt-4 flex flex-wrap gap-2 text-xs font-bold">
+						<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/sesi">Kelola Sesi Lengkap</a>
+						<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/panitia">Mode Lengkap Panitia</a>
+					</div>
 				</aside>
 			</section>
 		{/if}

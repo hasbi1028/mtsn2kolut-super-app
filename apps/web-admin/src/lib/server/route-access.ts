@@ -240,10 +240,18 @@ function isSensitiveAssessmentReadPath(pathname: string): boolean {
 		|| /^\/api\/asesmen\/sessions\/[^/]+\/audit-logs\/?$/.test(cleanPath);
 }
 
+const ASSESSMENT_OPERATOR_PERMISSIONS = ['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage'] as const;
+const ASSESSMENT_DAY_OF_PERMISSIONS = ['asesmen.proctor', ...ASSESSMENT_OPERATOR_PERMISSIONS] as const;
+const ASSESSMENT_GUIDE_PERMISSIONS = [...ASSESSMENT_DAY_OF_PERMISSIONS] as const;
+
 function asesmenPermission(pathname: string, method: string): string[] | undefined {
-	if (matchesPathSegment(pathname, '/asesmen/aplikasi-siswa/release')) return [];
+	if (matchesPathSegment(pathname, '/asesmen/ringkas')) return [...ASSESSMENT_OPERATOR_PERMISSIONS];
+	if (matchesPathSegment(pathname, '/asesmen/persiapan')) return [...ASSESSMENT_OPERATOR_PERMISSIONS];
+	if (matchesPathSegment(pathname, '/asesmen/pelaksanaan')) return [...ASSESSMENT_DAY_OF_PERMISSIONS];
+	if (matchesPathSegment(pathname, '/asesmen/aplikasi-siswa/release')) return [...ASSESSMENT_OPERATOR_PERMISSIONS];
+	if (matchesPathSegment(pathname, '/asesmen/aplikasi-siswa/matrix')) return [...ASSESSMENT_OPERATOR_PERMISSIONS];
 	if (matchesPathSegment(pathname, '/asesmen/hasil')) return ['asesmen.result_read'];
-	if (matchesPathSegment(pathname, '/ujian/command-center') || matchesPathSegment(pathname, '/asesmen/pelaksanaan') || matchesPathSegment(pathname, '/asesmen/pengawasan')) return ['asesmen.proctor'];
+	if (matchesPathSegment(pathname, '/ujian/command-center') || matchesPathSegment(pathname, '/asesmen/pengawasan')) return ['asesmen.proctor'];
 	if (/^\/api\/asesmen\/events\/[^/]+\/results\/?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/(results|item-analysis|operational-recap)\/?$/.test(pathname)) {
 		return ['asesmen.result_read'];
 	}
@@ -256,9 +264,9 @@ function asesmenPermission(pathname: string, method: string): string[] | undefin
 	if (matchesPathSegment(pathname, '/asesmen/non-tes') || matchesPathSegment(pathname, '/api/asesmen/non-test-assessments')) {
 		return isReadMethod(method) ? ['asesmen.read'] : ['asesmen.score'];
 	}
-	if (matchesPathSegment(pathname, '/asesmen/panitia')) return ['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage'];
+	if (matchesPathSegment(pathname, '/asesmen/panitia')) return [...ASSESSMENT_OPERATOR_PERMISSIONS];
 	if (matchesPathSegment(pathname, '/asesmen/ruang-saya')) return ['asesmen.proctor'];
-	if (matchesPathSegment(pathname, '/asesmen/aplikasi-siswa')) return ['asesmen.read'];
+	if (matchesPathSegment(pathname, '/asesmen/aplikasi-siswa')) return [...ASSESSMENT_GUIDE_PERMISSIONS];
 	if (matchesPathSegment(pathname, '/api/asesmen/proctoring')) return ['asesmen.proctor'];
 	if (matchesPathSegment(pathname, '/api/asesmen/approvals')) {
 		return [];

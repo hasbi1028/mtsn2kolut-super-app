@@ -25,7 +25,13 @@
 	};
 
 	const userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
-	const canAccess = $derived(userRoles.includes('admin') || userRoles.includes('guru'));
+	const userPermissions = $derived(page.data.user?.permissions ?? []);
+	const canAccess = $derived(
+		userRoles.includes('admin')
+			|| userPermissions.includes('asesmen.operator')
+			|| userPermissions.includes('asesmen.event_manage')
+			|| userPermissions.includes('asesmen.package_manage')
+	);
 
 	const adminTasks: PreparationTask[] = [
 		{
@@ -58,24 +64,7 @@
 		}
 	];
 
-	const guruTasks: PreparationTask[] = [
-		{
-			step: '01',
-			title: 'Pantau Pelaksanaan',
-			description: 'Jika ditugaskan pada hari-H, masuk ke ruang pelaksanaan untuk melihat status ujian.',
-			href: '/asesmen/pelaksanaan',
-			cta: 'Ke Pelaksanaan'
-		},
-		{
-			step: '02',
-			title: 'Lihat Hasil',
-			description: 'Masuk ke pintu hasil asesmen yang tersedia untuk akun guru.',
-			href: '/asesmen/hasil',
-			cta: 'Buka Hasil'
-		}
-	];
-
-	const tasks = $derived(userRoles.includes('admin') ? adminTasks : guruTasks);
+	const tasks = $derived(adminTasks);
 
 	const taskColumns = [
 		{ key: 'step', label: '#', class: 'w-20' },
@@ -100,10 +89,8 @@
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
-				<Button href={resolve('/asesmen')} variant="outline" size="sm">Beranda</Button>
-				{#if userRoles.includes('admin')}
-					<Button href={resolve('/asesmen/kegiatan')} size="sm">Kelola Kegiatan</Button>
-				{/if}
+				<Button href={resolve('/asesmen/ringkas')} variant="outline" size="sm">Kembali ke Ringkasan</Button>
+				<Button href={resolve('/asesmen/panitia')} size="sm">Mode Lengkap Panitia</Button>
 			</div>
 		</div>
 	</section>
@@ -163,10 +150,10 @@
 		<div class="max-w-lg rounded-2xl border border-border bg-card p-8 shadow-sm">
 			<h2 class="text-xl font-semibold text-foreground">Akses terbatas</h2>
 			<p class="mt-3 text-sm leading-6 text-muted-foreground">
-				Fase persiapan asesmen hanya tersedia untuk admin dan guru. Silakan kembali ke Beranda Asesmen untuk memilih pekerjaan lain.
+				Fase persiapan asesmen hanya tersedia untuk panitia/operator. Silakan kembali ke ringkasan atau gunakan menu asesmen lain sesuai tugas.
 			</p>
 			<div class="mt-6">
-				<Button href={resolve('/asesmen')} variant="outline">Kembali ke Beranda Asesmen</Button>
+				<Button href={resolve('/asesmen/ringkas')} variant="outline">Kembali ke Ringkasan</Button>
 			</div>
 		</div>
 	</div>

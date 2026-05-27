@@ -130,7 +130,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(byHref.get('/bank-soal/analisis-butir')?.permissions).toEqual(['bank_soal.analytics']);
 		expect(byHref.get('/asesmen/ringkas')?.permissions).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
 		expect(byHref.get('/asesmen/persiapan')?.permissions).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
-		expect(byHref.get('/asesmen/pelaksanaan')?.permissions).toEqual(['asesmen.proctor']);
+		expect(byHref.get('/asesmen/pelaksanaan')?.permissions).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage']);
 		expect(byHref.get('/asesmen/ruang-saya')?.permissions).toEqual(['asesmen.proctor']);
 		expect(byHref.get('/asesmen/pengawasan')).toBeUndefined();
 		expect(byHref.get('/asesmen')).toBeUndefined();
@@ -154,6 +154,24 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		).map((item) => item.href);
 		expect(visibleHrefs).toEqual(expect.arrayContaining(['/bank-soal', '/bank-soal/daftar', '/bank-soal/tambah', '/bank-soal/mapel-kd', '/settings/account']));
 		expect(visibleHrefs).not.toContain('/bank-soal/verifikasi');
+	});
+
+	it('shows only the field-facing assessment entry for a proctor permission set', () => {
+		const visibleHrefs = flattenSidebarNavGroups(
+			filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], ['asesmen.proctor'])
+		).map((item) => item.href);
+		expect(visibleHrefs).toEqual(expect.arrayContaining(['/asesmen/ruang-saya', '/settings/account']));
+		expect(visibleHrefs).not.toContain('/asesmen/pelaksanaan');
+		expect(visibleHrefs).not.toContain('/asesmen/ringkas');
+		expect(visibleHrefs).not.toContain('/asesmen/persiapan');
+	});
+
+	it('shows the operator assessment control lane without duplicating Ruang Saya', () => {
+		const visibleHrefs = flattenSidebarNavGroups(
+			filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], ['asesmen.operator'])
+		).map((item) => item.href);
+		expect(visibleHrefs).toEqual(expect.arrayContaining(['/asesmen/ringkas', '/asesmen/persiapan', '/asesmen/pelaksanaan', '/settings/account']));
+		expect(visibleHrefs).not.toContain('/asesmen/ruang-saya');
 	});
 
 	it('exposes student and parent portal entries only to matching roles or permissions', () => {

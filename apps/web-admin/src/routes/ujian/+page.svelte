@@ -378,16 +378,16 @@
 
 	async function submitExam() {
 		if (demoMode) {
-			if (!confirm('Kumpulkan ujian DEMO sekarang?')) return;
+			if (!confirm('Kirim jawaban DEMO sekarang? Pastikan semua soal penting sudah diperiksa.')) return;
 			submitted = true;
 			addTelemetry('Ujian DEMO dikumpulkan');
 			return;
 		}
 		if (Object.keys(pendingAnswers).length > 0) {
-			errorMessage = 'Masih ada jawaban yang belum tersinkron. Coba simpan ulang sebelum kumpulkan.';
+			errorMessage = 'Masih ada jawaban yang belum tersinkron. Coba simpan ulang sebelum kirim jawaban.';
 			return;
 		}
-		if (!confirm('Kumpulkan ujian sekarang?')) return;
+		if (!confirm('Kirim jawaban sekarang? Periksa kembali soal yang masih ragu-ragu sebelum lanjut.')) return;
 		loading = true;
 		errorMessage = '';
 		try {
@@ -555,7 +555,7 @@
 				<section class="rounded-[1.5rem] border border-emerald-200 bg-emerald-50 p-5 text-center">
 					<div class="mx-auto grid size-16 place-items-center rounded-full bg-emerald-700 text-2xl font-black text-white">✓</div>
 					<h2 class="mt-4 text-2xl font-black">Jawaban terkirim</h2>
-					<p class="mt-2 text-sm text-slate-600">Ujian telah dikumpulkan. Tunjukkan layar ini kepada pengawas bila diminta.</p>
+					<p class="mt-2 text-sm text-slate-600">Jawaban sudah terkirim. Tetap di tempat dan tunjukkan layar ini kepada pengawas bila diminta.</p>
 					<button class="mt-5 min-h-12 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm font-bold" onclick={() => { payload = null; submitted = false; portalStep = 'login'; }}>Kembali ke awal</button>
 				</section>
 			{:else if payload && portalStep === 'confirm'}
@@ -627,7 +627,7 @@
 						</article>
 					{/if}
 
-					<div class="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">Soal ditampilkan satu per layar. Tetap berada di halaman ujian. Copy, paste, klik kanan/tahan, dan drag teks dinonaktifkan serta dicatat ke pengawas. Jika koneksi tidak stabil, jawaban disimpan sementara dan akan dikirim ulang saat tersambung.</div>
+					<div class="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">Soal ditampilkan satu per layar. Periksa tombol <b>Ragu-ragu</b> bila masih ingin meninjau lagi. Jika koneksi tidak stabil, jawaban disimpan sementara lalu dikirim ulang saat tersambung.</div>
 				</section>
 			{:else}
 				<section class="space-y-4">
@@ -643,7 +643,7 @@
 						<label class="block space-y-1 text-sm font-bold">PIN<input class="min-h-14 w-full rounded-2xl border border-slate-300 bg-white px-3 text-center text-2xl tracking-[0.45em] text-slate-950" bind:value={pin} inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="••••" /></label>
 					{/if}
 					<button class="min-h-14 w-full rounded-2xl bg-emerald-700 px-4 text-base font-black text-white disabled:opacity-60" disabled={loading} onclick={portalLogin}>{loading ? 'Memproses...' : 'Lanjutkan'}</button>
-					<button class="w-full text-sm font-bold text-emerald-700 underline" type="button" onclick={() => (showLegacyTokenLogin = !showLegacyTokenLogin)}>{showLegacyTokenLogin ? 'Kembali ke QR + PIN' : 'Mode bantuan pengawas: token lama'}</button>
+					<button class="w-full text-sm font-bold text-emerald-700 underline" type="button" onclick={() => (showLegacyTokenLogin = !showLegacyTokenLogin)}>{showLegacyTokenLogin ? 'Kembali ke QR + PIN' : 'Cara lain bila QR belum bisa dipakai'}</button>
 					{#if demoMode}<p class="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">MODE DEMO aktif untuk latihan tanpa database.</p>{/if}
 				</section>
 			{/if}
@@ -660,7 +660,7 @@
 					<button class="min-h-12 rounded-2xl bg-slate-100 text-xs font-black text-slate-700 disabled:opacity-40" disabled={activeQuestionIndex === 0} onclick={() => goQuestion(-1)}>Sebelumnya</button>
 					<button class="min-h-12 rounded-2xl text-xs font-black {doubtfulQuestions.has(currentQuestion.id) ? 'bg-amber-500 text-amber-950' : 'bg-slate-100 text-slate-700'}" onclick={() => toggleDoubtful(currentQuestion.id)}>Ragu-ragu</button>
 					{#if activeQuestionIndex >= questions.length - 1}
-						<button class="min-h-12 rounded-2xl bg-emerald-700 text-xs font-black text-white disabled:opacity-60" disabled={loading} onclick={submitExam}>Kumpulkan</button>
+						<button class="min-h-12 rounded-2xl bg-emerald-700 text-xs font-black text-white disabled:opacity-60" disabled={loading} onclick={submitExam}>Kirim Jawaban</button>
 					{:else}
 						<button class="min-h-12 rounded-2xl bg-emerald-700 text-xs font-black text-white" onclick={() => goQuestion(1)}>Berikutnya</button>
 					{/if}

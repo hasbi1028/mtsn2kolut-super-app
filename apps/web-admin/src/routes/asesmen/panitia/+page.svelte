@@ -28,7 +28,13 @@
 	};
 
 	const roles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
-	const canAccess = $derived(roles.includes('admin'));
+	const permissions = $derived(page.data.user?.permissions ?? []);
+	const canAccess = $derived(
+		roles.includes('admin')
+			|| permissions.includes('asesmen.operator')
+			|| permissions.includes('asesmen.event_manage')
+			|| permissions.includes('asesmen.package_manage')
+	);
 
 	const tools: AdminTool[] = [
 		{ phase: 'Ringkas', title: 'Meja Kerja Panitia', description: 'Ringkasan sesi, paket, dan pembagian ruang.', href: '/asesmen/ringkas', cta: 'Buka Ringkas', level: 'utama' },

@@ -103,20 +103,20 @@
 				</div>
 
 				<div class="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm leading-6">
-					<p class="font-semibold text-warning">Instruksi Token Ujian</p>
-					<p>Token Ruang diberikan oleh pengawas saat peserta sudah berada di ruang ujian. Token Ujian peserta hanya dibuka pada waktu yang diizinkan dan jangan dibagikan ke perangkat lain.</p>
-					<p class="mt-2">Token Ujian tersamarkan: <span class="font-mono font-semibold">{item.token_masked || 'Belum dibuka'}</span></p>
+					<p class="font-semibold text-warning">Cara masuk ujian</p>
+					<p>Portal ujian utama memakai <b>QR/Kode Kartu + PIN</b>. Buka halaman <span class="font-mono font-semibold">/ujian</span>, lalu scan QR pada kartu atau ketik kode kartu dan PIN sesuai kartu/lembar dari pengawas.</p>
+					<p class="mt-2">Kode cadangan tersamarkan: <span class="font-mono font-semibold">{item.token_masked || 'Belum dibuka'}</span></p>
 				</div>
 
 				{#if item.can_reveal_token}
 					<div class="space-y-3 rounded-xl border border-border p-4 print:hidden">
-						<label class="text-sm font-semibold" for="room-token">Masukkan Token Ruang</label>
+						<label class="text-sm font-semibold" for="room-token">Buka kode cadangan dengan Token Ruang</label>
 						<input id="room-token" class="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm" bind:value={roomToken} placeholder="Token Ruang dari pengawas" />
-						<Button onclick={revealToken} disabled={revealing || roomToken.trim().length < 4}>{revealing ? 'Membuka...' : 'Buka Token Ujian'}</Button>
+						<Button onclick={revealToken} disabled={revealing || roomToken.trim().length < 4}>{revealing ? 'Membuka...' : 'Buka Kode Cadangan'}</Button>
 						{#if revealError}<p class="text-sm text-destructive">{revealError}</p>{/if}
 						{#if revealedToken}
 							<div class="rounded-lg border border-primary/30 bg-primary/10 p-3">
-								<p class="text-xs font-semibold uppercase tracking-wide text-primary">Token Ujian Anda</p>
+								<p class="text-xs font-semibold uppercase tracking-wide text-primary">Kode Cadangan Anda</p>
 								<p class="mt-1 font-mono text-xl font-bold tracking-wider">{revealedToken}</p>
 							</div>
 						{/if}

@@ -460,8 +460,8 @@
 			</div>
 		</section>
 		<MicroActionTable
-			title="Daftar kegiatan"
-			description="Tampilan ringkas untuk memindai status, sesi, kesiapan soal, dan aksi pengelolaan."
+			title="Pilih kegiatan"
+			description="Buka satu kegiatan untuk masuk ke alur utama: ringkasan, persiapan, sesi, dokumen, hasil, dan arsip."
 			columns={eventColumns}
 			rows={visibleEvents}
 			rowKey={(row) => (row as CbtEvent).id}
@@ -489,8 +489,8 @@
 			{/snippet}
 			{#snippet actions(row)}
 				{@const e = row as CbtEvent}
-				<a href={resolve(`/asesmen/kegiatan/${e.id}`)} class="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90">Kelola</a>
-				<LoadingButton variant="ghost" size="sm" class="text-muted-foreground" onclick={() => openEdit(e)}>Edit</LoadingButton>
+				<a href={resolve(`/asesmen/kegiatan/${e.id}`)} class="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90">Buka Alur</a>
+				<a href={resolve(`/asesmen/kegiatan/${e.id}/archive`)} class="inline-flex h-8 items-center rounded-md border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-muted">Arsip</a>
 				<LoadingButton
 					variant="ghost"
 					size="sm"
@@ -519,8 +519,8 @@
 					</div>
 					<p class="text-xs text-muted-foreground">{eventProgressLabel(e, overview.questionReadiness[e.id])}</p>
 					<div class="flex flex-wrap gap-2">
-						<a href={resolve(`/asesmen/kegiatan/${e.id}`)} class="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90">Kelola</a>
-						<LoadingButton variant="ghost" size="sm" onclick={() => openEdit(e)}>Edit</LoadingButton>
+						<a href={resolve(`/asesmen/kegiatan/${e.id}`)} class="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90">Buka Alur</a>
+						<a href={resolve(`/asesmen/kegiatan/${e.id}/archive`)} class="inline-flex h-8 items-center rounded-md border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-muted">Arsip</a>
 						<LoadingButton variant="ghost" size="sm" class="text-destructive hover:bg-destructive/10 hover:text-destructive" onclick={() => deleteEvent(e.id)} loading={deleteBusyId === e.id} loadingLabel="Menghapus..." disabled={deleteBusyId !== '' && deleteBusyId !== e.id}>Hapus</LoadingButton>
 					</div>
 				</div>

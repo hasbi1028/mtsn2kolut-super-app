@@ -28,8 +28,16 @@
 	};
 
 	const userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
-	const canAccess = $derived(userRoles.includes('admin') || userRoles.includes('guru') || userRoles.includes('staf'));
-	const roleMode = $derived<RoleMode>(userRoles.includes('admin') ? 'admin' : userRoles.includes('guru') ? 'guru' : 'staf');
+	const userPermissions = $derived((page.data.user?.permissions ?? []).map((permission) => permission.trim()).filter(Boolean));
+	const hasOperatorLane = $derived(
+		userRoles.includes('admin')
+			|| userPermissions.includes('asesmen.operator')
+			|| userPermissions.includes('asesmen.event_manage')
+			|| userPermissions.includes('asesmen.package_manage')
+	);
+	const hasProctorLane = $derived(userPermissions.includes('asesmen.proctor'));
+	const canAccess = $derived(hasOperatorLane || hasProctorLane);
+	const roleMode = $derived<RoleMode>(hasOperatorLane ? 'admin' : userRoles.includes('guru') ? 'guru' : 'staf');
 	const isAdminMode = $derived(roleMode === 'admin');
 	const roleName = $derived(isAdminMode ? 'Admin/Panitia' : roleMode === 'guru' ? 'Guru/Pengawas' : 'Staf/Operator');
 	const heroTitle = $derived(isAdminMode ? 'Hari-H Ujian Panitia' : 'Ruang Pengawasan Saya');
