@@ -52,6 +52,29 @@ func TestExamDrawQuestionGroup(t *testing.T) {
 	}
 }
 
+func TestExamDeterministicRuntimeRandomization(t *testing.T) {
+	questions := []db.GetExamQuestionsRow{
+		{ID: mustUUID(t, "10000000-0000-0000-0000-000000000011"), Code: "Q1", QuestionType: "multiple_choice", OptionA: "A1", OptionB: "B1", OptionC: "C1"},
+		{ID: mustUUID(t, "10000000-0000-0000-0000-000000000012"), Code: "Q2", QuestionType: "multiple_choice", OptionA: "A2", OptionB: "B2", OptionC: "C2"},
+		{ID: mustUUID(t, "10000000-0000-0000-0000-000000000013"), Code: "Q3", QuestionType: "multiple_choice", OptionA: "A3", OptionB: "B3", OptionC: "C3"},
+	}
+
+	first := orderQuestionsWithDrawSeeded(questions, nil, true, 0, 0, "session:participant")
+	second := orderQuestionsWithDrawSeeded(questions, nil, true, 0, 0, "session:participant")
+	if !reflect.DeepEqual(first, second) {
+		t.Fatalf("orderQuestionsWithDrawSeeded() should be stable for same participant seed")
+	}
+
+	firstOptions := ensureOptionOrderSeeded(questions, nil, true, "session:participant:options")
+	secondOptions := ensureOptionOrderSeeded(questions, nil, true, "session:participant:options")
+	if !reflect.DeepEqual(firstOptions, secondOptions) {
+		t.Fatalf("ensureOptionOrderSeeded() should be stable for same participant seed")
+	}
+	if len(firstOptions) != len(questions) {
+		t.Fatalf("ensureOptionOrderSeeded() generated %d orders, want %d", len(firstOptions), len(questions))
+	}
+}
+
 func TestExamOptionRandomizationHelpers(t *testing.T) {
 	for _, tt := range []struct {
 		questionType string

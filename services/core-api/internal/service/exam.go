@@ -5,6 +5,7 @@ import (
 	cryptorand "crypto/rand"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -311,7 +312,8 @@ func (s *Exam) loginParticipant(ctx context.Context, p db.GetParticipantByTokenR
 	}
 
 	// Build ordered question list — use stored question_order if available.
-	ordered := orderQuestionsWithDraw(questions, p.QuestionOrder, p.RandomizeQuestions, p.DrawPgCount, p.DrawEssayCount)
+	runtimeSeed := participantRuntimeSeed(p)
+	ordered := orderQuestionsWithDrawSeeded(questions, p.QuestionOrder, p.RandomizeQuestions, p.DrawPgCount, p.DrawEssayCount, runtimeSeed+":questions")
 	optionOrder := parseOptionOrder(p.OptionOrder)
 
 	// If no question_order yet, save the order for this participant
@@ -321,7 +323,7 @@ func (s *Exam) loginParticipant(ctx context.Context, p db.GetParticipantByTokenR
 			ids[i] = pgUUIDString(q.ID)
 		}
 		orderJSON := marshalJSON(ids)
-		optionOrder = ensureOptionOrder(ordered, optionOrder, p.RandomizeOptions)
+		optionOrder = ensureOptionOrderSeeded(ordered, optionOrder, p.RandomizeOptions, runtimeSeed+":options")
 		if runtimeStore, ok := s.q.(examRuntimePlanStore); ok {
 			if savedPlan, err := runtimeStore.SetParticipantRuntimePlanIfEmpty(ctx, db.SetParticipantRuntimePlanIfEmptyParams{
 				ID:              p.ID,
@@ -329,7 +331,7 @@ func (s *Exam) loginParticipant(ctx context.Context, p db.GetParticipantByTokenR
 				OptionOrder:     marshalJSON(optionOrder),
 				QuestionDrawLog: marshalJSON([]string{}),
 			}); err == nil && len(savedPlan.QuestionOrder) > 0 {
-				ordered = orderQuestionsWithDraw(questions, savedPlan.QuestionOrder, false, 0, 0)
+				ordered = orderQuestionsWithDrawSeeded(questions, savedPlan.QuestionOrder, false, 0, 0, runtimeSeed+":questions")
 				optionOrder = parseOptionOrder(savedPlan.OptionOrder)
 			} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 				return LoginResult{}, err
@@ -338,12 +340,12 @@ func (s *Exam) loginParticipant(ctx context.Context, p db.GetParticipantByTokenR
 			ID:            p.ID,
 			QuestionOrder: orderJSON,
 		}); err == nil && len(savedOrder) > 0 {
-			ordered = orderQuestionsWithDraw(questions, savedOrder, false, 0, 0)
+			ordered = orderQuestionsWithDrawSeeded(questions, savedOrder, false, 0, 0, runtimeSeed+":questions")
 		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return LoginResult{}, err
 		}
 	} else if p.RandomizeOptions && len(optionOrder) == 0 {
-		optionOrder = ensureOptionOrder(ordered, optionOrder, p.RandomizeOptions)
+		optionOrder = ensureOptionOrderSeeded(ordered, optionOrder, p.RandomizeOptions, runtimeSeed+":options")
 		if runtimeStore, ok := s.q.(examRuntimePlanStore); ok {
 			if savedOrder, err := runtimeStore.SetParticipantOptionOrderIfEmpty(ctx, db.SetParticipantOptionOrderIfEmptyParams{
 				ID:          p.ID,
@@ -1094,18 +1096,22 @@ func examDeadline(end pgtype.Timestamptz, durationMin int32, joinedAt pgtype.Tim
 }
 
 func orderQuestionsWithDraw(questions []db.GetExamQuestionsRow, orderJSON []byte, randomize bool, drawPG, drawEssay int32) []db.GetExamQuestionsRow {
+	return orderQuestionsWithDrawSeeded(questions, orderJSON, randomize, drawPG, drawEssay, "")
+}
+
+func orderQuestionsWithDrawSeeded(questions []db.GetExamQuestionsRow, orderJSON []byte, randomize bool, drawPG, drawEssay int32, seed string) []db.GetExamQuestionsRow {
 	if len(orderJSON) == 0 {
-		return defaultQuestionOrder(applyQuestionDraw(questions, drawPG, drawEssay), randomize)
+		return defaultQuestionOrderSeeded(applyQuestionDrawSeeded(questions, drawPG, drawEssay, seed+":draw"), randomize, seed+":order")
 	}
 
 	// Reorder by stored question_order. Treat an empty JSON array as missing order
 	// so a reset/retake cannot accidentally produce an empty exam package.
 	var ids []string
 	if err := json.Unmarshal(orderJSON, &ids); err != nil {
-		return applyQuestionDraw(questions, drawPG, drawEssay)
+		return applyQuestionDrawSeeded(questions, drawPG, drawEssay, seed+":draw")
 	}
 	if len(ids) == 0 {
-		return defaultQuestionOrder(applyQuestionDraw(questions, drawPG, drawEssay), randomize)
+		return defaultQuestionOrderSeeded(applyQuestionDrawSeeded(questions, drawPG, drawEssay, seed+":draw"), randomize, seed+":order")
 	}
 	idMap := make(map[string]db.GetExamQuestionsRow, len(questions))
 	for _, q := range questions {
@@ -1118,7 +1124,7 @@ func orderQuestionsWithDraw(questions []db.GetExamQuestionsRow, orderJSON []byte
 		}
 	}
 	if len(ordered) == 0 {
-		return defaultQuestionOrder(applyQuestionDraw(questions, drawPG, drawEssay), randomize)
+		return defaultQuestionOrderSeeded(applyQuestionDrawSeeded(questions, drawPG, drawEssay, seed+":draw"), randomize, seed+":order")
 	}
 	return ordered
 }
@@ -1128,6 +1134,10 @@ func orderQuestions(questions []db.GetExamQuestionsRow, orderJSON []byte, random
 }
 
 func applyQuestionDraw(questions []db.GetExamQuestionsRow, drawPG, drawEssay int32) []db.GetExamQuestionsRow {
+	return applyQuestionDrawSeeded(questions, drawPG, drawEssay, "")
+}
+
+func applyQuestionDrawSeeded(questions []db.GetExamQuestionsRow, drawPG, drawEssay int32, seed string) []db.GetExamQuestionsRow {
 	if drawPG <= 0 && drawEssay <= 0 {
 		return questions
 	}
@@ -1145,8 +1155,8 @@ func applyQuestionDraw(questions []db.GetExamQuestionsRow, drawPG, drawEssay int
 		}
 	}
 	selected := make([]db.GetExamQuestionsRow, 0, len(questions))
-	selected = append(selected, drawQuestionGroup(objective, drawPG)...)
-	selected = append(selected, drawQuestionGroup(essay, drawEssay)...)
+	selected = append(selected, drawQuestionGroupSeeded(objective, drawPG, seed+":objective")...)
+	selected = append(selected, drawQuestionGroupSeeded(essay, drawEssay, seed+":essay")...)
 	if drawPG <= 0 && len(objective) == 0 {
 		selected = append(selected, other...)
 	}
@@ -1164,10 +1174,14 @@ func applyQuestionDraw(questions []db.GetExamQuestionsRow, drawPG, drawEssay int
 }
 
 func drawQuestionGroup(questions []db.GetExamQuestionsRow, drawCount int32) []db.GetExamQuestionsRow {
+	return drawQuestionGroupSeeded(questions, drawCount, "")
+}
+
+func drawQuestionGroupSeeded(questions []db.GetExamQuestionsRow, drawCount int32, seed string) []db.GetExamQuestionsRow {
 	if drawCount <= 0 || int(drawCount) >= len(questions) {
 		return questions
 	}
-	indices := shuffleInts(len(questions))
+	indices := shuffleIntsSeeded(len(questions), seed)
 	out := make([]db.GetExamQuestionsRow, 0, drawCount)
 	for i := 0; i < int(drawCount) && i < len(indices); i++ {
 		out = append(out, questions[indices[i]])
@@ -1176,10 +1190,14 @@ func drawQuestionGroup(questions []db.GetExamQuestionsRow, drawCount int32) []db
 }
 
 func defaultQuestionOrder(questions []db.GetExamQuestionsRow, randomize bool) []db.GetExamQuestionsRow {
+	return defaultQuestionOrderSeeded(questions, randomize, "")
+}
+
+func defaultQuestionOrderSeeded(questions []db.GetExamQuestionsRow, randomize bool, seed string) []db.GetExamQuestionsRow {
 	if !randomize {
 		return questions
 	}
-	indices := shuffleInts(len(questions))
+	indices := shuffleIntsSeeded(len(questions), seed)
 	ordered := make([]db.GetExamQuestionsRow, len(questions))
 	for i, idx := range indices {
 		ordered[i] = questions[idx]
@@ -1187,10 +1205,31 @@ func defaultQuestionOrder(questions []db.GetExamQuestionsRow, randomize bool) []
 	return ordered
 }
 
+func participantRuntimeSeed(p db.GetParticipantByTokenRow) string {
+	return strings.Join([]string{
+		pgUUIDString(p.SessionID),
+		pgUUIDString(p.PackageID),
+		pgUUIDString(p.ID),
+		pgUUIDString(p.StudentID),
+	}, ":")
+}
+
 func shuffleInts(n int) []int {
+	return shuffleIntsSeeded(n, "")
+}
+
+func shuffleIntsSeeded(n int, seed string) []int {
 	idx := make([]int, n)
 	for i := range idx {
 		idx[i] = i
+	}
+	if seed != "" {
+		for i := n - 1; i > 0; i-- {
+			sum := sha256.Sum256([]byte(seed + ":" + strconv.Itoa(i)))
+			j := int(binary.BigEndian.Uint64(sum[:8]) % uint64(i+1))
+			idx[i], idx[j] = idx[j], idx[i]
+		}
+		return idx
 	}
 	for i := n - 1; i > 0; i-- {
 		value, err := cryptorand.Int(cryptorand.Reader, big.NewInt(int64(i+1)))
@@ -1215,6 +1254,10 @@ func parseOptionOrder(raw []byte) map[string][]string {
 }
 
 func ensureOptionOrder(rows []db.GetExamQuestionsRow, existing map[string][]string, randomize bool) map[string][]string {
+	return ensureOptionOrderSeeded(rows, existing, randomize, "")
+}
+
+func ensureOptionOrderSeeded(rows []db.GetExamQuestionsRow, existing map[string][]string, randomize bool, seed string) map[string][]string {
 	if !randomize {
 		return map[string][]string{}
 	}
@@ -1234,6 +1277,9 @@ func ensureOptionOrder(rows []db.GetExamQuestionsRow, existing map[string][]stri
 			continue
 		}
 		indices := shuffleInts(len(labels))
+		if seed != "" {
+			indices = shuffleIntsSeeded(len(labels), seed+":"+id)
+		}
 		shuffled := make([]string, 0, len(labels))
 		for _, idx := range indices {
 			shuffled = append(shuffled, labels[idx])

@@ -4,8 +4,12 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { toast } from '$lib/components/ui/sonner';
 	import {
+		classifyProctorEvent,
+		proctorEvidenceCategoryLabel,
 		proctorEventReasonLabel,
 		proctorIncidentActionLabel,
+		proctorRiskGroup,
+		proctorRiskGroupLabel,
 		type ProctorEvidenceEvent
 	} from '$lib/cbt/proctor-evidence';
 
@@ -77,7 +81,7 @@
 	let highlightedParticipantIds = $state(new Map<string, number>());
 	let audioAlertsEnabled = $state(false);
 	let activeTab = $state<'ruang' | 'peringatan' | 'peserta'>('ruang');
-	let alertFilter = $state<'all' | 'red' | 'yellow' | 'unchecked'>('all');
+	let alertFilter = $state<'all' | 'technical' | 'cheating' | 'red' | 'yellow' | 'unchecked'>('all');
 	let adminHelpText = $state('');
 	let pollInterval: ReturnType<typeof setInterval> | undefined;
 	let hasPrimedEvents = false;
@@ -94,8 +98,12 @@
 	let attentionCount = $derived(attentionParticipants.length + (room?.suspicious_count ?? 0) + (room?.missing_seat_count ?? 0));
 	let roomSignal = $derived(attentionCount > 0 || lockedCount > 0 ? 'red' : onlineCount > 0 ? 'green' : 'yellow');
 	let alertEvents = $derived((recentAlertEvents.length > 0 ? recentAlertEvents : events.filter(importantEvent)).slice(0, 12));
+	let technicalAlertCount = $derived(alertEvents.filter((event) => proctorRiskGroup(event) === 'technical').length);
+	let conductAlertCount = $derived(alertEvents.filter((event) => proctorRiskGroup(event) === 'cheating').length);
 	let visibleEvents = $derived.by<ProctoringEvent[]>(() => {
 		const source = alertEvents;
+		if (alertFilter === 'technical') return source.filter((event) => proctorRiskGroup(event) === 'technical');
+		if (alertFilter === 'cheating') return source.filter((event) => proctorRiskGroup(event) === 'cheating');
 		if (alertFilter === 'red') return source.filter((event) => eventSeverity(event) === 'red');
 		if (alertFilter === 'yellow') return source.filter((event) => eventSeverity(event) !== 'red');
 		if (alertFilter === 'unchecked') return source.filter((event) => !['proctor_acknowledge', 'proctor_incident_action'].includes(event.event_type));
@@ -294,7 +302,33 @@
 	}
 
 	function importantEvent(event: ProctoringEvent) {
-		return ['anti_cheat_violation', 'app_switch', 'screenshot_attempt', 'proctor_force_submit', 'proctor_reset_access', 'proctor_unlock', 'proctor_acknowledge', 'proctor_incident_action', 'participant_command'].includes(event.event_type);
+		return [
+			'anti_cheat_violation',
+			'app_switch',
+			'app_backgrounded',
+			'web_focus_lost',
+			'web_visibility_hidden',
+			'copy_attempt',
+			'cut_attempt',
+			'paste_attempt',
+			'context_menu_attempt',
+			'drop_attempt',
+			'anti_cheat_keyboard_shortcut',
+			'device_mismatch',
+			'device_mismatch_strong',
+			'token_reuse_confirmed',
+			'pending_sync',
+			'web_connection_degraded',
+			'stale_connection',
+			'heartbeat_failed',
+			'screenshot_attempt',
+			'proctor_force_submit',
+			'proctor_reset_access',
+			'proctor_unlock',
+			'proctor_acknowledge',
+			'proctor_incident_action',
+			'participant_command'
+		].includes(event.event_type);
 	}
 
 	function notifyNewEvents(nextEvents: ProctoringEvent[]) {
@@ -382,6 +416,14 @@
 		return 'offline';
 	}
 
+	function heartbeatLabel(row: ProctoringRow) {
+		const state = heartbeatState(row);
+		if (state === 'online') return 'Terhubung';
+		if (state === 'stale') return 'Perlu cek koneksi';
+		if (state === 'submitted') return 'Selesai';
+		return 'Tidak tersambung';
+	}
+
 	function participantLocked(row: ProctoringRow) {
 		return Boolean(row.locked_at || row.risk_level === 'locked');
 	}
@@ -393,6 +435,17 @@
 
 	function eventReason(event: ProctoringEvent) {
 		return proctorEventReasonLabel(event);
+	}
+
+	function eventCategoryLabel(event: ProctoringEvent) {
+		return proctorEvidenceCategoryLabel(classifyProctorEvent(event));
+	}
+
+	function eventGroupClass(event: ProctoringEvent) {
+		const group = proctorRiskGroup(event);
+		if (group === 'technical') return 'border-sky-200 bg-sky-50 text-sky-950';
+		if (group === 'cheating') return 'border-red-200 bg-red-50 text-red-950';
+		return 'border-slate-200 bg-slate-50 text-slate-700';
 	}
 
 	function eventSeverity(event: ProctoringEvent): 'red' | 'orange' | 'yellow' {
@@ -522,9 +575,23 @@
 						</div>
 					{:else if activeTab === 'peringatan'}
 						<div class="space-y-3">
+							<div class="grid grid-cols-2 gap-2">
+								<button class="rounded-2xl border border-sky-200 bg-sky-50 p-3 text-left text-sky-950 {alertFilter === 'technical' ? 'ring-2 ring-sky-400' : ''}" onclick={() => alertFilter = 'technical'}>
+									<p class="text-[11px] font-bold uppercase tracking-[0.16em]">Masalah teknis</p>
+									<p class="mt-1 text-2xl font-black">{technicalAlertCount}</p>
+									<p class="text-xs">koneksi, sinkronisasi, perangkat</p>
+								</button>
+								<button class="rounded-2xl border border-red-200 bg-red-50 p-3 text-left text-red-950 {alertFilter === 'cheating' ? 'ring-2 ring-red-400' : ''}" onclick={() => alertFilter = 'cheating'}>
+									<p class="text-[11px] font-bold uppercase tracking-[0.16em]">Indikasi tata tertib</p>
+									<p class="mt-1 text-2xl font-black">{conductAlertCount}</p>
+									<p class="text-xs">fokus, clipboard, perangkat berbeda</p>
+								</button>
+							</div>
 							<div class="flex gap-2 overflow-x-auto pb-1">
 								{#each [
 									{ key: 'all', label: 'Semua' },
+									{ key: 'technical', label: 'Teknis' },
+									{ key: 'cheating', label: 'Tata tertib' },
 									{ key: 'red', label: 'Merah' },
 									{ key: 'yellow', label: 'Kuning' },
 									{ key: 'unchecked', label: 'Belum Dicek' }
@@ -542,6 +609,10 @@
 											<p class="text-sm font-semibold">{eventReason(event)}</p>
 											<p class="mt-1 text-xs opacity-75">{fmtDt(event.created_at)} · {event.room_name ?? card.room_name ?? 'Ruang'}</p>
 										</div>
+									</div>
+									<div class="mt-3 flex flex-wrap gap-2">
+										<span class={`rounded-full border px-2 py-1 text-[11px] font-bold ${eventGroupClass(event)}`}>{proctorRiskGroupLabel(proctorRiskGroup(event))}</span>
+										<span class="rounded-full border border-slate-200 bg-white/70 px-2 py-1 text-[11px] font-bold">{eventCategoryLabel(event)}</span>
 									</div>
 									<div class="mt-3 grid grid-cols-2 gap-2">
 										<button class="min-h-11 rounded-xl border border-slate-300 bg-white/80 px-2 text-xs font-bold" disabled={Boolean(actionBusy) || demoMode} onclick={() => void acknowledgeEvent(event)}>Sudah Dicek</button>
@@ -563,12 +634,12 @@
 											<h3 class="truncate text-base font-black">{row.nama ?? 'Peserta'}</h3>
 											<p class="text-xs text-slate-500">NIS {row.nis ?? '—'} · Kursi {row.seat_no ?? '—'}</p>
 										</div>
-										<span class={`shrink-0 rounded-full border px-2 py-1 text-[11px] font-bold ${heartbeatClass(row)}`}>{heartbeatState(row)}</span>
+										<span class={`shrink-0 rounded-full border px-2 py-1 text-[11px] font-bold ${heartbeatClass(row)}`}>{heartbeatLabel(row)}</span>
 									</div>
 									<div class="mt-3 flex flex-wrap gap-1 text-[11px]">
 										<span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">{riskLabel(row)}</span>
 										<span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">Keluar {row.app_switch_count ?? 0}x</span>
-										<span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">Screenshot {row.screenshot_attempt ?? 0}x</span>
+										<span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">Tangkap layar {row.screenshot_attempt ?? 0}x</span>
 									</div>
 									{#if participantNeedsAttention(row)}
 										<div class="mt-3 grid grid-cols-2 gap-2">

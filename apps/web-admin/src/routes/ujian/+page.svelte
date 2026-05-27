@@ -9,12 +9,14 @@
 		text: string;
 		options?: Array<{ label: string; text: string }>;
 	};
-	type StudentIdentity = { nama?: string; name?: string; nis?: string; class_code?: string; class_name?: string; room_name?: string; seat_no?: number | string | null };
-	type SessionIdentity = { title?: string; subject?: string; scheduled_start?: string; scheduled_end?: string; status?: string; started?: boolean; is_started?: boolean; waiting?: boolean };
+	type StudentIdentity = { nama?: string; name?: string; nis?: string; class_code?: string; class_name?: string; room_name?: string; seat_no?: number | string | null; participant_id?: string };
+	type SessionIdentity = { id?: string; title?: string; subject?: string; scheduled_start?: string; scheduled_end?: string; status?: string; started?: boolean; is_started?: boolean; waiting?: boolean };
 	type ExamPayload = {
+		participant_id?: string;
 		student?: StudentIdentity;
 		participant?: StudentIdentity;
 		session?: SessionIdentity;
+		room?: { room_name?: string };
 		access_token?: string;
 		exam_token?: string;
 		token?: string;
@@ -44,6 +46,7 @@
 	let telemetry = $state<string[]>([]);
 	let activeQuestionIndex = $state(0);
 	let doubtfulQuestions = $state(new Set<string>());
+	let watermarkTime = $state('');
 	let participantPollInterval: ReturnType<typeof setInterval> | undefined;
 	let seenCommandIds = $state(new Set<string>());
 
@@ -56,6 +59,20 @@
 	let session = $derived(payload?.session ?? {});
 	let studentName = $derived(student.nama ?? student.name ?? 'Peserta');
 	let examAccessToken = $derived(payload?.access_token ?? payload?.exam_token ?? payload?.token ?? examToken);
+	let classLabel = $derived(student.class_name ?? student.class_code ?? 'Kelas belum tercatat');
+	let roomLabel = $derived(student.room_name ?? payload?.room?.room_name ?? 'Ruang belum tercatat');
+	let participantLabel = $derived(payload?.participant_id ?? student.participant_id ?? activeParticipantId);
+	let sessionLabel = $derived(session.id ?? '');
+	let watermarkLine = $derived(
+		[
+			studentName,
+			classLabel,
+			roomLabel,
+			participantLabel ? `Peserta ${participantLabel}` : '',
+			sessionLabel ? `Sesi ${sessionLabel}` : '',
+			watermarkTime
+		].filter(Boolean).join(' · ')
+	);
 
 	function friendlyError(error: unknown) {
 		const message = error instanceof Error ? error.message : String(error || '');
@@ -112,6 +129,13 @@
 		const source = wrapped?.data ?? wrapped?.payload ?? (body as ExamPayload);
 		return {
 			...source,
+			participant_id: source.participant_id,
+			room: source.room,
+			student: {
+				...(source.student ?? source.participant ?? {}),
+				room_name: (source.student ?? source.participant ?? {}).room_name ?? source.room?.room_name,
+				participant_id: source.participant_id
+			},
 			questions: (source.questions ?? []).map((question) => ({
 				...question,
 				text: question.text ?? (question as Question & { question_text?: string }).question_text ?? '',
@@ -231,7 +255,16 @@
 				}
 				throw new Error(message);
 			}
-			payload = normalizePortalPayload(body);
+			const startedPayload = normalizePortalPayload(body);
+			const priorPayload = payload;
+			payload = {
+				...startedPayload,
+				student: {
+					...(priorPayload?.student ?? priorPayload?.participant ?? {}),
+					...(startedPayload.student ?? startedPayload.participant ?? {})
+				},
+				room: startedPayload.room ?? priorPayload?.room
+			};
 			portalStep = 'exam';
 			addTelemetry('Identitas dikonfirmasi — ujian dibuka');
 			startParticipantRuntimePolling();
@@ -449,6 +482,11 @@
 	$effect(() => {
 		if (!browser) return;
 		deviceFingerprint = deviceFingerprint || makeFingerprint();
+		const updateWatermarkTime = () => {
+			watermarkTime = new Intl.DateTimeFormat('id-ID', { timeStyle: 'medium', timeZone: 'Asia/Makassar' }).format(new Date()) + ' WITA';
+		};
+		updateWatermarkTime();
+		const watermarkTimer = setInterval(updateWatermarkTime, 30000);
 		const onBlur = () => { addTelemetry('Halaman ujian tidak aktif sesaat'); void reportPortalEvent('web_focus_lost', { reason: 'window_blur' }); };
 		const onFocus = () => { addTelemetry('Halaman ujian aktif kembali'); void reportPortalEvent('web_focus_restored', { reason: 'window_focus' }); };
 		const onOffline = () => addTelemetry('Koneksi terputus, jawaban disimpan sementara');
@@ -473,6 +511,7 @@
 		document.addEventListener('selectstart', blockExamSelection, true);
 		document.addEventListener('beforeinput', blockPasteBeforeInput, true);
 		return () => {
+			clearInterval(watermarkTimer);
 			window.removeEventListener('blur', onBlur);
 			window.removeEventListener('focus', onFocus);
 			window.removeEventListener('offline', onOffline);
@@ -557,10 +596,16 @@
 							</div>
 							<div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-right text-xs font-bold text-emerald-900">{answeredCount}/{questions.length}<br />terjawab</div>
 						</div>
+						<div class="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold leading-4 text-slate-500">
+							{watermarkLine}
+						</div>
 					</div>
 
 					{#if currentQuestion}
-						<article class="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
+						<article class="relative overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
+							<div class="pointer-events-none absolute inset-x-3 top-16 -rotate-6 select-none text-center text-[11px] font-black uppercase tracking-[0.16em] text-slate-900/5" aria-hidden="true">
+								{studentName} · {classLabel} · {roomLabel}
+							</div>
 							<div class="flex items-start justify-between gap-3">
 								<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{currentQuestion.type === 'multiple_choice' ? 'Pilihan Ganda' : 'Uraian'}</p>
 								{#if doubtfulQuestions.has(currentQuestion.id)}<span class="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-900">Ragu-ragu</span>{/if}
@@ -582,7 +627,7 @@
 						</article>
 					{/if}
 
-					<div class="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">Tetap berada di halaman ujian. Copy, paste, klik kanan/tahan, dan drag teks dinonaktifkan serta dicatat ke pengawas. Jika koneksi tidak stabil, jawaban disimpan sementara dan akan dikirim ulang saat tersambung.</div>
+					<div class="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">Soal ditampilkan satu per layar. Tetap berada di halaman ujian. Copy, paste, klik kanan/tahan, dan drag teks dinonaktifkan serta dicatat ke pengawas. Jika koneksi tidak stabil, jawaban disimpan sementara dan akan dikirim ulang saat tersambung.</div>
 				</section>
 			{:else}
 				<section class="space-y-4">

@@ -41,6 +41,8 @@ export type ProctorEvidenceSummary = {
 	missingCategories: ProctorEvidenceCategory[];
 };
 
+export type ProctorRiskGroup = 'technical' | 'cheating' | 'supervision';
+
 export type ProctorOperatorGuidanceItem = {
 	title: string;
 	description: string;
@@ -93,6 +95,19 @@ export function proctorEvidenceCategoryLabel(category: ProctorEvidenceCategory |
 
 export function proctorEvidenceCategorySummary(category: ProctorEvidenceCategory | null): string {
 	return category ? PROCTOR_EVIDENCE_CATEGORY_SUMMARIES[category] : 'Kejadian tidak masuk kategori utama bukti pengawasan.';
+}
+
+export function proctorRiskGroup(event: ProctorEvidenceEvent): ProctorRiskGroup {
+	const category = classifyProctorEvent(event);
+	if (category === 'stale_connection' || category === 'submit_guard' || category === 'heartbeat') return 'technical';
+	if (category === 'anti_cheat' || category === 'app_background_resume' || category === 'device_mismatch') return 'cheating';
+	return 'supervision';
+}
+
+export function proctorRiskGroupLabel(group: ProctorRiskGroup): string {
+	if (group === 'technical') return 'Masalah teknis';
+	if (group === 'cheating') return 'Indikasi tata tertib';
+	return 'Tindak lanjut pengawas';
 }
 
 type ProctorEvidenceSummaryInput = {

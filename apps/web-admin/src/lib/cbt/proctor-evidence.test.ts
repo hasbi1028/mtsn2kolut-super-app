@@ -5,6 +5,8 @@ import {
 	buildProctorEvidenceCsvRows,
 	classifyProctorEvent,
 	proctorEventLabel,
+	proctorRiskGroup,
+	proctorRiskGroupLabel,
 	summarizeProctorEvidence
 } from './proctor-evidence';
 
@@ -69,6 +71,17 @@ describe('CBT proctor evidence helpers', () => {
 		expect(classifyProctorEvent({ event_type: 'offline_short', event_data: {} })).toBe('stale_connection');
 		expect(classifyProctorEvent({ event_type: 'web_connection_degraded', event_data: {} })).toBe('stale_connection');
 		expect(proctorEventLabel({ event_type: 'screenshot_attempt_valid', event_data: {} })).toBe('Percobaan tangkap layar tervalidasi');
+	});
+
+	it('groups proctor events into simple technical and conduct buckets', () => {
+		expect(proctorRiskGroup({ event_type: 'web_connection_degraded', event_data: {} })).toBe('technical');
+		expect(proctorRiskGroup({ event_type: 'pending_sync', event_data: {} })).toBe('technical');
+		expect(proctorRiskGroup({ event_type: 'paste_attempt', event_data: {} })).toBe('cheating');
+		expect(proctorRiskGroup({ event_type: 'web_focus_lost', event_data: {} })).toBe('cheating');
+		expect(proctorRiskGroup({ event_type: 'proctor_acknowledge', event_data: {} })).toBe('supervision');
+		expect(proctorRiskGroupLabel('technical')).toBe('Masalah teknis');
+		expect(proctorRiskGroupLabel('cheating')).toBe('Indikasi tata tertib');
+		expect(proctorRiskGroupLabel('supervision')).toBe('Tindak lanjut pengawas');
 	});
 
 	it('decodes JSON event data returned from Go byte slices as base64 strings', () => {
