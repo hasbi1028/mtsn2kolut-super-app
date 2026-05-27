@@ -76,6 +76,9 @@
 	let recentAlertEvents = $state<ProctoringEvent[]>([]);
 	let highlightedParticipantIds = $state(new Map<string, number>());
 	let audioAlertsEnabled = $state(false);
+	let activeTab = $state<'ruang' | 'peringatan' | 'peserta'>('ruang');
+	let alertFilter = $state<'all' | 'red' | 'yellow' | 'unchecked'>('all');
+	let adminHelpText = $state('');
 	let pollInterval: ReturnType<typeof setInterval> | undefined;
 	let hasPrimedEvents = false;
 
@@ -90,7 +93,14 @@
 	let attentionParticipants = $derived(participants.filter(participantNeedsAttention));
 	let attentionCount = $derived(attentionParticipants.length + (room?.suspicious_count ?? 0) + (room?.missing_seat_count ?? 0));
 	let roomSignal = $derived(attentionCount > 0 || lockedCount > 0 ? 'red' : onlineCount > 0 ? 'green' : 'yellow');
-	let visibleEvents = $derived((recentAlertEvents.length > 0 ? recentAlertEvents : events.filter(importantEvent)).slice(0, 8));
+	let alertEvents = $derived((recentAlertEvents.length > 0 ? recentAlertEvents : events.filter(importantEvent)).slice(0, 12));
+	let visibleEvents = $derived.by<ProctoringEvent[]>(() => {
+		const source = alertEvents;
+		if (alertFilter === 'red') return source.filter((event) => eventSeverity(event) === 'red');
+		if (alertFilter === 'yellow') return source.filter((event) => eventSeverity(event) !== 'red');
+		if (alertFilter === 'unchecked') return source.filter((event) => !['proctor_acknowledge', 'proctor_incident_action'].includes(event.event_type));
+		return source;
+	});
 
 	$effect(() => {
 		if (queryCard && !token) token = queryCard;
@@ -257,10 +267,18 @@
 	}
 
 	function contactAdmin() {
-		const text = `Mohon bantuan admin CBT. Ruang: ${card?.room_name ?? room?.room_name ?? 'Ruang ujian'}. Sesi: ${card?.session_title ?? room?.session_title ?? 'CBT'}. Status: ${signalLabel()}. Atensi: ${attentionCount}. Terkunci: ${lockedCount}.`;
+		const latest = alertEvents[0];
+		const text = `Mohon bantuan admin CBT.\n\nUjian: ${card?.session_title ?? room?.session_title ?? 'CBT'}\nRuang: ${card?.room_name ?? room?.room_name ?? 'Ruang ujian'}\nStatus: ${signalLabel()}\nAtensi: ${attentionCount} peserta/peringatan\nTerkunci: ${lockedCount}\n${latest ? `Peserta terbaru: ${latest.nama ?? 'Peserta'} - ${eventReason(latest)}\nWaktu: ${fmtDt(latest.created_at)}` : 'Belum ada detail peserta terbaru.'}`;
+		adminHelpText = text;
 		if (browser) navigator.clipboard?.writeText(text).catch(() => undefined);
 		successMessage = 'Pesan bantuan disiapkan/disalin. Kirim ke admin/operator CBT.';
 		if (demoMode) demoRoomStatus = 'Bantuan Admin Diminta';
+	}
+
+	function copyAdminHelpText() {
+		if (!adminHelpText) contactAdmin();
+		if (browser && adminHelpText) navigator.clipboard?.writeText(adminHelpText).catch(() => undefined);
+		successMessage = 'Teks bantuan admin disalin.';
 	}
 
 	async function readApiPayload<T = unknown>(response: Response, fallback: string): Promise<T> {
@@ -377,6 +395,29 @@
 		return proctorEventReasonLabel(event);
 	}
 
+	function eventSeverity(event: ProctoringEvent): 'red' | 'orange' | 'yellow' {
+		const type = event.event_type.trim().toLowerCase();
+		const reason = JSON.stringify(event.event_data ?? {}).toLowerCase();
+		if (['anti_cheat_violation', 'device_mismatch', 'device_mismatch_strong', 'token_reuse_confirmed', 'screenshot_attempt', 'screenshot_attempt_valid'].includes(type)) return 'red';
+		if (type.includes('device') || type.includes('token') || reason.includes('anti_cheat_locked') || reason.includes('device_mismatch')) return 'red';
+		if (type.includes('app_switch') || type.includes('visibility') || type.includes('focus') || type.includes('stale') || type.includes('heartbeat_failed')) return 'orange';
+		return 'yellow';
+	}
+
+	function eventSeverityLabel(event: ProctoringEvent) {
+		const severity = eventSeverity(event);
+		if (severity === 'red') return 'Merah — Perlu Admin';
+		if (severity === 'orange') return 'Oranye — Perhatian';
+		return 'Kuning — Perlu Dicek';
+	}
+
+	function eventSeverityClass(event: ProctoringEvent) {
+		const severity = eventSeverity(event);
+		if (severity === 'red') return 'border-red-200 bg-red-50 text-red-950';
+		if (severity === 'orange') return 'border-orange-200 bg-orange-50 text-orange-950';
+		return 'border-amber-200 bg-amber-50 text-amber-950';
+	}
+
 	function signalLabel() {
 		if (roomSignal === 'green') return 'Hijau — aman';
 		if (roomSignal === 'yellow') return 'Kuning — menunggu/cek koneksi';
@@ -418,123 +459,139 @@
 	<meta name="theme-color" content="#f7fbf5" />
 </svelte:head>
 
-<main data-cbt-portal-root class="exam-light-scope min-h-screen bg-[#f7fbf5] px-3 py-4 text-slate-950 sm:px-4 sm:py-6" style="background-color: #f7fbf5 !important; color-scheme: light;">
-	<section class="mx-auto max-w-5xl space-y-3">
-		<header class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-slate-950 shadow-sm sm:p-5">
-			<div class="flex flex-wrap items-start justify-between gap-3">
-				<div>
-					<p class="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-700">MTsN 2 Kolaka Utara</p>
-					<h1 class="mt-1 text-2xl font-bold sm:text-3xl">Portal Pengawasan Ruang</h1>
-					<p class="mt-2 max-w-3xl text-sm text-slate-700">{demoMode ? 'MODE DEMO meniru alur pengawasan ruang ujian nyata tanpa API/database.' : 'Scan QR pada Lembar Pengawas Ruang, masukkan PIN ruang, lalu pantau peserta secara real-time tanpa login admin.'}</p>
-				</div>
-				{#if card}
-					<div class="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800">
-						{demoMode ? 'Demo Lokal' : liveMode === 'polling' ? 'Live 3,5 detik' : liveMode === 'paused' ? 'Jeda saat tab tersembunyi' : 'Siap'}
-					</div>
-				{/if}
-			</div>
+<main data-cbt-portal-root class="exam-light-scope min-h-dvh bg-[#f7fbf5] px-3 py-4 text-slate-950" style="background-color: #f7fbf5 !important; color-scheme: light;">
+	<section class="mx-auto max-w-md space-y-3">
+		<header class="rounded-[1.75rem] border border-emerald-200 bg-emerald-50 p-4 text-slate-950 shadow-sm">
+			<p class="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-700">MTsN 2 Kolaka Utara</p>
+			<h1 class="mt-1 text-2xl font-black">Portal Pengawasan Ruang</h1>
+			<p class="mt-2 text-sm text-slate-700">{demoMode ? 'MODE DEMO meniru alur pengawasan ruang ujian nyata tanpa API/database.' : 'Scan QR pada Lembar Pengawas Ruang, masukkan PIN ruang, lalu pantau peserta tanpa login admin.'}</p>
 		</header>
 
-		{#if errorMessage}
-			<div class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>
-		{/if}
-		{#if successMessage}
-			<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{successMessage}</div>
-		{/if}
-
 		{#if card}
-			<section class="rounded-2xl border border-slate-200 bg-white p-4 text-slate-950 shadow-sm sm:p-5">
-				<div class="flex flex-wrap items-start justify-between gap-3">
-					<div>
-						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Lembar Pengawas Ruang Valid</p>
-						<h2 class="mt-1 text-2xl font-bold">{card.room_name ?? room?.room_name ?? 'Ruang Ujian'}</h2>
-						<p class="mt-1 text-sm text-slate-600">{card.session_title ?? room?.session_title ?? 'Sesi CBT'} · {card.package_title ?? room?.package_title ?? 'Paket ujian'}</p>
-					</div>
-					<button class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold" onclick={() => { stopLivePolling(); card = null; dashboard = null; pin = ''; successMessage = ''; }}>Ganti Lembar/PIN</button>
-				</div>
-
-				<div class="mt-4 grid gap-2 rounded-xl bg-emerald-50 p-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-					<p><b>Akses:</b> {card.proctor_name ?? 'Lembar Pengawas Ruang'}</p>
-					<p><b>Jadwal:</b> {fmtDt(card.scheduled_start)}</p>
-					<p><b>Status:</b> {room?.session_status ?? card.session_status ?? '—'}</p>
-					<p><b>Live:</b> {backgroundBusy ? 'Memperbarui...' : demoMode ? 'Demo' : 'Aktif'}</p>
-				</div>
-
-				<div class={`mt-4 rounded-2xl border p-4 ${signalClass()}`}>
-					<p class="text-xs font-semibold uppercase tracking-[0.2em]">Status Ruang</p>
-					<p class="mt-1 text-2xl font-bold">{demoMode ? demoRoomStatus : signalLabel()}</p>
-					<div class="mt-4 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
-						<p><b>Peserta:</b> {room?.participant_count ?? participants.length}</p>
-						<p><b>Online:</b> {onlineCount}</p>
-						<p><b>Selesai:</b> {submittedCount}</p>
-						<p><b>Atensi:</b> {attentionCount}</p>
-						<p><b>Terkunci:</b> {lockedCount}</p>
-					</div>
-				</div>
-
-				<div class="mt-4 grid gap-2 sm:grid-cols-4">
-					<button class="rounded-xl bg-emerald-700 px-4 py-4 text-base font-bold text-white disabled:opacity-60" disabled={Boolean(actionBusy) || room?.session_status === 'active'} onclick={() => void updateStatus('active')}>{actionBusy === 'status-active' ? 'Memproses...' : 'Mulai Ujian'}</button>
-					<button class="rounded-xl bg-amber-500 px-4 py-4 text-base font-bold text-amber-950" onclick={contactAdmin}>Hubungi Admin</button>
-					<button class="rounded-xl bg-slate-800 px-4 py-4 text-base font-bold text-white disabled:opacity-60" disabled={Boolean(actionBusy) || room?.session_status === 'finished'} onclick={() => void updateStatus('finished')}>Tutup Ujian</button>
-					<button class="rounded-xl border border-slate-300 px-4 py-4 text-base font-bold {audioAlertsEnabled ? 'bg-emerald-700 text-white' : 'bg-white text-slate-900'}" onclick={() => audioAlertsEnabled = !audioAlertsEnabled}>Audio {audioAlertsEnabled ? 'ON' : 'OFF'}</button>
-				</div>
-
-				{#if visibleEvents.length > 0}
-					<div class="mt-5 overflow-hidden rounded-2xl border border-red-100">
-						<div class="flex items-center justify-between bg-red-50 px-4 py-3">
-							<p class="font-semibold text-red-900">Insiden Terbaru</p>
-							<p class="text-xs text-red-700">Toast + highlight otomatis</p>
+			<section class="mx-auto flex min-h-[calc(100dvh-2rem)] max-w-md flex-col overflow-hidden rounded-[2rem] border border-emerald-100 bg-white text-slate-950 shadow-xl sm:min-h-[760px]">
+				<div class="sticky top-0 z-20 border-b border-emerald-100 bg-white/95 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] backdrop-blur">
+					<div class="flex items-start justify-between gap-3">
+						<div class="min-w-0">
+							<p class="text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-700">Portal Pengawasan Ruang</p>
+							<h2 class="mt-1 truncate text-xl font-black">{card.room_name ?? room?.room_name ?? 'Ruang Ujian'}</h2>
+							<p class="truncate text-xs text-slate-600">{card.session_title ?? room?.session_title ?? 'Sesi CBT'}</p>
 						</div>
-						{#each visibleEvents as event (event.id)}
-							<div class="border-t border-red-100 px-4 py-3 text-sm">
-								<div class="flex flex-wrap items-start justify-between gap-2">
-									<div class="min-w-0">
-										<p class="font-semibold text-slate-950">{event.nama ?? 'Peserta'} · {eventReason(event)}</p>
-										<p class="text-xs text-slate-600">{fmtDt(event.created_at)} · {event.event_type}</p>
-									</div>
-									<div class="flex flex-wrap gap-1">
-										<button class="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold" disabled={Boolean(actionBusy) || demoMode} onclick={() => void acknowledgeEvent(event)}>Sudah Dicek</button>
-										<button class="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900" disabled={Boolean(actionBusy) || demoMode} onclick={() => void incidentAction(event, 'warning_given')}>Beri Peringatan</button>
-										<button class="rounded-lg border border-red-300 bg-red-50 px-2 py-1 text-xs font-semibold text-red-900" disabled={Boolean(actionBusy) || demoMode} onclick={() => void incidentAction(event, 'escalated')}>Eskalasi</button>
-									</div>
-								</div>
-							</div>
-						{/each}
-					</div>
-				{/if}
-
-				<div class="mt-5 overflow-hidden rounded-2xl border border-slate-200">
-					<div class="bg-slate-50 px-4 py-3 font-semibold">Peserta Perlu Dicek</div>
-					{#each attentionParticipants.slice(0, 12) as row (row.participant_id)}
-						<div class="border-t border-slate-100 px-4 py-3 text-sm {highlightedParticipantIds.has(row.participant_id) ? 'bg-red-50' : ''}">
-							<div class="flex flex-wrap items-center justify-between gap-2">
-								<div class="min-w-0">
-									<p class="font-semibold text-slate-950">{row.nama ?? 'Peserta'} <span class="text-xs text-slate-500">Kursi {row.seat_no ?? '—'}</span></p>
-									<div class="mt-1 flex flex-wrap gap-1 text-xs">
-										<span class={`rounded-full border px-2 py-0.5 ${heartbeatClass(row)}`}>{heartbeatState(row)}</span>
-										<span class="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-700">{riskLabel(row)}</span>
-										<span class="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-700">Keluar {row.app_switch_count ?? 0}x</span>
-										<span class="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-700">Screenshot {row.screenshot_attempt ?? 0}x</span>
-									</div>
-								</div>
-								<div class="flex flex-wrap gap-1">
-									<button class="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900" disabled={Boolean(actionBusy) || demoMode} onclick={() => void sendWarning(row)}>Peringatkan</button>
-									{#if participantLocked(row)}
-										<button class="rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-900" disabled={Boolean(actionBusy) || demoMode} onclick={() => void unlockParticipant(row)}>Buka Kunci</button>
-									{/if}
-								</div>
-							</div>
+						<div class="shrink-0 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-right text-[10px] font-bold text-emerald-800">
+							<p>{demoMode ? 'DEMO' : liveMode === 'polling' ? 'LIVE' : liveMode === 'paused' ? 'JEDA' : 'SIAP'}</p>
+							<p class="font-medium normal-case">{backgroundBusy ? 'sinkron...' : '3–5 dtk'}</p>
 						</div>
-					{/each}
-					{#if attentionParticipants.length === 0}
-						<div class="border-t border-slate-100 px-4 py-3 text-sm text-slate-600">Belum ada peserta yang perlu perhatian khusus.</div>
+					</div>
+					{#if adminHelpText}
+						<div class="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+							<p class="font-bold">Pesan bantuan admin siap disalin.</p>
+							<pre class="mt-2 max-h-28 overflow-auto whitespace-pre-wrap rounded-xl bg-white/70 p-2 text-[11px] leading-5">{adminHelpText}</pre>
+							<button class="mt-2 min-h-10 rounded-xl bg-amber-500 px-3 text-xs font-bold text-amber-950" onclick={copyAdminHelpText}>Salin Lagi</button>
+						</div>
 					{/if}
 				</div>
 
-				<div class="mt-4 flex flex-wrap gap-2">
-					<button class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold" disabled={loading || demoMode} onclick={() => void loadPortalDashboard(false)}>{loading ? 'Memuat...' : 'Muat Ulang'}</button>
+				<div class="flex-1 overflow-y-auto px-4 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
+					{#if activeTab === 'ruang'}
+						<div class="space-y-4">
+							<div class={`rounded-[1.5rem] border p-4 ${signalClass()}`}>
+								<p class="text-xs font-bold uppercase tracking-[0.18em]">Status Ruang</p>
+								<p class="mt-1 text-2xl font-black">{demoMode ? demoRoomStatus : signalLabel()}</p>
+								<p class="mt-2 text-sm opacity-80">{card.package_title ?? room?.package_title ?? 'Paket ujian'} · {fmtDt(card.scheduled_start)}</p>
+							</div>
+
+							<div class="grid grid-cols-2 gap-2">
+								<div class="rounded-2xl border border-slate-200 bg-slate-50 p-3"><p class="text-[11px] text-slate-500">Peserta</p><p class="text-2xl font-black">{room?.participant_count ?? participants.length}</p></div>
+								<div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-3"><p class="text-[11px] text-emerald-700">Online</p><p class="text-2xl font-black text-emerald-900">{onlineCount}</p></div>
+								<div class="rounded-2xl border border-amber-200 bg-amber-50 p-3"><p class="text-[11px] text-amber-700">Perlu dicek</p><p class="text-2xl font-black text-amber-950">{attentionCount}</p></div>
+								<div class="rounded-2xl border border-slate-200 bg-white p-3"><p class="text-[11px] text-slate-500">Selesai</p><p class="text-2xl font-black">{submittedCount}</p></div>
+							</div>
+
+							<div class="grid gap-2">
+								<button class="min-h-14 rounded-2xl bg-emerald-700 px-4 text-base font-black text-white disabled:opacity-60" disabled={Boolean(actionBusy) || room?.session_status === 'active'} onclick={() => void updateStatus('active')}>{actionBusy === 'status-active' ? 'Memproses...' : 'Mulai Ujian'}</button>
+								<div class="grid grid-cols-2 gap-2">
+									<button class="min-h-12 rounded-2xl bg-amber-500 px-3 text-sm font-black text-amber-950" onclick={contactAdmin}>Hubungi Admin</button>
+									<button class="min-h-12 rounded-2xl border border-slate-300 px-3 text-sm font-black {audioAlertsEnabled ? 'bg-emerald-700 text-white' : 'bg-white text-slate-900'}" onclick={() => audioAlertsEnabled = !audioAlertsEnabled}>Audio {audioAlertsEnabled ? 'ON' : 'OFF'}</button>
+								</div>
+								<button class="min-h-12 rounded-2xl bg-slate-900 px-4 text-sm font-black text-white disabled:opacity-60" disabled={Boolean(actionBusy) || room?.session_status === 'finished'} onclick={() => void updateStatus('finished')}>Tutup Ujian</button>
+							</div>
+
+							<div class="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
+								<p class="font-bold text-slate-900">Pegangan pengawas</p>
+								<p>Jika ada peserta merah/kuning, buka tab <b>Peringatan</b>, cek nama peserta, lalu pilih Sudah Dicek, Beri Peringatan, atau Hubungi Admin.</p>
+							</div>
+						</div>
+					{:else if activeTab === 'peringatan'}
+						<div class="space-y-3">
+							<div class="flex gap-2 overflow-x-auto pb-1">
+								{#each [
+									{ key: 'all', label: 'Semua' },
+									{ key: 'red', label: 'Merah' },
+									{ key: 'yellow', label: 'Kuning' },
+									{ key: 'unchecked', label: 'Belum Dicek' }
+								] as filter}
+									<button class="shrink-0 rounded-full border px-3 py-2 text-xs font-bold {alertFilter === filter.key ? 'border-emerald-700 bg-emerald-700 text-white' : 'border-slate-200 bg-white text-slate-700'}" onclick={() => alertFilter = filter.key as typeof alertFilter}>{filter.label}</button>
+								{/each}
+							</div>
+
+							{#each visibleEvents as event (event.id)}
+								<article class={`rounded-[1.35rem] border p-4 shadow-sm ${eventSeverityClass(event)}`}>
+									<div class="flex items-start justify-between gap-3">
+										<div class="min-w-0">
+											<p class="text-[11px] font-black uppercase tracking-[0.16em]">{eventSeverityLabel(event)}</p>
+											<h3 class="mt-1 truncate text-lg font-black">{event.nama ?? 'Peserta'}</h3>
+											<p class="text-sm font-semibold">{eventReason(event)}</p>
+											<p class="mt-1 text-xs opacity-75">{fmtDt(event.created_at)} · {event.room_name ?? card.room_name ?? 'Ruang'}</p>
+										</div>
+									</div>
+									<div class="mt-3 grid grid-cols-2 gap-2">
+										<button class="min-h-11 rounded-xl border border-slate-300 bg-white/80 px-2 text-xs font-bold" disabled={Boolean(actionBusy) || demoMode} onclick={() => void acknowledgeEvent(event)}>Sudah Dicek</button>
+										<button class="min-h-11 rounded-xl border border-amber-300 bg-amber-100 px-2 text-xs font-bold text-amber-950" disabled={Boolean(actionBusy) || demoMode} onclick={() => void incidentAction(event, 'warning_given')}>Beri Peringatan</button>
+										<button class="col-span-2 min-h-11 rounded-xl bg-red-700 px-2 text-xs font-bold text-white" onclick={contactAdmin}>Hubungi Admin</button>
+									</div>
+								</article>
+							{/each}
+							{#if visibleEvents.length === 0}
+								<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-sm text-slate-600">Belum ada peringatan pada filter ini.</div>
+							{/if}
+						</div>
+					{:else}
+						<div class="space-y-3">
+							{#each participants as row (row.participant_id)}
+								<article class="rounded-[1.25rem] border border-slate-200 bg-white p-4 shadow-sm {highlightedParticipantIds.has(row.participant_id) ? 'ring-2 ring-red-300' : ''}">
+									<div class="flex items-start justify-between gap-3">
+										<div class="min-w-0">
+											<h3 class="truncate text-base font-black">{row.nama ?? 'Peserta'}</h3>
+											<p class="text-xs text-slate-500">NIS {row.nis ?? '—'} · Kursi {row.seat_no ?? '—'}</p>
+										</div>
+										<span class={`shrink-0 rounded-full border px-2 py-1 text-[11px] font-bold ${heartbeatClass(row)}`}>{heartbeatState(row)}</span>
+									</div>
+									<div class="mt-3 flex flex-wrap gap-1 text-[11px]">
+										<span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">{riskLabel(row)}</span>
+										<span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">Keluar {row.app_switch_count ?? 0}x</span>
+										<span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">Screenshot {row.screenshot_attempt ?? 0}x</span>
+									</div>
+									{#if participantNeedsAttention(row)}
+										<div class="mt-3 grid grid-cols-2 gap-2">
+											<button class="min-h-10 rounded-xl border border-amber-300 bg-amber-50 px-2 text-xs font-bold text-amber-950" disabled={Boolean(actionBusy) || demoMode} onclick={() => void sendWarning(row)}>Beri Peringatan</button>
+											<button class="min-h-10 rounded-xl border border-slate-300 px-2 text-xs font-bold" onclick={contactAdmin}>Hubungi Admin</button>
+										</div>
+									{/if}
+								</article>
+							{/each}
+							{#if participants.length === 0}
+								<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-sm text-slate-600">Belum ada peserta terbaca.</div>
+							{/if}
+						</div>
+					{/if}
 				</div>
-				<p class="mt-3 text-center text-xs text-slate-500">Pengawas cukup memakai halaman ini. Admin tetap memantau semua ruang dari Command Center.</p>
+
+				<nav class="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md border-t border-slate-200 bg-white/95 px-3 pb-[calc(0.55rem+env(safe-area-inset-bottom))] pt-2 backdrop-blur">
+					<div class="grid grid-cols-3 gap-2">
+						<button class="min-h-12 rounded-2xl text-xs font-black {activeTab === 'ruang' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-700'}" onclick={() => activeTab = 'ruang'}>Ruang</button>
+						<button class="relative min-h-12 rounded-2xl text-xs font-black {activeTab === 'peringatan' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-700'}" onclick={() => activeTab = 'peringatan'}>Peringatan{#if alertEvents.length > 0}<span class="absolute -right-1 -top-1 grid size-6 place-items-center rounded-full bg-red-600 text-[10px] text-white">{alertEvents.length}</span>{/if}</button>
+						<button class="min-h-12 rounded-2xl text-xs font-black {activeTab === 'peserta' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-700'}" onclick={() => activeTab = 'peserta'}>Peserta</button>
+					</div>
+				</nav>
 			</section>
 		{:else}
 			<section class="rounded-2xl border border-slate-200 bg-white p-5 text-slate-950 shadow-sm">

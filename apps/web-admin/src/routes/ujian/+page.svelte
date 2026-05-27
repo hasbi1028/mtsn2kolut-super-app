@@ -42,11 +42,15 @@
 	let pendingAnswers = $state<Record<string, string>>({});
 	let submitted = $state(false);
 	let telemetry = $state<string[]>([]);
+	let activeQuestionIndex = $state(0);
+	let doubtfulQuestions = $state(new Set<string>());
 	let participantPollInterval: ReturnType<typeof setInterval> | undefined;
 	let seenCommandIds = $state(new Set<string>());
 
 	let queryCard = $derived($page.url.searchParams.get('card') ?? $page.url.searchParams.get('token') ?? '');
+	let demoMode = $derived($page.url.searchParams.get('demo') === '1');
 	let questions = $derived(payload?.questions ?? []);
+	let currentQuestion = $derived(questions[Math.min(activeQuestionIndex, Math.max(questions.length - 1, 0))]);
 	let answeredCount = $derived(Object.values(answers).filter((answer) => answer.trim().length > 0).length);
 	let student = $derived(payload?.student ?? payload?.participant ?? {});
 	let session = $derived(payload?.session ?? {});
@@ -79,10 +83,28 @@
 		submitted = false;
 		answers = {};
 		pendingAnswers = {};
+		activeQuestionIndex = 0;
+		doubtfulQuestions = new Set();
 		activeParticipantId = '';
 		portalAuthToken = '';
 		authenticatedByCard = false;
 		stopParticipantRuntimePolling();
+	}
+
+	function activateDemo() {
+		payload = {
+			student: { nama: 'Ahmad Demo', nis: '24001', class_name: 'IX A', room_name: 'Ruang DEMO 01', seat_no: 12 },
+			session: { title: 'DEMO Portal Ujian Peserta', subject: 'Informatika', status: 'active', started: true },
+			questions: [
+				{ id: 'demo-q1', type: 'multiple_choice', text: 'Perangkat yang digunakan untuk mengolah data sesuai instruksi program disebut ....', options: [{ label: 'A', text: 'Komputer' }, { label: 'B', text: 'Printer' }, { label: 'C', text: 'Scanner' }, { label: 'D', text: 'Speaker' }] },
+				{ id: 'demo-q2', type: 'multiple_choice', text: 'Sikap yang benar saat ujian berbasis web adalah ....', options: [{ label: 'A', text: 'Membuka tab lain saat pengawas tidak melihat' }, { label: 'B', text: 'Tetap di halaman ujian dan mengikuti arahan pengawas' }, { label: 'C', text: 'Membagikan PIN kepada teman' }, { label: 'D', text: 'Menutup browser sebelum submit' }] },
+				{ id: 'demo-q3', type: 'essay', text: 'Tuliskan dua contoh perilaku jujur saat mengikuti ujian digital.' }
+			],
+			total_questions: 3,
+			time_remaining_seconds: 45 * 60
+		};
+		portalStep = 'confirm';
+		addTelemetry('MODE DEMO siap tanpa database');
 	}
 
 	function normalizePortalPayload(body: unknown): ExamPayload {
@@ -294,6 +316,10 @@
 
 	async function saveAnswer(questionId: string, answer: string) {
 		answers = { ...answers, [questionId]: answer };
+		if (demoMode) {
+			addTelemetry(`Jawaban soal ${questionId} tersimpan di DEMO`);
+			return;
+		}
 		pendingAnswers = { ...pendingAnswers, [questionId]: answer };
 		try {
 			const response = await fetch(authenticatedByCard ? `/api/cbt-portal/participants/${encodeURIComponent(activeParticipantId)}/answer` : '/api/exam/answer', {
@@ -318,6 +344,12 @@
 	}
 
 	async function submitExam() {
+		if (demoMode) {
+			if (!confirm('Kumpulkan ujian DEMO sekarang?')) return;
+			submitted = true;
+			addTelemetry('Ujian DEMO dikumpulkan');
+			return;
+		}
 		if (Object.keys(pendingAnswers).length > 0) {
 			errorMessage = 'Masih ada jawaban yang belum tersinkron. Coba simpan ulang sebelum kumpulkan.';
 			return;
@@ -348,9 +380,21 @@
 		}
 	}
 
+	function toggleDoubtful(questionId: string) {
+		const next = new Set(doubtfulQuestions);
+		if (next.has(questionId)) next.delete(questionId);
+		else next.add(questionId);
+		doubtfulQuestions = next;
+	}
+
+	function goQuestion(delta: number) {
+		activeQuestionIndex = Math.min(Math.max(activeQuestionIndex + delta, 0), Math.max(questions.length - 1, 0));
+	}
+
 	$effect(() => {
 		const token = queryCard;
 		if (token && !cardToken) cardToken = token;
+		if (demoMode && !payload) activateDemo();
 	});
 
 	$effect(() => {
@@ -385,122 +429,128 @@
 </svelte:head>
 
 <!-- Sacred space background with subtle geometric pattern -->
-<main class="exam-light-scope min-h-screen bg-[#f7fbf5] px-4 py-5 text-slate-950">
-	<section class="mx-auto max-w-5xl space-y-4">
-		<!-- Arch header with institutional green -->
-		<header class="arch-header rounded-2xl border border-[var(--gold)]/30 bg-[var(--primary)]/90 p-5 shadow-lg backdrop-blur-sm">
-			<div class="relative z-10">
-				<p class="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--gold)]">MTsN 2 Kolaka Utara</p>
-				<h1 class="mt-2 text-2xl font-bold text-primary-foreground font-[var(--font-display)]">Portal Ujian Peserta</h1>
-				<p class="mt-2 max-w-3xl text-sm text-primary-foreground/85">
-					Scan QR pada Kartu Peserta Ujian, masukkan PIN, cek identitas, lalu tunggu pengawas membuka ujian.
-				</p>
-			</div>
+<main class="exam-light-scope min-h-dvh bg-[#f7fbf5] px-3 py-4 text-slate-950" style="color-scheme: light;">
+	<section class="mx-auto flex min-h-[calc(100dvh-2rem)] max-w-md flex-col overflow-hidden rounded-[2rem] border border-emerald-100 bg-white shadow-xl">
+		<header class="sticky top-0 z-20 border-b border-emerald-100 bg-emerald-800 px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] text-white">
+			<p class="text-[10px] font-bold uppercase tracking-[0.25em] text-emerald-100">MTsN 2 Kolaka Utara</p>
+			<h1 class="mt-1 text-2xl font-black">Portal Ujian Peserta</h1>
+			<p class="mt-1 text-sm text-emerald-50">QR + PIN, cek identitas, lalu kerjakan ujian di halaman ini.</p>
 		</header>
 
-		{#if errorMessage}
-			<div class="page-enter-stagger-1 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive" role="alert">{errorMessage}</div>
-		{/if}
+		<div class="flex-1 overflow-y-auto px-4 py-4 pb-[calc(5rem+env(safe-area-inset-bottom))]">
+			{#if errorMessage}
+				<div class="mb-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{errorMessage}</div>
+			{/if}
 
-		{#if submitted}
-			<section class="page-enter-stagger-2 parchment-texture rounded-2xl p-5 text-slate-950 shadow-lg">
-				<h2 class="text-xl font-bold font-[var(--font-display)]">Selesai</h2>
-				<p class="mt-2 text-sm text-slate-600">Ujian telah dikumpulkan.</p>
-				<button class="mt-4 rounded-lg border px-4 py-2 text-sm font-semibold hover:bg-muted transition-colors" onclick={() => { payload = null; submitted = false; portalStep = 'login'; }}>Kembali</button>
-			</section>
-		{:else if payload && portalStep === 'confirm'}
-			<section class="page-enter-stagger-2 parchment-texture rounded-2xl p-5 text-slate-950 shadow-lg">
-				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Konfirmasi Identitas</p>
-				<h2 class="mt-2 text-2xl font-bold font-[var(--font-display)]">Apakah data ini benar?</h2>
-				<div class="mt-4 grid gap-3 rounded-xl bg-primary/10 p-4 text-sm sm:grid-cols-2">
-					<p><span class="font-semibold">Nama:</span> {studentName}</p>
-					<p><span class="font-semibold">NIS:</span> {student.nis ?? '—'}</p>
-					<p><span class="font-semibold">Kelas:</span> {student.class_name ?? student.class_code ?? '—'}</p>
-					<p><span class="font-semibold">Ruang/Meja:</span> {student.room_name ?? '—'} / {student.seat_no ?? '—'}</p>
-					<p><span class="font-semibold">Ujian:</span> {session.title ?? session.subject ?? 'Sesi Ujian'}</p>
-					<p><span class="font-semibold">Status:</span> {sessionAlreadyOpen(payload) ? 'Sudah dibuka' : 'Menunggu pengawas'}</p>
-				</div>
-				<p class="mt-3 text-sm text-slate-600">Jika nama/kelas/ruang tidak sesuai, jangan lanjut. Segera panggil pengawas.</p>
-				<button class="mt-4 w-full rounded-xl bg-[var(--primary)] px-4 py-3 font-semibold text-[var(--primary-foreground)] shadow-md hover:bg-[var(--primary)]/90 transition-colors" onclick={confirmIdentity}>Ya, Masuk Ujian</button>
-				<button class="mt-2 w-full rounded-xl border px-4 py-3 font-semibold hover:bg-muted transition-colors" onclick={() => { payload = null; portalStep = 'login'; }}>Data Tidak Sesuai</button>
-			</section>
-		{:else if payload && portalStep === 'waiting'}
-			<section class="page-enter-stagger-2 parchment-texture rounded-2xl p-5 text-center text-slate-950 shadow-lg">
-				<div class="mx-auto grid size-16 place-items-center rounded-full border border-[var(--gold)]/30 bg-[var(--gold)]/20 text-sm font-semibold text-[var(--gold-foreground)]">Siap</div>
-				<h2 class="mt-4 text-2xl font-bold font-[var(--font-display)]">Ujian belum dimulai</h2>
-				<p class="mx-auto mt-2 max-w-xl text-sm text-slate-600">Identitas sudah benar. Tetap di halaman ini dan tunggu pengawas menekan tombol <b>Mulai Ujian</b>. Jangan menutup browser.</p>
-				<div class="mt-4 rounded-xl bg-muted/50 p-3 text-sm"><b>{studentName}</b> · {session.title ?? 'Sesi Ujian'} · {student.room_name ?? 'Ruang belum tercatat'}</div>
-				{#if authenticatedByCard}
-					<button class="mt-4 w-full rounded-xl bg-[var(--primary)] px-4 py-3 font-semibold text-[var(--primary-foreground)] shadow-md hover:bg-[var(--primary)]/90 transition-colors disabled:opacity-60" disabled={loading} onclick={startPortalExam}>{loading ? 'Mengecek...' : 'Cek Lagi: Pengawas Sudah Mulai'}</button>
-				{/if}
-			</section>
-		{:else if payload && portalStep === 'exam'}
-			<section class="page-enter-stagger-2 parchment-texture rounded-2xl p-4 text-slate-950 shadow-lg">
-				<div class="flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-center sm:justify-between">
-					<div>
-						<p class="text-xs font-semibold uppercase text-primary">Portal Ujian Peserta</p>
-						<h2 class="text-xl font-bold font-[var(--font-display)]">{session.title ?? session.subject ?? 'Sesi Ujian'}</h2>
-						<p class="text-sm text-slate-600">{studentName} · {answeredCount}/{questions.length} terjawab</p>
+			{#if submitted}
+				<section class="rounded-[1.5rem] border border-emerald-200 bg-emerald-50 p-5 text-center">
+					<div class="mx-auto grid size-16 place-items-center rounded-full bg-emerald-700 text-2xl font-black text-white">✓</div>
+					<h2 class="mt-4 text-2xl font-black">Jawaban terkirim</h2>
+					<p class="mt-2 text-sm text-slate-600">Ujian telah dikumpulkan. Tunjukkan layar ini kepada pengawas bila diminta.</p>
+					<button class="mt-5 min-h-12 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm font-bold" onclick={() => { payload = null; submitted = false; portalStep = 'login'; }}>Kembali ke awal</button>
+				</section>
+			{:else if payload && portalStep === 'confirm'}
+				<section class="space-y-4">
+					<div class="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+						<p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Konfirmasi Identitas</p>
+						<h2 class="mt-1 text-2xl font-black">Apakah data ini benar?</h2>
 					</div>
-					<button class="rounded-lg border px-4 py-2 text-sm font-semibold hover:bg-muted transition-colors" onclick={() => { payload = null; portalStep = 'login'; }}>Keluar</button>
-				</div>
-				<div class="mt-4 space-y-3">
-					{#each questions as question, index (question.id)}
-						<article class="rounded-xl border border-[var(--gold)]/25 bg-white p-4 text-slate-950 shadow-sm transition-shadow hover:shadow-md">
-							<p class="text-xs font-semibold uppercase text-slate-500">Soal {index + 1} · {question.type}</p>
-							<p class="mt-2 font-medium">{question.text}</p>
-							{#if question.options?.length}
-								<div class="mt-3 grid gap-2">
-									{#each question.options as option}
-										<label class="flex gap-2 rounded-lg border border-[var(--gold)]/25 bg-white p-2 text-sm text-slate-950 hover:border-[var(--gold)]/40 transition-colors">
-											<input type="radio" name={question.id} value={option.label} checked={answers[question.id] === option.label} onchange={() => saveAnswer(question.id, option.label)} />
+					<div class="rounded-[1.5rem] border border-emerald-100 bg-white p-4 text-sm shadow-sm">
+						<div class="space-y-3">
+							<p><span class="block text-xs font-bold uppercase tracking-wide text-slate-500">Nama</span><b class="text-lg">{studentName}</b></p>
+							<p><span class="block text-xs font-bold uppercase tracking-wide text-slate-500">Kelas / NIS</span>{student.class_name ?? student.class_code ?? '—'} · {student.nis ?? '—'}</p>
+							<p><span class="block text-xs font-bold uppercase tracking-wide text-slate-500">Ruang / Meja</span>{student.room_name ?? '—'} / {student.seat_no ?? '—'}</p>
+							<p><span class="block text-xs font-bold uppercase tracking-wide text-slate-500">Ujian</span>{session.title ?? session.subject ?? 'Sesi Ujian'}</p>
+						</div>
+					</div>
+					<p class="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">Jika data tidak sesuai, jangan lanjut. Panggil pengawas ruang.</p>
+					<button class="min-h-14 w-full rounded-2xl bg-emerald-700 px-4 text-base font-black text-white" onclick={confirmIdentity}>Ya, Masuk Ujian</button>
+					<button class="min-h-12 w-full rounded-2xl border border-slate-300 px-4 text-sm font-bold" onclick={() => { payload = null; portalStep = 'login'; }}>Bukan Saya</button>
+				</section>
+			{:else if payload && portalStep === 'waiting'}
+				<section class="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-5 text-center">
+					<div class="mx-auto grid size-16 place-items-center rounded-full bg-amber-400 text-sm font-black text-amber-950">SIAP</div>
+					<h2 class="mt-4 text-2xl font-black">Menunggu pengawas</h2>
+					<p class="mt-2 text-sm text-amber-950">Identitas sudah benar. Tetap di halaman ini sampai pengawas menekan <b>Mulai Ujian</b>.</p>
+					<div class="mt-4 rounded-2xl bg-white/70 p-3 text-sm"><b>{studentName}</b><br />{session.title ?? 'Sesi Ujian'} · {student.room_name ?? 'Ruang belum tercatat'}</div>
+					{#if authenticatedByCard}
+						<button class="mt-4 min-h-12 w-full rounded-2xl bg-emerald-700 px-4 font-black text-white disabled:opacity-60" disabled={loading} onclick={startPortalExam}>{loading ? 'Mengecek...' : 'Cek Lagi'}</button>
+					{/if}
+				</section>
+			{:else if payload && portalStep === 'exam'}
+				<section class="space-y-4">
+					<div class="sticky top-0 z-10 -mx-4 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
+						<div class="flex items-center justify-between gap-3">
+							<div class="min-w-0">
+								<p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">{session.title ?? session.subject ?? 'Sesi Ujian'}</p>
+								<h2 class="truncate text-lg font-black">Soal {Math.min(activeQuestionIndex + 1, questions.length)} dari {questions.length}</h2>
+							</div>
+							<div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-right text-xs font-bold text-emerald-900">{answeredCount}/{questions.length}<br />terjawab</div>
+						</div>
+					</div>
+
+					{#if currentQuestion}
+						<article class="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
+							<div class="flex items-start justify-between gap-3">
+								<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{currentQuestion.type === 'multiple_choice' ? 'Pilihan Ganda' : 'Uraian'}</p>
+								{#if doubtfulQuestions.has(currentQuestion.id)}<span class="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-900">Ragu-ragu</span>{/if}
+							</div>
+							<p class="mt-3 whitespace-pre-wrap text-base font-semibold leading-7">{currentQuestion.text}</p>
+							{#if currentQuestion.options?.length}
+								<div class="mt-4 grid gap-2">
+									{#each currentQuestion.options as option}
+										<label class="flex min-h-14 items-start gap-3 rounded-2xl border p-3 text-sm {answers[currentQuestion.id] === option.label ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white'}">
+											<input class="mt-1" type="radio" name={currentQuestion.id} value={option.label} checked={answers[currentQuestion.id] === option.label} onchange={() => saveAnswer(currentQuestion.id, option.label)} />
 											<span><b>{option.label}.</b> {option.text}</span>
 										</label>
 									{/each}
 								</div>
 							{:else}
-								<textarea class="mt-3 min-h-24 w-full rounded-lg border border-[var(--gold)]/25 bg-white p-3 text-sm text-slate-950" placeholder="Tulis jawaban..." value={answers[question.id] ?? ''} onblur={(event) => saveAnswer(question.id, event.currentTarget.value)}></textarea>
+								<textarea class="mt-4 min-h-40 w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-950" placeholder="Tulis jawaban..." value={answers[currentQuestion.id] ?? ''} onblur={(event) => saveAnswer(currentQuestion.id, event.currentTarget.value)}></textarea>
 							{/if}
-							<p class="mt-2 text-xs text-slate-500">{pendingAnswers[question.id] ? 'Aman lokal, menunggu sinkron' : answers[question.id] ? 'Tersimpan' : 'Belum dijawab'}</p>
+							<p class="mt-3 rounded-xl bg-slate-50 p-2 text-xs text-slate-600">{pendingAnswers[currentQuestion.id] ? 'Aman lokal, menunggu sinkron' : answers[currentQuestion.id] ? 'Tersimpan' : 'Belum dijawab'}</p>
 						</article>
-					{/each}
-				</div>
-				<div class="mt-4 rounded-xl bg-primary/10 p-3 text-sm text-primary">Jawaban disimpan bertahap. Jika koneksi putus, tetap di halaman ini dan panggil pengawas.</div>
-				<button class="mt-4 w-full rounded-xl bg-[var(--gold)] px-4 py-3 font-semibold text-[var(--gold-foreground)] shadow-md hover:bg-[var(--gold)]/90 transition-colors disabled:opacity-60" disabled={loading} onclick={submitExam}>Kumpulkan</button>
-			</section>
-		{:else}
-			<section class="page-enter-stagger-2 parchment-texture rounded-2xl p-5 text-slate-950 shadow-lg">
-				<h2 class="text-xl font-bold font-[var(--font-display)]">Masuk dengan Kartu Peserta Ujian</h2>
-				<p class="mt-1 text-sm text-slate-600">Scan QR pada kartu. Jika kamera perangkat tidak tersedia, ketik kode kartu dan PIN secara manual.</p>
-				{#if showLegacyTokenLogin}
-						<div class="mt-4 grid gap-3 sm:grid-cols-2">
-							<label class="space-y-1 text-sm font-medium">Token Ujian<input class="w-full rounded-lg border border-[var(--gold)]/25 bg-white px-3 py-2 text-slate-950" bind:value={examToken} autocomplete="off" /></label>
-							<label class="space-y-1 text-sm font-medium">Token Ruang<input class="w-full rounded-lg border border-[var(--gold)]/25 bg-white px-3 py-2 text-slate-950" bind:value={roomToken} autocomplete="off" /></label>
-						</div>
-					{:else}
-						<div class="mt-4 grid gap-3 sm:grid-cols-2">
-							<label class="space-y-1 text-sm font-medium">Kode Kartu / QR Token<input class="w-full rounded-lg border border-[var(--gold)]/25 bg-white px-3 py-2 text-slate-950" bind:value={cardToken} autocomplete="off" placeholder="Terisi otomatis setelah scan QR" /></label>
-							<label class="space-y-1 text-sm font-medium">PIN<input class="w-full rounded-lg border border-[var(--gold)]/25 bg-white px-3 py-2 text-center text-xl tracking-[0.4em] text-slate-950" bind:value={pin} inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="••••" /></label>
-						</div>
-				{/if}
-				<button class="mt-4 w-full rounded-xl bg-[var(--primary)] px-4 py-3 font-semibold text-[var(--primary-foreground)] shadow-md hover:bg-[var(--primary)]/90 transition-colors disabled:opacity-60" disabled={loading} onclick={portalLogin}>{loading ? 'Memproses...' : 'Lanjutkan'}</button>
-				<div class="mt-3 flex flex-col gap-2 text-center text-sm sm:flex-row sm:justify-center">
-					<button class="text-primary underline hover:text-primary/80 transition-colors" type="button" onclick={() => (showLegacyTokenLogin = !showLegacyTokenLogin)}>{showLegacyTokenLogin ? 'Kembali ke QR + PIN' : 'Mode bantuan pengawas: token lama'}</button>
-				</div>
-			</section>
-		{/if}
+					{/if}
 
-		<section class="page-enter-stagger-3 rounded-2xl border border-[var(--gold)]/20 bg-white/90 p-4 text-sm text-slate-950 shadow-sm backdrop-blur-sm">
-			<h2 class="font-semibold text-slate-950">Aktivitas perangkat</h2>
-			{#if telemetry.length === 0}
-				<p class="mt-2 text-slate-600">Belum ada aktivitas tercatat.</p>
+					<div class="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">Tetap berada di halaman ujian. Jika koneksi tidak stabil, jawaban disimpan sementara dan akan dikirim ulang saat tersambung.</div>
+				</section>
 			{:else}
-				<ul class="mt-2 space-y-1 text-slate-700">
-					{#each telemetry as item}
-						<li>• {item}</li>
-					{/each}
-				</ul>
+				<section class="space-y-4">
+					<div class="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+						<h2 class="text-xl font-black">Masuk dengan Kartu Peserta Ujian</h2>
+						<p class="mt-1 text-sm text-slate-600">Scan QR pada kartu. Jika kamera perangkat tidak tersedia, ketik kode kartu dan PIN secara manual.</p>
+					</div>
+					{#if showLegacyTokenLogin}
+						<label class="block space-y-1 text-sm font-bold">Token Ujian<input class="min-h-12 w-full rounded-2xl border border-slate-300 bg-white px-3 text-slate-950" bind:value={examToken} autocomplete="off" /></label>
+						<label class="block space-y-1 text-sm font-bold">Token Ruang<input class="min-h-12 w-full rounded-2xl border border-slate-300 bg-white px-3 text-slate-950" bind:value={roomToken} autocomplete="off" /></label>
+					{:else}
+						<label class="block space-y-1 text-sm font-bold">Kode Kartu / QR Token<input class="min-h-12 w-full rounded-2xl border border-slate-300 bg-white px-3 text-slate-950" bind:value={cardToken} autocomplete="off" placeholder="Terisi otomatis setelah scan QR" /></label>
+						<label class="block space-y-1 text-sm font-bold">PIN<input class="min-h-14 w-full rounded-2xl border border-slate-300 bg-white px-3 text-center text-2xl tracking-[0.45em] text-slate-950" bind:value={pin} inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="••••" /></label>
+					{/if}
+					<button class="min-h-14 w-full rounded-2xl bg-emerald-700 px-4 text-base font-black text-white disabled:opacity-60" disabled={loading} onclick={portalLogin}>{loading ? 'Memproses...' : 'Lanjutkan'}</button>
+					<button class="w-full text-sm font-bold text-emerald-700 underline" type="button" onclick={() => (showLegacyTokenLogin = !showLegacyTokenLogin)}>{showLegacyTokenLogin ? 'Kembali ke QR + PIN' : 'Mode bantuan pengawas: token lama'}</button>
+					{#if demoMode}<p class="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">MODE DEMO aktif untuk latihan tanpa database.</p>{/if}
+				</section>
 			{/if}
-		</section>
+
+			<section class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+				<p class="font-bold text-slate-900">Aktivitas perangkat</p>
+				{#if telemetry.length === 0}<p class="mt-1">Belum ada aktivitas tercatat.</p>{:else}<ul class="mt-2 space-y-1">{#each telemetry.slice(0, 4) as item}<li>• {item}</li>{/each}</ul>{/if}
+			</section>
+		</div>
+
+		{#if payload && portalStep === 'exam' && currentQuestion}
+			<nav class="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md border-t border-slate-200 bg-white/95 px-3 pb-[calc(0.55rem+env(safe-area-inset-bottom))] pt-2 backdrop-blur">
+				<div class="grid grid-cols-3 gap-2">
+					<button class="min-h-12 rounded-2xl bg-slate-100 text-xs font-black text-slate-700 disabled:opacity-40" disabled={activeQuestionIndex === 0} onclick={() => goQuestion(-1)}>Sebelumnya</button>
+					<button class="min-h-12 rounded-2xl text-xs font-black {doubtfulQuestions.has(currentQuestion.id) ? 'bg-amber-500 text-amber-950' : 'bg-slate-100 text-slate-700'}" onclick={() => toggleDoubtful(currentQuestion.id)}>Ragu-ragu</button>
+					{#if activeQuestionIndex >= questions.length - 1}
+						<button class="min-h-12 rounded-2xl bg-emerald-700 text-xs font-black text-white disabled:opacity-60" disabled={loading} onclick={submitExam}>Kumpulkan</button>
+					{:else}
+						<button class="min-h-12 rounded-2xl bg-emerald-700 text-xs font-black text-white" onclick={() => goQuestion(1)}>Berikutnya</button>
+					{/if}
+				</div>
+			</nav>
+		{/if}
 	</section>
 </main>
