@@ -54,7 +54,6 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'/asesmen/pelaksanaan',
 			'/asesmen/pengawasan',
 			'/asesmen/hasil',
-			'/asesmen/aplikasi-siswa',
 			'/governance/actions/calendar',
 			'/governance/actions/meeting-pack',
 			'/settings/maintenance'
@@ -69,8 +68,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'/asesmen/persiapan',
 			'/asesmen/pelaksanaan',
 			'/asesmen/pengawasan',
-			'/asesmen/hasil',
-			'/asesmen/aplikasi-siswa'
+			'/asesmen/hasil'
 		]);
 		expect(labelsByGroup('Asesmen Ujian')).toEqual([
 			'Ringkasan Ujian',
@@ -78,7 +76,6 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'Pelaksanaan',
 			'Pantau Ruang',
 			'Hasil',
-			'Panduan Perangkat'
 		]);
 		expect(hrefsByGroup('Asesmen Ujian')).not.toEqual(expect.arrayContaining([
 			'/asesmen/kegiatan/new',
@@ -88,6 +85,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'/asesmen/aplikasi-siswa/release',
 			'/asesmen',
 			'/asesmen/non-tes',
+			'/asesmen/aplikasi-siswa',
 			'/ujian'
 		]));
 		expect(hrefsByGroup('Asesmen Ujian').some((href) => href.startsWith('/bank-soal'))).toBe(false);
@@ -131,9 +129,9 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(byHref.get('/asesmen/persiapan')?.permissions).toEqual(['asesmen.read']);
 		expect(byHref.get('/asesmen/pelaksanaan')?.permissions).toEqual(['asesmen.proctor']);
 		expect(byHref.get('/asesmen/pengawasan')?.permissions).toEqual(['asesmen.proctor']);
-		expect(byHref.get('/asesmen/aplikasi-siswa')?.permissions).toEqual(['asesmen.read']);
 		expect(byHref.get('/asesmen')).toBeUndefined();
 		expect(byHref.get('/asesmen/non-tes')).toBeUndefined();
+		expect(byHref.get('/asesmen/aplikasi-siswa')).toBeUndefined();
 		expect(byHref.get('/asesmen/aplikasi-siswa/matrix')).toBeUndefined();
 		expect(byHref.get('/asesmen/aplikasi-siswa/release')).toBeUndefined();
 	});

@@ -1,18 +1,14 @@
 <script lang="ts">
 	import ActivityIcon from '@lucide/svelte/icons/activity';
-	import PrinterIcon from '@lucide/svelte/icons/printer';
 	import SearchIcon from '@lucide/svelte/icons/search';
-	import ShieldCheckIcon from '@lucide/svelte/icons/shield-check';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import * as Table from '$lib/components/ui/table';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
-	import { MicroActionTable } from '$lib/components/ops';
 	import { readClientApiData } from '$lib/client/api';
 
 	type ProctorRoom = {
@@ -57,15 +53,6 @@
 		{ value: 'draft', label: 'Konsep' },
 		{ value: 'finished', label: 'Selesai' },
 	];
-	const roomColumns = [
-		{ key: 'room', label: 'Ruang', class: 'min-w-52' },
-		{ key: 'session', label: 'Sesi', class: 'min-w-64' },
-		{ key: 'status', label: 'Status', class: 'min-w-44' },
-		{ key: 'progress', label: 'Peserta', headClass: 'text-center', class: 'text-center' },
-		{ key: 'risk', label: 'Atensi', headClass: 'text-center', class: 'text-center' },
-		{ key: 'proctor', label: 'Pengawas', class: 'max-w-64' },
-	];
-
 	let roomsPromise = $state<Promise<ProctorRoom[]> | null>(null);
 	let rooms = $state<ProctorRoom[]>([]);
 	let query = $state('');
@@ -256,8 +243,7 @@
 					</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
-					<Button href={resolve('/asesmen/aplikasi-siswa')} variant="outline">Panduan BYOD</Button>
-					<Button href={resolve('/asesmen/sesi')} variant="outline">Sesi Ujian</Button>
+					<Button href={resolve('/asesmen/aplikasi-siswa')} variant="outline">Panduan Perangkat</Button>
 				</div>
 			</section>
 
@@ -378,72 +364,11 @@
 									<ActivityIcon class="mr-2 size-4" />
 									Mulai Ujian
 								</Button>
-								<Button href={resolve(`/asesmen/sesi/${room.session_id}/rooms/${room.id}/proctoring`)} variant="outline">
-									Panel Rinci
-								</Button>
-								<Button href={resolve(`/asesmen/sesi/${room.session_id}/rooms/${room.id}/print-pack`)} variant="outline">
-									<PrinterIcon class="mr-2 size-4" />
-									Paket Cetak
-								</Button>
-								<Button href={resolve(`/asesmen/sesi/${room.session_id}`)} variant="outline">
-									<ShieldCheckIcon class="mr-2 size-4" />
-									Detail Sesi
-								</Button>
 							</div>
 						</article>
 					{/each}
 				</section>
 
-				<section class="border border-border bg-card shadow-sm">
-					<div class="flex items-center justify-between gap-3 border-b border-border p-4">
-						<div>
-							<h2 class="text-base font-semibold text-foreground">Tabel Ringkas Ruang</h2>
-							<p class="text-xs text-muted-foreground">Tampilan padat untuk membandingkan ruang ujian dan status operasional.</p>
-						</div>
-						<Badge variant="outline">{filteredRooms.length} ruang</Badge>
-					</div>
-					<div class="overflow-x-auto">
-						<Table.Root>
-							<Table.Header>
-								<Table.Row class="bg-success/10">
-									<Table.Head>Ruang</Table.Head>
-									<Table.Head>Sesi</Table.Head>
-									<Table.Head>Status</Table.Head>
-									<Table.Head class="text-center">Peserta</Table.Head>
-									<Table.Head class="text-center">Terhubung</Table.Head>
-									<Table.Head class="text-center">Atensi</Table.Head>
-									<Table.Head>Pengawas</Table.Head>
-									<Table.Head class="text-right">Aksi</Table.Head>
-								</Table.Row>
-							</Table.Header>
-							<Table.Body>
-								{#each filteredRooms as room (room.id)}
-									<Table.Row>
-										<Table.Cell>
-											<div class="font-medium text-foreground">{room.room_name}</div>
-											<div class="font-mono text-xs text-muted-foreground">Kode {room.room_token || '—'}</div>
-										</Table.Cell>
-										<Table.Cell>
-											<div class="font-medium text-foreground">{room.session_title}</div>
-											<div class="text-xs text-muted-foreground">{fmtDate(room.scheduled_start)}</div>
-										</Table.Cell>
-										<Table.Cell><Badge variant="outline" class={statusClass(room.session_status)}>{statusLabel(room.session_status)}</Badge></Table.Cell>
-										<Table.Cell class="text-center font-mono">{room.participant_count}</Table.Cell>
-										<Table.Cell class="text-center font-mono text-primary">{room.online_count}</Table.Cell>
-										<Table.Cell class="text-center font-mono text-warning">{room.suspicious_count + room.missing_seat_count}</Table.Cell>
-										<Table.Cell class="max-w-64 truncate text-sm text-muted-foreground">{room.proctor_names || '—'}</Table.Cell>
-										<Table.Cell class="text-right">
-											<div class="flex flex-wrap justify-end gap-2">
-												<Button size="sm" href={resolve(`/asesmen/sesi/${room.session_id}/rooms/${room.id}/proctoring`)} variant="outline">Panel</Button>
-												<Button size="sm" href={resolve(`/asesmen/sesi/${room.session_id}/rooms/${room.id}/print-pack`)} variant="outline">Cetak</Button>
-											</div>
-										</Table.Cell>
-									</Table.Row>
-								{/each}
-							</Table.Body>
-						</Table.Root>
-					</div>
-				</section>
 			{/if}
 		</div>
 	{/snippet}

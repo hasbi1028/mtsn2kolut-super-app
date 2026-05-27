@@ -142,8 +142,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 				{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
 				{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
 				{ href: '/asesmen/pengawasan', label: 'Pantau Ruang', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
-				{ href: '/asesmen/hasil', label: 'Hasil', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.result_read'] },
-				{ href: '/asesmen/aplikasi-siswa', label: 'Panduan Perangkat', icon: 'book-open', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read'] }
+				{ href: '/asesmen/hasil', label: 'Hasil', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.result_read'] }
 			]}
 		]
 	},
