@@ -19,7 +19,7 @@ describe('assessment package and session operator UX', () => {
     expect(packagePage).toContain('createRevisionPackage');
   });
 
-  it('adds package-like structured filters to the session list', () => {
+  it('adds package-like structured filters to the session list while avoiding duplicate quick actions', () => {
     expect(sessionPage).toContain('Cari sesi atau paket');
     expect(sessionPage).toContain('Status sesi');
     expect(sessionPage).toContain('Cakupan');
@@ -28,6 +28,9 @@ describe('assessment package and session operator UX', () => {
     expect(sessionPage).toContain('sessionSearch');
     expect(sessionPage).toContain('sessionStatusFilter');
     expect(sessionPage).toContain('sessionPackageFilter');
+    expect(sessionPage).not.toContain('Aksi:');
+    expect(sessionPage).not.toContain('nextSessionAction');
+    expect(sessionPage).not.toContain('scheduleQuickAction');
   });
 
   it('blocks event-scoped packages from the global session form with operator guidance', () => {

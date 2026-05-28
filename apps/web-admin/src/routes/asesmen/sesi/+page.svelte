@@ -48,12 +48,6 @@
 		unpublishedCount: number;
 		totalCount: number;
 	};
-	type NextSessionAction = {
-		label: string;
-		href?: string;
-		kind: 'enroll' | 'link';
-		tone: 'primary' | 'warning' | 'danger';
-	};
 	type SessionReadinessFilter =
 		| 'all'
 		| 'not_ready'
@@ -76,13 +70,6 @@
 		label: string;
 		helper: string;
 		tone: ScheduleBoardTone;
-	};
-	type ScheduleQuickAction = {
-		label: string;
-		kind: 'status' | 'schedule' | 'link';
-		status?: 'cancelled' | 'finished';
-		href?: string;
-		tone: NextSessionAction['tone'];
 	};
 	type SchoolClass = { id: string; name: string; code: string; level: string; };
 	type EventContext = { id: string; title: string; status: string; target_levels?: string[]; academic_year_name?: string; };
@@ -245,14 +232,14 @@
 
 	function mixPolicyLabel(value: string) {
 		if (value === 'same_class') return 'Tetap dalam kelas asal';
-		if (value === 'mixed_scope') return 'Campur sesuai cakupan sesi';
-		return 'Campur dalam tingkat yang sama';
+		if (value === 'mixed_scope') return 'Campur per siswa lintas tingkat';
+		return 'Campur per siswa satu tingkat';
 	}
 
 	function mixPolicyHelp(value: string) {
 		if (value === 'same_class') return 'Peserta tetap dikelompokkan berdasarkan kelas asal; pengacakan ruang tidak mencampur kelas lain.';
-		if (value === 'same_grade') return 'Peserta dapat dicampur antar kelas pada tingkat yang sama; tidak mencampur tingkat VII, VIII, dan IX.';
-		return 'Peserta dapat dicampur di seluruh cakupan sesi. Gunakan hanya bila cakupan dan izin lintas tingkat sudah sesuai kebijakan kegiatan.';
+		if (value === 'same_grade') return 'Siswa dari beberapa rombel pada tingkat yang sama dibagi merata per ruang; tidak memindahkan rombel sebagai blok utuh dan tidak mencampur tingkat VII, VIII, IX.';
+		return 'Siswa dari seluruh cakupan sesi dibagi merata per ruang sampai lintas tingkat/rombel. Gunakan hanya bila cakupan dan izin lintas tingkat sudah sesuai kebijakan kegiatan.';
 	}
 
 	function assignmentModeHelp(value: string) {
@@ -516,13 +503,6 @@
 		return 'border-border bg-muted/50 text-muted-foreground';
 	}
 
-	function scheduleQuickAction(session: ExamSession, state: SessionScheduleState): ScheduleQuickAction | null {
-		if (state !== 'overdue') return null;
-		if (session.status === 'active') return { label: 'Selesaikan', kind: 'status', status: 'finished', tone: 'primary' };
-		if (session.status === 'scheduled' || session.status === 'draft') return { label: 'Ubah Jadwal', kind: 'schedule', tone: 'warning' };
-		return { label: 'Buka Detail', kind: 'link', href: resolve(`/asesmen/sesi/${session.id}`), tone: 'warning' };
-	}
-
 	function buildScheduleBoardCards(items: ExamSession[]) {
 		return scheduleBoardConfigs.map((card) => ({
 			...card,
@@ -606,34 +586,6 @@
 		}
 	}
 
-	function nextSessionAction(session: ExamSession): NextSessionAction {
-		const packageIssues = packageQualityIssues(session.package_id);
-		if (packageIssues.length > 0) {
-			return { label: 'Rapikan Paket', href: `${resolve('/asesmen/paket')}${eventId ? `?event_id=${eventId}` : ''}`, kind: 'link', tone: 'danger' };
-		}
-		if (session.participant_count === 0) {
-			return { label: 'Daftarkan Peserta', kind: 'enroll', tone: 'warning' };
-		}
-		if (session.room_count === 0 || session.total_capacity < session.participant_count) {
-			return { label: 'Atur Ruang', href: resolve(`/asesmen/sesi/${session.id}?tab=ruangan`), kind: 'link', tone: 'warning' };
-		}
-		if (session.unassigned_participant_count > 0) {
-			return { label: 'Acak Ruang', href: resolve(`/asesmen/sesi/${session.id}?tab=ruangan`), kind: 'link', tone: 'warning' };
-		}
-		if (session.missing_seat_count > 0) {
-			return { label: 'Atur Nomor Meja', href: resolve(`/asesmen/sesi/${session.id}?tab=ruangan`), kind: 'link', tone: 'warning' };
-		}
-		if (session.rooms_without_proctor > 0) {
-			return { label: 'Tetapkan Pengawas', href: resolve(`/asesmen/sesi/${session.id}?tab=ruangan`), kind: 'link', tone: 'warning' };
-		}
-		return { label: session.status === 'scheduled' ? 'Siap Mulai' : 'Lihat Detail', href: resolve(`/asesmen/sesi/${session.id}`), kind: 'link', tone: 'primary' };
-	}
-
-	function nextActionClass(tone: NextSessionAction['tone']) {
-		if (tone === 'danger') return 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/15';
-		if (tone === 'warning') return 'border-warning/30 bg-warning/10 text-warning hover:bg-warning/15';
-		return 'border-primary/20 bg-primary/10 text-primary hover:bg-primary/15';
-	}
 
 	function buildSessionReadinessIssues() {
 		const issues: string[] = [];
@@ -1084,8 +1036,8 @@
 						<label for="session-mix-policy" class="text-xs text-muted-foreground mb-1 block">Kebijakan pencampuran peserta</label>
 						<select id="session-mix-policy" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fMixPolicy}>
 							<option value="same_class">Tetap dalam kelas asal</option>
-							<option value="same_grade">Campur dalam tingkat yang sama</option>
-							<option value="mixed_scope">Campur sesuai cakupan sesi</option>
+							<option value="same_grade">Campur per siswa satu tingkat</option>
+							<option value="mixed_scope">Campur per siswa lintas tingkat</option>
 						</select>
 						<p class="mt-1 text-[11px] text-muted-foreground">{mixPolicyHelp(fMixPolicy)}</p>
 						<p class="mt-1 text-[11px] text-muted-foreground">Saat cakupan peserta berubah, sistem menyetel kebijakan awal secara otomatis; operator tetap wajib memeriksa konsekuensi pencampuran sebelum menyimpan.</p>
@@ -1445,9 +1397,7 @@
 							{@const rowPackageIssues = packageQualityIssues(s.package_id)}
 							{@const rowOperationalIssues = sessionOperationalIssues(s)}
 							{@const rowReadinessIssues = sessionRowReadinessIssues(s)}
-							{@const rowNextAction = nextSessionAction(s)}
 							{@const rowScheduleState = sessionScheduleState(s)}
-							{@const rowScheduleQuickAction = scheduleQuickAction(s, rowScheduleState)}
 							<Table.Row>
 								<Table.Cell class="font-medium max-w-48">
 									<p class="truncate">{s.title}</p>
@@ -1479,27 +1429,7 @@
 									<div class="space-y-1">
 										<p class="text-xs text-muted-foreground">{fmtDt(s.scheduled_start)}</p>
 										<Badge class="{scheduleStateClass(rowScheduleState)} text-[11px]">{scheduleStateLabel(rowScheduleState)}</Badge>
-										{#if rowScheduleQuickAction?.kind === 'schedule'}
-											<button
-												type="button"
-												class="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold transition-colors {nextActionClass(rowScheduleQuickAction.tone)}"
-												onclick={() => openScheduleEditor(s)}
-											>
-												{rowScheduleQuickAction.label}
-											</button>
-										{:else if rowScheduleQuickAction?.status === 'cancelled'}
-											<LoadingButton size="xs" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">
-												{rowScheduleQuickAction.label}
-											</LoadingButton>
-										{:else if rowScheduleQuickAction?.status === 'finished'}
-											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">
-												{rowScheduleQuickAction.label}
-											</LoadingButton>
-										{:else if rowScheduleQuickAction?.href}
-											<a class="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold transition-colors {nextActionClass(rowScheduleQuickAction.tone)}" href={resolve(rowScheduleQuickAction.href as '/')}>
-												{rowScheduleQuickAction.label}
-											</a>
-										{/if}
+
 									</div>
 								</Table.Cell>
 								<Table.Cell>
@@ -1520,24 +1450,7 @@
 										{#each rowReadinessIssues.slice(0, 2) as issue (issue)}
 											<span class="text-[11px] text-muted-foreground">{issue}</span>
 										{/each}
-										{#if rowNextAction.kind === 'enroll'}
-											<button
-												type="button"
-												class="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold transition-colors {nextActionClass(rowNextAction.tone)}"
-												onclick={() => {
-													enrollSession = s;
-													enrollScopeType = s.scope_type || 'class';
-													enrollClassId = s.class_id;
-													enrollGradeLevel = s.scope_type === 'grade' ? s.scope_ref : 'VII';
-												}}
-											>
-												Aksi: {rowNextAction.label}
-											</button>
-										{:else if rowNextAction.href}
-											<a class="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold transition-colors {nextActionClass(rowNextAction.tone)}" href={resolve(rowNextAction.href as '/')}>
-												Aksi: {rowNextAction.label}
-											</a>
-										{/if}
+
 									</div>
 								</Table.Cell>
 								<Table.Cell>
@@ -1610,9 +1523,7 @@
 						{@const rowPackageIssues = packageQualityIssues(s.package_id)}
 						{@const rowOperationalIssues = sessionOperationalIssues(s)}
 						{@const rowReadinessIssues = sessionRowReadinessIssues(s)}
-						{@const rowNextAction = nextSessionAction(s)}
 						{@const rowScheduleState = sessionScheduleState(s)}
-						{@const rowScheduleQuickAction = scheduleQuickAction(s, rowScheduleState)}
 						<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
@@ -1652,49 +1563,11 @@
 								{#each rowReadinessIssues.slice(0, 2) as issue (issue)}
 									<span class="text-xs text-muted-foreground">{issue}</span>
 								{/each}
-								{#if rowNextAction.kind === 'enroll'}
-									<button
-										type="button"
-										class="inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold transition-colors {nextActionClass(rowNextAction.tone)}"
-										onclick={() => {
-											enrollSession = s;
-											enrollScopeType = s.scope_type || 'class';
-											enrollClassId = s.class_id;
-											enrollGradeLevel = s.scope_type === 'grade' ? s.scope_ref : 'VII';
-										}}
-									>
-										Aksi: {rowNextAction.label}
-									</button>
-								{:else if rowNextAction.href}
-									<a class="inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold transition-colors {nextActionClass(rowNextAction.tone)}" href={resolve(rowNextAction.href as '/')}>
-										Aksi: {rowNextAction.label}
-									</a>
-								{/if}
 							</div>
 							<div class="mt-3 flex flex-wrap items-center gap-2">
 								<p class="text-xs text-muted-foreground">{fmtDt(s.scheduled_start)}</p>
 								<Badge class="{scheduleStateClass(rowScheduleState)} text-xs">{scheduleStateLabel(rowScheduleState)}</Badge>
-								{#if rowScheduleQuickAction?.kind === 'schedule'}
-									<button
-										type="button"
-										class="inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold transition-colors {nextActionClass(rowScheduleQuickAction.tone)}"
-										onclick={() => openScheduleEditor(s)}
-									>
-										{rowScheduleQuickAction.label}
-									</button>
-								{:else if rowScheduleQuickAction?.status === 'cancelled'}
-									<LoadingButton size="xs" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">
-										{rowScheduleQuickAction.label}
-									</LoadingButton>
-								{:else if rowScheduleQuickAction?.status === 'finished'}
-									<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">
-										{rowScheduleQuickAction.label}
-									</LoadingButton>
-								{:else if rowScheduleQuickAction?.href}
-									<a class="inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold transition-colors {nextActionClass(rowScheduleQuickAction.tone)}" href={resolve(rowScheduleQuickAction.href as '/')}>
-										{rowScheduleQuickAction.label}
-									</a>
-								{/if}
+
 							</div>
 							<div class="mt-4 flex flex-wrap gap-2">
 								{#if s.status === 'draft'}
