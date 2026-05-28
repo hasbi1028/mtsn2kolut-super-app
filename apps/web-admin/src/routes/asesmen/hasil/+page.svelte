@@ -1,6 +1,5 @@
 <script lang="ts">
 	import BarChart3Icon from '@lucide/svelte/icons/bar-chart-3';
-	import ArchiveIcon from '@lucide/svelte/icons/archive';
 	import FileTextIcon from '@lucide/svelte/icons/file-text';
 	import MonitorPlayIcon from '@lucide/svelte/icons/monitor-play';
 	import ClipboardCheckIcon from '@lucide/svelte/icons/clipboard-check';
@@ -24,10 +23,8 @@
 		helper: string;
 		status: string;
 		coverage: string;
-		href: ResultRoute;
-		action: string;
-		secondaryHref?: ResultRoute;
-		secondaryAction?: string;
+		href?: ResultRoute;
+		action?: string;
 		icon: typeof BarChart3Icon;
 	};
 
@@ -60,14 +57,12 @@
 			? [
 				{
 					id: 'event-results',
-					title: 'Rekap Kegiatan',
-					helper: 'Masuk dari daftar kegiatan untuk membaca hasil, detail sesi, dan jejak kesiapan penutupan.',
+					title: 'Pilih Kegiatan',
+					helper: 'Masuk dari daftar kegiatan untuk membaca rekap, detail sesi, BA, analisis, dan arsip final dari satu konteks kegiatan.',
 					status: 'Pintu utama operator',
-					coverage: 'Per kegiatan · hasil gabungan · finalisasi',
+					coverage: 'Rekap · BA · analisis · arsip',
 					href: '/asesmen/kegiatan',
 					action: 'Buka Daftar Kegiatan',
-					secondaryHref: '/asesmen',
-					secondaryAction: 'Dashboard Asesmen',
 					icon: BarChart3Icon
 				},
 				{
@@ -79,18 +74,6 @@
 					href: '/asesmen/sesi',
 					action: 'Buka Daftar Sesi',
 					icon: FileTextIcon
-				},
-				{
-					id: 'archive-results',
-					title: 'Arsip Final',
-					helper: 'Gunakan saat paket, hasil, dokumen cetak, dan pengesahan sudah siap untuk ditutup.',
-					status: 'Tahap penutupan kegiatan',
-					coverage: 'Checklist arsip · pengesahan · dokumen BA',
-					href: '/asesmen/kegiatan',
-					action: 'Buka Kegiatan & Arsip',
-					secondaryHref: '/asesmen/persiapan',
-					secondaryAction: 'Kembali ke Persiapan',
-					icon: ArchiveIcon
 				}
 			]
 			: [
@@ -100,8 +83,6 @@
 					helper: 'Baca hasil yang sudah dibuka oleh operator/panitia. Jika perlu detail kegiatan, minta operator membuka halaman lengkap.',
 					status: isResultReader ? 'Baca hasil tersedia' : 'Ikuti arahan operator',
 					coverage: 'Rekap akhir · status hasil',
-					href: '/asesmen/hasil',
-					action: 'Tetap di Hasil',
 					icon: BarChart3Icon
 				},
 				{
@@ -110,8 +91,8 @@
 					helper: 'Gunakan bila hasil perlu dicocokkan dengan ruang aktif, status kiriman, atau kejadian pengawasan.',
 					status: isProctor ? 'Mode ruang aktif' : 'Koordinasi pengawas',
 					coverage: 'Ruang berjalan · kejadian · status kiriman',
-					href: isProctor ? '/asesmen/pelaksanaan' : '/asesmen/hasil',
-					action: isProctor ? 'Buka Pelaksanaan' : 'Tetap di Hasil',
+					href: isProctor ? '/asesmen/pelaksanaan' : undefined,
+					action: isProctor ? 'Buka Pelaksanaan' : undefined,
 					icon: MonitorPlayIcon
 				},
 				{
@@ -120,8 +101,6 @@
 					helper: 'Jika butuh BA sesi, analisis butir, atau arsip final, lanjutkan lewat operator/panitia.',
 					status: 'Koordinasi panitia',
 					coverage: 'BA sesi · analisis · arsip final',
-					href: isProctor ? '/asesmen/pelaksanaan' : '/asesmen/hasil',
-					action: isProctor ? 'Buka Pelaksanaan' : 'Ikuti Arahan Panitia',
 					icon: ClipboardCheckIcon
 				}
 			]
@@ -155,7 +134,7 @@
 			</div>
 			<div class="flex flex-wrap gap-2">
 				{#if canOpenDashboard}
-					<Button href={resolve('/asesmen')} variant="outline">Dashboard Asesmen</Button>
+					<a class="inline-flex items-center rounded-md px-1 text-sm font-medium text-muted-foreground underline-offset-4 hover:underline" href={resolve('/asesmen')}>Ringkasan</a>
 				{/if}
 				{#if isOperator}
 					<Badge variant="outline" class="border-primary/20 bg-primary/10 text-primary">Mode hasil panitia</Badge>
@@ -193,9 +172,8 @@
 			{/snippet}
 			{#snippet actions(row)}
 				{@const item = row as ResultRow}
-				<Button href={resolve(item.href)} size="xs">{item.action}</Button>
-				{#if item.secondaryHref && item.secondaryAction}
-					<Button href={resolve(item.secondaryHref)} size="xs" variant="outline">{item.secondaryAction}</Button>
+				{#if item.href && item.action}
+					<Button href={resolve(item.href)} size="xs">{item.action}</Button>
 				{/if}
 			{/snippet}
 		</MicroActionTable>
@@ -208,7 +186,7 @@
 				Halaman hasil hanya tersedia untuk akun yang diberi akses baca hasil asesmen.
 			</p>
 			<div class="mt-6">
-				<Button href={resolve('/asesmen')} variant="outline">Dashboard Asesmen</Button>
+				<a class="inline-flex items-center rounded-md px-1 text-sm font-medium text-muted-foreground underline-offset-4 hover:underline" href={resolve('/asesmen')}>Ringkasan</a>
 			</div>
 		</div>
 	</div>

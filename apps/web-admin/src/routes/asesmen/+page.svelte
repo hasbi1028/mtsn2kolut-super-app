@@ -47,7 +47,6 @@
 	);
 	let canOpenExecution = $derived(canOpenPreparation || userPermissions.includes('asesmen.proctor'));
 	let canOpenResults = $derived(userRoles.includes('admin') || userPermissions.includes('asesmen.result_read'));
-	let canOpenNonTest = $derived(userRoles.includes('admin') || userPermissions.includes('asesmen.read') || userPermissions.includes('asesmen.score'));
 	let canLoadDashboardStats = $derived(canOpenPreparation || userPermissions.includes('asesmen.read'));
 	let documentHubHref = $derived(latestEventDocumentHubHref(sessions));
 	let workflowReadiness = $derived(summarizeWorkflowReadiness(sessions));
@@ -140,7 +139,7 @@
 </script>
 
 <svelte:head>
-	<title>Dashboard Asesmen — MTsN 2 Kolaka Utara</title>
+	<title>Ringkasan Asesmen — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 <main class="min-h-dvh bg-slate-50 px-4 py-5 text-slate-950 md:px-6">
@@ -149,8 +148,8 @@
 			<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 				<div>
 					<p class="text-xs font-bold uppercase tracking-[0.22em] text-emerald-700">Asesmen</p>
-					<h1 class="mt-1 text-2xl font-black tracking-tight md:text-3xl">Dashboard Asesmen</h1>
-					<p class="mt-1 max-w-2xl text-sm text-slate-600">Pintu utama asesmen: persiapan kegiatan, dokumen, pelaksanaan ruang, dan hasil.</p>
+					<h1 class="mt-1 text-2xl font-black tracking-tight md:text-3xl">Ringkasan Asesmen</h1>
+					<p class="mt-1 max-w-2xl text-sm text-slate-600">Satu pintu utama untuk persiapan, dokumen, pelaksanaan ruang, dan hasil.</p>
 				</div>
 				<div class="flex flex-wrap gap-2 text-sm font-bold">
 					{#if canOpenPreparation}
@@ -173,23 +172,23 @@
 		{:else}
 			<section class="grid gap-3 md:grid-cols-4">
 				<div class="rounded-2xl border border-slate-200 bg-white p-4">
-					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Persiapan</p>
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Sesi aktif</p>
 					<p class="mt-2 text-3xl font-black">{sessions.length}</p>
 					<p class="text-sm text-slate-600">sesi ujian tercatat</p>
 				</div>
 				<div class="rounded-2xl border border-slate-200 bg-white p-4">
-					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Pelaksanaan</p>
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Berjalan</p>
 					<p class="mt-2 text-3xl font-black">{runningSessions}</p>
 					<p class="text-sm text-slate-600">sesi sedang berjalan</p>
 				</div>
 				<div class="rounded-2xl border border-slate-200 bg-white p-4">
-					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Kesiapan</p>
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Belum ditempatkan</p>
 					<p class="mt-2 text-3xl font-black">{unassignedParticipantCount}</p>
-					<p class="text-sm text-slate-600">peserta belum ditempatkan</p>
+					<p class="text-sm text-slate-600">peserta perlu ruang</p>
 				</div>
 				<div class="rounded-2xl border border-slate-200 bg-white p-4">
 					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Dokumen</p>
-					<p class="mt-2 text-3xl font-black">Pusat</p>
+					<p class="mt-2 text-3xl font-black">Siap</p>
 					<p class="text-sm text-slate-600">kartu, lembar pengawas, arsip</p>
 				</div>
 			</section>
@@ -202,8 +201,7 @@
 								<h2 class="text-lg font-black">Sesi terdekat</h2>
 								<p class="text-sm text-slate-600">Pantau sesi terdekat tanpa masuk ke halaman teknis kecuali diperlukan.</p>
 							</div>
-							<a class="rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold" href="/asesmen/pelaksanaan">Pelaksanaan</a>
-						</div>
+							</div>
 						<div class="mt-3 divide-y divide-slate-100">
 							{#each latestSessions as session (session.id)}
 								<article class="flex items-center justify-between gap-3 py-3">
@@ -236,42 +234,14 @@
 				</div>
 
 				<aside class="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm">
-					<p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Status alur</p>
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Arah kerja</p>
 					<div class="mt-2 flex flex-wrap items-center gap-2">
-						<h2 class="text-xl font-black">Arah kerja berikutnya</h2>
+						<h2 class="text-xl font-black">Langkah berikutnya</h2>
 						<span class={`rounded-full px-2.5 py-1 text-xs font-bold ${readinessClass()}`}>{readinessLabel()}</span>
 					</div>
 					<p class="mt-2 text-sm leading-6 text-slate-600">
-						Dashboard ini tidak menyimpan perubahan. Pembagian ruang, peserta, token, dan status sesi tetap dikerjakan dari Persiapan atau halaman teknis terkait agar keputusan operasional tidak tersebar.
+						Gunakan halaman ini untuk memilih fase kerja. Detail teknis seperti kegiatan, paket, sesi, ruang, dan perangkat dibuka dari fase terkait agar alur tidak bercabang terlalu banyak.
 					</p>
-
-					<div class="mt-4 grid gap-2">
-						{#if canOpenPreparation}
-							<a class="rounded-xl bg-emerald-700 px-3 py-3 text-center text-sm font-black text-white" href="/asesmen/persiapan">1. Persiapan</a>
-							<a class="rounded-xl border border-slate-300 bg-white px-3 py-3 text-center text-sm font-bold text-slate-900" href={documentHubHref}>2. Dokumen & Cetak</a>
-						{/if}
-						{#if canOpenExecution}
-							<a class={canOpenPreparation ? 'rounded-xl border border-slate-300 bg-white px-3 py-3 text-center text-sm font-bold text-slate-900' : 'rounded-xl bg-emerald-700 px-3 py-3 text-center text-sm font-black text-white'} href="/asesmen/pelaksanaan">{canOpenPreparation ? '3. Pelaksanaan Ujian' : 'Pelaksanaan Ujian'}</a>
-						{/if}
-						{#if canOpenResults}
-							<a class="rounded-xl border border-slate-300 bg-white px-3 py-3 text-center text-sm font-bold text-slate-900" href="/asesmen/hasil">4. Hasil</a>
-						{/if}
-					</div>
-
-					{#if canOpenPreparation}
-					<div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-						<p class="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Fitur teknis panitia</p>
-						<div class="mt-2 flex flex-wrap gap-2">
-							<a class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-900" href="/asesmen/kegiatan">Kegiatan</a>
-							<a class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-900" href="/asesmen/paket">Paket</a>
-							<a class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-900" href="/asesmen/sesi">Sesi</a>
-							<a class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-900" href="/asesmen/aplikasi-siswa">Perangkat Siswa</a>
-							{#if canOpenNonTest}
-								<a class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-900" href="/asesmen/non-tes">Non-Tes</a>
-							{/if}
-						</div>
-					</div>
-					{/if}
 
 					<div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
 						<p class="font-bold text-slate-900">Batas sederhana:</p>

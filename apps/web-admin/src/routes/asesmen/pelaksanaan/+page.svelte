@@ -52,7 +52,7 @@
 	const baseDayTasks: DayTask[] = [
 		{
 			title: 'Persiapan',
-			description: 'Kembali ke checklist kegiatan, paket, sesi, ruang, peserta, dan token.',
+			description: 'Kembali ke alur persiapan kegiatan, paket, sesi, ruang, peserta, dan token.',
 			href: '/asesmen/persiapan',
 			cta: 'Buka Persiapan',
 			kind: 'support',
@@ -110,8 +110,6 @@
 	);
 
 	const visibleTasks = $derived(dayTasks.filter((task) => task.roles.includes(roleMode)));
-	const primaryTask = $derived(visibleTasks.find((task) => task.kind === 'primary') ?? visibleTasks[0]);
-	const secondaryTasks = $derived(visibleTasks.filter((task) => task !== primaryTask));
 	const dayTaskColumns = [
 		{ key: 'task', label: 'Pekerjaan', class: 'min-w-56' },
 		{ key: 'focus', label: 'Fokus', class: 'min-w-[20rem]' },
@@ -161,12 +159,7 @@
 					<h1 class="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">{heroTitle}</h1>
 					<p class="max-w-2xl text-sm leading-6 text-muted-foreground">{heroSubtitle}</p>
 				</div>
-				{#if primaryTask}
-					<div class="flex flex-wrap gap-2">
-						<Button href={taskHref(primaryTask)} size="sm">{primaryTask.cta}</Button>
-						<Button href={resolve('/asesmen')} variant="outline" size="sm">Dashboard Asesmen</Button>
-					</div>
-				{/if}
+				<a class="inline-flex items-center rounded-md px-1 text-sm font-medium text-muted-foreground underline-offset-4 hover:underline" href={resolve('/asesmen')}>Ringkasan</a>
 			</div>
 		</section>
 
@@ -221,24 +214,16 @@
 			</MicroActionTable>
 		</section>
 
-		{#if secondaryTasks.length > 0}
-			<nav aria-label="Pintasan hari-H" class="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm shadow-sm">
-				<span class="font-medium text-muted-foreground">Pintasan:</span>
-				{#each secondaryTasks as task (task.title)}
-					<a href={taskHref(task)} class="rounded-md border border-border px-3 py-1.5 font-medium text-foreground hover:border-primary/30 hover:bg-primary/10">{task.title}</a>
-				{/each}
-			</nav>
-		{/if}
 	</div>
 {:else}
 	<div class="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 py-16 text-center">
 		<div class="max-w-lg rounded-2xl border border-border bg-card p-8 shadow-sm">
 			<h2 class="text-xl font-semibold text-foreground">Akses terbatas</h2>
 			<p class="mt-3 text-sm leading-6 text-muted-foreground">
-				Halaman pelaksanaan ujian hanya tersedia untuk panitia atau pengawas yang diberi akses. Silakan kembali ke Dashboard Asesmen.
+				Halaman pelaksanaan ujian hanya tersedia untuk panitia atau pengawas yang diberi akses. Silakan kembali ke Ringkasan Asesmen.
 			</p>
 			<div class="mt-6">
-				<Button href={resolve('/asesmen')} variant="outline">Dashboard Asesmen</Button>
+				<Button href={resolve('/asesmen')} variant="outline">Ringkasan Asesmen</Button>
 			</div>
 		</div>
 	</div>

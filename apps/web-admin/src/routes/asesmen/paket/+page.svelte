@@ -2024,17 +2024,17 @@
               class="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted"
               aria-expanded={isPackageExpanded(p.id)}
               aria-controls={`package-detail-${p.id}`}
-              aria-label={`${isPackageExpanded(p.id) ? "Tutup pratinjau" : "Pratinjau"} paket ${p.title}`}
+              aria-label={`${isPackageExpanded(p.id) ? "Tutup pratinjau paket" : "Pratinjau paket"} ${p.title}`}
               onclick={() => togglePackageDetail(p.id)}
             >
-              {isPackageExpanded(p.id) ? "Tutup" : "Pratinjau"}
+              {isPackageExpanded(p.id) ? "Tutup pratinjau" : "Pratinjau paket"}
             </button>
             <a
               href={`${resolve("/asesmen/paket")}/${p.id}`}
               class="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted"
               title="Buka halaman paket: identitas, isi soal, blueprint, dan kunci paket"
             >
-              Buka
+              Buka paket
             </a>
             {#if p.locked_at}
               <LoadingButton
@@ -2045,7 +2045,7 @@
                 loadingLabel="Membuat..."
                 title="Paket terkunci; buat salinan revisi agar riwayat lama tetap aman"
               >
-                Buat Revisi
+                Buat revisi paket
               </LoadingButton>
             {:else if readiness === "ready"}
               <LoadingButton
@@ -2056,7 +2056,7 @@
                   selectedPackageIds.add(p.id);
                   void bulkLockSelected();
                 }}
-                loading={bulkBusy}>Lock</LoadingButton
+                loading={bulkBusy}>Kunci paket</LoadingButton
               >
             {/if}
             {#if Number(p.session_count ?? 0) > 0}
@@ -2069,7 +2069,7 @@
                 loadingLabel="Mengarsipkan..."
                 title={`Paket sudah dipakai ${p.session_count} sesi, tidak dapat dihapus permanen. Gunakan Arsipkan.`}
               >
-                Arsipkan
+                Arsipkan paket
               </LoadingButton>
             {:else}
               <LoadingButton
@@ -2081,7 +2081,7 @@
                 loadingLabel="Menghapus..."
                 title="Hapus permanen paket yang belum dipakai sesi"
               >
-                Hapus
+                Hapus paket
               </LoadingButton>
             {/if}
           {/snippet}

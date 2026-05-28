@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import PublicSiteShell from '$lib/components/PublicSiteShell.svelte';
+	import AdminBreadcrumb from '$lib/components/breadcrumb/AdminBreadcrumb.svelte';
 	import GlobalConfirmDialog from '$lib/components/GlobalConfirmDialog.svelte';
 	import MaintenanceBanner from '$lib/components/maintenance/MaintenanceBanner.svelte';
 	import RouteProgress from '$lib/components/RouteProgress.svelte';
@@ -80,6 +81,7 @@
 		<div class={`flex-1 min-w-0 pt-14 transition-[padding] duration-200 lg:pt-0 ${desktopSidebarExpanded ? 'lg:pl-60' : 'lg:pl-[5.5rem]'}`}>
 			<main class={`w-full px-2.5 py-4 sm:px-4 sm:py-6 lg:px-6 ${desktopSidebarExpanded ? 'lg:mx-auto lg:max-w-[1100px]' : 'lg:max-w-[1380px]'}`}>
 				<MaintenanceBanner status={data.maintenanceStatus} user={data.user} />
+				<AdminBreadcrumb user={data.user} />
 				{@render children()}
 			</main>
 		</div>

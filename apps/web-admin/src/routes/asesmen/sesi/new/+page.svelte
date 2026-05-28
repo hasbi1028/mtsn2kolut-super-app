@@ -134,8 +134,8 @@
 
 	function mixPolicyHelp(value: string) {
 		if (value === 'same_class') return 'Peserta tetap dikelompokkan berdasarkan kelas asal; pengacakan ruang tidak mencampur kelas lain.';
-		if (value === 'same_grade') return 'Peserta dapat dicampur antar kelas pada tingkat yang sama; tidak mencampur tingkat VII, VIII, dan IX.';
-		return 'Peserta dapat dicampur di seluruh cakupan sesi. Gunakan hanya bila cakupan dan izin lintas tingkat sudah sesuai kebijakan kegiatan.';
+		if (value === 'same_grade') return 'Siswa dari beberapa rombel pada tingkat yang sama dibagi merata per ruang; tidak memindahkan rombel sebagai blok utuh dan tidak mencampur tingkat VII, VIII, IX.';
+		return 'Siswa dari seluruh cakupan sesi dibagi merata per ruang sampai lintas tingkat/rombel. Gunakan hanya bila cakupan dan izin lintas tingkat sudah sesuai kebijakan kegiatan.';
 	}
 
 	function assignmentModeHelp(value: string) {
@@ -395,7 +395,7 @@
 						{/if}
 						<div>
 							<label for="session-mix-policy" class="mb-1 block text-xs text-muted-foreground">Kebijakan pencampuran peserta</label>
-							<select id="session-mix-policy" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fMixPolicy}><option value="same_class">Tetap dalam kelas asal</option><option value="same_grade">Campur dalam tingkat yang sama</option><option value="mixed_scope">Campur sesuai cakupan sesi</option></select>
+							<select id="session-mix-policy" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fMixPolicy}><option value="same_class">Tetap dalam kelas asal</option><option value="same_grade">Campur per siswa satu tingkat</option><option value="mixed_scope">Campur per siswa lintas tingkat</option></select>
 							<p class="mt-1 text-[11px] text-muted-foreground">{mixPolicyHelp(fMixPolicy)}</p>
 							<p class="mt-1 text-[11px] text-muted-foreground">Saat cakupan peserta berubah, sistem menyetel kebijakan awal secara otomatis; operator tetap wajib memeriksa konsekuensi pencampuran sebelum menyimpan.</p>
 						</div>

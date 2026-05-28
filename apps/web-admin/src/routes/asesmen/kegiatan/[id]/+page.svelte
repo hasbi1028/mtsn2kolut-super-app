@@ -9,7 +9,7 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
-	import { BlockerPanel, ContextStrip, EntityTabs, MetricCard, PageHeader } from '$lib/components/ops';
+	import { ContextStrip, EntityTabs, MetricCard, PageHeader } from '$lib/components/ops';
 	import { sopStages, sopStatusLabels, type SopReadinessResponse, type SopStageKey, type SopStageReadiness, type SopStageStatus } from '$lib/asesmen/sop-stages';
 	import { assessmentApprovalLabels, createApproval, listApprovals, revokeApproval, type AssessmentApprovalRecord, type AssessmentApprovalType } from '$lib/asesmen/approval-client';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
@@ -402,8 +402,8 @@
 			{ label: 'Sesi/Jadwal', helper: 'Sesi, status, dan jadwal operasional', count: countFrom(overview?.session_count, sessionFallback), href: `/asesmen/sesi?event_id=${eventId}`, action: 'Kelola sesi' },
 			{ label: 'Ruang/Pengawas/Kursi', helper: roomIssues > 0 ? `${roomIssues} sesi masih perlu dirapikan${proctorIssues > 0 ? `, ${proctorIssues} butuh pengawas` : ''}` : 'Cek ruang, pengawas, kapasitas, dan nomor meja', count: countFrom(overview?.room_count, detail.sessions.length > 0 ? detail.sessions.reduce((sum, session) => sum + (session.room_count ?? 0), 0) : null), href: `/asesmen/sesi?event_id=${eventId}&readiness=not_ready`, action: 'Cek ruang' },
 			{ label: 'Token/Kartu', helper: 'Dokumen & Cetak: kartu peserta, QR+PIN, lembar pengawas ruang, dan validasi kesiapan cetak', count: countFrom(overview?.token_count ?? overview?.card_count, null), href: `/asesmen/kegiatan/${eventId}/cetak`, action: 'Buka Dokumen & Cetak' },
-			{ label: 'Hasil', helper: 'Rekap nilai gabungan tersedia di tab Hasil', count: countFrom(overview?.result_count, detail.results.length), href: `/asesmen/kegiatan/${eventId}#hasil`, action: 'Buka tab hasil' },
-			{ label: 'Arsip', helper: 'Checklist kartu, daftar hadir, berita acara, hasil, insiden, dan catatan tindakan ringkas', count: null, href: `/asesmen/kegiatan/${eventId}/archive`, action: 'Buka checklist arsip' },
+			{ label: 'Hasil', helper: 'Rekap nilai gabungan tersedia di ringkasan hasil', count: countFrom(overview?.result_count, detail.results.length), href: `/asesmen/kegiatan/${eventId}#hasil`, action: 'Lihat hasil' },
+			{ label: 'Arsip', helper: 'Checklist kartu, daftar hadir, berita acara, hasil, insiden, dan catatan tindakan ringkas', count: null, href: `/asesmen/kegiatan/${eventId}/archive`, action: 'Lihat arsip' },
 		];
 		return items.map((item) => ({ ...item, tone: item.label === 'Ruang/Pengawas/Kursi' && roomIssues > 0 ? 'warning' : checklistTone(item.count) }));
 	}
@@ -988,16 +988,6 @@
 				</Card.Root>
 			</section>
 
-			<BlockerPanel
-				blockers={blockingItems.slice(0, 3).map((item) => ({
-					label: item.label,
-					description: item.helper,
-					href: resolve(item.href),
-					actionLabel: item.action,
-					tone: 'warning'
-				}))}
-			/>
-
 			<EntityTabs tabs={sectionTabs} bind:active={activeSection} label="Area kegiatan asesmen" />
 
 			{#if activeSection === 'ringkasan'}
@@ -1026,7 +1016,7 @@
 				<Card.Root class="border-border shadow-sm">
 					<Card.Header class="pb-2">
 						<Card.Title class="text-base">Kesiapan kegiatan</Card.Title>
-						<Card.Description>Satu permukaan utama untuk membaca progres. Buka tab di bawah untuk rincian kerja atau hasil.</Card.Description>
+						<Card.Description>Satu permukaan utama untuk membaca progres. Gunakan tab di bawah untuk rincian kerja atau hasil.</Card.Description>
 					</Card.Header>
 					<Card.Content class="space-y-4">
 						{#each readinessGroups as group (group.title)}
@@ -1036,8 +1026,7 @@
 										<p class="text-sm font-semibold text-foreground">{group.title}</p>
 										<p class="mt-1 text-xs text-muted-foreground">{group.description}</p>
 									</div>
-									<button type="button" class="text-xs font-semibold text-primary hover:text-primary" onclick={() => activeSection = group.id}>Buka tab</button>
-								</div>
+									</div>
 								<div class="mt-3 divide-y divide-border">
 									{#each group.items as item (item.label)}
 										<a href={resolve(item.href)} class="flex items-center justify-between gap-3 py-2 text-sm hover:text-primary">

@@ -27,10 +27,10 @@ type CbtSession struct {
 }
 
 type CbtRoomAssignmentInput struct {
-	MixPolicy       string                   `json:"mix_policy"`
-	AssignmentMode  string                   `json:"assignment_mode"`
-	AllowCrossGrade bool                     `json:"allow_cross_grade"`
-	IsSpecialEvent  bool                     `json:"is_special_event"`
+	MixPolicy       string                  `json:"mix_policy"`
+	AssignmentMode  string                  `json:"assignment_mode"`
+	AllowCrossGrade bool                    `json:"allow_cross_grade"`
+	IsSpecialEvent  bool                    `json:"is_special_event"`
 	Assignments     []CbtRoomAssignmentSeat `json:"assignments,omitempty"`
 }
 
@@ -63,13 +63,13 @@ type CbtRoomAssignmentRoom struct {
 }
 
 type CbtRoomAssignmentSeat struct {
-	ParticipantID   string `json:"participant_id"`
-	ParticipantName string `json:"participant_name,omitempty"`
-	ParticipantNis  string `json:"participant_nis,omitempty"`
+	ParticipantID    string `json:"participant_id"`
+	ParticipantName  string `json:"participant_name,omitempty"`
+	ParticipantNis   string `json:"participant_nis,omitempty"`
 	ParticipantClass string `json:"participant_class,omitempty"`
-	RoomID          string `json:"room_id"`
-	RoomName        string `json:"room_name,omitempty"`
-	SeatNo          int32  `json:"seat_no"`
+	RoomID           string `json:"room_id"`
+	RoomName         string `json:"room_name,omitempty"`
+	SeatNo           int32  `json:"seat_no"`
 }
 
 type UpdateCbtSessionScheduleResult struct {
@@ -151,6 +151,7 @@ type cbtRoomShuffleStore interface {
 type cbtRoomAssignmentStore interface {
 	GetCbtExamSession(ctx context.Context, id pgtype.UUID) (db.GetCbtExamSessionRow, error)
 	ClearParticipantRooms(ctx context.Context, sessionID pgtype.UUID) error
+	ClearParticipantSeatsForSession(ctx context.Context, sessionID pgtype.UUID) error
 	ListParticipantsByRoom(ctx context.Context, sessionID pgtype.UUID) ([]db.ListParticipantsByRoomRow, error)
 	ListCbtExamRooms(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamRoomsRow, error)
 	AssignParticipantSeat(ctx context.Context, arg db.AssignParticipantSeatParams) error
@@ -1159,6 +1160,9 @@ func applyCbtRoomAssignment(ctx context.Context, q cbtRoomAssignmentStore, sessi
 		return CbtRoomAssignmentPreview{}, err
 	}
 	if err := q.ClearParticipantRooms(ctx, sessionID); err != nil {
+		return CbtRoomAssignmentPreview{}, mapCbtRoomSetupError(err)
+	}
+	if err := q.ClearParticipantSeatsForSession(ctx, sessionID); err != nil {
 		return CbtRoomAssignmentPreview{}, mapCbtRoomSetupError(err)
 	}
 	for _, assignment := range preview.Assignments {

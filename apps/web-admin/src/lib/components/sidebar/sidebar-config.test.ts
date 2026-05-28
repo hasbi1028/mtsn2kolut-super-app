@@ -38,7 +38,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 
 	it('supports 3-level breadcrumbs for nested sidebar leaves', () => {
 		expect(sidebarBreadcrumbLabel(byHref.get('/bank-soal/tambah')!)).toBe('Bank Soal › Kelola Soal › Tambah Soal');
-		expect(sidebarBreadcrumbLabel(byHref.get('/asesmen')!)).toBe('Asesmen Ujian › Alur Utama › Dashboard Asesmen');
+		expect(sidebarBreadcrumbLabel(byHref.get('/asesmen')!)).toBe('Asesmen Ujian › Alur Utama › Ringkasan Asesmen');
 		expect(sidebarBreadcrumbLabel(byHref.get('/settings/backups')!)).toBe('Pengaturan › Sistem & Audit › Backup & Restore');
 	});
 
@@ -66,7 +66,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'/asesmen/hasil'
 		]);
 		expect(labelsByGroup('Asesmen Ujian')).toEqual([
-			'Dashboard Asesmen',
+			'Ringkasan Asesmen',
 			'Persiapan',
 			'Pelaksanaan',
 			'Hasil',

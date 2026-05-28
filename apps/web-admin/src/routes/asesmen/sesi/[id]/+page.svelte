@@ -16,7 +16,7 @@
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import RichContent from '$lib/components/RichContent.svelte';
-	import { BlockerPanel, ContextStrip, EntityTabs, MetricCard, PageHeader } from '$lib/components/ops';
+	import { ContextStrip, EntityTabs, MetricCard, PageHeader } from '$lib/components/ops';
 	import { confirmAction, confirmChallenge } from '$lib/confirm-dialog';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { cbtRoomSetupErrorMessage, roomReadinessMessage, roomReadinessTone, type CbtRoomReadiness } from '$lib/client/cbt-room-readiness';
@@ -1528,11 +1528,11 @@
 				<div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2">
 					<div class="min-w-0">
 						<div class="flex flex-wrap items-center gap-2">
-							<p class="text-base font-bold text-foreground">Grid 8 Ruang UAS</p>
+							<p class="text-base font-bold text-foreground">Distribusi Ruang Sesi</p>
 							<Badge variant="outline" class="text-[11px]">Update WITA {commandCenterLastUpdated}</Badge>
 							<Badge variant="outline" class="text-[11px]">Token masked</Badge>
 						</div>
-						<p class="mt-0.5 text-xs text-muted-foreground">Command center ringkas: ruang, submit, koneksi, atensi, dan serah-terima pengawas.</p>
+						<p class="mt-0.5 text-xs text-muted-foreground">Command center ringkas: ruang dinamis per sesi, submit, koneksi, atensi, dan serah-terima pengawas.</p>
 					</div>
 					<div class="flex flex-wrap gap-1.5">
 						<LoadingButton variant="outline" size="sm" onclick={() => void refreshCommandCenter()} loading={commandCenterBusy} loadingLabel="Memuat..." disabled={commandCenterBusy}>
@@ -1540,7 +1540,6 @@
 						</LoadingButton>
 						<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Masalah</Button>
 						<Button variant="outline" size="sm" onclick={() => switchTab('ruangan')}>Ruang</Button>
-						<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Cetak Paket</Button>
 					</div>
 				</div>
 
@@ -1635,16 +1634,6 @@
 					</aside>
 				</div>
 			</section>
-
-			<BlockerPanel
-				title="Masalah yang Perlu Ditangani"
-				blockers={commandCenterIssues.slice(0, 3).map((issue) => ({
-					label: issue.title,
-					description: issue.description || 'Status operasional tidak hanya ditandai warna; buka area kerja terkait untuk tindak lanjut.',
-					actionLabel: issue.actionLabel || 'Buka',
-					tone: issue.severity === 'critical' ? 'danger' : issue.severity === 'warning' ? 'warning' : 'info'
-				}))}
-			/>
 
 			<EntityTabs tabs={sessionAreaTabs} bind:active={activeArea} label="Area detail sesi" onSelect={setSessionArea} />
 

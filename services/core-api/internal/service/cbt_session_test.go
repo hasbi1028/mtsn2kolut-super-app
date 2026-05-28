@@ -20,6 +20,10 @@ func cbtSessionTestUUID(seed byte) pgtype.UUID {
 	return pgtype.UUID{Bytes: [16]byte{seed}, Valid: true}
 }
 
+func cbtSessionTestUUIDInt(seed int) pgtype.UUID {
+	return pgtype.UUID{Bytes: [16]byte{byte(seed >> 8), byte(seed)}, Valid: true}
+}
+
 func TestCbtSessionNormalizeScopeMixAndAssignment(t *testing.T) {
 	scopeTests := []struct {
 		name string
@@ -523,6 +527,40 @@ func TestCbtSessionShuffleRoomsSameGradeMayMixRombelButNotGrade(t *testing.T) {
 	assertAssignedRoomsDoNotMix(t, store.byRoomRows, store.assignRoomArgs, func(row db.ListParticipantsByRoomRow) string { return row.ClassLevel })
 }
 
+func TestCbtSessionShuffleRoomsSameGradeDistributesStudentsPerClassAcrossRooms(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtSessionTestUUID(156)
+	roomA := cbtSessionTestUUID(157)
+	roomB := cbtSessionTestUUID(158)
+	classA := cbtSessionTestUUID(159)
+	classB := cbtSessionTestUUID(160)
+	participants := make([]db.ListParticipantsByRoomRow, 0, 40)
+	for i := 0; i < 20; i++ {
+		participants = append(participants, db.ListParticipantsByRoomRow{ID: cbtSessionTestUUIDInt(1000 + i), ClassID: classA, ClassLevel: "VII", ClassCode: "VII-A"})
+	}
+	for i := 0; i < 20; i++ {
+		participants = append(participants, db.ListParticipantsByRoomRow{ID: cbtSessionTestUUIDInt(1100 + i), ClassID: classB, ClassLevel: "VII", ClassCode: "VII-B"})
+	}
+	store := &fakeCbtSessionStore{
+		sessionRow: db.GetCbtExamSessionRow{ID: sessionID, Status: db.CbtSessionStatusEnumScheduled, MixPolicy: "same_grade", AssignmentMode: "random_balanced"},
+		byRoomRows: participants,
+		roomRows: []db.ListCbtExamRoomsRow{
+			{ID: roomA, Capacity: 20},
+			{ID: roomB, Capacity: 20},
+		},
+	}
+
+	if err := shuffleRooms(ctx, store, sessionID); err != nil {
+		t.Fatalf("shuffleRooms() error = %v", err)
+	}
+	counts := assignedRoomClassCounts(t, participants, store.assignRoomArgs)
+	for _, roomID := range []pgtype.UUID{roomA, roomB} {
+		if counts[roomID]["VII-A"] != 10 || counts[roomID]["VII-B"] != 10 {
+			t.Fatalf("room %v class counts = %+v, want VII-A=10 and VII-B=10", roomID, counts[roomID])
+		}
+	}
+}
+
 func TestCbtSessionShuffleRoomsMixedScopeCrossGradeRequiresSpecialAllow(t *testing.T) {
 	ctx := context.Background()
 	sessionID := cbtSessionTestUUID(160)
@@ -599,6 +637,37 @@ func TestCbtSessionRoomAssignmentPreviewMixedScopeEightRooms(t *testing.T) {
 	}
 }
 
+func TestCbtSessionRoomAssignmentPreviewMixedScopeDistributesStudentsPerClassAcrossRooms(t *testing.T) {
+	sessionID := cbtSessionTestUUID(194)
+	roomA := cbtSessionTestUUID(195)
+	roomB := cbtSessionTestUUID(196)
+	classA := cbtSessionTestUUID(197)
+	classB := cbtSessionTestUUID(198)
+	rooms := []db.ListCbtExamRoomsRow{
+		{ID: roomA, RoomName: "Ruang 1", Capacity: 20},
+		{ID: roomB, RoomName: "Ruang 2", Capacity: 20},
+	}
+	participants := make([]db.ListParticipantsByRoomRow, 0, 40)
+	for i := 0; i < 20; i++ {
+		participants = append(participants, db.ListParticipantsByRoomRow{ID: cbtSessionTestUUIDInt(1200 + i), Nama: "VII-A", ClassID: classA, ClassLevel: "VII", ClassCode: "VII-A"})
+	}
+	for i := 0; i < 20; i++ {
+		participants = append(participants, db.ListParticipantsByRoomRow{ID: cbtSessionTestUUIDInt(1300 + i), Nama: "VIII-B", ClassID: classB, ClassLevel: "VIII", ClassCode: "VIII-B"})
+	}
+	session := db.GetCbtExamSessionRow{ID: sessionID, Status: db.CbtSessionStatusEnumScheduled, MixPolicy: "mixed_scope", AssignmentMode: "random_balanced", IsSpecialEvent: true, AllowCrossGrade: true}
+
+	preview, err := buildCbtRoomAssignmentPreview(session, participants, rooms, CbtRoomAssignmentInput{MixPolicy: "mixed_scope", AssignmentMode: "random_balanced", IsSpecialEvent: true, AllowCrossGrade: true})
+	if err != nil {
+		t.Fatalf("buildCbtRoomAssignmentPreview() error = %v", err)
+	}
+	counts := previewRoomClassCounts(t, participants, preview.Assignments)
+	for _, roomID := range []string{pgUUIDString(roomA), pgUUIDString(roomB)} {
+		if counts[roomID]["VII-A"] != 10 || counts[roomID]["VIII-B"] != 10 {
+			t.Fatalf("room %s class counts = %+v, want VII-A=10 and VIII-B=10", roomID, counts[roomID])
+		}
+	}
+}
+
 func TestCbtSessionRoomAssignmentPreviewBlocksMixedScopeWithoutSpecialAllow(t *testing.T) {
 	session := db.GetCbtExamSessionRow{ID: cbtSessionTestUUID(190), Status: db.CbtSessionStatusEnumScheduled, MixPolicy: "mixed_scope", AssignmentMode: "random_balanced", IsSpecialEvent: false, AllowCrossGrade: false}
 	participants := []db.ListParticipantsByRoomRow{
@@ -611,6 +680,46 @@ func TestCbtSessionRoomAssignmentPreviewBlocksMixedScopeWithoutSpecialAllow(t *t
 	if !errors.Is(err, domain.ErrBadRequest) || !strings.Contains(err.Error(), "sesi khusus") {
 		t.Fatalf("buildCbtRoomAssignmentPreview() error = %v, want bad request sesi khusus", err)
 	}
+}
+
+func assignedRoomClassCounts(t *testing.T, participants []db.ListParticipantsByRoomRow, assignments []db.AssignParticipantRoomParams) map[pgtype.UUID]map[string]int {
+	t.Helper()
+	participantByID := make(map[pgtype.UUID]db.ListParticipantsByRoomRow, len(participants))
+	for _, row := range participants {
+		participantByID[row.ID] = row
+	}
+	counts := map[pgtype.UUID]map[string]int{}
+	for _, assignment := range assignments {
+		row, ok := participantByID[assignment.ID]
+		if !ok {
+			t.Fatalf("assigned unknown participant %v", assignment.ID)
+		}
+		if counts[assignment.RoomID] == nil {
+			counts[assignment.RoomID] = map[string]int{}
+		}
+		counts[assignment.RoomID][row.ClassCode]++
+	}
+	return counts
+}
+
+func previewRoomClassCounts(t *testing.T, participants []db.ListParticipantsByRoomRow, assignments []CbtRoomAssignmentSeat) map[string]map[string]int {
+	t.Helper()
+	participantByID := make(map[string]db.ListParticipantsByRoomRow, len(participants))
+	for _, row := range participants {
+		participantByID[pgUUIDString(row.ID)] = row
+	}
+	counts := map[string]map[string]int{}
+	for _, assignment := range assignments {
+		row, ok := participantByID[assignment.ParticipantID]
+		if !ok {
+			t.Fatalf("assigned unknown participant %s", assignment.ParticipantID)
+		}
+		if counts[assignment.RoomID] == nil {
+			counts[assignment.RoomID] = map[string]int{}
+		}
+		counts[assignment.RoomID][row.ClassCode]++
+	}
+	return counts
 }
 
 func assertAssignedRoomsDoNotMix(t *testing.T, participants []db.ListParticipantsByRoomRow, assignments []db.AssignParticipantRoomParams, key func(db.ListParticipantsByRoomRow) string) {

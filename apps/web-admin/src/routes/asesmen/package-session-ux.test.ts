@@ -8,18 +8,20 @@ const sessionPage = readFileSync(resolve(root, 'src/routes/asesmen/sesi/+page.sv
 const newSessionPage = readFileSync(resolve(root, 'src/routes/asesmen/sesi/new/+page.svelte'), 'utf8');
 
 describe('assessment package and session operator UX', () => {
-  it('uses Pratinjau/Buka labels and archive-aware package actions', () => {
-    expect(packagePage).toContain('Pratinjau');
-    expect(packagePage).toContain('Buka');
-    expect(packagePage).toContain('Arsipkan');
+  it('uses clearer package labels for navigation and lifecycle actions', () => {
+    expect(packagePage).toContain('Pratinjau paket');
+    expect(packagePage).toContain('Buka paket');
+    expect(packagePage).toContain('Arsipkan paket');
+    expect(packagePage).toContain('Hapus paket');
+    expect(packagePage).toContain('Kunci paket');
+    expect(packagePage).toContain('Buat revisi paket');
     expect(packagePage).toContain('Paket tidak dapat dihapus');
     expect(packagePage).toContain('session_count');
     expect(packagePage).toContain('archivePackage');
-    expect(packagePage).toContain('Buat Revisi');
     expect(packagePage).toContain('createRevisionPackage');
   });
 
-  it('adds package-like structured filters to the session list while avoiding duplicate quick actions', () => {
+  it('adds package-like structured filters to the session list while avoiding duplicate quick actions and terse labels', () => {
     expect(sessionPage).toContain('Cari sesi atau paket');
     expect(sessionPage).toContain('Status sesi');
     expect(sessionPage).toContain('Cakupan');
@@ -28,6 +30,15 @@ describe('assessment package and session operator UX', () => {
     expect(sessionPage).toContain('sessionSearch');
     expect(sessionPage).toContain('sessionStatusFilter');
     expect(sessionPage).toContain('sessionPackageFilter');
+    expect(sessionPage).toContain('Daftarkan peserta');
+    expect(sessionPage).toContain('Atur jadwal');
+    expect(sessionPage).toContain('Buka detail');
+    expect(sessionPage).toContain('Pantau sesi');
+    expect(sessionPage).toContain('Lihat BA Sesi');
+    expect(sessionPage).toContain('Lihat detail');
+    expect(sessionPage).toContain('Batalkan sesi');
+    expect(sessionPage).toContain('Selesaikan sesi');
+    expect(sessionPage).toContain('Hapus sesi');
     expect(sessionPage).not.toContain('Aksi:');
     expect(sessionPage).not.toContain('nextSessionAction');
     expect(sessionPage).not.toContain('scheduleQuickAction');

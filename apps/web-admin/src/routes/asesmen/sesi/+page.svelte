@@ -1469,38 +1469,38 @@
 													enrollGradeLevel = s.scope_type === 'grade' ? s.scope_ref : 'VII';
 												}}
 											>
-												Daftarkan
+												Daftarkan peserta
 											</Button>
 											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'scheduled')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">
-												Jadwalkan
+												Atur jadwal
 											</LoadingButton>
 											<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
-												Buka
+												Buka detail
 											</a>
 											<LoadingButton size="xs" variant="destructive" onclick={() => deleteSession(s.id, s.title)} loading={deleteBusyId === s.id} disabled={deleteBusyId !== '' && deleteBusyId !== s.id} loadingLabel="Menghapus...">
-												Hapus
+												Hapus sesi
 											</LoadingButton>
 										{:else if s.status === 'scheduled'}
-											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowOperationalIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">Mulai</LoadingButton>
+											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowOperationalIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">Mulai sesi</LoadingButton>
 											<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
-												Buka
+												Buka detail
 											</a>
-											<LoadingButton size="xs" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Batalkan</LoadingButton>
+											<LoadingButton size="xs" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Batalkan sesi</LoadingButton>
 										{:else if s.status === 'active'}
 											<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
-												Pantau
+												Pantau sesi
 											</a>
-											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan</LoadingButton>
+											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan sesi</LoadingButton>
 										{:else if s.status === 'finished'}
 											<a href={resolve(`/asesmen/sesi/${s.id}/minutes`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
-												BA Sesi
+												Lihat BA Sesi
 											</a>
 											<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
-												Detail
+												Lihat detail
 											</a>
 										{:else}
 											<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
-												Detail
+												Lihat detail
 											</a>
 										{/if}
 									</div>
