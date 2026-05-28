@@ -234,7 +234,7 @@
 				id: 'incidents',
 				title: 'Rekap Insiden Pengawasan',
 				helper: 'Buka panel pengawasan saat perlu meninjau catatan ruang bermasalah atau kejadian penting.',
-				href: resolve('/asesmen/pengawasan'),
+				href: resolve('/asesmen/ruang-saya'),
 				status: 'Siap dibuka',
 				coverage: 'Panel pengawasan · kejadian ruang',
 				ready: true,

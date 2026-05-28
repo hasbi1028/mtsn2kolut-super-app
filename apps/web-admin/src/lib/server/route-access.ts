@@ -256,7 +256,7 @@ const ASSESSMENT_PARTICIPANT_MANAGE_PERMISSIONS = ['asesmen.participant_manage',
 const ASSESSMENT_RESULT_PERMISSIONS = ['asesmen.result_read', 'asesmen.result_manage'] as const;
 
 function asesmenPermission(pathname: string, method: string): string[] | undefined {
-	if (matchesPathSegment(pathname, '/asesmen/ringkas')) return [...ASSESSMENT_OPERATOR_PERMISSIONS];
+	if (matchesPathSegment(pathname, '/asesmen/ringkas')) return [...ASSESSMENT_DAY_OF_PERMISSIONS, ...ASSESSMENT_RESULT_PERMISSIONS];
 	if (matchesPathSegment(pathname, '/asesmen/persiapan')) return [...ASSESSMENT_OPERATOR_PERMISSIONS];
 	if (matchesPathSegment(pathname, '/asesmen/pelaksanaan')) return [...ASSESSMENT_DAY_OF_PERMISSIONS];
 	if (matchesPathSegment(pathname, '/asesmen/aplikasi-siswa/release')) return [...ASSESSMENT_OPERATOR_PERMISSIONS];

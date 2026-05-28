@@ -103,7 +103,7 @@
 	<section class="rounded-2xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
 		<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 			<p>
-				Fitur teknis seperti uji perangkat, arsip aplikasi, dan pengaturan lanjutan dipindahkan ke Mode Lengkap Panitia agar tidak membingungkan pengawas.
+				Fitur teknis seperti uji perangkat dan arsip aplikasi tersedia dari Dashboard Asesmen untuk panitia agar layar pengawas tetap ringkas.
 			</p>
 			{#if canOpenPanitiaTools}
 				<div class="flex flex-wrap gap-2">

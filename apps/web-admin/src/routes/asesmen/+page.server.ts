@@ -16,14 +16,8 @@ export const load: PageServerLoad = ({ locals }) => {
 	const hasFieldLane = permissions.includes('asesmen.proctor');
 	const hasResultLane = permissions.includes('asesmen.result_read') || permissions.includes('asesmen.result_manage');
 
-	if (hasOperatorLane) {
-		throw redirect(307, '/asesmen/ringkas');
-	}
-	if (hasFieldLane) {
-		throw redirect(307, '/asesmen/ruang-saya');
-	}
-	if (hasResultLane) {
-		throw redirect(307, '/asesmen/hasil');
+	if (hasOperatorLane || hasFieldLane || hasResultLane) {
+		return {};
 	}
 
 	throw redirect(307, '/');

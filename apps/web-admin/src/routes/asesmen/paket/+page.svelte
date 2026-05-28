@@ -800,7 +800,7 @@
     }
     if (
       !(await confirmPhrase(
-        "Kunci Paket Massal",
+        "Kunci Paket Asesmen Massal",
         `${lockable.length} paket siap akan dikunci/disalin kondisinya. Paket yang sudah terkunci atau belum siap dilewati.`,
         "LOCK",
       ))
@@ -1254,7 +1254,7 @@
 
 <svelte:head
   ><title
-    >{eventId ? "Paket Kegiatan Ujian" : "Format Paket Ujian"} — MTSN 2 Kolut</title
+    >{eventId ? "Paket Kegiatan Asesmen" : "Paket Asesmen"} — MTSN 2 Kolut</title
   ></svelte:head
 >
 
@@ -1269,13 +1269,13 @@
         <p
           class="text-xs font-semibold uppercase tracking-[0.2em] text-primary"
         >
-          Keranjang Soal Ujian Digital
+          Paket Asesmen
         </p>
         <h1 class="text-3xl font-semibold tracking-tight text-foreground">
-          {eventId ? "Paket Soal Kegiatan" : "Paket Soal"}
+          {eventId ? "Paket Kegiatan" : "Paket Asesmen"}
         </h1>
         <p class="max-w-2xl text-sm leading-6 text-muted-foreground">
-          Pilih soal terbit dari Bank Soal, masukkan ke paket, lalu pakai paket
+          Ambil soal siap pakai dari Bank Soal, masukkan ke paket asesmen, lalu pakai paket
           itu saat membuat sesi event. Untuk Simulasi/Gladi/Ujian nyata, gunakan
           paket/kegiatan server; DEMO lokal hanya memakai contoh tanpa mutasi data.
         </p>
@@ -1363,7 +1363,7 @@
           tertaut ke kegiatan ini.
         </p>
         <p>
-          Pilihan soal tetap memakai penyaring Bank Soal yang dapat dipakai
+          Pembuatan dan verifikasi soal tetap di Bank Soal; halaman ini hanya memilih soal siap pakai
           ulang, ditambah soal khusus kegiatan ini saja. Jika seed sistem
           Informatika tersedia, gunakan sebagai pool/paket awal melalui alur
           paket resmi, bukan melalui Latihan Lokal.

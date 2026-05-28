@@ -135,7 +135,7 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/api/auth/account', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/api/auth/account/change-request-fields', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(user, '/bank-soal/daftar', 'GET')).toBe(true);
-		expect(requiredPermissionsForPath('/asesmen/ringkas', 'GET')).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage']);
+		expect(requiredPermissionsForPath('/asesmen/ringkas', 'GET')).toEqual(['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage', 'asesmen.result_read', 'asesmen.result_manage']);
 		expect(requiredPermissionsForPath('/asesmen/persiapan', 'GET')).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage']);
 		expect(requiredPermissionsForPath('/asesmen/pelaksanaan', 'GET')).toEqual(['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage']);
 		expect(requiredPermissionsForPath('/asesmen', 'GET')).toEqual(['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage', 'asesmen.result_read', 'asesmen.result_manage']);
@@ -150,6 +150,8 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute({ ...user, permissions: ['asesmen.proctor'] }, '/asesmen', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: ['asesmen.result_read'] }, '/asesmen', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: ['asesmen.result_manage'] }, '/asesmen', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ ...user, permissions: ['asesmen.proctor'] }, '/asesmen/ringkas', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ ...user, permissions: ['asesmen.result_read'] }, '/asesmen/ringkas', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: ['asesmen.proctor'] }, '/ujian/command-center', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(user, '/ujian/command-center', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute(user, '/asesmen/kegiatan', 'GET')).toBe(true);

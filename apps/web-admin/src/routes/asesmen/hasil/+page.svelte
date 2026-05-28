@@ -11,7 +11,7 @@
 	import MicroActionTable from '$lib/components/ops/MicroActionTable.svelte';
 
 	type ResultRoute =
-		| '/asesmen/ringkas'
+		| '/asesmen'
 		| '/asesmen/kegiatan'
 		| '/asesmen/sesi'
 		| '/asesmen/pelaksanaan'
@@ -48,7 +48,7 @@
 	const isResultReader = $derived(userPermissions.includes('asesmen.result_read') || userPermissions.includes('asesmen.result_manage'));
 	const isProctor = $derived(userPermissions.includes('asesmen.proctor'));
 	const canAccess = $derived(isResultReader || userRoles.includes('admin'));
-	const canOpenRingkasan = $derived(
+	const canOpenDashboard = $derived(
 		userRoles.includes('admin')
 			|| userPermissions.includes('asesmen.operator')
 			|| userPermissions.includes('asesmen.event_manage')
@@ -66,8 +66,8 @@
 					coverage: 'Per kegiatan · hasil gabungan · finalisasi',
 					href: '/asesmen/kegiatan',
 					action: 'Buka Daftar Kegiatan',
-					secondaryHref: '/asesmen/ringkas',
-					secondaryAction: 'Kembali ke Ringkasan',
+					secondaryHref: '/asesmen',
+					secondaryAction: 'Dashboard Asesmen',
 					icon: BarChart3Icon
 				},
 				{
@@ -154,8 +154,8 @@
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
-				{#if canOpenRingkasan}
-					<Button href={resolve('/asesmen/ringkas')} variant="outline">Kembali ke Ringkasan</Button>
+				{#if canOpenDashboard}
+					<Button href={resolve('/asesmen')} variant="outline">Dashboard Asesmen</Button>
 				{/if}
 				{#if isOperator}
 					<Badge variant="outline" class="border-primary/20 bg-primary/10 text-primary">Mode hasil panitia</Badge>
@@ -208,7 +208,7 @@
 				Halaman hasil hanya tersedia untuk akun yang diberi akses baca hasil asesmen.
 			</p>
 			<div class="mt-6">
-				<Button href={resolve('/asesmen/ringkas')} variant="outline">Kembali ke Ringkasan</Button>
+				<Button href={resolve('/asesmen')} variant="outline">Dashboard Asesmen</Button>
 			</div>
 		</div>
 	</div>

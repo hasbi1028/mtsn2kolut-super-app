@@ -15,7 +15,6 @@
 		| '/asesmen/sesi/new'
 		| '/asesmen/pelaksanaan'
 		| '/asesmen/hasil'
-		| '/asesmen/panitia'
 		| '/asesmen';
 
 	type PreparationTask = {
@@ -47,8 +46,8 @@
 		},
 		{
 			step: '02',
-			title: 'Siapkan Paket',
-			description: 'Pilih paket soal yang siap dipakai. Untuk Simulasi/Gladi, gunakan paket server dari Bank Soal; seed sistem Informatika dapat dijadikan pool awal bila tersedia.',
+			title: 'Siapkan Paket Asesmen',
+			description: 'Pilih paket asesmen dari soal Bank Soal yang sudah siap pakai. Pembuatan dan verifikasi soal tetap dilakukan di modul Bank Soal.',
 			href: '/asesmen/paket',
 			cta: 'Kelola Paket'
 		},
@@ -95,7 +94,7 @@
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
-				<Button href={resolve('/asesmen/ringkas')} variant="outline" size="sm">Kembali ke Ringkasan</Button>
+				<Button href={resolve('/asesmen')} variant="outline" size="sm">Dashboard Asesmen</Button>
 			</div>
 		</div>
 	</section>
@@ -159,10 +158,10 @@
 		<div class="max-w-lg rounded-2xl border border-border bg-card p-8 shadow-sm">
 			<h2 class="text-xl font-semibold text-foreground">Akses terbatas</h2>
 			<p class="mt-3 text-sm leading-6 text-muted-foreground">
-				Fase persiapan ujian hanya tersedia untuk panitia/operator. Silakan kembali ke ringkasan atau gunakan menu asesmen lain sesuai tugas.
+				Fase persiapan ujian hanya tersedia untuk panitia/operator. Silakan kembali ke Dashboard Asesmen atau gunakan menu asesmen lain sesuai tugas.
 			</p>
 			<div class="mt-6">
-				<Button href={resolve('/asesmen/ringkas')} variant="outline">Kembali ke Ringkasan</Button>
+				<Button href={resolve('/asesmen')} variant="outline">Dashboard Asesmen</Button>
 			</div>
 		</div>
 	</div>

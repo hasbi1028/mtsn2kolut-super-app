@@ -173,7 +173,7 @@
 			</div>
 			<div class="flex flex-wrap gap-3">
 				<Button href="/asesmen/aplikasi-siswa">Kembali ke Pemantauan</Button>
-				<Button href="/asesmen/pengawasan" variant="outline">Panel Ruang</Button>
+				<Button href="/asesmen/ruang-saya" variant="outline">Ruang Saya</Button>
 				<Button href="/asesmen/aplikasi-siswa/matrix" variant="outline">Buka Tabel Perangkat</Button>
 			</div>
 		</div>

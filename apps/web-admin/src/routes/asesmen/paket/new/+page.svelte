@@ -403,15 +403,15 @@
 	onMount(loadForm);
 </script>
 
-<svelte:head><title>{eventId ? 'Buat Paket Kegiatan Ujian' : 'Buat Paket Ujian'} — MTSN 2 Kolut</title></svelte:head>
+<svelte:head><title>{eventId ? 'Buat Paket Kegiatan Asesmen' : 'Buat Paket Asesmen'} — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
 	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-2">
-				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Keranjang Soal Ujian Digital</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground">{eventId ? 'Buat Paket Kegiatan' : 'Buat Paket Soal'}</h1>
-				<p class="text-sm leading-6 text-muted-foreground">Pilih soal terbit dari Bank Soal, atur bobot, lalu simpan paket untuk dipakai saat membuat sesi.</p>
+				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Paket Asesmen</p>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">{eventId ? 'Buat Paket Kegiatan' : 'Buat Paket Asesmen'}</h1>
+				<p class="text-sm leading-6 text-muted-foreground">Ambil soal yang sudah siap dari Bank Soal, atur bobot, lalu simpan paket untuk dipakai saat membuat sesi.</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
 				{#if eventId}
@@ -511,7 +511,7 @@
 					{#if fSubjectId}
 						<div>
 							<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-								<div class="text-xs text-muted-foreground">Pilih Soal dari Bank Soal ({questionPool.length} soal terbit sesuai cakupan){#if selectedQuestions.length > 0} — <span class="font-medium text-success">{selectedQuestions.length} dipilih</span>{/if}</div>
+								<div class="text-xs text-muted-foreground">Soal siap pakai dari Bank Soal ({questionPool.length} soal sesuai cakupan){#if selectedQuestions.length > 0} — <span class="font-medium text-success">{selectedQuestions.length} dipilih</span>{/if}</div>
 								<details class="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-foreground">
 									<summary class="cursor-pointer font-medium">Info pool soal</summary>
 									<div class="mt-2 space-y-2 leading-5">
@@ -564,7 +564,7 @@
 								<div class="mt-3 rounded-lg border border-primary/20 bg-primary/10 p-3">
 									<div class="flex flex-wrap items-start justify-between gap-2">
 										<div>
-											<p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Keranjang Paket</p>
+											<p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Isi Paket Asesmen</p>
 											<p class="mt-1 text-xs text-primary">{selectedQuestions.length} soal dipilih dengan bobot total {selectedWeightTotal}.</p>
 										</div>
 										<span class="rounded-full border border-primary/20 bg-card px-2 py-1 text-xs font-medium text-primary">{selectedBlueprintMissingCount > 0 ? `${selectedBlueprintMissingCount} metadata kurang` : 'Metadata siap'}</span>

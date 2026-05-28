@@ -9,11 +9,10 @@
 		| '/asesmen/aplikasi-siswa'
 		| '/asesmen/sesi'
 		| '/asesmen/ruang-saya'
-		| '/asesmen/pengawasan'
 		| '/asesmen/kegiatan'
 		| '/asesmen/persiapan'
 		| '/asesmen/hasil'
-		| '/asesmen/ringkas';
+		| '/asesmen';
 	type RoleMode = 'admin' | 'guru' | 'staf';
 	type TaskKind = 'primary' | 'support' | 'result';
 
@@ -165,7 +164,7 @@
 				{#if primaryTask}
 					<div class="flex flex-wrap gap-2">
 						<Button href={taskHref(primaryTask)} size="sm">{primaryTask.cta}</Button>
-						<Button href={resolve('/asesmen/ringkas')} variant="outline" size="sm">Kembali ke Ringkasan</Button>
+						<Button href={resolve('/asesmen')} variant="outline" size="sm">Dashboard Asesmen</Button>
 					</div>
 				{/if}
 			</div>
@@ -236,10 +235,10 @@
 		<div class="max-w-lg rounded-2xl border border-border bg-card p-8 shadow-sm">
 			<h2 class="text-xl font-semibold text-foreground">Akses terbatas</h2>
 			<p class="mt-3 text-sm leading-6 text-muted-foreground">
-				Halaman pelaksanaan ujian hanya tersedia untuk panitia atau pengawas yang diberi akses. Silakan kembali ke Ringkasan.
+				Halaman pelaksanaan ujian hanya tersedia untuk panitia atau pengawas yang diberi akses. Silakan kembali ke Dashboard Asesmen.
 			</p>
 			<div class="mt-6">
-				<Button href={resolve('/asesmen/ringkas')} variant="outline">Kembali ke Ringkasan</Button>
+				<Button href={resolve('/asesmen')} variant="outline">Dashboard Asesmen</Button>
 			</div>
 		</div>
 	</div>
