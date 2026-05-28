@@ -65,6 +65,61 @@ func TestCbtSessionRoomOpsMoreAutoAssignSeatsUsesNilPoolAndSeparateRoomOrdering(
 	}
 }
 
+func TestCbtSessionRoomOpsMoreManualRoomAssignmentPreviewAndApply(t *testing.T) {
+	ctx := context.Background()
+	sessionID := cbtSessionTestUUID(1)
+	roomA := cbtSessionTestUUID(2)
+	roomB := cbtSessionTestUUID(3)
+	anna := cbtSessionTestUUID(4)
+	budi := cbtSessionTestUUID(5)
+
+	store := &fakeCbtSessionStore{
+		sessionRow: db.GetCbtExamSessionRow{ID: sessionID, Status: db.CbtSessionStatusEnumDraft, MixPolicy: "same_grade", AssignmentMode: "random_balanced"},
+		byRoomRows: []db.ListParticipantsByRoomRow{
+			{ID: anna, Nama: "Anna", Nis: "001", ClassLevel: "VII", ClassCode: "A"},
+			{ID: budi, Nama: "Budi", Nis: "002", ClassLevel: "VII", ClassCode: "B"},
+		},
+		roomRows: []db.ListCbtExamRoomsRow{
+			{ID: roomA, RoomName: "R01", Capacity: 2},
+			{ID: roomB, RoomName: "R02", Capacity: 2},
+		},
+	}
+
+	input := CbtRoomAssignmentInput{
+		MixPolicy:      "same_grade",
+		AssignmentMode: "manual",
+		Assignments: []CbtRoomAssignmentSeat{
+			{ParticipantID: pgUUIDString(anna), RoomID: pgUUIDString(roomB), SeatNo: 2},
+			{ParticipantID: pgUUIDString(budi), RoomID: pgUUIDString(roomA), SeatNo: 1},
+		},
+	}
+
+	preview, err := (&CbtSession{q: store}).PreviewRoomAssignment(ctx, sessionID, input)
+	if err != nil {
+		t.Fatalf("PreviewRoomAssignment(manual) error = %v", err)
+	}
+	if preview.Summary.AssignmentMode != "manual" || preview.Summary.AssignedCount != 2 || preview.Summary.UnassignedCount != 0 {
+		t.Fatalf("PreviewRoomAssignment(manual) summary = %+v, want manual/full", preview.Summary)
+	}
+	if len(preview.Assignments) != 2 || preview.Assignments[0].ParticipantName == "" || preview.Assignments[0].RoomName == "" {
+		t.Fatalf("PreviewRoomAssignment(manual) assignments = %+v, want enriched labels", preview.Assignments)
+	}
+
+	after, err := (&CbtSession{q: store}).ApplyRoomAssignment(ctx, sessionID, input)
+	if err != nil {
+		t.Fatalf("ApplyRoomAssignment(manual) error = %v", err)
+	}
+	if after.Summary.AssignmentMode != "manual" || after.Summary.AssignedCount != 2 {
+		t.Fatalf("ApplyRoomAssignment(manual) summary = %+v", after.Summary)
+	}
+	if store.clearSeatID != sessionID {
+		t.Fatalf("ApplyRoomAssignment(manual) clear seat id = %v, want %v", store.clearSeatID, sessionID)
+	}
+	if len(store.assignSeatArgs) != 2 {
+		t.Fatalf("ApplyRoomAssignment(manual) assignments = %d, want 2", len(store.assignSeatArgs))
+	}
+}
+
 func TestCbtSessionRoomOpsMoreShuffleRoomsCapacityOverrideAndMutableGuard(t *testing.T) {
 	ctx := context.Background()
 	sessionID := cbtSessionTestUUID(11)

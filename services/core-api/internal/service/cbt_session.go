@@ -27,10 +27,11 @@ type CbtSession struct {
 }
 
 type CbtRoomAssignmentInput struct {
-	MixPolicy       string `json:"mix_policy"`
-	AssignmentMode  string `json:"assignment_mode"`
-	AllowCrossGrade bool   `json:"allow_cross_grade"`
-	IsSpecialEvent  bool   `json:"is_special_event"`
+	MixPolicy       string                   `json:"mix_policy"`
+	AssignmentMode  string                   `json:"assignment_mode"`
+	AllowCrossGrade bool                     `json:"allow_cross_grade"`
+	IsSpecialEvent  bool                     `json:"is_special_event"`
+	Assignments     []CbtRoomAssignmentSeat `json:"assignments,omitempty"`
 }
 
 type CbtRoomAssignmentPreview struct {
@@ -62,9 +63,13 @@ type CbtRoomAssignmentRoom struct {
 }
 
 type CbtRoomAssignmentSeat struct {
-	ParticipantID string `json:"participant_id"`
-	RoomID        string `json:"room_id"`
-	SeatNo        int32  `json:"seat_no"`
+	ParticipantID   string `json:"participant_id"`
+	ParticipantName string `json:"participant_name,omitempty"`
+	ParticipantNis  string `json:"participant_nis,omitempty"`
+	ParticipantClass string `json:"participant_class,omitempty"`
+	RoomID          string `json:"room_id"`
+	RoomName        string `json:"room_name,omitempty"`
+	SeatNo          int32  `json:"seat_no"`
 }
 
 type UpdateCbtSessionScheduleResult struct {
@@ -1227,46 +1232,10 @@ func shuffleRooms(ctx context.Context, q cbtRoomShuffleStore, sessionID pgtype.U
 }
 
 func planCbtRoomShuffle(session db.GetCbtExamSessionRow, participants []db.ListParticipantsByRoomRow, rooms []db.ListCbtExamRoomsRow) []db.AssignParticipantRoomParams {
-	if len(participants) == 0 || len(rooms) == 0 {
-		return nil
-	}
-	groups := make(map[string][]db.ListParticipantsByRoomRow)
-	keys := make([]string, 0)
-	for _, participant := range participants {
-		key := cbtShufflePolicyGroupKey(session, participant)
-		if _, ok := groups[key]; !ok {
-			keys = append(keys, key)
-		}
-		groups[key] = append(groups[key], participant)
-	}
-	sort.Strings(keys)
-	keyOrder := cryptoPermInts(len(keys))
-
-	assignments := make([]db.AssignParticipantRoomParams, 0, min(len(participants), int(cbtRoomsTotalEffectiveCapacity(rooms))))
-	roomIndex := 0
-	for _, keyIndex := range keyOrder {
-		group := groups[keys[keyIndex]]
-		participantOrder := cryptoPermInts(len(group))
-		participantSlot := 0
-		for participantSlot < len(participantOrder) && roomIndex < len(rooms) {
-			capacity := int(cbtRoomEffectiveCapacity(rooms[roomIndex]))
-			if capacity <= 0 {
-				roomIndex++
-				continue
-			}
-			for used := 0; used < capacity && participantSlot < len(participantOrder); used++ {
-				participant := group[participantOrder[participantSlot]]
-				assignments = append(assignments, db.AssignParticipantRoomParams{ID: participant.ID, RoomID: rooms[roomIndex].ID})
-				participantSlot++
-			}
-			if participantSlot < len(participantOrder) {
-				roomIndex++
-			}
-		}
-		// Do not place another policy group into spare capacity of this room.
-		if participantSlot == len(participantOrder) {
-			roomIndex++
-		}
+	placements := planCbtRoomPlacements(session, participants, rooms)
+	assignments := make([]db.AssignParticipantRoomParams, 0, len(placements))
+	for _, placement := range placements {
+		assignments = append(assignments, db.AssignParticipantRoomParams{ID: placement.ParticipantID, RoomID: rooms[placement.RoomIndex].ID})
 	}
 	return assignments
 }
@@ -1302,7 +1271,18 @@ func buildCbtRoomAssignmentPreview(session db.GetCbtExamSessionRow, participants
 	if policySession.MixPolicy == "mixed_scope" && hasMultipleClassLevels(participants) && (!policySession.IsSpecialEvent || !policySession.AllowCrossGrade) {
 		return CbtRoomAssignmentPreview{}, fmt.Errorf("%w: campur lintas tingkat hanya boleh untuk sesi khusus dengan izin campur tingkat", domain.ErrBadRequest)
 	}
+
 	assignments := planCbtBalancedRoomAssignment(policySession, participants, rooms)
+	previewAssignments := assignmentSeatsFromPlan(assignments, participants, rooms)
+	if len(input.Assignments) > 0 {
+		manualAssignments, err := normalizeManualRoomAssignments(input.Assignments, participants, rooms)
+		if err != nil {
+			return CbtRoomAssignmentPreview{}, err
+		}
+		assignments = manualAssignments.db
+		previewAssignments = manualAssignments.preview
+	}
+
 	preview := CbtRoomAssignmentPreview{
 		Summary: CbtRoomAssignmentSummary{
 			ParticipantCount: len(participants),
@@ -1316,7 +1296,7 @@ func buildCbtRoomAssignmentPreview(session db.GetCbtExamSessionRow, participants
 			IsSpecialEvent:   policySession.IsSpecialEvent,
 		},
 		Rooms:       summarizeCbtRoomAssignments(rooms, participants, assignments),
-		Assignments: assignmentSeatsFromPlan(assignments),
+		Assignments: previewAssignments,
 	}
 	if preview.Summary.UnassignedCount > 0 {
 		preview.Warnings = append(preview.Warnings, fmt.Sprintf("%d peserta belum mendapat ruang karena kapasitas kurang.", preview.Summary.UnassignedCount))
@@ -1344,9 +1324,36 @@ func normalizeRoomAssignmentMixPolicy(value, fallback string) string {
 }
 
 func planCbtBalancedRoomAssignment(session db.GetCbtExamSessionRow, participants []db.ListParticipantsByRoomRow, rooms []db.ListCbtExamRoomsRow) []db.AssignParticipantSeatParams {
+	placements := planCbtRoomPlacements(session, participants, rooms)
+	assignments := make([]db.AssignParticipantSeatParams, 0, len(placements))
+	for _, placement := range placements {
+		assignments = append(assignments, db.AssignParticipantSeatParams{
+			ID:     placement.ParticipantID,
+			RoomID: rooms[placement.RoomIndex].ID,
+			SeatNo: pgtype.Int4{Int32: placement.SeatNo, Valid: true},
+		})
+	}
+	return assignments
+}
+
+type cbtRoomPlacement struct {
+	ParticipantID pgtype.UUID
+	RoomIndex     int
+	SeatNo        int32
+}
+
+func planCbtRoomPlacements(session db.GetCbtExamSessionRow, participants []db.ListParticipantsByRoomRow, rooms []db.ListCbtExamRoomsRow) []cbtRoomPlacement {
 	if len(participants) == 0 || len(rooms) == 0 {
 		return nil
 	}
+	placements := make([]cbtRoomPlacement, 0, min(len(participants), int(cbtRoomsTotalEffectiveCapacity(rooms))))
+	roomUsed := make([]int32, len(rooms))
+	seatNo := make([]int32, len(rooms))
+	if session.MixPolicy == "mixed_scope" && session.IsSpecialEvent && session.AllowCrossGrade {
+		appendBalancedCbtRoomPlacements(&placements, participants, rooms, allAvailableRoomIndexes(rooms), roomUsed, seatNo)
+		return placements
+	}
+
 	groups := make(map[string][]db.ListParticipantsByRoomRow)
 	keys := make([]string, 0)
 	for _, participant := range participants {
@@ -1357,53 +1364,17 @@ func planCbtBalancedRoomAssignment(session db.GetCbtExamSessionRow, participants
 		groups[key] = append(groups[key], participant)
 	}
 	sort.Strings(keys)
-	assignments := make([]db.AssignParticipantSeatParams, 0, min(len(participants), int(cbtRoomsTotalEffectiveCapacity(rooms))))
-	roomUsed := make([]int32, len(rooms))
-	seatNo := make([]int32, len(rooms))
-	if session.MixPolicy == "mixed_scope" && session.IsSpecialEvent && session.AllowCrossGrade {
-		flat := make([]db.ListParticipantsByRoomRow, 0, len(participants))
-		for _, key := range keys {
-			group := groups[key]
-			order := cryptoPermInts(len(group))
-			for _, idx := range order {
-				flat = append(flat, group[idx])
-			}
-		}
-		order := cryptoPermInts(len(flat))
-		nextRoom := 0
-		for _, idx := range order {
-			roomIdx := nextAvailableRoomIndex(rooms, roomUsed, nextRoom)
-			if roomIdx < 0 {
-				break
-			}
-			seatNo[roomIdx]++
-			assignments = append(assignments, db.AssignParticipantSeatParams{ID: flat[idx].ID, RoomID: rooms[roomIdx].ID, SeatNo: pgtype.Int4{Int32: seatNo[roomIdx], Valid: true}})
-			roomUsed[roomIdx]++
-			nextRoom = (roomIdx + 1) % len(rooms)
-		}
-		return assignments
-	}
-	roomStart := 0
+	roomCursor := 0
 	for _, key := range keys {
 		group := groups[key]
-		order := cryptoPermInts(len(group))
-		nextRoom := roomStart
-		for _, idx := range order {
-			roomIdx := nextAvailableRoomIndex(rooms, roomUsed, nextRoom)
-			if roomIdx < 0 {
-				return assignments
-			}
-			seatNo[roomIdx]++
-			assignments = append(assignments, db.AssignParticipantSeatParams{ID: group[idx].ID, RoomID: rooms[roomIdx].ID, SeatNo: pgtype.Int4{Int32: seatNo[roomIdx], Valid: true}})
-			roomUsed[roomIdx]++
-			nextRoom = (roomIdx + 1) % len(rooms)
-		}
-		roomStart = nextGroupRoomStart(rooms, roomUsed)
-		if roomStart < 0 {
+		roomIndexes := roomIndexesForParticipantGroup(rooms, roomCursor, len(group))
+		if len(roomIndexes) == 0 {
 			break
 		}
+		appendBalancedCbtRoomPlacements(&placements, group, rooms, roomIndexes, roomUsed, seatNo)
+		roomCursor = roomIndexes[len(roomIndexes)-1] + 1
 	}
-	return assignments
+	return placements
 }
 
 func nextAvailableRoomIndex(rooms []db.ListCbtExamRoomsRow, used []int32, start int) int {
@@ -1419,18 +1390,111 @@ func nextAvailableRoomIndex(rooms []db.ListCbtExamRoomsRow, used []int32, start 
 	return -1
 }
 
-func nextGroupRoomStart(rooms []db.ListCbtExamRoomsRow, used []int32) int {
-	for idx := range rooms {
-		if used[idx] == 0 && cbtRoomEffectiveCapacity(rooms[idx]) > 0 {
-			return idx
-		}
+func nextAvailableSelectedRoomIndex(rooms []db.ListCbtExamRoomsRow, used []int32, selected []int, start int) int {
+	if len(selected) == 0 {
+		return -1
 	}
-	for idx := range rooms {
+	for offset := 0; offset < len(selected); offset++ {
+		selectedPos := (start + offset) % len(selected)
+		idx := selected[selectedPos]
 		if used[idx] < cbtRoomEffectiveCapacity(rooms[idx]) {
 			return idx
 		}
 	}
 	return -1
+}
+
+func selectedRoomPosition(selected []int, roomIdx int) int {
+	for pos, idx := range selected {
+		if idx == roomIdx {
+			return pos
+		}
+	}
+	return 0
+}
+
+func allAvailableRoomIndexes(rooms []db.ListCbtExamRoomsRow) []int {
+	indexes := make([]int, 0, len(rooms))
+	for idx := range rooms {
+		if cbtRoomEffectiveCapacity(rooms[idx]) > 0 {
+			indexes = append(indexes, idx)
+		}
+	}
+	return indexes
+}
+
+func roomIndexesForParticipantGroup(rooms []db.ListCbtExamRoomsRow, start int, participantCount int) []int {
+	if participantCount <= 0 {
+		return nil
+	}
+	indexes := make([]int, 0)
+	capacity := int32(0)
+	for idx := start; idx < len(rooms); idx++ {
+		roomCapacity := cbtRoomEffectiveCapacity(rooms[idx])
+		if roomCapacity <= 0 {
+			continue
+		}
+		indexes = append(indexes, idx)
+		capacity += roomCapacity
+		if capacity >= int32(participantCount) {
+			break
+		}
+	}
+	return indexes
+}
+
+func appendBalancedCbtRoomPlacements(placements *[]cbtRoomPlacement, participants []db.ListParticipantsByRoomRow, rooms []db.ListCbtExamRoomsRow, selectedRooms []int, roomUsed []int32, seatNo []int32) {
+	if len(participants) == 0 || len(selectedRooms) == 0 {
+		return
+	}
+	cohorts := make(map[string][]db.ListParticipantsByRoomRow)
+	keys := make([]string, 0)
+	for _, participant := range participants {
+		key := cbtRoomAssignmentCohortKey(participant)
+		if _, ok := cohorts[key]; !ok {
+			keys = append(keys, key)
+		}
+		cohorts[key] = append(cohorts[key], participant)
+	}
+	sort.Strings(keys)
+	for cohortOffset, key := range keys {
+		group := cohorts[key]
+		order := cryptoPermInts(len(group))
+		nextRoomPos := cohortOffset % len(selectedRooms)
+		for _, participantIdx := range order {
+			roomIdx := nextAvailableSelectedRoomIndex(rooms, roomUsed, selectedRooms, nextRoomPos)
+			if roomIdx < 0 {
+				return
+			}
+			seatNo[roomIdx]++
+			*placements = append(*placements, cbtRoomPlacement{
+				ParticipantID: group[participantIdx].ID,
+				RoomIndex:     roomIdx,
+				SeatNo:        seatNo[roomIdx],
+			})
+			roomUsed[roomIdx]++
+			nextRoomPos = (selectedRoomPosition(selectedRooms, roomIdx) + 1) % len(selectedRooms)
+		}
+	}
+}
+
+func cbtRoomAssignmentCohortKey(participant db.ListParticipantsByRoomRow) string {
+	if participant.ClassID.Valid {
+		return "class:" + participant.ClassID.String()
+	}
+	classCode := strings.TrimSpace(participant.ClassCode)
+	if classCode != "" {
+		level := strings.TrimSpace(participant.ClassLevel)
+		if level != "" {
+			return "class_code:" + level + ":" + classCode
+		}
+		return "class_code:" + classCode
+	}
+	level := strings.TrimSpace(participant.ClassLevel)
+	if level != "" {
+		return "level:" + level
+	}
+	return "unknown"
 }
 
 func summarizeCbtRoomAssignments(rooms []db.ListCbtExamRoomsRow, participants []db.ListParticipantsByRoomRow, assignments []db.AssignParticipantSeatParams) []CbtRoomAssignmentRoom {
@@ -1476,12 +1540,107 @@ func summarizeCbtRoomAssignments(rooms []db.ListCbtExamRoomsRow, participants []
 	return out
 }
 
-func assignmentSeatsFromPlan(assignments []db.AssignParticipantSeatParams) []CbtRoomAssignmentSeat {
+func assignmentSeatsFromPlan(assignments []db.AssignParticipantSeatParams, participants []db.ListParticipantsByRoomRow, rooms []db.ListCbtExamRoomsRow) []CbtRoomAssignmentSeat {
+	participantByID := make(map[pgtype.UUID]db.ListParticipantsByRoomRow, len(participants))
+	for _, participant := range participants {
+		participantByID[participant.ID] = participant
+	}
+	roomByID := make(map[pgtype.UUID]db.ListCbtExamRoomsRow, len(rooms))
+	for _, room := range rooms {
+		roomByID[room.ID] = room
+	}
 	out := make([]CbtRoomAssignmentSeat, 0, len(assignments))
 	for _, assignment := range assignments {
-		out = append(out, CbtRoomAssignmentSeat{ParticipantID: pgUUIDString(assignment.ID), RoomID: pgUUIDString(assignment.RoomID), SeatNo: assignment.SeatNo.Int32})
+		participant, _ := participantByID[assignment.ID]
+		room, _ := roomByID[assignment.RoomID]
+		out = append(out, assignmentSeatFromRow(participant, room, assignment))
 	}
 	return out
+}
+
+func assignmentSeatFromRow(participant db.ListParticipantsByRoomRow, room db.ListCbtExamRoomsRow, assignment db.AssignParticipantSeatParams) CbtRoomAssignmentSeat {
+	return CbtRoomAssignmentSeat{
+		ParticipantID:    pgUUIDString(assignment.ID),
+		ParticipantName:  strings.TrimSpace(participant.Nama),
+		ParticipantNis:   strings.TrimSpace(participant.Nis),
+		ParticipantClass: formatParticipantClass(participant),
+		RoomID:           pgUUIDString(assignment.RoomID),
+		RoomName:         room.RoomName,
+		SeatNo:           assignment.SeatNo.Int32,
+	}
+}
+
+type normalizedManualRoomAssignments struct {
+	db      []db.AssignParticipantSeatParams
+	preview []CbtRoomAssignmentSeat
+}
+
+func normalizeManualRoomAssignments(assignments []CbtRoomAssignmentSeat, participants []db.ListParticipantsByRoomRow, rooms []db.ListCbtExamRoomsRow) (normalizedManualRoomAssignments, error) {
+	if len(assignments) == 0 {
+		return normalizedManualRoomAssignments{}, nil
+	}
+	participantByID := make(map[string]db.ListParticipantsByRoomRow, len(participants))
+	for _, participant := range participants {
+		participantByID[pgUUIDString(participant.ID)] = participant
+	}
+	roomByID := make(map[string]db.ListCbtExamRoomsRow, len(rooms))
+	for _, room := range rooms {
+		roomByID[pgUUIDString(room.ID)] = room
+	}
+	seenParticipants := make(map[string]bool, len(assignments))
+	seenSeats := make(map[string]map[int32]bool, len(rooms))
+	outDB := make([]db.AssignParticipantSeatParams, 0, len(assignments))
+	outPreview := make([]CbtRoomAssignmentSeat, 0, len(assignments))
+	for _, assignment := range assignments {
+		participantID := strings.TrimSpace(assignment.ParticipantID)
+		roomID := strings.TrimSpace(assignment.RoomID)
+		if participantID == "" || roomID == "" || assignment.SeatNo <= 0 {
+			return normalizedManualRoomAssignments{}, fmt.Errorf("%w: data pembagian ruang manual tidak valid", domain.ErrBadRequest)
+		}
+		participant, ok := participantByID[participantID]
+		if !ok {
+			return normalizedManualRoomAssignments{}, fmt.Errorf("%w: peserta pembagian ruang manual tidak valid", domain.ErrBadRequest)
+		}
+		room, ok := roomByID[roomID]
+		if !ok {
+			return normalizedManualRoomAssignments{}, fmt.Errorf("%w: ruang pembagian manual tidak valid", domain.ErrBadRequest)
+		}
+		if assignment.SeatNo > cbtRoomEffectiveCapacity(room) {
+			return normalizedManualRoomAssignments{}, fmt.Errorf("%w: nomor kursi melebihi kapasitas ruang", domain.ErrBadRequest)
+		}
+		if seenParticipants[participantID] {
+			return normalizedManualRoomAssignments{}, fmt.Errorf("%w: peserta tidak boleh mendapat dua ruang atau dua kursi", domain.ErrConflict)
+		}
+		if seenSeats[roomID] == nil {
+			seenSeats[roomID] = map[int32]bool{}
+		}
+		if seenSeats[roomID][assignment.SeatNo] {
+			return normalizedManualRoomAssignments{}, fmt.Errorf("%w: nomor kursi pada ruang yang sama tidak boleh duplikat", domain.ErrConflict)
+		}
+		seenParticipants[participantID] = true
+		seenSeats[roomID][assignment.SeatNo] = true
+		seatNo := pgtype.Int4{Int32: assignment.SeatNo, Valid: true}
+		outDB = append(outDB, db.AssignParticipantSeatParams{ID: participant.ID, RoomID: room.ID, SeatNo: seatNo})
+		outPreview = append(outPreview, assignmentSeatFromRow(participant, room, db.AssignParticipantSeatParams{ID: participant.ID, RoomID: room.ID, SeatNo: seatNo}))
+	}
+	if len(seenParticipants) != len(participants) {
+		return normalizedManualRoomAssignments{}, fmt.Errorf("%w: masih ada peserta yang belum diberi ruang atau kursi", domain.ErrBadRequest)
+	}
+	return normalizedManualRoomAssignments{db: outDB, preview: outPreview}, nil
+}
+
+func formatParticipantClass(participant db.ListParticipantsByRoomRow) string {
+	parts := []string{}
+	if level := strings.TrimSpace(participant.ClassLevel); level != "" {
+		parts = append(parts, level)
+	}
+	if code := strings.TrimSpace(participant.ClassCode); code != "" {
+		parts = append(parts, code)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, " ")
 }
 
 func hasMultipleClassLevels(participants []db.ListParticipantsByRoomRow) bool {
