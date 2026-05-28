@@ -1,6 +1,13 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
+	import {
+		countRunningSessions,
+		countUnassignedParticipants,
+		latestEventDocumentHubHref,
+		summarizeWorkflowReadiness,
+		workflowReadinessClass
+	} from '$lib/asesmen/workflow-hub';
 
 	type ApiEnvelope<T> = { data?: T; items?: T; error?: string; message?: string } | T;
 	type SessionRow = {
@@ -26,14 +33,13 @@
 
 	let latestSessions = $derived(sessions.slice(0, 5));
 	let latestPackages = $derived(packages.slice(0, 5));
-	let todaySessions = $derived(sessions.filter((session) => isToday(session.scheduled_start)).slice(0, 5));
-	let unassignedParticipantCount = $derived(sessions.reduce((sum, session) => sum + (session.unassigned_participant_count ?? 0), 0));
-	let runningSessions = $derived(sessions.filter((session) => (session.status ?? session.session_status) === 'active').length);
+	let unassignedParticipantCount = $derived(countUnassignedParticipants(sessions));
+	let runningSessions = $derived(countRunningSessions(sessions));
 	let userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
 	let userPermissions = $derived((page.data.user?.permissions ?? []).map((permission) => permission.trim()).filter(Boolean));
 	let canOpenResults = $derived(userRoles.includes('admin') || userPermissions.includes('asesmen.result_read'));
-	let latestEventId = $derived(sessions.find((session) => session.event_id)?.event_id ?? '');
-	let documentHubHref = $derived(latestEventId ? `/asesmen/kegiatan/${latestEventId}/cetak` : '/asesmen/kegiatan');
+	let documentHubHref = $derived(latestEventDocumentHubHref(sessions));
+	let workflowReadiness = $derived(summarizeWorkflowReadiness(sessions));
 
 	onMount(() => {
 		void loadData();
@@ -94,14 +100,6 @@
 		return body as T;
 	}
 
-	function isToday(value?: string) {
-		if (!value) return false;
-		const date = new Date(value);
-		if (Number.isNaN(date.getTime())) return false;
-		const now = new Date();
-		return date.toDateString() === now.toDateString();
-	}
-
 	function fmtDate(value?: string) {
 		if (!value) return 'Belum dijadwalkan';
 		const date = new Date(value);
@@ -118,18 +116,11 @@
 	}
 
 	function readinessLabel() {
-		if (sessions.length === 0) return 'Belum ada sesi';
-		if (unassignedParticipantCount > 0) return 'Perlu penempatan peserta';
-		if (runningSessions > 0) return 'Sedang berjalan';
-		if (todaySessions.length > 0) return 'Siap hari ini';
-		return 'Terkendali';
+		return workflowReadiness.label;
 	}
 
 	function readinessClass() {
-		if (sessions.length === 0) return 'bg-slate-100 text-slate-700';
-		if (unassignedParticipantCount > 0) return 'bg-amber-100 text-amber-900';
-		if (runningSessions > 0) return 'bg-emerald-100 text-emerald-800';
-		return 'bg-slate-100 text-slate-700';
+		return workflowReadinessClass(workflowReadiness.tone);
 	}
 </script>
 
