@@ -250,7 +250,7 @@ const ASSESSMENT_OPERATOR_PERMISSIONS = [
 const ASSESSMENT_DAY_OF_PERMISSIONS = ['asesmen.proctor', ...ASSESSMENT_OPERATOR_PERMISSIONS] as const;
 const ASSESSMENT_GUIDE_PERMISSIONS = [...ASSESSMENT_DAY_OF_PERMISSIONS] as const;
 const ASSESSMENT_SESSION_MANAGE_PERMISSIONS = ['asesmen.session_manage', 'asesmen.operator'] as const;
-const ASSESSMENT_PARTICIPANT_MANAGE_PERMISSIONS = ['asesmen.participant_manage'] as const;
+const ASSESSMENT_PARTICIPANT_MANAGE_PERMISSIONS = ['asesmen.participant_manage', 'asesmen.session_manage', 'asesmen.operator'] as const;
 const ASSESSMENT_RESULT_PERMISSIONS = ['asesmen.result_read', 'asesmen.result_manage'] as const;
 
 function asesmenPermission(pathname: string, method: string): string[] | undefined {
@@ -271,7 +271,7 @@ function asesmenPermission(pathname: string, method: string): string[] | undefin
 		return ['asesmen.score'];
 	}
 	if (/^\/api\/asesmen\/sessions\/[^/]+\/rooms\/(assignment|assignment-preview)\/?$/.test(pathname)) {
-		return [];
+		return [...ASSESSMENT_PARTICIPANT_MANAGE_PERMISSIONS];
 	}
 	if (/^\/api\/asesmen\/sessions\/[^/]+\/rooms\/readiness\/?$/.test(pathname)) {
 		return ['asesmen.read'];
@@ -297,7 +297,7 @@ function asesmenPermission(pathname: string, method: string): string[] | undefin
 		return [...ASSESSMENT_PARTICIPANT_MANAGE_PERMISSIONS];
 	}
 	if (/^\/api\/asesmen\/sessions\/[^/]+\/(shuffle-rooms|finalize-overdue)\/?$/.test(pathname)) {
-		return [];
+		return [...ASSESSMENT_SESSION_MANAGE_PERMISSIONS];
 	}
 	if (
 		/^\/api\/asesmen\/sessions\/[^/]+\/(status|schedule)\/?$/.test(pathname)

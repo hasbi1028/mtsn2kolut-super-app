@@ -41,6 +41,7 @@ tmp/
 .env
 .env.*
 !.env.example
+.secrets/
 
 # OS
 .DS_Store

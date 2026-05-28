@@ -81,7 +81,7 @@
 	let highlightedParticipantIds = $state(new Map<string, number>());
 	let audioAlertsEnabled = $state(false);
 	let activeTab = $state<'ruang' | 'peringatan' | 'peserta'>('ruang');
-	let alertFilter = $state<'all' | 'technical' | 'cheating' | 'red' | 'yellow' | 'unchecked'>('all');
+	let alertFilter = $state<'all' | 'technical' | 'cheating' | 'supervision' | 'red' | 'yellow' | 'unchecked'>('all');
 	let adminHelpText = $state('');
 	let pollInterval: ReturnType<typeof setInterval> | undefined;
 	let hasPrimedEvents = false;
@@ -100,15 +100,24 @@
 	let alertEvents = $derived((recentAlertEvents.length > 0 ? recentAlertEvents : events.filter(importantEvent)).slice(0, 12));
 	let technicalAlertCount = $derived(alertEvents.filter((event) => proctorRiskGroup(event) === 'technical').length);
 	let conductAlertCount = $derived(alertEvents.filter((event) => proctorRiskGroup(event) === 'cheating').length);
+	let supervisionAlertCount = $derived(alertEvents.filter((event) => proctorRiskGroup(event) === 'supervision').length);
 	let visibleEvents = $derived.by<ProctoringEvent[]>(() => {
 		const source = alertEvents;
 		if (alertFilter === 'technical') return source.filter((event) => proctorRiskGroup(event) === 'technical');
 		if (alertFilter === 'cheating') return source.filter((event) => proctorRiskGroup(event) === 'cheating');
+		if (alertFilter === 'supervision') return source.filter((event) => proctorRiskGroup(event) === 'supervision');
 		if (alertFilter === 'red') return source.filter((event) => eventSeverity(event) === 'red');
 		if (alertFilter === 'yellow') return source.filter((event) => eventSeverity(event) !== 'red');
 		if (alertFilter === 'unchecked') return source.filter((event) => !['proctor_acknowledge', 'proctor_incident_action'].includes(event.event_type));
 		return source;
 	});
+	let groupedVisibleEvents = $derived.by(() =>
+		[
+			{ key: 'technical', title: 'Masalah teknis', desc: 'Koneksi, sinkronisasi, atau kondisi perangkat yang perlu dicek.', events: visibleEvents.filter((event) => proctorRiskGroup(event) === 'technical') },
+			{ key: 'cheating', title: 'Indikasi tata tertib', desc: 'Fokus halaman, clipboard, perangkat berbeda, token ulang, atau tangkap layar.', events: visibleEvents.filter((event) => proctorRiskGroup(event) === 'cheating') },
+			{ key: 'supervision', title: 'Tindak lanjut pengawas', desc: 'Catatan pemeriksaan, peringatan, instruksi peserta, dan eskalasi ruang.', events: visibleEvents.filter((event) => proctorRiskGroup(event) === 'supervision') }
+		].filter((group) => group.events.length > 0 || alertFilter === group.key)
+	);
 
 	$effect(() => {
 		if (queryCard && !token) token = queryCard;
@@ -618,12 +627,23 @@
 									<p class="mt-1 text-2xl font-black">{conductAlertCount}</p>
 									<p class="text-xs">fokus, clipboard, perangkat berbeda</p>
 								</button>
+								<button class="col-span-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-left text-emerald-950 {alertFilter === 'supervision' ? 'ring-2 ring-emerald-400' : ''}" onclick={() => alertFilter = 'supervision'}>
+									<p class="text-[11px] font-bold uppercase tracking-[0.16em]">Tindak lanjut pengawas</p>
+									<p class="mt-1 text-2xl font-black">{supervisionAlertCount}</p>
+									<p class="text-xs">sudah dicek, peringatan, instruksi peserta, eskalasi</p>
+								</button>
+							</div>
+							<div class="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-600">
+								<p class="font-black text-slate-900">Label ramah pengawas</p>
+								<p><b>Clipboard</b>: salin/tempel/potong diblokir. <b>Focus/visibility</b>: browser keluar atau tersembunyi. <b>Stale/pending sync</b>: koneksi atau jawaban belum aman tersinkron.</p>
+								<p><b>Device mismatch</b>: perangkat berbeda. <b>Token reuse</b>: akses dipakai ulang. <b>Screenshot</b>: indikasi tangkap layar. <b>Proctor follow-up</b>: tindak lanjut pengawas sudah dicatat.</p>
 							</div>
 							<div class="flex gap-2 overflow-x-auto pb-1">
 								{#each [
-									{ key: 'all', label: 'Semua' },
+									{ key: 'all', label: 'Ringkasan' },
 									{ key: 'technical', label: 'Teknis' },
 									{ key: 'cheating', label: 'Tata tertib' },
+									{ key: 'supervision', label: 'Tindak lanjut' },
 									{ key: 'red', label: 'Merah' },
 									{ key: 'yellow', label: 'Kuning' },
 									{ key: 'unchecked', label: 'Belum Dicek' }
@@ -632,28 +652,39 @@
 								{/each}
 							</div>
 
-							{#each visibleEvents as event (event.id)}
-								<article class={`rounded-[1.35rem] border p-4 shadow-sm ${eventSeverityClass(event)}`}>
-									<div class="flex items-start justify-between gap-3">
-										<div class="min-w-0">
-											<p class="text-[11px] font-black uppercase tracking-[0.16em]">{eventSeverityLabel(event)}</p>
-											<h3 class="mt-1 truncate text-lg font-black">{event.nama ?? 'Peserta'}</h3>
-											<p class="text-sm font-semibold">{eventReason(event)}</p>
-											<p class="mt-1 text-xs opacity-75">{fmtDt(event.created_at)} · {event.room_name ?? card.room_name ?? 'Ruang'}</p>
-										</div>
+							{#each groupedVisibleEvents as group (group.key)}
+								<section class="space-y-2">
+									<div>
+										<p class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">{group.title}</p>
+										<p class="text-xs text-slate-500">{group.desc}</p>
 									</div>
-									<div class="mt-3 flex flex-wrap gap-2">
-										<span class={`rounded-full border px-2 py-1 text-[11px] font-bold ${eventGroupClass(event)}`}>{proctorRiskGroupLabel(proctorRiskGroup(event))}</span>
-										<span class="rounded-full border border-slate-200 bg-white/70 px-2 py-1 text-[11px] font-bold">{eventCategoryLabel(event)}</span>
-									</div>
-									<div class="mt-3 grid grid-cols-2 gap-2">
-										<button class="min-h-11 rounded-xl border border-slate-300 bg-white/80 px-2 text-xs font-bold" disabled={Boolean(actionBusy)} onclick={() => void acknowledgeEvent(event)}>Sudah Dicek</button>
-										<button class="min-h-11 rounded-xl border border-amber-300 bg-amber-100 px-2 text-xs font-bold text-amber-950" disabled={Boolean(actionBusy)} onclick={() => void incidentAction(event, 'warning_given')}>Beri Peringatan</button>
-										<button class="col-span-2 min-h-11 rounded-xl bg-red-700 px-2 text-xs font-bold text-white" onclick={contactAdmin}>Hubungi Admin</button>
-									</div>
-								</article>
+									{#each group.events as event (event.id)}
+										<article class={`rounded-[1.35rem] border p-4 shadow-sm ${eventSeverityClass(event)}`}>
+											<div class="flex items-start justify-between gap-3">
+												<div class="min-w-0">
+													<p class="text-[11px] font-black uppercase tracking-[0.16em]">{eventSeverityLabel(event)}</p>
+													<h3 class="mt-1 truncate text-lg font-black">{event.nama ?? 'Peserta'}</h3>
+													<p class="text-sm font-semibold">{eventReason(event)}</p>
+													<p class="mt-1 text-xs opacity-75">{fmtDt(event.created_at)} · {event.room_name ?? card.room_name ?? 'Ruang'}</p>
+												</div>
+											</div>
+											<div class="mt-3 flex flex-wrap gap-2">
+												<span class={`rounded-full border px-2 py-1 text-[11px] font-bold ${eventGroupClass(event)}`}>{proctorRiskGroupLabel(proctorRiskGroup(event))}</span>
+												<span class="rounded-full border border-slate-200 bg-white/70 px-2 py-1 text-[11px] font-bold">{eventCategoryLabel(event)}</span>
+											</div>
+											<div class="mt-3 grid grid-cols-2 gap-2">
+												<button class="min-h-11 rounded-xl border border-slate-300 bg-white/80 px-2 text-xs font-bold" disabled={Boolean(actionBusy)} onclick={() => void acknowledgeEvent(event)}>Sudah Dicek</button>
+												<button class="min-h-11 rounded-xl border border-amber-300 bg-amber-100 px-2 text-xs font-bold text-amber-950" disabled={Boolean(actionBusy)} onclick={() => void incidentAction(event, 'warning_given')}>Beri Peringatan</button>
+												<button class="col-span-2 min-h-11 rounded-xl bg-red-700 px-2 text-xs font-bold text-white" onclick={contactAdmin}>Hubungi Admin</button>
+											</div>
+										</article>
+									{/each}
+									{#if group.events.length === 0}
+										<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-sm text-slate-600">Belum ada peringatan untuk kelompok ini.</div>
+									{/if}
+								</section>
 							{/each}
-							{#if visibleEvents.length === 0}
+							{#if groupedVisibleEvents.length === 0}
 								<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-sm text-slate-600">Belum ada peringatan pada filter ini.</div>
 							{/if}
 						</div>
