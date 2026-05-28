@@ -230,27 +230,34 @@
 	}
 
 	async function acknowledgeEvent(event: ProctoringEvent) {
+		if (demoMode) {
+			markDemoEventHandled(event.id, `Kejadian ${event.nama ?? 'peserta'} ditandai sudah diperiksa.`);
+			return;
+		}
 		const notes = window.prompt('Catatan pemeriksaan pengawas:', eventReason(event));
 		if (notes === null) return;
 		await portalAction(`/api/exam/proctor/portal/participants/${encodeURIComponent(event.participant_id)}/acknowledge`, { event_id: event.id, notes }, `Kejadian ${event.nama ?? 'peserta'} ditandai sudah diperiksa.`);
 	}
 
 	async function incidentAction(event: ProctoringEvent, action: 'warning_given' | 'cleared' | 'escalated') {
+		if (demoMode) {
+			markDemoEventHandled(event.id, `${proctorIncidentActionLabel(action)} DEMO dicatat untuk ${event.nama ?? 'peserta'}.`);
+			return;
+		}
 		const notes = window.prompt(`Catatan ${proctorIncidentActionLabel(action)}:`, eventReason(event));
 		if (notes === null) return;
 		await portalAction(`/api/exam/proctor/portal/participants/${encodeURIComponent(event.participant_id)}/incident-action`, { event_id: event.id, action, notes }, 'Tindakan insiden tersimpan.');
 	}
 
 	async function sendWarning(row: ProctoringRow) {
+		if (demoMode) {
+			successMessage = `Peringatan DEMO dikirim ke ${row.nama ?? 'peserta'}.`;
+			highlightParticipant(row.participant_id);
+			return;
+		}
 		const message = window.prompt('Instruksi/peringatan ke aplikasi siswa:', 'Tetap di aplikasi ujian dan ikuti arahan pengawas.');
 		if (!message?.trim()) return;
 		await portalAction(`/api/exam/proctor/portal/participants/${encodeURIComponent(row.participant_id)}/command`, { command_type: 'warning_message', message }, `Peringatan dikirim ke ${row.nama ?? 'peserta'}.`);
-	}
-
-	async function unlockParticipant(row: ProctoringRow) {
-		const notes = window.prompt('Catatan verifikasi sebelum buka kunci:', 'Sudah diverifikasi pengawas ruang.');
-		if (notes === null) return;
-		await portalAction(`/api/exam/proctor/portal/participants/${encodeURIComponent(row.participant_id)}/unlock`, { notes }, `Kunci ${row.nama ?? 'peserta'} dibuka.`);
 	}
 
 	async function portalAction(url: string, payload: Record<string, unknown>, message: string) {
@@ -272,6 +279,19 @@
 		} finally {
 			actionBusy = '';
 		}
+	}
+
+	function markDemoEventHandled(eventId: string, message: string) {
+		const current = dashboard;
+		if (current) {
+			dashboard = {
+				...current,
+				room: current.room ? { ...current.room, suspicious_count: Math.max((current.room.suspicious_count ?? 1) - 1, 0) } : current.room,
+				events: (current.events ?? []).filter((item) => item.id !== eventId)
+			};
+		}
+		recentAlertEvents = recentAlertEvents.filter((item) => item.id !== eventId);
+		successMessage = message;
 	}
 
 	function contactAdmin() {
@@ -627,8 +647,8 @@
 										<span class="rounded-full border border-slate-200 bg-white/70 px-2 py-1 text-[11px] font-bold">{eventCategoryLabel(event)}</span>
 									</div>
 									<div class="mt-3 grid grid-cols-2 gap-2">
-										<button class="min-h-11 rounded-xl border border-slate-300 bg-white/80 px-2 text-xs font-bold" disabled={Boolean(actionBusy) || demoMode} onclick={() => void acknowledgeEvent(event)}>Sudah Dicek</button>
-										<button class="min-h-11 rounded-xl border border-amber-300 bg-amber-100 px-2 text-xs font-bold text-amber-950" disabled={Boolean(actionBusy) || demoMode} onclick={() => void incidentAction(event, 'warning_given')}>Beri Peringatan</button>
+										<button class="min-h-11 rounded-xl border border-slate-300 bg-white/80 px-2 text-xs font-bold" disabled={Boolean(actionBusy)} onclick={() => void acknowledgeEvent(event)}>Sudah Dicek</button>
+										<button class="min-h-11 rounded-xl border border-amber-300 bg-amber-100 px-2 text-xs font-bold text-amber-950" disabled={Boolean(actionBusy)} onclick={() => void incidentAction(event, 'warning_given')}>Beri Peringatan</button>
 										<button class="col-span-2 min-h-11 rounded-xl bg-red-700 px-2 text-xs font-bold text-white" onclick={contactAdmin}>Hubungi Admin</button>
 									</div>
 								</article>
@@ -659,7 +679,7 @@
 									</div>
 									{#if participantNeedsAttention(row)}
 										<div class="mt-3 grid grid-cols-2 gap-2">
-											<button class="min-h-10 rounded-xl border border-amber-300 bg-amber-50 px-2 text-xs font-bold text-amber-950" disabled={Boolean(actionBusy) || demoMode} onclick={() => void sendWarning(row)}>Beri Peringatan</button>
+											<button class="min-h-10 rounded-xl border border-amber-300 bg-amber-50 px-2 text-xs font-bold text-amber-950" disabled={Boolean(actionBusy)} onclick={() => void sendWarning(row)}>Beri Peringatan</button>
 											<button class="min-h-10 rounded-xl border border-slate-300 px-2 text-xs font-bold" onclick={contactAdmin}>Hubungi Admin</button>
 										</div>
 									{/if}
