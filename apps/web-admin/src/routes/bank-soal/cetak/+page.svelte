@@ -110,7 +110,7 @@
 	let includeExplanation = $state(false);
 	let includeMetadata = $state(true);
 
-	const listHref = resolve('/bank-soal/daftar');
+	const listHref = resolve('/bank-soal');
 	const printTitle = 'Cetak Soal Saya';
 
 	const workflowOptions = [

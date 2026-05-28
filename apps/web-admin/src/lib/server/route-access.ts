@@ -198,6 +198,7 @@ function bankSoalPermission(pathname: string, method: string): string[] | undefi
 		if (matchesPathSegment(pathname, '/bank-soal/verifikasi')) return ['bank_soal.review'];
 		if (matchesPathSegment(pathname, '/bank-soal/penerbitan')) return ['bank_soal.publish'];
 		if (matchesPathSegment(pathname, '/bank-soal/impor')) return ['bank_soal.import'];
+		if (matchesPathSegment(pathname, '/bank-soal/alat')) return ['bank_soal.analytics', 'bank_soal.publish', 'bank_soal.settings'];
 		if (matchesPathSegment(pathname, '/bank-soal/pengaturan')) return ['bank_soal.settings'];
 		if (matchesPathSegment(pathname, '/bank-soal/analisis-butir')) return ['bank_soal.analytics'];
 		return ['bank_soal.read'];
@@ -205,14 +206,14 @@ function bankSoalPermission(pathname: string, method: string): string[] | undefi
 	if (matchesPathSegment(pathname, '/api/bank-soal/reviewer-scopes')) return ['bank_soal.assign_reviewer', 'bank_soal.settings'];
 	if (isReadMethod(method)) return ['bank_soal.read'];
 	if (matchesPathSegment(pathname, '/api/bank-soal/questions/import-legacy')) return ['bank_soal.import'];
-	if (matchesPathSegment(pathname, '/api/bank-soal/questions/bulk-workflow')) return ['bank_soal.update', 'bank_soal.review', 'bank_soal.publish'];
+	if (matchesPathSegment(pathname, '/api/bank-soal/questions/bulk-workflow')) return ['bank_soal.review', 'bank_soal.publish'];
 	if (matchesPathSegment(pathname, '/api/bank-soal/assets') && method === 'POST') return ['bank_soal.create', 'bank_soal.update'];
 	if (matchesPathSegment(pathname, '/api/bank-soal/questions') && pathname.endsWith('/duplicate') && method === 'POST') return ['bank_soal.create'];
 	if (matchesPathSegment(pathname, '/api/bank-soal/questions') && pathname.endsWith('/revision') && method === 'POST') return ['bank_soal.update'];
-	if (matchesPathSegment(pathname, '/api/bank-soal/questions') && pathname.endsWith('/workflow')) return ['bank_soal.update', 'bank_soal.review', 'bank_soal.publish'];
+	if (matchesPathSegment(pathname, '/api/bank-soal/questions') && pathname.endsWith('/workflow')) return ['bank_soal.review', 'bank_soal.publish'];
 	if (method === 'POST') return ['bank_soal.create'];
 	if (method === 'DELETE') return ['bank_soal.delete'];
-	if (method === 'PATCH' || method === 'PUT') return ['bank_soal.update', 'bank_soal.review', 'bank_soal.publish'];
+	if (method === 'PATCH' || method === 'PUT') return ['bank_soal.update'];
 	return ['bank_soal.read'];
 }
 
@@ -223,6 +224,7 @@ function isBankSoalGuruFallbackPath(pathname: string, method: string) {
 		&& !matchesPathSegment(pathname, '/bank-soal/verifikasi')
 		&& !matchesPathSegment(pathname, '/bank-soal/penerbitan')
 		&& !matchesPathSegment(pathname, '/bank-soal/impor')
+		&& !matchesPathSegment(pathname, '/bank-soal/alat')
 		&& !matchesPathSegment(pathname, '/bank-soal/pengaturan');
 }
 

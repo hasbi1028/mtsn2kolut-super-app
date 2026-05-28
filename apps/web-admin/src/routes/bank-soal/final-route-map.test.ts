@@ -12,6 +12,7 @@ const finalBankSoalRoutes = [
 	'/bank-soal/daftar',
 	'/bank-soal/tambah',
 	'/bank-soal/verifikasi',
+	'/bank-soal/alat',
 	'/bank-soal/penerbitan',
 	'/bank-soal/impor',
 	'/bank-soal/analisis-butir',
@@ -36,21 +37,14 @@ describe('Bank Soal final route map', () => {
 		const bankSoalItems = bankSoalGroup ? flattenSidebarNavGroups([bankSoalGroup]) : [];
 		expect(bankSoalItems.map((item) => item.href)).toEqual([
 			'/bank-soal',
-			'/bank-soal/daftar',
 			'/bank-soal/tambah',
 			'/bank-soal/impor',
-			'/bank-soal/cetak',
-			'/bank-soal/verifikasi',
-			'/bank-soal/penerbitan',
-			'/bank-soal/mapel-kd',
-			'/bank-soal/analisis-butir',
-			'/bank-soal/laporan',
-			'/bank-soal/pengaturan'
+			'/bank-soal/verifikasi'
 		]);
 		expect(new Set(bankSoalItems.map((item) => item.href)).size).toBe(bankSoalItems.length);
-		expect(finalBankSoalRoutes).toEqual(expect.arrayContaining(['/bank-soal/tambah', '/bank-soal/impor', '/bank-soal/penerbitan', '/bank-soal/mapel-kd']));
+		expect(finalBankSoalRoutes).toEqual(expect.arrayContaining(['/bank-soal/tambah', '/bank-soal/impor', '/bank-soal/alat', '/bank-soal/penerbitan', '/bank-soal/mapel-kd']));
 		expect(bankSoalItems.find((item) => item.href === '/bank-soal/verifikasi')?.permissions).toEqual(['bank_soal.review', 'bank_soal.publish']);
-		expect(bankSoalItems.find((item) => item.href === '/bank-soal/pengaturan')?.permissions).toEqual(['bank_soal.settings']);
+		expect(bankSoalItems.find((item) => item.href === '/bank-soal/pengaturan')).toBeUndefined();
 	});
 
 	it('keeps final routes free from legacy CBT/mode naming', () => {

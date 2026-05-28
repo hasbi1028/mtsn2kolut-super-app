@@ -46,9 +46,6 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(hrefs).toEqual(expect.arrayContaining([
 			'/bank-soal/tambah',
 			'/bank-soal/impor',
-			'/bank-soal/cetak',
-			'/bank-soal/mapel-kd',
-			'/bank-soal/laporan',
 			'/asesmen/persiapan',
 			'/asesmen/pelaksanaan',
 			'/asesmen/ruang-saya',
@@ -97,16 +94,9 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(sidebarNavGroups.some((group) => group.group === 'CBT')).toBe(false);
 		expect(hrefsByGroup('Bank Soal')).toEqual([
 			'/bank-soal',
-			'/bank-soal/daftar',
 			'/bank-soal/tambah',
 			'/bank-soal/impor',
-			'/bank-soal/cetak',
-			'/bank-soal/verifikasi',
-			'/bank-soal/penerbitan',
-			'/bank-soal/mapel-kd',
-			'/bank-soal/analisis-butir',
-			'/bank-soal/laporan',
-			'/bank-soal/pengaturan'
+			'/bank-soal/verifikasi'
 		]);
 		expect(hrefsByGroup('Bank Soal').every((href) => !href.startsWith('/cbt/'))).toBe(true);
 	});
@@ -124,7 +114,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(byHref.get('/settings/users')?.permissions).toEqual(['users.read']);
 		expect(byHref.get('/settings/rbac')?.permissions).toEqual(['roles.read']);
 		expect(byHref.get('/bank-soal/verifikasi')?.permissions).toEqual(['bank_soal.review', 'bank_soal.publish']);
-		expect(byHref.get('/bank-soal/analisis-butir')?.permissions).toEqual(['bank_soal.analytics']);
+		expect(byHref.get('/bank-soal/analisis-butir')).toBeUndefined();
 		expect(byHref.get('/asesmen/ringkas')).toBeUndefined();
 		expect(byHref.get('/asesmen/persiapan')?.permissions).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage']);
 		expect(byHref.get('/asesmen/pelaksanaan')?.permissions).toEqual(['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage']);
@@ -164,8 +154,9 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		const visibleHrefs = flattenSidebarNavGroups(
 			filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], ['bank_soal.read', 'bank_soal.create'])
 		).map((item) => item.href);
-		expect(visibleHrefs).toEqual(expect.arrayContaining(['/bank-soal', '/bank-soal/daftar', '/bank-soal/tambah', '/bank-soal/mapel-kd', '/settings/account']));
+		expect(visibleHrefs).toEqual(expect.arrayContaining(['/bank-soal', '/bank-soal/tambah', '/settings/account']));
 		expect(visibleHrefs).not.toContain('/bank-soal/verifikasi');
+		expect(visibleHrefs).not.toContain('/bank-soal/daftar');
 	});
 
 	it('shows only the field-facing assessment entry for a proctor permission set', () => {

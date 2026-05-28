@@ -61,7 +61,7 @@
 		'Soal yang sudah dipakai paket/jawaban tidak diedit sembarang; lakukan duplikasi/revisi versi bila perlu perubahan besar.'
 	];
 	const integrations = [
-		{ name: 'Daftar Soal', path: resolve('/bank-soal/daftar'), desc: 'Pencarian, filter, halaman daftar, dan aksi per soal.', required: 'read' },
+		{ name: 'Daftar Soal', path: resolve('/bank-soal'), desc: 'Pencarian, filter, halaman daftar, dan aksi per soal.', required: 'read' },
 		{ name: 'Penyusun soal', path: resolve('/bank-soal/tambah'), desc: 'Pembuatan/edit soal dengan pratinjau siswa.', required: 'create' },
 		{ name: 'Verifikasi', path: resolve('/bank-soal/verifikasi'), desc: 'Antrean verifikasi, catatan pemeriksa soal, setujui/revisi.', required: 'review' },
 		{ name: 'Impor', path: resolve('/bank-soal/impor'), desc: 'Pratinjau cek data dan impor final.', required: 'import' },

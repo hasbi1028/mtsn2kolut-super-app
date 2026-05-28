@@ -113,7 +113,7 @@
 	}
 
 	function actionHref(href: string): string {
-		if (href === '/bank-soal/daftar') return resolve('/bank-soal/daftar');
+		if (href === '/bank-soal/daftar') return resolve('/bank-soal');
 		if (href === '/bank-soal/verifikasi') return resolve('/bank-soal/verifikasi');
 		if (href === '/bank-soal/tambah') return resolve('/bank-soal/tambah');
 		if (href === '/bank-soal/impor') return resolve('/bank-soal/impor');
@@ -148,14 +148,14 @@
 </script>
 
 <svelte:head>
-	<title>Bank Soal - MTsN 2 Kolaka Utara</title>
+	<title>Alat Bank Soal - MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 <div class="space-y-5">
 	<PageHeader
-		eyebrow="Beranda Bank Soal"
-		title="Bank Soal"
-		subtitle="Kelola soal madrasah dari alur sederhana: tulis soal, verifikasi dan terbitkan, cek mutu, lalu atur standar."
+		eyebrow="Admin Bank Soal"
+		title="Alat Bank Soal"
+		subtitle="Pantau mutu, penerbitan, referensi, laporan, dan pengaturan Bank Soal dari satu tempat admin."
 		context="Bank Soal MTsN 2 Kolaka Utara"
 		primaryAction={canCreate ? { label: 'Tambah Soal', href: actionHref('/bank-soal/tambah') } : undefined}
 		secondaryAction={{ label: 'Refresh', onclick: loadHealth }}
@@ -163,7 +163,7 @@
 
 	<ContextStrip
 		items={[
-			{ label: 'Alur', value: 'Kelola → Verifikasi → Mutu → Pengaturan', tone: 'success' },
+			{ label: 'Alur', value: 'Daftar → Verifikasi → Mutu → Pengaturan', tone: 'success' },
 			{ label: 'Sumber data', value: 'Data Bank Soal', tone: 'muted' },
 			{ label: 'Mode', value: 'Operasional' }
 		]}

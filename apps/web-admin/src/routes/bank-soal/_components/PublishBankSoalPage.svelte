@@ -313,7 +313,7 @@
 			</div>
 			<div class="flex flex-wrap gap-2 lg:justify-end">
 				<a href={resolve('/bank-soal/verifikasi')} class="inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted/50">Review Soal</a>
-				<a href={resolve('/bank-soal/daftar?workflow_status=approved&status=draft')} class="inline-flex h-9 items-center rounded-md border border-success/20 bg-card px-3 text-sm font-semibold text-success hover:bg-success/10">Daftar Disetujui</a>
+				<a href={resolve('/bank-soal?workflow_status=approved&status=draft')} class="inline-flex h-9 items-center rounded-md border border-success/20 bg-card px-3 text-sm font-semibold text-success hover:bg-success/10">Daftar Disetujui</a>
 			</div>
 		</div>
 	</section>

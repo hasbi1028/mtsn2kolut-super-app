@@ -231,7 +231,7 @@
 					{#if canPublish}
 						<a href={resolve('/bank-soal/penerbitan')} class="inline-flex rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Antrean Terbit</a>
 					{/if}
-					<a href={resolve('/bank-soal/daftar')} class="inline-flex rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">Daftar Soal</a>
+					<a href={resolve('/bank-soal')} class="inline-flex rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">Daftar Soal</a>
 					<a href={resolve('/bank-soal')} class="inline-flex rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">Dashboard</a>
 				</div>
 			</div>

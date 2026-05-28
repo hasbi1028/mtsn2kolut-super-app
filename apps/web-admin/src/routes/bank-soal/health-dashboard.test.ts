@@ -15,12 +15,13 @@ afterEach(() => {
 });
 
 describe('/bank-soal health dashboard', () => {
-	it('keeps /bank-soal root as a single health dashboard surface without the legacy dashboard duplicate', () => {
-		const pageSource = readFileSync(path.resolve(process.cwd(), 'src/routes/bank-soal/+page.svelte'), 'utf8');
+	it('keeps the health dashboard on the technical tools route, not the Bank Soal list root', () => {
+		const rootSource = readFileSync(path.resolve(process.cwd(), 'src/routes/bank-soal/+page.svelte'), 'utf8');
+		const toolsSource = readFileSync(path.resolve(process.cwd(), 'src/routes/bank-soal/alat/+page.svelte'), 'utf8');
 
-		expect(pageSource).toContain('BankSoalHealthDashboard');
-		expect(pageSource).not.toContain('BankSoalListPage');
-		expect(pageSource).not.toContain('mode="dashboard"');
+		expect(rootSource).toContain('BankSoalListPage');
+		expect(rootSource).not.toContain('BankSoalHealthDashboard');
+		expect(toolsSource).toContain('BankSoalHealthDashboard');
 	});
 
 	it('loads summary and sampled questions through Bank Soal BFF routes only', async () => {
@@ -71,7 +72,7 @@ describe('/bank-soal health dashboard', () => {
 			},
 		});
 
-		expect(await screen.findByRole('heading', { name: 'Bank Soal' })).toBeTruthy();
+		expect(await screen.findByRole('heading', { name: 'Alat Bank Soal' })).toBeTruthy();
 		expect(await screen.findByText('Menunggu verifikasi')).toBeTruthy();
 		expect(screen.getByText('Data Bank Soal')).toBeTruthy();
 		await waitFor(() => {

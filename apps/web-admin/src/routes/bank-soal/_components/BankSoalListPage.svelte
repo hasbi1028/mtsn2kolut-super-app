@@ -421,7 +421,7 @@
   let mapelKdHref = $derived(resolve("/bank-soal/mapel-kd"));
   let settingsHref = $derived(resolve("/bank-soal/pengaturan"));
   let packageHref = $derived(resolve("/asesmen/paket"));
-  let listHref = $derived(resolve("/bank-soal/daftar"));
+  let listHref = $derived(resolve("/bank-soal"));
   let summarySubjectDistribution = $state<SubjectDistribution[]>([]);
   let summaryBloomComposition = $state<BloomComposition[]>([]);
   let summaryRecentActivities = $state<ActivityItem[]>([]);

@@ -116,21 +116,10 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		group: 'Bank Soal',
 		items: [
 			{ kind: 'folder', id: 'kelola-soal', label: 'Kelola Soal', icon: 'book-open', children: [
-				{ href: '/bank-soal', label: 'Dashboard Bank Soal', icon: 'grid', roles: ['admin', 'guru'], permissions: ['bank_soal.read'] },
-				{ href: '/bank-soal/daftar', label: 'Daftar Soal', icon: 'book-open', roles: ['admin', 'guru'], permissions: ['bank_soal.read'] },
+				{ href: '/bank-soal', label: 'Daftar Soal', icon: 'book-open', roles: ['admin', 'guru'], permissions: ['bank_soal.read'] },
 				{ href: '/bank-soal/tambah', label: 'Tambah Soal', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['bank_soal.create'] },
 				{ href: '/bank-soal/impor', label: 'Impor Soal', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['bank_soal.import', 'bank_soal.create'] },
-				{ href: '/bank-soal/cetak', label: 'Cetak Soal', icon: 'printer', roles: ['admin', 'guru'], permissions: ['bank_soal.read'] }
-			]},
-			{ kind: 'folder', id: 'review-penerbitan', label: 'Review & Penerbitan', icon: 'clipboard', children: [
-				{ href: '/bank-soal/verifikasi', label: 'Verifikasi Soal', icon: 'clipboard', roles: ['admin'], permissions: ['bank_soal.review', 'bank_soal.publish'] },
-				{ href: '/bank-soal/penerbitan', label: 'Penerbitan Soal', icon: 'shield', roles: ['admin'], permissions: ['bank_soal.publish'] }
-			]},
-			{ kind: 'folder', id: 'referensi-analisis', label: 'Referensi & Analisis', icon: 'activity', children: [
-				{ href: '/bank-soal/mapel-kd', label: 'Mapel & KD', icon: 'layers', roles: ['admin', 'guru'], permissions: ['bank_soal.create', 'bank_soal.read'] },
-				{ href: '/bank-soal/analisis-butir', label: 'Analisis Butir', icon: 'activity', roles: ['admin', 'guru'], permissions: ['bank_soal.analytics'] },
-				{ href: '/bank-soal/laporan', label: 'Laporan Bank Soal', icon: 'activity', roles: ['admin', 'guru'], permissions: ['bank_soal.read', 'bank_soal.analytics', 'bank_soal.review'] },
-				{ href: '/bank-soal/pengaturan', label: 'Pengaturan Bank Soal', icon: 'settings', roles: ['admin'], permissions: ['bank_soal.settings'] }
+				{ href: '/bank-soal/verifikasi', label: 'Verifikasi Soal', icon: 'clipboard', roles: ['admin'], permissions: ['bank_soal.review', 'bank_soal.publish'] }
 			]}
 		]
 	},

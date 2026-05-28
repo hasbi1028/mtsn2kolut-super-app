@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { trackInternalAnalyticsEvent } from '$lib/analytics/internal-analytics';
-	import BankSoalHealthDashboard from './_components/BankSoalHealthDashboard.svelte';
+	import BankSoalListPage from './_components/BankSoalListPage.svelte';
 
 	type PageData = {
 		user?: {
@@ -22,4 +22,4 @@
 	});
 </script>
 
-<BankSoalHealthDashboard {data} />
+<BankSoalListPage {data} mode="list" />
