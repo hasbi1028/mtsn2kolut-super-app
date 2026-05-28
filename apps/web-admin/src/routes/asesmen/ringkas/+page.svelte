@@ -14,6 +14,8 @@
 		room_count?: number;
 		participant_count?: number;
 		unassigned_participant_count?: number;
+		event_id?: string;
+		event_title?: string;
 	};
 	type PackageRow = { id: string; title?: string; subject?: string; level?: string; question_count?: number; status?: string };
 
@@ -30,6 +32,8 @@
 	let userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
 	let userPermissions = $derived((page.data.user?.permissions ?? []).map((permission) => permission.trim()).filter(Boolean));
 	let canOpenResults = $derived(userRoles.includes('admin') || userPermissions.includes('asesmen.result_read'));
+	let latestEventId = $derived(sessions.find((session) => session.event_id)?.event_id ?? '');
+	let documentHubHref = $derived(latestEventId ? `/asesmen/kegiatan/${latestEventId}/cetak` : '/asesmen/kegiatan');
 
 	onMount(() => {
 		void loadData();
@@ -140,10 +144,11 @@
 				<div>
 					<p class="text-xs font-bold uppercase tracking-[0.22em] text-emerald-700">Ujian Digital</p>
 					<h1 class="mt-1 text-2xl font-black tracking-tight md:text-3xl">Ringkasan Ujian</h1>
-					<p class="mt-1 max-w-2xl text-sm text-slate-600">Satu halaman baca untuk melihat kondisi asesmen dan membuka alur kerja yang tepat.</p>
+					<p class="mt-1 max-w-2xl text-sm text-slate-600">Pusat kerja panitia: mulai dari persiapan, cetak dokumen, pelaksanaan ruang, lalu hasil.</p>
 				</div>
 				<div class="flex flex-wrap gap-2 text-sm font-bold">
 					<a class="rounded-xl bg-emerald-700 px-3 py-2 text-white" href="/asesmen/persiapan">Persiapan</a>
+					<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href={documentHubHref}>Dokumen & Cetak</a>
 					<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/pelaksanaan">Pelaksanaan</a>
 					{#if canOpenResults}
 						<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/hasil">Hasil</a>
@@ -156,7 +161,7 @@
 		{#if loading}
 			<div class="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">Memuat ringkasan ujian...</div>
 		{:else}
-			<section class="grid gap-3 md:grid-cols-3">
+			<section class="grid gap-3 md:grid-cols-4">
 				<div class="rounded-2xl border border-slate-200 bg-white p-4">
 					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Persiapan</p>
 					<p class="mt-2 text-3xl font-black">{sessions.length}</p>
@@ -172,6 +177,11 @@
 					<p class="mt-2 text-3xl font-black">{unassignedParticipantCount}</p>
 					<p class="text-sm text-slate-600">peserta belum ditempatkan</p>
 				</div>
+				<div class="rounded-2xl border border-slate-200 bg-white p-4">
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Dokumen</p>
+					<p class="mt-2 text-3xl font-black">Pusat</p>
+					<p class="text-sm text-slate-600">kartu, lembar pengawas, arsip</p>
+				</div>
 			</section>
 
 			<section class="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -179,10 +189,10 @@
 					<div class="rounded-2xl border border-slate-200 bg-white p-4">
 						<div class="flex items-center justify-between gap-3">
 							<div>
-								<h2 class="text-lg font-black">Langkah cepat panitia</h2>
-								<p class="text-sm text-slate-600">Buka sesi terdekat, lalu lanjutkan ke ruang, kartu, atau arsip sesuai kebutuhan.</p>
+								<h2 class="text-lg font-black">Sesi terdekat</h2>
+								<p class="text-sm text-slate-600">Pantau sesi terdekat tanpa masuk ke halaman teknis kecuali diperlukan.</p>
 							</div>
-							<a class="rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold" href="/asesmen/pelaksanaan">Buka Pelaksanaan</a>
+							<a class="rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold" href="/asesmen/pelaksanaan">Pelaksanaan</a>
 						</div>
 						<div class="mt-3 divide-y divide-slate-100">
 							{#each latestSessions as session (session.id)}
@@ -199,7 +209,7 @@
 					</div>
 
 					<div class="rounded-2xl border border-slate-200 bg-white p-4">
-						<h2 class="text-lg font-black">Paket siap dipakai</h2>
+						<h2 class="text-lg font-black">Paket siap ujian</h2>
 						<div class="mt-3 divide-y divide-slate-100">
 							{#each latestPackages as pkg (pkg.id)}
 								<article class="flex items-center justify-between gap-3 py-3">
@@ -207,7 +217,7 @@
 										<p class="truncate font-bold">{pkg.title ?? 'Paket Ujian'}</p>
 										<p class="text-xs text-slate-500">{pkg.subject ?? 'Mapel'} · {pkg.level ?? 'Tingkat'} · {pkg.question_count ?? 0} soal</p>
 									</div>
-									<a class="shrink-0 rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold" href={`/asesmen/paket/${pkg.id}`}>Buka</a>
+									<span class="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-bold">Siap dipilih</span>
 								</article>
 							{/each}
 							{#if latestPackages.length === 0}<p class="py-4 text-sm text-slate-500">Belum ada paket ujian.</p>{/if}
@@ -222,18 +232,19 @@
 						<span class={`rounded-full px-2.5 py-1 text-xs font-bold ${readinessClass()}`}>{readinessLabel()}</span>
 					</div>
 					<p class="mt-2 text-sm leading-6 text-slate-600">
-						Ringkasan ini tidak menyimpan perubahan. Pembagian ruang, peserta, token, dan status sesi dikerjakan dari Persiapan atau Sesi agar keputusan teknis tidak tersebar.
+						Ringkasan ini tidak menyimpan perubahan. Pembagian ruang, peserta, token, dan status sesi dikerjakan dari Persiapan atau Mode Lengkap agar keputusan teknis tidak tersebar.
 					</p>
 
 					<div class="mt-4 grid gap-2">
-						<a class="rounded-xl bg-emerald-700 px-3 py-3 text-center text-sm font-black text-white" href="/asesmen/persiapan">Buka Persiapan</a>
-						<a class="rounded-xl border border-slate-300 bg-white px-3 py-3 text-center text-sm font-bold text-slate-900" href="/asesmen/sesi">Kelola Sesi</a>
-						<a class="rounded-xl border border-slate-300 bg-white px-3 py-3 text-center text-sm font-bold text-slate-900" href="/asesmen/pelaksanaan">Masuk Hari-H</a>
+						<a class="rounded-xl bg-emerald-700 px-3 py-3 text-center text-sm font-black text-white" href="/asesmen/persiapan">1. Persiapan</a>
+						<a class="rounded-xl border border-slate-300 bg-white px-3 py-3 text-center text-sm font-bold text-slate-900" href={documentHubHref}>2. Dokumen & Cetak</a>
+						<a class="rounded-xl border border-slate-300 bg-white px-3 py-3 text-center text-sm font-bold text-slate-900" href="/asesmen/pelaksanaan">3. Pelaksanaan Ujian</a>
+						<a class="rounded-xl border border-slate-300 bg-white px-3 py-3 text-center text-sm font-bold text-slate-900" href="/asesmen/panitia">Mode Lengkap Panitia</a>
 					</div>
 
 					<div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
 						<p class="font-bold text-slate-900">Batas sederhana:</p>
-						<p>Bank Soal untuk menyusun soal. Persiapan untuk menyiapkan kegiatan dan sesi. Hari-H untuk pengawas. Hasil untuk rekap dan penutupan.</p>
+						<p>Bank Soal untuk menyusun soal. Asesmen cukup untuk menyiapkan kegiatan, mencetak dokumen, menjalankan ruang, dan menutup hasil.</p>
 					</div>
 				</aside>
 			</section>

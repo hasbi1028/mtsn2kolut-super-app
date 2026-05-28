@@ -70,7 +70,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		]);
 		expect(labelsByGroup('Asesmen Ujian')).toEqual([
 			'Persiapan',
-			'Hari-H',
+			'Pelaksanaan',
 			'Ruang Saya',
 			'Hasil',
 		]);
