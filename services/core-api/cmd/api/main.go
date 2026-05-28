@@ -233,7 +233,6 @@ func main() {
 	r.With(cbtPortalLoginRateLimit).Post("/api/exam/proctor/portal/participants/{pid}/acknowledge", cbtAccessCardH.ProctorPortalAcknowledge)
 	r.With(cbtPortalLoginRateLimit).Post("/api/exam/proctor/portal/participants/{pid}/incident-action", cbtAccessCardH.ProctorPortalIncidentAction)
 	r.With(cbtPortalLoginRateLimit).Post("/api/exam/proctor/portal/participants/{pid}/command", cbtAccessCardH.ProctorPortalCommand)
-	r.With(cbtPortalLoginRateLimit).Post("/api/exam/proctor/portal/participants/{pid}/unlock", cbtAccessCardH.ProctorPortalUnlock)
 	r.With(cbtPortalLoginRateLimit).Post("/api/cbt-portal/login", cbtPortalH.Login)
 	r.Get("/api/cbt-portal/schedule", cbtPortalH.Schedule)
 	r.Post("/api/cbt-portal/participants/{participantID}/start", cbtPortalH.Start)

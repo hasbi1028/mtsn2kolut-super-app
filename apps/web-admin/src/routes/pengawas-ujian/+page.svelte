@@ -64,6 +64,8 @@
 		participants?: ProctoringRow[];
 		events?: ProctoringEvent[];
 	};
+	type AdminHelpRequest = { id: string; subject: string; text: string; created_at: string; source: 'ruang' | 'peringatan' | 'peserta' };
+	type AdminHelpContext = { source: AdminHelpRequest['source']; event?: ProctoringEvent; row?: ProctoringRow };
 
 	let token = $state('');
 	let pin = $state('');
@@ -83,6 +85,7 @@
 	let activeTab = $state<'ruang' | 'peringatan' | 'peserta'>('ruang');
 	let alertFilter = $state<'all' | 'technical' | 'cheating' | 'supervision' | 'red' | 'yellow' | 'unchecked'>('all');
 	let adminHelpText = $state('');
+	let adminHelpQueue = $state<AdminHelpRequest[]>([]);
 	let pollInterval: ReturnType<typeof setInterval> | undefined;
 	let hasPrimedEvents = false;
 
@@ -303,13 +306,44 @@
 		successMessage = message;
 	}
 
-	function contactAdmin() {
-		const latest = alertEvents[0];
-		const text = `Mohon bantuan admin CBT.\n\nUjian: ${card?.session_title ?? room?.session_title ?? 'CBT'}\nRuang: ${card?.room_name ?? room?.room_name ?? 'Ruang ujian'}\nStatus: ${signalLabel()}\nAtensi: ${attentionCount} peserta/peringatan\nTerkunci: ${lockedCount}\n${latest ? `Peserta terbaru: ${latest.nama ?? 'Peserta'} - ${eventReason(latest)}\nWaktu: ${fmtDt(latest.created_at)}` : 'Belum ada detail peserta terbaru.'}`;
+	function buildAdminHelpText(context: AdminHelpContext = { source: 'ruang' }) {
+		const latest = context.event ?? alertEvents[0];
+		const row = context.row;
+		const participantLine = latest
+			? `Peserta: ${latest.nama ?? 'Peserta'} - ${eventReason(latest)}\nWaktu: ${fmtDt(latest.created_at)}`
+			: row
+				? `Peserta: ${row.nama ?? 'Peserta'} - ${riskLabel(row)} / ${heartbeatLabel(row)}\nKursi: ${row.seat_no ?? '—'}`
+				: 'Belum ada detail peserta terbaru.';
+		return `Mohon bantuan admin CBT.\n\nUjian: ${card?.session_title ?? room?.session_title ?? 'CBT'}\nRuang: ${card?.room_name ?? room?.room_name ?? 'Ruang ujian'}\nSumber: ${context.source === 'peringatan' ? 'Tab Peringatan' : context.source === 'peserta' ? 'Tab Peserta' : 'Tab Ruang'}\nStatus: ${signalLabel()}\nAtensi: ${attentionCount} peserta/peringatan\nTerkunci: ${lockedCount}\n${participantLine}`;
+	}
+
+	function queueAdminHelp(text: string, context: AdminHelpContext) {
+		const subject = context.event?.nama ?? context.row?.nama ?? card?.room_name ?? room?.room_name ?? 'Ruang ujian';
 		adminHelpText = text;
+		adminHelpQueue = [
+			{ id: `${Date.now()}-${adminHelpQueue.length}`, subject, text, created_at: new Date().toISOString(), source: context.source },
+			...adminHelpQueue
+		].slice(0, 5);
+	}
+
+	async function contactAdmin(context: AdminHelpContext = { source: 'ruang' }) {
+		const text = buildAdminHelpText(context);
+		queueAdminHelp(text, context);
 		if (browser) navigator.clipboard?.writeText(text).catch(() => undefined);
+		if (demoMode) {
+			demoRoomStatus = 'Bantuan Admin Diminta';
+			successMessage = 'Permintaan bantuan admin DEMO masuk antrean dan teks siap dikirim.';
+			return;
+		}
+		if (context.event?.id && context.event.participant_id) {
+			await portalAction(
+				`/api/exam/proctor/portal/participants/${encodeURIComponent(context.event.participant_id)}/incident-action`,
+				{ event_id: context.event.id, action: 'escalated', notes: text },
+				'Permintaan bantuan admin dicatat dan teks siap dikirim.'
+			);
+			return;
+		}
 		successMessage = 'Pesan bantuan disiapkan/disalin. Kirim ke admin/operator CBT.';
-		if (demoMode) demoRoomStatus = 'Bantuan Admin Diminta';
 	}
 
 	function copyAdminHelpText() {
@@ -570,6 +604,18 @@
 							<button class="mt-2 min-h-10 rounded-xl bg-amber-500 px-3 text-xs font-bold text-amber-950" onclick={copyAdminHelpText}>Salin Lagi</button>
 						</div>
 					{/if}
+					{#if adminHelpQueue.length > 0}
+						<div class="mt-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-xs text-red-950">
+							<p class="font-black">Antrian bantuan admin ({adminHelpQueue.length})</p>
+							<div class="mt-2 space-y-1">
+								{#each adminHelpQueue.slice(0, 3) as item (item.id)}
+									<button class="w-full rounded-xl bg-white/75 px-2 py-1 text-left text-[11px] font-semibold" onclick={() => { adminHelpText = item.text; if (browser) navigator.clipboard?.writeText(item.text).catch(() => undefined); }}>
+										{item.source === 'peringatan' ? 'Peringatan' : item.source === 'peserta' ? 'Peserta' : 'Ruang'} · {item.subject} · {fmtDt(item.created_at)}
+									</button>
+								{/each}
+							</div>
+						</div>
+					{/if}
 				</div>
 
 				<div class="flex-1 overflow-y-auto px-4 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
@@ -599,7 +645,7 @@
 							<div class="grid gap-2">
 								<button class="min-h-14 rounded-2xl bg-emerald-700 px-4 text-base font-black text-white disabled:opacity-60" disabled={Boolean(actionBusy) || room?.session_status === 'active'} onclick={() => void updateStatus('active')}>{actionBusy === 'status-active' ? 'Memproses...' : 'Mulai Ujian'}</button>
 								<div class="grid grid-cols-2 gap-2">
-									<button class="min-h-12 rounded-2xl bg-amber-500 px-3 text-sm font-black text-amber-950" onclick={contactAdmin}>Hubungi Admin</button>
+									<button class="min-h-12 rounded-2xl bg-amber-500 px-3 text-sm font-black text-amber-950" onclick={() => void contactAdmin({ source: 'ruang' })}>Hubungi Admin</button>
 									<button class="min-h-12 rounded-2xl border border-slate-300 px-3 text-sm font-black {audioAlertsEnabled ? 'bg-emerald-700 text-white' : 'bg-white text-slate-900'}" onclick={() => audioAlertsEnabled = !audioAlertsEnabled}>Audio {audioAlertsEnabled ? 'ON' : 'OFF'}</button>
 								</div>
 								<button class="min-h-12 rounded-2xl bg-slate-900 px-4 text-sm font-black text-white disabled:opacity-60" disabled={Boolean(actionBusy) || room?.session_status === 'finished'} onclick={() => void updateStatus('finished')}>Tutup Ujian</button>
@@ -675,7 +721,7 @@
 											<div class="mt-3 grid grid-cols-2 gap-2">
 												<button class="min-h-11 rounded-xl border border-slate-300 bg-white/80 px-2 text-xs font-bold" disabled={Boolean(actionBusy)} onclick={() => void acknowledgeEvent(event)}>Sudah Dicek</button>
 												<button class="min-h-11 rounded-xl border border-amber-300 bg-amber-100 px-2 text-xs font-bold text-amber-950" disabled={Boolean(actionBusy)} onclick={() => void incidentAction(event, 'warning_given')}>Beri Peringatan</button>
-												<button class="col-span-2 min-h-11 rounded-xl bg-red-700 px-2 text-xs font-bold text-white" onclick={contactAdmin}>Hubungi Admin</button>
+												<button class="col-span-2 min-h-11 rounded-xl bg-red-700 px-2 text-xs font-bold text-white" onclick={() => void contactAdmin({ source: 'peringatan', event })}>Hubungi Admin</button>
 											</div>
 										</article>
 									{/each}
@@ -711,7 +757,7 @@
 									{#if participantNeedsAttention(row)}
 										<div class="mt-3 grid grid-cols-2 gap-2">
 											<button class="min-h-10 rounded-xl border border-amber-300 bg-amber-50 px-2 text-xs font-bold text-amber-950" disabled={Boolean(actionBusy)} onclick={() => void sendWarning(row)}>Beri Peringatan</button>
-											<button class="min-h-10 rounded-xl border border-slate-300 px-2 text-xs font-bold" onclick={contactAdmin}>Hubungi Admin</button>
+											<button class="min-h-10 rounded-xl border border-slate-300 px-2 text-xs font-bold" onclick={() => void contactAdmin({ source: 'peserta', row })}>Hubungi Admin</button>
 										</div>
 									{/if}
 								</article>

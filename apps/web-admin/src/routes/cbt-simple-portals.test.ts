@@ -5,6 +5,7 @@ const layoutSource = readFileSync('src/routes/+layout.svelte', 'utf8');
 const publicPolicySource = readFileSync('src/lib/routes/public-policy.ts', 'utf8');
 const studentPortalSource = readFileSync('src/routes/ujian/+page.svelte', 'utf8');
 const proctorPortalSource = readFileSync('src/routes/pengawas-ujian/+page.svelte', 'utf8');
+const coreApiMainSource = readFileSync('../../services/core-api/cmd/api/main.go', 'utf8');
 
 describe('simple CBT mobile web portals', () => {
 	it('keeps student and proctor portals as public standalone shells outside admin chrome', () => {
@@ -56,9 +57,21 @@ describe('simple CBT mobile web portals', () => {
 		expect(proctorPortalSource).not.toContain('disabled={Boolean(actionBusy) || demoMode}');
 		expect(proctorPortalSource).not.toContain('unlockParticipant');
 		expect(proctorPortalSource).not.toContain('/unlock');
+		expect(coreApiMainSource).not.toContain('/api/exam/proctor/portal/participants/{pid}/unlock');
 		expect(proctorPortalSource).not.toContain('/reset');
 		expect(proctorPortalSource).not.toContain('force-submit');
 		expect(proctorPortalSource).not.toContain('onclick={() => void unlockParticipant');
+	});
+
+	it('keeps Phase 5 proctor admin help as a safe queue and escalation instead of an admin action panel', () => {
+		expect(proctorPortalSource).toContain('type AdminHelpRequest');
+		expect(proctorPortalSource).toContain('let adminHelpQueue = $state<AdminHelpRequest[]>([])');
+		expect(proctorPortalSource).toContain('buildAdminHelpText');
+		expect(proctorPortalSource).toContain('queueAdminHelp');
+		expect(proctorPortalSource).toContain('Antrian bantuan admin');
+		expect(proctorPortalSource).toContain("action: 'escalated'");
+		expect(proctorPortalSource).toContain("contactAdmin({ source: 'peringatan', event })");
+		expect(proctorPortalSource).toContain("contactAdmin({ source: 'peserta', row })");
 	});
 
 	it('groups proctor warnings into simple Phase 4 buckets with friendly labels', () => {
