@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+	buildAsesmenWorkflowPhaseCards,
 	countRunningSessions,
 	countUnassignedParticipants,
+	deriveAsesmenWorkflowAccess,
 	latestEventDocumentHubHref,
 	summarizeWorkflowReadiness,
 	workflowReadinessClass
@@ -43,5 +45,42 @@ describe('asesmen workflow hub helpers', () => {
 		expect(workflowReadinessClass('warning')).toContain('warning');
 		expect(workflowReadinessClass('success')).toContain('success');
 		expect(workflowReadinessClass('neutral')).toContain('muted');
+	});
+
+	it('derives workflow access from permission-based RBAC instead of route-local role checks', () => {
+		expect(deriveAsesmenWorkflowAccess({ roles: ['admin'] })).toEqual({
+			canOpenPreparation: true,
+			canOpenExecution: true,
+			canOpenResults: true,
+			canLoadDashboardStats: true
+		});
+		expect(deriveAsesmenWorkflowAccess({ permissions: ['asesmen.proctor'] })).toMatchObject({
+			canOpenPreparation: false,
+			canOpenExecution: true,
+			canOpenResults: false
+		});
+		expect(deriveAsesmenWorkflowAccess({ permissions: ['asesmen.result_read'] })).toMatchObject({
+			canOpenPreparation: false,
+			canOpenExecution: false,
+			canOpenResults: true
+		});
+	});
+
+	it('builds only visible workflow phase cards with the simplified public labels', () => {
+		const cards = buildAsesmenWorkflowPhaseCards(
+			{
+				canOpenPreparation: true,
+				canOpenExecution: true,
+				canOpenResults: false,
+				canLoadDashboardStats: true
+			},
+			'/asesmen/kegiatan/event-1/cetak',
+			(href) => `/base${href}`
+		);
+		expect(cards.map((card) => card.title)).toEqual(['Persiapan', 'Pelaksanaan', 'Arsip']);
+		expect(cards.find((card) => card.title === 'Pelaksanaan')?.description).toContain('bantuan portal');
+		expect(cards.find((card) => card.title === 'Pelaksanaan')?.tone).toBe('primary');
+		expect(cards.find((card) => card.title === 'Arsip')?.href).toBe('/asesmen/kegiatan/event-1/cetak');
+		expect(cards[0]?.href).toBe('/base/asesmen/persiapan');
 	});
 });

@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import asesmenHubSource from './+page.svelte?raw';
+import asesmenWorkflowHubSource from '$lib/asesmen/workflow-hub?raw';
 import pelaksanaanSource from './pelaksanaan/+page.svelte?raw';
 import aplikasiSiswaSource from './aplikasi-siswa/+page.svelte?raw';
 
 describe('simplified Asesmen terminology', () => {
 	it('keeps the main CBT hub free of day-of jargon', () => {
 		expect(asesmenHubSource).toContain('Command Center CBT');
-		expect(asesmenHubSource).toContain('sebelum pelaksanaan');
+		expect(`${asesmenHubSource}
+${asesmenWorkflowHubSource}`).toContain('sebelum pelaksanaan');
 		expect(asesmenHubSource).not.toContain('hari-H');
 		// Keep internal route names stable, but field-facing title/copy should be simple.
 		expect(asesmenHubSource).not.toContain('Browser Darurat');

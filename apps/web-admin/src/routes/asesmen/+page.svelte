@@ -4,8 +4,10 @@
 	import { onMount } from 'svelte';
 	import { AssessmentPhaseHeader, AssessmentTaskCard } from '$lib/components/asesmen';
 	import {
+		buildAsesmenWorkflowPhaseCards,
 		countRunningSessions,
 		countUnassignedParticipants,
+		deriveAsesmenWorkflowAccess,
 		latestEventDocumentHubHref,
 		summarizeWorkflowReadiness,
 		workflowReadinessClass
@@ -37,55 +39,12 @@
 	let latestPackages = $derived(packages.slice(0, 5));
 	let unassignedParticipantCount = $derived(countUnassignedParticipants(sessions));
 	let runningSessions = $derived(countRunningSessions(sessions));
-	let userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
-	let userPermissions = $derived((page.data.user?.permissions ?? []).map((permission) => permission.trim()).filter(Boolean));
-	let canOpenPreparation = $derived(
-		userRoles.includes('admin')
-			|| userPermissions.includes('asesmen.operator')
-			|| userPermissions.includes('asesmen.event_manage')
-			|| userPermissions.includes('asesmen.package_manage')
-			|| userPermissions.includes('asesmen.session_manage')
-			|| userPermissions.includes('asesmen.participant_manage')
-	);
-	let canOpenExecution = $derived(canOpenPreparation || userPermissions.includes('asesmen.proctor'));
-	let canOpenResults = $derived(userRoles.includes('admin') || userPermissions.includes('asesmen.result_read'));
-	let canLoadDashboardStats = $derived(canOpenPreparation || userPermissions.includes('asesmen.read'));
+	let workflowAccess = $derived(deriveAsesmenWorkflowAccess(page.data.user));
+	let canOpenPreparation = $derived(workflowAccess.canOpenPreparation);
+	let canLoadDashboardStats = $derived(workflowAccess.canLoadDashboardStats);
 	let documentHubHref = $derived(latestEventDocumentHubHref(sessions));
 	let workflowReadiness = $derived(summarizeWorkflowReadiness(sessions));
-	let phaseCards = $derived([
-		{
-			code: '7.1',
-			title: 'Persiapan',
-			description: 'Kegiatan, paket, sesi, ruang, peserta, dan pengawas sebelum pelaksanaan.',
-			href: resolve('/asesmen/persiapan'),
-			cta: 'Buka persiapan',
-			show: canOpenPreparation
-		},
-		{
-			code: '7.2',
-			title: 'Pelaksanaan',
-			description: 'Sesi panitia, Ruang Saya, panel ruang, dan bantuan perangkat saat ujian berjalan.',
-			href: resolve('/asesmen/pelaksanaan'),
-			cta: 'Buka pelaksanaan',
-			show: canOpenExecution
-		},
-		{
-			code: '7.3',
-			title: 'Hasil',
-			description: 'Rekap nilai, status submit, koreksi uraian, analisis butir, dan sinkronisasi.',
-			href: resolve('/asesmen/hasil'),
-			cta: 'Buka hasil',
-			show: canOpenResults
-		},
-		{
-			code: '7.4',
-			title: 'Arsip',
-			description: 'Berita acara, rekap pelaksanaan, dan tindak lanjut sesi setelah ujian.',
-			href: documentHubHref,
-			cta: 'Buka arsip',
-			show: canOpenPreparation || canOpenResults
-		}
-	].filter((item) => item.show));
+	let phaseCards = $derived(buildAsesmenWorkflowPhaseCards(workflowAccess, documentHubHref, resolve));
 
 	onMount(() => {
 		if (canLoadDashboardStats) {
@@ -200,7 +159,7 @@
 				</div>
 				<div class="grid gap-3 lg:grid-cols-2">
 					{#each phaseCards as item (item.code)}
-						<AssessmentTaskCard code={item.code} title={item.title} description={item.description} href={item.href} cta={item.cta} tone={item.code === '7.2' ? 'primary' : 'default'} />
+						<AssessmentTaskCard code={item.code} title={item.title} description={item.description} href={item.href} cta={item.cta} tone={item.tone ?? 'default'} />
 					{/each}
 				</div>
 			</section>
