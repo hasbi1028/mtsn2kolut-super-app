@@ -2,9 +2,13 @@
 	import {
 		advancedPrototypeLinks,
 		hiddenFromMainFlow,
+		legacyNavigationGroups,
+		legacyUiPrinciples,
 		prototypeLanes,
 		prototypeMetrics,
+		prototypePublicPortals,
 		prototypeRooms,
+		publicPortalRules,
 		type PrototypeStatus,
 		type PrototypeStepState
 	} from './asesmen-prototype.model';
@@ -73,6 +77,121 @@
 						</div>
 					{/each}
 				</div>
+			</div>
+		</div>
+	</section>
+
+	<section class="rounded-2xl border border-border bg-card p-3 shadow-sm">
+		<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+			<div>
+				<p class="text-[11px] font-black uppercase tracking-[0.18em] text-primary">Mengikuti CBT lama</p>
+				<h2 class="mt-0.5 text-lg font-black text-foreground">Familiar untuk operator: command center, sidebar grup, tabel kerja</h2>
+				<p class="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+					Prototype ini diarahkan mengambil rasa UI CBT lama di cbt.mtsn2kolut.sch.id: putih terang, kartu status, angka besar, istilah operasional yang sudah dikenal, tetapi Bank Soal tidak dijadikan acuan utama penyederhanaan.
+				</p>
+			</div>
+			<span class="w-fit rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-black text-sky-800">referensi CBT lama</span>
+		</div>
+
+		<div class="mt-3 grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
+			<div class="rounded-2xl border border-border bg-muted/20 p-3">
+				<p class="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground">Struktur menu familiar</p>
+				<div class="mt-2 grid gap-2 sm:grid-cols-2">
+					{#each legacyNavigationGroups as group (group.label)}
+						<div class="rounded-xl border border-border bg-card p-2.5">
+							<p class="text-[11px] font-black uppercase tracking-[0.16em] text-primary">{group.label}</p>
+							<div class="mt-2 flex flex-wrap gap-1.5">
+								{#each group.items as item (item)}
+									<span class="rounded-lg border border-border bg-background px-2 py-1 text-[11px] font-bold text-foreground">{item}</span>
+								{/each}
+							</div>
+						</div>
+					{/each}
+				</div>
+			</div>
+
+			<div class="rounded-2xl border border-border bg-muted/20 p-3">
+				<p class="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground">Prinsip yang dibawa ke Super App</p>
+				<div class="mt-2 grid gap-2">
+					{#each legacyUiPrinciples as principle (principle.label)}
+						<div class="rounded-xl border border-border bg-card px-3 py-2">
+							<p class="text-sm font-black text-foreground">{principle.label}</p>
+							<p class="mt-0.5 text-xs leading-5 text-muted-foreground">{principle.detail}</p>
+						</div>
+					{/each}
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<section class="rounded-2xl border border-border bg-card p-3 shadow-sm">
+		<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+			<div>
+				<p class="text-[11px] font-black uppercase tracking-[0.18em] text-primary">Prototype portal publik</p>
+				<h2 class="mt-0.5 text-lg font-black text-foreground">Siswa & Pengawas dibuat seperti aplikasi HP</h2>
+				<p class="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+					Bagian ini menggambarkan arah penyederhanaan `/ujian` dan `/pengawas-ujian`: tidak masuk ke dashboard admin, tidak penuh menu teknis, dan hanya menampilkan aksi harian yang dibutuhkan.
+				</p>
+			</div>
+			<span class="w-fit rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-800">mobile-web sederhana</span>
+		</div>
+
+		<div class="mt-3 grid gap-3 lg:grid-cols-2">
+			{#each prototypePublicPortals as portal (portal.code)}
+				<article class="rounded-2xl border border-border bg-muted/20 p-3">
+					<div class="flex items-start justify-between gap-3">
+						<div class="min-w-0">
+							<p class="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">{portal.code} · {portal.routeLabel}</p>
+							<h3 class="mt-0.5 text-base font-black text-foreground">{portal.title}</h3>
+							<p class="mt-1 text-xs leading-5 text-muted-foreground">{portal.subtitle}</p>
+						</div>
+						<div class="shrink-0 rounded-[1.5rem] border border-border bg-card p-1.5 shadow-sm" aria-hidden="true">
+							<div class="h-20 w-11 rounded-[1.1rem] border border-border bg-background p-1">
+								<div class="h-1 rounded-full bg-muted"></div>
+								<div class="mt-2 grid gap-1">
+									<span class="h-2 rounded bg-primary/70"></span>
+									<span class="h-2 rounded bg-muted"></span>
+									<span class="h-2 rounded bg-muted"></span>
+								</div>
+								<div class="mt-4 h-3 rounded bg-emerald-100"></div>
+							</div>
+						</div>
+					</div>
+
+					<div class="mt-3 grid gap-2 sm:grid-cols-2">
+						<div class="rounded-xl border border-border bg-card p-2.5">
+							<p class="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Alur layar</p>
+							<ol class="mt-2 space-y-1.5 text-xs font-semibold text-foreground">
+								{#each portal.steps as step, index (step)}
+									<li class="flex gap-2 rounded-lg bg-muted/25 px-2 py-1.5"><span class="text-primary">{index + 1}.</span><span>{step}</span></li>
+								{/each}
+							</ol>
+						</div>
+						<div class="rounded-xl border border-border bg-card p-2.5">
+							<p class="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Tombol yang terlihat</p>
+							<div class="mt-2 flex flex-wrap gap-1.5">
+								{#each portal.actions as action (action)}
+									<span class="rounded-lg border border-border bg-background px-2 py-1 text-[11px] font-black text-foreground">{action}</span>
+								{/each}
+							</div>
+							<p class="mt-2 text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Batas aman</p>
+							<ul class="mt-1 space-y-1 text-xs leading-5 text-muted-foreground">
+								{#each portal.guardrails as guardrail (guardrail)}
+									<li>• {guardrail}</li>
+								{/each}
+							</ul>
+						</div>
+					</div>
+				</article>
+			{/each}
+		</div>
+
+		<div class="mt-3 rounded-xl border border-dashed border-border bg-muted/20 p-3">
+			<p class="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground">Aturan portal sederhana</p>
+			<div class="mt-2 flex flex-wrap gap-1.5">
+				{#each publicPortalRules as rule (rule)}
+					<span class="rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground">{rule}</span>
+				{/each}
 			</div>
 		</div>
 	</section>

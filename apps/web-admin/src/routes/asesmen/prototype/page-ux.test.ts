@@ -44,6 +44,17 @@ describe('asesmen frontend-only prototype', () => {
 		expect(modelSource).toContain('Hubungi Admin');
 	});
 
+	it('follows the old CBT UI vocabulary while excluding Bank Soal as the main reference', () => {
+		expect(pageSource).toContain('Mengikuti CBT lama');
+		expect(pageSource).toContain('Struktur menu familiar');
+		expect(pageSource).toContain('Prinsip yang dibawa ke Super App');
+		expect(modelSource).toContain('Pusat Data');
+		expect(modelSource).toContain('Ruang Ujian');
+		expect(modelSource).toContain('Proctoring Live');
+		expect(modelSource).toContain('Rekap Nilai');
+		expect(modelSource).toContain('Bank Soal tidak dijadikan contoh utama prototype');
+	});
+
 	it('keeps the prototype compact and avoids demo/local CTA', () => {
 		expect(pageSource).toContain('Micro');
 		expect(pageSource).not.toContain('demo=1');

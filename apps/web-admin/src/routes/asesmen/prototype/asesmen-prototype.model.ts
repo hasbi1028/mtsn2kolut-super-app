@@ -37,6 +37,26 @@ export type PrototypeLane = {
 	modeLengkap?: string[];
 };
 
+export type PrototypePublicPortal = {
+	code: 'S1' | 'P1';
+	title: string;
+	subtitle: string;
+	routeLabel: string;
+	steps: string[];
+	actions: string[];
+	guardrails: string[];
+};
+
+export type LegacyNavigationGroup = {
+	label: string;
+	items: string[];
+};
+
+export type LegacyUiPrinciple = {
+	label: string;
+	detail: string;
+};
+
 export const prototypeMetrics: PrototypeMetric[] = [
 	{
 		label: 'Kegiatan aktif',
@@ -76,6 +96,72 @@ export const prototypeRooms: PrototypeRoom[] = [
 		students: '32 peserta',
 		status: 'Menunggu jadwal sesi',
 		tone: 'blue'
+	}
+];
+
+export const prototypePublicPortals: PrototypePublicPortal[] = [
+	{
+		code: 'S1',
+		title: 'Portal Siswa Sederhana',
+		subtitle: 'Web rasa aplikasi HP untuk peserta: masuk, tunggu, kerjakan, kumpulkan.',
+		routeLabel: '/ujian',
+		steps: ['QR/PIN kartu', 'Konfirmasi identitas', 'Ruang tunggu', 'Satu soal per layar', 'Kumpulkan'],
+		actions: ['Sebelumnya', 'Ragu-ragu', 'Berikutnya', 'Kumpulkan'],
+		guardrails: ['Teks ramah siswa', 'Status tersimpan jelas', 'Tidak ada menu admin']
+	},
+	{
+		code: 'P1',
+		title: 'Portal Pengawas Ruang',
+		subtitle: 'Pengawas hanya melihat ruang tugas, peringatan, peserta, dan tombol bantuan admin.',
+		routeLabel: '/pengawas-ujian',
+		steps: ['Masuk ruang', 'Tab Ruang', 'Tab Peringatan', 'Tab Peserta', 'Hubungi Admin'],
+		actions: ['Mulai Ujian', 'Sudah Dicek', 'Beri Peringatan', 'Hubungi Admin'],
+		guardrails: ['Tidak ada unlock publik', 'Tidak membuka konsol panitia', 'Bantuan admin satu tombol']
+	}
+];
+
+export const publicPortalRules = [
+	'Standalone tanpa sidebar/admin chrome',
+	'Tampilan terang dan mudah dibaca di HP',
+	'Aksi sensitif tetap di Mode Lengkap Panitia',
+	'Demo boleh klik-through, tetapi tidak menyentuh data asli'
+];
+
+export const legacyNavigationGroups: LegacyNavigationGroup[] = [
+	{
+		label: 'Pusat Data',
+		items: ['Dashboard', 'Mata Pelajaran', 'Data Kelas', 'Daftar Siswa', 'Staf & Pengawas', 'Ruang Ujian']
+	},
+	{
+		label: 'Manajemen Ujian',
+		items: ['Paket Ujian', 'Jadwal Sesi', 'Penempatan Peserta']
+	},
+	{
+		label: 'Pelaksanaan',
+		items: ['Proctoring Live', 'Agenda Hari Ini', 'Kekurangan Operasional']
+	},
+	{
+		label: 'Laporan',
+		items: ['Rekap Nilai', 'Export Excel/CSV', 'Arsip Ujian']
+	}
+];
+
+export const legacyUiPrinciples: LegacyUiPrinciple[] = [
+	{
+		label: 'Command center terang',
+		detail: 'Hero ringkas, angka besar, badge status, dan kartu kesiapan seperti CBT lama.'
+	},
+	{
+		label: 'Sidebar dikelompokkan',
+		detail: 'Pusat Data, Manajemen Ujian, Pelaksanaan, Laporan; Bank Soal tidak dijadikan contoh utama prototype.'
+	},
+	{
+		label: 'Tabel operasional familiar',
+		detail: 'Filter kecil, tombol EXPORT/IMPORT/CETAK, pagination sederhana, dan aksi per baris secukupnya.'
+	},
+	{
+		label: 'Bahasa operasional',
+		detail: 'Istilah seperti Ruang Ujian, Jadwal Sesi, Proctoring Live, Rekap Nilai tetap dipakai agar familiar.'
 	}
 ];
 
