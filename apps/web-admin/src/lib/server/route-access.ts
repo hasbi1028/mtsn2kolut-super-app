@@ -7,9 +7,6 @@ const ADMIN_ONLY_PREFIXES = [
 	'/parents',
 	'/pusaka',
 	'/website',
-	'/asesmen/kegiatan',
-	'/asesmen/paket',
-	'/asesmen/sesi',
 	'/settings/users',
 	'/settings/rbac',
 	'/settings/user-change-requests',
@@ -29,30 +26,14 @@ const ADMIN_ONLY_PREFIXES = [
 	'/api/branding',
 	'/api/system/backups',
 	'/api/system/maintenance',
-	'/api/asesmen/events',
-	'/api/asesmen/approvals',
-	'/api/asesmen/packages',
-	'/api/asesmen/sessions',
 	'/api/scheduler/tick'
 ] as const;
 
 const GURU_SAFE_ASSESSMENT_SUPPORT_READ_PATHS = new Set([
-	'/asesmen/kegiatan',
-	'/asesmen/paket',
-	'/asesmen/sesi',
-	'/api/asesmen/events',
-	'/api/asesmen/packages',
-	'/api/asesmen/sessions',
 	'/api/bank-soal/soal-support/subjects'
 ]);
 
-const GURU_SAFE_ASSESSMENT_SUPPORT_READ_PREFIXES = [
-	'/asesmen/kegiatan',
-	'/asesmen/paket',
-	'/asesmen/sesi',
-	'/api/asesmen/events',
-	'/api/asesmen/packages'
-] as const;
+const GURU_SAFE_ASSESSMENT_SUPPORT_READ_PREFIXES = [] as const;
 
 const BANK_SOAL_PREFIXES = ['/bank-soal', '/api/bank-soal'] as const;
 
@@ -107,7 +88,6 @@ export function isAdminOnlyPath(pathname: string) {
 
 export function isGuruSafeAssessmentSupportReadPath(pathname: string, method: string) {
 	if (!isReadMethod(method)) return false;
-	if (isSensitiveAssessmentReadPath(pathname)) return false;
 	if (GURU_SAFE_ASSESSMENT_SUPPORT_READ_PATHS.has(pathname)) return true;
 	return GURU_SAFE_ASSESSMENT_SUPPORT_READ_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
 }
@@ -228,111 +208,6 @@ function isBankSoalGuruFallbackPath(pathname: string, method: string) {
 		&& !matchesPathSegment(pathname, '/bank-soal/pengaturan');
 }
 
-function isSensitiveAssessmentReadPath(pathname: string): boolean {
-	const cleanPath = pathname.split('?')[0] ?? pathname;
-	return /^\/api\/asesmen\/events\/[^/]+\/results\/?$/.test(cleanPath)
-		|| /^\/api\/asesmen\/sessions\/[^/]+\/results\/?$/.test(cleanPath)
-		|| /^\/api\/asesmen\/sessions\/[^/]+\/item-analysis\/?$/.test(cleanPath)
-		|| /^\/api\/asesmen\/sessions\/[^/]+\/operational-recap\/?$/.test(cleanPath)
-		|| /^\/api\/asesmen\/sessions\/[^/]+\/ungraded-essays\/?$/.test(cleanPath)
-		|| /^\/api\/asesmen\/sessions\/[^/]+\/score\/?$/.test(cleanPath)
-		|| /^\/api\/asesmen\/sessions\/[^/]+\/answers\/[^/]+\/grade-essay\/?$/.test(cleanPath)
-		|| /^\/api\/asesmen\/sessions\/[^/]+\/proctoring(?:\/.*)?$/.test(cleanPath)
-		|| /^\/api\/asesmen\/sessions\/[^/]+\/rooms\/[^/]+\/proctoring(?:\/.*)?$/.test(cleanPath)
-		|| /^\/api\/asesmen\/sessions\/[^/]+\/audit-logs\/?$/.test(cleanPath);
-}
-
-const ASSESSMENT_OPERATOR_PERMISSIONS = [
-	'asesmen.operator',
-	'asesmen.event_manage',
-	'asesmen.package_manage',
-	'asesmen.session_manage',
-	'asesmen.participant_manage'
-] as const;
-const ASSESSMENT_DAY_OF_PERMISSIONS = ['asesmen.proctor', ...ASSESSMENT_OPERATOR_PERMISSIONS] as const;
-const ASSESSMENT_GUIDE_PERMISSIONS = [...ASSESSMENT_DAY_OF_PERMISSIONS] as const;
-const ASSESSMENT_SESSION_MANAGE_PERMISSIONS = ['asesmen.session_manage', 'asesmen.operator'] as const;
-const ASSESSMENT_PARTICIPANT_MANAGE_PERMISSIONS = ['asesmen.participant_manage', 'asesmen.session_manage', 'asesmen.operator'] as const;
-const ASSESSMENT_RESULT_PERMISSIONS = ['asesmen.result_read', 'asesmen.result_manage'] as const;
-
-function asesmenPermission(pathname: string, method: string): string[] | undefined {
-	if (matchesPathSegment(pathname, '/asesmen/ringkas')) return [...ASSESSMENT_DAY_OF_PERMISSIONS, ...ASSESSMENT_RESULT_PERMISSIONS];
-	if (matchesPathSegment(pathname, '/asesmen/persiapan')) return [...ASSESSMENT_OPERATOR_PERMISSIONS];
-	if (matchesPathSegment(pathname, '/asesmen/pelaksanaan')) return [...ASSESSMENT_DAY_OF_PERMISSIONS];
-	if (matchesPathSegment(pathname, '/asesmen/aplikasi-siswa/release')) return [...ASSESSMENT_OPERATOR_PERMISSIONS];
-	if (matchesPathSegment(pathname, '/asesmen/aplikasi-siswa/matrix')) return [...ASSESSMENT_OPERATOR_PERMISSIONS];
-	if (matchesPathSegment(pathname, '/asesmen/hasil')) return [...ASSESSMENT_RESULT_PERMISSIONS];
-	if (matchesPathSegment(pathname, '/ujian/command-center') || matchesPathSegment(pathname, '/asesmen/pengawasan')) return ['asesmen.proctor'];
-	if (/^\/api\/asesmen\/events\/[^/]+\/results\/?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/(results|item-analysis|operational-recap)\/?$/.test(pathname)) {
-		return [...ASSESSMENT_RESULT_PERMISSIONS];
-	}
-	if (/^\/api\/asesmen\/sessions\/[^/]+\/(grade-sync-preflight|remedial-candidates)\/?$/.test(pathname)) {
-		return [...ASSESSMENT_RESULT_PERMISSIONS];
-	}
-	if (/^\/api\/asesmen\/sessions\/[^/]+\/(ungraded-essays|score)\/?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/answers\/[^/]+\/grade-essay\/?$/.test(pathname)) {
-		return ['asesmen.score'];
-	}
-	if (/^\/api\/asesmen\/sessions\/[^/]+\/rooms\/(assignment|assignment-preview)\/?$/.test(pathname)) {
-		return [...ASSESSMENT_PARTICIPANT_MANAGE_PERMISSIONS];
-	}
-	if (/^\/api\/asesmen\/sessions\/[^/]+\/rooms\/readiness\/?$/.test(pathname)) {
-		return ['asesmen.read'];
-	}
-	if (/^\/api\/asesmen\/sessions\/[^/]+\/rooms\/[^/]+\/participants\/[^/]+(?:\/(flag|reset-access|unlock|acknowledge|incident-action|command|force-submit))?\/?$/.test(pathname)) {
-		return ['asesmen.proctor'];
-	}
-	if (/^\/api\/asesmen\/sessions\/[^/]+\/participants\/[^/]+\/(flag|force-submit|proctor-actions)\/?$/.test(pathname)) {
-		return ['asesmen.proctor'];
-	}
-	if (/^\/api\/asesmen\/sessions\/[^/]+\/participants\/[^/]+\/answer\/?$/.test(pathname)) {
-		return [];
-	}
-	if (/^\/api\/asesmen\/sessions\/[^/]+\/participants\/[^/]+\/answers\/?$/.test(pathname)) {
-		return ['asesmen.read'];
-	}
-	if (/^\/api\/asesmen\/sessions\/[^/]+\/participants(?:\/.*)?$/.test(pathname)) {
-		if (isReadMethod(method)) return ['asesmen.read'];
-		return [...ASSESSMENT_PARTICIPANT_MANAGE_PERMISSIONS];
-	}
-	if (/^\/api\/asesmen\/sessions\/[^/]+\/(generate-tokens|seats\/auto|enroll|enroll-grade|enroll-school)\/?$/.test(pathname)) {
-		if (isReadMethod(method)) return ['asesmen.read'];
-		return [...ASSESSMENT_PARTICIPANT_MANAGE_PERMISSIONS];
-	}
-	if (/^\/api\/asesmen\/sessions\/[^/]+\/(shuffle-rooms|finalize-overdue)\/?$/.test(pathname)) {
-		return [...ASSESSMENT_SESSION_MANAGE_PERMISSIONS];
-	}
-	if (
-		/^\/api\/asesmen\/sessions\/[^/]+\/(status|schedule)\/?$/.test(pathname)
-	) {
-		if (isReadMethod(method)) return ['asesmen.read'];
-		return [...ASSESSMENT_SESSION_MANAGE_PERMISSIONS];
-	}
-	if (/^\/api\/asesmen\/sessions\/[^/]+\/proctoring(?:\/.*)?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/rooms\/[^/]+\/proctoring(?:\/.*)?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/rooms\/[^/]+\/(web-fallback|print-pack|handover(?:\/lock)?)\/?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/audit-logs\/?$/.test(pathname)) {
-		return ['asesmen.proctor'];
-	}
-	if (matchesPathSegment(pathname, '/asesmen/non-tes') || matchesPathSegment(pathname, '/api/asesmen/non-test-assessments')) {
-		return isReadMethod(method) ? ['asesmen.read'] : ['asesmen.score'];
-	}
-	if (matchesPathSegment(pathname, '/asesmen/panitia')) return [...ASSESSMENT_OPERATOR_PERMISSIONS];
-	if (matchesPathSegment(pathname, '/asesmen/ruang-saya')) return ['asesmen.proctor'];
-	if (matchesPathSegment(pathname, '/asesmen/aplikasi-siswa')) return [...ASSESSMENT_GUIDE_PERMISSIONS];
-	if (matchesPathSegment(pathname, '/api/asesmen/proctoring')) return ['asesmen.proctor'];
-	if (matchesPathSegment(pathname, '/api/asesmen/approvals')) {
-		return [];
-	}
-	if (matchesPathSegment(pathname, '/asesmen/paket') || matchesPathSegment(pathname, '/api/asesmen/packages')) {
-		return isReadMethod(method) ? ['asesmen.read'] : ['asesmen.package_manage'];
-	}
-	if (matchesPathSegment(pathname, '/asesmen/kegiatan') || matchesPathSegment(pathname, '/api/asesmen/events')) {
-		return isReadMethod(method) ? ['asesmen.read'] : ['asesmen.event_manage'];
-	}
-	if (matchesPathSegment(pathname, '/asesmen/sesi') || matchesPathSegment(pathname, '/api/asesmen/sessions')) {
-		return isReadMethod(method) ? ['asesmen.read'] : [...ASSESSMENT_SESSION_MANAGE_PERMISSIONS];
-	}
-	if (matchesPathSegment(pathname, '/asesmen')) return [...ASSESSMENT_DAY_OF_PERMISSIONS, ...ASSESSMENT_RESULT_PERMISSIONS];
-	return undefined;
-}
-
 function staffOperationPermission(pathname: string, method: string): string[] | undefined {
 	if (!isStaffOperationPath(pathname)) return undefined;
 	if (matchesPathSegment(pathname, '/library') || matchesPathSegment(pathname, '/api/library')) return isReadMethod(method) ? ['library.read'] : ['library.manage'];
@@ -407,7 +282,6 @@ export function requiredPermissionsForPath(pathname: string, method: string): st
 		?? journalPermission(pathname, method)
 		?? employeePermission(pathname, method)
 		?? bankSoalPermission(pathname, method)
-		?? asesmenPermission(pathname, method)
 		?? staffOperationPermission(pathname, method)
 		?? [];
 }

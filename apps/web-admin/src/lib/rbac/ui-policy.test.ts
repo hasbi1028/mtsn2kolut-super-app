@@ -30,12 +30,11 @@ describe('UI policy access evaluation', () => {
 		expect(preview.visibleMenuItems.map((item) => item.href)).toEqual([
 			'/',
 			'/bank-soal',
-			'/bank-soal/daftar',
 			'/bank-soal/tambah',
-			'/bank-soal/mapel-kd',
+			'/bank-soal/impor',
 			'/settings/account'
 		]);
-		expect(preview.hiddenMenuItems.map((item) => item.href)).toContain('/asesmen/pelaksanaan');
+		expect(preview.hiddenMenuItems.map((item) => item.href)).not.toContain('/asesmen/pelaksanaan');
 		expect(preview.visibleDashboardWidgets.map((widget) => widget.id)).toEqual([
 			'bank-soal-overview',
 			'bank-soal-authoring'

@@ -371,7 +371,7 @@
 									<Table.Cell>
 										<div class="flex justify-end gap-2">
 											{#if !isPreviewMode}
-												<Button size="sm" variant="outline" href={resolve(`/portal/siswa/cbt/${item.participant_id}`)}>Kartu</Button>
+												<span class="text-xs text-muted-foreground">CBT lama dihapus</span>
 											{/if}
 											<Button size="sm" disabled={isPreviewMode || !item.can_reveal_token} onclick={() => openReveal(item)}>
 												{isPreviewMode ? 'Preview Saja' : item.can_reveal_token ? 'Buka Kode' : 'Belum Dibuka'}

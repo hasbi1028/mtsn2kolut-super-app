@@ -44,7 +44,7 @@
 		saveBankSoalDraftPayload,
 		type BankSoalQuestionSyncItem,
 	} from '$lib/client/bank-soal-offline';
-	import { questionExportButtonLabel, questionExportSuccessMessage } from '$lib/cbt/question-export-ui';
+	import { questionExportButtonLabel, questionExportSuccessMessage } from '$lib/bank-soal/question-export-ui';
 	import { canDeleteBankSoal, canPublishBankSoal, canReviewBankSoal } from '$lib/bank-soal/access';
 	import {
 		compareTableHtmlBeforeSave,

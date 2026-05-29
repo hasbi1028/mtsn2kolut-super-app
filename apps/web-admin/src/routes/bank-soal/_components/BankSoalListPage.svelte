@@ -407,7 +407,7 @@
   let analysisHref = $derived(resolve("/bank-soal/analisis-butir"));
   let mapelKdHref = $derived(resolve("/bank-soal/mapel-kd"));
   let settingsHref = $derived(resolve("/bank-soal/pengaturan"));
-  let packageHref = $derived(resolve("/asesmen/paket"));
+  let packageHref = $derived(resolve("/bank-soal"));
   let listHref = $derived(resolve("/bank-soal"));
   let summarySubjectDistribution = $state<SubjectDistribution[]>([]);
   let summaryBloomComposition = $state<BloomComposition[]>([]);

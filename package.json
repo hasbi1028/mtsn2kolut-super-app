@@ -3,7 +3,6 @@
   "private": true,
   "workspaces": [
     "apps/web-admin",
-    "apps/cbt-portal",
     "services/pusaka-worker",
     "services/core-api/db/scripts"
   ],
@@ -19,17 +18,10 @@
     "test:backend": "cd services/core-api && go test ./...",
     "db:migrate": "npm --prefix services/core-api/db/scripts run migrate:pg",
     "db:seed:bank-soal-e2e-roles": "npm --prefix services/core-api/db/scripts run seed:bank-soal-e2e-roles",
-    "db:seed:mobile-cbt": "npm --prefix services/core-api/db/scripts run seed:mobile-cbt",
-    "db:seed:dev-test-cbt": "npm --prefix services/core-api/db/scripts run seed:dev-test-cbt",
-    "db:test:cbt": "scripts/setup-cbt-test-db.sh",
     "ops:runtime-retention": "deploy/scripts/runtime-artifact-retention.sh",
     "ops:validate-pm2": "node scripts/validate-pm2-configs.mjs",
     "security:scan-secrets": "python3 scripts/scan-secrets.py",
     "security:scan-secrets:staged": "python3 scripts/scan-secrets.py --staged",
-    "smoke:web:asesmen-cbt:opsi0": "npm --prefix apps/web-admin run smoke:asesmen-cbt:opsi0",
-    "e2e:web:asesmen-cbt:pg-essay": "npm --prefix apps/web-admin run e2e:asesmen-cbt:pg-essay",
-    "test:web": "npm --prefix apps/web-admin run test:unit",
-    "build:cbt-portal": "npm --prefix apps/cbt-portal run build",
-    "check:cbt-portal": "npm --prefix apps/cbt-portal run check"
+    "test:web": "npm --prefix apps/web-admin run test:unit"
   }
 }

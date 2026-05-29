@@ -12,8 +12,6 @@ const PUBLIC_API_EXACT_PATHS = [
 ] as const;
 
 const PUBLIC_API_PREFIXES = [
-	'/api/exam/',
-	'/api/cbt-portal/',
 	'/api/branding/file/',
 	'/releases/mobile/',
 	'/api/public/site/pages/',
@@ -24,7 +22,7 @@ const PUBLIC_API_PREFIXES = [
 
 const PUBLIC_PAGE_PREFIXES = ['/s/idc/', '/portal/siswa/qr-login'] as const;
 
-const PUBLIC_AUTH_EXACT_PATHS = ['/login', '/maintenance', '/manifest.webmanifest', '/ujian', '/pengawas-ujian'] as const;
+const PUBLIC_AUTH_EXACT_PATHS = ['/login', '/maintenance', '/manifest.webmanifest'] as const;
 
 export function matchesPathSegment(pathname: string, prefix: string) {
 	const normalizedPrefix = prefix === '/' ? '/' : prefix.replace(/\/$/, '');

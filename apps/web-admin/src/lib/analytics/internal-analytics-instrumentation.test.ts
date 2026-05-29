@@ -13,7 +13,6 @@ describe('internal analytics instrumentation source guards', () => {
 		const targets = [
 			['apps/web-admin/src/routes/+page.svelte', 'dashboard.view'],
 			['apps/web-admin/src/routes/bank-soal/+page.svelte', 'bank_soal.list_view'],
-			['apps/web-admin/src/routes/asesmen/+page.svelte', 'asesmen.hub_view'],
 			['apps/web-admin/src/routes/pusaka/+page.svelte', 'pusaka.dashboard_view'],
 			['apps/web-admin/src/routes/settings/users/+page.svelte', 'users.list_view'],
 			['apps/web-admin/src/routes/settings/rbac/+page.svelte', 'rbac.roles_view'],

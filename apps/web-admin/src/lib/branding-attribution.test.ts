@@ -36,10 +36,7 @@ describe('HasbiGML app attribution', () => {
 
 	it('does not add personal attribution to official print/document pages', () => {
 		const officialDocumentSurfaces = [
-			'routes/tu/surat-keterangan/[id]/print/+page.svelte',
-			'routes/asesmen/sesi/[id]/rooms/[rid]/print-pack/+page.svelte',
-			'routes/asesmen/kegiatan/[id]/exam-cards/+page.svelte',
-			'routes/asesmen/sesi/[id]/minutes/+page.svelte'
+			'routes/tu/surat-keterangan/[id]/print/+page.svelte'
 		];
 
 		for (const relativePath of officialDocumentSurfaces) {

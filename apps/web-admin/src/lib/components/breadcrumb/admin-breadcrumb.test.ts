@@ -4,12 +4,6 @@ import { buildAdminBreadcrumbs, compactAdminBreadcrumbs } from './admin-breadcru
 const adminRoles = ['admin'];
 const adminPermissions = [
 	'dashboard.read',
-	'asesmen.operator',
-	'asesmen.event_manage',
-	'asesmen.package_manage',
-	'asesmen.session_manage',
-	'asesmen.participant_manage',
-	'asesmen.result_read',
 	'bank_soal.read',
 	'bank_soal.create',
 	'students.read',
@@ -47,7 +41,6 @@ const routedAdminModuleSamples = [
 	'/bank-soal/soal/01000000-0000-0000-0000-000000000000',
 	'/bank-soal/impor',
 	'/bank-soal/verifikasi',
-	'/asesmen/sesi/01000000-0000-0000-0000-000000000000/rooms/01000000-0000-0000-0000-000000000001/print-pack',
 	'/tu',
 	'/tu/surat-masuk',
 	'/tu/surat-keluar',
@@ -80,13 +73,6 @@ const routedAdminModuleSamples = [
 
 describe('admin breadcrumb resolver', () => {
 	it('uses sidebar trail for configured admin routes', () => {
-		const asesmenCrumbs = buildAdminBreadcrumbs('/asesmen', adminRoles, adminPermissions);
-		expect(asesmenCrumbs.map((crumb) => crumb.label)).toEqual([
-			'Asesmen',
-			'Ringkasan Asesmen'
-		]);
-		expect(asesmenCrumbs.map((crumb) => crumb.section)).toEqual(['7', '7.0']);
-
 		const tambahSoalCrumbs = buildAdminBreadcrumbs('/bank-soal/tambah', adminRoles, adminPermissions);
 		expect(tambahSoalCrumbs.map((crumb) => crumb.label)).toEqual([
 			'Bank Soal',
@@ -95,24 +81,6 @@ describe('admin breadcrumb resolver', () => {
 		expect(tambahSoalCrumbs.map((crumb) => crumb.section)).toEqual(['6', '6.2']);
 	});
 
-	it('uses assessment fallback trails for routes hidden from sidebar', () => {
-		expect(buildAdminBreadcrumbs('/asesmen/sesi/01000000-0000-0000-0000-000000000000', adminRoles, adminPermissions)).toEqual([
-			{ label: 'Asesmen', href: undefined, section: '7' },
-			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1' },
-			{ label: 'Sesi Ujian', href: '/asesmen/sesi', section: '7.1.3' },
-			{ label: 'Detail Sesi', href: undefined, section: '7.1.3.1' }
-		]);
-		expect(buildAdminBreadcrumbs('/asesmen/ruang-saya', adminRoles, adminPermissions).map((crumb) => crumb.label)).toEqual([
-			'Asesmen',
-			'Pelaksanaan',
-			'Ruang Saya'
-		]);
-		expect(buildAdminBreadcrumbs('/asesmen/ruang-saya', adminRoles, adminPermissions).map((crumb) => crumb.section)).toEqual([
-			'7',
-			'7.2',
-			'7.2.2'
-		]);
-	});
 
 	it('falls back to readable route segments for unknown admin routes', () => {
 		expect(buildAdminBreadcrumbs('/unknown-tools/sync-log', adminRoles, adminPermissions).map((crumb) => crumb.label)).toEqual([
@@ -134,11 +102,11 @@ describe('admin breadcrumb resolver', () => {
 		]);
 
 		expect(buildAdminBreadcrumbs('/library/books/abc123/copies', adminRoles, adminPermissions)).toEqual([
-			{ label: 'Aset & Layanan', href: undefined, section: '9' },
-			{ label: 'Perpustakaan', href: undefined, section: '9.1' },
-			{ label: 'Katalog Buku', href: '/library/books', section: '9.1.2' },
-			{ label: 'Abc123', href: undefined, section: '9.1.2.1' },
-			{ label: 'Eksemplar', href: undefined, section: '9.1.2.1.1' }
+			{ label: 'Aset & Layanan', href: undefined, section: '8' },
+			{ label: 'Perpustakaan', href: undefined, section: '8.1' },
+			{ label: 'Katalog Buku', href: '/library/books', section: '8.1.2' },
+			{ label: 'Abc123', href: undefined, section: '8.1.2.1' },
+			{ label: 'Eksemplar', href: undefined, section: '8.1.2.1.1' }
 		]);
 	});
 
@@ -151,27 +119,27 @@ describe('admin breadcrumb resolver', () => {
 		]);
 
 		expect(buildAdminBreadcrumbs('/tu/surat-keterangan/42/print', adminRoles, adminPermissions)).toEqual([
-			{ label: 'Tata Usaha', href: undefined, section: '8' },
-			{ label: 'Persuratan', href: undefined, section: '8.1' },
-			{ label: 'Surat Keterangan', href: '/tu/surat-keterangan', section: '8.1.4' },
-			{ label: 'Detail', href: undefined, section: '8.1.4.1' },
-			{ label: 'Cetak', href: undefined, section: '8.1.4.1.1' }
+			{ label: 'Tata Usaha', href: undefined, section: '7' },
+			{ label: 'Persuratan', href: undefined, section: '7.1' },
+			{ label: 'Surat Keterangan', href: '/tu/surat-keterangan', section: '7.1.4' },
+			{ label: 'Detail', href: undefined, section: '7.1.4.1' },
+			{ label: 'Cetak', href: undefined, section: '7.1.4.1.1' }
 		]);
 
 		expect(buildAdminBreadcrumbs('/website/posts/berita-madrasah/edit', adminRoles, adminPermissions)).toEqual([
-			{ label: 'Website', href: undefined, section: '10' },
-			{ label: 'Kelola Konten', href: undefined, section: '10.1' },
-			{ label: 'Kelola Berita', href: '/website/posts', section: '10.1.7' },
-			{ label: 'Berita Madrasah', href: undefined, section: '10.1.7.1' },
-			{ label: 'Ubah', href: undefined, section: '10.1.7.1.1' }
+			{ label: 'Website', href: undefined, section: '9' },
+			{ label: 'Kelola Konten', href: undefined, section: '9.1' },
+			{ label: 'Kelola Berita', href: '/website/posts', section: '9.1.7' },
+			{ label: 'Berita Madrasah', href: undefined, section: '9.1.7.1' },
+			{ label: 'Ubah', href: undefined, section: '9.1.7.1.1' }
 		]);
 	});
 
 	it('uses global sidebar numbering even when the current role cannot see that menu item', () => {
 		expect(buildAdminBreadcrumbs('/pusaka/summary', ['guru'], [])).toEqual([
-			{ label: 'Pegawai & Kehadiran', href: undefined, section: '11' },
-			{ label: 'PUSAKA', href: undefined, section: '11.2' },
-			{ label: 'Ringkasan Kehadiran', href: undefined, section: '11.2.4' }
+			{ label: 'Pegawai & Kehadiran', href: undefined, section: '10' },
+			{ label: 'PUSAKA', href: undefined, section: '10.2' },
+			{ label: 'Ringkasan Kehadiran', href: undefined, section: '10.2.4' }
 		]);
 	});
 
@@ -186,9 +154,9 @@ describe('admin breadcrumb resolver', () => {
 	it('compacts long breadcrumb trails for narrow layouts without losing current context', () => {
 		const crumbs = buildAdminBreadcrumbs('/tu/surat-keterangan/42/print', adminRoles, adminPermissions);
 		expect(compactAdminBreadcrumbs(crumbs)).toEqual([
-			{ label: 'Tata Usaha', href: undefined, section: '8' },
-			{ label: 'Detail', href: undefined, section: '8.1.4.1' },
-			{ label: 'Cetak', href: undefined, section: '8.1.4.1.1' }
+			{ label: 'Tata Usaha', href: undefined, section: '7' },
+			{ label: 'Detail', href: undefined, section: '7.1.4.1' },
+			{ label: 'Cetak', href: undefined, section: '7.1.4.1.1' }
 		]);
 	});
 });

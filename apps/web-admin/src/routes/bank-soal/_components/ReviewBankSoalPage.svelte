@@ -225,9 +225,6 @@
 					</div>
 				</div>
 				<div class="flex flex-wrap gap-2">
-					{#if eventId}
-						<a href={resolve(`/asesmen/kegiatan/${eventId}`)} class="inline-flex rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Kembali ke Kegiatan</a>
-					{/if}
 					{#if canPublish}
 						<a href={resolve('/bank-soal/penerbitan')} class="inline-flex rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Antrean Terbit</a>
 					{/if}

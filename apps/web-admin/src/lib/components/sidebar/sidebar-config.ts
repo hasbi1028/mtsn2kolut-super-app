@@ -132,20 +132,6 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		]
 	},
 	{
-		group: 'Asesmen',
-		items: [
-			{ kind: 'folder', id: 'asesmen-alur-utama', label: 'Alur Utama', icon: 'activity', children: [
-				{ href: '/asesmen', label: 'Command Center CBT', icon: 'grid', section: '7.0', roleFallbacks: ['admin'], permissions: ['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage', 'asesmen.result_read', 'asesmen.result_manage'] },
-				{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', section: '7.1', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage'] },
-				{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', section: '7.2', roleFallbacks: ['admin'], permissions: ['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage'] },
-				{ href: '/asesmen/ruang-saya', label: 'Ruang Saya', icon: 'user-check', section: '7.2.1', roleFallbacks: ['admin'], permissions: ['asesmen.proctor', 'asesmen.operator'] },
-				{ href: '/asesmen/hasil', label: 'Hasil', icon: 'clipboard', section: '7.3', roleFallbacks: ['admin'], permissions: ['asesmen.result_read', 'asesmen.result_manage'] },
-				{ href: '/asesmen/aplikasi-siswa', label: 'Portal Ujian Peserta', icon: 'server', section: '7.4', roleFallbacks: ['admin'], permissions: ['asesmen.proctor', 'asesmen.operator'] },
-				{ href: '/asesmen/non-tes', label: 'Penilaian Non-Tes', icon: 'clipboard', section: '7.5', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.result_read', 'asesmen.result_manage'] }
-			]}
-		]
-	},
-	{
 		group: 'Tata Usaha',
 		items: [
 			{ kind: 'folder', id: 'persuratan', label: 'Persuratan', icon: 'mail', children: [
@@ -245,7 +231,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 ];
 
 export const defaultPinnedByRole: Record<string, string[]> = {
-	admin: ['/akademik/kesiapan', '/akademik/rombel', '/akademik/jadwal', '/grades/rapor', '/asesmen/persiapan'],
+	admin: ['/akademik/kesiapan', '/akademik/rombel', '/akademik/jadwal', '/grades/rapor'],
 	guru: ['/journal', '/grades', '/grades/rapor', '/bank-soal', '/akademik/jadwal'],
 	staf: ['/document-cycles', '/inventory', '/library'],
 	kesiswaan: ['/students', '/akademik/rombel', '/parents', '/kesiswaan'],

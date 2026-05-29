@@ -315,9 +315,9 @@ describe('SvelteKit handle auth gate', () => {
 		expect(resolve).not.toHaveBeenCalled();
 	});
 
-	it('does not mark Bank Soal or Asesmen API aliases as deprecated', async () => {
+	it('does not mark Bank Soal API aliases as deprecated', async () => {
 		const { handle } = await loadHooks();
-		const aliases = ['/api/bank-soal/questions', '/api/asesmen/events'];
+		const aliases = ['/api/bank-soal/questions'];
 
 		for (const path of aliases) {
 			const access = token('access', { uid: 'u1', role: 'admin', roles: ['admin'] });
@@ -494,25 +494,10 @@ describe('SvelteKit handle auth gate', () => {
 		{ path: '/settings/users', roles: ['staf'], allowed: false, api: false },
 		{ path: '/api/school-profile', roles: ['admin'], allowed: true, api: true },
 		{ path: '/api/school-profile', roles: ['staf'], allowed: false, api: true },
-		{ path: '/asesmen/kegiatan', roles: ['admin'], allowed: true, api: false },
-		{ path: '/asesmen/kegiatan/event-1', roles: ['guru'], allowed: false, api: false },
-		{ path: '/api/asesmen/events', roles: ['admin'], allowed: true, api: true },
-		{ path: '/api/asesmen/events', roles: ['guru'], allowed: false, api: true, method: 'GET' },
-		{ path: '/api/asesmen/events', roles: ['guru'], allowed: false, api: true, method: 'POST' },
-		{ path: '/api/asesmen/events/event-1', roles: ['guru'], allowed: false, api: true },
-		{ path: '/api/asesmen/events/event-1/question-targets', roles: ['guru'], allowed: false, api: true, method: 'GET' },
-		{ path: '/api/asesmen/events/event-1/question-targets', roles: ['guru'], allowed: false, api: true, method: 'PUT' },
-		{ path: '/asesmen/kegiatan/event-1/members', roles: ['guru'], allowed: false, api: false },
 		{ path: '/bank-soal', roles: ['guru'], allowed: false, api: false },
 		{ path: '/bank-soal/verifikasi', roles: ['guru'], allowed: false, api: false },
 		{ path: '/bank-soal/impor', roles: ['guru'], allowed: false, api: false },
 		{ path: '/api/bank-soal/soal-support/subjects', roles: ['guru'], allowed: false, api: true, method: 'GET' },
-		{ path: '/asesmen/paket', roles: ['guru'], allowed: false, api: false },
-		{ path: '/asesmen/sesi', roles: ['guru'], allowed: false, api: false },
-		{ path: '/api/asesmen/packages', roles: ['guru'], allowed: false, api: true, method: 'GET' },
-		{ path: '/api/asesmen/packages', roles: ['guru'], allowed: false, api: true, method: 'POST' },
-		{ path: '/api/asesmen/sessions', roles: ['guru'], allowed: false, api: true, method: 'GET' },
-		{ path: '/api/asesmen/sessions', roles: ['guru'], allowed: false, api: true, method: 'POST' },
 		{ path: '/bank-soal/tambah', roles: ['guru'], allowed: false, api: false },
 		{ path: '/api/bank-soal/questions', roles: ['guru'], allowed: false, api: true, method: 'GET' },
 		{ path: '/api/bank-soal/questions', roles: ['guru'], allowed: false, api: true, method: 'POST' },
