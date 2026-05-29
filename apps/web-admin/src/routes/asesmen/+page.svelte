@@ -175,17 +175,18 @@
 </script>
 
 <svelte:head>
-	<title>Ringkasan Asesmen — MTsN 2 Kolaka Utara</title>
+	<title>Command Center CBT — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 <main class="min-h-dvh bg-background px-4 py-5 text-foreground md:px-6">
 	<section class="mx-auto max-w-6xl space-y-4">
 		<AssessmentPhaseHeader
 			code="7.0"
-			badge="Asesmen"
-			title="Ringkasan Asesmen"
-			description="Satu pintu utama untuk memilih fase kerja asesmen: persiapan, pelaksanaan, hasil, dan arsip."
-			primaryAction={phaseCards[0] ? { label: phaseCards[0].cta, href: phaseCards[0].href } : undefined}
+			badge="CBT Web"
+			title="Command Center CBT"
+			description="Alur sederhana untuk panitia: siapkan ujian, jalankan ruang, buka portal peserta, lalu tutup hasil."
+			primaryAction={canOpenPreparation ? { label: 'Mulai Persiapan', href: resolve('/asesmen/persiapan') } : undefined}
+			secondaryActions={[{ label: 'Portal Peserta', href: resolve('/asesmen/aplikasi-siswa'), variant: 'outline' }]}
 		/>
 
 		{#if errorMessage}<div class="rounded-2xl border border-destructive/25 bg-destructive/10 p-3 text-sm font-semibold text-destructive">{errorMessage}</div>{/if}
@@ -194,8 +195,8 @@
 		{:else}
 			<section aria-labelledby="asesmen-phase-title" class="space-y-3">
 				<div>
-					<p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Pilih fase</p>
-					<h2 id="asesmen-phase-title" class="mt-1 text-xl font-semibold tracking-tight text-foreground">Alur kerja asesmen</h2>
+					<p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Alur utama</p>
+					<h2 id="asesmen-phase-title" class="mt-1 text-xl font-semibold tracking-tight text-foreground">Jalur kerja panitia</h2>
 				</div>
 				<div class="grid gap-3 lg:grid-cols-2">
 					{#each phaseCards as item (item.code)}
@@ -206,9 +207,9 @@
 
 			<section class="grid gap-3 md:grid-cols-3">
 				<div class="rounded-2xl border border-border bg-card p-4">
-					<p class="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Sesi aktif</p>
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Sesi CBT</p>
 					<p class="mt-2 text-3xl font-black">{sessions.length}</p>
-					<p class="text-sm text-muted-foreground">sesi ujian tercatat</p>
+					<p class="text-sm text-muted-foreground">sesi tercatat</p>
 				</div>
 				<div class="rounded-2xl border border-border bg-card p-4">
 					<p class="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Berjalan</p>
@@ -227,8 +228,8 @@
 					<div class="rounded-2xl border border-border bg-card p-4">
 						<div class="flex items-center justify-between gap-3">
 							<div>
-								<h2 class="text-lg font-black">Sesi terdekat</h2>
-								<p class="text-sm text-muted-foreground">Pantau sesi terdekat tanpa masuk ke halaman teknis kecuali diperlukan.</p>
+								<h2 class="text-lg font-black">Sesi CBT terdekat</h2>
+								<p class="text-sm text-muted-foreground">Pantau jadwal dan status ruang tanpa membuka panel teknis kecuali diperlukan.</p>
 							</div>
 							</div>
 						<div class="mt-3 divide-y divide-border">
@@ -246,7 +247,7 @@
 					</div>
 
 					<div class="rounded-2xl border border-border bg-card p-4">
-						<h2 class="text-lg font-black">Paket siap ujian</h2>
+						<h2 class="text-lg font-black">Paket siap dipakai</h2>
 						<div class="mt-3 divide-y divide-border">
 							{#each latestPackages as pkg (pkg.id)}
 								<article class="flex items-center justify-between gap-3 py-3">
@@ -263,16 +264,16 @@
 				</div>
 
 				<aside class="rounded-2xl border border-primary/25 bg-card p-4 shadow-sm">
-					<p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Arah kerja</p>
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Ringkas</p>
 					<div class="mt-2 flex flex-wrap items-center gap-2">
-						<h2 class="text-xl font-black">Langkah berikutnya</h2>
+						<h2 class="text-xl font-black">Apa yang perlu dilakukan</h2>
 						<span class={`rounded-full px-2.5 py-1 text-xs font-bold ${readinessClass()}`}>{readinessLabel()}</span>
 					</div>
 					<p class="mt-2 text-sm leading-6 text-muted-foreground">
-						Gunakan halaman ini untuk memilih fase kerja: Persiapan, Pelaksanaan, atau Hasil. Detail teknis tetap dibuka dari halaman terkait.
+						Gunakan halaman ini sebagai pintu utama CBT. Menu teknis seperti kegiatan, paket, sesi, kartu, dan arsip tetap ada di halaman detail, bukan di sidebar harian.
 					</p>
 					<p class="mt-4 rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">
-						Bank Soal menyusun soal. Asesmen menyiapkan kegiatan, mencetak dokumen, menjalankan ruang, dan menutup hasil.
+						Bank Soal tetap untuk menyusun soal. CBT web dipakai untuk portal peserta, pengawasan ruang, dokumen, dan hasil.
 					</p>
 
 				</aside>

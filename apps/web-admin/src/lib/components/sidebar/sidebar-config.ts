@@ -134,30 +134,15 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	{
 		group: 'Asesmen',
 		items: [
-			{ href: '/asesmen', label: 'Ringkasan Asesmen', icon: 'grid', section: '7.0', roleFallbacks: ['admin'], permissions: ['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage', 'asesmen.result_read', 'asesmen.result_manage'] },
-			{ href: '/asesmen/prototype', label: 'Prototype CBT Baru', icon: 'activity', section: '7.0.1', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage'] },
-			{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', section: '7.1', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage'] },
-			{ href: '/asesmen/kegiatan', label: 'Kegiatan Asesmen', icon: 'calendar', section: '7.1.1', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.event_manage'] },
-			{ href: '/asesmen/paket', label: 'Paket Soal', icon: 'book-open', section: '7.1.2', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.package_manage'] },
-			{ href: '/asesmen/sesi', label: 'Sesi Ujian', icon: 'activity', section: '7.1.3', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.session_manage'] },
-			{ href: '/asesmen/sesi#ruang-peserta', label: 'Ruang & Peserta', icon: 'layers', section: '7.1.4', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.participant_manage', 'asesmen.session_manage'] },
-			{ href: '/asesmen/sesi#pengawas', label: 'Pengawas Ruang', icon: 'user-check', section: '7.1.5', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.session_manage'] },
-			{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', section: '7.2', roleFallbacks: ['admin'], permissions: ['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage'] },
-			{ href: '/asesmen/sesi?schedule=today', label: 'Sesi Panitia', icon: 'activity', section: '7.2.1', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage'] },
-			{ href: '/asesmen/ruang-saya', label: 'Ruang Saya', icon: 'user-check', section: '7.2.2', roleFallbacks: ['admin'], permissions: ['asesmen.proctor', 'asesmen.operator'] },
-			{ href: '/asesmen/ruang-saya#panel-ruang', label: 'Panel Ruang', icon: 'activity', section: '7.2.3', roleFallbacks: ['admin'], permissions: ['asesmen.proctor', 'asesmen.operator'] },
-			{ href: '/asesmen/aplikasi-siswa', label: 'Perangkat Siswa', icon: 'server', section: '7.2.4', roleFallbacks: ['admin'], permissions: ['asesmen.proctor', 'asesmen.operator'] },
-			{ href: '/asesmen/sesi?area=serah-terima', label: 'Serah Terima Pengawas', icon: 'clipboard', section: '7.2.5', roleFallbacks: ['admin'], permissions: ['asesmen.proctor', 'asesmen.operator', 'asesmen.session_manage'] },
-			{ href: '/asesmen/hasil', label: 'Hasil', icon: 'clipboard', section: '7.3', roleFallbacks: ['admin'], permissions: ['asesmen.result_read', 'asesmen.result_manage'] },
-			{ href: '/asesmen/hasil#rekap-nilai', label: 'Rekap Nilai', icon: 'clipboard', section: '7.3.1', roleFallbacks: ['admin'], permissions: ['asesmen.result_read', 'asesmen.result_manage'] },
-			{ href: '/asesmen/hasil#status-submit', label: 'Status Submit', icon: 'activity', section: '7.3.2', roleFallbacks: ['admin'], permissions: ['asesmen.result_read', 'asesmen.result_manage'] },
-			{ href: '/asesmen/hasil#koreksi-uraian', label: 'Koreksi Uraian', icon: 'file-text', section: '7.3.3', roleFallbacks: ['admin'], permissions: ['asesmen.result_read', 'asesmen.result_manage'] },
-			{ href: '/asesmen/hasil#analisis-butir', label: 'Analisis Butir', icon: 'layers', section: '7.3.4', roleFallbacks: ['admin'], permissions: ['asesmen.result_read', 'asesmen.result_manage'] },
-			{ href: '/asesmen/hasil#sinkronisasi', label: 'Publikasi / Sinkronisasi', icon: 'server', section: '7.3.5', roleFallbacks: ['admin'], permissions: ['asesmen.result_manage'] },
-			{ href: '/asesmen/kegiatan?arsip=utama', label: 'Arsip', icon: 'archive', section: '7.4', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.result_read', 'asesmen.result_manage'] },
-			{ href: '/asesmen/sesi?dokumen=berita-acara', label: 'Berita Acara', icon: 'printer', section: '7.4.1', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.result_read', 'asesmen.session_manage'] },
-			{ href: '/asesmen/hasil#rekap-pelaksanaan', label: 'Rekap Pelaksanaan', icon: 'clipboard', section: '7.4.2', roleFallbacks: ['admin'], permissions: ['asesmen.result_read', 'asesmen.result_manage'] },
-			{ href: '/asesmen/kegiatan?arsip=tindak-lanjut', label: 'Tindak Lanjut Sesi', icon: 'file-text', section: '7.4.3', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.result_manage'] }
+			{ kind: 'folder', id: 'asesmen-alur-utama', label: 'Alur Utama', icon: 'activity', children: [
+				{ href: '/asesmen', label: 'Command Center CBT', icon: 'grid', section: '7.0', roleFallbacks: ['admin'], permissions: ['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage', 'asesmen.result_read', 'asesmen.result_manage'] },
+				{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', section: '7.1', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage'] },
+				{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', section: '7.2', roleFallbacks: ['admin'], permissions: ['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage'] },
+				{ href: '/asesmen/ruang-saya', label: 'Ruang Saya', icon: 'user-check', section: '7.2.1', roleFallbacks: ['admin'], permissions: ['asesmen.proctor', 'asesmen.operator'] },
+				{ href: '/asesmen/hasil', label: 'Hasil', icon: 'clipboard', section: '7.3', roleFallbacks: ['admin'], permissions: ['asesmen.result_read', 'asesmen.result_manage'] },
+				{ href: '/asesmen/aplikasi-siswa', label: 'Portal Ujian Peserta', icon: 'server', section: '7.4', roleFallbacks: ['admin'], permissions: ['asesmen.proctor', 'asesmen.operator'] },
+				{ href: '/asesmen/non-tes', label: 'Penilaian Non-Tes', icon: 'clipboard', section: '7.5', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.result_read', 'asesmen.result_manage'] }
+			]}
 		]
 	},
 	{

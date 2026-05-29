@@ -4,7 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { AssessmentPhaseHeader, AssessmentTaskCard } from '$lib/components/asesmen';
 
-	type PersiapanRoute = '/asesmen/paket' | '/asesmen/kegiatan' | '/asesmen/sesi' | '/asesmen' | '/asesmen/sesi#ruang-peserta' | '/asesmen/sesi#pengawas';
+	type PersiapanRoute = '/asesmen/paket' | '/asesmen/kegiatan' | '/asesmen/sesi' | '/asesmen' | '/asesmen/sesi#ruang-peserta' | '/asesmen/sesi#pengawas' | '/asesmen/aplikasi-siswa';
 	type PreparationStep = {
 		step: string;
 		title: string;
@@ -79,15 +79,15 @@
 			code="7.1"
 			badge="Asesmen"
 			title="Persiapan Ujian"
-			description="Kerjakan berurutan: kegiatan, paket, sesi, ruang dan peserta, lalu pengawas. Satu langkah selesai, lanjut ke langkah berikutnya."
+			description="Checklist ringkas sebelum CBT: pilih kegiatan, siapkan paket, atur sesi-ruang-peserta, cetak kartu/lembar pengawas, lalu masuk pelaksanaan."
 			primaryAction={{ label: 'Mulai dari Kegiatan', href: resolve('/asesmen/kegiatan') }}
-			secondaryActions={[{ label: 'Ringkasan', href: resolve('/asesmen'), variant: 'outline' }]}
+			secondaryActions={[{ label: 'Command Center', href: resolve('/asesmen'), variant: 'outline' }]}
 		/>
 
 		<section aria-labelledby="persiapan-area-title" class="space-y-3">
 			<div>
 				<p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">7.1 Alur Persiapan</p>
-				<h2 id="persiapan-area-title" class="mt-1 text-xl font-semibold tracking-tight text-foreground">Langkah persiapan</h2>
+				<h2 id="persiapan-area-title" class="mt-1 text-xl font-semibold tracking-tight text-foreground">Checklist persiapan CBT</h2>
 			</div>
 
 			<ol class="grid gap-3 lg:grid-cols-2">
@@ -102,7 +102,7 @@
 		<details class="rounded-lg border border-border bg-muted/40 p-3 text-sm leading-6 text-muted-foreground">
 			<summary class="cursor-pointer font-semibold text-foreground">Catatan teknis persiapan</summary>
 			<p class="mt-2">
-				Penyusunan soal tetap berada di modul Bank Soal. Tambahkan ruang dari detail sesi, isi kapasitas sesuai master ruangan, lalu gunakan pembagian otomatis atau manual dari area Ruangan.
+				Penyusunan soal tetap berada di Bank Soal. Detail teknis kegiatan, paket, sesi, ruang, kartu peserta, dan lembar pengawas tetap dibuka dari halaman terkait agar sidebar harian tetap sederhana.
 			</p>
 		</details>
 	</div>
@@ -111,10 +111,10 @@
 		<div class="max-w-lg rounded-2xl border border-border bg-card p-8 shadow-sm">
 			<h2 class="text-xl font-semibold text-foreground">Akses terbatas</h2>
 			<p class="mt-3 text-sm leading-6 text-muted-foreground">
-				Fase persiapan ujian hanya tersedia untuk panitia/operator. Silakan kembali ke Ringkasan Asesmen atau gunakan menu asesmen lain sesuai tugas.
+				Fase persiapan ujian hanya tersedia untuk panitia/operator. Silakan kembali ke Command Center CBT atau gunakan menu asesmen lain sesuai tugas.
 			</p>
 			<div class="mt-6">
-				<Button href={resolve('/asesmen')} variant="outline">Ringkasan Asesmen</Button>
+				<Button href={resolve('/asesmen')} variant="outline">Command Center CBT</Button>
 			</div>
 		</div>
 	</div>
