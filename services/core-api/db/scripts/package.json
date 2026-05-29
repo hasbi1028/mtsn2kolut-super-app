@@ -8,6 +8,7 @@
     "migrate:pg": "node apply_migrations.js",
     "seed:bank-soal-e2e-roles": "node seed_bank_soal_role_e2e.js",
     "seed:mobile-cbt": "node seed_mobile_cbt.js",
+    "seed:dev-test-cbt": "node seed_dev_test_cbt.js",
     "test": "node --test"
   },
   "dependencies": {
