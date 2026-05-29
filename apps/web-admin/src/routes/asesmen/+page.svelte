@@ -56,7 +56,7 @@
 		{
 			code: '7.1',
 			title: 'Persiapan',
-			description: 'Kegiatan, paket, sesi, ruang, peserta, dan pengawas sebelum hari-H.',
+			description: 'Kegiatan, paket, sesi, ruang, peserta, dan pengawas sebelum pelaksanaan.',
 			href: resolve('/asesmen/persiapan'),
 			cta: 'Buka persiapan',
 			show: canOpenPreparation

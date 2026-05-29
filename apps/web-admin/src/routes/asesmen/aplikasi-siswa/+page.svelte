@@ -22,7 +22,7 @@
 
 	const steps = [
 		'Buka Portal Ujian Web di alamat /ujian pada perangkat siswa.',
-		'Masukkan token peserta dan kode ruang sesuai kartu/pengawas.',
+		'Scan QR Kartu Peserta Ujian lalu masukkan PIN. Jika perlu, gunakan kode manual dari panitia.',
 		'Pastikan status perangkat Hijau sebelum siswa mulai mengerjakan.',
 		'Jika status Kuning atau Merah, siswa tetap di layar ujian dan pengawas menghubungi panitia.',
 		'Sebelum kirim ujian, pastikan tidak ada jawaban yang masih menunggu sinkron.'
@@ -30,7 +30,7 @@
 
 	const adminLinks = [
 		{ label: 'Uji Perangkat', href: '/asesmen/aplikasi-siswa/matrix' },
-		{ label: 'Arsip Rilis Aplikasi', href: '/asesmen/aplikasi-siswa/release' }
+		{ label: 'Arsip Aplikasi Lama', href: '/asesmen/aplikasi-siswa/release' }
 	];
 
 	const roles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
@@ -51,15 +51,15 @@
 </script>
 
 <svelte:head>
-	<title>Panduan Perangkat Siswa — MTsN 2 Kolut</title>
+	<title>Panduan Portal Peserta — MTsN 2 Kolut</title>
 </svelte:head>
 
 <div class="space-y-5">
 	<AssessmentPhaseHeader
 		code="7.2.4"
 		badge="Panduan Pengawas"
-		title="Panduan Perangkat Siswa"
-		description="Jalur utama siswa adalah Portal Ujian Web. Halaman ini sengaja ringkas agar guru/pengawas cukup tahu langkah masuk, arti status, dan kapan menghubungi panitia."
+		title="Panduan Portal Peserta"
+		description="Jalur utama siswa adalah Portal Ujian Peserta berbasis web. Halaman ini sengaja ringkas agar guru/pengawas cukup tahu langkah masuk, arti status, dan kapan menghubungi panitia."
 		primaryAction={{ label: 'Buka Pelaksanaan', href: resolve('/asesmen/pelaksanaan') }}
 		secondaryActions={[
 			{ label: 'Ruang Saya', href: resolve('/asesmen/ruang-saya'), variant: 'outline' },
@@ -99,7 +99,7 @@
 	<section class="rounded-2xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
 		<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 			<p>
-				Fitur teknis seperti uji perangkat dan arsip aplikasi tetap tersedia untuk panitia, sementara layar pengawas dibuat ringkas.
+				Uji perangkat dan arsip aplikasi lama tetap tersedia untuk panitia, sementara pengawas cukup memakai panduan ringkas ini.
 			</p>
 			{#if canOpenPanitiaTools}
 				<div class="flex flex-wrap gap-2">

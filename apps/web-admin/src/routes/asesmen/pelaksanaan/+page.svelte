@@ -46,7 +46,7 @@
 	const heroTitle = $derived(isAdminMode ? 'Pelaksanaan Ujian' : 'Ruang Saya');
 	const heroSubtitle = $derived(
 		isAdminMode
-			? 'Pilih jalur kerja hari-H: panitia mengelola sesi, pengawas membuka ruang, dan bantuan perangkat dipakai bila ada masalah siswa.'
+			? 'Pilih jalur pelaksanaan: panitia mengelola sesi, pengawas membuka ruang, dan bantuan portal peserta dipakai bila ada masalah siswa.'
 			: 'Buka ruang yang ditugaskan. Pengawas tidak perlu masuk ke detail sesi panitia kecuali diminta operator.'
 	);
 
@@ -74,8 +74,8 @@
 		},
 		{
 			step: '3',
-			title: 'Perangkat Siswa',
-			description: 'Panduan singkat saat siswa kesulitan masuk, status perangkat kuning/merah, atau butuh arahan operator.',
+			title: 'Portal Peserta',
+			description: 'Panduan singkat saat siswa kesulitan masuk Portal Ujian, status kuning/merah, atau butuh arahan operator.',
 			meta: 'Bantuan lapangan',
 			href: '/asesmen/aplikasi-siswa',
 			cta: 'Buka Panduan',
