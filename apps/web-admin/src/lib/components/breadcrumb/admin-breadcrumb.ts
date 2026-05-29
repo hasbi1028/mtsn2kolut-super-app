@@ -44,110 +44,110 @@ const fallbackPatterns: BreadcrumbPattern[] = [
 	{
 		match: /^\/asesmen\/kegiatan\/[^/]+\/exam-cards\/?$/,
 		crumbs: [
-			{ label: 'Asesmen Ujian', section: '7' },
-			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1.2' },
-			{ label: 'Kegiatan', href: '/asesmen/kegiatan', section: '7.1.2.1' },
-			{ label: 'Kartu Peserta', section: '7.1.2.1.1' }
+			{ label: 'Asesmen', section: '7' },
+			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1' },
+			{ label: 'Kegiatan Asesmen', href: '/asesmen/kegiatan', section: '7.1.1' },
+			{ label: 'Kartu Peserta', section: '7.1.1.1' }
 		]
 	},
 	{
 		match: /^\/asesmen\/kegiatan\/[^/]+\/(cetak|archive|members)\/?$/,
 		crumbs: [
-			{ label: 'Asesmen Ujian', section: '7' },
-			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1.2' },
-			{ label: 'Kegiatan', href: '/asesmen/kegiatan', section: '7.1.2.1' },
-			{ label: 'Dokumen & Arsip', section: '7.1.2.1.2' }
+			{ label: 'Asesmen', section: '7' },
+			{ label: 'Arsip', section: '7.4' },
+			{ label: 'Kegiatan Asesmen', href: '/asesmen/kegiatan', section: '7.1.1' },
+			{ label: 'Dokumen & Arsip', section: '7.4.1' }
 		]
 	},
 	{
 		match: /^\/asesmen\/kegiatan\/[^/]+\/?$/,
 		crumbs: [
-			{ label: 'Asesmen Ujian', section: '7' },
-			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1.2' },
-			{ label: 'Kegiatan', href: '/asesmen/kegiatan', section: '7.1.2.1' },
-			{ label: 'Detail Kegiatan', section: '7.1.2.1.3' }
+			{ label: 'Asesmen', section: '7' },
+			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1' },
+			{ label: 'Kegiatan Asesmen', href: '/asesmen/kegiatan', section: '7.1.1' },
+			{ label: 'Detail Kegiatan', section: '7.1.1.1' }
 		]
 	},
 	{
 		match: /^\/asesmen\/kegiatan(\/new)?\/?$/,
 		crumbs: [
-			{ label: 'Asesmen Ujian', section: '7' },
-			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1.2' },
-			{ label: 'Kegiatan', section: '7.1.2.1' }
+			{ label: 'Asesmen', section: '7' },
+			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1' },
+			{ label: 'Kegiatan Asesmen', section: '7.1.1' }
 		]
 	},
 	{
 		match: /^\/asesmen\/paket\/[^/]+\/?$/,
 		crumbs: [
-			{ label: 'Asesmen Ujian', section: '7' },
-			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1.2' },
-			{ label: 'Paket Asesmen', href: '/asesmen/paket', section: '7.1.2.2' },
-			{ label: 'Detail Paket', section: '7.1.2.2.1' }
+			{ label: 'Asesmen', section: '7' },
+			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1' },
+			{ label: 'Paket Soal', href: '/asesmen/paket', section: '7.1.2' },
+			{ label: 'Detail Paket', section: '7.1.2.1' }
 		]
 	},
 	{
 		match: /^\/asesmen\/paket(\/new)?\/?$/,
 		crumbs: [
-			{ label: 'Asesmen Ujian', section: '7' },
-			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1.2' },
-			{ label: 'Paket Asesmen', section: '7.1.2.2' }
+			{ label: 'Asesmen', section: '7' },
+			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1' },
+			{ label: 'Paket Soal', section: '7.1.2' }
 		]
 	},
 	{
 		match: /^\/asesmen\/sesi\/[^/]+\/rooms\/[^/]+\/proctoring(\/report)?\/?$/,
 		crumbs: [
-			{ label: 'Asesmen Ujian', section: '7' },
-			{ label: 'Pelaksanaan', href: '/asesmen/pelaksanaan', section: '7.1.3' },
-			{ label: 'Ruang Saya', href: '/asesmen/ruang-saya', section: '7.1.3.1' },
-			{ label: 'Pengawasan Ruang', section: '7.1.3.1.1' }
+			{ label: 'Asesmen', section: '7' },
+			{ label: 'Pelaksanaan', href: '/asesmen/pelaksanaan', section: '7.2' },
+			{ label: 'Ruang Saya', href: '/asesmen/ruang-saya', section: '7.2.2' },
+			{ label: 'Panel Ruang', section: '7.2.3' }
 		]
 	},
 	{
 		match: /^\/asesmen\/sesi\/[^/]+\/(proctoring|minutes)(\/report)?\/?$/,
 		crumbs: [
-			{ label: 'Asesmen Ujian', section: '7' },
-			{ label: 'Pelaksanaan', href: '/asesmen/pelaksanaan', section: '7.1.3' },
-			{ label: 'Sesi', href: '/asesmen/sesi', section: '7.1.2.3' },
-			{ label: 'Operasional Sesi', section: '7.1.3.2' }
+			{ label: 'Asesmen', section: '7' },
+			{ label: 'Pelaksanaan', href: '/asesmen/pelaksanaan', section: '7.2' },
+			{ label: 'Sesi Panitia', href: '/asesmen/sesi', section: '7.2.1' },
+			{ label: 'Serah Terima Pengawas', section: '7.2.5' }
 		]
 	},
 	{
 		match: /^\/asesmen\/sesi\/[^/]+\/?$/,
 		crumbs: [
-			{ label: 'Asesmen Ujian', section: '7' },
-			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1.2' },
-			{ label: 'Sesi & Ruang', href: '/asesmen/sesi', section: '7.1.2.3' },
-			{ label: 'Detail Sesi', section: '7.1.2.3.1' }
+			{ label: 'Asesmen', section: '7' },
+			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1' },
+			{ label: 'Sesi Ujian', href: '/asesmen/sesi', section: '7.1.3' },
+			{ label: 'Detail Sesi', section: '7.1.3.1' }
 		]
 	},
 	{
 		match: /^\/asesmen\/sesi(\/new)?\/?$/,
 		crumbs: [
-			{ label: 'Asesmen Ujian', section: '7' },
-			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1.2' },
-			{ label: 'Sesi & Ruang', section: '7.1.2.3' }
+			{ label: 'Asesmen', section: '7' },
+			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1' },
+			{ label: 'Sesi Ujian', section: '7.1.3' }
 		]
 	},
 	{
 		match: /^\/asesmen\/ruang-saya\/?$/,
 		crumbs: [
-			{ label: 'Asesmen Ujian', section: '7' },
-			{ label: 'Pelaksanaan', href: '/asesmen/pelaksanaan', section: '7.1.3' },
-			{ label: 'Ruang Saya', section: '7.1.3.1' }
+			{ label: 'Asesmen', section: '7' },
+			{ label: 'Pelaksanaan', href: '/asesmen/pelaksanaan', section: '7.2' },
+			{ label: 'Ruang Saya', section: '7.2.2' }
 		]
 	},
 	{
 		match: /^\/asesmen\/aplikasi-siswa(\/matrix|\/release)?\/?$/,
 		crumbs: [
-			{ label: 'Asesmen Ujian', section: '7' },
-			{ label: 'Pelaksanaan', href: '/asesmen/pelaksanaan', section: '7.1.3' },
-			{ label: 'Perangkat Siswa', section: '7.1.3.3' }
+			{ label: 'Asesmen', section: '7' },
+			{ label: 'Pelaksanaan', href: '/asesmen/pelaksanaan', section: '7.2' },
+			{ label: 'Perangkat Siswa', section: '7.2.4' }
 		]
 	},
 	{
 		match: /^\/asesmen\/non-tes\/?$/,
 		crumbs: [
-			{ label: 'Asesmen Ujian', section: '7' },
+			{ label: 'Asesmen', section: '7' },
 			{ label: 'Penilaian Non-Tes', section: '7.2' }
 		]
 	},
@@ -155,8 +155,8 @@ const fallbackPatterns: BreadcrumbPattern[] = [
 		match: /^\/bank-soal\/(analisis-butir|cetak|laporan|mapel-kd|pengaturan|alat|penerbitan|daftar)\/?$/,
 		crumbs: [
 			{ label: 'Bank Soal', section: '6' },
-			{ label: 'Kelola Soal', href: '/bank-soal', section: '6.1' },
-			{ label: 'Fitur Bank Soal', section: '6.1.5' }
+			{ label: 'Daftar Soal', href: '/bank-soal', section: '6.1' },
+			{ label: 'Fitur Bank Soal', section: '6.5' }
 		]
 	}
 ];

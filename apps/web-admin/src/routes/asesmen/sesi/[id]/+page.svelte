@@ -1538,8 +1538,6 @@
 						<LoadingButton variant="outline" size="sm" onclick={() => void refreshCommandCenter()} loading={commandCenterBusy} loadingLabel="Memuat..." disabled={commandCenterBusy}>
 							↻ Refresh
 						</LoadingButton>
-						<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Serah Terima</Button>
-						<Button variant="outline" size="sm" onclick={() => switchTab('ruangan')}>Setup Ruang</Button>
 					</div>
 				</div>
 
@@ -1564,15 +1562,12 @@
 							<p class="text-xs text-muted-foreground">{commandCenterRooms.length} ruang</p>
 						</div>
 						<div class="overflow-x-auto">
-							<Table.Root class="min-w-[820px] text-xs">
+							<Table.Root class="min-w-[620px] text-xs">
 								<Table.Header>
 									<Table.Row class="bg-muted/50">
-										<Table.Head class="w-[180px]">Ruang</Table.Head>
-										<Table.Head>Pengawas</Table.Head>
-										<Table.Head class="text-center">Login</Table.Head>
-										<Table.Head class="text-center">Submit</Table.Head>
-										<Table.Head class="text-center">Offline</Table.Head>
-										<Table.Head>Catatan</Table.Head>
+										<Table.Head>Ruang</Table.Head>
+										<Table.Head>Progres</Table.Head>
+										<Table.Head>Atensi</Table.Head>
 										<Table.Head class="text-right">Aksi</Table.Head>
 									</Table.Row>
 								</Table.Header>
@@ -1580,40 +1575,43 @@
 									{#each commandCenterRooms as room (room.room_id)}
 										<Table.Row>
 											<Table.Cell>
-												<div class="flex items-center gap-2">
-													<p class="font-semibold text-foreground">{room.room_name}</p>
-													<Badge variant="outline" class={commandRoomStatusClass(room.command_status)}>{commandRoomStatusLabel(room.command_status)}</Badge>
-												</div>
-												<p class="mt-0.5 text-[11px] text-muted-foreground">Token {room.masked_token}</p>
+												<p class="font-semibold text-foreground">{room.room_name}</p>
+												<p class="mt-0.5 text-[11px] text-muted-foreground">{room.primary_proctor_name || 'Pengawas belum ditugaskan'} · Token {room.masked_token}</p>
 											</Table.Cell>
-											<Table.Cell class="text-muted-foreground">{room.primary_proctor_name || 'Belum ditugaskan'}</Table.Cell>
-											<Table.Cell class="text-center font-semibold">{room.joined_count}/{room.participant_count}</Table.Cell>
-											<Table.Cell class="text-center font-semibold">{room.submitted_count}/{room.participant_count}</Table.Cell>
-											<Table.Cell class={room.offline > 0 ? 'text-center font-semibold text-destructive' : 'text-center font-semibold'}>{room.offline}</Table.Cell>
 											<Table.Cell>
-												<div class="flex flex-wrap gap-1">
-													{#if room.missing_seat_count > 0}<Badge variant="outline" class="border-warning/30 text-warning">{room.missing_seat_count} meja kosong</Badge>{/if}
-													{#if room.suspicious_count > 0}<Badge variant="outline" class="border-destructive/30 text-destructive">{room.suspicious_count} atensi</Badge>{/if}
-													{#if room.handover_locked}<Badge variant="outline" class="border-success/30 text-success">Handover final</Badge>{/if}
-													{#if room.missing_seat_count === 0 && room.suspicious_count === 0 && !room.handover_locked}<span class="text-[11px] text-muted-foreground">—</span>{/if}
+												<div class="grid gap-1 sm:grid-cols-3">
+													<span><span class="text-muted-foreground">Login</span> <span class="font-semibold text-foreground">{room.joined_count}/{room.participant_count}</span></span>
+													<span><span class="text-muted-foreground">Kirim</span> <span class="font-semibold text-foreground">{room.submitted_count}/{room.participant_count}</span></span>
+													<span class={room.offline > 0 ? 'font-semibold text-destructive' : 'text-muted-foreground'}>{room.offline} offline</span>
+												</div>
+											</Table.Cell>
+											<Table.Cell>
+												<Badge variant="outline" class={commandRoomStatusClass(room.command_status)}>{commandRoomStatusLabel(room.command_status)}</Badge>
+												<div class="mt-1 flex flex-wrap gap-1">
+													{#if room.missing_seat_count > 0}<span class="text-warning">{room.missing_seat_count} meja</span>{/if}
+													{#if room.suspicious_count > 0}<span class="text-destructive">{room.suspicious_count} atensi</span>{/if}
+													{#if room.handover_locked}<span class="text-success">Serah terima final</span>{/if}
 												</div>
 											</Table.Cell>
 											<Table.Cell class="text-right">
-												<div class="flex justify-end gap-1">
-													<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${room.room_id}/proctoring`)}>Panel Ruang</Button>
-													<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${room.room_id}/print-pack`)}>Cetak</Button>
-													<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Serah Terima</Button>
-												</div>
+												<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${room.room_id}/proctoring`)}>Panel Ruang</Button>
 											</Table.Cell>
 										</Table.Row>
 									{:else}
 										<Table.Row>
-											<Table.Cell colspan={7} class="py-6 text-center text-muted-foreground">Belum ada snapshot ruang. Klik Refresh atau buka tab Operasional.</Table.Cell>
+											<Table.Cell colspan={4} class="py-6 text-center text-muted-foreground">Belum ada snapshot ruang. Klik Refresh atau buka rincian teknis.</Table.Cell>
 										</Table.Row>
 									{/each}
 								</Table.Body>
 							</Table.Root>
 						</div>
+						<details class="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+							<summary class="cursor-pointer font-semibold text-foreground">Aksi teknis lain</summary>
+							<div class="mt-2 flex flex-wrap gap-2">
+								<Button variant="outline" size="sm" onclick={() => switchTab('ruangan')}>Setup Ruang</Button>
+								<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Serah Terima</Button>
+							</div>
+						</details>
 					</div>
 
 					<aside class="rounded-md border border-border bg-card/70">

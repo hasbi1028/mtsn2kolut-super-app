@@ -82,37 +82,35 @@ describe('admin breadcrumb resolver', () => {
 	it('uses sidebar trail for configured admin routes', () => {
 		const asesmenCrumbs = buildAdminBreadcrumbs('/asesmen', adminRoles, adminPermissions);
 		expect(asesmenCrumbs.map((crumb) => crumb.label)).toEqual([
-			'Asesmen Ujian',
-			'Alur Utama',
+			'Asesmen',
 			'Ringkasan Asesmen'
 		]);
-		expect(asesmenCrumbs.map((crumb) => crumb.section)).toEqual(['7', '7.1', '7.1.1']);
+		expect(asesmenCrumbs.map((crumb) => crumb.section)).toEqual(['7', '7.0']);
 
 		const tambahSoalCrumbs = buildAdminBreadcrumbs('/bank-soal/tambah', adminRoles, adminPermissions);
 		expect(tambahSoalCrumbs.map((crumb) => crumb.label)).toEqual([
 			'Bank Soal',
-			'Kelola Soal',
 			'Tambah Soal'
 		]);
-		expect(tambahSoalCrumbs.map((crumb) => crumb.section)).toEqual(['6', '6.1', '6.1.2']);
+		expect(tambahSoalCrumbs.map((crumb) => crumb.section)).toEqual(['6', '6.2']);
 	});
 
 	it('uses assessment fallback trails for routes hidden from sidebar', () => {
 		expect(buildAdminBreadcrumbs('/asesmen/sesi/01000000-0000-0000-0000-000000000000', adminRoles, adminPermissions)).toEqual([
-			{ label: 'Asesmen Ujian', href: undefined, section: '7' },
-			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1.2' },
-			{ label: 'Sesi & Ruang', href: '/asesmen/sesi', section: '7.1.2.3' },
-			{ label: 'Detail Sesi', href: undefined, section: '7.1.2.3.1' }
+			{ label: 'Asesmen', href: undefined, section: '7' },
+			{ label: 'Persiapan', href: '/asesmen/persiapan', section: '7.1' },
+			{ label: 'Sesi Ujian', href: '/asesmen/sesi', section: '7.1.3' },
+			{ label: 'Detail Sesi', href: undefined, section: '7.1.3.1' }
 		]);
 		expect(buildAdminBreadcrumbs('/asesmen/ruang-saya', adminRoles, adminPermissions).map((crumb) => crumb.label)).toEqual([
-			'Asesmen Ujian',
+			'Asesmen',
 			'Pelaksanaan',
 			'Ruang Saya'
 		]);
 		expect(buildAdminBreadcrumbs('/asesmen/ruang-saya', adminRoles, adminPermissions).map((crumb) => crumb.section)).toEqual([
 			'7',
-			'7.1.3',
-			'7.1.3.1'
+			'7.2',
+			'7.2.2'
 		]);
 	});
 

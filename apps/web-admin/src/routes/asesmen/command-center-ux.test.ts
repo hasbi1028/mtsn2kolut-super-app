@@ -9,6 +9,8 @@ describe('Ujian Digital Command Center Hari-H UX', () => {
 		expect(pageSource).toContain('Satu ringkasan untuk panitia');
 		expect(pageSource).toContain('Ruang Sesi');
 		expect(pageSource).toContain('Atensi Aktif');
+		expect(pageSource).toContain('Aksi teknis lain');
+		expect(pageSource).toContain('Belum ada snapshot ruang. Klik Refresh atau buka rincian teknis.');
 		expect(pageSource).not.toContain('Cetak Paket');
 	});
 

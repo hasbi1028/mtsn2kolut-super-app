@@ -190,11 +190,6 @@
 		return 'border-primary/20 bg-primary/10 text-primary';
 	}
 
-	function attentionClass(room: ProctorRoom) {
-		if (room.suspicious_count > 0) return 'border-destructive/30 bg-destructive/10 text-destructive';
-		if (room.missing_seat_count > 0 || room.proctor_count === 0) return 'border-warning/30 bg-warning/10 text-warning';
-		return 'border-primary/20 bg-primary/10 text-primary';
-	}
 </script>
 
 <svelte:head>
@@ -233,75 +228,63 @@
 
 	{#snippet children(value)}
 		{@const loadedRooms = value as ProctorRoom[]}
-		<div class="space-y-5 p-4 md:p-6">
-			<section class="flex flex-col gap-4 border-b border-primary/20 pb-5 lg:flex-row lg:items-end lg:justify-between">
-				<div class="max-w-3xl space-y-2">
+		<div class="space-y-4 p-4 md:p-6">
+			<section class="rounded-xl border border-primary/20 bg-card p-4 shadow-sm">
+				<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+					<div class="max-w-3xl">
 					<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Ujian Digital / Ruang Saya</p>
-					<h1 class="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Ruang Saya</h1>
-					<p class="text-sm leading-6 text-muted-foreground">
+					<h1 class="mt-1 text-2xl font-semibold tracking-tight text-foreground">Ruang Saya</h1>
+					<p class="mt-2 text-sm leading-6 text-muted-foreground">
 						Halaman kerja pengawas ruang. Pilih ruang yang ditugaskan, baca kode ruang, pantau status hijau/kuning/merah, lalu buka panel ruang bila perlu tindakan.
 					</p>
-				</div>
-				<div class="flex flex-wrap gap-2">
-					<a class="inline-flex items-center rounded-md px-1 text-sm font-medium text-muted-foreground underline-offset-4 hover:underline" href={resolve('/asesmen/pelaksanaan')}>Pelaksanaan</a>
-					<a class="inline-flex items-center rounded-md px-1 text-sm font-medium text-muted-foreground underline-offset-4 hover:underline" href={resolve('/asesmen/aplikasi-siswa')}>Panduan perangkat</a>
-				</div>
-			</section>
-
-			<section class="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm leading-6 text-muted-foreground">
-				<p class="font-semibold text-foreground">Cara pakai singkat</p>
-				<p>Pengawas cukup buka satu kartu ruang. Jika status merah/kuning, buka panel ruang dan ikuti catatan tindakan. Pengaturan sesi, peserta, dan pembagian ruang tetap dikerjakan panitia dari halaman Sesi.</p>
-			</section>
-
-			<section class="grid gap-3 md:grid-cols-5">
-				<div class="border border-primary/20 bg-card p-4 shadow-sm">
-					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ruang</p>
-					<p class="mt-1 text-2xl font-bold text-foreground">{stats.total}</p>
-				</div>
-				<div class="border border-primary/20 bg-card p-4 shadow-sm">
-					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Aktif</p>
-					<p class="mt-1 text-2xl font-bold text-primary">{stats.active}</p>
-				</div>
-				<div class="border border-primary/20 bg-card p-4 shadow-sm">
-					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Terjadwal</p>
-					<p class="mt-1 text-2xl font-bold text-accent-foreground">{stats.scheduled}</p>
-				</div>
-				<div class="border border-primary/20 bg-card p-4 shadow-sm">
-					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Peserta</p>
-					<p class="mt-1 text-2xl font-bold text-foreground">{stats.participants}</p>
-				</div>
-				<div class="border border-primary/20 bg-card p-4 shadow-sm">
-					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Atensi</p>
-					<p class="mt-1 text-2xl font-bold text-warning">{stats.attention}</p>
-				</div>
-			</section>
-
-			<section class="grid gap-3 border border-border bg-card p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_220px]">
-				<div>
-					<label for="proctor-room-search" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cari ruang / sesi / kode ruang</label>
-					<div class="relative">
-						<SearchIcon class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-						<input
-							id="proctor-room-search"
-							bind:value={query}
-							class="h-10 w-full rounded-md border border-border bg-card pl-9 pr-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring"
-							placeholder="Cari ruang, paket, kode ruang, atau pengawas"
-						/>
+					</div>
+					<div class="flex flex-wrap gap-2">
+						<a class="inline-flex min-h-9 items-center rounded-md border border-border bg-muted/50 px-3 text-sm font-medium text-foreground hover:border-primary/30 hover:text-primary" href={resolve('/asesmen/pelaksanaan')}>Pelaksanaan</a>
+						<a class="inline-flex min-h-9 items-center rounded-md px-1 text-sm font-medium text-muted-foreground underline-offset-4 hover:underline" href={resolve('/asesmen/aplikasi-siswa')}>Panduan perangkat</a>
 					</div>
 				</div>
-				<div>
-					<label for="proctor-room-status" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status sesi</label>
-					<select
-						id="proctor-room-status"
-						bind:value={statusFilter}
-						class="h-10 w-full rounded-md border border-border bg-card px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring"
-					>
-						{#each statusOptions as option (option.value)}
-							<option value={option.value}>{option.label}</option>
-						{/each}
-					</select>
+			</section>
+
+			<section class="grid gap-3 rounded-lg border border-border bg-muted/40 p-3 text-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+				<p class="text-muted-foreground">
+					Pengawas cukup buka satu kartu ruang. Pengaturan sesi, peserta, dan pembagian ruang tetap dikerjakan panitia dari halaman Sesi.
+				</p>
+				<div class="flex flex-wrap gap-2 text-xs">
+					<Badge variant="outline" class="bg-card">{stats.total} ruang</Badge>
+					<Badge variant="outline" class="border-primary/20 bg-primary/10 text-primary">{stats.active} aktif</Badge>
+					<Badge variant="outline" class="border-warning/30 bg-warning/10 text-warning">{stats.attention} atensi</Badge>
 				</div>
 			</section>
+
+			<details class="rounded-lg border border-border bg-card p-3 shadow-sm">
+				<summary class="cursor-pointer text-sm font-semibold text-foreground">Cari dan filter ruang</summary>
+				<section class="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
+					<div>
+						<label for="proctor-room-search" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cari ruang / sesi / kode ruang</label>
+						<div class="relative">
+							<SearchIcon class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+							<input
+								id="proctor-room-search"
+								bind:value={query}
+								class="h-10 w-full rounded-md border border-border bg-card pl-9 pr-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring"
+								placeholder="Cari ruang, paket, kode ruang, atau pengawas"
+							/>
+						</div>
+					</div>
+					<div>
+						<label for="proctor-room-status" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status sesi</label>
+						<select
+							id="proctor-room-status"
+							bind:value={statusFilter}
+							class="h-10 w-full rounded-md border border-border bg-card px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring"
+						>
+							{#each statusOptions as option (option.value)}
+								<option value={option.value}>{option.label}</option>
+							{/each}
+						</select>
+					</div>
+				</section>
+			</details>
 
 			{#if loadedRooms.length === 0}
 				<EmptyStatePanel
@@ -316,13 +299,12 @@
 			{:else}
 				<section class="grid gap-3 xl:grid-cols-2">
 					{#each filteredRooms as room (room.id)}
-						<article class="border border-primary/20 bg-card p-4 shadow-sm">
-							<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+						<article class="rounded-lg border border-primary/20 bg-card p-4 shadow-sm">
+							<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 								<div class="min-w-0 space-y-2">
 									<div class="flex flex-wrap items-center gap-2">
 										<Badge variant="outline" class={simpleSignalClass(room)}>{simpleSignalLabel(room)}</Badge>
 										<Badge variant="outline" class={statusClass(room.session_status)}>{statusLabel(room.session_status)}</Badge>
-										<Badge variant="outline" class={attentionClass(room)}>{readinessText(room)}</Badge>
 										{#if room.actor_role}
 											<Badge variant="outline" class="border-primary/20 text-primary">{roomRoleLabel(room.actor_role)}</Badge>
 										{/if}
@@ -339,34 +321,33 @@
 								</div>
 							</div>
 
-							<div class="mt-4 grid gap-2 text-sm sm:grid-cols-4">
-								<div class="border border-border bg-muted/50 p-3">
+							<div class="mt-4 grid gap-2 text-sm sm:grid-cols-3">
+								<div class="rounded-md border border-border bg-muted/50 p-3">
 									<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Peserta</p>
 									<p class="font-semibold text-foreground">{room.participant_count}</p>
 								</div>
-								<div class="border border-border bg-muted/50 p-3">
+								<div class="rounded-md border border-border bg-muted/50 p-3">
 									<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Terhubung</p>
 									<p class="font-semibold text-primary">{room.online_count}</p>
 								</div>
-								<div class="border border-border bg-muted/50 p-3">
+								<div class="rounded-md border border-border bg-muted/50 p-3">
 									<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Kirim</p>
 									<p class="font-semibold text-foreground">{room.submitted_count}</p>
 								</div>
-								<div class="border border-border bg-muted/50 p-3">
-									<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Atensi</p>
-									<p class="font-semibold text-warning">{room.suspicious_count}</p>
+							</div>
+
+							<details class="mt-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+								<summary class="cursor-pointer font-semibold text-foreground">Detail ruang</summary>
+								<div class="mt-2 grid gap-2 md:grid-cols-2">
+									<p><span class="font-semibold text-foreground">Catatan:</span> {readinessText(room)}</p>
+									<p><span class="font-semibold text-foreground">Lokasi:</span> {roomLocation(room)}</p>
+									<p><span class="font-semibold text-foreground">Pengawas:</span> {room.proctor_names || 'Belum ditugaskan'}</p>
+									<p><span class="font-semibold text-foreground">Selesai:</span> {fmtDate(room.scheduled_end)}</p>
 								</div>
-							</div>
+							</details>
 
-							<div class="mt-4 grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
-								<p><span class="font-semibold text-foreground">Lokasi:</span> {roomLocation(room)}</p>
-								<p><span class="font-semibold text-foreground">Pengawas:</span> {room.proctor_names || 'Belum ditugaskan'}</p>
-								<p><span class="font-semibold text-foreground">Durasi:</span> {room.duration_minutes} menit</p>
-								<p><span class="font-semibold text-foreground">Selesai:</span> {fmtDate(room.scheduled_end)}</p>
-							</div>
-
-							<div class="mt-4 flex flex-wrap gap-2">
-								<Button class="h-12 px-5 text-base font-bold" href={resolve(`/asesmen/sesi/${room.session_id}/rooms/${room.id}/proctoring`)}>
+							<div class="mt-4">
+								<Button class="h-11 w-full px-5 text-base font-bold sm:w-auto" href={resolve(`/asesmen/sesi/${room.session_id}/rooms/${room.id}/proctoring`)}>
 									<ActivityIcon class="mr-2 size-4" />
 									Buka Panel Ruang
 								</Button>

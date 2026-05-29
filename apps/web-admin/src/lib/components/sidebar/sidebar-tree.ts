@@ -67,7 +67,7 @@ export function sidebarNumberedBreadcrumbLabel(
 
 function numberNodes(nodes: readonly SidebarNavNode[], parentSection: string): SidebarNavNode[] {
 	return nodes.map((node, index) => {
-		const section = `${parentSection}.${index + 1}`;
+		const section = node.section ?? `${parentSection}.${index + 1}`;
 		const numberedLabel = withNumber(node.label, section);
 		if (isSidebarFolder(node)) {
 			return {
@@ -83,7 +83,7 @@ function numberNodes(nodes: readonly SidebarNavNode[], parentSection: string): S
 
 export function numberSidebarNavGroups(groups: readonly SidebarNavGroup[]): SidebarNavGroup[] {
 	return groups.map((group, index) => {
-		const section = `${index + 1}`;
+		const section = group.section ?? `${index + 1}`;
 		return {
 			...group,
 			section,

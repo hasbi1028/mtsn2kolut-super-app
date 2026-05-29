@@ -28,7 +28,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'Siswa & Orang Tua',
 			'Nilai & Rapor',
 			'Bank Soal',
-			'Asesmen Ujian',
+			'Asesmen',
 			'Tata Usaha',
 			'Aset & Layanan',
 			'Website',
@@ -40,8 +40,8 @@ describe('sidebar 3-level full route coverage configuration', () => {
 	});
 
 	it('supports 3-level breadcrumbs for nested sidebar leaves', () => {
-		expect(sidebarBreadcrumbLabel(byHref.get('/bank-soal/tambah')!)).toBe('Bank Soal › Kelola Soal › Tambah Soal');
-		expect(sidebarBreadcrumbLabel(byHref.get('/asesmen')!)).toBe('Asesmen Ujian › Alur Utama › Ringkasan Asesmen');
+		expect(sidebarBreadcrumbLabel(byHref.get('/bank-soal/tambah')!)).toBe('Bank Soal › Tambah Soal');
+		expect(sidebarBreadcrumbLabel(byHref.get('/asesmen')!)).toBe('Asesmen › Ringkasan Asesmen');
 		expect(sidebarBreadcrumbLabel(byHref.get('/settings/backups')!)).toBe('Pengaturan › Sistem & Audit › Backup & Restore');
 	});
 
@@ -53,15 +53,16 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'4 Siswa & Orang Tua',
 			'5 Nilai & Rapor',
 			'6 Bank Soal',
-			'7 Asesmen Ujian',
+			'7 Asesmen',
 			'8 Tata Usaha',
 			'9 Aset & Layanan',
 			'10 Website',
 			'11 Pegawai & Kehadiran',
 			'12 Pengaturan'
 		]);
-		expect(numberedByHref.get('/bank-soal/tambah')).toMatchObject({ section: '6.1.2', numberedLabel: '6.1.2 Tambah Soal' });
-		expect(numberedByHref.get('/asesmen/persiapan')).toMatchObject({ groupSection: '7', ancestorSections: ['7.1'], section: '7.1.2' });
+		expect(numberedByHref.get('/bank-soal/tambah')).toMatchObject({ section: '6.2', numberedLabel: '6.2 Tambah Soal' });
+		expect(numberedByHref.get('/asesmen/persiapan')).toMatchObject({ groupSection: '7', ancestorSections: [], section: '7.1' });
+		expect(numberedByHref.get('/asesmen/ruang-saya')).toMatchObject({ groupSection: '7', ancestorSections: [], section: '7.2.2' });
 		expect(sidebarNumberedBreadcrumbLabel(numberedByHref.get('/settings/backups')!)).toBe(
 			'12 Pengaturan › 12.3 Sistem & Audit › 12.3.3 Backup & Restore'
 		);
@@ -84,19 +85,59 @@ describe('sidebar 3-level full route coverage configuration', () => {
 	});
 
 	it('keeps assessment navigation aligned to preparation, execution, and result workflows', () => {
-		expect(hrefsByGroup('Asesmen Ujian')).toEqual([
+		expect(hrefsByGroup('Asesmen')).toEqual([
 			'/asesmen',
 			'/asesmen/persiapan',
+			'/asesmen/kegiatan',
+			'/asesmen/paket',
+			'/asesmen/sesi',
+			'/asesmen/sesi#ruang-peserta',
+			'/asesmen/sesi#pengawas',
 			'/asesmen/pelaksanaan',
-			'/asesmen/hasil'
+			'/asesmen/sesi?schedule=today',
+			'/asesmen/ruang-saya',
+			'/asesmen/ruang-saya#panel-ruang',
+			'/asesmen/aplikasi-siswa',
+			'/asesmen/sesi?area=serah-terima',
+			'/asesmen/hasil',
+			'/asesmen/hasil#rekap-nilai',
+			'/asesmen/hasil#status-submit',
+			'/asesmen/hasil#koreksi-uraian',
+			'/asesmen/hasil#analisis-butir',
+			'/asesmen/hasil#sinkronisasi',
+			'/asesmen/kegiatan?arsip=utama',
+			'/asesmen/sesi?dokumen=berita-acara',
+			'/asesmen/hasil#rekap-pelaksanaan',
+			'/asesmen/kegiatan?arsip=tindak-lanjut'
 		]);
-		expect(labelsByGroup('Asesmen Ujian')).toEqual([
+		expect(labelsByGroup('Asesmen')).toEqual([
 			'Ringkasan Asesmen',
 			'Persiapan',
+			'Kegiatan Asesmen',
+			'Paket Soal',
+			'Sesi Ujian',
+			'Ruang & Peserta',
+			'Pengawas Ruang',
 			'Pelaksanaan',
+			'Sesi Panitia',
+			'Ruang Saya',
+			'Panel Ruang',
+			'Perangkat Siswa',
+			'Serah Terima Pengawas',
 			'Hasil',
+			'Rekap Nilai',
+			'Status Submit',
+			'Koreksi Uraian',
+			'Analisis Butir',
+			'Publikasi / Sinkronisasi',
+			'Arsip',
+			'Berita Acara',
+			'Rekap Pelaksanaan',
+			'Tindak Lanjut Sesi',
 		]);
-		expect(hrefsByGroup('Asesmen Ujian')).not.toEqual(expect.arrayContaining([
+		expect(numberedByHref.get('/asesmen/kegiatan')).toMatchObject({ section: '7.1.1' });
+		expect(numberedByHref.get('/asesmen/sesi?dokumen=berita-acara')).toMatchObject({ section: '7.4.1' });
+		expect(hrefsByGroup('Asesmen')).not.toEqual(expect.arrayContaining([
 			'/asesmen/kegiatan/new',
 			'/asesmen/paket/new',
 			'/asesmen/sesi/new',
@@ -108,12 +149,12 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'/asesmen/panitia',
 			'/ujian'
 		]));
-		expect(hrefsByGroup('Asesmen Ujian').some((href) => href.startsWith('/bank-soal'))).toBe(false);
+		expect(hrefsByGroup('Asesmen').some((href) => href.startsWith('/bank-soal'))).toBe(false);
 	});
 
 	it('separates Bank Soal as a standalone module outside CBT routes', () => {
 		expect(sidebarNavGroups.findIndex((group) => group.group === 'Bank Soal')).toBeLessThan(
-			sidebarNavGroups.findIndex((group) => group.group === 'Asesmen Ujian')
+			sidebarNavGroups.findIndex((group) => group.group === 'Asesmen')
 		);
 		expect(sidebarNavGroups.some((group) => group.group === 'CBT')).toBe(false);
 		expect(hrefsByGroup('Bank Soal')).toEqual([
@@ -144,10 +185,10 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(byHref.get('/asesmen/persiapan')?.permissions).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage']);
 		expect(byHref.get('/asesmen/pelaksanaan')?.permissions).toEqual(['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage']);
 		expect(byHref.get('/asesmen/hasil')?.permissions).toEqual(['asesmen.result_read', 'asesmen.result_manage']);
-		expect(byHref.get('/asesmen/ruang-saya')).toBeUndefined();
+		expect(byHref.get('/asesmen/ruang-saya')?.section).toBe('7.2.2');
 		expect(byHref.get('/asesmen/pengawasan')).toBeUndefined();
 		expect(byHref.get('/asesmen/non-tes')).toBeUndefined();
-		expect(byHref.get('/asesmen/aplikasi-siswa')).toBeUndefined();
+		expect(byHref.get('/asesmen/aplikasi-siswa')?.section).toBe('7.2.4');
 		expect(byHref.get('/asesmen/aplikasi-siswa/matrix')).toBeUndefined();
 		expect(byHref.get('/asesmen/aplikasi-siswa/release')).toBeUndefined();
 	});
@@ -187,19 +228,17 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		const visibleHrefs = flattenSidebarNavGroups(
 			filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], ['asesmen.proctor'])
 		).map((item) => item.href);
-		expect(visibleHrefs).toEqual(expect.arrayContaining(['/asesmen', '/asesmen/pelaksanaan', '/settings/account']));
+		expect(visibleHrefs).toEqual(expect.arrayContaining(['/asesmen', '/asesmen/pelaksanaan', '/asesmen/ruang-saya', '/settings/account']));
 		expect(visibleHrefs).not.toContain('/asesmen/ringkas');
 		expect(visibleHrefs).not.toContain('/asesmen/persiapan');
-		expect(visibleHrefs).not.toContain('/asesmen/ruang-saya');
 	});
 
-	it('shows the operator assessment control lane without duplicating Ruang Saya', () => {
+	it('shows the operator assessment control lane with stable work-code aliases', () => {
 		const visibleHrefs = flattenSidebarNavGroups(
 			filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], ['asesmen.operator'])
 		).map((item) => item.href);
-		expect(visibleHrefs).toEqual(expect.arrayContaining(['/asesmen', '/asesmen/persiapan', '/asesmen/pelaksanaan', '/settings/account']));
+		expect(visibleHrefs).toEqual(expect.arrayContaining(['/asesmen', '/asesmen/persiapan', '/asesmen/pelaksanaan', '/asesmen/ruang-saya', '/settings/account']));
 		expect(visibleHrefs).not.toContain('/asesmen/ringkas');
-		expect(visibleHrefs).not.toContain('/asesmen/ruang-saya');
 	});
 
 	it('exposes student and parent portal entries only to matching roles or permissions', () => {
