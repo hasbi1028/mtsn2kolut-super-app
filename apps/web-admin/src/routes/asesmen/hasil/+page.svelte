@@ -1,13 +1,6 @@
 <script lang="ts">
-	import BarChart3Icon from '@lucide/svelte/icons/bar-chart-3';
-	import FileTextIcon from '@lucide/svelte/icons/file-text';
-	import MonitorPlayIcon from '@lucide/svelte/icons/monitor-play';
-	import ClipboardCheckIcon from '@lucide/svelte/icons/clipboard-check';
 	import { page } from '$app/state';
-	import { resolve } from '$app/paths';
-	import { Badge } from '$lib/components/ui/badge';
-	import { Button } from '$lib/components/ui/button';
-	import MicroActionTable from '$lib/components/ops/MicroActionTable.svelte';
+	import { AssessmentPhaseHeader, AssessmentTaskCard } from '$lib/components/asesmen';
 
 	type ResultRoute =
 		| '/asesmen'
@@ -17,22 +10,16 @@
 		| '/asesmen/hasil'
 		| '/asesmen/persiapan';
 
-	type ResultRow = {
+	type ResultTask = {
 		id: string;
+		code: string;
 		title: string;
 		helper: string;
 		status: string;
 		coverage: string;
 		href?: ResultRoute;
 		action?: string;
-		icon: typeof BarChart3Icon;
 	};
-
-	const rowColumns = [
-		{ key: 'task', label: 'Alur Hasil', class: 'min-w-[18rem]' },
-		{ key: 'status', label: 'Status', class: 'min-w-[12rem]' },
-		{ key: 'coverage', label: 'Cakupan', class: 'min-w-[14rem]' }
-	];
 
 	const userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
 	const userPermissions = $derived((page.data.user?.permissions ?? []).map((permission) => permission.trim()).filter(Boolean));
@@ -52,68 +39,92 @@
 			|| userPermissions.includes('asesmen.package_manage')
 			|| userPermissions.includes('asesmen.session_manage')
 	);
-	const resultRows = $derived<ResultRow[]>(
+	const resultTasks = $derived<ResultTask[]>(
 		isOperator
 			? [
 				{
 					id: 'event-results',
-					title: 'Pilih Kegiatan',
+					code: '7.3.1',
+					title: 'Rekap Nilai',
 					helper: 'Masuk dari daftar kegiatan untuk membaca rekap, detail sesi, BA, analisis, dan arsip final dari satu konteks kegiatan.',
 					status: 'Pintu utama operator',
 					coverage: 'Rekap · BA · analisis · arsip',
 					href: '/asesmen/kegiatan',
-					action: 'Buka Daftar Kegiatan',
-					icon: BarChart3Icon
+					action: 'Buka kegiatan'
 				},
 				{
 					id: 'session-results',
-					title: 'Hasil Sesi & BA',
+					code: '7.3.2',
+					title: 'Status Submit',
 					helper: 'Pilih sesi untuk melihat kiriman peserta, BA sesi, nilai, dan analisis butir.',
 					status: 'Dipakai saat verifikasi',
 					coverage: 'Per sesi · BA · analisis soal',
 					href: '/asesmen/sesi',
-					action: 'Buka Daftar Sesi',
-					icon: FileTextIcon
+					action: 'Buka sesi'
+				},
+				{
+					id: 'essay-scoring',
+					code: '7.3.3',
+					title: 'Koreksi Uraian',
+					helper: 'Buka sesi atau kegiatan yang memiliki soal uraian untuk melengkapi penilaian manual.',
+					status: 'Jika ada uraian',
+					coverage: 'Uraian · koreksi manual',
+					href: '/asesmen/sesi',
+					action: 'Cek sesi'
+				},
+				{
+					id: 'item-analysis',
+					code: '7.3.4',
+					title: 'Analisis Butir',
+					helper: 'Gunakan setelah peserta submit untuk melihat butir yang mudah, sulit, atau perlu ditinjau ulang.',
+					status: 'Setelah submit',
+					coverage: 'Mutu soal · tindak lanjut',
+					href: '/asesmen/sesi',
+					action: 'Buka analisis'
+				},
+				{
+					id: 'publish-sync',
+					code: '7.3.5',
+					title: 'Publikasi / Sinkronisasi',
+					helper: 'Lakukan setelah rekap, status submit, dan koreksi uraian sudah selesai diverifikasi.',
+					status: 'Langkah akhir',
+					coverage: 'Publikasi · rapor',
+					href: '/asesmen/kegiatan',
+					action: 'Buka kegiatan'
 				}
 			]
 			: [
 				{
 					id: 'reader-results',
+					code: '7.3.1',
 					title: 'Rekap Hasil Kegiatan',
 					helper: 'Baca hasil yang sudah dibuka oleh operator/panitia. Jika perlu detail kegiatan, minta operator membuka halaman lengkap.',
 					status: isResultReader ? 'Baca hasil tersedia' : 'Ikuti arahan operator',
 					coverage: 'Rekap akhir · status hasil',
-					icon: BarChart3Icon
 				},
 				{
 					id: 'reader-monitoring',
+					code: '7.2',
 					title: 'Pantau Pelaksanaan',
 					helper: 'Gunakan bila hasil perlu dicocokkan dengan ruang aktif, status kiriman, atau kejadian pengawasan.',
 					status: isProctor ? 'Mode ruang aktif' : 'Koordinasi pengawas',
 					coverage: 'Ruang berjalan · kejadian · status kiriman',
 					href: isProctor ? '/asesmen/pelaksanaan' : undefined,
 					action: isProctor ? 'Buka Pelaksanaan' : undefined,
-					icon: MonitorPlayIcon
 				},
 				{
 					id: 'reader-followup',
+					code: '7.4',
 					title: 'Tindak Lanjut Operator',
 					helper: 'Jika butuh BA sesi, analisis butir, atau arsip final, lanjutkan lewat operator/panitia.',
 					status: 'Koordinasi panitia',
 					coverage: 'BA sesi · analisis · arsip final',
-					icon: ClipboardCheckIcon
 				}
 			]
 	);
 
-	function badgeClass(label: string) {
-		if (label.includes('utama') || label.includes('tersedia') || label.includes('aktif')) {
-			return 'border-success/20 bg-success/10 text-success';
-		}
-		if (label.includes('penutupan') || label.includes('verifikasi')) {
-			return 'border-warning/30 bg-warning/10 text-warning';
-		}
-		return 'border-primary/20 bg-primary/10 text-primary';
+	function taskHref(task: ResultTask) {
+		return task.href ?? '';
 	}
 </script>
 
@@ -122,61 +133,41 @@
 </svelte:head>
 
 {#if canAccess}
-	<div class="mx-auto max-w-6xl space-y-6 p-6">
-		<section class="space-y-4">
-			<div class="space-y-2">
-				<p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Ujian Digital · Hasil</p>
-				<h1 class="text-2xl font-semibold tracking-tight text-foreground">Hasil & Penutupan Kegiatan</h1>
-				<p class="max-w-3xl text-sm leading-6 text-muted-foreground">
-					Halaman ini menjadi pintu kerja hasil. Rekap detail tetap ada di halaman
-					kegiatan, sesi, dan arsip; di sini operator cukup memilih alur berikutnya.
-				</p>
+	<div class="space-y-5">
+		<AssessmentPhaseHeader
+			code="7.3"
+			badge={isOperator ? 'Mode hasil panitia' : 'Mode baca hasil'}
+			title="Hasil & Penutupan Kegiatan"
+			description="Pilih satu alur hasil. Rekap detail tetap ada di halaman kegiatan, sesi, dan arsip; halaman ini hanya menjadi pintu kerja hasil."
+			primaryAction={{ label: isOperator ? 'Buka Rekap Nilai' : 'Lihat Rekap', href: isOperator ? '/asesmen/kegiatan' : '/asesmen/hasil' }}
+			secondaryActions={canOpenDashboard ? [{ label: 'Ringkasan', href: '/asesmen', variant: 'outline' }] : []}
+		/>
+
+		<section aria-labelledby="hasil-area-title" class="space-y-3">
+			<div>
+				<p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">7.3 Alur Hasil</p>
+				<h2 id="hasil-area-title" class="mt-1 text-xl font-semibold tracking-tight text-foreground">Langkah hasil</h2>
 			</div>
-			<div class="flex flex-wrap gap-2">
-				{#if canOpenDashboard}
-					<a class="inline-flex items-center rounded-md px-1 text-sm font-medium text-muted-foreground underline-offset-4 hover:underline" href={resolve('/asesmen')}>Ringkasan</a>
-				{/if}
-				{#if isOperator}
-					<Badge variant="outline" class="border-primary/20 bg-primary/10 text-primary">Mode hasil panitia</Badge>
-				{:else}
-					<Badge variant="outline" class="border-muted bg-muted text-muted-foreground">Mode baca hasil</Badge>
-				{/if}
+			<div class="grid gap-3 lg:grid-cols-2">
+				{#each resultTasks as task (task.id)}
+					<AssessmentTaskCard
+						code={task.code}
+						title={task.title}
+						description={task.helper}
+						meta={`${task.status} · ${task.coverage}`}
+						href={taskHref(task)}
+						cta={task.action ?? ''}
+					/>
+				{/each}
 			</div>
 		</section>
 
-		<MicroActionTable
-			title="Alur utama hasil"
-			description="Gunakan jalur ini untuk memeriksa rekap, BA sesi, dan penutupan arsip tanpa membuka terlalu banyak menu."
-			columns={rowColumns}
-			rows={resultRows}
-			rowKey={(row) => (row as ResultRow).id}
-			tableClass="min-w-[900px]"
-		>
-			{#snippet cell(row, column)}
-				{@const item = row as ResultRow}
-				{#if column.key === 'task'}
-					<div class="flex items-start gap-3">
-						<div class="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-							<item.icon class="size-4" />
-						</div>
-						<div class="space-y-1">
-							<p class="font-semibold text-foreground">{item.title}</p>
-							<p class="text-xs leading-5 text-muted-foreground">{item.helper}</p>
-						</div>
-					</div>
-				{:else if column.key === 'status'}
-					<Badge variant="outline" class={badgeClass(item.status)}>{item.status}</Badge>
-				{:else}
-					<p class="text-xs leading-5 text-muted-foreground">{item.coverage}</p>
-				{/if}
-			{/snippet}
-			{#snippet actions(row)}
-				{@const item = row as ResultRow}
-				{#if item.href && item.action}
-					<Button href={resolve(item.href)} size="xs">{item.action}</Button>
-				{/if}
-			{/snippet}
-		</MicroActionTable>
+		<details class="rounded-lg border border-border bg-muted/40 p-3 text-sm leading-6 text-muted-foreground">
+			<summary class="cursor-pointer font-semibold text-foreground">Catatan teknis hasil</summary>
+			<p class="mt-2">
+				Koreksi uraian, analisis butir, dan sinkronisasi dilakukan setelah status submit peserta jelas. Berita acara dan rekap pelaksanaan masuk area 7.4 Arsip.
+			</p>
+		</details>
 	</div>
 {:else}
 	<div class="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 py-16 text-center">
@@ -186,7 +177,7 @@
 				Halaman hasil hanya tersedia untuk akun yang diberi akses baca hasil asesmen.
 			</p>
 			<div class="mt-6">
-				<a class="inline-flex items-center rounded-md px-1 text-sm font-medium text-muted-foreground underline-offset-4 hover:underline" href={resolve('/asesmen')}>Ringkasan</a>
+				<a class="inline-flex items-center rounded-md px-1 text-sm font-medium text-muted-foreground underline-offset-4 hover:underline" href="/asesmen">Ringkasan</a>
 			</div>
 		</div>
 	</div>

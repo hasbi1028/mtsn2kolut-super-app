@@ -9,6 +9,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import MicroActionTable from '$lib/components/ops/MicroActionTable.svelte';
+	import { AssessmentPhaseHeader } from '$lib/components/asesmen';
 	import { toast } from '$lib/components/ui/sonner';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPath, readClientApiData, readClientJson } from '$lib/client/api';
@@ -228,14 +229,15 @@
 		{/snippet}
 		{#snippet children(value)}
 			{@const current = value as PagePayload}
-			<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-				<div>
-					<p class="text-xs font-bold uppercase tracking-[0.18em] text-success">Panitia & Penugasan Soal</p>
-					<h1 class="mt-1 text-2xl font-semibold text-foreground">{current.info.title}</h1>
-					<p class="mt-1 text-sm text-muted-foreground">Kelola pembuat soal, reviewer, proktor, pengawas, dan korektor untuk kegiatan asesmen ini.</p>
-				</div>
-				<a href={resolve(`/bank-soal/tambah?event_id=${eventId}`)} class="inline-flex rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Buka Komposer Bank Soal</a>
-			</div>
+			<AssessmentPhaseHeader
+				code="7.1.1.a"
+				badge="Penugasan"
+				context={current.info.title}
+				title="Panitia & Penugasan Kegiatan"
+				description="Kelola pembuat soal, reviewer, proktor, pengawas, dan korektor untuk kegiatan asesmen ini."
+				primaryAction={{ label: 'Buka Komposer Bank Soal', href: resolve(`/bank-soal/tambah?event_id=${eventId}`), variant: 'outline' }}
+				secondaryActions={[{ label: 'Kegiatan', href: resolve(`/asesmen/kegiatan/${eventId}`), variant: 'ghost' }]}
+			/>
 
 			<section class="rounded-xl border border-success/20 bg-card p-4 shadow-sm">
 				<div class="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_11rem_14rem_auto] lg:items-end">
@@ -282,7 +284,7 @@
 			<section class="space-y-3">
 				<div class="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 shadow-sm md:flex-row md:items-center md:justify-between">
 					<div>
-						<h2 class="text-base font-semibold text-foreground">Daftar Penugasan</h2>
+						<h2 class="text-base font-semibold text-foreground">7.1.1.a Daftar Penugasan</h2>
 						<p class="text-sm text-muted-foreground">{members.length} orang terhubung dengan kegiatan ini.</p>
 					</div>
 					<Input placeholder="Cari nama/peran/mapel..." bind:value={search} class="h-9 md:w-72" />

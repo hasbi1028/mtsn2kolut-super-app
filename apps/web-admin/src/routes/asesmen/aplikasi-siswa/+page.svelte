@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { AssessmentPhaseHeader } from '$lib/components/asesmen';
 
 	type StatusTone = 'good' | 'warning' | 'danger';
 
@@ -54,22 +55,17 @@
 </svelte:head>
 
 <div class="space-y-5">
-	<section class="rounded-2xl border border-border bg-card p-4 shadow-sm">
-		<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-			<div class="max-w-3xl space-y-2">
-				<Badge class="border-primary/20 bg-primary/10 text-primary" variant="outline">Panduan Pengawas</Badge>
-				<h1 class="text-2xl font-semibold tracking-tight text-foreground">Panduan Perangkat Siswa</h1>
-				<p class="text-sm leading-6 text-muted-foreground">
-					Jalur utama siswa adalah Portal Ujian Web. Halaman ini sengaja ringkas agar guru/pengawas cukup tahu langkah masuk, arti status, dan kapan menghubungi panitia.
-				</p>
-			</div>
-			<div class="flex flex-wrap gap-2">
-				<Button href={resolve('/asesmen/pelaksanaan')} size="sm">Buka Pelaksanaan</Button>
-				<Button href={resolve('/asesmen/ruang-saya')} variant="outline" size="sm">Buka Ruang Saya</Button>
-				<Button href="/ujian?demo=1" variant="outline" size="sm">Latihan Lokal</Button>
-			</div>
-		</div>
-	</section>
+	<AssessmentPhaseHeader
+		code="7.2.4"
+		badge="Panduan Pengawas"
+		title="Panduan Perangkat Siswa"
+		description="Jalur utama siswa adalah Portal Ujian Web. Halaman ini sengaja ringkas agar guru/pengawas cukup tahu langkah masuk, arti status, dan kapan menghubungi panitia."
+		primaryAction={{ label: 'Buka Pelaksanaan', href: resolve('/asesmen/pelaksanaan') }}
+		secondaryActions={[
+			{ label: 'Ruang Saya', href: resolve('/asesmen/ruang-saya'), variant: 'outline' },
+			{ label: 'Latihan Lokal', href: '/ujian?demo=1', variant: 'outline' }
+		]}
+	/>
 
 	<section class="grid gap-4 lg:grid-cols-[1fr_0.8fr]">
 		<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">

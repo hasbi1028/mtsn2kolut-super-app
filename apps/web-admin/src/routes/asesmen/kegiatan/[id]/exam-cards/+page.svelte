@@ -11,6 +11,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import MicroActionTable from '$lib/components/ops/MicroActionTable.svelte';
+	import { AssessmentPhaseHeader } from '$lib/components/asesmen';
 	import { fetchSchoolProfile, schoolAddressLine, type SchoolProfile } from '$lib/school-profile';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
 	import {
@@ -207,18 +208,20 @@
 	</div>
 {:else}
 	<div class="mx-auto max-w-7xl space-y-6 p-6 print:max-w-none print:p-0">
-		<div class="flex flex-col gap-3 print:hidden lg:flex-row lg:items-center lg:justify-between">
-			<div>
-				<p class="text-sm font-medium text-primary">Dokumen & Cetak</p>
-				<h1 class="text-2xl font-semibold text-foreground">Kartu Peserta Ujian</h1>
-				<p class="text-sm text-muted-foreground">Cetak massal kartu peserta per kegiatan dengan filter kelas, sesi, ruang, dan status kesiapan.</p>
-			</div>
-			<div class="flex flex-wrap gap-2">
-				<a href={resolve(`/asesmen/kegiatan/${eventId}/cetak`)} class="inline-flex items-center rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">Dokumen & Cetak</a>
-				<Button variant="outline" onclick={loadCards}><RefreshCwIcon class="mr-2 size-4" />Refresh</Button>
-				<Button variant="outline" onclick={() => issueCards(false)} disabled={issueBusy}><QrCodeIcon class="mr-2 size-4" />Terbitkan QR+PIN</Button>
-				<Button onclick={printCards} disabled={printDisabled}><PrinterIcon class="mr-2 size-4" />Cetak Massal</Button>
-			</div>
+		<div class="print:hidden">
+			<AssessmentPhaseHeader
+				code="7.4.0.a"
+				badge="Kartu peserta"
+				title="Kartu Peserta Ujian"
+				description="Cetak massal kartu peserta per kegiatan dengan filter kelas, sesi, ruang, dan status kesiapan."
+				primaryAction={{ label: 'Dokumen & Cetak', href: resolve(`/asesmen/kegiatan/${eventId}/cetak`), variant: 'outline' }}
+				secondaryActions={[{ label: '7.4 Arsip', href: resolve(`/asesmen/kegiatan/${eventId}/archive`), variant: 'ghost' }]}
+			/>
+		</div>
+		<div class="flex flex-wrap justify-end gap-2 print:hidden">
+			<Button variant="outline" onclick={loadCards}><RefreshCwIcon class="mr-2 size-4" />Refresh</Button>
+			<Button variant="outline" onclick={() => issueCards(false)} disabled={issueBusy}><QrCodeIcon class="mr-2 size-4" />Terbitkan QR+PIN</Button>
+			<Button onclick={printCards} disabled={printDisabled}><PrinterIcon class="mr-2 size-4" />Cetak Massal</Button>
 		</div>
 
 		<div class="grid gap-3 print:hidden md:grid-cols-4">
@@ -327,7 +330,7 @@
 			</div>
 		{/if}
 
-		<MicroActionTable title="Status kartu peserta" description={`Menampilkan ${filteredCards.length} dari ${cards.length} kartu. Kode mentah disamarkan pada layar.`} columns={cardColumns} rows={filteredCards} rowKey={(row) => (row as ExamCard).participant_id} tableClass="min-w-[820px]" class="print:hidden" emptyTitle="Tidak ada kartu sesuai filter.">
+		<MicroActionTable title="7.4.0.a Status kartu peserta" description={`Menampilkan ${filteredCards.length} dari ${cards.length} kartu. Kode mentah disamarkan pada layar.`} columns={cardColumns} rows={filteredCards} rowKey={(row) => (row as ExamCard).participant_id} tableClass="min-w-[820px]" class="print:hidden" emptyTitle="Tidak ada kartu sesuai filter.">
 			{#snippet cell(row, column)}
 				{@const card = row as ExamCard}
 				{#if column.key === 'student'}

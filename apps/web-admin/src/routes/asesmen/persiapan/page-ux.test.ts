@@ -4,13 +4,20 @@ import { readFileSync } from 'node:fs';
 const pageSource = readFileSync('src/routes/asesmen/persiapan/+page.svelte', 'utf8');
 
 describe('Persiapan page UX', () => {
-	it('keeps the prep flow vertical, short, and step based', () => {
-		expect(pageSource).toContain('Kerjakan berurutan: kegiatan, paket, lalu sesi dan ruang.');
+	it('keeps the prep flow numbered, short, and aligned with the sidebar work codes', () => {
+		expect(pageSource).toContain('code="7.1"');
+		expect(pageSource).toContain('Kerjakan berurutan: kegiatan, paket, sesi, ruang dan peserta, lalu pengawas.');
 		expect(pageSource).toContain('Langkah persiapan');
+		expect(pageSource).toContain('7.1.1');
+		expect(pageSource).toContain('7.1.2');
+		expect(pageSource).toContain('7.1.3');
+		expect(pageSource).toContain('7.1.4');
+		expect(pageSource).toContain('7.1.5');
 		expect(pageSource).toContain('Buka kegiatan');
 		expect(pageSource).toContain('Buka paket');
 		expect(pageSource).toContain('Buka sesi');
-		expect(pageSource).toContain('Pembagian ruang mengikuti data sesi.');
-		expect(pageSource).toContain('Simulasi, gladi, dan ujian nyata tetap memakai data kegiatan, paket, dan sesi server.');
+		expect(pageSource).toContain('Atur ruang');
+		expect(pageSource).toContain('Atur pengawas');
+		expect(pageSource).toContain('Catatan teknis persiapan');
 	});
 });

@@ -14,6 +14,7 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import MicroActionTable from '$lib/components/ops/MicroActionTable.svelte';
+	import { AssessmentPhaseHeader } from '$lib/components/asesmen';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
 	import {
 		summarizeDocumentPrintStatus,
@@ -237,26 +238,20 @@
 	</div>
 {:else}
 	<div class="mx-auto max-w-7xl space-y-6 p-6">
-		<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-			<div>
-				<p class="text-sm font-medium text-primary">Asesmen · Kegiatan</p>
-				<h1 class="text-2xl font-semibold text-foreground">Dokumen & Cetak</h1>
-				<p class="text-sm text-muted-foreground">
-					{data.info?.title ?? 'Kegiatan Ujian'}
-					{data.info?.academic_year_name ? ` · ${data.info.academic_year_name}` : ''}
-				</p>
-			</div>
-			<div class="flex flex-wrap gap-2">
-				<a
-					href={resolve(`/asesmen/kegiatan/${eventId}`)}
-					class="inline-flex items-center rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted"
-				>
-					Kembali ke Kegiatan
-				</a>
-				<Button variant="outline" onclick={loadHub}
-					><RefreshCwIcon class="mr-2 size-4" />Refresh Status</Button
-				>
-			</div>
+		<AssessmentPhaseHeader
+			code="7.4.0"
+			badge="Dokumen"
+			context={`${data.info?.title ?? 'Kegiatan Ujian'}${data.info?.academic_year_name ? ` · ${data.info.academic_year_name}` : ''}`}
+			title="Dokumen & Cetak"
+			description="Pusat kartu peserta, lembar pengawas, QR/PIN, dan checklist arsip kegiatan."
+			primaryAction={{ label: 'Kembali ke Kegiatan', href: resolve(`/asesmen/kegiatan/${eventId}`) }}
+			secondaryActions={[
+				{ label: '7.4 Arsip', href: resolve(`/asesmen/kegiatan/${eventId}/archive`), variant: 'outline' }
+			]}
+		/>
+
+		<div class="flex justify-end">
+			<Button variant="outline" onclick={loadHub}><RefreshCwIcon class="mr-2 size-4" />Refresh Status</Button>
 		</div>
 
 		<div class="grid gap-3 md:grid-cols-4">
@@ -299,7 +294,7 @@
 		{/if}
 
 		<MicroActionTable
-			title="Pusat dokumen kegiatan"
+			title="7.4.0 Pusat dokumen kegiatan"
 			description="Semua jalur cetak utama dipusatkan di sini agar operator tidak perlu mencari tombol di banyak halaman."
 			columns={rowColumns}
 			rows={rows}

@@ -2,10 +2,12 @@
 	import PrinterIcon from '@lucide/svelte/icons/printer';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { AssessmentPhaseHeader } from '$lib/components/asesmen';
 	import { fetchSchoolProfile, schoolAddressLine, type SchoolProfile } from '$lib/school-profile';
 	import { readClientApiData } from '$lib/client/api';
 	import { maskAssessmentToken } from '$lib/asesmen/token-display';
@@ -144,11 +146,18 @@
 		{@const currentParticipants = detail.participants}
 		{@const currentRooms = detail.rooms}
 	<div class="mx-auto max-w-6xl space-y-6 p-6 print:p-0">
-		<div class="flex items-center justify-between print:hidden">
-			<div>
-				<h1 class="text-2xl font-semibold text-foreground">Berita Acara Sesi Ujian</h1>
-				<p class="text-sm text-muted-foreground">Siap dicetak untuk pengawas dan arsip madrasah.</p>
-			</div>
+		<div class="print:hidden">
+			<AssessmentPhaseHeader
+				code="7.4.3"
+				badge="Berita acara"
+				context={currentSession.title}
+				title="Berita Acara Sesi Ujian"
+				description="Siap dicetak untuk pengawas dan arsip madrasah."
+				primaryAction={{ label: 'Detail Sesi', href: resolve(`/asesmen/sesi/${sessionId}`), variant: 'outline' }}
+				secondaryActions={[{ label: 'Daftar Sesi', href: resolve('/asesmen/sesi'), variant: 'ghost' }]}
+			/>
+		</div>
+		<div class="flex justify-end print:hidden">
 			<Button onclick={() => window.print()}>
 				<PrinterIcon class="mr-2 size-4" />
 				Cetak

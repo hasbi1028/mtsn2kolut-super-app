@@ -14,6 +14,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { AssessmentPhaseHeader } from '$lib/components/asesmen';
 	import { confirmChallenge } from '$lib/confirm-dialog';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 
@@ -896,20 +897,18 @@
 	<svelte:head><title>{eventId ? 'Kegiatan & Sesi Ujian' : 'Sesi Ujian'} — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
-	<div class="flex flex-wrap items-start justify-between gap-4">
-		<div>
-			<p class="text-xs font-semibold uppercase tracking-[0.16em] text-success">Kegiatan & Sesi</p>
-			<h1 class="text-2xl font-semibold text-foreground">{eventId ? 'Sesi Kegiatan' : 'Sesi Ujian Mandiri'}</h1>
-			<p class="text-sm text-muted-foreground mt-1">{eventId ? 'Hanya menampilkan sesi yang benar-benar tertaut ke kegiatan aktif.' : 'Menampilkan sesi global/mandiri. Sesi kegiatan sebaiknya dibuat dari detail Kegiatan agar tidak salah konteks.'}</p>
-		</div>
-		<div class="flex flex-wrap gap-2">
-			{#if eventId}
-				<a href={resolve(`/asesmen/kegiatan/${eventId}`)} class="inline-flex items-center rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Kembali ke Kegiatan</a>
-			{/if}
-			<Button href={createSessionHref}>+ Sesi</Button>
-		</div>
-		<p class="mt-2 max-w-2xl text-sm text-muted-foreground">Untuk edit sesi, atur jadwal, dan manual ruangan, buka detail sesi. Layar ini hanya daftar cepat agar operator tidak kebanyakan tombol.</p>
-	</div>
+	<AssessmentPhaseHeader
+		code="7.1.3"
+		badge={eventId ? 'Sesi kegiatan' : 'Sesi mandiri'}
+		context={eventContext?.title ?? ''}
+		title={eventId ? 'Sesi Kegiatan' : 'Sesi Ujian Mandiri'}
+		description={eventId ? 'Hanya menampilkan sesi yang benar-benar tertaut ke kegiatan aktif. Untuk edit sesi, atur jadwal, dan manual ruangan, buka detail sesi.' : 'Menampilkan sesi global/mandiri. Sesi kegiatan sebaiknya dibuat dari detail Kegiatan agar tidak salah konteks.'}
+		primaryAction={{ label: 'Buat Sesi', href: createSessionHref }}
+		secondaryActions={[
+			...(eventId ? [{ label: 'Kembali kegiatan', href: resolve(`/asesmen/kegiatan/${eventId}`), variant: 'outline' as const }] : []),
+			{ label: '7.1 Persiapan', href: resolve('/asesmen/persiapan'), variant: 'outline' as const }
+		]}
+	/>
 
 	{#if eventId}
 		<div class="rounded-xl border border-success/20 bg-success/10 p-4 text-sm text-success">

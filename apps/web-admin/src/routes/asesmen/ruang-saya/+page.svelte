@@ -6,6 +6,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { AssessmentPhaseHeader } from '$lib/components/asesmen';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
@@ -229,21 +230,17 @@
 	{#snippet children(value)}
 		{@const loadedRooms = value as ProctorRoom[]}
 		<div class="space-y-4 p-4 md:p-6">
-			<section class="rounded-xl border border-primary/20 bg-card p-4 shadow-sm">
-				<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-					<div class="max-w-3xl">
-					<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Ujian Digital / Ruang Saya</p>
-					<h1 class="mt-1 text-2xl font-semibold tracking-tight text-foreground">Ruang Saya</h1>
-					<p class="mt-2 text-sm leading-6 text-muted-foreground">
-						Halaman kerja pengawas ruang. Pilih ruang yang ditugaskan, baca kode ruang, pantau status hijau/kuning/merah, lalu buka panel ruang bila perlu tindakan.
-					</p>
-					</div>
-					<div class="flex flex-wrap gap-2">
-						<a class="inline-flex min-h-9 items-center rounded-md border border-border bg-muted/50 px-3 text-sm font-medium text-foreground hover:border-primary/30 hover:text-primary" href={resolve('/asesmen/pelaksanaan')}>Pelaksanaan</a>
-						<a class="inline-flex min-h-9 items-center rounded-md px-1 text-sm font-medium text-muted-foreground underline-offset-4 hover:underline" href={resolve('/asesmen/aplikasi-siswa')}>Panduan perangkat</a>
-					</div>
-				</div>
-			</section>
+			<AssessmentPhaseHeader
+				code="7.2.2"
+				badge="Pengawas ruang"
+				title="Ruang Saya"
+				description="Halaman kerja pengawas ruang. Pilih ruang yang ditugaskan, baca kode ruang, pantau status hijau/kuning/merah, lalu buka panel ruang bila perlu tindakan."
+				primaryAction={{ label: loadedRooms.length > 0 ? 'Pilih ruang di bawah' : 'Menunggu penugasan', href: '#daftar-ruang', variant: 'outline' }}
+				secondaryActions={[
+					{ label: 'Pelaksanaan', href: resolve('/asesmen/pelaksanaan'), variant: 'outline' },
+					{ label: 'Perangkat', href: resolve('/asesmen/aplikasi-siswa'), variant: 'outline' }
+				]}
+			/>
 
 			<section class="grid gap-3 rounded-lg border border-border bg-muted/40 p-3 text-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
 				<p class="text-muted-foreground">
@@ -297,7 +294,7 @@
 					description="Ubah kata kunci atau status sesi untuk melihat ruang pengawas yang lain."
 				/>
 			{:else}
-				<section class="grid gap-3 xl:grid-cols-2">
+				<section id="daftar-ruang" class="grid gap-3 xl:grid-cols-2">
 					{#each filteredRooms as room (room.id)}
 						<article class="rounded-lg border border-primary/20 bg-card p-4 shadow-sm">
 							<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

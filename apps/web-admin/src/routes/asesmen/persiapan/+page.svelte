@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import * as Card from '$lib/components/ui/card';
+	import { AssessmentPhaseHeader, AssessmentTaskCard } from '$lib/components/asesmen';
 
-	type PersiapanRoute = '/asesmen/paket' | '/asesmen/kegiatan' | '/asesmen/sesi' | '/asesmen';
+	type PersiapanRoute = '/asesmen/paket' | '/asesmen/kegiatan' | '/asesmen/sesi' | '/asesmen' | '/asesmen/sesi#ruang-peserta' | '/asesmen/sesi#pengawas';
 	type PreparationStep = {
 		step: string;
 		title: string;
@@ -28,28 +27,44 @@
 
 	const preparationSteps: PreparationStep[] = [
 		{
-			step: '01',
-			title: 'Kegiatan',
+			step: '7.1.1',
+			title: 'Kegiatan Asesmen',
 			description: 'Pilih konteks ujian terlebih dulu: simulasi, gladi, UAS, atau ujian madrasah.',
 			href: '/asesmen/kegiatan',
 			cta: 'Buka kegiatan',
 			note: 'Mulai dari konteks ujian.'
 		},
 		{
-			step: '02',
-			title: 'Paket asesmen',
+			step: '7.1.2',
+			title: 'Paket Soal',
 			description: 'Ambil paket dari Bank Soal yang sudah siap dipakai di kegiatan.',
 			href: '/asesmen/paket',
 			cta: 'Buka paket',
 			note: 'Soal tetap disusun di Bank Soal.'
 		},
 		{
-			step: '03',
-			title: 'Sesi & ruang',
-			description: 'Atur jadwal, peserta, token, ruang, kapasitas, dan pembagian peserta per sesi.',
+			step: '7.1.3',
+			title: 'Sesi Ujian',
+			description: 'Atur jadwal, durasi, paket, dan cakupan peserta untuk tiap sesi ujian.',
 			href: '/asesmen/sesi',
 			cta: 'Buka sesi',
-			note: 'Ruang mengikuti data per sesi.'
+			note: 'Jadwal dan peserta.'
+		},
+		{
+			step: '7.1.4',
+			title: 'Ruang & Peserta',
+			description: 'Bagi peserta ke ruang secara dinamis per siswa, bukan memindahkan rombel sebagai blok utuh.',
+			href: '/asesmen/sesi#ruang-peserta',
+			cta: 'Atur ruang',
+			note: 'Pembagian per siswa.'
+		},
+		{
+			step: '7.1.5',
+			title: 'Pengawas Ruang',
+			description: 'Tetapkan pengawas utama atau pendamping untuk ruang yang sudah siap.',
+			href: '/asesmen/sesi#pengawas',
+			cta: 'Atur pengawas',
+			note: 'Penugasan ruang.'
 		}
 	];
 </script>
@@ -60,57 +75,36 @@
 
 {#if canAccess}
 	<div class="space-y-5">
-		<section class="rounded-2xl border border-border bg-card p-4 shadow-sm">
-			<div class="space-y-2">
-				<Badge class="border-primary/20 bg-primary/10 text-primary" variant="outline">Ujian Digital · Persiapan</Badge>
-				<h1 class="text-2xl font-semibold tracking-tight text-foreground">Persiapan Ujian</h1>
-				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
-					Kerjakan berurutan: kegiatan, paket, lalu sesi dan ruang. Satu langkah selesai, lanjut ke langkah berikutnya.
-				</p>
-			</div>
-		</section>
+		<AssessmentPhaseHeader
+			code="7.1"
+			badge="Asesmen"
+			title="Persiapan Ujian"
+			description="Kerjakan berurutan: kegiatan, paket, sesi, ruang dan peserta, lalu pengawas. Satu langkah selesai, lanjut ke langkah berikutnya."
+			primaryAction={{ label: 'Mulai dari Kegiatan', href: resolve('/asesmen/kegiatan') }}
+			secondaryActions={[{ label: 'Ringkasan', href: resolve('/asesmen'), variant: 'outline' }]}
+		/>
 
 		<section aria-labelledby="persiapan-area-title" class="space-y-3">
 			<div>
-				<p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Alur ringkas</p>
+				<p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">7.1 Alur Persiapan</p>
 				<h2 id="persiapan-area-title" class="mt-1 text-xl font-semibold tracking-tight text-foreground">Langkah persiapan</h2>
 			</div>
 
-			<ol class="space-y-3">
+			<ol class="grid gap-3 lg:grid-cols-2">
 				{#each preparationSteps as step}
 					<li>
-						<Card.Root class="border-border shadow-sm">
-							<Card.Content class="p-4">
-								<div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-									<div class="flex min-w-0 gap-3">
-										<span class="inline-flex h-9 min-w-9 items-center justify-center rounded-md border border-primary/20 bg-primary/10 px-2 text-xs font-semibold text-primary">{step.step}</span>
-										<div class="min-w-0 space-y-1">
-											<div class="flex flex-wrap items-center gap-2">
-												<Card.Title class="text-base">{step.title}</Card.Title>
-												<Badge variant="outline" class="bg-card text-[11px]">{step.note}</Badge>
-											</div>
-											<Card.Description class="max-w-2xl leading-6">{step.description}</Card.Description>
-										</div>
-									</div>
-									<Button href={resolve(step.href)} variant="outline" size="sm" class="shrink-0 border-primary/20 text-primary hover:bg-primary/10">{step.cta}</Button>
-								</div>
-							</Card.Content>
-						</Card.Root>
+						<AssessmentTaskCard code={step.step} title={step.title} description={step.description} meta={step.note} href={resolve(step.href)} cta={step.cta} />
 					</li>
 				{/each}
 			</ol>
 		</section>
 
-		<section class="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm leading-6 text-muted-foreground">
-			<p class="font-medium text-foreground">Pembagian ruang mengikuti data sesi.</p>
-			<p class="mt-1">
-				Tambahkan ruang dari detail sesi, isi kapasitas sesuai master ruangan, lalu gunakan pembagian otomatis atau manual dari area Ruangan.
+		<details class="rounded-lg border border-border bg-muted/40 p-3 text-sm leading-6 text-muted-foreground">
+			<summary class="cursor-pointer font-semibold text-foreground">Catatan teknis persiapan</summary>
+			<p class="mt-2">
+				Penyusunan soal tetap berada di modul Bank Soal. Tambahkan ruang dari detail sesi, isi kapasitas sesuai master ruangan, lalu gunakan pembagian otomatis atau manual dari area Ruangan.
 			</p>
-		</section>
-
-		<p class="rounded-lg border border-dashed border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-			Catatan: penyusunan soal tetap berada di modul Bank Soal. Simulasi, gladi, dan ujian nyata tetap memakai data kegiatan, paket, dan sesi server.
-		</p>
+		</details>
 	</div>
 {:else}
 	<div class="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 py-16 text-center">

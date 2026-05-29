@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { AssessmentPhaseHeader } from '$lib/components/asesmen';
 
 	type PelaksanaanRoute =
 		| '/asesmen/aplikasi-siswa'
@@ -118,28 +118,14 @@
 
 {#if canAccess}
 	<div class="space-y-3">
-		<section class="rounded-xl border border-primary/20 bg-card p-4 shadow-sm">
-			<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
-				<div class="min-w-0">
-					<div class="mb-2 flex flex-wrap items-center gap-2">
-						<Badge class="border-primary/20 bg-primary/10 text-primary" variant="outline">Hari-H</Badge>
-						<Badge class="border-border bg-muted text-muted-foreground" variant="outline">{roleName}</Badge>
-					</div>
-					<h1 class="text-2xl font-semibold tracking-tight text-foreground">{heroTitle}</h1>
-					<p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{heroSubtitle}</p>
-				</div>
-				{#if primaryTask}
-					<div class="rounded-lg border border-primary/20 bg-primary/5 p-3">
-						<p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Mulai dari sini</p>
-						<p class="mt-1 text-base font-semibold text-foreground">{primaryTask.title}</p>
-						<p class="mt-1 text-xs leading-5 text-muted-foreground">{primaryTask.description}</p>
-						<Button href={taskHref(primaryTask)} class="mt-3 w-full">
-							{primaryTask.cta}
-						</Button>
-					</div>
-				{/if}
-			</div>
-		</section>
+		<AssessmentPhaseHeader
+			code="7.2"
+			badge={roleName}
+			title={heroTitle}
+			description={heroSubtitle}
+			primaryAction={primaryTask ? { label: primaryTask.cta, href: taskHref(primaryTask) } : undefined}
+			secondaryActions={[{ label: 'Ringkasan', href: resolve('/asesmen'), variant: 'outline' }]}
+		/>
 
 		<section aria-labelledby="pelaksanaan-secondary-title" class="rounded-lg border border-border bg-muted/40 p-3">
 			<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">

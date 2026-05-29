@@ -16,7 +16,8 @@
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import RichContent from '$lib/components/RichContent.svelte';
-	import { ContextStrip, EntityTabs, MetricCard, PageHeader } from '$lib/components/ops';
+	import { ContextStrip, EntityTabs, MetricCard } from '$lib/components/ops';
+	import { AssessmentPhaseHeader } from '$lib/components/asesmen';
 	import { confirmAction, confirmChallenge } from '$lib/confirm-dialog';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { cbtRoomSetupErrorMessage, roomReadinessMessage, roomReadinessTone, type CbtRoomReadiness } from '$lib/client/cbt-room-readiness';
@@ -339,10 +340,10 @@
 	let auditLogsRequestId = 0;
 	let essaysRequestId = 0;
 	const sessionAreaTabs: Array<{ id: SessionArea; label: string }> = [
-		{ id: 'monitor', label: 'Ringkasan' },
-		{ id: 'peserta', label: 'Setup peserta & ruang' },
-		{ id: 'insiden', label: 'Atensi & serah terima' },
-		{ id: 'hasil', label: 'Hasil & BA' },
+		{ id: 'monitor', label: '7.1.3.a Ringkasan' },
+		{ id: 'peserta', label: '7.1.4 Peserta & ruang' },
+		{ id: 'insiden', label: '7.2.3 Atensi & serah terima' },
+		{ id: 'hasil', label: '7.3.2 Hasil & BA' },
 	];
 
 	function selectedSchoolRoom() {
@@ -1500,21 +1501,18 @@
 			{@const currentSession = detail.session}
 			{@const currentResults = detail.results}
 			{@const roomControlsLocked = roomSetupLocked(currentSession.status)}
-			<PageHeader
-				eyebrow="Detail Sesi Ujian"
-				title={currentSession.title}
-				subtitle={`${currentSession.package_title} · ${currentSession.duration_minutes} menit · ${fmtDt(currentSession.scheduled_start)}`}
+			<AssessmentPhaseHeader
+				code="7.1.3"
+				badge={statusLabel[currentSession.status] ?? currentSession.status}
 				context={currentSession.class_code ? `Kelas ${currentSession.class_code}` : 'Lintas peserta'}
+				title={currentSession.title}
+				description={`${currentSession.package_title} · ${currentSession.duration_minutes} menit · ${fmtDt(currentSession.scheduled_start)}`}
 				primaryAction={{ label: 'Buka Pengawasan Sesi', href: resolve(`/asesmen/sesi/${sessionId}/proctoring`) }}
-				secondaryAction={{ label: 'Berita Acara', href: resolve(`/asesmen/sesi/${sessionId}/minutes`) }}
-			>
-				{#snippet meta()}
-					<Badge class={statusClass(currentSession.status)}>{statusLabel[currentSession.status] ?? currentSession.status}</Badge>
-					{#if currentSession.event_id}
-						<Badge variant="outline" class="bg-card">Kegiatan tertaut</Badge>
-					{/if}
-				{/snippet}
-			</PageHeader>
+				secondaryActions={[
+					{ label: 'Berita Acara', href: resolve(`/asesmen/sesi/${sessionId}/minutes`), variant: 'outline' },
+					{ label: 'Daftar Sesi', href: resolve('/asesmen/sesi'), variant: 'ghost' }
+				]}
+			/>
 
 			<ContextStrip
 				items={[
@@ -1528,7 +1526,7 @@
 				<div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2">
 					<div class="min-w-0">
 						<div class="flex flex-wrap items-center gap-2">
-							<p class="text-base font-bold text-foreground">Ringkasan Hari-H</p>
+							<p class="text-base font-bold text-foreground">7.2 Ringkasan Hari-H</p>
 							<Badge variant="outline" class="text-[11px]">Update WITA {commandCenterLastUpdated}</Badge>
 							<Badge variant="outline" class="text-[11px]">Token masked</Badge>
 						</div>
@@ -1558,7 +1556,7 @@
 				<div class="mt-3 grid gap-3 xl:grid-cols-[1fr_20rem]">
 					<div class="overflow-hidden rounded-md border border-border bg-card/70">
 						<div class="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-							<p class="text-sm font-semibold text-foreground">Ruang Sesi</p>
+							<p class="text-sm font-semibold text-foreground">7.1.4 Ruang Sesi</p>
 							<p class="text-xs text-muted-foreground">{commandCenterRooms.length} ruang</p>
 						</div>
 						<div class="overflow-x-auto">
@@ -1616,7 +1614,7 @@
 
 					<aside class="rounded-md border border-border bg-card/70">
 						<div class="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-							<p class="text-sm font-semibold text-foreground">Atensi Aktif</p>
+							<p class="text-sm font-semibold text-foreground">7.2.3 Atensi Aktif</p>
 							<Badge variant="outline">{commandCenterIssues.length}</Badge>
 						</div>
 						<div class="divide-y divide-border">

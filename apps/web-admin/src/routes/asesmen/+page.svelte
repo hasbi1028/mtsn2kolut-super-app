@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
+	import { AssessmentPhaseHeader, AssessmentTaskCard } from '$lib/components/asesmen';
 	import {
 		countRunningSessions,
 		countUnassignedParticipants,
@@ -50,6 +52,40 @@
 	let canLoadDashboardStats = $derived(canOpenPreparation || userPermissions.includes('asesmen.read'));
 	let documentHubHref = $derived(latestEventDocumentHubHref(sessions));
 	let workflowReadiness = $derived(summarizeWorkflowReadiness(sessions));
+	let phaseCards = $derived([
+		{
+			code: '7.1',
+			title: 'Persiapan',
+			description: 'Kegiatan, paket, sesi, ruang, peserta, dan pengawas sebelum hari-H.',
+			href: resolve('/asesmen/persiapan'),
+			cta: 'Buka persiapan',
+			show: canOpenPreparation
+		},
+		{
+			code: '7.2',
+			title: 'Pelaksanaan',
+			description: 'Sesi panitia, Ruang Saya, panel ruang, dan bantuan perangkat saat ujian berjalan.',
+			href: resolve('/asesmen/pelaksanaan'),
+			cta: 'Buka pelaksanaan',
+			show: canOpenExecution
+		},
+		{
+			code: '7.3',
+			title: 'Hasil',
+			description: 'Rekap nilai, status submit, koreksi uraian, analisis butir, dan sinkronisasi.',
+			href: resolve('/asesmen/hasil'),
+			cta: 'Buka hasil',
+			show: canOpenResults
+		},
+		{
+			code: '7.4',
+			title: 'Arsip',
+			description: 'Berita acara, rekap pelaksanaan, dan tindak lanjut sesi setelah ujian.',
+			href: documentHubHref,
+			cta: 'Buka arsip',
+			show: canOpenPreparation || canOpenResults
+		}
+	].filter((item) => item.show));
 
 	onMount(() => {
 		if (canLoadDashboardStats) {
@@ -144,32 +180,30 @@
 
 <main class="min-h-dvh bg-background px-4 py-5 text-foreground md:px-6">
 	<section class="mx-auto max-w-6xl space-y-4">
-		<header class="rounded-2xl border border-border bg-card p-4 shadow-sm">
-			<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-				<div>
-					<p class="text-xs font-bold uppercase tracking-[0.22em] text-primary">Asesmen</p>
-					<h1 class="mt-1 text-2xl font-black tracking-tight md:text-3xl">Ringkasan Asesmen</h1>
-					<p class="mt-1 max-w-2xl text-sm text-muted-foreground">Satu pintu utama untuk persiapan, dokumen, pelaksanaan ruang, dan hasil.</p>
-				</div>
-				<div class="flex flex-wrap gap-2 text-sm font-bold">
-					{#if canOpenPreparation}
-						<a class="rounded-xl bg-primary px-3 py-2 text-primary-foreground" href="/asesmen/persiapan">Persiapan</a>
-						<a class="rounded-xl border border-border bg-background px-3 py-2 text-foreground hover:bg-muted" href={documentHubHref}>Dokumen & Cetak</a>
-					{/if}
-					{#if canOpenExecution}
-						<a class={canOpenPreparation ? 'rounded-xl border border-border bg-background px-3 py-2 text-foreground hover:bg-muted' : 'rounded-xl bg-primary px-3 py-2 text-primary-foreground'} href="/asesmen/pelaksanaan">Pelaksanaan</a>
-					{/if}
-					{#if canOpenResults}
-						<a class="rounded-xl border border-border bg-background px-3 py-2 text-foreground hover:bg-muted" href="/asesmen/hasil">Hasil</a>
-					{/if}
-				</div>
-			</div>
-		</header>
+		<AssessmentPhaseHeader
+			code="7.0"
+			badge="Asesmen"
+			title="Ringkasan Asesmen"
+			description="Satu pintu utama untuk memilih fase kerja asesmen: persiapan, pelaksanaan, hasil, dan arsip."
+			primaryAction={phaseCards[0] ? { label: phaseCards[0].cta, href: phaseCards[0].href } : undefined}
+		/>
 
 		{#if errorMessage}<div class="rounded-2xl border border-destructive/25 bg-destructive/10 p-3 text-sm font-semibold text-destructive">{errorMessage}</div>{/if}
 		{#if loading}
 			<div class="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">Memuat ringkasan ujian...</div>
 		{:else}
+			<section aria-labelledby="asesmen-phase-title" class="space-y-3">
+				<div>
+					<p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Pilih fase</p>
+					<h2 id="asesmen-phase-title" class="mt-1 text-xl font-semibold tracking-tight text-foreground">Alur kerja asesmen</h2>
+				</div>
+				<div class="grid gap-3 lg:grid-cols-2">
+					{#each phaseCards as item (item.code)}
+						<AssessmentTaskCard code={item.code} title={item.title} description={item.description} href={item.href} cta={item.cta} tone={item.code === '7.2' ? 'primary' : 'default'} />
+					{/each}
+				</div>
+			</section>
+
 			<section class="grid gap-3 md:grid-cols-3">
 				<div class="rounded-2xl border border-border bg-card p-4">
 					<p class="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Sesi aktif</p>

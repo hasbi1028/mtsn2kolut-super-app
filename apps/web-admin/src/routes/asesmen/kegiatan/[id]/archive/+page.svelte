@@ -9,11 +9,11 @@
 	import ClipboardCheckIcon from '@lucide/svelte/icons/clipboard-check';
 	import BadgeAlertIcon from '@lucide/svelte/icons/badge-alert';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import MicroActionTable from '$lib/components/ops/MicroActionTable.svelte';
+	import { AssessmentPhaseHeader } from '$lib/components/asesmen';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
 	import { listApprovals, assessmentApprovalLabels, type AssessmentApprovalRecord } from '$lib/asesmen/approval-client';
 
@@ -264,27 +264,19 @@
 			};
 		})}
 		<div class="mx-auto max-w-7xl space-y-6 p-6">
-			<section class="space-y-4">
-				<div class="space-y-2">
-					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Asesmen · Arsip</p>
-					<h1 class="text-2xl font-semibold tracking-tight text-foreground">Arsip & Penutupan Kegiatan</h1>
-					<p class="max-w-3xl text-sm leading-6 text-muted-foreground">
-						{data.info.title} · {data.info.academic_year_name}. Halaman ini dirapikan menjadi checklist
-						penutupan: dokumen, BA sesi, pengesahan, dan jejak hasil akhir.
-					</p>
-				</div>
-				<div class="flex flex-wrap gap-2">
-					<Button variant="outline" href={resolve(`/asesmen/kegiatan/${eventId}`)}>Kembali ke Kegiatan</Button>
-					<Button variant="outline" href={resolve(`/asesmen/kegiatan/${eventId}/cetak`)}>Dokumen & Cetak</Button>
-					<Button variant="outline" href={resolve(`/asesmen/kegiatan/${eventId}/exam-cards`)}>Kartu Ujian</Button>
-					<Button variant="outline" href={resolve(`/asesmen/kegiatan/${eventId}/pengawas-cards`)}>Lembar Pengawas</Button>
-					{#if finalApproval}
-						<Badge variant="outline" class="border-success/20 bg-success/10 text-success">Final arsip sudah disahkan</Badge>
-					{:else}
-						<Badge variant="outline" class="border-warning/30 bg-warning/10 text-warning">Final arsip belum disahkan</Badge>
-					{/if}
-				</div>
-			</section>
+			<AssessmentPhaseHeader
+				code="7.4"
+				badge={finalApproval ? 'Final arsip sudah disahkan' : 'Final arsip belum disahkan'}
+				context={`${data.info.title} · ${data.info.academic_year_name}`}
+				title="Arsip & Penutupan Kegiatan"
+				description="Checklist penutupan kegiatan: dokumen, BA sesi, pengesahan, dan jejak hasil akhir."
+				primaryAction={{ label: 'Dokumen & Cetak', href: resolve(`/asesmen/kegiatan/${eventId}/cetak`) }}
+				secondaryActions={[
+					{ label: 'Kegiatan', href: resolve(`/asesmen/kegiatan/${eventId}`), variant: 'outline' },
+					{ label: 'Kartu', href: resolve(`/asesmen/kegiatan/${eventId}/exam-cards`), variant: 'outline' },
+					{ label: 'Pengawas', href: resolve(`/asesmen/kegiatan/${eventId}/pengawas-cards`), variant: 'ghost' }
+				]}
+			/>
 
 			<div class="grid gap-3 md:grid-cols-4">
 				<div class="rounded-xl border border-border bg-card px-4 py-3">
@@ -306,7 +298,7 @@
 			</div>
 
 			<MicroActionTable
-				title="Checklist penutupan"
+				title="7.4.1 Checklist penutupan"
 				description="Buka hanya dokumen yang dibutuhkan untuk menutup kegiatan. Tidak perlu lagi menyisir banyak halaman."
 				columns={checklistColumns}
 				rows={checklistRows}
@@ -338,7 +330,7 @@
 			</MicroActionTable>
 
 			<MicroActionTable
-				title="Status pengesahan"
+				title="7.4.2 Status pengesahan"
 				description="Pantau pengesahan formal sebelum menutup arsip."
 				columns={approvalColumns}
 				rows={approvalRows}
@@ -366,7 +358,7 @@
 			{/if}
 
 			<MicroActionTable
-				title="Sesi & BA"
+				title="7.4.3 Sesi & BA"
 				description="Jalur cepat untuk membuka BA per sesi tanpa tenggelam di halaman detail lain."
 				columns={sessionColumns}
 				rows={data.sessions}

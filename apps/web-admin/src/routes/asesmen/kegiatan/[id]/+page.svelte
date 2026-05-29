@@ -9,7 +9,8 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
-	import { ContextStrip, MetricCard, PageHeader } from '$lib/components/ops';
+	import { ContextStrip, MetricCard } from '$lib/components/ops';
+	import { AssessmentPhaseHeader, AssessmentTaskCard } from '$lib/components/asesmen';
 	import { sopStages, sopStatusLabels, type SopReadinessResponse, type SopStageKey, type SopStageReadiness, type SopStageStatus } from '$lib/asesmen/sop-stages';
 	import { assessmentApprovalLabels, createApproval, listApprovals, revokeApproval, type AssessmentApprovalRecord, type AssessmentApprovalType } from '$lib/asesmen/approval-client';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
@@ -133,9 +134,9 @@
 	let hasilFocusRequest = $state(0);
 	let detailRequestId = 0;
 	const mainSections = [
-		{ id: 'persiapan', label: 'Persiapan', href: '/asesmen/persiapan', withEvent: true },
-		{ id: 'pelaksanaan', label: 'Pelaksanaan', href: '/asesmen/pelaksanaan', withEvent: true },
-		{ id: 'hasil', label: 'Hasil', href: '/asesmen/hasil', withEvent: false },
+		{ id: 'persiapan', code: '7.1', label: 'Persiapan', href: '/asesmen/persiapan', withEvent: true },
+		{ id: 'pelaksanaan', code: '7.2', label: 'Pelaksanaan', href: '/asesmen/pelaksanaan', withEvent: true },
+		{ id: 'hasil', code: '7.3', label: 'Hasil', href: '/asesmen/hasil', withEvent: false },
 	] as const;
 	let completenessLevel = $state('');
 	let completenessStatus = $state('');
@@ -859,24 +860,15 @@
 			{@const sopBackendAvailable = detail.sopDetail?.report_only === false}
 			{@const blockingItems = checklist.filter((item) => item.tone === 'warning')}
 			{@const readyCount = checklist.filter((item) => item.tone === 'success').length}
-			<PageHeader
-				eyebrow="Kegiatan Asesmen"
-				title={currentInfo.title}
-				subtitle="Kelola kegiatan dari ringkasan, persiapan, pelaksanaan, hasil dan berita acara, sampai arsip final."
+			<AssessmentPhaseHeader
+				code="7.1.1"
+				badge={statusLabel[currentInfo.status] ?? currentInfo.status}
 				context={`${currentInfo.academic_year_name} · ${scopeLabel[currentInfo.scope] ?? currentInfo.scope}`}
-				primaryAction={{ label: 'Buka Mode Lengkap', onclick: () => { document.getElementById('mode-lengkap')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }}
-				secondaryAction={{ label: 'Daftar Kegiatan', href: resolve('/asesmen/kegiatan') }}
-			>
-				{#snippet meta()}
-					<Badge class={statusClass(currentInfo.status)}>{statusLabel[currentInfo.status] ?? currentInfo.status}</Badge>
-					{#each currentInfo.target_levels ?? [] as level (level)}
-						<Badge variant="outline" class="bg-card">Tingkat {level}</Badge>
-					{/each}
-					{#if !currentInfo.target_levels?.length}
-						<Badge variant="outline" class="bg-card">Target mengikuti cakupan</Badge>
-					{/if}
-				{/snippet}
-			</PageHeader>
+				title={currentInfo.title}
+				description="Kelola kegiatan dari ringkasan, persiapan, pelaksanaan, hasil dan berita acara, sampai arsip final."
+				primaryAction={{ label: 'Buka Mode Lengkap', href: '#mode-lengkap' }}
+				secondaryActions={[{ label: 'Daftar Kegiatan', href: resolve('/asesmen/kegiatan'), variant: 'outline' }]}
+			/>
 
 			<ContextStrip
 				items={[
@@ -888,12 +880,14 @@
 
 			<section class="grid gap-3 md:grid-cols-3" aria-label="Langkah utama kegiatan asesmen">
 				{#each mainSections as section (section.id)}
-					<a href={`${resolve(section.href)}${section.withEvent ? `?event_id=${eventId}` : ''}`} class="rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-						<p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Langkah utama</p>
-						<p class="mt-2 text-base font-semibold text-foreground">{section.label}</p>
-						<p class="mt-2 text-sm leading-6 text-muted-foreground">{section.id === 'persiapan' ? 'Atur paket, sesi, peserta, dan kelengkapan sebelum hari-H.' : section.id === 'pelaksanaan' ? 'Pantau ruang, pengawas, dan kejadian saat ujian berjalan.' : 'Buka rekap nilai, BA, dan tindak lanjut hasil.'}</p>
-						<p class="mt-4 text-sm font-semibold text-primary">Buka {section.label}</p>
-					</a>
+					<AssessmentTaskCard
+						code={section.code}
+						title={section.label}
+						description={section.id === 'persiapan' ? 'Atur paket, sesi, peserta, dan kelengkapan sebelum hari-H.' : section.id === 'pelaksanaan' ? 'Pantau ruang, pengawas, dan kejadian saat ujian berjalan.' : 'Buka rekap nilai, BA, dan tindak lanjut hasil.'}
+						href={`${resolve(section.href)}${section.withEvent ? `?event_id=${eventId}` : ''}`}
+						cta={`Buka ${section.label}`}
+						tone={section.id === 'persiapan' ? 'primary' : 'default'}
+					/>
 				{/each}
 			</section>
 
@@ -936,7 +930,7 @@
 			<section id="mode-lengkap" class="rounded-2xl border border-border bg-card p-4 shadow-sm" aria-label="Mode lengkap kegiatan asesmen">
 				<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
 					<div>
-						<p class="text-sm font-semibold text-foreground">Mode Lengkap</p>
+						<p class="text-sm font-semibold text-foreground">7.1.1 Mode Lengkap</p>
 						<p class="text-sm leading-6 text-muted-foreground">Detail teknis, SOP, arsip, dan kelengkapan lengkap dipisah agar layar utama tetap ringan.</p>
 					</div>
 					<a href={resolve(`/asesmen/kegiatan/${eventId}/cetak`)} class="inline-flex rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15">Dokumen & Cetak</a>

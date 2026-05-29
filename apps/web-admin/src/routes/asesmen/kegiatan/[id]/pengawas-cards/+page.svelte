@@ -10,6 +10,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { AssessmentPhaseHeader } from '$lib/components/asesmen';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
 	import { fetchSchoolProfile, schoolAddressLine, type SchoolProfile } from '$lib/school-profile';
 
@@ -209,19 +210,21 @@
 	</div>
 {:else}
 	<div class="mx-auto max-w-7xl space-y-6 p-6 print:p-0">
-		<div class="flex flex-col gap-3 print:hidden md:flex-row md:items-center md:justify-between">
-			<div>
-				<p class="text-sm font-medium text-primary">Dokumen & Cetak</p>
-				<h1 class="text-2xl font-semibold text-foreground">Lembar Pengawas Ruang</h1>
-				<p class="text-sm text-muted-foreground">Cetak satu QR+PIN per ruang. Lembar ini tidak melekat ke nama pengawas sehingga guru pengganti tetap bisa masuk ruang yang sama.</p>
-			</div>
-			<div class="flex flex-wrap gap-2">
-				<a href={resolve(`/asesmen/kegiatan/${eventId}/cetak`)} class="inline-flex items-center rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">Dokumen & Cetak</a>
-				<Button variant="outline" onclick={loadCards}><RefreshCwIcon class="mr-2 size-4" />Refresh</Button>
-				<Button variant="outline" onclick={() => issueSupervisorCards(false)} disabled={issueBusy}><QrCodeIcon class="mr-2 size-4" />Terbitkan QR+PIN Ruang</Button>
-				<Button variant="outline" onclick={() => issueSupervisorCards(true)} disabled={issueBusy}>Reset QR+PIN</Button>
-				<Button onclick={() => window.print()} disabled={printDisabled}><PrinterIcon class="mr-2 size-4" />Cetak Semua Lembar</Button>
-			</div>
+		<div class="print:hidden">
+			<AssessmentPhaseHeader
+				code="7.4.0.b"
+				badge="Lembar pengawas"
+				title="Lembar Pengawas Ruang"
+				description="Cetak satu QR+PIN per ruang. Lembar ini tidak melekat ke nama pengawas sehingga guru pengganti tetap bisa masuk ruang yang sama."
+				primaryAction={{ label: 'Dokumen & Cetak', href: resolve(`/asesmen/kegiatan/${eventId}/cetak`), variant: 'outline' }}
+				secondaryActions={[{ label: '7.4 Arsip', href: resolve(`/asesmen/kegiatan/${eventId}/archive`), variant: 'ghost' }]}
+			/>
+		</div>
+		<div class="flex flex-wrap justify-end gap-2 print:hidden">
+			<Button variant="outline" onclick={loadCards}><RefreshCwIcon class="mr-2 size-4" />Refresh</Button>
+			<Button variant="outline" onclick={() => issueSupervisorCards(false)} disabled={issueBusy}><QrCodeIcon class="mr-2 size-4" />Terbitkan QR+PIN Ruang</Button>
+			<Button variant="outline" onclick={() => issueSupervisorCards(true)} disabled={issueBusy}>Reset QR+PIN</Button>
+			<Button onclick={() => window.print()} disabled={printDisabled}><PrinterIcon class="mr-2 size-4" />Cetak Semua Lembar</Button>
 		</div>
 
 		<div class="grid gap-3 print:hidden md:grid-cols-3">

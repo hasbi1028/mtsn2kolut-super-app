@@ -15,6 +15,7 @@
   import LoadingButton from "$lib/components/LoadingButton.svelte";
   import OperationStatusPanel from "$lib/components/OperationStatusPanel.svelte";
   import RecoveryPanel from "$lib/components/RecoveryPanel.svelte";
+  import { AssessmentPhaseHeader, AssessmentTaskCard } from "$lib/components/asesmen";
   import { confirmChallenge } from "$lib/confirm-dialog";
   import {
     clientApiPath,
@@ -1259,63 +1260,35 @@
 >
 
 <div class="space-y-6">
-  <section
-    class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm"
-  >
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-      <div class="max-w-3xl space-y-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Paket Asesmen</p>
-        <h1 class="text-3xl font-semibold tracking-tight text-foreground">{eventId ? 'Paket Kegiatan' : 'Paket Asesmen'}</h1>
-        <p class="max-w-2xl text-sm leading-6 text-muted-foreground">
-          Pilih paket siap pakai, lalu tautkan ke kegiatan bila perlu. Detail soal tetap dikelola di Bank Soal.
-        </p>
-      </div>
-      <div class="flex flex-wrap gap-2">
-        {#if eventId}
-          <a
-            href={resolve(`/asesmen/kegiatan/${eventId}`)}
-            class="inline-flex items-center rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15"
-            >Kembali ke kegiatan</a
-          >
-        {/if}
-        <a
-          href={resolve('/asesmen')}
-          class="inline-flex items-center rounded-md border border-success/20 bg-card px-3 py-2 text-sm font-semibold text-success hover:bg-success/10"
-          >Ringkasan</a
-        >
-        <a
-          href={createPackageHref}
-          class="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-          >Buat paket</a
-        >
-      </div>
-    </div>
+  <AssessmentPhaseHeader
+    code="7.1.2"
+    badge={eventId ? "Paket kegiatan" : "Persiapan"}
+    context={eventContext?.title ?? ""}
+    title={eventId ? "Paket Kegiatan" : "Paket Asesmen"}
+    description="Pilih paket siap pakai, lalu tautkan ke kegiatan bila perlu. Detail soal tetap dikelola di Bank Soal."
+    primaryAction={{ label: "Buat paket", href: createPackageHref }}
+    secondaryActions={[
+      ...(eventId ? [{ label: "Kembali kegiatan", href: resolve(`/asesmen/kegiatan/${eventId}`), variant: "outline" as const }] : []),
+      { label: "7.1 Persiapan", href: resolve("/asesmen/persiapan"), variant: "outline" as const },
+      { label: "7.0 Ringkasan", href: resolve("/asesmen"), variant: "ghost" as const },
+    ]}
+  />
 
-    <div class="mt-5 grid gap-3 md:grid-cols-3">
-      <a
-        href="#paket-saya"
-        class="rounded-2xl border border-primary/20 bg-card p-4 text-sm text-primary shadow-sm transition hover:border-primary"
-      >
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Paket saya</p>
-        <p class="mt-2 text-lg font-semibold">Lihat daftar</p>
-        <p class="mt-1 leading-6 text-muted-foreground">Daftar paket menjadi pusat kerja.</p>
-      </a>
-      <a
-        href={createPackageHref}
-        class="rounded-2xl border border-primary/20 bg-card/70 p-4 text-left text-sm text-foreground shadow-sm transition hover:border-primary/20 hover:bg-card"
-      >
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Buat paket</p>
-        <p class="mt-2 text-lg font-semibold">Buka builder</p>
-        <p class="mt-1 leading-6 text-muted-foreground">Mulai dari soal yang sudah siap.</p>
-      </a>
-      <a
-        href={resolve(eventId ? `/asesmen/kegiatan/${eventId}` : '/asesmen/kegiatan')}
-        class="rounded-2xl border border-primary/20 bg-card/70 p-4 text-sm text-foreground shadow-sm transition hover:border-primary/20 hover:bg-card"
-      >
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Pakai di kegiatan</p>
-        <p class="mt-2 text-lg font-semibold">Lanjut ke sesi</p>
-        <p class="mt-1 leading-6 text-muted-foreground">Hubungkan paket ke sesi, ruang, dan token.</p>
-      </a>
+  <section aria-labelledby="paket-flow-title" class="space-y-3">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">7.1.2 Alur Paket</p>
+      <h2 id="paket-flow-title" class="mt-1 text-xl font-semibold tracking-tight text-foreground">Langkah paket</h2>
+    </div>
+    <div class="grid gap-3 md:grid-cols-3">
+      <AssessmentTaskCard code="7.1.2.a" title="Paket saya" description="Daftar paket menjadi pusat kerja." href="#paket-saya" cta="Lihat daftar" tone="primary" />
+      <AssessmentTaskCard code="7.1.2.b" title="Buat paket" description="Mulai dari soal yang sudah siap." href={createPackageHref} cta="Buka builder" />
+      <AssessmentTaskCard
+        code="7.1.2.c"
+        title="Pakai di kegiatan"
+        description="Hubungkan paket ke sesi, ruang, dan token."
+        href={resolve(eventId ? `/asesmen/kegiatan/${eventId}` : "/asesmen/kegiatan")}
+        cta="Lanjut"
+      />
     </div>
   </section>
 

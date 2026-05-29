@@ -5,6 +5,7 @@ const pageSource = readFileSync('src/routes/asesmen/ruang-saya/+page.svelte', 'u
 
 describe('Ruang Saya page UX', () => {
 	it('keeps the proctor screen focused and hides secondary controls', () => {
+		expect(pageSource).toContain('code="7.2.2"');
 		expect(pageSource).toContain('Halaman kerja pengawas ruang.');
 		expect(pageSource).toContain('Pengawas cukup buka satu kartu ruang.');
 		expect(pageSource).toContain('Pengaturan sesi, peserta, dan pembagian ruang tetap dikerjakan panitia dari halaman Sesi.');

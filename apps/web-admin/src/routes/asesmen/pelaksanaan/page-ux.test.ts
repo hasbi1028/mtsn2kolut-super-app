@@ -5,7 +5,8 @@ const pageSource = readFileSync('src/routes/asesmen/pelaksanaan/+page.svelte', '
 
 describe('Pelaksanaan page UX', () => {
 	it('keeps day-of assessment navigation focused on one primary action', () => {
-		expect(pageSource).toContain('Mulai dari sini');
+		expect(pageSource).toContain('code="7.2"');
+		expect(pageSource).toContain('primaryAction={primaryTask');
 		expect(pageSource).toContain('Butuh yang lain?');
 		expect(pageSource).toContain('Sesi Panitia');
 		expect(pageSource).toContain('Untuk operator: cek jadwal hari ini, status sesi, ruang, peserta, pengawas, dan tindakan teknis panitia.');

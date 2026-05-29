@@ -10,6 +10,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import MicroActionTable from '$lib/components/ops/MicroActionTable.svelte';
+	import { AssessmentPhaseHeader } from '$lib/components/asesmen';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPath, readClientApiData, readClientJson } from '$lib/client/api';
 
@@ -321,19 +322,17 @@
 <svelte:head><title>Kegiatan & Sesi Ujian — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-5">
-	<section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-		<div class="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-			<div class="min-w-0">
-				<p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Kegiatan & Sesi Ujian</p>
-				<h1 class="mt-1 text-2xl font-semibold tracking-tight text-foreground">Kegiatan & Sesi Ujian</h1>
-				<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{eventHomeCopy}</p>
-			</div>
-			<div class="flex flex-wrap gap-2 lg:justify-end">
-				<a href={resolve('/asesmen')} class="inline-flex rounded-md border border-input bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/50">Beranda Ujian</a>
-				<a href={resolve('/asesmen/kegiatan/new')} class="inline-flex rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Buat Kegiatan</a>
-			</div>
-		</div>
-	</section>
+	<AssessmentPhaseHeader
+		code="7.1.1"
+		badge="Persiapan"
+		title="Kegiatan Asesmen"
+		description={eventHomeCopy}
+		primaryAction={{ label: 'Buat Kegiatan', href: resolve('/asesmen/kegiatan/new') }}
+		secondaryActions={[
+			{ label: '7.1 Persiapan', href: resolve('/asesmen/persiapan'), variant: 'outline' },
+			{ label: '7.0 Ringkasan', href: resolve('/asesmen'), variant: 'ghost' }
+		]}
+	/>
 
 	{#if showForm}
 		<Card.Root class="border-border shadow-sm">
@@ -442,7 +441,7 @@
 		<section class="rounded-2xl border border-border bg-card p-4 shadow-sm">
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<div>
-					<p class="text-sm font-semibold text-foreground">Kegiatan & Sesi</p>
+					<p class="text-sm font-semibold text-foreground">7.1.1 Daftar Kegiatan</p>
 					<p class="mt-1 text-xs text-muted-foreground">{overview.events.length} kegiatan, {overview.events.reduce((sum, event) => sum + (event.session_count || 0), 0)} sesi tersusun</p>
 				</div>
 				<div class="flex flex-wrap gap-2" aria-label="Filter status kegiatan">
@@ -491,6 +490,7 @@
 				{@const e = row as CbtEvent}
 				<a href={resolve(`/asesmen/kegiatan/${e.id}`)} class="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90">Buka Alur</a>
 				<a href={resolve(`/asesmen/kegiatan/${e.id}/archive`)} class="inline-flex h-8 items-center rounded-md border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-muted">Arsip</a>
+				<button type="button" class="inline-flex h-8 items-center rounded-md border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => openEdit(e)}>Edit</button>
 				<LoadingButton
 					variant="ghost"
 					size="sm"
@@ -521,6 +521,7 @@
 					<div class="flex flex-wrap gap-2">
 						<a href={resolve(`/asesmen/kegiatan/${e.id}`)} class="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90">Buka Alur</a>
 						<a href={resolve(`/asesmen/kegiatan/${e.id}/archive`)} class="inline-flex h-8 items-center rounded-md border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-muted">Arsip</a>
+						<button type="button" class="inline-flex h-8 items-center rounded-md border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => openEdit(e)}>Edit</button>
 						<LoadingButton variant="ghost" size="sm" class="text-destructive hover:bg-destructive/10 hover:text-destructive" onclick={() => deleteEvent(e.id)} loading={deleteBusyId === e.id} loadingLabel="Menghapus..." disabled={deleteBusyId !== '' && deleteBusyId !== e.id}>Hapus</LoadingButton>
 					</div>
 				</div>
