@@ -699,14 +699,14 @@
 						<p class="mt-1 text-sm text-slate-600">Scan QR pada kartu. Jika kamera perangkat tidak tersedia, ketik kode kartu dan PIN secara manual.</p>
 					</div>
 					{#if showLegacyTokenLogin}
-						<label class="block space-y-1 text-sm font-bold">Token Ujian<input class="min-h-12 w-full rounded-2xl border border-slate-300 bg-white px-3 text-slate-950" bind:value={examToken} autocomplete="off" /></label>
-						<label class="block space-y-1 text-sm font-bold">Token Ruang<input class="min-h-12 w-full rounded-2xl border border-slate-300 bg-white px-3 text-slate-950" bind:value={roomToken} autocomplete="off" /></label>
+						<label class="block space-y-1 text-sm font-bold">Kode Ujian Manual<input class="min-h-12 w-full rounded-2xl border border-slate-300 bg-white px-3 text-slate-950" bind:value={examToken} autocomplete="off" /></label>
+						<label class="block space-y-1 text-sm font-bold">Kode Ruang Manual<input class="min-h-12 w-full rounded-2xl border border-slate-300 bg-white px-3 text-slate-950" bind:value={roomToken} autocomplete="off" /></label>
 					{:else}
-						<label class="block space-y-1 text-sm font-bold">Kode Kartu / QR Token<input class="min-h-12 w-full rounded-2xl border border-slate-300 bg-white px-3 text-slate-950" bind:value={cardToken} autocomplete="off" placeholder="Terisi otomatis setelah scan QR" /></label>
+						<label class="block space-y-1 text-sm font-bold">Kode Kartu<input class="min-h-12 w-full rounded-2xl border border-slate-300 bg-white px-3 text-slate-950" bind:value={cardToken} autocomplete="off" placeholder="Terisi otomatis setelah scan QR" /></label>
 						<label class="block space-y-1 text-sm font-bold">PIN<input class="min-h-14 w-full rounded-2xl border border-slate-300 bg-white px-3 text-center text-2xl tracking-[0.45em] text-slate-950" bind:value={pin} inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="••••" /></label>
 					{/if}
 					<button class="min-h-14 w-full rounded-2xl bg-emerald-700 px-4 text-base font-black text-white disabled:opacity-60" disabled={loading} onclick={portalLogin}>{loading ? 'Memproses...' : 'Lanjutkan'}</button>
-					<button class="w-full text-sm font-bold text-emerald-700 underline" type="button" onclick={() => (showLegacyTokenLogin = !showLegacyTokenLogin)}>{showLegacyTokenLogin ? 'Kembali ke QR + PIN' : 'Cara lain bila QR belum bisa dipakai'}</button>
+					<button class="w-full text-sm font-bold text-emerald-700 underline" type="button" onclick={() => (showLegacyTokenLogin = !showLegacyTokenLogin)}>{showLegacyTokenLogin ? 'Kembali ke QR + PIN' : 'Cara manual dari panitia'}</button>
 				</section>
 			{/if}
 

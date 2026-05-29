@@ -115,7 +115,7 @@
 	let groupedVisibleEvents = $derived.by(() =>
 		[
 			{ key: 'technical', title: 'Masalah teknis', desc: 'Koneksi, sinkronisasi, atau kondisi perangkat yang perlu dicek.', events: visibleEvents.filter((event) => proctorRiskGroup(event) === 'technical') },
-			{ key: 'cheating', title: 'Indikasi tata tertib', desc: 'Fokus halaman, clipboard, perangkat berbeda, token ulang, atau tangkap layar.', events: visibleEvents.filter((event) => proctorRiskGroup(event) === 'cheating') },
+			{ key: 'cheating', title: 'Indikasi tata tertib', desc: 'Peserta keluar dari halaman ujian, akses dari perangkat berbeda, atau percobaan salin/tempel.', events: visibleEvents.filter((event) => proctorRiskGroup(event) === 'cheating') },
 			{ key: 'supervision', title: 'Tindak lanjut pengawas', desc: 'Catatan pemeriksaan, peringatan, instruksi peserta, dan eskalasi ruang.', events: visibleEvents.filter((event) => proctorRiskGroup(event) === 'supervision') }
 		].filter((group) => group.events.length > 0 || alertFilter === group.key)
 	);
@@ -612,7 +612,7 @@
 								<button class="rounded-2xl border border-red-200 bg-red-50 p-3 text-left text-red-950 {alertFilter === 'cheating' ? 'ring-2 ring-red-400' : ''}" onclick={() => alertFilter = 'cheating'}>
 									<p class="text-[11px] font-bold uppercase tracking-[0.16em]">Indikasi tata tertib</p>
 									<p class="mt-1 text-2xl font-black">{conductAlertCount}</p>
-									<p class="text-xs">fokus, clipboard, perangkat berbeda</p>
+									<p class="text-xs">keluar halaman, salin/tempel, perangkat berbeda</p>
 								</button>
 								<button class="col-span-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-left text-emerald-950 {alertFilter === 'supervision' ? 'ring-2 ring-emerald-400' : ''}" onclick={() => alertFilter = 'supervision'}>
 									<p class="text-[11px] font-bold uppercase tracking-[0.16em]">Tindak lanjut pengawas</p>
@@ -622,8 +622,8 @@
 							</div>
 							<div class="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-600">
 								<p class="font-black text-slate-900">Label ramah pengawas</p>
-								<p><b>Clipboard</b>: salin/tempel/potong diblokir. <b>Focus/visibility</b>: browser keluar atau tersembunyi. <b>Stale/pending sync</b>: koneksi atau jawaban belum aman tersinkron.</p>
-								<p><b>Device mismatch</b>: perangkat berbeda. <b>Token reuse</b>: akses dipakai ulang. <b>Screenshot</b>: indikasi tangkap layar. <b>Proctor follow-up</b>: tindak lanjut pengawas sudah dicatat.</p>
+								<p><b>Salin/tempel</b>: aplikasi memblokir copy, paste, atau potong teks. <b>Keluar halaman</b>: peserta membuka halaman lain atau browser tersembunyi. <b>Koneksi</b>: jawaban belum aman tersinkron.</p>
+								<p><b>Perangkat berbeda</b>: kartu dipakai dari perangkat lain. <b>Akses ulang</b>: kartu dipakai ulang secara mencurigakan. <b>Tangkap layar</b>: indikasi screenshot. <b>Tindak lanjut</b>: pengawas sudah mencatat pemeriksaan.</p>
 							</div>
 							<div class="flex gap-2 overflow-x-auto pb-1">
 								{#each [

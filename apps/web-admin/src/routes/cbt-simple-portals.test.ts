@@ -33,6 +33,9 @@ describe('simple CBT mobile web portals', () => {
 		expect(studentPortalSource).toContain('Ragu-ragu');
 		expect(studentPortalSource).toContain('Berikutnya');
 		expect(studentPortalSource).toContain('Kirim Jawaban');
+		expect(studentPortalSource).toContain('Kode Kartu');
+		expect(studentPortalSource).toContain('Cara manual dari panitia');
+		expect(studentPortalSource).not.toContain('QR Token');
 	});
 
 	it('shows lightweight participant watermarks and keeps only non-answer content non-selectable', () => {
@@ -82,15 +85,19 @@ describe('simple CBT mobile web portals', () => {
 		expect(proctorPortalSource).toContain('groupedVisibleEvents');
 		expect(proctorPortalSource).toContain('Masalah teknis');
 		expect(proctorPortalSource).toContain('Indikasi tata tertib');
+		expect(proctorPortalSource).toContain('keluar halaman, salin/tempel, perangkat berbeda');
 		expect(proctorPortalSource).toContain('Tindak lanjut pengawas');
 		expect(proctorPortalSource).toContain('Ringkasan');
 		expect(proctorPortalSource).toContain('Label ramah pengawas');
-		expect(proctorPortalSource).toContain('Clipboard');
-		expect(proctorPortalSource).toContain('Focus/visibility');
-		expect(proctorPortalSource).toContain('Stale/pending sync');
-		expect(proctorPortalSource).toContain('Device mismatch');
-		expect(proctorPortalSource).toContain('Token reuse');
-		expect(proctorPortalSource).toContain('Screenshot');
-		expect(proctorPortalSource).toContain('Proctor follow-up');
+		expect(proctorPortalSource).toContain('Salin/tempel');
+		expect(proctorPortalSource).toContain('Keluar halaman');
+		expect(proctorPortalSource).toContain('Koneksi');
+		expect(proctorPortalSource).toContain('Perangkat berbeda');
+		expect(proctorPortalSource).toContain('Akses ulang');
+		expect(proctorPortalSource).toContain('Tangkap layar');
+		expect(proctorPortalSource).toContain('Tindak lanjut');
+		expect(proctorPortalSource).not.toContain('<b>Clipboard</b>');
+		expect(proctorPortalSource).not.toContain('<b>Device mismatch</b>');
+		expect(proctorPortalSource).not.toContain('<b>Token reuse</b>');
 	});
 });
