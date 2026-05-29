@@ -5,10 +5,10 @@ const pageSource = readFileSync('src/routes/asesmen/sesi/[id]/+page.svelte', 'ut
 
 describe('Ujian Digital Command Center Hari-H UX', () => {
 	it('exposes the day-of-exam command center shell with dynamic room wording', () => {
-		expect(pageSource).toContain('Command Center Hari-H');
-		expect(pageSource).toContain('Distribusi Ruang Sesi');
-		expect(pageSource).toContain('ruang dinamis per sesi');
-		expect(pageSource).toContain('Masalah Aktif');
+		expect(pageSource).toContain('Ringkasan Hari-H');
+		expect(pageSource).toContain('Satu ringkasan untuk panitia');
+		expect(pageSource).toContain('Ruang Sesi');
+		expect(pageSource).toContain('Atensi Aktif');
 		expect(pageSource).not.toContain('Cetak Paket');
 	});
 

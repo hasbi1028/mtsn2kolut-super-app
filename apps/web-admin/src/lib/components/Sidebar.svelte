@@ -12,7 +12,12 @@
 	import { fetchSidebarAttention } from '$lib/components/sidebar/sidebar-attention';
 	import { filterSidebarNavGroupsByAccess } from '$lib/components/sidebar/sidebar-access';
 	import { findActiveSidebarHref } from '$lib/components/sidebar/sidebar-active';
-	import { flattenSidebarNavGroups, sidebarBreadcrumbLabel } from '$lib/components/sidebar/sidebar-tree';
+	import {
+		flattenSidebarNavGroups,
+		numberSidebarNavGroups,
+		numberedLabel,
+		sidebarNumberedBreadcrumbLabel
+	} from '$lib/components/sidebar/sidebar-tree';
 	import { readClientJson } from '$lib/client/api';
 	import type { AccountIdentity } from '$lib/client/account';
 	import { appAttribution, defaultBranding, versionedAsset, type BrandingSettings } from '$lib/branding';
@@ -28,15 +33,19 @@
 		user,
 		account = null,
 		branding = defaultBranding,
-		desktopExpanded = $bindable(true)
+		desktopExpanded = $bindable(true),
+		desktopWidth = $bindable(240)
 	}: {
 		user?: { id: string; username: string; role: string; roles?: string[]; permissions?: string[]; employee_id?: string };
 		account?: AccountIdentity | null;
 		branding?: BrandingSettings;
 		desktopExpanded?: boolean;
+		desktopWidth?: number;
 	} = $props();
 	let open = $state(false);
 	let commandOpen = $state(false);
+	let resizeHandle = $state<HTMLButtonElement | null>(null);
+	let isResizing = $state(false);
 	let inventoryAttention = $state(0);
 	let libraryAttention = $state(0);
 	let pusakaAttention = $state(0);
@@ -56,19 +65,24 @@
 
 	const userRoles = $derived(user?.roles || (user?.role ? [user.role] : []));
 	const userPermissions = $derived(user?.permissions || []);
-	const nav = $derived(filterSidebarNavGroupsByAccess(sidebarNavGroups, userRoles, userPermissions));
+	const numberedSidebarNavGroups = numberSidebarNavGroups(sidebarNavGroups);
+	const numberedDashboardNavItem = { ...dashboardNavItem, section: '0', numberedLabel: '0 Dashboard' };
+	const nav = $derived(filterSidebarNavGroupsByAccess(numberedSidebarNavGroups, userRoles, userPermissions));
 
 	const PINNED_STORAGE_KEY_PREFIX = 'sidebar:pinned-items';
 	const RECENT_STORAGE_KEY_PREFIX = 'sidebar:recent-items';
 	const RECENT_LIMIT = 6;
 	const ATTENTION_REFRESH_INTERVAL_MS = 60_000;
+	const SIDEBAR_MIN_WIDTH = 220;
+	const SIDEBAR_MAX_WIDTH = 360;
+	const SIDEBAR_RESIZE_STEP = 16;
 	let openGroups = $state<string[]>([]);
 	let pinnedItems = $state<string[]>([]);
 	let recentItems = $state<string[]>([]);
 	let pinnedLoaded = $state(false);
 
 	const visibleNavItems = $derived([
-		{ ...dashboardNavItem, group: 'Akses Cepat', ancestors: [], breadcrumb: ['Akses Cepat', dashboardNavItem.label] },
+		{ ...numberedDashboardNavItem, group: 'Akses Cepat', groupSection: '0', ancestors: [], ancestorSections: [], breadcrumb: ['Akses Cepat', dashboardNavItem.label] },
 		...flattenSidebarNavGroups(nav)
 	]);
 
@@ -114,6 +128,55 @@
 
 	function isActive(href: string) {
 		return activeHref === href;
+	}
+
+	function clampDesktopWidth(value: number) {
+		return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(value)));
+	}
+
+	function setDesktopWidth(value: number) {
+		desktopWidth = clampDesktopWidth(value);
+	}
+
+	function startSidebarResize(event: PointerEvent) {
+		if (!desktopExpanded) return;
+		isResizing = true;
+		resizeHandle?.setPointerCapture(event.pointerId);
+		setDesktopWidth(event.clientX);
+		event.preventDefault();
+	}
+
+	function resizeSidebar(event: PointerEvent) {
+		if (!isResizing || !desktopExpanded) return;
+		setDesktopWidth(event.clientX);
+	}
+
+	function stopSidebarResize(event: PointerEvent) {
+		if (!isResizing) return;
+		isResizing = false;
+		if (resizeHandle?.hasPointerCapture(event.pointerId)) {
+			resizeHandle.releasePointerCapture(event.pointerId);
+		}
+	}
+
+	function handleSidebarResizeKeydown(event: KeyboardEvent) {
+		if (!desktopExpanded) return;
+		if (event.key === 'ArrowLeft') {
+			setDesktopWidth(desktopWidth - SIDEBAR_RESIZE_STEP);
+			event.preventDefault();
+		}
+		if (event.key === 'ArrowRight') {
+			setDesktopWidth(desktopWidth + SIDEBAR_RESIZE_STEP);
+			event.preventDefault();
+		}
+		if (event.key === 'Home') {
+			setDesktopWidth(SIDEBAR_MIN_WIDTH);
+			event.preventDefault();
+		}
+		if (event.key === 'End') {
+			setDesktopWidth(SIDEBAR_MAX_WIDTH);
+			event.preventDefault();
+		}
 	}
 
 	function isGroupOpen(group: string) {
@@ -172,8 +235,8 @@
 	}
 
 	function railTooltip(item: SidebarNavItem | SidebarFlatItem, group: string) {
-		if ('ancestors' in item) return sidebarBreadcrumbLabel(item);
-		return `${group} · ${item.label}`;
+		if ('ancestors' in item) return sidebarNumberedBreadcrumbLabel(item);
+		return `${group} · ${numberedLabel(item.label, item.section)}`;
 	}
 
 	function storageScope() {
@@ -506,9 +569,10 @@
 <!-- Sidebar -->
 <aside
 	class={`fixed inset-y-0 left-0 z-30 flex flex-col border-r border-border bg-card text-card-foreground
-	       transition-transform duration-200
+	       transition-[transform,width] duration-200
 	       ${open ? 'translate-x-0' : '-translate-x-full'}
-	       ${desktopExpanded ? 'lg:w-60' : 'lg:w-[5.5rem]'}
+	       ${desktopExpanded ? 'lg:w-[var(--sidebar-width)]' : 'lg:w-[5.5rem]'}
+	       ${isResizing ? 'lg:transition-none' : ''}
 	       lg:translate-x-0`}
 >
 	<!-- Brand -->
@@ -599,6 +663,27 @@
 			</div>
 		{/if}
 	</div>
+
+	{#if desktopExpanded}
+		<button
+			type="button"
+			bind:this={resizeHandle}
+			role="slider"
+			aria-label="Lebar sidebar"
+			aria-valuemin={SIDEBAR_MIN_WIDTH}
+			aria-valuemax={SIDEBAR_MAX_WIDTH}
+			aria-valuenow={clampDesktopWidth(desktopWidth)}
+			aria-valuetext={`${clampDesktopWidth(desktopWidth)} piksel`}
+			class={`group absolute inset-y-0 right-0 hidden w-3 cursor-col-resize touch-none items-center justify-center border-0 bg-transparent p-0 outline-none lg:flex ${isResizing ? 'select-none' : ''}`}
+			onpointerdown={startSidebarResize}
+			onpointermove={resizeSidebar}
+			onpointerup={stopSidebarResize}
+			onpointercancel={stopSidebarResize}
+			onkeydown={handleSidebarResizeKeydown}
+		>
+			<span class="h-16 w-1 rounded-full bg-border opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 group-active:opacity-100"></span>
+		</button>
+	{/if}
 </aside>
 
 <SidebarCommandPalette

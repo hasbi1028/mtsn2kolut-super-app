@@ -7,8 +7,12 @@
 		href: string;
 		label: string;
 		group: string;
+		groupSection?: string;
+		section?: string;
+		numberedLabel?: string;
 		pinned: boolean;
 		ancestors?: string[];
+		ancestorSections?: string[];
 		breadcrumb?: string[];
 	};
 
@@ -35,7 +39,7 @@
 		const normalizedQuery = query.trim().toLowerCase();
 		const base = items.filter((item) => {
 			if (!normalizedQuery) return true;
-			const searchable = [item.label, item.group, item.href, ...(item.ancestors ?? []), ...(item.breadcrumb ?? [])]
+			const searchable = [item.label, item.group, item.href, item.section ?? '', item.groupSection ?? '', ...(item.ancestors ?? []), ...(item.breadcrumb ?? [])]
 				.join(' ')
 				.toLowerCase();
 			return searchable.includes(normalizedQuery);
@@ -86,7 +90,13 @@
 	}
 
 	function commandSubtitle(item: CommandItem) {
-		const crumb = item.breadcrumb?.length ? item.breadcrumb.join(' › ') : `${item.group} › ${item.label}`;
+		const numberedGroup = item.groupSection ? `${item.groupSection} ${item.group}` : item.group;
+		const numberedAncestors = (item.ancestors ?? []).map((ancestor, index) => {
+			const section = item.ancestorSections?.[index];
+			return section ? `${section} ${ancestor}` : ancestor;
+		});
+		const numberedItem = item.section ? `${item.section} ${item.label}` : item.label;
+		const crumb = [numberedGroup, ...numberedAncestors, numberedItem].join(' › ');
 		return `${crumb} · ${item.href}`;
 	}
 
@@ -140,6 +150,9 @@
 								>
 									<div class="min-w-0">
 										<div class="flex items-center gap-2">
+											{#if item.section}
+												<span class="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">{item.section}</span>
+											{/if}
 											<span class="text-sm font-semibold">{item.label}</span>
 											<span class={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${badgeToneClasses('quick')}`}>
 												Cepat
@@ -177,6 +190,9 @@
 								>
 									<div class="min-w-0">
 										<div class="flex items-center gap-2">
+											{#if item.section}
+												<span class="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">{item.section}</span>
+											{/if}
 											<span class="text-sm font-semibold">{item.label}</span>
 											<span class={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${badgeToneClasses('recent')}`}>
 												Baru
@@ -209,6 +225,9 @@
 								>
 									<div class="min-w-0">
 										<div class="flex items-center gap-2">
+											{#if item.section}
+												<span class="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">{item.section}</span>
+											{/if}
 											<span class="text-sm font-semibold">{item.label}</span>
 											{#if isActive(item.href)}
 												<span class={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${badgeToneClasses('active')}`}>
@@ -235,6 +254,9 @@
 							>
 								<div class="min-w-0">
 									<div class="flex items-center gap-2">
+										{#if item.section}
+											<span class="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">{item.section}</span>
+										{/if}
 										<span class="text-sm font-semibold">{item.label}</span>
 										{#if item.pinned}
 											<span class={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${badgeToneClasses('quick')}`}>

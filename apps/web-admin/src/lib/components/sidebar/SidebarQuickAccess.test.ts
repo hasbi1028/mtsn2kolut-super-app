@@ -14,11 +14,12 @@ const baseItems: Array<{
 	permissions: string[];
 	pinnable?: boolean;
 	group: string;
+	section?: string;
 }> = [
-	{ href: '/', label: 'Dashboard', icon: 'grid', permissions: ['dashboard.read'], pinnable: false, group: 'Utama' },
-	{ href: '/bank-soal/tambah', label: 'Tambah Soal', icon: 'book-open', permissions: ['bank_soal.create'], group: 'Bank Soal' },
-	{ href: '/grades', label: 'Nilai', icon: 'clipboard', permissions: ['grades.read'], group: 'Akademik' },
-	{ href: '/jadwal', label: 'Jadwal', icon: 'calendar', permissions: ['academic.read'], group: 'Akademik' }
+	{ href: '/', label: 'Dashboard', icon: 'grid', permissions: ['dashboard.read'], pinnable: false, group: 'Utama', section: '0' },
+	{ href: '/bank-soal/tambah', label: 'Tambah Soal', icon: 'book-open', permissions: ['bank_soal.create'], group: 'Bank Soal', section: '6.1.2' },
+	{ href: '/grades', label: 'Nilai', icon: 'clipboard', permissions: ['grades.read'], group: 'Akademik', section: '5.1.1' },
+	{ href: '/jadwal', label: 'Jadwal', icon: 'calendar', permissions: ['academic.read'], group: 'Akademik', section: '2.1.4' }
 ];
 
 function renderQuickAccess() {
@@ -46,6 +47,7 @@ describe('SidebarQuickAccess', () => {
 		expect(screen.getByText('Akses Cepat')).toBeTruthy();
 		expect(screen.getByText('Dashboard')).toBeTruthy();
 		expect(screen.getByText('Nilai')).toBeTruthy();
+		expect(screen.getByText('5.1.1')).toBeTruthy();
 		expect(screen.queryByLabelText('Pin Dashboard')).toBeNull();
 	});
 

@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import { MicroActionTable } from '$lib/components/ops';
 
 	type PelaksanaanRoute =
 		| '/asesmen/aplikasi-siswa'
@@ -14,11 +14,13 @@
 		| '/asesmen/hasil'
 		| '/asesmen';
 	type RoleMode = 'admin' | 'guru' | 'staf';
-	type TaskKind = 'primary' | 'support' | 'result';
+	type TaskKind = 'panitia' | 'pengawas' | 'bantuan' | 'hasil';
 
 	type DayTask = {
+		step: string;
 		title: string;
 		description: string;
+		meta: string;
 		href: PelaksanaanRoute;
 		query?: string;
 		cta: string;
@@ -45,50 +47,40 @@
 	const heroTitle = $derived(isAdminMode ? 'Pelaksanaan Ujian' : 'Ruang Saya');
 	const heroSubtitle = $derived(
 		isAdminMode
-			? 'Kelola sesi, ruang, kartu peserta, perangkat siswa, mode cadangan, dan hasil dari satu layar kerja.'
-			: 'Buka ruang yang ditugaskan, pantau peserta, cek perangkat siswa, lalu hubungi panitia bila perlu.'
+			? 'Pilih jalur kerja hari-H: panitia mengelola sesi, pengawas membuka ruang, dan bantuan perangkat dipakai bila ada masalah siswa.'
+			: 'Buka ruang yang ditugaskan. Pengawas tidak perlu masuk ke detail sesi panitia kecuali diminta operator.'
 	);
 
 	const baseDayTasks: DayTask[] = [
 		{
-			title: 'Persiapan',
-			description: 'Kembali ke alur persiapan kegiatan, paket, sesi, ruang, peserta, dan token.',
-			href: '/asesmen/persiapan',
-			cta: 'Buka Persiapan',
-			kind: 'support',
-			roles: ['admin']
-		},
-		{
-			title: 'Sesi Hari Ini',
-			description: 'Lihat jadwal/sesi aktif dan status ujian yang sedang berjalan.',
+			step: '1',
+			title: 'Sesi Panitia',
+			description: 'Untuk operator: cek jadwal hari ini, status sesi, ruang, peserta, pengawas, dan tindakan teknis panitia.',
+			meta: 'Panitia / operator',
 			href: '/asesmen/sesi',
 			query: '?schedule=today',
-			cta: 'Buka Sesi',
-			kind: 'primary',
+			cta: 'Buka Sesi Hari Ini',
+			kind: 'panitia',
 			roles: ['admin']
 		},
 		{
+			step: '2',
 			title: 'Ruang Saya',
-			description: 'Buka daftar ruang yang ditugaskan, status peserta, dan atensi yang perlu ditangani.',
+			description: 'Untuk pengawas: pilih ruang yang ditugaskan, lihat kode ruang, pantau peserta, dan tangani atensi.',
+			meta: 'Pengawas ruang',
 			href: '/asesmen/ruang-saya',
 			cta: 'Buka Ruang Saya',
-			kind: 'primary',
+			kind: 'pengawas',
 			roles: ['admin', 'guru', 'staf']
 		},
 		{
-			title: 'Cetak Kartu Peserta',
-			description: 'Cetak kartu dari kegiatan ujian jika ada peserta yang membutuhkan salinan.',
-			href: '/asesmen/kegiatan',
-			cta: 'Pilih Kegiatan',
-			kind: 'support',
-			roles: ['admin']
-		},
-		{
+			step: '3',
 			title: 'Perangkat Siswa',
-			description: 'Panduan Portal Ujian Siswa, latihan lokal, dan mode cadangan untuk perangkat bermasalah.',
+			description: 'Panduan singkat saat siswa kesulitan masuk, status perangkat kuning/merah, atau butuh arahan operator.',
+			meta: 'Bantuan lapangan',
 			href: '/asesmen/aplikasi-siswa',
 			cta: 'Buka Panduan',
-			kind: 'support',
+			kind: 'bantuan',
 			roles: ['admin', 'guru', 'staf']
 		}
 	];
@@ -98,11 +90,13 @@
 			? [
 				...baseDayTasks,
 				{
+					step: '4',
 					title: 'Hasil',
-					description: 'Buka rekap, nilai, dan hasil sesi setelah ujian selesai.',
+					description: 'Dipakai setelah ujian selesai untuk rekap nilai, berita acara, dan penutupan kegiatan.',
+					meta: 'Akhir ujian',
 					href: '/asesmen/hasil',
 					cta: 'Lihat Hasil',
-					kind: 'result',
+					kind: 'hasil',
 					roles: ['admin', 'guru', 'staf']
 				}
 			]
@@ -110,11 +104,6 @@
 	);
 
 	const visibleTasks = $derived(dayTasks.filter((task) => task.roles.includes(roleMode)));
-	const dayTaskColumns = [
-		{ key: 'task', label: 'Pekerjaan', class: 'min-w-56' },
-		{ key: 'focus', label: 'Fokus', class: 'min-w-[20rem]' },
-		{ key: 'kind', label: 'Jenis', headClass: 'text-right', class: 'text-right' }
-	];
 
 	function taskHref(task: DayTask): string {
 		return `${resolve(task.href)}${task.query ?? ''}`;
@@ -122,23 +111,27 @@
 
 	function kindLabel(kind: TaskKind): string {
 		switch (kind) {
-			case 'primary':
-				return 'Utama';
-			case 'support':
+			case 'panitia':
+				return 'Panitia';
+			case 'pengawas':
+				return 'Pengawas';
+			case 'bantuan':
 				return 'Bantuan';
-			case 'result':
+			case 'hasil':
 				return 'Akhir';
 		}
 	}
 
 	function kindClass(kind: TaskKind): string {
 		switch (kind) {
-			case 'primary':
+			case 'panitia':
 				return 'border-primary/20 bg-primary/10 text-primary';
-			case 'support':
-				return 'border-border bg-muted text-muted-foreground';
-			case 'result':
+			case 'pengawas':
 				return 'border-success/30 bg-success/10 text-success';
+			case 'bantuan':
+				return 'border-border bg-muted text-muted-foreground';
+			case 'hasil':
+				return 'border-warning/30 bg-warning/10 text-warning';
 		}
 	}
 </script>
@@ -168,52 +161,42 @@
 				<div>
 					<p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Alur Pelaksanaan</p>
 					<h2 id="pelaksanaan-focus-title" class="mt-1 text-xl font-semibold tracking-tight text-foreground">
-						{isAdminMode ? 'Kontrol panitia' : 'Tugas pengawasan'}
+						{isAdminMode ? 'Pilih jalur kerja' : 'Tugas pengawas ruang'}
 					</h2>
 				</div>
 				<p class="max-w-md text-xs leading-5 text-muted-foreground">
-					{isAdminMode ? 'Admin melihat alur lengkap; guru/staf hanya melihat pekerjaan lapangan.' : 'Tampilan ini hanya menampilkan pekerjaan yang dibutuhkan pengawas.'}
+					{isAdminMode ? 'Sesi untuk panitia, Ruang Saya untuk pengawas. Jangan masuk ke panel teknis kalau hanya perlu mengawasi ruang.' : 'Mulai dari Ruang Saya. Panel teknis sesi disediakan untuk panitia.'}
 				</p>
 			</div>
 
-			<MicroActionTable
-				title={isAdminMode ? 'Pekerjaan Panitia' : 'Pekerjaan Pengawas'}
-				description={isAdminMode ? 'Satu layar untuk persiapan akhir, pelaksanaan, dan hasil.' : 'Fokus pada ruang, peserta, perangkat, dan hasil.'}
-				columns={dayTaskColumns}
-				rows={visibleTasks}
-				rowKey={(row) => (row as DayTask).title}
-				tableClass="min-w-[720px]"
-			>
-				{#snippet cell(row, column)}
-					{@const task = row as DayTask}
-					{#if column.key === 'task'}
-						<div class="font-semibold text-foreground">{task.title}</div>
-					{:else if column.key === 'focus'}
-						<p class="max-w-2xl text-xs leading-5 text-muted-foreground">{task.description}</p>
-					{:else}
-						<Badge class={kindClass(task.kind)} variant="outline">{kindLabel(task.kind)}</Badge>
-					{/if}
-				{/snippet}
-				{#snippet actions(row)}
-					{@const task = row as DayTask}
-					<Button href={taskHref(task)} size="xs" variant={task.kind === 'primary' ? 'default' : 'outline'} class={task.kind === 'primary' ? '' : 'border-primary/20 text-primary hover:bg-primary/10'}>{task.cta}</Button>
-				{/snippet}
-				{#snippet mobile(row)}
-					{@const task = row as DayTask}
-					<div class="space-y-2">
-						<div class="flex items-start justify-between gap-2">
-							<div class="min-w-0">
-								<p class="font-semibold text-foreground">{task.title}</p>
-								<p class="mt-1 text-xs leading-5 text-muted-foreground">{task.description}</p>
+			<div class="grid gap-3 lg:grid-cols-3">
+				{#each visibleTasks as task (task.title)}
+					<Card.Root class={task.kind === 'pengawas' ? 'border-success/30 shadow-sm' : 'border-border shadow-sm'}>
+						<Card.Header class="space-y-3">
+							<div class="flex items-center justify-between gap-3">
+								<span class="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-primary/20 bg-primary/10 px-2 text-xs font-semibold text-primary">{task.step}</span>
+								<Badge class={kindClass(task.kind)} variant="outline">{kindLabel(task.kind)}</Badge>
 							</div>
-							<Badge class={`${kindClass(task.kind)} shrink-0`} variant="outline">{kindLabel(task.kind)}</Badge>
-						</div>
-						<Button href={taskHref(task)} size="sm" variant={task.kind === 'primary' ? 'default' : 'outline'} class={task.kind === 'primary' ? 'w-full' : 'w-full border-primary/20 text-primary hover:bg-primary/10'}>{task.cta}</Button>
-					</div>
-				{/snippet}
-			</MicroActionTable>
+							<div>
+								<Card.Title class="text-base">{task.title}</Card.Title>
+								<Card.Description class="mt-1 leading-6">{task.description}</Card.Description>
+							</div>
+							<p class="text-xs font-medium text-muted-foreground">{task.meta}</p>
+						</Card.Header>
+						<Card.Content>
+							<Button href={taskHref(task)} size="sm" variant={task.kind === 'pengawas' || task.kind === 'panitia' ? 'default' : 'outline'} class={task.kind === 'pengawas' || task.kind === 'panitia' ? 'w-full' : 'w-full border-primary/20 text-primary hover:bg-primary/10'}>
+								{task.cta}
+							</Button>
+						</Card.Content>
+					</Card.Root>
+				{/each}
+			</div>
 		</section>
 
+		<section class="rounded-lg border border-dashed border-border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
+			<p class="font-semibold text-foreground">Batas sederhana:</p>
+			<p><span class="font-semibold">Sesi</span> = kendali panitia/operator. <span class="font-semibold">Ruang Saya</span> = layar kerja pengawas. <span class="font-semibold">Pengawasan</span> = panel teknis yang dibuka dari sesi atau ruang saat perlu tindakan.</p>
+		</section>
 	</div>
 {:else}
 	<div class="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 py-16 text-center">

@@ -908,6 +908,7 @@
 			{/if}
 			<Button href={createSessionHref}>+ Sesi</Button>
 		</div>
+		<p class="mt-2 max-w-2xl text-sm text-muted-foreground">Untuk edit sesi, atur jadwal, dan manual ruangan, buka detail sesi. Layar ini hanya daftar cepat agar operator tidak kebanyakan tombol.</p>
 	</div>
 
 	{#if eventId}
@@ -1459,51 +1460,35 @@
 								<Table.Cell>
 									<div class="flex gap-1 flex-wrap">
 										{#if s.status === 'draft'}
-											<Button
-												size="xs"
-												variant="outline"
-												onclick={() => {
-													enrollSession = s;
-													enrollScopeType = s.scope_type || 'class';
-													enrollClassId = s.class_id;
-													enrollGradeLevel = s.scope_type === 'grade' ? s.scope_ref : 'VII';
-												}}
-											>
-												Daftarkan peserta
-											</Button>
-											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'scheduled')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">
-												Atur jadwal
-											</LoadingButton>
-											<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
-												Buka detail
-											</a>
-											<LoadingButton size="xs" variant="destructive" onclick={() => deleteSession(s.id, s.title)} loading={deleteBusyId === s.id} disabled={deleteBusyId !== '' && deleteBusyId !== s.id} loadingLabel="Menghapus...">
-												Hapus sesi
-											</LoadingButton>
-										{:else if s.status === 'scheduled'}
-											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowOperationalIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">Mulai sesi</LoadingButton>
-											<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
-												Buka detail
-											</a>
-											<LoadingButton size="xs" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Batalkan sesi</LoadingButton>
-										{:else if s.status === 'active'}
-											<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
-												Pantau sesi
-											</a>
-											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan sesi</LoadingButton>
-										{:else if s.status === 'finished'}
-											<a href={resolve(`/asesmen/sesi/${s.id}/minutes`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
-												Lihat BA Sesi
-											</a>
-											<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
-												Lihat detail
-											</a>
-										{:else}
-											<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
-												Lihat detail
-											</a>
-										{/if}
-									</div>
+									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
+										Lanjutkan setup
+									</a>
+									<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'scheduled')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">
+										Siap jadwal
+									</LoadingButton>
+								{:else if s.status === 'scheduled'}
+									<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowOperationalIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">Mulai sesi</LoadingButton>
+									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
+										Detail
+									</a>
+								{:else if s.status === 'active'}
+									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
+										Pantau sesi
+									</a>
+									<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan</LoadingButton>
+								{:else if s.status === 'finished'}
+									<a href={resolve(`/asesmen/sesi/${s.id}/minutes`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
+										BA Sesi
+									</a>
+									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
+										Detail
+									</a>
+								{:else}
+									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
+										Detail
+									</a>
+								{/if}
+								</div>
 								</Table.Cell>
 							</Table.Row>
 						{:else}
@@ -1571,27 +1556,13 @@
 							</div>
 							<div class="mt-4 flex flex-wrap gap-2">
 								{#if s.status === 'draft'}
-									<Button
-										size="sm"
-										variant="outline"
-										onclick={() => {
-											enrollSession = s;
-											enrollScopeType = s.scope_type || 'class';
-											enrollClassId = s.class_id;
-											enrollGradeLevel = s.scope_type === 'grade' ? s.scope_ref : 'VII';
-										}}
-									>
-										Daftarkan
-									</Button>
-									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'scheduled')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">Jadwalkan</LoadingButton>
-									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">Buka</a>
-									<LoadingButton size="sm" variant="destructive" onclick={() => deleteSession(s.id, s.title)} loading={deleteBusyId === s.id} disabled={deleteBusyId !== '' && deleteBusyId !== s.id} loadingLabel="Menghapus...">Hapus</LoadingButton>
+									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">Lanjutkan setup</a>
+									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'scheduled')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">Siap jadwal</LoadingButton>
 								{:else if s.status === 'scheduled'}
-									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowOperationalIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">Mulai</LoadingButton>
-									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">Buka</a>
-									<LoadingButton size="sm" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Batalkan</LoadingButton>
+									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowOperationalIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">Mulai sesi</LoadingButton>
+									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">Detail</a>
 								{:else if s.status === 'active'}
-									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">Pantau</a>
+									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">Pantau sesi</a>
 									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan</LoadingButton>
 								{:else if s.status === 'finished'}
 									<a href={resolve(`/asesmen/sesi/${s.id}/minutes`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">BA Sesi</a>

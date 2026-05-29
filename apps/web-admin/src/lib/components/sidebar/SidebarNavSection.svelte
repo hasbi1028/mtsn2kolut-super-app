@@ -2,7 +2,7 @@
 	import { resolve } from '$app/paths';
 	import SidebarIcon from '$lib/components/sidebar/SidebarIcon.svelte';
 	import type { SidebarNavGroup, SidebarNavItem, SidebarNavNode } from '$lib/components/sidebar/sidebar-config';
-	import { isSidebarFolder } from '$lib/components/sidebar/sidebar-tree';
+	import { isSidebarFolder, numberedLabel } from '$lib/components/sidebar/sidebar-tree';
 
 	let {
 		section,
@@ -61,7 +61,7 @@
 	}
 
 	function itemTooltip(item: SidebarNavItem, ancestors: string[] = []) {
-		return [section.group, ...ancestors, item.label].filter(Boolean).join(' › ');
+		return [numberedLabel(section.group, section.section), ...ancestors, numberedLabel(item.label, item.section)].filter(Boolean).join(' › ');
 	}
 </script>
 
@@ -77,9 +77,12 @@
 				onclick={() => toggleFolder(node, ancestors)}
 				aria-expanded={open}
 				aria-controls={`sidebar-folder-${key.replaceAll(/[^a-zA-Z0-9_-]/g, '-')}`}
-				title={!desktopExpanded ? [section.group, ...ancestors, node.label].join(' › ') : undefined}
+				title={!desktopExpanded ? [numberedLabel(section.group, section.section), ...ancestors, numberedLabel(node.label, node.section)].join(' › ') : undefined}
 			>
 				<SidebarIcon name={node.icon} active={nodeHasActive(node)} />
+				{#if node.section}
+					<span class={`shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary ${desktopExpanded ? 'inline' : 'inline lg:hidden'}`}>{node.section}</span>
+				{/if}
 				<span class={`truncate ${desktopExpanded ? 'inline' : 'inline lg:hidden'}`}>{node.label}</span>
 				<svg class={`ml-auto h-3.5 w-3.5 shrink-0 transition-transform ${open ? 'rotate-90' : ''} ${desktopExpanded ? 'inline' : 'inline lg:hidden'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -112,6 +115,9 @@
 					style={desktopExpanded ? `padding-left: ${0.5 + depth * 0.65}rem` : undefined}
 				>
 					<SidebarIcon name={node.icon} active={isActive(node.href)} />
+					{#if node.section}
+						<span class={`shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground ${desktopExpanded ? 'inline' : 'inline lg:hidden'}`}>{node.section}</span>
+					{/if}
 					<span class={`truncate ${desktopExpanded ? 'inline' : 'inline lg:hidden'}`}>{node.label}</span>
 					{#if navBadge(node.href) > 0 && desktopExpanded}
 						<span class="ml-auto rounded-full bg-[var(--gold)]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--gold)]">
@@ -148,6 +154,9 @@
 		onclick={() => toggleGroup(section.group)}
 		aria-expanded={isGroupOpen(section.group)}
 	>
+		{#if section.section}
+			<span class="mr-1 shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] tracking-normal text-primary">{section.section}</span>
+		{/if}
 		<span class="truncate">{section.group}</span>
 		{#if groupBadge(section.group) > 0 && desktopExpanded}
 			<span class="ml-2 rounded-full bg-[var(--gold)]/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-normal text-[var(--gold)]">

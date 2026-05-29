@@ -1262,22 +1262,12 @@
   <section
     class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm"
   >
-    <div
-      class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"
-    >
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div class="max-w-3xl space-y-3">
-        <p
-          class="text-xs font-semibold uppercase tracking-[0.2em] text-primary"
-        >
-          Paket Asesmen
-        </p>
-        <h1 class="text-3xl font-semibold tracking-tight text-foreground">
-          {eventId ? "Paket Kegiatan" : "Paket Asesmen"}
-        </h1>
+        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Paket Asesmen</p>
+        <h1 class="text-3xl font-semibold tracking-tight text-foreground">{eventId ? 'Paket Kegiatan' : 'Paket Asesmen'}</h1>
         <p class="max-w-2xl text-sm leading-6 text-muted-foreground">
-          Ambil soal siap pakai dari Bank Soal, masukkan ke paket asesmen, lalu pakai paket
-          itu saat membuat sesi event. Untuk Simulasi/Gladi/Ujian nyata, gunakan
-          paket/kegiatan server; DEMO lokal hanya memakai contoh tanpa mutasi data.
+          Pilih paket siap pakai, lalu tautkan ke kegiatan bila perlu. Detail soal tetap dikelola di Bank Soal.
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
@@ -1285,18 +1275,18 @@
           <a
             href={resolve(`/asesmen/kegiatan/${eventId}`)}
             class="inline-flex items-center rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15"
-            >Kembali ke Kegiatan</a
+            >Kembali ke kegiatan</a
           >
         {/if}
         <a
-          href={resolve("/asesmen")}
+          href={resolve('/asesmen')}
           class="inline-flex items-center rounded-md border border-success/20 bg-card px-3 py-2 text-sm font-semibold text-success hover:bg-success/10"
-          >Beranda Ujian</a
+          >Ringkasan</a
         >
         <a
           href={createPackageHref}
           class="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-          >Buat Paket</a
+          >Buat paket</a
         >
       </div>
     </div>
@@ -1306,85 +1296,49 @@
         href="#paket-saya"
         class="rounded-2xl border border-primary/20 bg-card p-4 text-sm text-primary shadow-sm transition hover:border-primary"
       >
-        <p
-          class="text-xs font-semibold uppercase tracking-[0.18em] text-primary"
-        >
-          Paket Saya
-        </p>
-        <p class="mt-2 text-lg font-semibold">Lihat daftar paket</p>
-        <p class="mt-1 leading-6 text-muted-foreground">
-          Daftar paket menjadi pusat kerja utama.
-        </p>
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Paket saya</p>
+        <p class="mt-2 text-lg font-semibold">Lihat daftar</p>
+        <p class="mt-1 leading-6 text-muted-foreground">Daftar paket menjadi pusat kerja.</p>
       </a>
       <a
         href={createPackageHref}
         class="rounded-2xl border border-primary/20 bg-card/70 p-4 text-left text-sm text-foreground shadow-sm transition hover:border-primary/20 hover:bg-card"
       >
-        <p
-          class="text-xs font-semibold uppercase tracking-[0.18em] text-primary"
-        >
-          Buat Paket
-        </p>
-        <p class="mt-2 text-lg font-semibold">Buka builder soal</p>
-        <p class="mt-1 leading-6 text-muted-foreground">
-          Masuk ke halaman create-only agar alur utama tetap fokus.
-        </p>
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Buat paket</p>
+        <p class="mt-2 text-lg font-semibold">Buka builder</p>
+        <p class="mt-1 leading-6 text-muted-foreground">Mulai dari soal yang sudah siap.</p>
       </a>
       <a
-        href={resolve(
-          eventId ? `/asesmen/kegiatan/${eventId}` : "/asesmen/kegiatan",
-        )}
+        href={resolve(eventId ? `/asesmen/kegiatan/${eventId}` : '/asesmen/kegiatan')}
         class="rounded-2xl border border-primary/20 bg-card/70 p-4 text-sm text-foreground shadow-sm transition hover:border-primary/20 hover:bg-card"
       >
-        <p
-          class="text-xs font-semibold uppercase tracking-[0.18em] text-primary"
-        >
-          Pakai untuk Kegiatan
-        </p>
-        <p class="mt-2 text-lg font-semibold">Buat/Cek Sesi Kegiatan</p>
-        <p class="mt-1 leading-6 text-muted-foreground">
-          Lanjutkan paket ke sesi, ruang, dan token.
-        </p>
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Pakai di kegiatan</p>
+        <p class="mt-2 text-lg font-semibold">Lanjut ke sesi</p>
+        <p class="mt-1 leading-6 text-muted-foreground">Hubungkan paket ke sesi, ruang, dan token.</p>
       </a>
     </div>
   </section>
 
-  <details
-    class="rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground shadow-sm"
-  >
-    <summary class="cursor-pointer font-semibold text-foreground"
-      >Catatan penggunaan paket dan cakupan soal</summary
-    >
+  <details class="rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground shadow-sm">
+    <summary class="cursor-pointer font-semibold text-foreground">Catatan singkat</summary>
     <div class="mt-3 space-y-3 leading-6">
       {#if eventId}
         <p>
           <span class="font-semibold text-primary">Paket kegiatan:</span>
-          {eventContext?.title ?? eventId}. Sesi kegiatan membutuhkan paket yang
-          tertaut ke kegiatan ini.
+          {eventContext?.title ?? eventId}. Paket ini dipakai oleh sesi yang tertaut ke kegiatan tersebut.
         </p>
-        <p>
-          Pembuatan dan verifikasi soal tetap di Bank Soal; halaman ini hanya memilih soal siap pakai
-          ulang, ditambah soal khusus kegiatan ini saja. Jika seed sistem
-          Informatika tersedia, gunakan sebagai pool/paket awal melalui alur
-          paket resmi, bukan melalui Latihan Lokal.
-        </p>
+        <p>Pembuatan dan verifikasi soal tetap di Bank Soal. Halaman ini hanya memilih paket siap pakai dan paket khusus kegiatan ini.</p>
       {:else}
         <p>
-          <span class="font-semibold text-warning">Paket umum:</span> dapat dipakai
-          sebagai templat yang dapat dipakai ulang atau paket mandiri. Jika seed
-          sistem Informatika tersedia, jadikan sumber awal melalui Bank Soal/paket
-          resmi untuk Simulasi/Gladi/Ujian nyata. Jika bekerja dari Kegiatan Ujian,
-          buka pembuat paket dari kegiatan agar paket otomatis tertaut kegiatan.
+          <span class="font-semibold text-warning">Paket umum:</span>
+          dipakai sebagai templat atau paket mandiri. Jika bekerja dari Kegiatan Ujian, buka pembuat paket dari kegiatan agar paket otomatis tertaut.
         </p>
       {/if}
       {#if hiddenEventPackageCount > 0}
-        <p>
-          {hiddenEventPackageCount} templat umum atau paket kegiatan lain disembunyikan
-          dari daftar kegiatan ini.
-        </p>
+        <p>{hiddenEventPackageCount} paket lain disembunyikan dari daftar ini.</p>
       {/if}
       <a
-        href={resolve("/bank-soal")}
+        href={resolve('/bank-soal')}
         class="inline-flex rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15"
         >Buka Bank Soal</a
       >

@@ -239,13 +239,18 @@
 					<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Ujian Digital / Ruang Saya</p>
 					<h1 class="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Ruang Saya</h1>
 					<p class="text-sm leading-6 text-muted-foreground">
-						Halaman sederhana untuk pengawas: pilih ruang, lihat kode ruang, pantau label hijau/kuning/merah, lalu tekan tombol besar Mulai Ujian.
+						Halaman kerja pengawas ruang. Pilih ruang yang ditugaskan, baca kode ruang, pantau status hijau/kuning/merah, lalu buka panel ruang bila perlu tindakan.
 					</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
-					<Button href={resolve('/asesmen/pelaksanaan')} variant="outline">Kembali ke Pelaksanaan</Button>
-					<Button href={resolve('/asesmen/aplikasi-siswa')} variant="outline">Panduan Perangkat</Button>
+					<a class="inline-flex items-center rounded-md px-1 text-sm font-medium text-muted-foreground underline-offset-4 hover:underline" href={resolve('/asesmen/pelaksanaan')}>Pelaksanaan</a>
+					<a class="inline-flex items-center rounded-md px-1 text-sm font-medium text-muted-foreground underline-offset-4 hover:underline" href={resolve('/asesmen/aplikasi-siswa')}>Panduan perangkat</a>
 				</div>
+			</section>
+
+			<section class="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm leading-6 text-muted-foreground">
+				<p class="font-semibold text-foreground">Cara pakai singkat</p>
+				<p>Pengawas cukup buka satu kartu ruang. Jika status merah/kuning, buka panel ruang dan ikuti catatan tindakan. Pengaturan sesi, peserta, dan pembagian ruang tetap dikerjakan panitia dari halaman Sesi.</p>
 			</section>
 
 			<section class="grid gap-3 md:grid-cols-5">
@@ -363,7 +368,7 @@
 							<div class="mt-4 flex flex-wrap gap-2">
 								<Button class="h-12 px-5 text-base font-bold" href={resolve(`/asesmen/sesi/${room.session_id}/rooms/${room.id}/proctoring`)}>
 									<ActivityIcon class="mr-2 size-4" />
-									Mulai Ujian
+									Buka Panel Ruang
 								</Button>
 							</div>
 						</article>

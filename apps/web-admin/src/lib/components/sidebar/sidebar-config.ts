@@ -3,6 +3,8 @@ export type SidebarNavItem = {
 	href: string;
 	label: string;
 	icon: string;
+	section?: string;
+	numberedLabel?: string;
 	roles?: string[];
 	permissions: string[];
 	roleFallbacks?: string[];
@@ -15,6 +17,8 @@ export type SidebarFolderItem = {
 	id: string;
 	label: string;
 	icon: string;
+	section?: string;
+	numberedLabel?: string;
 	permissions?: string[];
 	roleFallbacks?: string[];
 	allowAuthenticatedFallback?: boolean;
@@ -26,12 +30,18 @@ export type SidebarNavNode = SidebarNavItem | SidebarFolderItem;
 
 export type SidebarFlatItem = SidebarNavItem & {
 	group: string;
+	groupSection?: string;
 	ancestors: string[];
+	ancestorSections?: string[];
 	breadcrumb: string[];
+	section?: string;
+	numberedLabel?: string;
 };
 
 export type SidebarNavGroup = {
 	group: string;
+	section?: string;
+	numberedLabel?: string;
 	items: SidebarNavNode[];
 };
 

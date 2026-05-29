@@ -339,10 +339,10 @@
 	let auditLogsRequestId = 0;
 	let essaysRequestId = 0;
 	const sessionAreaTabs: Array<{ id: SessionArea; label: string }> = [
-		{ id: 'monitor', label: 'Monitor' },
-		{ id: 'peserta', label: 'Peserta' },
-		{ id: 'insiden', label: 'Masalah/Insiden' },
-		{ id: 'hasil', label: 'Hasil & Berita Acara' },
+		{ id: 'monitor', label: 'Ringkasan' },
+		{ id: 'peserta', label: 'Setup peserta & ruang' },
+		{ id: 'insiden', label: 'Atensi & serah terima' },
+		{ id: 'hasil', label: 'Hasil & BA' },
 	];
 
 	function selectedSchoolRoom() {
@@ -1505,7 +1505,7 @@
 				title={currentSession.title}
 				subtitle={`${currentSession.package_title} · ${currentSession.duration_minutes} menit · ${fmtDt(currentSession.scheduled_start)}`}
 				context={currentSession.class_code ? `Kelas ${currentSession.class_code}` : 'Lintas peserta'}
-				primaryAction={{ label: 'Buka Panel Pengawasan', href: resolve(`/asesmen/sesi/${sessionId}/proctoring`) }}
+				primaryAction={{ label: 'Buka Pengawasan Sesi', href: resolve(`/asesmen/sesi/${sessionId}/proctoring`) }}
 				secondaryAction={{ label: 'Berita Acara', href: resolve(`/asesmen/sesi/${sessionId}/minutes`) }}
 			>
 				{#snippet meta()}
@@ -1524,22 +1524,22 @@
 				]}
 			/>
 
-			<section class={`rounded-lg border bg-background/95 p-3 shadow-sm ${commandCenterClass()}`} aria-label="Command Center Hari-H Ujian Digital">
+			<section class={`rounded-lg border bg-background/95 p-3 shadow-sm ${commandCenterClass()}`} aria-label="Ringkasan hari-H ujian digital">
 				<div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2">
 					<div class="min-w-0">
 						<div class="flex flex-wrap items-center gap-2">
-							<p class="text-base font-bold text-foreground">Distribusi Ruang Sesi</p>
+							<p class="text-base font-bold text-foreground">Ringkasan Hari-H</p>
 							<Badge variant="outline" class="text-[11px]">Update WITA {commandCenterLastUpdated}</Badge>
 							<Badge variant="outline" class="text-[11px]">Token masked</Badge>
 						</div>
-						<p class="mt-0.5 text-xs text-muted-foreground">Command center ringkas: ruang dinamis per sesi, submit, koneksi, atensi, dan serah-terima pengawas.</p>
+						<p class="mt-0.5 text-xs text-muted-foreground">Satu ringkasan untuk panitia: kesiapan ruang, login, submit, koneksi, atensi, dan serah-terima pengawas.</p>
 					</div>
 					<div class="flex flex-wrap gap-1.5">
 						<LoadingButton variant="outline" size="sm" onclick={() => void refreshCommandCenter()} loading={commandCenterBusy} loadingLabel="Memuat..." disabled={commandCenterBusy}>
 							↻ Refresh
 						</LoadingButton>
-						<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Masalah</Button>
-						<Button variant="outline" size="sm" onclick={() => switchTab('ruangan')}>Ruang</Button>
+						<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Serah Terima</Button>
+						<Button variant="outline" size="sm" onclick={() => switchTab('ruangan')}>Setup Ruang</Button>
 					</div>
 				</div>
 
@@ -1560,7 +1560,7 @@
 				<div class="mt-3 grid gap-3 xl:grid-cols-[1fr_20rem]">
 					<div class="overflow-hidden rounded-md border border-border bg-card/70">
 						<div class="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-							<p class="text-sm font-semibold text-foreground">Status Ruang</p>
+							<p class="text-sm font-semibold text-foreground">Ruang Sesi</p>
 							<p class="text-xs text-muted-foreground">{commandCenterRooms.length} ruang</p>
 						</div>
 						<div class="overflow-x-auto">
@@ -1600,9 +1600,9 @@
 											</Table.Cell>
 											<Table.Cell class="text-right">
 												<div class="flex justify-end gap-1">
-													<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${room.room_id}/proctoring`)}>Buka</Button>
+													<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${room.room_id}/proctoring`)}>Panel Ruang</Button>
 													<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${room.room_id}/print-pack`)}>Cetak</Button>
-													<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Handover</Button>
+													<Button variant="outline" size="sm" onclick={() => switchTab('operasional')}>Serah Terima</Button>
 												</div>
 											</Table.Cell>
 										</Table.Row>
@@ -1618,7 +1618,7 @@
 
 					<aside class="rounded-md border border-border bg-card/70">
 						<div class="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-							<p class="text-sm font-semibold text-foreground">Masalah Aktif</p>
+							<p class="text-sm font-semibold text-foreground">Atensi Aktif</p>
 							<Badge variant="outline">{commandCenterIssues.length}</Badge>
 						</div>
 						<div class="divide-y divide-border">
@@ -1635,7 +1635,7 @@
 				</div>
 			</section>
 
-			<EntityTabs tabs={sessionAreaTabs} bind:active={activeArea} label="Area detail sesi" onSelect={setSessionArea} />
+			<EntityTabs tabs={sessionAreaTabs} bind:active={activeArea} label="Area sederhana detail sesi" onSelect={setSessionArea} />
 
 			{@const detailNextAction = nextDetailAction(roomReadiness)}
 			{#if activeArea === 'monitor'}
@@ -1660,7 +1660,7 @@
 			{/if}
 
 			<details class="rounded-lg border border-border bg-card p-3 shadow-sm">
-				<summary class="cursor-pointer text-sm font-semibold text-foreground">Rincian lengkap: data sesi</summary>
+				<summary class="cursor-pointer text-sm font-semibold text-foreground">Rincian teknis panitia</summary>
 				<div class="mt-3 grid gap-3 xl:grid-cols-3" role="tablist" aria-label="Navigasi rincian detail sesi ujian">
 					{#each detailTabGroups as group (group.module)}
 						<section class="rounded-lg border border-border bg-muted/50 p-2">
@@ -1953,9 +1953,9 @@
 								<Table.Head>NIS</Table.Head>
 								<Table.Head>Nama</Table.Head>
 								<Table.Head>L/P</Table.Head>
-								<Table.Head>Ruangan</Table.Head>
-								<Table.Head>No Meja</Table.Head>
-								<Table.Head>Token Ujian</Table.Head>
+								<Table.Head>Ruang</Table.Head>
+								<Table.Head>Meja</Table.Head>
+								<Table.Head>Token</Table.Head>
 								<Table.Head>Status</Table.Head>
 								<Table.Head class="text-right">Aksi</Table.Head>
 							</Table.Row>
@@ -1994,8 +1994,8 @@
 													{/each}
 												</select>
 										<Input bind:value={seatInput[p.id]} type="number" min="1" aria-label={`Nomor meja untuk ${p.nama}`} class="h-8 w-16" disabled={roomControlsLocked} />
-										<LoadingButton variant="outline" size="sm" onclick={() => assignSeat(p.id)} loading={seatSaveBusyId === p.id} disabled={roomControlsLocked || (seatSaveBusyId !== '' && seatSaveBusyId !== p.id) || seatBusy} loadingLabel="Menyimpan...">Simpan</LoadingButton>
-											<LoadingButton variant="outline" size="sm" onclick={() => regenerateToken(p.id)} loading={regenBusyId === p.id} disabled={regenBusyId !== '' && regenBusyId !== p.id} loadingLabel="Membuat ulang...">Buat Ulang</LoadingButton>
+										<LoadingButton variant="outline" size="sm" onclick={() => assignSeat(p.id)} loading={seatSaveBusyId === p.id} disabled={roomControlsLocked || (seatSaveBusyId !== '' && seatSaveBusyId !== p.id) || seatBusy} loadingLabel="Menyimpan...">Simpan penempatan</LoadingButton>
+											<LoadingButton variant="outline" size="sm" onclick={() => regenerateToken(p.id)} loading={regenBusyId === p.id} disabled={regenBusyId !== '' && regenBusyId !== p.id} loadingLabel="Membuat ulang...">Token</LoadingButton>
 										</div>
 									</Table.Cell>
 								</Table.Row>
@@ -2023,8 +2023,8 @@
 			{/if}
 			<Card.Root class="border-success/20">
 				<Card.Header class="pb-3">
-					<Card.Title class="text-base">Ruangan & Pengawas</Card.Title>
-					<p class="text-xs text-muted-foreground">Pilih master ruangan fisik bila sudah tersedia, atau isi manual untuk transisi.</p>
+					<Card.Title class="text-base">Ruangan Manual & Pengawas</Card.Title>
+					<p class="text-xs text-muted-foreground">Atur penempatan manual lewat daftar peserta di bawah. Gunakan master ruangan hanya jika sudah ada aset fisik yang cocok.</p>
 				</Card.Header>
 				<Card.Content>
 					<div class="flex gap-3 flex-wrap items-end {roomControlsLocked ? 'opacity-70' : ''}">
@@ -2055,15 +2055,15 @@
 							<Input id="r-cap" type="number" bind:value={newRoomCap} min={1} max={100} class="w-24" disabled={roomControlsLocked} />
 						</div>
 						<LoadingButton onclick={() => void createRoom()} loading={roomBusy} loadingLabel="Menyimpan..." disabled={roomControlsLocked || roomBusy || (!newRoomName.trim() && !selectedSchoolRoomId)}>
-							+ Tambah Ruangan
+							+ Tambah Ruang Manual
 						</LoadingButton>
 							{#if rooms.length > 0}
 								<LoadingButton variant="outline" loading={shuffleBusy} loadingLabel="Mengacak..." disabled={roomControlsLocked || shuffleBusy} onclick={shuffleRooms}
 									class="border-warning/30 text-warning hover:bg-warning/10">
-									Acak Peserta
+									Bagi Peserta Otomatis
 								</LoadingButton>
 								<LoadingButton variant="outline" loading={seatBusy} loadingLabel="Mengatur..." disabled={roomControlsLocked || seatBusy} onclick={autoAssignSeats}>
-									Atur Nomor Meja
+									Atur Meja Otomatis
 								</LoadingButton>
 							{/if}
 					</div>
@@ -2083,6 +2083,12 @@
 			/>
 
 			{#if rooms.length > 0}
+				<OperationStatusPanel
+					tone="info"
+					compact
+					title="Atur Ruangan Manual"
+					message="Pilih ruang peserta di kolom kanan, isi nomor meja, lalu simpan. Aksi ini paling aman untuk penataan per peserta."
+				/>
 				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
 					{#each rooms as room (room.id)}
 						<Card.Root class="border-success/20">

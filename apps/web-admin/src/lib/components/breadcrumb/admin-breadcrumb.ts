@@ -4,9 +4,8 @@ import {
 	dashboardNavItem,
 	sidebarNavGroups,
 	type SidebarFlatItem,
-	type SidebarNavNode
 } from '$lib/components/sidebar/sidebar-config';
-import { flattenSidebarNavGroups } from '$lib/components/sidebar/sidebar-tree';
+import { flattenSidebarNavGroups, numberSidebarNavGroups } from '$lib/components/sidebar/sidebar-tree';
 
 export type AdminBreadcrumbCrumb = {
 	label: string;
@@ -162,10 +161,17 @@ const fallbackPatterns: BreadcrumbPattern[] = [
 	}
 ];
 
+const numberedSidebarNavGroups = numberSidebarNavGroups(sidebarNavGroups);
+const numberedDashboardNavItem = {
+	...dashboardNavItem,
+	section: '0',
+	numberedLabel: '0 Dashboard'
+};
+
 export function visibleBreadcrumbNavItems(roles: string[], permissions: string[]) {
 	return [
-		{ ...dashboardNavItem, group: 'Akses Cepat', ancestors: [], breadcrumb: ['Akses Cepat', dashboardNavItem.label] },
-		...flattenSidebarNavGroups(filterSidebarNavGroupsByAccess(sidebarNavGroups, roles, permissions))
+		{ ...numberedDashboardNavItem, group: 'Akses Cepat', groupSection: '0', ancestors: [], ancestorSections: [], breadcrumb: ['Akses Cepat', dashboardNavItem.label] },
+		...flattenSidebarNavGroups(filterSidebarNavGroupsByAccess(numberedSidebarNavGroups, roles, permissions))
 	];
 }
 
@@ -193,7 +199,9 @@ export function compactAdminBreadcrumbs(crumbs: AdminBreadcrumbCrumb[]) {
 
 function sidebarItemCrumbs(item: SidebarFlatItem, pathname: string): AdminBreadcrumbCrumb[] {
 	const labels = [item.group, ...(item.ancestors ?? []), item.label].filter(Boolean);
-	const sections = findSidebarSectionsByHref(item.href);
+	const sections = [item.groupSection, ...(item.ancestorSections ?? []), item.section].filter(
+		(section): section is string => typeof section === 'string' && section.length > 0
+	);
 	const crumbs: AdminBreadcrumbCrumb[] = labels.map((label, index) => ({ label, section: sections[index] }));
 
 	const extraSegments = extraPathSegments(pathname, item.href);
@@ -212,8 +220,8 @@ function sidebarItemCrumbs(item: SidebarFlatItem, pathname: string): AdminBreadc
 
 function allBreadcrumbNavItems() {
 	return [
-		{ ...dashboardNavItem, group: 'Akses Cepat', ancestors: [], breadcrumb: ['Akses Cepat', dashboardNavItem.label] },
-		...flattenSidebarNavGroups(sidebarNavGroups)
+		{ ...numberedDashboardNavItem, group: 'Akses Cepat', groupSection: '0', ancestors: [], ancestorSections: [], breadcrumb: ['Akses Cepat', dashboardNavItem.label] },
+		...flattenSidebarNavGroups(numberedSidebarNavGroups)
 	];
 }
 
@@ -256,38 +264,4 @@ function normalizeCrumbs(crumbs: AdminBreadcrumbCrumb[]) {
 			href: index === all.length - 1 ? undefined : crumb.href,
 			section: crumb.section
 		}));
-}
-
-function findSidebarSectionsByHref(href: string) {
-	if (href === dashboardNavItem.href) return ['0', '0.1'];
-
-	for (let groupIndex = 0; groupIndex < sidebarNavGroups.length; groupIndex += 1) {
-		const group = sidebarNavGroups[groupIndex];
-		const groupSection = `${groupIndex + 1}`;
-		const childSections = findNodeSectionsByHref(group.items, href, groupSection);
-		if (childSections.length > 0) return [groupSection, ...childSections];
-	}
-
-	return [];
-}
-
-function findNodeSectionsByHref(nodes: readonly SidebarNavNode[], href: string, parentSection: string): string[] {
-	for (let index = 0; index < nodes.length; index += 1) {
-		const node = nodes[index];
-		const section = `${parentSection}.${index + 1}`;
-
-		if (isSidebarFolder(node)) {
-			const childSections = findNodeSectionsByHref(node.children, href, section);
-			if (childSections.length > 0) return [section, ...childSections];
-			continue;
-		}
-
-		if (node.href === href) return [section];
-	}
-
-	return [];
-}
-
-function isSidebarFolder(node: SidebarNavNode): node is Extract<SidebarNavNode, { kind: 'folder' }> {
-	return node.kind === 'folder';
 }

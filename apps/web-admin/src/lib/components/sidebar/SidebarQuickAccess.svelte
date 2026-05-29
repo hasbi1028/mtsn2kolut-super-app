@@ -56,6 +56,9 @@
 									: 'text-muted-foreground hover:bg-[var(--gold)]/10 hover:text-foreground'}`}
 						>
 							<SidebarIcon name={item.icon} active={isActive(item.href)} />
+							{#if item.section}
+								<span class={`shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground ${desktopExpanded ? 'inline' : 'inline lg:hidden'}`}>{item.section}</span>
+							{/if}
 							<span class={`truncate ${desktopExpanded ? 'inline' : 'inline lg:hidden'}`}>{item.label}</span>
 						</a>
 						{#if item.pinnable !== false}

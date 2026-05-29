@@ -58,28 +58,28 @@ export const statusLabel: Record<string, string> = {
 
 export const detailTabGroups: DetailTabGroup[] = [
 	{
-		module: 'Kegiatan & Sesi',
-		help: 'Peserta/Ruang/Kartu',
+		module: 'Setup Panitia',
+		help: 'Peserta dan ruang sebelum ujian',
 		tabs: [
 			{ id: 'peserta', label: 'Peserta' },
 			{ id: 'ruangan', label: 'Ruang' }
 		]
 	},
 	{
-		module: 'Monitoring',
-		help: 'Pantau ujian berjalan',
+		module: 'Hari-H',
+		help: 'Pantau ruang dan kejadian',
 		tabs: [
-			{ id: 'proctoring', label: 'Proctoring' },
-			{ id: 'operasional', label: 'Operasional' },
-			{ id: 'audit', label: 'Audit' }
+			{ id: 'proctoring', label: 'Pengawasan' },
+			{ id: 'operasional', label: 'Serah Terima' },
+			{ id: 'audit', label: 'Log Tindakan' }
 		]
 	},
 	{
-		module: 'Hasil & Analisis',
-		help: 'Nilai, butir, uraian',
+		module: 'Penutupan',
+		help: 'Nilai, analisis, uraian',
 		tabs: [
 			{ id: 'hasil', label: 'Hasil' },
-			{ id: 'butir', label: 'Butir' },
+			{ id: 'butir', label: 'Analisis Butir' },
 			{ id: 'essay', label: 'Uraian' }
 		]
 	}
@@ -185,7 +185,7 @@ export function nextDetailAction(readiness: RoomReadinessLike | null): DetailNex
 	return {
 		title: 'Sesi siap dipantau',
 		message: 'Peserta, ruang, kapasitas, nomor meja, dan pengawas sudah siap.',
-		label: 'Pantau Pengawasan Ujian',
+		label: 'Buka Pengawasan',
 		tab: 'proctoring',
 		tone: 'success'
 	};

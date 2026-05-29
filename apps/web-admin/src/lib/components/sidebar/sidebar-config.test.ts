@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { filterSidebarNavGroupsByAccess } from './sidebar-access';
 import { dashboardNavItem, sidebarNavGroups } from './sidebar-config';
 import sidebarIconSource from './SidebarIcon.svelte?raw';
-import { flattenSidebarNavGroups, sidebarBreadcrumbLabel } from './sidebar-tree';
+import { flattenSidebarNavGroups, numberSidebarNavGroups, sidebarBreadcrumbLabel, sidebarNumberedBreadcrumbLabel } from './sidebar-tree';
 
 const flatItems = flattenSidebarNavGroups(sidebarNavGroups);
+const numberedGroups = numberSidebarNavGroups(sidebarNavGroups);
+const numberedFlatItems = flattenSidebarNavGroups(numberedGroups);
 const hrefs = flatItems.map((item) => item.href);
 const byHref = new Map(flatItems.map((item) => [item.href, item]));
+const numberedByHref = new Map(numberedFlatItems.map((item) => [item.href, item]));
 const labelsByGroup = (group: string) => flatItems.filter((item) => item.group === group).map((item) => item.label);
 const hrefsByGroup = (group: string) => flatItems.filter((item) => item.group === group).map((item) => item.href);
 
@@ -40,6 +43,28 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(sidebarBreadcrumbLabel(byHref.get('/bank-soal/tambah')!)).toBe('Bank Soal › Kelola Soal › Tambah Soal');
 		expect(sidebarBreadcrumbLabel(byHref.get('/asesmen')!)).toBe('Asesmen Ujian › Alur Utama › Ringkasan Asesmen');
 		expect(sidebarBreadcrumbLabel(byHref.get('/settings/backups')!)).toBe('Pengaturan › Sistem & Audit › Backup & Restore');
+	});
+
+	it('assigns stable global numbers from the full sidebar tree', () => {
+		expect(numberedGroups.map((group) => `${group.section} ${group.group}`)).toEqual([
+			'1 Beranda',
+			'2 Portal',
+			'3 Akademik',
+			'4 Siswa & Orang Tua',
+			'5 Nilai & Rapor',
+			'6 Bank Soal',
+			'7 Asesmen Ujian',
+			'8 Tata Usaha',
+			'9 Aset & Layanan',
+			'10 Website',
+			'11 Pegawai & Kehadiran',
+			'12 Pengaturan'
+		]);
+		expect(numberedByHref.get('/bank-soal/tambah')).toMatchObject({ section: '6.1.2', numberedLabel: '6.1.2 Tambah Soal' });
+		expect(numberedByHref.get('/asesmen/persiapan')).toMatchObject({ groupSection: '7', ancestorSections: ['7.1'], section: '7.1.2' });
+		expect(sidebarNumberedBreadcrumbLabel(numberedByHref.get('/settings/backups')!)).toBe(
+			'12 Pengaturan › 12.3 Sistem & Audit › 12.3.3 Backup & Restore'
+		);
 	});
 
 	it('adds route coverage for important admin index/action pages while excluding dynamic detail routes', () => {

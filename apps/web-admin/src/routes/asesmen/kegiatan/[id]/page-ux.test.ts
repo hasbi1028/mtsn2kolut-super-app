@@ -4,12 +4,13 @@ import { readFileSync } from 'node:fs';
 const pageSource = readFileSync('src/routes/asesmen/kegiatan/[id]/+page.svelte', 'utf8');
 
 describe('Detail kegiatan asesmen UX', () => {
-	it('keeps one ringkasan surface and removes redundant blocker panel shortcuts', () => {
+	it('uses a simple launcher layout instead of confusing tabs', () => {
+		expect(pageSource).toContain('Langkah utama kegiatan asesmen');
 		expect(pageSource).toContain('Langkah berikutnya');
-		expect(pageSource).toContain('Kesiapan kegiatan');
-		expect(pageSource).toContain('Timeline SOP Kegiatan');
-		expect(pageSource).toContain('EntityTabs');
-		expect(pageSource).not.toContain('BlockerPanel');
-		expect(pageSource).not.toContain('onclick={() => activeSection = group.id}');
+		expect(pageSource).toContain('Mode Lengkap');
+		expect(pageSource).toContain('Dokumen & Cetak');
+		expect(pageSource).not.toContain('EntityTabs');
+		expect(pageSource).not.toContain('sectionTabs');
+		expect(pageSource).not.toContain('activeSection');
 	});
 });

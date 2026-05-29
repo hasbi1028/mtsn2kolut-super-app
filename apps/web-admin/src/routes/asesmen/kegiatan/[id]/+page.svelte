@@ -9,7 +9,7 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
-	import { ContextStrip, EntityTabs, MetricCard, PageHeader } from '$lib/components/ops';
+	import { ContextStrip, MetricCard, PageHeader } from '$lib/components/ops';
 	import { sopStages, sopStatusLabels, type SopReadinessResponse, type SopStageKey, type SopStageReadiness, type SopStageStatus } from '$lib/asesmen/sop-stages';
 	import { assessmentApprovalLabels, createApproval, listApprovals, revokeApproval, type AssessmentApprovalRecord, type AssessmentApprovalType } from '$lib/asesmen/approval-client';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
@@ -129,18 +129,14 @@
 	let info = $state<EventInfo | null>(null);
 	let results = $state<ResultRow[]>([]);
 	let detailPromise = $state<Promise<EventCommandDetail> | null>(null);
-	let activeSection = $state<EventSection>('ringkasan');
 	let hasilSectionElement = $state<HTMLElement | null>(null);
 	let hasilFocusRequest = $state(0);
 	let detailRequestId = 0;
-	let handledHasilFocusRequest = 0;
-	const sectionTabs: Array<{ id: EventSection; label: string }> = [
-		{ id: 'ringkasan', label: 'Ringkasan' },
-		{ id: 'persiapan', label: 'Persiapan' },
-		{ id: 'pelaksanaan', label: 'Pelaksanaan' },
-		{ id: 'hasil', label: 'Hasil & Berita Acara' },
-		{ id: 'arsip', label: 'Arsip' },
-	];
+	const mainSections = [
+		{ id: 'persiapan', label: 'Persiapan', href: '/asesmen/persiapan', withEvent: true },
+		{ id: 'pelaksanaan', label: 'Pelaksanaan', href: '/asesmen/pelaksanaan', withEvent: true },
+		{ id: 'hasil', label: 'Hasil', href: '/asesmen/hasil', withEvent: false },
+	] as const;
 	let completenessLevel = $state('');
 	let completenessStatus = $state('');
 	let completenessSearch = $state('');
@@ -818,32 +814,13 @@
 		}
 	}
 
-	function activateHasilHash() {
-		if (window.location.hash !== '#hasil') return;
-		activeSection = 'hasil';
-		hasilFocusRequest += 1;
-	}
-
-	function handleHashChange() {
-		activateHasilHash();
-	}
-
-	$effect(() => {
-		if (hasilFocusRequest === handledHasilFocusRequest || activeSection !== 'hasil' || !hasilSectionElement) return;
-		handledHasilFocusRequest = hasilFocusRequest;
-		hasilSectionElement.focus({ preventScroll: true });
-		hasilSectionElement.scrollIntoView({ block: 'start', behavior: 'smooth' });
-	});
-
 	onMount(() => {
-		activateHasilHash();
 		void loadInitial();
 	});
 </script>
 
 <svelte:head><title>Pusat Kegiatan Asesmen — {info?.title ?? 'Kegiatan Asesmen'}</title></svelte:head>
 
-<svelte:window onhashchange={handleHashChange} />
 
 <div class="space-y-5">
 	<div class="flex items-center gap-2 text-sm text-muted-foreground">
@@ -887,7 +864,7 @@
 				title={currentInfo.title}
 				subtitle="Kelola kegiatan dari ringkasan, persiapan, pelaksanaan, hasil dan berita acara, sampai arsip final."
 				context={`${currentInfo.academic_year_name} · ${scopeLabel[currentInfo.scope] ?? currentInfo.scope}`}
-				primaryAction={{ label: currentInfo.status === 'finished' ? 'Buka Hasil & Berita Acara' : 'Buka Pelaksanaan', onclick: () => (activeSection = currentInfo.status === 'finished' ? 'hasil' : 'pelaksanaan') }}
+				primaryAction={{ label: 'Buka Mode Lengkap', onclick: () => { document.getElementById('mode-lengkap')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }}
 				secondaryAction={{ label: 'Daftar Kegiatan', href: resolve('/asesmen/kegiatan') }}
 			>
 				{#snippet meta()}
@@ -909,93 +886,22 @@
 				]}
 			/>
 
-			<section class="grid gap-3 md:grid-cols-3" aria-label="Ringkasan kegiatan asesmen">
-				<MetricCard label="Kesiapan" value={`${readyCount}/${checklist.length}`} helper={blockingItems.length > 0 ? `${blockingItems.length} item perlu tindakan` : 'Item utama terbaca siap'} tone={blockingItems.length > 0 ? 'warning' : 'success'} />
-				<MetricCard label="Peserta / Sesi" value={`${detail.overview?.member_count ?? '-'} / ${detail.sessions.length}`} helper={`${detail.sessions.reduce((sum, session) => sum + (session.room_count ?? 0), 0)} ruang terbaca`} />
-				<MetricCard label="Hasil & Berita Acara" value={currentResults.length} helper="Baris hasil dari seluruh sesi kegiatan" tone={currentResults.length > 0 ? 'success' : 'muted'} />
+			<section class="grid gap-3 md:grid-cols-3" aria-label="Langkah utama kegiatan asesmen">
+				{#each mainSections as section (section.id)}
+					<a href={`${resolve(section.href)}${section.withEvent ? `?event_id=${eventId}` : ''}`} class="rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+						<p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Langkah utama</p>
+						<p class="mt-2 text-base font-semibold text-foreground">{section.label}</p>
+						<p class="mt-2 text-sm leading-6 text-muted-foreground">{section.id === 'persiapan' ? 'Atur paket, sesi, peserta, dan kelengkapan sebelum hari-H.' : section.id === 'pelaksanaan' ? 'Pantau ruang, pengawas, dan kejadian saat ujian berjalan.' : 'Buka rekap nilai, BA, dan tindak lanjut hasil.'}</p>
+						<p class="mt-4 text-sm font-semibold text-primary">Buka {section.label}</p>
+					</a>
+				{/each}
 			</section>
 
-			<section aria-label="Panel SOP kegiatan asesmen">
-				<Card.Root class="border-primary/20 shadow-sm">
-					<Card.Header class="pb-3">
-						<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-							<div>
-								<Card.Title class="text-base">Panel SOP Kegiatan</Card.Title>
-								<Card.Description>Ringkasan tahap formal, tindakan berikutnya, catatan perhatian, dan riwayat transisi jika layanan SOP sudah tersedia.</Card.Description>
-							</div>
-								<Badge variant="outline" class={sopBackendAvailable ? 'border-primary/20 bg-primary/10 text-primary' : 'border-warning/30 bg-warning/10 text-warning'}>
-									{sopBackendAvailable ? 'Workflow SOP formal aktif' : 'Mode laporan kesiapan'}
-								</Badge>
-						</div>
-					</Card.Header>
-					<Card.Content class="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
-						<div class="space-y-3">
-							<div class="rounded-xl border border-border bg-card p-4">
-								<p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Tahap Saat Ini</p>
-								<div class="mt-2 flex flex-wrap items-center gap-2">
-									<p class="text-lg font-semibold text-foreground">{currentSopLabel(detail, sopTimeline)}</p>
-									{#if currentSop}<Badge variant="outline" class={sopStageClass(currentSop.status)}>{sopStatusLabels[currentSop.status]}</Badge>{/if}
-								</div>
-									<p class="mt-2 text-sm leading-6 text-muted-foreground">{currentSop?.description ?? 'Tahap formal belum tercatat dari backend; panel hanya memakai ringkasan kesiapan yang tersedia.'}</p>
-							</div>
-							<div class="rounded-xl border border-border bg-muted/30 p-4">
-								<p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Tindakan Berikutnya</p>
-								{#if currentSopAction}
-									{#if currentSopAction.href}
-										<a href={currentSopAction.href} class="mt-2 inline-flex rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15">{currentSopAction.label}</a>
-									{:else}
-										<p class="mt-2 text-sm font-semibold text-foreground">{currentSopAction.label}</p>
-									{/if}
-								{:else}
-									<p class="mt-2 text-sm text-muted-foreground">Tidak ada tindakan lanjutan dari data aktif.</p>
-								{/if}
-							</div>
-						</div>
-						<div class="grid gap-3 md:grid-cols-2">
-							<div class="rounded-xl border border-border bg-card p-4">
-								<p class="text-sm font-semibold text-foreground">Penghambat & Perhatian</p>
-								<div class="mt-3 space-y-3 text-sm">
-									<div>
-										<p class="text-xs font-semibold uppercase tracking-[0.14em] text-warning">Penghambat</p>
-										<ul class="mt-2 space-y-1 text-muted-foreground">
-											{#each sopIssues.blockers.slice(0, 4) as blocker (blocker)}<li>• {blocker}</li>{:else}<li>Tidak ada penghambat utama terbaca.</li>{/each}
-										</ul>
-									</div>
-									<div>
-										<p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Peringatan</p>
-										<ul class="mt-2 space-y-1 text-muted-foreground">
-											{#each sopIssues.warnings.slice(0, 4) as warning (warning)}<li>• {warning}</li>{:else}<li>Tidak ada peringatan tambahan.</li>{/each}
-										</ul>
-									</div>
-								</div>
-							</div>
-							<div class="rounded-xl border border-border bg-card p-4">
-								<p class="text-sm font-semibold text-foreground">Riwayat Transisi</p>
-								<div class="mt-3 space-y-3">
-									{#each sopTransitionHistory as item (`${item.id ?? item.to_stage}-${item.created_at ?? item.note ?? ''}`)}
-										<div class="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
-											<p class="font-semibold text-foreground">{sopStageLabel(item.from_stage)} → {sopStageLabel(item.to_stage)}</p>
-											<p>{sopTransitionTime(item.created_at)}{item.actor ? ` · ${item.actor}` : ''}</p>
-											{#if item.note}<p class="mt-1 leading-5">{item.note}</p>{/if}
-										</div>
-									{:else}
-											<p class="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">Riwayat transisi formal belum tersedia. Panel tetap menampilkan mode laporan berdasarkan kesiapan yang terbaca dari sistem.</p>
-										{/each}
-									</div>
-							</div>
-						</div>
-					</Card.Content>
-				</Card.Root>
-			</section>
-
-			<EntityTabs tabs={sectionTabs} bind:active={activeSection} label="Area kegiatan asesmen" />
-
-			{#if activeSection === 'ringkasan'}
-			<section class="grid gap-4 lg:grid-cols-[0.82fr_1.18fr]" aria-label="Ringkasan langkah kegiatan">
+			<section class="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]" aria-label="Ringkasan kegiatan asesmen">
 				<Card.Root class="border-primary/20 bg-primary/10 shadow-sm">
 					<Card.Header class="pb-2">
 						<Card.Title class="text-base">Langkah berikutnya</Card.Title>
-						<Card.Description>Rekomendasi ringkas dari data kesiapan yang tersedia saat ini.</Card.Description>
+						<Card.Description>Ringkasan cepat, bukan daftar panjang. Detail kerja tetap di halaman khusus.</Card.Description>
 					</Card.Header>
 					<Card.Content class="space-y-3">
 						{#each nextActions as action (action.label)}
@@ -1015,354 +921,45 @@
 
 				<Card.Root class="border-border shadow-sm">
 					<Card.Header class="pb-2">
-						<Card.Title class="text-base">Kesiapan kegiatan</Card.Title>
-						<Card.Description>Satu permukaan utama untuk membaca progres. Gunakan tab di bawah untuk rincian kerja atau hasil.</Card.Description>
+						<Card.Title class="text-base">Kelengkapan data</Card.Title>
+						<Card.Description>Angka praktis agar admin tahu harus masuk ke jalur mana dulu.</Card.Description>
 					</Card.Header>
-					<Card.Content class="space-y-4">
-						{#each readinessGroups as group (group.title)}
-							<div class="rounded-xl border border-border bg-card p-4">
-								<div class="flex flex-wrap items-start justify-between gap-3">
-									<div>
-										<p class="text-sm font-semibold text-foreground">{group.title}</p>
-										<p class="mt-1 text-xs text-muted-foreground">{group.description}</p>
-									</div>
-									</div>
-								<div class="mt-3 divide-y divide-border">
-									{#each group.items as item (item.label)}
-										<a href={resolve(item.href)} class="flex items-center justify-between gap-3 py-2 text-sm hover:text-primary">
-											<span class="flex min-w-0 items-center gap-2">
-												<span class={`size-2 rounded-full ${readinessDotClass(item.tone)}`}></span>
-												<span class="truncate font-medium text-foreground">{item.label}</span>
-											</span>
-											<span class="shrink-0 text-xs font-semibold text-muted-foreground">{readinessStatusLabel(item)}</span>
-										</a>
-									{/each}
-								</div>
-							</div>
-						{/each}
+					<Card.Content class="grid gap-2 sm:grid-cols-2 lg:grid-cols-2">
+						<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Paket</p><p class="text-lg font-semibold text-foreground">{detail.packages.length}</p></div>
+						<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Sesi</p><p class="text-lg font-semibold text-foreground">{detail.sessions.length}</p></div>
+						<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Baris hasil</p><p class="text-lg font-semibold text-foreground">{currentResults.length}</p></div>
+						<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Kesiapan</p><p class="text-sm font-semibold text-foreground">{detail.overview ? 'Terbaca dari sistem' : 'Sebagian data tersedia'}</p></div>
 					</Card.Content>
 				</Card.Root>
 			</section>
-			{/if}
 
-			{#if activeSection === 'persiapan'}
-			<section aria-label="Timeline SOP kegiatan asesmen">
-				<Card.Root class="border-primary/20 shadow-sm">
-					<Card.Header class="pb-3">
-						<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-							<div>
-								<Card.Title class="text-base">Timeline SOP Kegiatan</Card.Title>
-								<Card.Description>Sepuluh tahap formal dari persiapan soal sampai arsip akhir. Status bersifat panduan baca, belum mengunci alur kerja.</Card.Description>
-							</div>
-							<Badge variant="outline" class={detail.sopReadiness ? 'border-primary/20 bg-primary/10 text-primary' : 'border-warning/30 bg-warning/10 text-warning'}>
-								{detail.sopReadiness ? 'Kesiapan dari layanan ujian' : 'Mode cadangan halaman'}
-							</Badge>
-						</div>
-					</Card.Header>
-					<Card.Content>
-						<div class="grid gap-3 lg:grid-cols-2">
-							{#each sopTimeline as stage, index (stage.key)}
-								<div class="flex gap-3 rounded-xl border border-border bg-card p-4">
-									<div class="flex flex-col items-center">
-										<div class={`flex size-8 items-center justify-center rounded-full border text-xs font-bold ${sopStageClass(stage.status)}`}>{index + 1}</div>
-										{#if index < sopTimeline.length - 1}
-											<div class="mt-2 h-full min-h-10 w-px bg-border"></div>
-										{/if}
-									</div>
-									<div class="min-w-0 flex-1 space-y-2">
-										<div class="flex flex-wrap items-start justify-between gap-2">
-											<div>
-												<p class="text-sm font-semibold text-foreground">{stage.label}</p>
-												<p class="text-xs text-muted-foreground">{stage.owner ?? 'Panitia'} · {stage.description ?? 'Tahap SOP kegiatan asesmen.'}</p>
-											</div>
-											<Badge variant="outline" class={sopStageClass(stage.status)}>{sopStatusLabels[stage.status]}</Badge>
-										</div>
-										<div class="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-											<span>{stage.blocking_count} penghambat</span>
-											<span>{stage.warning_count} perhatian</span>
-										</div>
-										<div class="flex flex-wrap gap-2">
-											{#each stage.next_actions.slice(0, 3) as action (action.href + action.label)}
-												<a href={action.href} class="rounded-md border border-border px-2.5 py-1 text-xs font-semibold text-primary hover:border-primary/30 hover:bg-primary/10">{action.label}</a>
-											{:else}
-												<span class="text-xs text-muted-foreground">Tidak ada tindakan lanjutan dari data aktif.</span>
-											{/each}
-										</div>
-									</div>
-								</div>
-							{/each}
-						</div>
-					</Card.Content>
-				</Card.Root>
-			</section>
-			{/if}
-
-			{#if activeSection === 'arsip'}
-			<section aria-label="Pengesahan SOP kegiatan asesmen">
-				<Card.Root class="border-primary/20 shadow-sm">
-					<Card.Header class="pb-3">
-						<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-							<div>
-								<Card.Title class="text-base">Pengesahan SOP</Card.Title>
-									<Card.Description>Pengesahan mengikuti gate kesiapan SOP dan dicatat sebagai jejak formal kegiatan.</Card.Description>
-							</div>
-							<a href={resolve(`/asesmen/kegiatan/${eventId}/archive`)} class="inline-flex rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15">Buka Arsip</a>
-						</div>
-					</Card.Header>
-					<Card.Content class="space-y-4">
-						{#if !detail.approvalsAvailable}
-							<p class="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">Catatan pengesahan SOP belum dapat dimuat untuk sesi ini. Pengelolaan pengesahan formal tersedia melalui akses admin.</p>
-						{/if}
-						<div class="grid gap-3 lg:grid-cols-2">
-								{#each sopApprovalMilestones as milestone (milestone.approvalType)}
-									{@const record = approvalRecordFor(detail.approvals, milestone.approvalType)}
-									{@const stageStatus = approvalStageStatus(sopTimeline, milestone)}
-									{@const stageReady = approvalStageReady(stageStatus)}
-									<div class="rounded-xl border border-border bg-card p-4">
-									<div class="flex flex-wrap items-start justify-between gap-3">
-										<div class="min-w-0">
-											<p class="text-sm font-semibold text-foreground">{assessmentApprovalLabels[milestone.approvalType]}</p>
-											<p class="mt-1 text-xs leading-5 text-muted-foreground">{milestone.helper}</p>
-										</div>
-										<div class="flex flex-wrap gap-2">
-											<Badge variant="outline" class={sopStageClass(stageStatus)}>SOP {sopStatusLabels[stageStatus]}</Badge>
-											<Badge variant="outline" class={approvalStatusClass(record)}>{approvalStatusLabel(record)}</Badge>
-										</div>
-									</div>
-										<div class="mt-3 grid gap-2 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground sm:grid-cols-2">
-											<p><span class="font-semibold text-foreground">Aktor:</span> {approvalActor(record)}</p>
-											<p><span class="font-semibold text-foreground">Waktu:</span> {approvalTime(record)}</p>
-										</div>
-										{#if !record && !stageReady}
-											<p class="mt-3 rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs leading-5 text-warning">Pengesahan belum bisa dicatat karena tahap SOP ini belum berstatus siap.</p>
-										{/if}
-										{#if record?.notes}
-											<p class="mt-3 rounded-lg border border-border bg-muted/30 p-3 text-xs leading-5 text-muted-foreground"><span class="font-semibold text-foreground">Catatan:</span> {record.notes}</p>
-										{/if}
-									{#if detail.approvalsAvailable}
-										<label class="mt-3 block space-y-1 text-xs font-medium text-muted-foreground" for={`approval-note-${milestone.approvalType}`}>
-											Catatan pengesahan/cabut
-											<textarea
-												id={`approval-note-${milestone.approvalType}`}
-												bind:value={approvalNotes[milestone.approvalType]}
-												rows="2"
-												class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-												placeholder="Opsional, misalnya hasil pemeriksaan panitia"
-											></textarea>
-										</label>
-										<div class="mt-3 flex flex-wrap gap-2">
-											{#if record?.status === 'approved'}
-												<LoadingButton
-													variant="destructive"
-													size="sm"
-													onclick={() => revokeMilestone(record, milestone.approvalType)}
-													loading={approvalBusyType === milestone.approvalType}
-													loadingLabel="Mencabut..."
-													disabled={approvalBusyType !== null && approvalBusyType !== milestone.approvalType}
-													label="Cabut pengesahan"
-												/>
-											{:else}
-													<LoadingButton
-														size="sm"
-														onclick={() => approveMilestone(milestone.approvalType)}
-														loading={approvalBusyType === milestone.approvalType}
-														loadingLabel="Mengesahkan..."
-														disabled={!stageReady || (approvalBusyType !== null && approvalBusyType !== milestone.approvalType)}
-														label="Sahkan"
-													/>
-												{/if}
-										</div>
-									{/if}
-								</div>
-							{/each}
-						</div>
-					</Card.Content>
-				</Card.Root>
-			</section>
-			{/if}
-
-			{#if activeSection === 'ringkasan'}
-				<section>
-					<Card.Root>
-				<Card.Header class="pb-2"><Card.Title class="text-base">Kelengkapan data</Card.Title><Card.Description>Angka praktis dari paket, sesi, dan hasil yang sudah terbaca.</Card.Description></Card.Header>
-						<Card.Content class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-							<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Paket</p><p class="text-lg font-semibold text-foreground">{detail.packages.length}</p></div>
-							<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Sesi</p><p class="text-lg font-semibold text-foreground">{detail.sessions.length}</p></div>
-							<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Baris hasil</p><p class="text-lg font-semibold text-foreground">{currentResults.length}</p></div>
-							<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Ringkasan kesiapan</p><p class="text-sm font-semibold text-foreground">{detail.overview ? 'Lengkap dari sistem' : 'Sebagian data tersedia'}</p></div>
-						</Card.Content>
-					</Card.Root>
-				</section>
-			{/if}
-
-			{#if activeSection === 'persiapan'}
-				{@const completeness = detail.questionCompleteness}
-				{@const filteredRows = filteredCompletenessRows(detail)}
-				<details class="rounded-xl border border-border bg-card p-4 shadow-sm">
-					<summary class="cursor-pointer text-sm font-semibold text-foreground">Rincian lengkap: target dan kelengkapan soal</summary>
-					<section class="mt-4 space-y-4">
-					<Card.Root>
-						<Card.Header class="pb-2">
-							<div class="flex flex-wrap items-start justify-between gap-3">
-								<div>
-									<Card.Title class="text-base">Kelengkapan Soal per Guru/Mapel/Rombel</Card.Title>
-									<Card.Description>Target aktif: {questionRequirementScopeLabel[completeness?.requirements?.scope_mode ?? 'per_rombel'] ?? 'Per rombel + mapel + guru'} · PG {completeness?.requirements?.target_pg ?? 20} · Esai {completeness?.requirements?.target_essay ?? 5} · {questionRequirementStatusLabel[completeness?.requirements?.status_filter ?? 'published_only'] ?? 'Hanya soal terbit'}.</Card.Description>
-								</div>
-								<div class="flex flex-wrap gap-2">
-						<LoadingButton variant="outline" onclick={() => exportIncompleteByTeacherCSV(detail)} disabled={incompleteCompletenessRows(detail).length === 0} label="Ekspor Kurang per Guru" />
-						<LoadingButton variant="outline" onclick={() => copyReminderDraft(detail)} disabled={incompleteCompletenessRows(detail).length === 0} label="Salin Pengingat" />
-						<LoadingButton variant="outline" onclick={() => exportCompletenessCSV(detail)} disabled={filteredRows.length === 0} label="Ekspor CSV" />
+			<section id="mode-lengkap" class="rounded-2xl border border-border bg-card p-4 shadow-sm" aria-label="Mode lengkap kegiatan asesmen">
+				<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+					<div>
+						<p class="text-sm font-semibold text-foreground">Mode Lengkap</p>
+						<p class="text-sm leading-6 text-muted-foreground">Detail teknis, SOP, arsip, dan kelengkapan lengkap dipisah agar layar utama tetap ringan.</p>
 					</div>
-							</div>
-						</Card.Header>
-						<Card.Content class="space-y-4">
-							<div class="rounded-2xl border border-border bg-muted/30 p-4">
-								<div class="flex flex-wrap items-start justify-between gap-3">
-									<div>
-										<p class="text-sm font-semibold text-foreground">Pengaturan Target</p>
-										<p class="text-xs text-muted-foreground">Atur cara pemantauan dan target minimal soal yang dihitung untuk kegiatan ini.</p>
-									</div>
-									<LoadingButton onclick={saveQuestionRequirements} loading={targetSettingsBusy} loadingLabel="Menyimpan..." label="Simpan Target" />
-								</div>
-								<div class="mt-3 grid gap-2 md:grid-cols-4">
-									<label class="space-y-1 text-xs font-medium text-muted-foreground">Mode monitoring
-										<select bind:value={targetScopeMode} class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground">
-											<option value="per_rombel">Per rombel + mapel + guru</option>
-											<option value="per_level">Per tingkat + mapel + guru</option>
-											<option value="pool_level_subject">Kumpulan tingkat + mapel</option>
-										</select>
-									</label>
-									<label class="space-y-1 text-xs font-medium text-muted-foreground">Filter soal
-										<select bind:value={targetStatusFilter} class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground">
-											<option value="published_only">Hanya soal terbit</option>
-											<option value="all_progress">Konsep/verifikasi/terbit dihitung</option>
-										</select>
-									</label>
-									<label class="space-y-1 text-xs font-medium text-muted-foreground">Target PG
-										<input bind:value={targetPg} type="number" min="0" class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground" />
-									</label>
-									<label class="space-y-1 text-xs font-medium text-muted-foreground">Target esai
-										<input bind:value={targetEssay} type="number" min="0" class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground" />
-									</label>
-								</div>
-							</div>
-							{#if completeness}
-								<div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-									<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Penugasan</p><p class="text-lg font-semibold text-foreground">{completeness.summary.total_rows}</p></div>
-									<div class="rounded-xl bg-success/10 p-3"><p class="text-xs text-muted-foreground">Lengkap</p><p class="text-lg font-semibold text-success">{completeness.summary.complete_rows}</p></div>
-									<div class="rounded-xl bg-warning/10 p-3"><p class="text-xs text-muted-foreground">Belum lengkap</p><p class="text-lg font-semibold text-warning">{completeness.summary.incomplete_rows}</p></div>
-									<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Kekurangan total</p><p class="text-lg font-semibold text-foreground">PG {completeness.summary.missing_pg} · Esai {completeness.summary.missing_essay}</p></div>
-								</div>
-				{#if completeness.excluded_levels?.length}
-					<p class="rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-muted-foreground">Tingkat tidak dihitung karena di luar target event: {completeness.excluded_levels.join(', ')}.</p>
-				{/if}
-				{#if completeness.contributions?.length && completeness.requirements?.scope_mode === 'pool_level_subject'}
-					<details class="rounded-xl border border-border bg-muted/30 p-3 text-xs text-foreground">
-						<summary class="cursor-pointer font-semibold">Kontribusi guru ke pool mapel ({completeness.contributions.length})</summary>
-						<div class="mt-2 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-							{#each completeness.contributions.slice(0, 12) as row (`${row.level}-${row.subject_id}-${row.teacher_username}`)}
-								<div class="rounded-lg border border-border bg-card p-2">
-									<p class="font-medium">{row.level} · {row.subject_name}</p>
-									<p class="text-muted-foreground">{row.teacher_name || row.teacher_username || 'Guru belum tertaut'}</p>
-									<p class="mt-1 font-semibold">PG {row.available_pg} · Esai {row.available_essay}</p>
-								</div>
-							{/each}
-						</div>
-						{#if completeness.contributions.length > 12}<p class="mt-2 text-muted-foreground">Menampilkan 12 kontribusi pertama; ekspor CSV untuk data lengkap.</p>{/if}
-					</details>
-				{/if}
-				<div class="grid gap-2 md:grid-cols-3">
-									<select bind:value={completenessLevel} class="rounded-lg border border-border bg-background px-3 py-2 text-sm">
-										<option value="">Semua tingkat</option>
-										{#each completenessLevels(detail) as level (level)}<option value={level}>Tingkat {level}</option>{/each}
-									</select>
-									<select bind:value={completenessStatus} class="rounded-lg border border-border bg-background px-3 py-2 text-sm">
-										<option value="">Semua status</option>
-										<option value="incomplete">Belum lengkap</option>
-										<option value="complete">Lengkap</option>
-									</select>
-									<input bind:value={completenessSearch} class="rounded-lg border border-border bg-background px-3 py-2 text-sm" placeholder="Cari rombel, mapel, atau guru" />
-								</div>
-							{:else}
-								<p class="rounded-xl bg-muted/50 p-4 text-sm text-muted-foreground">Data kelengkapan soal belum tersedia dari layanan sistem.</p>
-							{/if}
-						</Card.Content>
-					</Card.Root>
-
-					<Card.Root>
-						<Card.Content class="p-0 overflow-x-auto">
-							<Table.Root>
-								<Table.Header><Table.Row class="bg-muted/50"><Table.Head>Tingkat</Table.Head><Table.Head>Rombel</Table.Head><Table.Head>Mapel</Table.Head><Table.Head>Guru</Table.Head><Table.Head class="text-center">PG</Table.Head><Table.Head class="text-center">Esai</Table.Head><Table.Head>Status</Table.Head></Table.Row></Table.Header>
-								<Table.Body>
-									{#each filteredRows as row (`${row.level}-${row.class_id}-${row.subject_id}-${row.teacher_employee_id}`)}
-										<Table.Row>
-											<Table.Cell><Badge variant="outline" class="bg-card">{row.level}</Badge></Table.Cell>
-											<Table.Cell class="font-medium">{row.class_name || row.class_code}</Table.Cell>
-											<Table.Cell>{row.subject_name}</Table.Cell>
-											<Table.Cell><div class="font-medium">{row.teacher_name}</div><div class="text-xs text-muted-foreground">{row.teacher_username || 'username belum tertaut'}</div></Table.Cell>
-											<Table.Cell class="text-center"><span class={row.missing_pg > 0 ? 'font-semibold text-warning' : 'font-semibold text-success'}>{row.available_pg}/{row.target_pg}</span>{#if row.missing_pg > 0}<div class="text-xs text-muted-foreground">kurang {row.missing_pg}</div>{/if}</Table.Cell>
-											<Table.Cell class="text-center"><span class={row.missing_essay > 0 ? 'font-semibold text-warning' : 'font-semibold text-success'}>{row.available_essay}/{row.target_essay}</span>{#if row.missing_essay > 0}<div class="text-xs text-muted-foreground">kurang {row.missing_essay}</div>{/if}</Table.Cell>
-											<Table.Cell>{#if row.complete}<Badge variant="outline" class="bg-success/10 text-success border-success/20">Lengkap</Badge>{:else}<div class="flex flex-col gap-1"><Badge variant="secondary" class="bg-warning/10 text-warning border-warning/30">Belum</Badge><div class="flex flex-wrap gap-1"><a class="text-xs font-semibold text-primary hover:underline" href={resolve(bankSoalComposerHref(row, 'multiple_choice'))}>Tambah PG</a><a class="text-xs font-semibold text-primary hover:underline" href={resolve(bankSoalComposerHref(row, 'essay'))}>Tambah esai</a></div></div>{/if}</Table.Cell>
-										</Table.Row>
-									{:else}
-										<Table.Row><Table.Cell colspan={7} class="py-12 text-center text-muted-foreground">Tidak ada baris sesuai filter.</Table.Cell></Table.Row>
-									{/each}
-								</Table.Body>
-							</Table.Root>
-						</Card.Content>
-					</Card.Root>
-					</section>
-				</details>
-			{/if}
-
-			{#if activeSection === 'persiapan' || activeSection === 'pelaksanaan' || activeSection === 'arsip'}
-				{@const activeGroups = readinessGroups.filter((item) => item.id === activeSection)}
-				{#if activeGroups.length > 0}
-					<section class="grid gap-3 md:grid-cols-2">
-						{#each activeGroups as group (group.title)}
-							{#each group.items as item (item.label)}
-							<a href={resolve(item.href)} class={`block rounded-xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${checklistClass(item.tone)}`}>
-								<div class="flex items-start justify-between gap-3">
-									<div>
-										<p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{group.title}</p>
-										<p class="mt-1 text-sm font-semibold text-foreground">{item.label}</p>
-										<p class="mt-1 text-xs text-muted-foreground">{item.helper}</p>
-									</div>
-									<Badge variant={item.tone === 'warning' ? 'secondary' : 'outline'} class="bg-card">{item.count ?? 'Cek'}</Badge>
-								</div>
-								<p class="mt-4 text-sm font-semibold text-success">{item.action}</p>
-							</a>
-							{/each}
-						{/each}
-					</section>
-				{/if}
-			{/if}
-
-			{#if activeSection === 'hasil'}
-			<Card.Root id="hasil" bind:ref={hasilSectionElement} tabindex={-1}>
-				<Card.Header class="pb-2">
-					<div class="flex flex-wrap items-start justify-between gap-3">
-						<div><Card.Title class="text-base">Hasil & Berita Acara</Card.Title><Card.Description>Rekap nilai gabungan, status submit, dan bahan berita acara dari seluruh sesi kegiatan.</Card.Description></div>
-						<div class="flex flex-wrap gap-2">
-							<a href={resolve(`/asesmen/kegiatan/${eventId}/archive`)} class="inline-flex h-8 items-center rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted/50">Arsip BA</a>
-							<LoadingButton variant="outline" onclick={exportCSV} disabled={currentResults.length === 0} label="Ekspor CSV" />
-						</div>
-					</div>
-				</Card.Header>
-				<Card.Content class="p-0 overflow-x-auto">
-					<Table.Root>
-						<Table.Header><Table.Row class="bg-muted/50"><Table.Head>NIS</Table.Head><Table.Head>Nama Siswa</Table.Head><Table.Head>Kelas</Table.Head><Table.Head>Sesi Ujian</Table.Head><Table.Head class="text-center">Skor</Table.Head><Table.Head>Status</Table.Head></Table.Row></Table.Header>
-						<Table.Body>
-							{#each currentResults as r (r.participant_id)}
-								<Table.Row><Table.Cell class="font-mono text-sm">{r.nis}</Table.Cell><Table.Cell class="font-medium">{r.student_nama}</Table.Cell><Table.Cell><Badge variant="secondary" class="text-xs">{r.class_code || '-'}</Badge></Table.Cell><Table.Cell class="text-sm text-muted-foreground">{r.session_title}</Table.Cell><Table.Cell class="text-center font-bold text-success">{fmtScore(r.score)}</Table.Cell><Table.Cell>{#if r.submitted_at}<Badge variant="outline" class="bg-success/10 text-success border-success/20">Selesai</Badge>{:else}<Badge variant="outline" class="text-muted-foreground border-border">Belum</Badge>{/if}</Table.Cell></Table.Row>
-							{:else}
-								<Table.Row><Table.Cell colspan={6} class="py-12 text-center text-muted-foreground">Belum ada data nilai untuk kegiatan ini.</Table.Cell></Table.Row>
-							{/each}
-						</Table.Body>
-					</Table.Root>
-				</Card.Content>
-			</Card.Root>
-			{/if}
-		{/snippet}
+					<a href={resolve(`/asesmen/kegiatan/${eventId}/cetak`)} class="inline-flex rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15">Dokumen & Cetak</a>
+				</div>
+				<div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+					<a href={resolve(`/asesmen/persiapan?event_id=${eventId}`)} class="rounded-xl border border-border bg-muted/20 p-4 transition hover:border-primary/20 hover:bg-primary/5">
+						<p class="text-sm font-semibold text-foreground">Persiapan</p>
+						<p class="mt-1 text-xs leading-5 text-muted-foreground">Kelola paket, sesi, peserta, dan cek kesiapan.</p>
+					</a>
+					<a href={resolve(`/asesmen/sesi?event_id=${eventId}`)} class="rounded-xl border border-border bg-muted/20 p-4 transition hover:border-primary/20 hover:bg-primary/5">
+						<p class="text-sm font-semibold text-foreground">Pelaksanaan</p>
+						<p class="mt-1 text-xs leading-5 text-muted-foreground">Lihat sesi, ruang, pengawas, dan status berjalan.</p>
+					</a>
+					<a href={resolve('/asesmen/hasil')} class="rounded-xl border border-border bg-muted/20 p-4 transition hover:border-primary/20 hover:bg-primary/5">
+						<p class="text-sm font-semibold text-foreground">Hasil</p>
+						<p class="mt-1 text-xs leading-5 text-muted-foreground">Buka rekap, BA, dan tindak lanjut nilai.</p>
+					</a>
+					<a href={resolve(`/asesmen/kegiatan/${eventId}/archive`)} class="rounded-xl border border-border bg-muted/20 p-4 transition hover:border-primary/20 hover:bg-primary/5">
+						<p class="text-sm font-semibold text-foreground">Arsip</p>
+						<p class="mt-1 text-xs leading-5 text-muted-foreground">Lihat pengesahan, BA, dan dokumen final.</p>
+					</a>
+				</div>
+			</section>
+{/snippet}
 	</AsyncContent>
 </div>
