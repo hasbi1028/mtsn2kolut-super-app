@@ -4,11 +4,12 @@ import { readFileSync } from 'node:fs';
 const pageSource = readFileSync('src/routes/asesmen/prototype/+page.svelte', 'utf8');
 const modelSource = readFileSync('src/routes/asesmen/prototype/asesmen-prototype.model.ts', 'utf8');
 
-describe('asesmen frontend-only prototype', () => {
-	it('is clearly marked as a frontend prototype', () => {
+describe('asesmen CBT reference prototype', () => {
+	it('is clearly marked as a frontend-only prototype', () => {
 		expect(pageSource).toContain('PROTOTYPE UI');
 		expect(pageSource).toContain('belum terhubung backend');
 		expect(pageSource).toContain('Belum menjalankan aksi data');
+		expect(modelSource).toContain('frontend-only');
 	});
 
 	it('does not call backend, BFF, or mutate data', () => {
@@ -22,41 +23,45 @@ describe('asesmen frontend-only prototype', () => {
 		}
 	});
 
-	it('uses the numbered A0-A5 review flow', () => {
-		expect(pageSource).toContain('A0 · Asesmen / Ujian Digital');
-		for (const label of ['A1', 'A2', 'A3', 'A4', 'A5', 'Persiapan Ujian', 'Dokumen & Cetak', 'Pelaksanaan Hari-H', 'Ruang Saya', 'Hasil & Penutupan']) {
+	it('was rebuilt from the legacy CBT domain and cbt-ujian repository references', () => {
+		expect(pageSource).toContain('cbt.mtsn2kolut.sch.id');
+		expect(pageSource).toContain('cbt-ujian');
+		expect(modelSource).toContain('/home/servermtsn2kolut/cbt-ujian');
+		expect(pageSource).toContain('Dibuat ulang');
+	});
+
+	it('uses the old CBT command-center/sidebar/table vocabulary instead of the previous micro workflow', () => {
+		expect(pageSource).toContain('Dashboard Utama · Command Center CBT');
+		expect(pageSource).toContain('Struktur menu CBT prototype');
+		expect(pageSource).toContain('Tabel operasional');
+		expect(pageSource).toContain('Bukan Micro Workflow List lagi');
+		for (const label of ['Pusat Data', 'Manajemen Ujian', 'Pelaksanaan', 'Laporan']) {
 			expect(modelSource).toContain(label);
 		}
 	});
 
-	it('keeps A9 as a secondary complete-mode lane', () => {
-		expect(pageSource).toContain('A9 · Mode Lengkap Panitia');
-		expect(modelSource).toContain('advancedPrototypeLinks');
-		expect(modelSource).toContain('hiddenFromMainFlow');
-		expect(pageSource).toContain('Disembunyikan dari alur utama');
+	it('keeps familiar CBT operational surfaces excluding Bank Soal as the main focus', () => {
+		for (const label of ['Ruang Ujian', 'Jadwal Sesi', 'Proctoring Live', 'Rekap Nilai', 'Kartu QR']) {
+			expect(modelSource).toContain(label);
+		}
+		expect(modelSource).toContain('Bank Soal sengaja tidak dijadikan fokus prototype ini');
+		expect(modelSource).toContain('Bank Soal lama tidak ditiru di prototype ini');
 	});
 
-	it('adds compact operational details without becoming a production console', () => {
-		expect(pageSource).toContain('Daftar kerja ringkas');
-		expect(pageSource).toContain('Preview Ruang');
-		expect(modelSource).toContain('8 ruang');
-		expect(modelSource).toContain('Susun 8 ruang otomatis');
-		expect(modelSource).toContain('Hubungi Admin');
+	it('includes the standalone QR portal concepts from cbt-ujian', () => {
+		expect(pageSource).toContain('Portal QR dari repo cbt-ujian');
+		for (const label of ['Portal depan', 'Portal siswa', 'Portal pengawas', '/ujian/[token]', '/pengawas/[token]']) {
+			expect(modelSource).toContain(label);
+		}
+		expect(modelSource).toContain('Masuk ujian cukup scan kartu QR');
+		expect(modelSource).toContain('Monitoring peserta per ruang');
 	});
 
-	it('follows the old CBT UI vocabulary while excluding Bank Soal as the main reference', () => {
-		expect(pageSource).toContain('Mengikuti CBT lama');
-		expect(pageSource).toContain('Struktur menu familiar');
-		expect(pageSource).toContain('Prinsip yang dibawa ke Super App');
-		expect(modelSource).toContain('Pusat Data');
-		expect(modelSource).toContain('Ruang Ujian');
-		expect(modelSource).toContain('Proctoring Live');
-		expect(modelSource).toContain('Rekap Nilai');
-		expect(modelSource).toContain('Bank Soal tidak dijadikan contoh utama prototype');
-	});
-
-	it('keeps the prototype compact and avoids demo/local CTA', () => {
-		expect(pageSource).toContain('Micro');
+	it('does not keep the old A0-A9 prototype anchors or demo CTA', () => {
+		expect(pageSource).not.toContain('A0 · Asesmen / Ujian Digital');
+		expect(pageSource).not.toContain('A9 · Mode Lengkap Panitia');
+		expect(modelSource).not.toContain('advancedPrototypeLinks');
+		expect(modelSource).not.toContain('hiddenFromMainFlow');
 		expect(pageSource).not.toContain('demo=1');
 		expect(pageSource).not.toContain('Latihan Lokal');
 		expect(pageSource).not.toContain('MODE DEMO');

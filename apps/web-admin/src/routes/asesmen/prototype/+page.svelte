@@ -1,295 +1,197 @@
 <script lang="ts">
 	import {
-		advancedPrototypeLinks,
-		hiddenFromMainFlow,
-		legacyNavigationGroups,
-		legacyUiPrinciples,
-		prototypeLanes,
-		prototypeMetrics,
-		prototypePublicPortals,
-		prototypeRooms,
-		publicPortalRules,
-		type PrototypeStatus,
-		type PrototypeStepState
+		commandMetrics,
+		excludedSurfaces,
+		legacyMenuGroups,
+		portalPreviews,
+		sourceNotes,
+		tableRows,
+		workAreas,
+		type StatusTone
 	} from './asesmen-prototype.model';
 
-	const statusCopy: Record<PrototypeStatus, string> = {
-		siap: 'Siap',
-		'perlu-dicek': 'Perlu dicek',
-		menunggu: 'Menunggu data'
-	};
-
-	const statusClass: Record<PrototypeStatus, string> = {
-		siap: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-		'perlu-dicek': 'border-amber-200 bg-amber-50 text-amber-900',
-		menunggu: 'border-slate-200 bg-slate-50 text-slate-600'
-	};
-
-	const stepCopy: Record<PrototypeStepState, string> = {
-		selesai: 'Selesai',
-		lanjut: 'Lanjut',
-		cek: 'Cek',
-		opsional: 'Opsional'
-	};
-
-	const stepClass: Record<PrototypeStepState, string> = {
-		selesai: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-		lanjut: 'border-sky-200 bg-sky-50 text-sky-800',
-		cek: 'border-amber-200 bg-amber-50 text-amber-900',
-		opsional: 'border-slate-200 bg-slate-50 text-slate-600'
-	};
-
-	const roomToneClass = {
+	const toneClass: Record<StatusTone, string> = {
+		blue: 'border-blue-200 bg-blue-50 text-blue-900',
 		green: 'border-emerald-200 bg-emerald-50 text-emerald-900',
 		amber: 'border-amber-200 bg-amber-50 text-amber-950',
-		blue: 'border-sky-200 bg-sky-50 text-sky-900'
+		red: 'border-rose-200 bg-rose-50 text-rose-900',
+		slate: 'border-slate-200 bg-slate-50 text-slate-700'
 	};
 </script>
 
 <svelte:head>
-	<title>Prototype UI Asesmen — MTsN 2 Kolut</title>
+	<title>Prototype CBT Super App — MTsN 2 Kolut</title>
 </svelte:head>
 
 <div class="space-y-4">
-	<section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-		<div class="grid gap-0 lg:grid-cols-[1.35fr_0.85fr]">
-			<div class="min-w-0 px-4 py-4 sm:px-5">
-				<p class="text-[11px] font-black uppercase tracking-[0.22em] text-primary">PROTOTYPE UI — belum terhubung backend</p>
-				<h1 class="mt-1 text-2xl font-black tracking-tight text-foreground sm:text-3xl">A0 · Asesmen / Ujian Digital</h1>
-				<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-					Alur sederhana untuk menyiapkan, menjalankan, mengawasi, dan menutup ujian. Tombol di halaman ini hanya rancangan alur. Belum menjalankan aksi data.
-				</p>
-				<div class="mt-3 flex flex-wrap gap-2 text-[11px] font-bold text-muted-foreground">
-					<span class="rounded-full border border-border bg-muted/40 px-3 py-1">Micro Workflow List</span>
-					<span class="rounded-full border border-border bg-muted/40 px-3 py-1">5 langkah utama</span>
-					<span class="rounded-full border border-border bg-muted/40 px-3 py-1">frontend-only</span>
-					<span class="rounded-full border border-border bg-muted/40 px-3 py-1">tidak mengubah data</span>
-				</div>
-			</div>
-			<div class="border-t border-border bg-muted/25 p-3 lg:border-l lg:border-t-0">
-				<p class="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground">Contoh ringkasan A0</p>
-				<div class="mt-2 grid gap-2">
-					{#each prototypeMetrics as metric (metric.label)}
-						<div class="rounded-xl border border-border bg-card px-3 py-2">
-							<p class="text-[11px] font-bold text-muted-foreground">{metric.label}</p>
-							<p class="mt-0.5 text-sm font-black text-foreground">{metric.value}</p>
-							<p class="mt-0.5 text-[11px] leading-4 text-muted-foreground">{metric.note}</p>
-						</div>
-					{/each}
-				</div>
-			</div>
-		</div>
-	</section>
+	<section class="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
+		<div class="grid gap-0 xl:grid-cols-[16rem_1fr]">
+			<aside class="border-b border-slate-200 bg-slate-950 p-4 text-white xl:border-b-0 xl:border-r">
+				<p class="text-[11px] font-black uppercase tracking-[0.24em] text-blue-200">MTSN 2 KOLAKA UTARA</p>
+				<h1 class="mt-2 text-2xl font-black tracking-tight">Prototype CBT</h1>
+				<p class="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Pusat Data</p>
 
-	<section class="rounded-2xl border border-border bg-card p-3 shadow-sm">
-		<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-			<div>
-				<p class="text-[11px] font-black uppercase tracking-[0.18em] text-primary">Mengikuti CBT lama</p>
-				<h2 class="mt-0.5 text-lg font-black text-foreground">Familiar untuk operator: command center, sidebar grup, tabel kerja</h2>
-				<p class="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
-					Prototype ini diarahkan mengambil rasa UI CBT lama di cbt.mtsn2kolut.sch.id: putih terang, kartu status, angka besar, istilah operasional yang sudah dikenal, tetapi Bank Soal tidak dijadikan acuan utama penyederhanaan.
-				</p>
-			</div>
-			<span class="w-fit rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-black text-sky-800">referensi CBT lama</span>
-		</div>
-
-		<div class="mt-3 grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
-			<div class="rounded-2xl border border-border bg-muted/20 p-3">
-				<p class="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground">Struktur menu familiar</p>
-				<div class="mt-2 grid gap-2 sm:grid-cols-2">
-					{#each legacyNavigationGroups as group (group.label)}
-						<div class="rounded-xl border border-border bg-card p-2.5">
-							<p class="text-[11px] font-black uppercase tracking-[0.16em] text-primary">{group.label}</p>
-							<div class="mt-2 flex flex-wrap gap-1.5">
+				<nav class="mt-4 grid gap-3" aria-label="Struktur menu CBT prototype">
+					{#each legacyMenuGroups as group (group.label)}
+						<div>
+							<p class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">{group.label}</p>
+							<div class="mt-1.5 grid gap-1">
 								{#each group.items as item (item)}
-									<span class="rounded-lg border border-border bg-background px-2 py-1 text-[11px] font-bold text-foreground">{item}</span>
+									<span class="rounded-lg px-2 py-1.5 text-xs font-bold text-slate-100 hover:bg-white/10">{item}</span>
 								{/each}
 							</div>
 						</div>
 					{/each}
-				</div>
-			</div>
+				</nav>
+			</aside>
 
-			<div class="rounded-2xl border border-border bg-muted/20 p-3">
-				<p class="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground">Prinsip yang dibawa ke Super App</p>
-				<div class="mt-2 grid gap-2">
-					{#each legacyUiPrinciples as principle (principle.label)}
-						<div class="rounded-xl border border-border bg-card px-3 py-2">
-							<p class="text-sm font-black text-foreground">{principle.label}</p>
-							<p class="mt-0.5 text-xs leading-5 text-muted-foreground">{principle.detail}</p>
+			<div class="min-w-0 bg-slate-50 p-3 sm:p-4">
+				<div class="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
+					<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+						<div class="min-w-0">
+							<p class="text-[11px] font-black uppercase tracking-[0.22em] text-blue-700">PROTOTYPE UI — belum terhubung backend</p>
+							<h2 class="mt-1 text-2xl font-black tracking-tight text-slate-950 sm:text-4xl">Dashboard Utama · Command Center CBT</h2>
+							<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+								Dibuat ulang dari rujukan <strong>cbt.mtsn2kolut.sch.id</strong> dan repo lokal <strong>cbt-ujian</strong>. Tombol di halaman ini hanya rancangan alur. Belum menjalankan aksi data.
+							</p>
 						</div>
-					{/each}
+						<div class="flex flex-wrap gap-1.5 text-[11px] font-black">
+							<span class="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-blue-800">frontend-only</span>
+							<span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-800">tanpa API</span>
+							<span class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-700">Bank Soal dikecualikan</span>
+						</div>
+					</div>
+
+					<div class="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+						{#each commandMetrics as metric (metric.label)}
+							<div class={`rounded-2xl border p-3 ${toneClass[metric.tone]}`}>
+								<p class="text-[10px] font-black uppercase tracking-[0.16em] opacity-75">{metric.label}</p>
+								<p class="mt-1 text-3xl font-black tracking-tight">{metric.value}</p>
+								<p class="mt-1 text-xs font-semibold leading-5 opacity-80">{metric.note}</p>
+							</div>
+						{/each}
+					</div>
+
+					<div class="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-3">
+						<p class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Sumber prototype baru</p>
+						<div class="mt-2 grid gap-1.5 text-xs font-semibold text-slate-700">
+							{#each sourceNotes as note (note)}
+								<p class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">{note}</p>
+							{/each}
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
 	</section>
 
-	<section class="rounded-2xl border border-border bg-card p-3 shadow-sm">
-		<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-			<div>
-				<p class="text-[11px] font-black uppercase tracking-[0.18em] text-primary">Prototype portal publik</p>
-				<h2 class="mt-0.5 text-lg font-black text-foreground">Siswa & Pengawas dibuat seperti aplikasi HP</h2>
-				<p class="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
-					Bagian ini menggambarkan arah penyederhanaan `/ujian` dan `/pengawas-ujian`: tidak masuk ke dashboard admin, tidak penuh menu teknis, dan hanya menampilkan aksi harian yang dibutuhkan.
-				</p>
-			</div>
-			<span class="w-fit rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-800">mobile-web sederhana</span>
-		</div>
+	<section class="grid gap-3 xl:grid-cols-[1fr_20rem]">
+		<div class="space-y-3">
+			<section class="rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm">
+				<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+					<div>
+						<p class="text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">Kesiapan Pelaksanaan</p>
+						<h2 class="text-xl font-black text-slate-950">Alur dibuat mengikuti pola CBT lama</h2>
+						<p class="mt-1 text-sm leading-6 text-slate-600">Bukan Micro Workflow List lagi. Prototype ini memakai bahasa dan struktur CBT lama: dashboard, ruang ujian, jadwal sesi, proctoring live, dan rekap nilai.</p>
+					</div>
+					<span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-800">dibuat ulang</span>
+				</div>
 
-		<div class="mt-3 grid gap-3 lg:grid-cols-2">
-			{#each prototypePublicPortals as portal (portal.code)}
-				<article class="rounded-2xl border border-border bg-muted/20 p-3">
-					<div class="flex items-start justify-between gap-3">
-						<div class="min-w-0">
-							<p class="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">{portal.code} · {portal.routeLabel}</p>
-							<h3 class="mt-0.5 text-base font-black text-foreground">{portal.title}</h3>
-							<p class="mt-1 text-xs leading-5 text-muted-foreground">{portal.subtitle}</p>
-						</div>
-						<div class="shrink-0 rounded-[1.5rem] border border-border bg-card p-1.5 shadow-sm" aria-hidden="true">
-							<div class="h-20 w-11 rounded-[1.1rem] border border-border bg-background p-1">
-								<div class="h-1 rounded-full bg-muted"></div>
-								<div class="mt-2 grid gap-1">
-									<span class="h-2 rounded bg-primary/70"></span>
-									<span class="h-2 rounded bg-muted"></span>
-									<span class="h-2 rounded bg-muted"></span>
+				<div class="mt-3 grid gap-2">
+					{#each workAreas as area (area.code)}
+						<article class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+							<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+								<div class="min-w-0">
+									<p class="text-[11px] font-black uppercase tracking-[0.16em] text-blue-700">{area.code} · {area.status}</p>
+									<h3 class="mt-0.5 text-base font-black text-slate-950">{area.label}</h3>
+									<p class="mt-1 text-sm leading-6 text-slate-600">{area.description}</p>
 								</div>
-								<div class="mt-4 h-3 rounded bg-emerald-100"></div>
+								<button class="w-fit rounded-xl bg-blue-700 px-3 py-2 text-xs font-black text-white shadow-sm" type="button">{area.cta}</button>
 							</div>
-						</div>
-					</div>
-
-					<div class="mt-3 grid gap-2 sm:grid-cols-2">
-						<div class="rounded-xl border border-border bg-card p-2.5">
-							<p class="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Alur layar</p>
-							<ol class="mt-2 space-y-1.5 text-xs font-semibold text-foreground">
-								{#each portal.steps as step, index (step)}
-									<li class="flex gap-2 rounded-lg bg-muted/25 px-2 py-1.5"><span class="text-primary">{index + 1}.</span><span>{step}</span></li>
-								{/each}
-							</ol>
-						</div>
-						<div class="rounded-xl border border-border bg-card p-2.5">
-							<p class="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Tombol yang terlihat</p>
 							<div class="mt-2 flex flex-wrap gap-1.5">
-								{#each portal.actions as action (action)}
-									<span class="rounded-lg border border-border bg-background px-2 py-1 text-[11px] font-black text-foreground">{action}</span>
+								{#each area.items as item (item)}
+									<span class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-700">{item}</span>
 								{/each}
 							</div>
-							<p class="mt-2 text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Batas aman</p>
-							<ul class="mt-1 space-y-1 text-xs leading-5 text-muted-foreground">
-								{#each portal.guardrails as guardrail (guardrail)}
-									<li>• {guardrail}</li>
-								{/each}
-							</ul>
-						</div>
-					</div>
-				</article>
-			{/each}
-		</div>
-
-		<div class="mt-3 rounded-xl border border-dashed border-border bg-muted/20 p-3">
-			<p class="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground">Aturan portal sederhana</p>
-			<div class="mt-2 flex flex-wrap gap-1.5">
-				{#each publicPortalRules as rule (rule)}
-					<span class="rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground">{rule}</span>
-				{/each}
-			</div>
-		</div>
-	</section>
-
-	<section class="grid gap-3 xl:grid-cols-[13.5rem_1fr_18rem]">
-		<aside class="h-fit rounded-2xl border border-border bg-muted/25 p-3 shadow-sm xl:sticky xl:top-3">
-			<p class="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground">Alur Utama</p>
-			<nav class="mt-3 grid gap-1.5" aria-label="Navigasi prototype Asesmen">
-				{#each prototypeLanes as lane (lane.id)}
-					<a class="rounded-xl border border-border bg-card px-3 py-2 text-sm font-bold text-foreground hover:border-primary/40 hover:bg-primary/5" href={`#${lane.id}`}>
-						{lane.code} · {lane.title}
-					</a>
-				{/each}
-			</nav>
-			<div id="a9-mode-lengkap" class="mt-3 rounded-xl border border-dashed border-border bg-card p-3">
-				<p class="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">A9 · Mode Lengkap Panitia</p>
-				<p class="mt-1 text-xs leading-5 text-muted-foreground">Fitur teknis tetap ada, tapi tidak menjadi pintu utama operator.</p>
-				<div class="mt-2 flex flex-wrap gap-1.5">
-					{#each advancedPrototypeLinks as label (label)}
-						<span class="rounded-full border border-border bg-muted/30 px-2 py-1 text-[11px] font-semibold text-foreground">{label}</span>
-					{/each}
-				</div>
-			</div>
-		</aside>
-
-		<div class="space-y-2.5">
-			{#each prototypeLanes as lane (lane.id)}
-				<article id={lane.id} class="scroll-mt-3 rounded-2xl border border-border bg-card p-3 shadow-sm">
-					<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-						<div class="min-w-0">
-							<p class="text-[11px] font-black uppercase tracking-[0.18em] text-primary">{lane.code} · {lane.audience}</p>
-							<h2 class="mt-0.5 text-lg font-black text-foreground">{lane.title}</h2>
-							<p class="mt-1 text-sm leading-6 text-muted-foreground">{lane.description}</p>
-						</div>
-						<span class={`w-fit shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-black ${statusClass[lane.status]}`}>{statusCopy[lane.status]}</span>
-					</div>
-
-					<div class="mt-3 grid gap-2 lg:grid-cols-[1fr_15rem]">
-						<div class="rounded-xl border border-border bg-muted/20 p-2.5">
-							<p class="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Daftar kerja ringkas</p>
-							<div class="mt-2 grid gap-1.5">
-								{#each lane.checklist as item (item.label)}
-									<div class="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-card px-2.5 py-2">
-										<span class="min-w-0 truncate text-xs font-semibold text-foreground">{item.label}</span>
-										<span class={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black ${stepClass[item.state]}`}>{stepCopy[item.state]}</span>
-									</div>
-								{/each}
-							</div>
-						</div>
-
-						<div class="rounded-xl border border-border bg-muted/20 p-2.5">
-							<p class="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Isi menu</p>
-							<div class="mt-2 flex flex-wrap gap-1.5">
-								{#each lane.items as item (item)}
-									<span class="rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground">{item}</span>
-								{/each}
-							</div>
-							<p class="mt-2 text-xs leading-5 text-muted-foreground">{lane.operatorNote}</p>
-						</div>
-					</div>
-
-					<div class="mt-3 flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
-						<div class="flex flex-wrap gap-2">
-							<button class="rounded-xl bg-primary px-3 py-2 text-xs font-black text-primary-foreground shadow-sm" type="button">{lane.primaryAction}</button>
-							{#if lane.secondaryAction}
-								<button class="rounded-xl border border-border bg-background px-3 py-2 text-xs font-black text-foreground" type="button">{lane.secondaryAction}</button>
-							{/if}
-						</div>
-						{#if lane.modeLengkap}
-							<p class="text-xs leading-5 text-muted-foreground">Mode lengkap: {lane.modeLengkap.join(' · ')}</p>
-						{/if}
-					</div>
-				</article>
-			{/each}
-		</div>
-
-		<aside class="space-y-3">
-			<section class="rounded-2xl border border-border bg-card p-3 shadow-sm">
-				<p class="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground">Preview Ruang</p>
-				<p class="mt-1 text-xs leading-5 text-muted-foreground">Contoh tampilan kecil agar panitia melihat status ruang tanpa membuka konsol besar.</p>
-				<div class="mt-2 grid gap-2">
-					{#each prototypeRooms as room (room.code)}
-						<div class={`rounded-xl border px-3 py-2 ${roomToneClass[room.tone]}`}>
-							<div class="flex items-center justify-between gap-2">
-								<p class="text-sm font-black">{room.code} · {room.name}</p>
-								<span class="text-[11px] font-bold">{room.students}</span>
-							</div>
-							<p class="mt-1 text-xs font-semibold">{room.status}</p>
-						</div>
+						</article>
 					{/each}
 				</div>
 			</section>
 
-			<section class="rounded-2xl border border-dashed border-border bg-muted/20 p-3 shadow-sm">
-				<p class="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground">Disembunyikan dari alur utama</p>
-				<ul class="mt-2 space-y-1.5 text-xs leading-5 text-muted-foreground">
-					{#each hiddenFromMainFlow as item (item)}
-						<li class="rounded-lg border border-border bg-card px-2.5 py-1.5">{item}</li>
+			<section class="rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm">
+				<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+					<div>
+						<p class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Tabel operasional</p>
+						<h2 class="text-xl font-black text-slate-950">Contoh daftar kerja seperti CBT lama</h2>
+					</div>
+					<div class="flex flex-wrap gap-1.5">
+						<button class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-700" type="button">FILTER</button>
+						<button class="rounded-lg bg-slate-950 px-2.5 py-1.5 text-[11px] font-black text-white" type="button">EXPORT</button>
+						<button class="rounded-lg bg-blue-700 px-2.5 py-1.5 text-[11px] font-black text-white" type="button">TAMBAH</button>
+					</div>
+				</div>
+
+				<div class="mt-3 overflow-x-auto">
+					<table class="min-w-[720px] w-full border-collapse text-left text-sm">
+						<thead class="text-[11px] uppercase tracking-[0.14em] text-slate-500">
+							<tr class="border-b border-slate-200">
+								<th class="py-2 pr-3">Nama</th>
+								<th class="py-2 pr-3">Keterangan</th>
+								<th class="py-2 pr-3">Status</th>
+								<th class="py-2 pr-3 text-right">Aksi</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each tableRows as row (row.name)}
+								<tr class="border-b border-slate-100 last:border-b-0">
+									<td class="py-3 pr-3 font-black text-slate-950">{row.name}</td>
+									<td class="py-3 pr-3 text-slate-600">{row.meta}</td>
+									<td class="py-3 pr-3"><span class={`rounded-full border px-2 py-1 text-[11px] font-black ${toneClass[row.tone]}`}>{row.status}</span></td>
+									<td class="py-3 text-right">
+										<div class="flex justify-end gap-1.5">
+											{#each row.actions as action (action)}
+												<button class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-black text-slate-700" type="button">{action}</button>
+											{/each}
+										</div>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+				<p class="mt-3 text-xs font-bold text-slate-500">HAL 1 / 1 (TOTAL 4) · contoh statis untuk review UI</p>
+			</section>
+		</div>
+
+		<aside class="space-y-3">
+			<section class="rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm">
+				<p class="text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">Portal QR dari repo cbt-ujian</p>
+				<div class="mt-2 grid gap-2">
+					{#each portalPreviews as portal (portal.label)}
+						<article class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+							<p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{portal.label} · {portal.route}</p>
+							<h3 class="mt-1 text-sm font-black text-slate-950">{portal.title}</h3>
+							<p class="mt-1 text-xs leading-5 text-slate-600">{portal.description}</p>
+							<ol class="mt-2 space-y-1 text-xs font-semibold text-slate-700">
+								{#each portal.steps as step, index (step)}
+									<li>{index + 1}. {step}</li>
+								{/each}
+							</ol>
+							<div class="mt-2 flex flex-wrap gap-1.5">
+								{#each portal.primaryActions as action (action)}
+									<span class="rounded-lg bg-slate-950 px-2 py-1 text-[10px] font-black text-white">{action}</span>
+								{/each}
+							</div>
+						</article>
+					{/each}
+				</div>
+			</section>
+
+			<section class="rounded-[1.5rem] border border-dashed border-slate-300 bg-slate-50 p-3 shadow-sm">
+				<p class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Tidak dibawa ke prototype utama</p>
+				<ul class="mt-2 space-y-1.5 text-xs leading-5 text-slate-600">
+					{#each excludedSurfaces as item (item)}
+						<li class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">{item}</li>
 					{/each}
 				</ul>
 			</section>

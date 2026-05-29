@@ -114,7 +114,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		]);
 		expect(labelsByGroup('Asesmen')).toEqual([
 			'Ringkasan Asesmen',
-			'Prototype CBT Lama',
+			'Prototype CBT Baru',
 			'Persiapan',
 			'Kegiatan Asesmen',
 			'Paket Soal',

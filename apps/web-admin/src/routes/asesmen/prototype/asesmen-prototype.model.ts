@@ -1,278 +1,147 @@
-export type PrototypeStatus = 'siap' | 'perlu-dicek' | 'menunggu';
+export type StatusTone = 'blue' | 'green' | 'amber' | 'red' | 'slate';
 
-export type PrototypeStepState = 'selesai' | 'lanjut' | 'cek' | 'opsional';
-
-export type PrototypeChecklist = {
-	label: string;
-	state: PrototypeStepState;
-};
-
-export type PrototypeMetric = {
+export type CommandMetric = {
 	label: string;
 	value: string;
 	note: string;
+	tone: StatusTone;
 };
 
-export type PrototypeRoom = {
+export type WorkArea = {
 	code: string;
-	name: string;
-	students: string;
-	status: string;
-	tone: 'green' | 'amber' | 'blue';
-};
-
-export type PrototypeLane = {
-	id: 'a1-persiapan' | 'a2-dokumen' | 'a3-hari-h' | 'a4-ruang-saya' | 'a5-hasil';
-	code: 'A1' | 'A2' | 'A3' | 'A4' | 'A5';
-	number: string;
-	title: string;
-	audience: string;
+	label: string;
 	description: string;
-	primaryAction: string;
-	secondaryAction?: string;
-	status: PrototypeStatus;
+	status: string;
+	cta: string;
 	items: string[];
-	checklist: PrototypeChecklist[];
-	operatorNote: string;
-	modeLengkap?: string[];
 };
 
-export type PrototypePublicPortal = {
-	code: 'S1' | 'P1';
-	title: string;
-	subtitle: string;
-	routeLabel: string;
-	steps: string[];
+export type LegacyMenuGroup = {
+	label: string;
+	items: string[];
+};
+
+export type LegacyTableRow = {
+	name: string;
+	meta: string;
+	status: string;
 	actions: string[];
+	tone: StatusTone;
+};
+
+export type PortalPreview = {
+	label: string;
+	route: string;
+	title: string;
+	description: string;
+	steps: string[];
+	primaryActions: string[];
 	guardrails: string[];
 };
 
-export type LegacyNavigationGroup = {
-	label: string;
-	items: string[];
-};
+export const sourceNotes = [
+	'Rujukan: domain cbt.mtsn2kolut.sch.id dan repo lokal /home/servermtsn2kolut/cbt-ujian',
+	'Bank Soal sengaja tidak dijadikan fokus prototype ini',
+	'Prototype tetap statis/frontend-only: tidak login, tidak fetch, tidak menyimpan data'
+];
 
-export type LegacyUiPrinciple = {
-	label: string;
-	detail: string;
-};
+export const commandMetrics: CommandMetric[] = [
+	{ label: 'Siswa terdaftar', value: '42', note: 'contoh angka dari pola dashboard CBT lama', tone: 'blue' },
+	{ label: 'Ruang ujian', value: '4', note: 'ruang, kapasitas, monitor, denah', tone: 'green' },
+	{ label: 'Sesi siap', value: '23', note: 'jadwal sesi + paket aktif', tone: 'amber' },
+	{ label: 'Perlu tindak', value: '3', note: 'kekurangan operasional terkelompok', tone: 'red' }
+];
 
-export const prototypeMetrics: PrototypeMetric[] = [
+export const legacyMenuGroups: LegacyMenuGroup[] = [
+	{ label: 'Pusat Data', items: ['Dashboard', 'Mata Pelajaran', 'Data Kelas', 'Daftar Siswa', 'Staf & Pengawas', 'Ruang Ujian'] },
+	{ label: 'Manajemen Ujian', items: ['Paket Ujian', 'Jadwal Sesi', 'Kartu QR', 'Penempatan'] },
+	{ label: 'Pelaksanaan', items: ['Portal Siswa', 'Portal Pengawas', 'Proctoring Live', 'Anti-cheat'] },
+	{ label: 'Laporan', items: ['Rekap Nilai', 'Koreksi Essay', 'Export Excel', 'Arsip'] }
+];
+
+export const workAreas: WorkArea[] = [
 	{
-		label: 'Kegiatan aktif',
-		value: 'UAS Genap 2025/2026',
-		note: 'Contoh data statis untuk review alur'
+		code: '01',
+		label: 'Dashboard Utama',
+		description: 'Command center terang seperti CBT lama: angka besar, readiness, agenda hari ini, dan kekurangan operasional.',
+		status: 'Arah utama',
+		cta: 'Buka command center',
+		items: ['Kesiapan peserta', 'Kesiapan ruang', 'Kesiapan sesi', 'Kesiapan paket']
 	},
 	{
-		label: 'Ruang ujian',
-		value: '8 ruang',
-		note: 'Dibayangkan campur kelas/rombel otomatis'
+		code: '02',
+		label: 'Ruang & Kartu QR',
+		description: 'Mengikuti repo cbt-ujian: siswa scan kartu QR, pengawas scan lembar pengawasan, panitia cetak dari satu tempat.',
+		status: 'Dibuat familiar',
+		cta: 'Cek kartu & ruang',
+		items: ['Cetak kartu peserta', 'Lembar pengawas', 'Denah ruang', 'Token sesi']
 	},
 	{
-		label: 'Mode utama',
-		value: '5 langkah',
-		note: 'Persiapan → Dokumen → Hari-H → Ruang → Hasil'
+		code: '03',
+		label: 'Jadwal Sesi',
+		description: 'Sesi ujian ditampilkan sebagai daftar operasional dengan status aktif/draft/final dan filter sederhana.',
+		status: 'Mirip CBT lama',
+		cta: 'Kelola jadwal',
+		items: ['Tanggal sesi', 'Mata pelajaran', 'Target kelas', 'Status sesi']
+	},
+	{
+		code: '04',
+		label: 'Proctoring Live',
+		description: 'Pengawas melihat peserta, progress jawaban, status submit, dan log anti-cheat terbaru tanpa masuk ke menu rumit.',
+		status: 'Hari-H',
+		cta: 'Pantau ruang',
+		items: ['Monitoring peserta', 'Log anti-cheat', 'Terkunci', 'Sudah submit']
+	},
+	{
+		code: '05',
+		label: 'Rekap Nilai',
+		description: 'Rekap dibuat seperti CBT lama: filter kelas/mapel, ringkasan peserta tampil, lengkap/perlu tindak, dan export.',
+		status: 'Penutupan',
+		cta: 'Lihat rekap',
+		items: ['Rata-rata', 'Progress', 'Koreksi essay', 'Export CSV/Excel']
 	}
 ];
 
-export const prototypeRooms: PrototypeRoom[] = [
+export const tableRows: LegacyTableRow[] = [
+	{ name: 'Ruang 01', meta: '15 siswa · Gedung Kelas 9A', status: 'SIAP', actions: ['DENAH', 'MONITOR'], tone: 'green' },
+	{ name: 'Jadwal Sesi UAS', meta: 'Informatika · Tingkat 9', status: 'AKTIF', actions: ['EDIT', 'FINAL'], tone: 'blue' },
+	{ name: 'Peserta belum submit', meta: '3 siswa perlu dicek pengawas', status: 'PERLU TINDAK', actions: ['PANTAU', 'HUBUNGI'], tone: 'amber' },
+	{ name: 'Koreksi Essay', meta: 'Jawaban uraian menunggu guru mapel', status: 'MENUNGGU', actions: ['KOREKSI', 'EXPORT'], tone: 'slate' }
+];
+
+export const portalPreviews: PortalPreview[] = [
 	{
-		code: 'R.I',
-		name: 'Ruang 1',
-		students: '32 peserta',
-		status: 'Siap cetak kartu',
-		tone: 'green'
+		label: 'Portal depan',
+		route: '/',
+		title: 'Masuk ujian cukup scan kartu QR',
+		description: 'Satu panel masuk untuk siswa dan pengawas seperti repo cbt-ujian.',
+		steps: ['Scan QR', 'Kenali jenis token', 'Masuk portal sesuai peran'],
+		primaryActions: ['Masuk portal', 'Cetak kartu & lembar QR'],
+		guardrails: ['Token QR tidak ditampilkan mentah', 'Bahasa sederhana', 'Tidak ada sidebar admin']
 	},
 	{
-		code: 'R.II',
-		name: 'Ruang 2',
-		students: '31 peserta',
-		status: 'Butuh cek pengawas',
-		tone: 'amber'
+		label: 'Portal siswa',
+		route: '/ujian/[token]',
+		title: 'Token sesi, timer, soal, autosave',
+		description: 'Siswa fokus mengerjakan; PG dan essay didukung; anti-cheat diberi bahasa manusiawi.',
+		steps: ['Masukkan token sesi', 'Mulai ujian', 'Jawab soal', 'Kirim final'],
+		primaryActions: ['Mulai ujian', 'Kirim jawaban final'],
+		guardrails: ['Timer jelas', 'Autosave', 'Peringatan anti-cheat ramah']
 	},
 	{
-		code: 'R.III',
-		name: 'Ruang 3',
-		students: '32 peserta',
-		status: 'Menunggu jadwal sesi',
-		tone: 'blue'
+		label: 'Portal pengawas',
+		route: '/pengawas/[token]',
+		title: 'Monitoring peserta per ruang',
+		description: 'Pengawas melihat submit, jawaban, status terkunci, dan log anti-cheat terbaru.',
+		steps: ['Scan lembar pengawas', 'Lihat peserta', 'Cek log terbaru', 'Hubungi admin bila perlu'],
+		primaryActions: ['Kartu QR', 'Admin', 'Pantau peserta'],
+		guardrails: ['Tanpa unlock publik', 'Aksi sensitif tetap admin', 'Status peserta ringkas']
 	}
 ];
 
-export const prototypePublicPortals: PrototypePublicPortal[] = [
-	{
-		code: 'S1',
-		title: 'Portal Siswa Sederhana',
-		subtitle: 'Web rasa aplikasi HP untuk peserta: masuk, tunggu, kerjakan, kumpulkan.',
-		routeLabel: '/ujian',
-		steps: ['QR/PIN kartu', 'Konfirmasi identitas', 'Ruang tunggu', 'Satu soal per layar', 'Kumpulkan'],
-		actions: ['Sebelumnya', 'Ragu-ragu', 'Berikutnya', 'Kumpulkan'],
-		guardrails: ['Teks ramah siswa', 'Status tersimpan jelas', 'Tidak ada menu admin']
-	},
-	{
-		code: 'P1',
-		title: 'Portal Pengawas Ruang',
-		subtitle: 'Pengawas hanya melihat ruang tugas, peringatan, peserta, dan tombol bantuan admin.',
-		routeLabel: '/pengawas-ujian',
-		steps: ['Masuk ruang', 'Tab Ruang', 'Tab Peringatan', 'Tab Peserta', 'Hubungi Admin'],
-		actions: ['Mulai Ujian', 'Sudah Dicek', 'Beri Peringatan', 'Hubungi Admin'],
-		guardrails: ['Tidak ada unlock publik', 'Tidak membuka konsol panitia', 'Bantuan admin satu tombol']
-	}
-];
-
-export const publicPortalRules = [
-	'Standalone tanpa sidebar/admin chrome',
-	'Tampilan terang dan mudah dibaca di HP',
-	'Aksi sensitif tetap di Mode Lengkap Panitia',
-	'Demo boleh klik-through, tetapi tidak menyentuh data asli'
-];
-
-export const legacyNavigationGroups: LegacyNavigationGroup[] = [
-	{
-		label: 'Pusat Data',
-		items: ['Dashboard', 'Mata Pelajaran', 'Data Kelas', 'Daftar Siswa', 'Staf & Pengawas', 'Ruang Ujian']
-	},
-	{
-		label: 'Manajemen Ujian',
-		items: ['Paket Ujian', 'Jadwal Sesi', 'Penempatan Peserta']
-	},
-	{
-		label: 'Pelaksanaan',
-		items: ['Proctoring Live', 'Agenda Hari Ini', 'Kekurangan Operasional']
-	},
-	{
-		label: 'Laporan',
-		items: ['Rekap Nilai', 'Export Excel/CSV', 'Arsip Ujian']
-	}
-];
-
-export const legacyUiPrinciples: LegacyUiPrinciple[] = [
-	{
-		label: 'Command center terang',
-		detail: 'Hero ringkas, angka besar, badge status, dan kartu kesiapan seperti CBT lama.'
-	},
-	{
-		label: 'Sidebar dikelompokkan',
-		detail: 'Pusat Data, Manajemen Ujian, Pelaksanaan, Laporan; Bank Soal tidak dijadikan contoh utama prototype.'
-	},
-	{
-		label: 'Tabel operasional familiar',
-		detail: 'Filter kecil, tombol EXPORT/IMPORT/CETAK, pagination sederhana, dan aksi per baris secukupnya.'
-	},
-	{
-		label: 'Bahasa operasional',
-		detail: 'Istilah seperti Ruang Ujian, Jadwal Sesi, Proctoring Live, Rekap Nilai tetap dipakai agar familiar.'
-	}
-];
-
-export const prototypeLanes: PrototypeLane[] = [
-	{
-		id: 'a1-persiapan',
-		code: 'A1',
-		number: '1',
-		title: 'Persiapan Ujian',
-		audience: 'Panitia / Operator',
-		description: 'Satu tempat untuk memastikan kegiatan, paket, sesi, ruang, peserta, dan pengawas sudah siap sebelum dicetak.',
-		primaryAction: 'Mulai Persiapan',
-		secondaryAction: 'Lihat kendala',
-		status: 'perlu-dicek',
-		items: ['Kegiatan', 'Paket', 'Sesi', 'Ruang & Peserta', 'Pengawas'],
-		checklist: [
-			{ label: 'Pilih kegiatan ujian aktif', state: 'selesai' },
-			{ label: 'Cek paket dan sesi', state: 'lanjut' },
-			{ label: 'Susun 8 ruang otomatis', state: 'cek' },
-			{ label: 'Tetapkan pengawas ruang', state: 'cek' }
-		],
-		operatorNote: 'Operator cukup mengikuti daftar cek; pengaturan teknis tetap tersedia di Mode Lengkap bila perlu.',
-		modeLengkap: ['Edit kegiatan', 'Builder paket', 'Detail sesi', 'Assignment ruang']
-	},
-	{
-		id: 'a2-dokumen',
-		code: 'A2',
-		number: '2',
-		title: 'Dokumen & Cetak',
-		audience: 'Panitia / Operator',
-		description: 'Pusat cetak yang menggabungkan kartu peserta, lembar pengawas ruang, berita acara, dan arsip tanpa membuka banyak halaman.',
-		primaryAction: 'Buka Dokumen',
-		secondaryAction: 'Cek kelengkapan',
-		status: 'menunggu',
-		items: ['Kartu Peserta', 'Lembar Pengawas', 'Berita Acara', 'Arsip'],
-		checklist: [
-			{ label: 'Cetak kartu peserta per ruang', state: 'lanjut' },
-			{ label: 'Cetak lembar pengawas ruang', state: 'lanjut' },
-			{ label: 'Siapkan berita acara', state: 'opsional' },
-			{ label: 'Simpan arsip final', state: 'opsional' }
-		],
-		operatorNote: 'Cetak dibuat berbasis ruang agar panitia tidak mencari peserta satu per satu.',
-		modeLengkap: ['Reset QR/PIN', 'Cetak per sesi', 'Arsip lama']
-	},
-	{
-		id: 'a3-hari-h',
-		code: 'A3',
-		number: '3',
-		title: 'Pelaksanaan Hari-H',
-		audience: 'Panitia / Operator',
-		description: 'Command center sederhana untuk melihat sesi berjalan, kondisi ruang, kendala peserta, dan status pengumpulan.',
-		primaryAction: 'Buka Hari-H',
-		secondaryAction: 'Hubungi pengawas',
-		status: 'siap',
-		items: ['Sesi Hari Ini', 'Pantau Ruang', 'Bantuan Peserta', 'Status Submit'],
-		checklist: [
-			{ label: 'Buka sesi sesuai jadwal', state: 'lanjut' },
-			{ label: 'Lihat ruang bermasalah', state: 'cek' },
-			{ label: 'Bantu peserta yang terkunci', state: 'opsional' },
-			{ label: 'Pantau submit akhir', state: 'lanjut' }
-		],
-		operatorNote: 'Hari-H hanya menampilkan aksi yang sering dipakai; tindakan sensitif tidak ditaruh di layar awal.',
-		modeLengkap: ['Monitoring detail', 'Log proctoring', 'Override admin']
-	},
-	{
-		id: 'a4-ruang-saya',
-		code: 'A4',
-		number: '4',
-		title: 'Ruang Saya',
-		audience: 'Pengawas / Guru',
-		description: 'Tampilan pengawas difokuskan ke ruang tugas: daftar peserta, peringatan, bantuan admin, dan berita acara singkat.',
-		primaryAction: 'Buka Ruang Saya',
-		secondaryAction: 'Portal Pengawas Ruang',
-		status: 'siap',
-		items: ['Ruang Tugas', 'Peserta', 'Peringatan', 'Hubungi Admin'],
-		checklist: [
-			{ label: 'Scan/masukkan kode ruang', state: 'lanjut' },
-			{ label: 'Cek peserta hadir', state: 'lanjut' },
-			{ label: 'Kirim bantuan admin bila perlu', state: 'opsional' },
-			{ label: 'Isi catatan pengawas', state: 'opsional' }
-		],
-		operatorNote: 'Pengawas tidak perlu melihat menu panitia; cukup ruangnya sendiri dan tombol bantuan.',
-		modeLengkap: ['Rekap ruang', 'Berita acara lengkap', 'Riwayat peringatan']
-	},
-	{
-		id: 'a5-hasil',
-		code: 'A5',
-		number: '5',
-		title: 'Hasil & Penutupan',
-		audience: 'Panitia / Guru Mapel',
-		description: 'Menutup ujian dengan cek submit, koreksi uraian, rekap nilai, analisis, dan arsip akhir.',
-		primaryAction: 'Buka Hasil',
-		secondaryAction: 'Cek yang belum submit',
-		status: 'menunggu',
-		items: ['Status Submit', 'Koreksi', 'Rekap Nilai', 'Analisis', 'Arsip'],
-		checklist: [
-			{ label: 'Pastikan semua submit', state: 'cek' },
-			{ label: 'Koreksi uraian', state: 'lanjut' },
-			{ label: 'Rekap nilai per mapel', state: 'lanjut' },
-			{ label: 'Kunci arsip akhir', state: 'opsional' }
-		],
-		operatorNote: 'Hasil dipisah dari Hari-H agar panitia tidak mencampur monitoring dengan penutupan.',
-		modeLengkap: ['Analisis butir', 'Ekspor nilai', 'Sinkron penilaian']
-	}
-];
-
-export const advancedPrototypeLinks = ['Kegiatan', 'Paket', 'Sesi', 'Perangkat Siswa', 'Non-Tes', 'Proctoring detail', 'Log teknis'];
-
-export const hiddenFromMainFlow = [
-	'Pengaturan teknis jarang dipakai',
-	'Override admin sensitif',
-	'Log proctoring rinci',
-	'Halaman lama yang masih dibutuhkan panitia'
+export const excludedSurfaces = [
+	'Bank Soal lama tidak ditiru di prototype ini',
+	'Form import soal CSV tidak jadi alur utama operator',
+	'Pengaturan sistem dan backup tetap di Mode Lengkap',
+	'Data sensitif siswa/staf tidak dipakai sebagai data mock'
 ];
