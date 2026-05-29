@@ -135,6 +135,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		group: 'Asesmen',
 		items: [
 			{ href: '/asesmen', label: 'Ringkasan Asesmen', icon: 'grid', section: '7.0', roleFallbacks: ['admin'], permissions: ['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage', 'asesmen.result_read', 'asesmen.result_manage'] },
+			{ href: '/asesmen/prototype', label: 'Prototype CBT Lama', icon: 'activity', section: '7.0.1', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage'] },
 			{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', section: '7.1', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage'] },
 			{ href: '/asesmen/kegiatan', label: 'Kegiatan Asesmen', icon: 'calendar', section: '7.1.1', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.event_manage'] },
 			{ href: '/asesmen/paket', label: 'Paket Soal', icon: 'book-open', section: '7.1.2', roleFallbacks: ['admin'], permissions: ['asesmen.operator', 'asesmen.package_manage'] },

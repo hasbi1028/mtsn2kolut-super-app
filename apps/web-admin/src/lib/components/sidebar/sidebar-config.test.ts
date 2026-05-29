@@ -73,6 +73,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'/bank-soal/tambah',
 			'/bank-soal/impor',
 			'/asesmen',
+			'/asesmen/prototype',
 			'/asesmen/persiapan',
 			'/asesmen/pelaksanaan',
 			'/asesmen/hasil',
@@ -87,6 +88,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 	it('keeps assessment navigation aligned to preparation, execution, and result workflows', () => {
 		expect(hrefsByGroup('Asesmen')).toEqual([
 			'/asesmen',
+			'/asesmen/prototype',
 			'/asesmen/persiapan',
 			'/asesmen/kegiatan',
 			'/asesmen/paket',
@@ -112,6 +114,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		]);
 		expect(labelsByGroup('Asesmen')).toEqual([
 			'Ringkasan Asesmen',
+			'Prototype CBT Lama',
 			'Persiapan',
 			'Kegiatan Asesmen',
 			'Paket Soal',
@@ -136,6 +139,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'Tindak Lanjut Sesi',
 		]);
 		expect(numberedByHref.get('/asesmen/kegiatan')).toMatchObject({ section: '7.1.1' });
+		expect(numberedByHref.get('/asesmen/prototype')).toMatchObject({ section: '7.0.1' });
 		expect(numberedByHref.get('/asesmen/sesi?dokumen=berita-acara')).toMatchObject({ section: '7.4.1' });
 		expect(hrefsByGroup('Asesmen')).not.toEqual(expect.arrayContaining([
 			'/asesmen/kegiatan/new',
@@ -181,6 +185,8 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(byHref.get('/bank-soal/verifikasi')?.permissions).toEqual(['bank_soal.review', 'bank_soal.publish']);
 		expect(byHref.get('/bank-soal/analisis-butir')).toBeUndefined();
 		expect(byHref.get('/asesmen')?.permissions).toEqual(['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage', 'asesmen.result_read', 'asesmen.result_manage']);
+		expect(byHref.get('/asesmen/prototype')?.permissions).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage']);
+		expect(byHref.get('/asesmen/prototype')?.section).toBe('7.0.1');
 		expect(byHref.get('/asesmen/ringkas')).toBeUndefined();
 		expect(byHref.get('/asesmen/persiapan')?.permissions).toEqual(['asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage', 'asesmen.participant_manage']);
 		expect(byHref.get('/asesmen/pelaksanaan')?.permissions).toEqual(['asesmen.proctor', 'asesmen.operator', 'asesmen.event_manage', 'asesmen.package_manage', 'asesmen.session_manage']);
@@ -237,7 +243,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		const visibleHrefs = flattenSidebarNavGroups(
 			filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], ['asesmen.operator'])
 		).map((item) => item.href);
-		expect(visibleHrefs).toEqual(expect.arrayContaining(['/asesmen', '/asesmen/persiapan', '/asesmen/pelaksanaan', '/asesmen/ruang-saya', '/settings/account']));
+		expect(visibleHrefs).toEqual(expect.arrayContaining(['/asesmen', '/asesmen/prototype', '/asesmen/persiapan', '/asesmen/pelaksanaan', '/asesmen/ruang-saya', '/settings/account']));
 		expect(visibleHrefs).not.toContain('/asesmen/ringkas');
 	});
 
