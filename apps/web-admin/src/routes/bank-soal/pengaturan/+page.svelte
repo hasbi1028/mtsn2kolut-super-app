@@ -14,7 +14,7 @@
 	} from '$lib/bank-soal/access';
 
 	type SummaryResponse = {
-		counts?: Partial<Record<'all' | 'total' | 'draft' | 'review' | 'revision' | 'approved' | 'published' | 'package_usage', number>>;
+		counts?: Partial<Record<'all' | 'total' | 'konsep' | 'diperiksa' | 'siap_pakai' | 'draft' | 'review' | 'revision' | 'approved' | 'published' | 'package_usage', number>>;
 		by_subject?: Array<{ subject_name?: string; subject_code?: string; total?: number }>;
 		by_cognitive_level?: Array<{ cognitive_level?: string; total?: number }>;
 	};
@@ -47,10 +47,8 @@
 
 	const workflowSteps = [
 		{ label: 'Konsep', desc: 'Guru menyusun identitas soal, naskah, opsi/kunci, dan pembahasan sebelum diajukan.' },
-		{ label: 'Verifikasi', desc: 'Pemeriksa soal menelaah substansi, konstruksi, bahasa, kunci/rubrik, dan kesesuaian KD/CP/TP.' },
-		{ label: 'Revisi', desc: 'Soal dikembalikan jika perlu perbaikan. Catatan pemeriksa soal wajib jelas dan bisa ditindaklanjuti.' },
-		{ label: 'Disetujui', desc: 'Soal lolos verifikasi dan siap dipakai untuk paket asesmen internal.' },
-		{ label: 'Terbit', desc: 'Soal tersedia untuk pemakaian paket dan menjadi bagian bank soal pakai ulang.' }
+		{ label: 'Diperiksa', desc: 'Pemeriksa soal menelaah substansi, konstruksi, bahasa, kunci/rubrik, dan kesesuaian KD/CP/TP.' },
+		{ label: 'Siap Pakai', desc: 'Soal lolos pemeriksaan dan boleh dipakai untuk paket asesmen internal.' }
 	];
 	const qualityRules = [
 		'Isi identitas soal: mapel, kelas/fase, KD/CP/TP, materi, level kognitif, dan kesulitan sebelum verifikasi.',
@@ -63,7 +61,7 @@
 	const integrations = [
 		{ name: 'Daftar Soal', path: resolve('/bank-soal'), desc: 'Pencarian, filter, halaman daftar, dan aksi per soal.', required: 'read' },
 		{ name: 'Penyusun soal', path: resolve('/bank-soal/tambah'), desc: 'Pembuatan/edit soal dengan pratinjau siswa.', required: 'create' },
-		{ name: 'Verifikasi', path: resolve('/bank-soal/verifikasi'), desc: 'Antrean verifikasi, catatan pemeriksa soal, setujui/revisi.', required: 'review' },
+		{ name: 'Pemeriksaan', path: resolve('/bank-soal/verifikasi'), desc: 'Antrean pemeriksaan, catatan pemeriksa soal, siap pakai/revisi.', required: 'review' },
 		{ name: 'Impor', path: resolve('/bank-soal/impor'), desc: 'Pratinjau cek data dan impor final.', required: 'import' },
 		{ name: 'Asesmen Paket', path: resolve('/asesmen/paket'), desc: 'Pemakaian soal terbit ke paket asesmen.', required: 'read' }
 	] as const;
@@ -84,15 +82,15 @@
 
 	let canAssignReviewer = $derived(canAssignBankSoalReviewer(data.user));
 	let totalQuestions = $derived(summary.counts?.total ?? summary.counts?.all ?? 0);
-	let readyQuestions = $derived((summary.counts?.approved ?? 0) + (summary.counts?.published ?? 0));
-	let pendingReview = $derived(summary.counts?.review ?? 0);
+	let readyQuestions = $derived(summary.counts?.siap_pakai ?? summary.counts?.approved ?? summary.counts?.published ?? 0);
+	let pendingReview = $derived(summary.counts?.diperiksa ?? summary.counts?.review ?? 0);
 	let completionRate = $derived(totalQuestions > 0 ? Math.round((readyQuestions / totalQuestions) * 100) : 0);
 	let subjectCoverage = $derived(summary.by_subject?.length ?? subjects.length ?? 0);
 	let cognitiveCoverage = $derived(summary.by_cognitive_level?.filter((item) => (item.total ?? 0) > 0).length ?? 0);
 	let reviewerUserOptions = $derived(users.filter((user) => user.is_active !== false && (user.employee_id || user.roles?.includes('guru') || user.roles?.includes('admin'))));
 	let operationalStatus = $derived([
-		{ label: 'Kesiapan Bank Soal', value: `${completionRate}%`, desc: `${readyQuestions} dari ${totalQuestions} soal disetujui/terbit` },
-		{ label: 'Antrean Verifikasi', value: pendingReview, desc: 'Soal menunggu keputusan pemeriksa soal' },
+		{ label: 'Kesiapan Bank Soal', value: `${completionRate}%`, desc: `${readyQuestions} dari ${totalQuestions} soal siap pakai` },
+		{ label: 'Antrean Pemeriksaan', value: pendingReview, desc: 'Soal menunggu keputusan pemeriksa soal' },
 		{ label: 'Cakupan Pemeriksa Soal', value: scopes.length, desc: 'Cakupan verifikasi/persetujuan manual aktif' },
 		{ label: 'Cakupan Mapel', value: subjectCoverage, desc: 'Mapel muncul pada ringkasan atau data akademik' },
 		{ label: 'Level Kognitif', value: cognitiveCoverage, desc: 'Kategori Bloom/C-level berisi soal' }

@@ -55,7 +55,7 @@ func TestCbtPackageUltraCreateSelectionValidationBranches(t *testing.T) {
 			questionIDs:  []pgtype.UUID{archivedQuestionID},
 			questions:    map[pgtype.UUID]db.GetCbtQuestionRow{archivedQuestionID: {ID: archivedQuestionID, SubjectID: subjectID, Status: db.CbtQuestionStatusEnumArchived, WorkflowStatus: "published"}},
 			wantIs:       domain.ErrConflict,
-			wantContains: "approved/published",
+			wantContains: "Siap Pakai atau sudah terbit",
 			wantLookups:  true,
 		},
 		{

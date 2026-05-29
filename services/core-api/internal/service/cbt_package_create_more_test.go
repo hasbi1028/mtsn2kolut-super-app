@@ -155,7 +155,7 @@ func TestCbtPackageLockSnapshotAndAddQuestionMoreBranches(t *testing.T) {
 		t.Fatalf("LockAndSnapshot(lock error) = %v, want %v", err, lockErr)
 	}
 
-	if err := addCbtPackageQuestion(ctx, &fakeCbtPackageAddRowsStore{rows: 0}, db.AddCbtPackageQuestionParams{PackageID: packageID}); err == nil || !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "approved/published") {
+	if err := addCbtPackageQuestion(ctx, &fakeCbtPackageAddRowsStore{rows: 0}, db.AddCbtPackageQuestionParams{PackageID: packageID}); err == nil || !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "Siap Pakai atau sudah terbit") {
 		t.Fatalf("addCbtPackageQuestion(rows=0) error = %v, want workflow conflict", err)
 	}
 

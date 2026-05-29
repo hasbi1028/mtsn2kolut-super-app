@@ -309,7 +309,7 @@
 	let fMaterialTopic = $state('');
 	let fCognitiveLevel = $state('');
 	let fHotsFlag = $state(false);
-	let fWorkflowStatus = $state('draft');
+	let fWorkflowStatus = $state('konsep');
 	let activeDraftKey = $derived(DRAFT_KEY(editingId, selectedEventId));
 	let draftSignature = $derived(JSON.stringify({
 		specialEventQuestionMode,
@@ -364,12 +364,12 @@
 	let exportSuccessMessage = $derived(questionExportSuccessMessage(roles));
 	let hasCatalogQuickFilter = $derived(Boolean(search.trim() || filterWorkflow || filterStatus || filterTargetLevel));
 	let reviewCount = $derived(reviewTotal);
-	let visibleReviewCount = $derived(questions.filter((item) => item.workflow_status === 'review' || item.workflow_status === 'submitted').length);
+	let visibleReviewCount = $derived(questions.filter((item) => normalizeWorkflowStatus(item.workflow_status) === 'diperiksa').length);
 	let approvedCount = $derived(approvedTotal);
-	let visibleApprovedCount = $derived(questions.filter((item) => item.workflow_status === 'reviewed' && item.status === 'draft').length);
-	let draftCount = $derived(questions.filter((item) => item.workflow_status === 'draft').length);
-	let visibleRevisionCount = $derived(questions.filter((item) => item.workflow_status === 'rejected' || item.workflow_status === 'revision_needed').length);
-	let publishedCount = $derived(questions.filter((item) => item.status === 'published' || item.workflow_status === 'published').length);
+	let visibleApprovedCount = $derived(questions.filter((item) => normalizeWorkflowStatus(item.workflow_status) === 'siap_pakai' && item.status === 'draft').length);
+	let draftCount = $derived(questions.filter((item) => normalizeWorkflowStatus(item.workflow_status) === 'konsep').length);
+	let visibleRevisionCount = $derived(questions.filter((item) => normalizeWorkflowStatus(item.workflow_status) === 'konsep' && Boolean(item.review_notes?.trim())).length);
+	let publishedCount = $derived(questions.filter((item) => item.status === 'published').length);
 	let selectedTarget = $derived(questionTargets.find((target) => target.subject_id === filterSubject) ?? null);
 	let eventTargetTotal = $derived(questionTargets.reduce((sum, target) => sum + (target.target_questions || 0), 0));
 	let eventPublishedTotal = $derived(questionTargets.reduce((sum, target) => sum + (target.published || 0), 0));
@@ -385,10 +385,9 @@
 	let offlineDraftQueueCount = $derived(offlineQueueItems.filter((item) => item.intent === 'draft').length);
 	let canSyncOfflineQueue = $derived(isOnline && offlineQueueCount > 0 && !offlineSyncBusy);
 	let statusCards = $derived([
-		{ label: 'Konsep', value: draftCount, tone: 'slate', helper: 'soal masih disusun', workflowStatus: 'draft', status: '', active: filterWorkflow === 'draft' && !filterStatus },
-		{ label: 'Perlu Revisi', value: revisionTotal, tone: 'red', helper: `${visibleRevisionCount} tampil`, workflowStatus: 'revision_needed', status: '', active: filterWorkflow === 'revision_needed' && !filterStatus },
-		{ label: 'Menunggu Verifikasi', value: reviewCount, tone: 'amber', helper: `${visibleReviewCount} tampil`, workflowStatus: 'submitted', status: '', active: filterWorkflow === 'submitted' && !filterStatus },
-		{ label: 'Layak Verifikasi', value: approvedCount, tone: 'green', helper: `${visibleApprovedCount} siap disetujui`, workflowStatus: 'reviewed', status: 'draft', active: filterWorkflow === 'reviewed' && filterStatus === 'draft' },
+		{ label: 'Konsep', value: draftCount, tone: 'slate', helper: `${visibleRevisionCount} perlu revisi`, workflowStatus: 'konsep', status: '', active: filterWorkflow === 'konsep' && !filterStatus },
+		{ label: 'Diperiksa', value: reviewCount, tone: 'amber', helper: `${visibleReviewCount} tampil`, workflowStatus: 'diperiksa', status: '', active: filterWorkflow === 'diperiksa' && !filterStatus },
+		{ label: 'Siap Pakai', value: approvedCount, tone: 'green', helper: `${visibleApprovedCount} siap dipakai`, workflowStatus: 'siap_pakai', status: '', active: filterWorkflow === 'siap_pakai' && !filterStatus },
 		{ label: 'Terbit', value: publishedCount, tone: 'emerald', helper: 'siap dipakai paket', workflowStatus: '', status: 'published', active: !filterWorkflow && filterStatus === 'published' },
 	]);
 	let selectedSubject = $derived(subjects.find((subject) => subject.id === fSubjectId) ?? null);
@@ -809,7 +808,7 @@
 		fMatchingPairs = normalizeMatchingPairs([], fQuestionType);
 		fMatchingDistractors = normalizeMatchingDistractors([], fQuestionType);
 		fAnswerKey = defaultAnswerKeyForQuestionType(fQuestionType);
-		fWorkflowStatus = 'draft';
+		fWorkflowStatus = 'konsep';
 		draftSavedAt = null;
 		lastDraftSig = '';
 	}
@@ -1077,7 +1076,7 @@
 		if (filterWorkflow) params.set('workflow_status', filterWorkflow);
 		if (filterStatus) params.set('status', filterStatus);
 		if (filterTargetLevel) params.set('target_level', filterTargetLevel);
-		if ((filterWorkflow === 'rejected' || filterWorkflow === 'revision_needed') && revisionSourceFilter) params.set('revision_source', revisionSourceFilter);
+		if (filterWorkflow === 'konsep' && revisionSourceFilter) params.set('revision_source', revisionSourceFilter);
 		return params;
 	}
 
@@ -1086,8 +1085,8 @@
 		params.set('limit', '6');
 		params.set('offset', '0');
 		applyQuestionScopeParams(params);
-		params.set('workflow_status', 'revision_needed');
-		if (revisionSourceFilter) params.set('revision_source', revisionSourceFilter);
+		params.set('workflow_status', 'konsep');
+		params.set('revision_source', revisionSourceFilter || 'needs_revision');
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
 		return params;
@@ -1098,7 +1097,7 @@
 		params.set('limit', '6');
 		params.set('offset', '0');
 		applyQuestionScopeParams(params);
-		params.set('workflow_status', 'submitted');
+		params.set('workflow_status', 'diperiksa');
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
 		return params;
@@ -1109,8 +1108,7 @@
 		params.set('limit', '6');
 		params.set('offset', '0');
 		applyQuestionScopeParams(params);
-		params.set('workflow_status', 'reviewed');
-		params.set('status', 'draft');
+		params.set('workflow_status', 'siap_pakai');
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
 		return params;
@@ -1647,7 +1645,7 @@
 	}
 
 	function showPendingReviews() {
-		filterWorkflow = 'submitted';
+		filterWorkflow = 'diperiksa';
 		filterStatus = '';
 		revisionSourceFilter = '';
 		setModuleMode('review');
@@ -1655,8 +1653,8 @@
 	}
 
 	function showApprovedQuestions() {
-		filterWorkflow = 'reviewed';
-		filterStatus = 'draft';
+		filterWorkflow = 'siap_pakai';
+		filterStatus = '';
 		revisionSourceFilter = '';
 		setModuleMode('review');
 		load(1);
@@ -1664,14 +1662,14 @@
 
 	function setRevisionSourceFilter(source: RevisionSourceFilter) {
 		revisionSourceFilter = source;
-		filterWorkflow = 'revision_needed';
+		filterWorkflow = 'konsep';
 		filterStatus = '';
 		setModuleMode('review');
 		load(1);
 	}
 
 	function onWorkflowFilterChange() {
-		if (filterWorkflow !== 'rejected' && filterWorkflow !== 'revision_needed') revisionSourceFilter = '';
+		if (filterWorkflow !== 'konsep') revisionSourceFilter = '';
 		filterStatus = '';
 		load(1);
 	}
@@ -1717,7 +1715,7 @@
 
 	function setAuthoringMode(mode: AuthoringMode) {
 		fAuthoringMode = mode;
-		if (mode === 'beginner') fWorkflowStatus = 'draft';
+		if (mode === 'beginner') fWorkflowStatus = 'konsep';
 	}
 
 	function answerItemCountForType(type: ComposerQuestionType = fQuestionType): number {
@@ -1803,11 +1801,11 @@
 	}
 
 	function canDecideReview(q: Question): boolean {
-		return canReviewWorkflow && (q.workflow_status === 'review' || q.workflow_status === 'submitted') && q.status === 'draft' && !questionUsageLocked(q);
+		return canReviewWorkflow && normalizeWorkflowStatus(q.workflow_status) === 'diperiksa' && q.status === 'draft' && !questionUsageLocked(q);
 	}
 
 	function canPublishQuestion(q: Question): boolean {
-		return canPublishWorkflow && q.workflow_status === 'approved' && q.status === 'draft' && !questionUsageLocked(q);
+		return canPublishWorkflow && normalizeWorkflowStatus(q.workflow_status) === 'siap_pakai' && q.status === 'draft' && !questionUsageLocked(q);
 	}
 
 	async function loadQuestionDetail(q: Question): Promise<Question> {
@@ -1885,12 +1883,12 @@
 	}
 
 	function questionEditActionLabel(q: Question | null): string {
-		if (q?.workflow_status === 'revision_needed') return 'Edit Revisi';
+		if (q && normalizeWorkflowStatus(q.workflow_status) === 'konsep' && q.review_notes?.trim()) return 'Edit Revisi';
 		return 'Edit';
 	}
 
 	function canReturnDetailRevision(q: Question | null): boolean {
-		return Boolean(q && q.workflow_status === 'approved' && q.status !== 'published' && !questionUsageLocked(q) && q.is_latest_version !== false && canReviewWorkflow);
+		return Boolean(q && normalizeWorkflowStatus(q.workflow_status) === 'siap_pakai' && q.status !== 'published' && !questionUsageLocked(q) && q.is_latest_version !== false && canReviewWorkflow);
 	}
 
 	function canCreateDetailRevision(q: Question | null): boolean {
@@ -1923,10 +1921,10 @@
 		if (!q) return '';
 		if (q.is_latest_version === false) return 'Ini versi lama. Paket dan hasil ujian lama tetap memakai versi ini. Buat revisi baru untuk perubahan berikutnya.';
 		if (q.status === 'published' || questionUsageLocked(q)) return 'Soal sudah terbit/dipakai. Tidak boleh diedit langsung; buat revisi baru agar riwayat ujian tetap valid.';
-		if (q.workflow_status === 'approved' || q.workflow_status === 'published') return 'Soal sudah disetujui/terbit. Kembalikan ke revisi sebelum mengubah isi soal.';
-		if (q.workflow_status === 'reviewed') return 'Soal sudah ditandai layak dan menunggu approval akhir.';
-		if (q.workflow_status === 'revision_needed') return 'Soal membutuhkan revisi. Guru pembuat soal dapat mengedit langsung selama soal masih draft dan belum dipakai.';
-		if (q.workflow_status === 'review' || q.workflow_status === 'submitted') return 'Soal sedang diverifikasi. Perubahan dinonaktifkan sampai reviewer meminta revisi.';
+		const workflow = normalizeWorkflowStatus(q.workflow_status);
+		if (workflow === 'siap_pakai') return 'Soal sudah siap pakai/terbit. Kembalikan ke konsep sebelum mengubah isi soal.';
+		if (workflow === 'konsep' && q.review_notes?.trim()) return 'Soal membutuhkan revisi. Guru pembuat soal dapat mengedit langsung selama soal masih draft dan belum dipakai.';
+		if (workflow === 'diperiksa') return 'Soal sedang diperiksa. Perubahan dinonaktifkan sampai pemeriksa meminta revisi.';
 		return 'Soal dibuka dalam mode lihat.';
 	}
 
@@ -2065,7 +2063,7 @@
 		fMaterialTopic = '';
 		fCognitiveLevel = '';
 		fHotsFlag = false;
-		fWorkflowStatus = 'draft';
+		fWorkflowStatus = 'konsep';
 		draftStatus = '';
 		draftSavedAt = null;
 		lastDraftSig = '';
@@ -2491,7 +2489,7 @@
 			answer_key: buildPayloadAnswerKey(),
 			difficulty: fDifficulty,
 			status: 'draft',
-			workflow_status: isReview ? 'review' : 'draft',
+			workflow_status: isReview ? 'diperiksa' : 'konsep',
 			target_level: fTargetLevel,
 			academic_phase: fAcademicPhase,
 			cp_ref: fCPRef,
@@ -2580,7 +2578,7 @@
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ action: 'submit_for_review', notes: '' })
 				}).then((response) => readClientJson<unknown>(response));
-				fWorkflowStatus = 'review';
+				fWorkflowStatus = 'diperiksa';
 			}
 
 			if (keepMetadataForNext) rememberLastComposerMetadata();
@@ -2773,7 +2771,7 @@
 			toast.warning('Anda belum memiliki izin verifikasi soal.');
 			return;
 		}
-		if ((q.workflow_status !== 'review' && q.workflow_status !== 'submitted') || q.status !== 'draft') {
+		if (normalizeWorkflowStatus(q.workflow_status) !== 'diperiksa' || q.status !== 'draft') {
 			toast.warning('Soal ini tidak sedang menunggu verifikasi.');
 			return;
 		}
@@ -2951,7 +2949,7 @@
 			...payload,
 			question_text: payload.question_text || 'Draft gambar',
 			stem_html: payload.stem_html || '<p>Draft gambar</p>',
-			workflow_status: 'draft',
+			workflow_status: 'konsep',
 		};
 		const res = await fetch('/api/bank-soal/questions', {
 			method: 'POST',
@@ -3333,14 +3331,9 @@
 					class="h-8 rounded-md border border-border bg-card px-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
 			>
 				<option value="">Semua Status</option>
-				<option value="draft">Konsep</option>
-				<option value="submitted">Menunggu Verifikasi</option>
-				<option value="revision_needed">Perlu Revisi</option>
-				<option value="reviewed">Layak Verifikasi</option>
-				<option value="approved">Disetujui</option>
-				<option value="published">Terbit</option>
-				<option value="rejected">Ditolak</option>
-				<option value="archived">Diarsipkan</option>
+				<option value="konsep">Konsep</option>
+				<option value="diperiksa">Diperiksa</option>
+				<option value="siap_pakai">Siap Pakai</option>
 				</select>
 				<select
 					id="question-target-level-filter"
@@ -3484,7 +3477,7 @@
 								</span>
 							{/if}
 										</div>
-										{#if q.workflow_status === 'rejected' || q.workflow_status === 'revision_needed'}
+										{#if normalizeWorkflowStatus(q.workflow_status) === 'konsep' && q.review_notes?.trim()}
 											<div class="mt-1 rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-[11px] leading-relaxed text-destructive">
 												<span class="font-semibold">{revisionSourceLabel(q)}:</span> {revisionReason(q)}
 											</div>
@@ -3510,7 +3503,7 @@
 										>
 										{isQuickEditable(q) ? questionEditActionLabel(q) : 'Lihat'}
 										</button>
-										{#if q.workflow_status === 'rejected' || q.workflow_status === 'revision_needed'}
+										{#if normalizeWorkflowStatus(q.workflow_status) === 'konsep' && q.review_notes?.trim()}
 											<button
 												onclick={(e) => {
 													e.stopPropagation();
@@ -4193,7 +4186,7 @@
 								<p class="mt-1 font-semibold">{detailLockMessage(detailQuestion)}</p>
 							</div>
 							<div class="flex flex-wrap gap-2">
-								{#if detailQuestion?.workflow_status === 'approved' && detailQuestion?.status !== 'published' && !questionUsageLocked(detailQuestion) && detailQuestion?.is_latest_version !== false}
+								{#if detailQuestion && normalizeWorkflowStatus(detailQuestion.workflow_status) === 'siap_pakai' && detailQuestion.status !== 'published' && !questionUsageLocked(detailQuestion) && detailQuestion.is_latest_version !== false}
 									<Button type="button" size="sm" variant="outline" onclick={() => void returnDetailToRevision()}>Kembalikan ke Revisi</Button>
 								{/if}
 								{#if detailQuestion && (detailQuestion.status === 'published' || questionUsageLocked(detailQuestion) || detailQuestion.is_latest_version === false)}

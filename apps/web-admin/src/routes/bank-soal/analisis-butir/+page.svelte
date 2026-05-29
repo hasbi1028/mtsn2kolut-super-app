@@ -28,7 +28,7 @@
 	};
 	type QuestionListResponse = { items?: Question[]; meta?: { total?: number } };
 	type SummaryResponse = {
-		counts?: Partial<Record<'all' | 'total' | 'review' | 'approved' | 'published' | 'revision' | 'package_usage', number>>;
+		counts?: Partial<Record<'all' | 'total' | 'konsep' | 'diperiksa' | 'siap_pakai' | 'draft' | 'review' | 'approved' | 'published' | 'revision' | 'package_usage', number>>;
 		by_subject?: Array<{ subject_name?: string; subject_code?: string; total?: number }>;
 		by_cognitive_level?: Array<{ cognitive_level?: string; total?: number }>;
 	};
@@ -54,6 +54,21 @@
 		return question.usage?.answer_count ?? question.answer_count ?? 0;
 	}
 
+	function normalizeWorkflowStatus(value?: string | null) {
+		const status = (value ?? '').trim().toLowerCase();
+		if (['konsep', 'draft', 'revision', 'revision_needed', 'rejected', 'archived'].includes(status)) return 'konsep';
+		if (['diperiksa', 'review', 'submitted', 'reviewed'].includes(status)) return 'diperiksa';
+		if (['siap_pakai', 'approved', 'published'].includes(status)) return 'siap_pakai';
+		return status;
+	}
+	function workflowLabel(value?: string | null) {
+		const status = normalizeWorkflowStatus(value);
+		if (status === 'konsep') return 'Konsep';
+		if (status === 'diperiksa') return 'Diperiksa';
+		if (status === 'siap_pakai') return 'Siap Pakai';
+		return 'Belum ada status';
+	}
+
 	function subjectName(question: Question) {
 		return question.subject_name || question.subject_code || 'Tanpa Mapel';
 	}
@@ -77,10 +92,10 @@
 
 	let filteredQuestions = $derived(activeSubject ? questions.filter((question) => subjectName(question) === activeSubject) : questions);
 	let totalQuestions = $derived(summary.counts?.total ?? summary.counts?.all ?? questions.length);
-	let reviewedQuestions = $derived((summary.counts?.approved ?? 0) + (summary.counts?.published ?? 0));
+	let reviewedQuestions = $derived(summary.counts?.siap_pakai ?? summary.counts?.approved ?? summary.counts?.published ?? 0);
 	let usedQuestions = $derived(questions.filter((question) => packageCount(question) > 0 || answerCount(question) > 0).length || (summary.counts?.package_usage ?? 0));
-	let revisionQuestions = $derived(questions.filter((question) => question.workflow_status === 'revision' || question.workflow_status === 'rejected'));
-	let untouchedQuestions = $derived(questions.filter((question) => packageCount(question) === 0 && answerCount(question) === 0 && ['approved', 'published'].includes(question.workflow_status ?? question.status ?? '')));
+	let revisionQuestions = $derived(questions.filter((question) => normalizeWorkflowStatus(question.workflow_status) === 'konsep' && Boolean(question.review_notes?.trim())));
+	let untouchedQuestions = $derived(questions.filter((question) => packageCount(question) === 0 && answerCount(question) === 0 && normalizeWorkflowStatus(question.workflow_status ?? question.status) === 'siap_pakai'));
 	let hotsQuestions = $derived(questions.filter((question) => question.hots_flag || ['C4', 'C5', 'C6'].includes((question.cognitive_level ?? '').toUpperCase())));
 	let subjectOptions = $derived(Array.from(new Set(questions.map(subjectName))).sort((a, b) => a.localeCompare(b, 'id')));
 	let typeBuckets = $derived.by(() => {
@@ -91,7 +106,7 @@
 	let cognitiveBuckets = $derived((summary.by_cognitive_level ?? []).filter((item) => item.total && item.total > 0));
 	let insights = $derived<Insight[]>([
 		{ label: 'Total bank soal', value: totalQuestions, desc: `${filteredQuestions.length} soal masuk sampel mutu`, tone: 'emerald' },
-		{ label: 'Lolos verifikasi', value: reviewedQuestions, desc: 'Disetujui + terbit', tone: 'green' },
+		{ label: 'Siap pakai', value: reviewedQuestions, desc: 'Lolos pemeriksaan dan boleh dipakai', tone: 'green' },
 		{ label: 'Dipakai paket/jawaban', value: usedQuestions, desc: 'Soal yang sudah punya jejak pemakaian', tone: 'amber' },
 		{ label: 'Perlu revisi', value: revisionQuestions.length, desc: 'Prioritas perbaikan guru/reviewer', tone: 'rose' }
 	]);
@@ -166,7 +181,7 @@
 						<div class="mt-4 divide-y divide-border">
 							{#each priorityItems as question (question.id)}
 								<a href={resolve(`/bank-soal/tambah?question_id=${question.id}`)} class="block py-3 hover:bg-muted/50">
-									<div class="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground"><span>{subjectName(question)}</span><span>{question.workflow_status || question.status || 'draft'}</span><span>{question.code || 'tanpa kode'}</span></div>
+									<div class="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground"><span>{subjectName(question)}</span><span>{workflowLabel(question.workflow_status ?? question.status)}</span><span>{question.code || 'tanpa kode'}</span></div>
 									<p class="mt-1 line-clamp-2 text-sm font-semibold text-foreground">{plain(question)}</p>
 								</a>
 							{:else}

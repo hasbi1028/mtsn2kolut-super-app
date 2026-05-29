@@ -32,10 +32,9 @@ describe('/bank-soal health dashboard', () => {
 					counts: {
 						total: 12,
 						published: 4,
-						approved: 3,
-						review: 2,
-						draft: 2,
-						revision: 1,
+						siap_pakai: 3,
+						diperiksa: 2,
+						konsep: 3,
 					},
 					by_subject: [{ subject_id: 'math', subject_name: 'Matematika', total: 12 }],
 				});
@@ -47,7 +46,7 @@ describe('/bank-soal health dashboard', () => {
 							id: 'q-1',
 							subject_id: 'math',
 							subject_name: 'Matematika',
-							workflow_status: 'review',
+							workflow_status: 'diperiksa',
 							status: 'draft',
 							kd_ref: '',
 							cp_ref: 'CP-1',
@@ -73,7 +72,7 @@ describe('/bank-soal health dashboard', () => {
 		});
 
 		expect(await screen.findByRole('heading', { name: 'Alat Bank Soal' })).toBeTruthy();
-		expect(await screen.findByText('Menunggu verifikasi')).toBeTruthy();
+		expect(await screen.findByText('Diperiksa')).toBeTruthy();
 		expect(screen.getByText('Data Bank Soal')).toBeTruthy();
 		await waitFor(() => {
 			expect(fetchMock).toHaveBeenCalledWith('/api/bank-soal/summary');
@@ -89,10 +88,10 @@ describe('/bank-soal health dashboard', () => {
 		vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
 			const url = String(input);
 			if (url === '/api/bank-soal/summary') {
-				return jsonResponse({ counts: { total: 10, review: 3, draft: 7 } });
+				return jsonResponse({ counts: { total: 10, diperiksa: 3, konsep: 7 } });
 			}
 			if (url === '/api/bank-soal/questions?limit=50&offset=0') {
-				return jsonResponse({ items: [{ id: 'q-1', workflow_status: 'review', status: 'draft' }], meta: { total: 10 } });
+				return jsonResponse({ items: [{ id: 'q-1', workflow_status: 'diperiksa', status: 'draft' }], meta: { total: 10 } });
 			}
 			return jsonResponse({ error: `Unhandled ${url}` }, 500);
 		}));

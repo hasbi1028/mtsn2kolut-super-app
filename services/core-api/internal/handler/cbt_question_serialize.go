@@ -122,6 +122,9 @@ func serializeQuestionSummary(summary service.CbtQuestionSummary) map[string]any
 		"counts": map[string]any{
 			"all":               summary.Counts.Total,
 			"total":             summary.Counts.Total,
+			"konsep":            summary.Counts.Draft,
+			"diperiksa":         summary.Counts.Review,
+			"siap_pakai":        summary.Counts.Approved,
 			"draft":             summary.Counts.Draft,
 			"review":            summary.Counts.Review,
 			"rejected":          summary.Counts.Rejected,

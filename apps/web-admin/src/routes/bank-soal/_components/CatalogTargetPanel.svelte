@@ -69,7 +69,7 @@
 						<div class="mt-2 h-2 overflow-hidden rounded-full bg-card">
 							<div class="h-2 rounded-full bg-success" style:width={`${target.target_questions > 0 ? Math.min(100, Math.round((target.published / target.target_questions) * 100)) : 0}%`}></div>
 						</div>
-						<p class="mt-2 text-[11px] text-muted-foreground">Draft {target.draft} · Review {target.review} · Revisi {target.rejected} · Disetujui {target.approved}</p>
+						<p class="mt-2 text-[11px] text-muted-foreground">Konsep {target.draft} · Diperiksa {target.review} · Perlu revisi {target.rejected} · Siap pakai {target.approved}</p>
 					</div>
 				{:else}
 					<div class="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">Belum ada target kebutuhan soal untuk event ini.</div>

@@ -16,12 +16,10 @@
 		essay: number;
 		other: number;
 		draft: number;
-		submitted: number;
 		review: number;
 		revision_needed: number;
 		approved: number;
 		published: number;
-		rejected: number;
 		shortage?: number;
 		volume?: number;
 		unit?: string;
@@ -55,8 +53,8 @@
 		{ key: 'input', label: 'Input Soal', desc: 'Rekap pembuat, mapel, tingkat, jenis soal, dan status workflow.' },
 		{ key: 'progress', label: 'Progres Mapel', desc: 'Kelengkapan target PG/Essay per mapel dan tingkat.' },
 		{ key: 'revision', label: 'Perlu Revisi', desc: 'Soal yang perlu ditindaklanjuti pembuat soal.' },
-		{ key: 'reviewer', label: 'Reviewer', desc: 'Beban verifikasi, soal menunggu review, dan hasil review.' },
-		{ key: 'readiness', label: 'Siap Paket', desc: 'Soal approved/published yang siap dipakai paket.' },
+		{ key: 'reviewer', label: 'Reviewer', desc: 'Beban pemeriksaan, soal menunggu diperiksa, dan hasil pemeriksaan.' },
+		{ key: 'readiness', label: 'Siap Paket', desc: 'Soal siap pakai yang dapat dipakai paket.' },
 		{ key: 'honor', label: 'Honor/Tugas', desc: 'Volume tugas sebagai bahan lampiran SK/honor.' }
 	];
 
@@ -78,14 +76,9 @@
 	let report = $state<ReportResult | null>(null);
 
 	const workflowStatusOptions: StatusOption[] = [
-		{ value: 'draft', label: 'Draft' },
-		{ value: 'submitted', label: 'Submitted' },
-		{ value: 'review', label: 'Review' },
-		{ value: 'revision_needed', label: 'Perlu Revisi' },
-		{ value: 'approved', label: 'Approved' },
-		{ value: 'published', label: 'Published' },
-		{ value: 'rejected', label: 'Rejected' },
-		{ value: 'archived', label: 'Archived' }
+		{ value: 'konsep', label: 'Konsep' },
+		{ value: 'diperiksa', label: 'Diperiksa' },
+		{ value: 'siap_pakai', label: 'Siap Pakai' }
 	];
 
 	let selectedStatusLabels = $derived(
@@ -136,14 +129,9 @@
 	};
 
 	const statusShortNames: Record<string, string> = {
-		draft: 'Draft',
-		submitted: 'Sub',
-		review: 'Review',
-		revision_needed: 'Rev',
-		approved: 'Appr',
-		published: 'Pub',
-		rejected: 'Reject',
-		archived: 'Arsip'
+		konsep: 'Konsep',
+		diperiksa: 'Periksa',
+		siap_pakai: 'Siap'
 	};
 
 	function compactSubjectName(value?: string) {

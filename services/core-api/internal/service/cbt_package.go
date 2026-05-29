@@ -430,7 +430,7 @@ func addCbtPackageQuestion(ctx context.Context, q interface {
 }
 
 func cbtPackageQuestionWorkflowError() error {
-	return fmt.Errorf("%w: soal draft/submitted/revision_needed/rejected/archived tidak boleh digunakan dalam paket resmi; pilih soal approved/published atau soal berstatus terbit", domain.ErrConflict)
+	return fmt.Errorf("%w: hanya soal berstatus Siap Pakai atau sudah terbit yang boleh digunakan dalam paket resmi", domain.ErrConflict)
 }
 
 func cbtQuestionCanBeAssignedToOfficialPackage(question db.GetCbtQuestionRow) bool {
@@ -438,7 +438,7 @@ func cbtQuestionCanBeAssignedToOfficialPackage(question db.GetCbtQuestionRow) bo
 		return false
 	}
 	switch normalizeWorkflowStatus(question.WorkflowStatus) {
-	case "approved", "published":
+	case "siap_pakai":
 		return true
 	default:
 		return question.Status == db.CbtQuestionStatusEnumPublished

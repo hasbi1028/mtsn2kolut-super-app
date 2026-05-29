@@ -59,7 +59,7 @@ export type BankSoalHealthInput = {
 	sampleLimit?: number;
 };
 
-export type BankSoalStatusKey = 'total' | 'published' | 'approved' | 'review' | 'draft' | 'revision' | 'archived';
+export type BankSoalStatusKey = 'total' | 'konsep' | 'diperiksa' | 'siap_pakai' | 'published' | 'archived';
 
 export type BankSoalStatusCard = {
 	key: BankSoalStatusKey;
@@ -133,21 +133,19 @@ export type BankSoalHealthModel = {
 
 const statusLabels: Record<BankSoalStatusKey, string> = {
 	total: 'Total',
+	konsep: 'Konsep',
+	diperiksa: 'Diperiksa',
+	siap_pakai: 'Siap Pakai',
 	published: 'Terbit',
-	approved: 'Disetujui',
-	review: 'Verifikasi',
-	draft: 'Konsep',
-	revision: 'Revisi',
 	archived: 'Arsip',
 };
 
 const statusHelpers: Record<BankSoalStatusKey, string> = {
 	total: 'seluruh stok yang tersedia dari ringkasan atau contoh data',
+	konsep: 'masih disusun atau dikembalikan untuk perbaikan',
+	diperiksa: 'menunggu atau sedang diperiksa',
+	siap_pakai: 'sudah layak dipakai di paket asesmen',
 	published: 'sudah dapat dipakai di paket asesmen',
-	approved: 'sudah disetujui dan menunggu penerbitan',
-	review: 'menunggu keputusan pemeriksa soal',
-	draft: 'masih disusun atau belum dikirim',
-	revision: 'dikembalikan untuk perbaikan',
 	archived: 'hanya ditampilkan saat data tersedia',
 };
 
@@ -187,12 +185,18 @@ function evidenceLabel(evidence: BankSoalHealthEvidence, sampleSize: number): st
 function countFromSummary(summary: BankSoalHealthSummary | null | undefined, key: BankSoalStatusKey): number | null {
 	const counts = summary?.counts ?? {};
 	if (key === 'total') return numberValue(counts.total) ?? numberValue(counts.all);
-	if (key === 'revision') return numberValue(counts.revision) ?? numberValue(counts.rejected);
+	if (key === 'konsep') return numberValue(counts.konsep) ?? numberValue(counts.draft) ?? numberValue(counts.unsubmitted);
+	if (key === 'diperiksa') return numberValue(counts.diperiksa) ?? numberValue(counts.review);
+	if (key === 'siap_pakai') return numberValue(counts.siap_pakai) ?? numberValue(counts.approved);
 	return numberValue(counts[key]);
 }
 
 function workflowOf(question: BankSoalHealthQuestion): string {
-	return normalizeText(question.workflow_status).toLowerCase();
+	const workflow = normalizeText(question.workflow_status).toLowerCase();
+	if (['konsep', 'draft', 'revision', 'revision_needed', 'rejected', 'archived'].includes(workflow)) return 'konsep';
+	if (['diperiksa', 'review', 'submitted', 'reviewed'].includes(workflow)) return 'diperiksa';
+	if (['siap_pakai', 'approved', 'published'].includes(workflow)) return 'siap_pakai';
+	return workflow;
 }
 
 function publicationOf(question: BankSoalHealthQuestion): string {
@@ -203,25 +207,22 @@ function countFromSample(questions: BankSoalHealthQuestion[], key: BankSoalStatu
 	if (questions.length === 0) return null;
 	if (key === 'total') return questions.length;
 	if (key === 'published') return questions.filter((question) => publicationOf(question) === 'published').length;
-	if (key === 'approved') return questions.filter((question) => workflowOf(question) === 'approved').length;
-	if (key === 'review') return questions.filter((question) => workflowOf(question) === 'review').length;
-	if (key === 'revision') {
-		return questions.filter((question) => ['revision', 'rejected'].includes(workflowOf(question))).length;
-	}
-	if (key === 'draft') {
+	if (key === 'siap_pakai') return questions.filter((question) => workflowOf(question) === 'siap_pakai').length;
+	if (key === 'diperiksa') return questions.filter((question) => workflowOf(question) === 'diperiksa').length;
+	if (key === 'konsep') {
 		return questions.filter((question) => {
 			const workflow = workflowOf(question);
 			const status = publicationOf(question);
-			return workflow === 'draft' || (!workflow && status !== 'published' && status !== 'archived');
+			return workflow === 'konsep' || (!workflow && status !== 'published' && status !== 'archived');
 		}).length;
 	}
-	const archived = questions.filter((question) => publicationOf(question) === 'archived' || workflowOf(question) === 'archived').length;
+	const archived = questions.filter((question) => publicationOf(question) === 'archived').length;
 	return archived > 0 ? archived : null;
 }
 
 function statusTone(key: BankSoalStatusKey, value: number | null): BankSoalStatusCard['tone'] {
-	if (key === 'published' || key === 'approved') return 'success';
-	if (key === 'review' || key === 'revision') return value && value > 0 ? 'warning' : 'neutral';
+	if (key === 'published' || key === 'siap_pakai') return 'success';
+	if (key === 'diperiksa') return value && value > 0 ? 'warning' : 'neutral';
 	if (key === 'archived') return value && value > 0 ? 'danger' : 'neutral';
 	return 'neutral';
 }
@@ -230,10 +231,10 @@ function buildRoleWorkflowCards(summary: BankSoalHealthSummary | null | undefine
 	const counts = summary?.counts ?? {};
 	const configs = [
 		{ key: 'my_draft', label: 'Konsep saya', helper: 'soal pribadi yang masih bisa dilengkapi', tone: 'neutral' as const },
-		{ key: 'my_review_waiting', label: 'Menunggu verifikasi saya', helper: 'antrean verifikasi sesuai tugas pemeriksa soal', tone: 'warning' as const },
+		{ key: 'my_review_waiting', label: 'Perlu saya periksa', helper: 'antrean pemeriksaan sesuai tugas pemeriksa soal', tone: 'warning' as const },
 		{ key: 'revision_needed', label: 'Perlu revisi', helper: 'ditolak/dikembalikan untuk perbaikan', tone: 'warning' as const },
-		{ key: 'approval_waiting', label: 'Menunggu persetujuan', helper: 'sudah diperiksa dan menunggu keputusan akhir', tone: 'warning' as const },
-		{ key: 'package_ready', label: 'Siap paket', helper: 'disetujui/terbit dan boleh dipakai paket asesmen', tone: 'success' as const },
+		{ key: 'approval_waiting', label: 'Selesai diperiksa', helper: 'sudah ditelaah dan siap dipakai bila disetujui', tone: 'warning' as const },
+		{ key: 'package_ready', label: 'Siap paket', helper: 'siap pakai/terbit dan boleh dipakai paket asesmen', tone: 'success' as const },
 		{ key: 'missing_metadata', label: 'Identitas soal kurang', helper: 'butuh mapel/tingkat/materi/level/CP-TP-KD', tone: 'danger' as const },
 	];
 	return configs.map((config) => ({
@@ -244,7 +245,7 @@ function buildRoleWorkflowCards(summary: BankSoalHealthSummary | null | undefine
 }
 
 function buildStatusCards(summary: BankSoalHealthSummary | null | undefined, questions: BankSoalHealthQuestion[]) {
-	const keys: BankSoalStatusKey[] = ['total', 'published', 'approved', 'review', 'draft', 'revision', 'archived'];
+	const keys: BankSoalStatusKey[] = ['total', 'konsep', 'diperiksa', 'siap_pakai', 'published', 'archived'];
 	return keys.map((key): BankSoalStatusCard => {
 		const summaryCount = countFromSummary(summary, key);
 		if (summaryCount !== null) {
@@ -363,16 +364,14 @@ function valueFor(cards: BankSoalStatusCard[], key: BankSoalStatusKey): number |
 }
 
 function buildReviewBacklog(cards: BankSoalStatusCard[], sampleSize: number) {
-	const reviewCard = cards.find((card) => card.key === 'review');
-	const revisionCard = cards.find((card) => card.key === 'revision');
-	if (reviewCard?.evidence === 'missing' && revisionCard?.evidence === 'missing') {
-		return ratioMetric('review_backlog', 'Antrean Verifikasi', null, null, 'missing', sampleSize);
+	const reviewCard = cards.find((card) => card.key === 'diperiksa');
+	if (reviewCard?.evidence === 'missing') {
+		return ratioMetric('review_backlog', 'Antrean Pemeriksaan', null, null, 'missing', sampleSize);
 	}
 	const review = reviewCard?.value ?? 0;
-	const revision = revisionCard?.value ?? 0;
 	const total = valueFor(cards, 'total');
-	const evidence = reviewCard?.evidence === 'summary' || revisionCard?.evidence === 'summary' ? 'summary' : 'sample';
-	return ratioMetric('review_backlog', 'Antrean Verifikasi', review + revision, total, evidence, sampleSize);
+	const evidence = reviewCard?.evidence === 'summary' ? 'summary' : 'sample';
+	return ratioMetric('review_backlog', 'Antrean Pemeriksaan', review, total, evidence, sampleSize);
 }
 
 function averagePercent(metrics: BankSoalRatioMetric[]): number | null {
@@ -398,7 +397,7 @@ function buildReadiness(
 	sampleSize: number
 ): BankSoalReadiness {
 	const total = valueFor(cards, 'total');
-	const approved = (valueFor(cards, 'approved') ?? 0) + (valueFor(cards, 'published') ?? 0);
+	const approved = valueFor(cards, 'siap_pakai') ?? valueFor(cards, 'published') ?? 0;
 	const approvalPercent = total && total > 0 ? Math.round((approved / total) * 100) : null;
 	const metadataPercent = averagePercent([...curriculumCoverage, ...metadataQuality.filter((metric) => metric.key !== 'kd')]);
 	const backlogHealth = total && total > 0 && reviewBacklog.value !== null

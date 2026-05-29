@@ -31,7 +31,7 @@ func TestCbtPackageDeepCreateStopsWhenQuestionInsertAffectsNoRows(t *testing.T) 
 		Title:       "PAT IPA",
 		QuestionIDs: []pgtype.UUID{questionID},
 	})
-	if err == nil || !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "approved/published") {
+	if err == nil || !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "Siap Pakai atau sudah terbit") {
 		t.Fatalf("createCbtPackage(add rows=0) error = %v, want workflow conflict", err)
 	}
 	if store.createCalls != 1 || len(store.addArgs) != 1 {

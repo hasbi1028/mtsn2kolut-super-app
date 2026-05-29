@@ -243,7 +243,7 @@ export type QuestionSavePayload = {
 	answer_key: string;
 	difficulty: string;
 	status: 'draft';
-	workflow_status: 'draft' | 'review';
+	workflow_status: 'konsep' | 'diperiksa';
 	target_level: string;
 	academic_phase: string;
 	cp_ref: string;
@@ -395,14 +395,17 @@ export const QUESTION_TYPE_CONFIGS: QuestionTypeConfig[] = [
 	}
 ];
 export const WORKFLOW_LABEL: Record<string, string> = {
+	konsep: 'Konsep',
+	diperiksa: 'Diperiksa',
+	siap_pakai: 'Siap Pakai',
 	draft: 'Konsep',
-	submitted: 'Menunggu Verifikasi',
-	review: 'Menunggu Verifikasi',
-	revision_needed: 'Perlu Revisi',
-	reviewed: 'Layak Verifikasi',
-	approved: 'Disetujui',
-	published: 'Terbit',
-	rejected: 'Ditolak',
+	submitted: 'Diperiksa',
+	review: 'Diperiksa',
+	revision_needed: 'Konsep',
+	reviewed: 'Diperiksa',
+	approved: 'Siap Pakai',
+	published: 'Siap Pakai',
+	rejected: 'Konsep',
 	archived: 'Diarsipkan'
 };
 export const DIFFICULTY_LABEL: Record<string, string> = { easy: 'Mudah', medium: 'Sedang', hard: 'Sulit' };
@@ -455,8 +458,10 @@ export function normalizeAuthoringMode(value: string | undefined): AuthoringMode
 
 export function normalizeWorkflowStatus(value: string | undefined): string {
 	const normalized = (value ?? '').trim().toLowerCase();
-	if (['draft', 'review', 'submitted', 'revision_needed', 'reviewed', 'approved', 'published', 'rejected', 'archived'].includes(normalized)) return normalized;
-	return 'draft';
+	if (['konsep', 'draft', 'revision', 'revision_needed', 'rejected', 'archived'].includes(normalized)) return 'konsep';
+	if (['diperiksa', 'review', 'submitted', 'reviewed'].includes(normalized)) return 'diperiksa';
+	if (['siap_pakai', 'approved', 'published'].includes(normalized)) return 'siap_pakai';
+	return 'konsep';
 }
 
 export function defaultAnswerKeyForQuestionType(type: ComposerQuestionType): string {
@@ -630,7 +635,8 @@ export function revisionReason(q: Question): string {
 }
 
 export function canSubmitRevisionReview(q: Question): boolean {
-	return (q.workflow_status === 'rejected' || q.workflow_status === 'revision_needed')
+	return normalizeWorkflowStatus(q.workflow_status) === 'konsep'
+		&& Boolean(q.review_notes?.trim())
 		&& q.status === 'draft'
 		&& q.is_latest_version !== false
 		&& !questionUsageLocked(q);
@@ -638,7 +644,7 @@ export function canSubmitRevisionReview(q: Question): boolean {
 
 export function isQuickEditable(q: Question): boolean {
 	return isComposerQuestionType(q.question_type)
-		&& (q.workflow_status === 'draft' || q.workflow_status === 'rejected' || q.workflow_status === 'revision_needed')
+		&& normalizeWorkflowStatus(q.workflow_status) === 'konsep'
 		&& q.status === 'draft'
 		&& q.is_latest_version !== false
 		&& !questionUsageLocked(q);
@@ -647,8 +653,8 @@ export function isQuickEditable(q: Question): boolean {
 export function explainQuickEditBlocked(q: Question): string {
 	if (questionUsageLocked(q)) return 'Soal sudah dipakai. Gunakan Duplikat untuk membuat revisi draft.';
 	if (q.is_latest_version === false) return 'Soal bukan versi terbaru. Buka versi terbaru atau gunakan Duplikat untuk revisi baru.';
-	if ((q.workflow_status !== 'draft' && q.workflow_status !== 'rejected' && q.workflow_status !== 'revision_needed') || q.status !== 'draft') {
-		if (q.workflow_status === 'revision_needed') return 'Soal diminta revisi, tetapi hanya bisa diedit jika masih draft, versi terbaru, dan belum dipakai.';
+	if (normalizeWorkflowStatus(q.workflow_status) !== 'konsep' || q.status !== 'draft') {
+		if (q.review_notes?.trim()) return 'Soal diminta revisi, tetapi hanya bisa diedit jika masih draft, versi terbaru, dan belum dipakai.';
 		return 'Soal sudah masuk alur verifikasi/publikasi. Gunakan Duplikat untuk revisi.';
 	}
 	if (!isComposerQuestionType(q.question_type)) {
@@ -664,6 +670,9 @@ export function stemPreview(q: Question): string {
 
 export function workflowClass(status: string): string {
 	const map: Record<string, string> = {
+		konsep: 'bg-muted text-muted-foreground',
+		diperiksa: 'bg-warning/15 text-warning',
+		siap_pakai: 'bg-success/15 text-success',
 		draft: 'bg-muted text-muted-foreground',
 		submitted: 'bg-warning/15 text-warning',
 		review: 'bg-warning/15 text-warning',

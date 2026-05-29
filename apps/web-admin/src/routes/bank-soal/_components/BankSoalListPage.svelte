@@ -151,7 +151,7 @@
 
   type SummaryCountPayload = Partial<
     Record<
-      StatusKey | "package_usage" | "total" | "unsubmitted" | "workflow_draft",
+      StatusKey | "package_usage" | "total" | "unsubmitted" | "workflow_draft" | "draft" | "review" | "approved" | "published" | "rejected",
       number
     >
   >;
@@ -169,15 +169,9 @@
   };
 
   type WorkflowFilter =
-    | "draft"
-    | "submitted"
-    | "review"
-    | "revision_needed"
-    | "reviewed"
-    | "approved"
-    | "published"
-    | "rejected"
-    | "archived";
+    | "konsep"
+    | "diperiksa"
+    | "siap_pakai";
   type PublicationFilter = "" | "draft" | "published";
   type QuestionTypeFilter =
     | ""
@@ -191,11 +185,9 @@
   type HotsFilter = "" | "yes" | "no";
   type StatusKey =
     | "all"
-    | "unpublished"
-    | "draft"
-    | "review"
-    | "rejected"
-    | "approved"
+    | "konsep"
+    | "diperiksa"
+    | "siap_pakai"
     | "published";
 
   type StatusCounts = Record<StatusKey, number>;
@@ -249,24 +241,16 @@
   const DEFAULT_PAGE_SIZE = DEFAULT_PAGE_SIZE_OPTIONS[0];
   const emptyCounts: StatusCounts = {
     all: 0,
-    unpublished: 0,
-    draft: 0,
-    review: 0,
-    rejected: 0,
-    approved: 0,
+    konsep: 0,
+    diperiksa: 0,
+    siap_pakai: 0,
     published: 0,
   };
 
   const workflowOptions: Array<{ value: WorkflowFilter; label: string }> = [
-    { value: "draft", label: "Draft" },
-    { value: "submitted", label: "Diajukan" },
-    { value: "review", label: "Review" },
-    { value: "revision_needed", label: "Perlu Revisi" },
-    { value: "reviewed", label: "Sudah Direview" },
-    { value: "approved", label: "Disetujui" },
-    { value: "published", label: "Published" },
-    { value: "rejected", label: "Ditolak" },
-    { value: "archived", label: "Arsip" },
+    { value: "konsep", label: "Konsep" },
+    { value: "diperiksa", label: "Diperiksa" },
+    { value: "siap_pakai", label: "Siap Pakai" },
   ];
 
   const publicationOptions: Array<{ value: PublicationFilter; label: string }> =
@@ -297,14 +281,17 @@
   ];
 
   const workflowLabels: Record<string, string> = {
-    draft: "Draft",
-    submitted: "Diajukan",
-    review: "Review",
-    revision_needed: "Perlu Revisi",
-    reviewed: "Sudah Direview",
-    approved: "Disetujui",
-    published: "Published",
-    rejected: "Ditolak",
+    konsep: "Konsep",
+    diperiksa: "Diperiksa",
+    siap_pakai: "Siap Pakai",
+    draft: "Konsep",
+    submitted: "Diperiksa",
+    review: "Diperiksa",
+    revision_needed: "Konsep",
+    reviewed: "Diperiksa",
+    approved: "Siap Pakai",
+    published: "Siap Pakai",
+    rejected: "Konsep",
     archived: "Arsip",
   };
 
@@ -450,49 +437,33 @@
       active: workflowFilters.length === 0 && !publicationFilter,
     },
     {
-      key: "unpublished",
-      label: "Belum Terbit",
-      helper: "ringkasan belum tayang",
-      value: counts.unpublished,
+      key: "konsep",
+      label: "Konsep",
+      helper: "masih disusun atau dikembalikan",
+      value: counts.konsep,
       tone: "slate",
-      active: workflowFilters.length === 0 && publicationFilter === "draft",
+      active: workflowFiltersEqual(["konsep"]) && !publicationFilter,
     },
     {
-      key: "draft",
-      label: "Draft / Belum Diajukan",
-      helper: "belum masuk verifikasi",
-      value: counts.draft,
-      tone: "slate",
-      active: workflowFiltersEqual(["draft"]) && publicationFilter === "draft",
-    },
-    {
-      key: "review",
-      label: "Verifikasi",
-      helper: "diajukan/review",
-      value: counts.review,
+      key: "diperiksa",
+      label: "Diperiksa",
+      helper: "menunggu atau sedang ditelaah",
+      value: counts.diperiksa,
       tone: "amber",
-      active: workflowFiltersEqual(["submitted", "review"]) && !publicationFilter,
+      active: workflowFiltersEqual(["diperiksa"]) && !publicationFilter,
     },
     {
-      key: "rejected",
-      label: "Revisi",
-      helper: "perlu perbaikan",
-      value: counts.rejected,
-      tone: "red",
-      active: workflowFiltersEqual(["revision_needed", "rejected"]) && publicationFilter === "draft",
-    },
-    {
-      key: "approved",
-      label: "Disetujui",
-      helper: "siap diterbitkan",
-      value: counts.approved,
+      key: "siap_pakai",
+      label: "Siap Pakai",
+      helper: "boleh dipakai paket",
+      value: counts.siap_pakai,
       tone: "green",
-      active: workflowFilters.length === 1 && workflowFilters[0] === "approved" && publicationFilter === "draft",
+      active: workflowFiltersEqual(["siap_pakai"]) && !publicationFilter,
     },
     {
       key: "published",
       label: "Terbit",
-      helper: "siap dipakai paket",
+      helper: "sudah dipublikasikan",
       value: counts.published,
       tone: "emerald",
       active: workflowFilters.length === 0 && publicationFilter === "published",
@@ -512,29 +483,8 @@
   }
 
   function appendStatusParams(params: URLSearchParams, key: StatusKey) {
-    if (key === "unpublished") {
-      params.set("status", "draft");
-      return;
-    }
-    if (key === "draft") {
-      params.set("workflow_status", "draft");
-      params.set("status", "draft");
-      return;
-    }
-    if (key === "review") {
-      params.append("workflow_status", "submitted");
-      params.append("workflow_status", "review");
-      return;
-    }
-    if (key === "rejected") {
-      params.append("workflow_status", "revision_needed");
-      params.append("workflow_status", "rejected");
-      params.set("status", "draft");
-      return;
-    }
-    if (key === "approved") {
-      params.set("workflow_status", "approved");
-      params.set("status", "draft");
+    if (key === "konsep" || key === "diperiksa" || key === "siap_pakai") {
+      params.set("workflow_status", key);
       return;
     }
     if (key === "published") {
@@ -606,25 +556,16 @@
     fallback: StatusCounts = emptyCounts,
   ): StatusCounts {
     const all = summaryCounts?.all ?? summaryCounts?.total ?? fallback.all;
-    const unpublished = summaryCounts?.unpublished ?? summaryCounts?.draft ?? fallback.unpublished;
-    const review = summaryCounts?.review ?? fallback.review;
-    const rejected = summaryCounts?.rejected ?? fallback.rejected;
-    const approved = summaryCounts?.approved ?? fallback.approved;
+    const konsep = summaryCounts?.konsep ?? summaryCounts?.draft ?? summaryCounts?.unsubmitted ?? fallback.konsep;
+    const diperiksa = summaryCounts?.diperiksa ?? summaryCounts?.review ?? fallback.diperiksa;
+    const siapPakai = summaryCounts?.siap_pakai ?? summaryCounts?.approved ?? fallback.siap_pakai;
     const published = summaryCounts?.published ?? fallback.published;
-    const draft =
-      summaryCounts?.unsubmitted ??
-      summaryCounts?.workflow_draft ??
-      (summaryCounts?.unpublished !== undefined
-        ? summaryCounts?.draft ?? Math.max(0, unpublished - review - rejected - approved)
-        : Math.max(0, unpublished - review - rejected - approved));
 
     return {
       all,
-      unpublished,
-      draft,
-      review,
-      rejected,
-      approved,
+      konsep,
+      diperiksa,
+      siap_pakai: siapPakai,
       published,
     };
   }
@@ -793,21 +734,9 @@
     if (key === "all") {
       workflowFilters = [];
       publicationFilter = "";
-    } else if (key === "unpublished") {
-      workflowFilters = [];
-      publicationFilter = "draft";
-    } else if (key === "draft") {
-      workflowFilters = ["draft"];
-      publicationFilter = "draft";
-    } else if (key === "review") {
-      workflowFilters = ["submitted", "review"];
+    } else if (key === "konsep" || key === "diperiksa" || key === "siap_pakai") {
+      workflowFilters = [key];
       publicationFilter = "";
-    } else if (key === "rejected") {
-      workflowFilters = ["revision_needed", "rejected"];
-      publicationFilter = "draft";
-    } else if (key === "approved") {
-      workflowFilters = ["approved"];
-      publicationFilter = "draft";
     } else if (key === "published") {
       workflowFilters = [];
       publicationFilter = "published";
@@ -846,16 +775,31 @@
   }
 
   function normalizeWorkflowFilters(values: string[]): WorkflowFilter[] {
-    const allowed = new Set(workflowOptions.map((option) => option.value));
     const selected: WorkflowFilter[] = [];
     for (const value of values) {
       for (const part of value.split(",")) {
-        const normalized = part.trim() as WorkflowFilter;
-        if (!allowed.has(normalized) || selected.includes(normalized)) continue;
+        const normalized = normalizeWorkflowFilterValue(part);
+        if (!normalized || selected.includes(normalized)) continue;
         selected.push(normalized);
       }
     }
     return selected;
+  }
+
+  function normalizeWorkflowFilterValue(value: string): WorkflowFilter | "" {
+    const normalized = value.trim().toLowerCase();
+    if (["konsep", "draft", "revision", "revision_needed", "rejected", "archived"].includes(normalized)) return "konsep";
+    if (["diperiksa", "submitted", "review", "reviewed"].includes(normalized)) return "diperiksa";
+    if (["siap_pakai", "approved", "published"].includes(normalized)) return "siap_pakai";
+    return "";
+  }
+
+  function normalizedQuestionWorkflow(question: Question): WorkflowFilter {
+    return normalizeWorkflowFilterValue(question.workflow_status ?? question.status ?? "") || "konsep";
+  }
+
+  function questionNeedsRevision(question: Question): boolean {
+    return normalizedQuestionWorkflow(question) === "konsep" && Boolean(question.review_notes?.trim());
   }
 
   function toggleWorkflowFilter(value: WorkflowFilter) {
@@ -1043,23 +987,26 @@
         action: activityAction(question),
         object: `${compactText(question.code, "Tanpa kode")} · ${compactText(question.material_topic || question.subject_name, "Soal")}`,
         time: formatDate(question.updated_at || question.created_at),
-        tone: question.workflow_status ?? question.status ?? "draft",
+        tone: normalizedQuestionWorkflow(question),
       }));
   }
 
   function activityAction(question: Question): string {
-    if (question.workflow_status === "review") return "mengirim untuk review";
-    if (question.workflow_status === "approved") return "menyetujui";
-    if (question.workflow_status === "rejected") return "meminta revisi";
+    const workflow = normalizedQuestionWorkflow(question);
+    if (workflow === "diperiksa") return "mengirim untuk diperiksa";
+    if (workflow === "siap_pakai") return "menyiapkan soal";
+    if (questionNeedsRevision(question)) return "meminta revisi";
     if (question.status === "published") return "menerbitkan";
-    return "memperbarui draft";
+    return "memperbarui konsep";
   }
 
   function activityToneClass(tone: string): string {
-    if (tone === "approved" || tone === "published")
+    if (tone === "siap_pakai" || tone === "published")
       return "border-primary/20 bg-primary/10 text-primary";
-    if (tone === "review")
+    if (tone === "diperiksa")
       return "border-warning/30 bg-warning/10 text-warning";
+    if (tone === "konsep")
+      return "border-border bg-muted/50 text-foreground";
     if (tone === "rejected")
       return "border-destructive/30 bg-destructive/10 text-destructive";
     return "border-border bg-muted/50 text-foreground";
@@ -1088,7 +1035,8 @@
   }
 
   function workflowLabel(value: string | undefined): string {
-    return workflowLabels[value ?? ""] ?? compactText(value, "Belum ada alur");
+    const canonical = normalizeWorkflowFilterValue(value ?? "");
+    return workflowLabels[canonical || value || ""] ?? compactText(value, "Belum ada alur");
   }
 
   function publicationLabel(value: string | undefined): string {
@@ -1154,9 +1102,7 @@
 
   function isQuickEditable(question: Question): boolean {
     return (
-      (question.workflow_status === "draft" ||
-        question.workflow_status === "rejected" ||
-        question.workflow_status === "revision_needed") &&
+      normalizedQuestionWorkflow(question) === "konsep" &&
       (question.status ?? "draft") === "draft" &&
       !questionUsageLocked(question)
     );
@@ -1164,21 +1110,21 @@
 
   function isSafeDeletable(question: Question): boolean {
     return (
-      ["draft", "rejected"].includes(question.workflow_status ?? "draft") &&
+      normalizedQuestionWorkflow(question) === "konsep" &&
       (question.status ?? "draft") === "draft" &&
       !questionUsageLocked(question)
     );
   }
 
   function quickEditLabel(question: Question): string {
-    if (question.workflow_status === "revision_needed") return "Edit Revisi";
+    if (questionNeedsRevision(question)) return "Edit Revisi";
     return "Edit";
   }
 
   function canReturnToRevision(question: Question): boolean {
     return (
       canReview &&
-      question.workflow_status === "approved" &&
+      normalizedQuestionWorkflow(question) === "siap_pakai" &&
       (question.status ?? "draft") === "draft" &&
       !questionUsageLocked(question)
     );
@@ -1188,19 +1134,19 @@
     return (
       canCreate &&
       !isQuickEditable(question) &&
-      (question.workflow_status === "approved" ||
+      (normalizedQuestionWorkflow(question) === "siap_pakai" ||
         question.status === "published" ||
         questionUsageLocked(question))
     );
   }
 
   function canArchive(question: Question): boolean {
-    const archiveable = ["approved", "published", "rejected"];
     return (
       canPublish &&
       !questionUsageLocked(question) &&
       question.status !== "archived" &&
-      (archiveable.includes(question.workflow_status ?? "") ||
+      (normalizedQuestionWorkflow(question) === "siap_pakai" ||
+        questionNeedsRevision(question) ||
         question.status === "published")
     );
   }
@@ -1208,7 +1154,6 @@
   function canRestoreArchive(question: Question): boolean {
     return (
       canPublish &&
-      question.workflow_status === "archived" &&
       question.status === "archived" &&
       !questionUsageLocked(question)
     );
@@ -1374,14 +1319,12 @@
   }
 
   function workflowBadgeClass(value: string | undefined): string {
-    switch (value) {
-      case "review":
+    switch (normalizeWorkflowFilterValue(value ?? "")) {
+      case "diperiksa":
         return "border-warning/30 bg-warning/10 text-warning";
-      case "approved":
+      case "siap_pakai":
         return "border-primary/20 bg-primary/10 text-primary";
-      case "rejected":
-        return "border-destructive/30 bg-destructive/10 text-destructive";
-      case "draft":
+      case "konsep":
         return "border-border bg-muted/50 text-foreground";
       default:
         return "border-border bg-card text-muted-foreground";
@@ -1623,9 +1566,9 @@
       </button>
       <button
         type="button"
-        class={summaryCardClass(summaryCards[4])}
-        aria-pressed={summaryCards[4].active}
-        onclick={() => setSummaryFilter("approved")}
+        class={summaryCardClass(summaryCards[3])}
+        aria-pressed={summaryCards[3].active}
+        onclick={() => setSummaryFilter("siap_pakai")}
       >
         <div class="flex items-center justify-between gap-3">
           <span
@@ -1635,11 +1578,11 @@
           <BookOpenCheckIcon class="size-5 text-primary" />
         </div>
         <span
-          class={`mt-2 block text-3xl font-semibold ${summaryValueClass(summaryCards[4])}`}
-          >{counts.approved + counts.published}</span
+          class={`mt-2 block text-3xl font-semibold ${summaryValueClass(summaryCards[3])}`}
+          >{counts.siap_pakai}</span
         >
         <span class="mt-1 block text-xs text-muted-foreground"
-          >disetujui atau sudah terbit</span
+          >siap dipakai termasuk yang sudah terbit</span
         >
       </button>
       <a
@@ -1664,7 +1607,7 @@
         type="button"
         class={summaryCardClass(summaryCards[2])}
         aria-pressed={summaryCards[2].active}
-        onclick={() => setSummaryFilter("review")}
+        onclick={() => setSummaryFilter("diperiksa")}
       >
         <div class="flex items-center justify-between gap-3">
           <span
@@ -1675,7 +1618,7 @@
         </div>
         <span
           class={`mt-2 block text-3xl font-semibold ${summaryValueClass(summaryCards[2])}`}
-          >{counts.review}</span
+          >{counts.diperiksa}</span
         >
         <span class="mt-1 block text-xs text-muted-foreground"
           >perlu keputusan reviewer</span

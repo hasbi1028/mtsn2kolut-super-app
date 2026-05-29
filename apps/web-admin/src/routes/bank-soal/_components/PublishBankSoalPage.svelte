@@ -141,7 +141,7 @@
 
 	function publishChecklist(question: Question) {
 		return [
-			{ label: 'Disetujui', ok: question.workflow_status === 'approved' },
+			{ label: 'Siap Pakai', ok: question.workflow_status === 'siap_pakai' },
 			{ label: 'Belum terbit', ok: (question.status ?? 'draft') !== 'published' },
 			{ label: 'Mapel', ok: Boolean(question.subject_name || question.subject_code || question.subject_id) },
 			{ label: 'Naskah', ok: stemPreview(question).length >= 5 },
@@ -151,7 +151,7 @@
 	}
 
 	function buildParams(pageNumber: number, limit = pageSize): URLSearchParams {
-		const params = new URLSearchParams({ workflow_status: 'approved', status: 'draft', limit: String(limit), offset: String(Math.max(0, (pageNumber - 1) * limit)) });
+		const params = new URLSearchParams({ workflow_status: 'siap_pakai', status: 'draft', limit: String(limit), offset: String(Math.max(0, (pageNumber - 1) * limit)) });
 		if (search.trim()) params.set('q', search.trim());
 		if (subjectFilter) params.set('subject_id', subjectFilter);
 		if (targetLevelFilter) params.set('target_level', targetLevelFilter);
@@ -304,16 +304,16 @@
 					<span class="inline-flex size-10 items-center justify-center rounded-xl bg-success/15 text-success"><ShieldCheckIcon class="size-5" /></span>
 					<div>
 						<p class="text-[11px] font-black uppercase tracking-[0.28em] text-success">Ruang Penerbitan Soal</p>
-						<h1 class="mt-1 text-2xl font-black text-foreground md:text-3xl">Terbitkan soal yang sudah disetujui</h1>
+						<h1 class="mt-1 text-2xl font-black text-foreground md:text-3xl">Terbitkan soal siap pakai</h1>
 					</div>
 				</div>
 				<p class="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-					Halaman ini khusus untuk antrean soal <strong>Disetujui</strong> yang belum berstatus <strong>Terbit</strong>. Review tetap dilakukan di ruang verifikasi; di sini admin/panitia memastikan kesiapan operasional sebelum soal boleh dipakai paket asesmen.
+					Halaman ini khusus untuk antrean soal <strong>Siap Pakai</strong> yang belum berstatus <strong>Terbit</strong>. Pemeriksaan tetap dilakukan di ruang verifikasi; di sini admin/panitia memastikan kesiapan operasional sebelum soal boleh dipakai paket asesmen.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2 lg:justify-end">
-				<a href={resolve('/bank-soal/verifikasi')} class="inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted/50">Review Soal</a>
-				<a href={resolve('/bank-soal?workflow_status=approved&status=draft')} class="inline-flex h-9 items-center rounded-md border border-success/20 bg-card px-3 text-sm font-semibold text-success hover:bg-success/10">Daftar Disetujui</a>
+				<a href={resolve('/bank-soal/verifikasi')} class="inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted/50">Pemeriksaan Soal</a>
+				<a href={resolve('/bank-soal?workflow_status=siap_pakai&status=draft')} class="inline-flex h-9 items-center rounded-md border border-success/20 bg-card px-3 text-sm font-semibold text-success hover:bg-success/10">Daftar Siap Pakai</a>
 			</div>
 		</div>
 	</section>
@@ -322,7 +322,7 @@
 		<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
 			<p class="text-xs font-semibold text-muted-foreground">Antrean siap terbit</p>
 			<p class="mt-2 text-3xl font-black text-foreground">{totalItems}</p>
-			<p class="mt-1 text-xs text-muted-foreground">Soal approved + belum published</p>
+			<p class="mt-1 text-xs text-muted-foreground">Soal siap pakai + belum terbit</p>
 		</div>
 		<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
 			<p class="text-xs font-semibold text-muted-foreground">Siap secara metadata</p>
@@ -409,15 +409,15 @@
 						<h2 class="text-base font-semibold text-foreground">Antrean Penerbitan</h2>
 						<p class="mt-1 text-xs text-muted-foreground">{overview.total === 0 ? 'Tidak ada soal siap terbit pada filter ini' : `${resultStart}-${resultEnd} dari ${overview.total} soal`}</p>
 					</div>
-					<Badge variant="outline" class="border-success/20 bg-success/10 text-success">Approved → Terbit</Badge>
+					<Badge variant="outline" class="border-success/20 bg-success/10 text-success">Siap Pakai -> Terbit</Badge>
 				</div>
 
 				{#if overview.questions.length === 0}
 					<div class="flex flex-col items-center px-6 py-12 text-center">
 						<div class="flex size-12 items-center justify-center rounded-xl bg-success/10 text-success"><CheckCircle2Icon class="size-6" /></div>
 						<h3 class="mt-4 text-lg font-bold text-foreground">Antrean penerbitan kosong</h3>
-						<p class="mt-2 max-w-md text-sm leading-6 text-muted-foreground">Semua soal yang lolos review sudah diterbitkan, atau belum ada soal yang berstatus disetujui.</p>
-						<a href={resolve('/bank-soal/verifikasi')} class="mt-5 inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted/50">Buka Review</a>
+						<p class="mt-2 max-w-md text-sm leading-6 text-muted-foreground">Semua soal siap pakai sudah diterbitkan, atau belum ada soal yang siap diterbitkan.</p>
+						<a href={resolve('/bank-soal/verifikasi')} class="mt-5 inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted/50">Buka Pemeriksaan</a>
 					</div>
 				{:else}
 					<div class="hidden md:block">
@@ -440,11 +440,11 @@
 											<div class="min-w-0">
 												<div class="flex flex-wrap items-center gap-1.5">
 													<Badge variant="outline" class="text-[10px]">{question.code || 'Tanpa kode'}</Badge>
-													<Badge class="bg-success text-background text-[10px]">Disetujui</Badge>
+													<Badge class="bg-success text-background text-[10px]">Siap Pakai</Badge>
 													{#if question.hots_flag}<Badge variant="outline" class="text-[10px]">HOTS</Badge>{/if}
 												</div>
 												<p class="mt-1 line-clamp-2 text-sm font-medium text-foreground">{stemPreview(question)}</p>
-												<p class="mt-1 text-xs text-muted-foreground">Penulis: {authorLabel(question)} · Reviewer: {reviewerLabel(question)} · Review {formatDate(question.reviewed_at)}</p>
+												<p class="mt-1 text-xs text-muted-foreground">Penulis: {authorLabel(question)} · Pemeriksa: {reviewerLabel(question)} · Diperiksa {formatDate(question.reviewed_at)}</p>
 											</div>
 										</Table.Cell>
 										<Table.Cell class="text-sm text-muted-foreground">
@@ -478,7 +478,7 @@
 								<div class="flex items-start gap-3">
 									<input class="mt-1" type="checkbox" aria-label={`Pilih ${question.code || question.id}`} checked={selectedIds.has(question.id)} onchange={(event) => toggleSelection(question.id, (event.currentTarget as HTMLInputElement).checked)} />
 									<div class="min-w-0 flex-1">
-										<div class="flex flex-wrap gap-1.5"><Badge class="bg-success text-background text-[10px]">Disetujui</Badge><Badge variant="outline" class="text-[10px]">{question.code || 'Tanpa kode'}</Badge></div>
+										<div class="flex flex-wrap gap-1.5"><Badge class="bg-success text-background text-[10px]">Siap Pakai</Badge><Badge variant="outline" class="text-[10px]">{question.code || 'Tanpa kode'}</Badge></div>
 										<p class="mt-2 line-clamp-3 text-sm font-semibold text-foreground">{stemPreview(question)}</p>
 										<p class="mt-1 text-xs text-muted-foreground">{question.subject_name || question.subject_code || 'Mapel'} · {questionTypeLabel(question.question_type)} · {question.target_level || 'Lintas tingkat'}</p>
 										<p class="mt-1 text-xs text-muted-foreground">Penulis: {authorLabel(question)} · Reviewer: {reviewerLabel(question)}</p>

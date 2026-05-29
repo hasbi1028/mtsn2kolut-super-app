@@ -91,7 +91,7 @@ WHERE (
   AND (
     $14::bool
     OR q.status = 'published'
-    OR ($15::bool AND q.workflow_status IN ('approved', 'published'))
+    OR ($15::bool AND q.workflow_status IN ('siap_pakai'))
     OR q.author_username = $16::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -104,8 +104,8 @@ WHERE (
       SELECT 1 FROM bank_soal_reviewer_scopes rs
       WHERE rs.user_id = $17::uuid
         AND (
-          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+          (rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
         )
         AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
         AND (
@@ -117,19 +117,31 @@ WHERE (
   AND (
     $18::text = ''
     OR (
+      $18::text = 'needs_revision'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
+    )
+    OR (
       $18::text = 'item_analysis'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
       $18::text = 'reviewer'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
       $18::text = 'workflow'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
@@ -519,7 +531,7 @@ WHERE author_username = $1::text
   AND COALESCE(media_asset_ids::text, 'null') = COALESCE($26::jsonb::text, 'null')
   AND status = 'draft'
   AND workflow_status = $27::text
-  AND workflow_status IN ('draft', 'review', 'submitted')
+  AND workflow_status IN ('konsep', 'diperiksa')
   AND source_question_id IS NULL
   AND supersedes_question_id IS NULL
   AND created_at >= NOW() - INTERVAL '15 minutes'
@@ -998,19 +1010,21 @@ func (q *Queries) GetCbtQuestionDetail(ctx context.Context, id pgtype.UUID) (Get
 const getCbtQuestionSummaryCounts = `-- name: GetCbtQuestionSummaryCounts :one
 SELECT
   COUNT(*)::bigint AS total,
-  COUNT(*) FILTER (WHERE q.status = 'draft')::bigint AS draft,
-  COUNT(*) FILTER (WHERE q.workflow_status IN ('review', 'submitted'))::bigint AS review,
-  COUNT(*) FILTER (WHERE q.workflow_status = 'rejected')::bigint AS rejected,
-  COUNT(*) FILTER (WHERE q.workflow_status = 'approved')::bigint AS approved,
+  COUNT(*) FILTER (WHERE q.workflow_status = 'konsep' AND q.status <> 'archived')::bigint AS draft,
+  COUNT(*) FILTER (WHERE q.workflow_status = 'diperiksa')::bigint AS review,
+  COUNT(*) FILTER (WHERE q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> '')::bigint AS rejected,
+  COUNT(*) FILTER (WHERE q.workflow_status = 'siap_pakai')::bigint AS approved,
   COUNT(*) FILTER (WHERE q.status = 'published')::bigint AS published,
   COALESCE(SUM(pkg_usage.package_count), 0)::bigint AS package_usage,
   COUNT(*) FILTER (
     WHERE q.author_username = $1::text
       AND q.status = 'draft'
-      AND q.workflow_status = 'draft'
+      AND q.workflow_status = 'konsep'
   )::bigint AS my_draft,
   COUNT(*) FILTER (
-    WHERE q.workflow_status IN ('review', 'submitted')
+    WHERE q.workflow_status = 'diperiksa'
       AND (
         $2::bool
         OR q.author_username = $1::text
@@ -1035,11 +1049,13 @@ SELECT
   )::bigint AS my_review_waiting,
   COUNT(*) FILTER (
     WHERE q.status = 'draft'
-      AND q.workflow_status IN ('revision_needed', 'rejected')
+      AND q.workflow_status = 'konsep'
+      AND btrim(q.review_notes) <> ''
   )::bigint AS revision_needed,
   COUNT(*) FILTER (
     WHERE q.status = 'draft'
-      AND q.workflow_status = 'reviewed'
+      AND q.workflow_status = 'diperiksa'
+      AND btrim(q.reviewer_username) <> ''
       AND (
         $2::bool
         OR q.author_username = $1::text
@@ -1057,7 +1073,7 @@ SELECT
   )::bigint AS approval_waiting,
   COUNT(*) FILTER (
     WHERE q.status = 'published'
-       OR q.workflow_status IN ('approved', 'published')
+       OR q.workflow_status = 'siap_pakai'
   )::bigint AS package_ready,
   COUNT(*) FILTER (
     WHERE COALESCE(NULLIF(btrim(q.target_level), ''), '') = ''
@@ -1079,7 +1095,7 @@ WHERE TRUE
   AND (
     $2::bool
     OR q.status = 'published'
-    OR ($4::bool AND q.workflow_status IN ('approved', 'published'))
+    OR ($4::bool AND q.workflow_status IN ('siap_pakai'))
     OR q.author_username = $1::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -1092,8 +1108,8 @@ WHERE TRUE
       SELECT 1 FROM bank_soal_reviewer_scopes rs
       WHERE rs.user_id = $3::uuid
         AND (
-          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+          (rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
         )
         AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
         AND (
@@ -1314,7 +1330,7 @@ WHERE TRUE
   AND (
     $1::bool
     OR q.status = 'published'
-    OR ($2::bool AND q.workflow_status IN ('approved', 'published'))
+    OR ($2::bool AND q.workflow_status IN ('siap_pakai'))
     OR q.author_username = $3::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -1327,8 +1343,8 @@ WHERE TRUE
       SELECT 1 FROM bank_soal_reviewer_scopes rs
       WHERE rs.user_id = $4::uuid
         AND (
-          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+          (rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
         )
         AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
         AND (
@@ -1386,7 +1402,7 @@ WHERE TRUE
   AND (
     $1::bool
     OR q.status = 'published'
-    OR ($2::bool AND q.workflow_status IN ('approved', 'published'))
+    OR ($2::bool AND q.workflow_status IN ('siap_pakai'))
     OR q.author_username = $3::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -1399,8 +1415,8 @@ WHERE TRUE
       SELECT 1 FROM bank_soal_reviewer_scopes rs
       WHERE rs.user_id = $4::uuid
         AND (
-          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+          (rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
         )
         AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
         AND (
@@ -1468,7 +1484,7 @@ WHERE TRUE
   AND (
     $1::bool
     OR q.status = 'published'
-    OR ($2::bool AND q.workflow_status IN ('approved', 'published'))
+    OR ($2::bool AND q.workflow_status IN ('siap_pakai'))
     OR q.author_username = $3::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -1481,8 +1497,8 @@ WHERE TRUE
       SELECT 1 FROM bank_soal_reviewer_scopes rs
       WHERE rs.user_id = $4::uuid
         AND (
-          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+          (rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
         )
         AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
         AND (
@@ -1710,8 +1726,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
              SELECT 1 FROM bank_soal_reviewer_scopes rs
              WHERE rs.user_id = $3::uuid
                AND (
-                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
                )
                AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
                AND (
@@ -1737,8 +1753,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
              SELECT 1 FROM bank_soal_reviewer_scopes rs
              WHERE rs.user_id = $3::uuid
                AND (
-                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
                )
                AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
                AND (
@@ -1952,8 +1968,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
              SELECT 1 FROM bank_soal_reviewer_scopes rs
              WHERE rs.user_id = $3::uuid
                AND (
-                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
                )
                AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
                AND (
@@ -1979,8 +1995,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
              SELECT 1 FROM bank_soal_reviewer_scopes rs
              WHERE rs.user_id = $3::uuid
                AND (
-                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
                )
                AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
                AND (
@@ -2069,7 +2085,7 @@ WHERE (
   AND (
     $1::bool
     OR q.status = 'published'
-    OR ($19::bool AND q.workflow_status IN ('approved', 'published'))
+    OR ($19::bool AND q.workflow_status IN ('siap_pakai'))
     OR q.author_username = $2::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -2082,8 +2098,8 @@ WHERE (
       SELECT 1 FROM bank_soal_reviewer_scopes rs
       WHERE rs.user_id = $3::uuid
         AND (
-          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+          (rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
         )
         AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
         AND (
@@ -2095,19 +2111,31 @@ WHERE (
   AND (
     $20::text = ''
     OR (
+      $20::text = 'needs_revision'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
+    )
+    OR (
       $20::text = 'item_analysis'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
       $20::text = 'reviewer'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
       $20::text = 'workflow'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
@@ -2338,8 +2366,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
              SELECT 1 FROM bank_soal_reviewer_scopes rs
              WHERE rs.user_id = $3::uuid
                AND (
-                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
                )
                AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
                AND (
@@ -2365,8 +2393,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
              SELECT 1 FROM bank_soal_reviewer_scopes rs
              WHERE rs.user_id = $3::uuid
                AND (
-                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+                 ($4::bool AND rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+                 OR ($5::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
                )
                AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
                AND (
@@ -2455,7 +2483,7 @@ WHERE (
   AND (
     $1::bool
     OR q.status = 'published'
-    OR ($19::bool AND q.workflow_status IN ('approved', 'published'))
+    OR ($19::bool AND q.workflow_status IN ('siap_pakai'))
     OR q.author_username = $2::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -2468,8 +2496,8 @@ WHERE (
       SELECT 1 FROM bank_soal_reviewer_scopes rs
       WHERE rs.user_id = $3::uuid
         AND (
-          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+          (rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
         )
         AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
         AND (
@@ -2481,19 +2509,31 @@ WHERE (
   AND (
     $20::text = ''
     OR (
+      $20::text = 'needs_revision'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
+    )
+    OR (
       $20::text = 'item_analysis'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
       $20::text = 'reviewer'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
       $20::text = 'workflow'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )

@@ -215,7 +215,7 @@
 					description="Cek cakupan mapel, kelengkapan data soal, HOTS, pemakaian paket, dan prioritas revisi."
 					href={canUseQuality ? actionHref('/bank-soal/analisis-butir') : ''}
 					actionLabel={canUseQuality ? 'Buka Mutu' : 'Perlu izin mutu'}
-					status={`${formatNumber(statusValue(model, 'approved'))} siap`}
+					status={`${formatNumber(statusValue(model, 'siap_pakai'))} siap`}
 				/>
 				<WorkflowCard
 					title="Pengaturan"
@@ -236,7 +236,7 @@
 							<span class="text-xs font-semibold uppercase text-muted-foreground">{card.label}</span>
 							{#if card.key === 'archived'}
 								<ArchiveIcon class="size-4 text-muted-foreground" />
-							{:else if card.key === 'published' || card.key === 'approved'}
+							{:else if card.key === 'published' || card.key === 'siap_pakai'}
 								<CheckCircle2Icon class="size-4 text-primary" />
 							{:else}
 								<FileQuestionIcon class="size-4 text-muted-foreground" />

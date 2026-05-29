@@ -147,7 +147,7 @@ func TestCreateCbtPackageRequiresEligibleOfficialQuestions(t *testing.T) {
 			t.Fatalf("createCbtPackage() error = %v", err)
 		}
 		if len(store.addParams) != 2 || store.addParams[0].QuestionID != approvedQuestionID || store.addParams[1].QuestionID != workflowPublishedQuestionID {
-			t.Fatalf("AddCbtPackageQuestion() params = %+v, want approved/published workflow questions added", store.addParams)
+			t.Fatalf("AddCbtPackageQuestion() params = %+v, want Siap Pakai atau sudah terbit workflow questions added", store.addParams)
 		}
 	})
 
@@ -172,7 +172,7 @@ func TestCreateCbtPackageRequiresEligibleOfficialQuestions(t *testing.T) {
 					Title:       "PAT IPA",
 					QuestionIDs: []pgtype.UUID{draftQuestionID},
 				})
-				if err == nil || !strings.Contains(err.Error(), "draft/submitted/revision_needed/rejected") {
+				if err == nil || !strings.Contains(err.Error(), "Siap Pakai atau sudah terbit") {
 					t.Fatalf("createCbtPackage() error = %v, want unsafe workflow rejection", err)
 				}
 				if len(store.addParams) != 0 {
@@ -199,7 +199,7 @@ func TestCreateCbtPackageRequiresEligibleOfficialQuestions(t *testing.T) {
 			Title:       "PAT IPA",
 			QuestionIDs: []pgtype.UUID{draftQuestionID},
 		})
-		if err == nil || !strings.Contains(err.Error(), "approved/published") {
+		if err == nil || !strings.Contains(err.Error(), "Siap Pakai atau sudah terbit") {
 			t.Fatalf("createCbtPackage() error = %v, want unpublished question rejection", err)
 		}
 		if len(store.addParams) != 0 {

@@ -197,21 +197,15 @@ func normalizeBankSoalReportFilters(f BankSoalReportFilters) BankSoalReportFilte
 
 func normalizeBankSoalWorkflowStatuses(primary string, values []string) []string {
 	allowed := map[string]bool{
-		"draft":           true,
-		"submitted":       true,
-		"review":          true,
-		"reviewed":        true,
-		"revision_needed": true,
-		"approved":        true,
-		"published":       true,
-		"rejected":        true,
-		"archived":        true,
+		"konsep":     true,
+		"diperiksa":  true,
+		"siap_pakai": true,
 	}
 	seen := map[string]bool{}
 	out := []string{}
 	add := func(raw string) {
 		for _, part := range strings.Split(raw, ",") {
-			status := strings.ToLower(strings.TrimSpace(part))
+			status := normalizeWorkflowStatus(part)
 			if status == "" || !allowed[status] || seen[status] {
 				continue
 			}
@@ -296,7 +290,8 @@ WITH filtered AS (
          COALESCE(NULLIF(s.name,''), '[Mapel tidak tercatat]') AS subject_name,
          COALESCE(NULLIF(q.target_level,''), 'Belum tercatat') AS level_name,
          COALESCE(NULLIF(q.question_type::text,''), 'multiple_choice') AS qtype,
-         COALESCE(NULLIF(q.workflow_status::text,''), 'draft') AS workflow,
+         COALESCE(NULLIF(q.workflow_status::text,''), 'konsep') AS workflow,
+         q.status::text AS publication_status,
          (q.created_at AT TIME ZONE 'Asia/Makassar') AS created_wita,
          COALESCE(NULLIF(e.nama,''), NULLIF(u.display_name,''), NULLIF(q.author_username,''), '[Tidak tercatat]') AS author_name
   FROM cbt_questions q
@@ -337,17 +332,17 @@ func (s *BankSoalReportService) queryRows(ctx context.Context, f BankSoalReportF
 }
 
 func bankSoalReportSelectSQL(report string) string {
-	commonCounts := `COUNT(*)::bigint AS total, COUNT(*) FILTER (WHERE qtype='multiple_choice')::bigint AS pg, COUNT(*) FILTER (WHERE qtype='essay')::bigint AS essay, COUNT(*) FILTER (WHERE qtype NOT IN ('multiple_choice','essay'))::bigint AS other, COUNT(*) FILTER (WHERE workflow='draft')::bigint AS draft, COUNT(*) FILTER (WHERE workflow='submitted')::bigint AS submitted, COUNT(*) FILTER (WHERE workflow IN ('review','reviewed'))::bigint AS review, COUNT(*) FILTER (WHERE workflow='revision_needed')::bigint AS revision, COUNT(*) FILTER (WHERE workflow='approved')::bigint AS approved, COUNT(*) FILTER (WHERE workflow='published')::bigint AS published, COUNT(*) FILTER (WHERE workflow='rejected')::bigint AS rejected`
+	commonCounts := `COUNT(*)::bigint AS total, COUNT(*) FILTER (WHERE qtype='multiple_choice')::bigint AS pg, COUNT(*) FILTER (WHERE qtype='essay')::bigint AS essay, COUNT(*) FILTER (WHERE qtype NOT IN ('multiple_choice','essay'))::bigint AS other, COUNT(*) FILTER (WHERE workflow='konsep')::bigint AS draft, 0::bigint AS submitted, COUNT(*) FILTER (WHERE workflow='diperiksa')::bigint AS review, COUNT(*) FILTER (WHERE workflow='konsep' AND NULLIF(btrim(COALESCE(reviewer_username,'')), '') IS NOT NULL) AS revision, COUNT(*) FILTER (WHERE workflow='siap_pakai')::bigint AS approved, COUNT(*) FILTER (WHERE publication_status='published')::bigint AS published, 0::bigint AS rejected`
 	suffix := `, to_char(MIN(created_wita), 'YYYY-MM-DD HH24:MI') AS first_input, to_char(MAX(created_wita), 'YYYY-MM-DD HH24:MI') AS last_input`
 	switch report {
 	case "progress":
 		return ` SELECT subject_name AS primary, '' AS secondary, subject_name, level_name, 'Progres mapel' AS task, ` + commonCounts + `, 20::bigint AS target_pg, 5::bigint AS target_essay, GREATEST(20 - COUNT(*) FILTER (WHERE qtype='multiple_choice'),0)::bigint + GREATEST(5 - COUNT(*) FILTER (WHERE qtype='essay'),0)::bigint AS shortage, COUNT(*)::bigint AS volume, 'soal' AS unit` + suffix + `, CASE WHEN (COUNT(*) FILTER (WHERE qtype='multiple_choice') >= 20 AND COUNT(*) FILTER (WHERE qtype='essay') >= 5) THEN 'Lengkap' ELSE 'Belum lengkap' END AS notes FROM filtered GROUP BY subject_name, level_name ORDER BY subject_name, level_name`
 	case "revision":
-		return ` SELECT author_name AS primary, COALESCE(author_username,'-') AS secondary, subject_name, level_name, 'Revisi soal' AS task, ` + commonCounts + `, 0::bigint, 0::bigint, COUNT(*)::bigint AS shortage, COUNT(*)::bigint AS volume, 'soal revisi' AS unit` + suffix + `, 'Perlu ditindaklanjuti pembuat soal' AS notes FROM filtered WHERE workflow='revision_needed' GROUP BY author_name, author_username, subject_name, level_name ORDER BY last_input DESC`
+		return ` SELECT author_name AS primary, COALESCE(author_username,'-') AS secondary, subject_name, level_name, 'Revisi soal' AS task, ` + commonCounts + `, 0::bigint, 0::bigint, COUNT(*)::bigint AS shortage, COUNT(*)::bigint AS volume, 'soal revisi' AS unit` + suffix + `, 'Perlu ditindaklanjuti pembuat soal' AS notes FROM filtered WHERE workflow='konsep' AND NULLIF(btrim(COALESCE(reviewer_username,'')), '') IS NOT NULL GROUP BY author_name, author_username, subject_name, level_name ORDER BY last_input DESC`
 	case "reviewer":
-		return ` SELECT COALESCE(NULLIF(reviewer_username,''), NULLIF(approver_username,''), 'Belum ditugaskan') AS primary, '' AS secondary, subject_name, level_name, 'Review/verifikasi' AS task, ` + commonCounts + `, 0::bigint, 0::bigint, COUNT(*) FILTER (WHERE workflow IN ('submitted','review','reviewed'))::bigint AS shortage, COUNT(*)::bigint AS volume, 'soal' AS unit` + suffix + `, 'Beban reviewer dan status verifikasi' AS notes FROM filtered WHERE workflow IN ('submitted','review','reviewed','revision_needed','approved','published') GROUP BY primary, subject_name, level_name ORDER BY primary, subject_name, level_name`
+		return ` SELECT COALESCE(NULLIF(reviewer_username,''), NULLIF(approver_username,''), 'Belum ditugaskan') AS primary, '' AS secondary, subject_name, level_name, 'Review/verifikasi' AS task, ` + commonCounts + `, 0::bigint, 0::bigint, COUNT(*) FILTER (WHERE workflow='diperiksa')::bigint AS shortage, COUNT(*)::bigint AS volume, 'soal' AS unit` + suffix + `, 'Beban reviewer dan status verifikasi' AS notes FROM filtered WHERE workflow IN ('diperiksa','siap_pakai') OR (workflow='konsep' AND NULLIF(btrim(COALESCE(reviewer_username,'')), '') IS NOT NULL) GROUP BY primary, subject_name, level_name ORDER BY primary, subject_name, level_name`
 	case "readiness":
-		return ` SELECT subject_name AS primary, '' AS secondary, subject_name, level_name, 'Siap paket' AS task, ` + commonCounts + `, 20::bigint, 5::bigint, GREATEST(20 - COUNT(*) FILTER (WHERE qtype='multiple_choice' AND workflow IN ('approved','published')),0)::bigint + GREATEST(5 - COUNT(*) FILTER (WHERE qtype='essay' AND workflow IN ('approved','published')),0)::bigint AS shortage, COUNT(*) FILTER (WHERE workflow IN ('approved','published'))::bigint AS volume, 'soal siap' AS unit` + suffix + `, CASE WHEN COUNT(*) FILTER (WHERE workflow IN ('approved','published')) > 0 THEN 'Ada soal siap paket' ELSE 'Belum siap' END AS notes FROM filtered GROUP BY subject_name, level_name ORDER BY subject_name, level_name`
+		return ` SELECT subject_name AS primary, '' AS secondary, subject_name, level_name, 'Siap paket' AS task, ` + commonCounts + `, 20::bigint, 5::bigint, GREATEST(20 - COUNT(*) FILTER (WHERE qtype='multiple_choice' AND workflow='siap_pakai'),0)::bigint + GREATEST(5 - COUNT(*) FILTER (WHERE qtype='essay' AND workflow='siap_pakai'),0)::bigint AS shortage, COUNT(*) FILTER (WHERE workflow='siap_pakai')::bigint AS volume, 'soal siap' AS unit` + suffix + `, CASE WHEN COUNT(*) FILTER (WHERE workflow='siap_pakai') > 0 THEN 'Ada soal siap paket' ELSE 'Belum siap' END AS notes FROM filtered GROUP BY subject_name, level_name ORDER BY subject_name, level_name`
 	case "honor":
 		return ` SELECT author_name AS primary, COALESCE(author_username,'-') AS secondary, subject_name, level_name, 'Pembuat soal' AS task, ` + commonCounts + `, 0::bigint, 0::bigint, 0::bigint AS shortage, COUNT(*)::bigint AS volume, 'soal' AS unit` + suffix + `, 'Volume input soal; nominal honor ditentukan kebijakan madrasah' AS notes FROM filtered GROUP BY author_name, author_username, subject_name, level_name ORDER BY author_name, subject_name, level_name`
 	default:
@@ -385,13 +380,9 @@ func summarizeBankSoalRows(rows []BankSoalReportRow) BankSoalReportSummary {
 func statusesFromRows(rows []BankSoalReportRow) []BankSoalReportStatus {
 	m := map[string]int64{}
 	for _, r := range rows {
-		m["draft"] += r.Draft
-		m["submitted"] += r.Submitted
-		m["review"] += r.Review
-		m["revision_needed"] += r.Revision
-		m["approved"] += r.Approved
-		m["published"] += r.Published
-		m["rejected"] += r.Rejected
+		m["konsep"] += r.Draft
+		m["diperiksa"] += r.Review
+		m["siap_pakai"] += r.Approved
 	}
 	keys := make([]string, 0, len(m))
 	for k, v := range m {
@@ -411,7 +402,7 @@ func statusString(r BankSoalReportRow) string {
 	vals := []struct {
 		k string
 		v int64
-	}{{"draft", r.Draft}, {"submitted", r.Submitted}, {"review", r.Review}, {"revision_needed", r.Revision}, {"approved", r.Approved}, {"published", r.Published}, {"rejected", r.Rejected}}
+	}{{"konsep", r.Draft}, {"diperiksa", r.Review}, {"siap_pakai", r.Approved}}
 	for _, x := range vals {
 		if x.v > 0 {
 			parts = append(parts, x.k+":"+strconv.FormatInt(x.v, 10))
@@ -424,9 +415,9 @@ func renderBankSoalReportCSV(r BankSoalReportResult) ([]byte, error) {
 	var b bytes.Buffer
 	b.WriteString("\xEF\xBB\xBF")
 	w := csv.NewWriter(&b)
-	_ = w.Write([]string{"No", "Laporan", "Pembuat/Utama", "Username/Sekunder", "Mapel", "Tingkat", "Tugas", "Total", "PG", "Essay", "Lain", "Draft", "Submitted", "Review", "Perlu Revisi", "Approved", "Published", "Rejected", "Target PG", "Target Essay", "Kurang", "Volume", "Satuan", "Input Pertama", "Input Terakhir", "Keterangan"})
+	_ = w.Write([]string{"No", "Laporan", "Pembuat/Utama", "Username/Sekunder", "Mapel", "Tingkat", "Tugas", "Total", "PG", "Essay", "Lain", "Konsep", "Diperiksa", "Siap Pakai", "Perlu Revisi", "Target PG", "Target Essay", "Kurang", "Volume", "Satuan", "Input Pertama", "Input Terakhir", "Keterangan"})
 	for _, row := range r.Rows {
-		_ = w.Write([]string{strconv.Itoa(row.No), r.Title, row.Primary, row.Secondary, row.SubjectName, row.LevelName, row.Task, i64(row.Total), i64(row.PG), i64(row.Essay), i64(row.Other), i64(row.Draft), i64(row.Submitted), i64(row.Review), i64(row.Revision), i64(row.Approved), i64(row.Published), i64(row.Rejected), i64(row.TargetPG), i64(row.TargetEssay), i64(row.Shortage), i64(row.Volume), row.Unit, row.FirstInput, row.LastInput, row.Notes})
+		_ = w.Write([]string{strconv.Itoa(row.No), r.Title, row.Primary, row.Secondary, row.SubjectName, row.LevelName, row.Task, i64(row.Total), i64(row.PG), i64(row.Essay), i64(row.Other), i64(row.Draft), i64(row.Review), i64(row.Approved), i64(row.Revision), i64(row.TargetPG), i64(row.TargetEssay), i64(row.Shortage), i64(row.Volume), row.Unit, row.FirstInput, row.LastInput, row.Notes})
 	}
 	w.Flush()
 	return b.Bytes(), w.Error()
@@ -584,15 +575,9 @@ func bankSoalReportShortStatuses(value string) string {
 		return ""
 	}
 	aliases := map[string]string{
-		"draft":           "Draft",
-		"submitted":       "Sub",
-		"review":          "Review",
-		"reviewed":        "Review",
-		"revision_needed": "Rev",
-		"approved":        "Appr",
-		"published":       "Pub",
-		"rejected":        "Reject",
-		"archived":        "Arsip",
+		"konsep":     "Konsep",
+		"diperiksa":  "Diperiksa",
+		"siap_pakai": "Siap",
 	}
 	parts := strings.Split(text, ",")
 	out := make([]string, 0, len(parts))

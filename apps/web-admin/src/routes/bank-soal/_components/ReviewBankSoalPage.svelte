@@ -91,7 +91,7 @@
 
 	async function fetchQueue(pageNumber = currentPage, limit = pageSize): Promise<QuestionListResponse> {
 		const params = new URLSearchParams({
-			workflow_status: 'review',
+			workflow_status: 'diperiksa',
 			status: 'draft',
 			limit: String(limit),
 			offset: String(Math.max(0, (pageNumber - 1) * limit))

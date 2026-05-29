@@ -11,7 +11,7 @@ const sampleQuestions: BankSoalHealthInput['questions'] = [
 		id: 'q-1',
 		subject_id: 'math',
 		subject_name: 'Matematika',
-		workflow_status: 'approved',
+		workflow_status: 'siap_pakai',
 		status: 'published',
 		kd_ref: '3.1',
 		cp_ref: 'CP-1',
@@ -27,7 +27,7 @@ const sampleQuestions: BankSoalHealthInput['questions'] = [
 		id: 'q-2',
 		subject_id: 'math',
 		subject_name: 'Matematika',
-		workflow_status: 'review',
+		workflow_status: 'diperiksa',
 		status: 'draft',
 		kd_ref: '',
 		cp_ref: 'CP-1',
@@ -43,7 +43,7 @@ const sampleQuestions: BankSoalHealthInput['questions'] = [
 		id: 'q-3',
 		subject_id: 'indo',
 		subject_name: 'Bahasa Indonesia',
-		workflow_status: 'revision',
+		workflow_status: 'konsep',
 		status: 'draft',
 		kd_ref: null,
 		cp_ref: '',
@@ -64,10 +64,9 @@ describe('Bank Soal health model', () => {
 				counts: {
 					total: 30,
 					published: 8,
-					approved: 10,
-					review: 5,
-					draft: 6,
-					revision: 1,
+					siap_pakai: 10,
+					diperiksa: 5,
+					konsep: 7,
 					archived: 0,
 				},
 				by_subject: [
@@ -80,11 +79,10 @@ describe('Bank Soal health model', () => {
 
 		expect(model.statusCards.map((card) => [card.key, card.value, card.evidence])).toEqual([
 			['total', 30, 'summary'],
+			['konsep', 7, 'summary'],
+			['diperiksa', 5, 'summary'],
+			['siap_pakai', 10, 'summary'],
 			['published', 8, 'summary'],
-			['approved', 10, 'summary'],
-			['review', 5, 'summary'],
-			['draft', 6, 'summary'],
-			['revision', 1, 'summary'],
 			['archived', 0, 'summary'],
 		]);
 		expect(model.subjectCoverage.value).toBe(2);
@@ -100,18 +98,18 @@ describe('Bank Soal health model', () => {
 			['difficulty', 1],
 			['explanation', 2],
 		]);
-		expect(model.reviewBacklog.value).toBe(6);
-		expect(model.readiness.score).toBeGreaterThanOrEqual(55);
+		expect(model.reviewBacklog.value).toBe(5);
+		expect(model.readiness.score).toBeGreaterThanOrEqual(50);
 		expect(model.readiness.grade).toMatch(/^[A-D]$/);
 		expect(model.warnings.some((warning) => warning.kind === 'asset' && warning.severity === 'warning')).toBe(true);
 	});
 
 	it('marks unavailable import, asset, and archived evidence instead of inventing analytics', () => {
 		const model = buildBankSoalHealthModel({
-			summary: { counts: { total: 2, draft: 2 } },
+			summary: { counts: { total: 2, konsep: 2 } },
 			questions: [
-				{ id: 'q-1', workflow_status: 'draft', status: 'draft' },
-				{ id: 'q-2', workflow_status: 'draft', status: 'draft' },
+				{ id: 'q-1', workflow_status: 'konsep', status: 'draft' },
+				{ id: 'q-2', workflow_status: 'konsep', status: 'draft' },
 			],
 		});
 
@@ -138,8 +136,8 @@ describe('Bank Soal health model', () => {
 	it('labels sample-only subject data without pretending full coverage', () => {
 		const model = buildBankSoalHealthModel({
 			questions: [
-				{ id: 'q-1', subject_id: 'math', workflow_status: 'draft', status: 'draft' },
-				{ id: 'q-2', subject_id: 'indo', workflow_status: 'draft', status: 'draft' },
+				{ id: 'q-1', subject_id: 'math', workflow_status: 'konsep', status: 'draft' },
+				{ id: 'q-2', subject_id: 'indo', workflow_status: 'konsep', status: 'draft' },
 			],
 		});
 
@@ -152,7 +150,7 @@ describe('Bank Soal health model', () => {
 
 	it('filters privileged quick actions by Bank Soal capabilities', () => {
 		const model = buildBankSoalHealthModel({
-			summary: { counts: { total: 10, review: 3, draft: 7 } },
+			summary: { counts: { total: 10, diperiksa: 3, konsep: 7 } },
 			questions: sampleQuestions,
 		});
 

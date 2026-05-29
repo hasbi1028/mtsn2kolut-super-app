@@ -51,8 +51,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
              SELECT 1 FROM bank_soal_reviewer_scopes rs
              WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
                AND (
-                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
                )
                AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
                AND (
@@ -78,8 +78,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
              SELECT 1 FROM bank_soal_reviewer_scopes rs
              WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
                AND (
-                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
                )
                AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
                AND (
@@ -142,8 +142,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
              SELECT 1 FROM bank_soal_reviewer_scopes rs
              WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
                AND (
-                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
                )
                AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
                AND (
@@ -169,8 +169,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
              SELECT 1 FROM bank_soal_reviewer_scopes rs
              WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
                AND (
-                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
                )
                AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
                AND (
@@ -259,7 +259,7 @@ WHERE (
   AND (
     sqlc.arg(is_admin)::bool
     OR q.status = 'published'
-    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('approved', 'published'))
+    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('siap_pakai'))
     OR q.author_username = sqlc.arg(actor_username)::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -272,8 +272,8 @@ WHERE (
       SELECT 1 FROM bank_soal_reviewer_scopes rs
       WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
         AND (
-          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+          (rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
         )
         AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
         AND (
@@ -285,19 +285,31 @@ WHERE (
   AND (
     sqlc.arg(revision_source)::text = ''
     OR (
+      sqlc.arg(revision_source)::text = 'needs_revision'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
+    )
+    OR (
       sqlc.arg(revision_source)::text = 'item_analysis'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
       sqlc.arg(revision_source)::text = 'reviewer'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
       sqlc.arg(revision_source)::text = 'workflow'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
@@ -339,8 +351,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
              SELECT 1 FROM bank_soal_reviewer_scopes rs
              WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
                AND (
-                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
                )
                AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
                AND (
@@ -366,8 +378,8 @@ SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject
              SELECT 1 FROM bank_soal_reviewer_scopes rs
              WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
                AND (
-                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+                 (sqlc.arg(can_review_answer)::bool AND rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+                 OR (sqlc.arg(can_approve_answer)::bool AND rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
                )
                AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
                AND (
@@ -456,7 +468,7 @@ WHERE (
   AND (
     sqlc.arg(is_admin)::bool
     OR q.status = 'published'
-    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('approved', 'published'))
+    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('siap_pakai'))
     OR q.author_username = sqlc.arg(actor_username)::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -469,8 +481,8 @@ WHERE (
       SELECT 1 FROM bank_soal_reviewer_scopes rs
       WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
         AND (
-          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+          (rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
         )
         AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
         AND (
@@ -482,19 +494,31 @@ WHERE (
   AND (
     sqlc.arg(revision_source)::text = ''
     OR (
+      sqlc.arg(revision_source)::text = 'needs_revision'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
+    )
+    OR (
       sqlc.arg(revision_source)::text = 'item_analysis'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
       sqlc.arg(revision_source)::text = 'reviewer'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
       sqlc.arg(revision_source)::text = 'workflow'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
@@ -567,7 +591,7 @@ WHERE (
   AND (
     sqlc.arg(is_admin)::bool
     OR q.status = 'published'
-    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('approved', 'published'))
+    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('siap_pakai'))
     OR q.author_username = sqlc.arg(actor_username)::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -580,8 +604,8 @@ WHERE (
       SELECT 1 FROM bank_soal_reviewer_scopes rs
       WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
         AND (
-          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+          (rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
         )
         AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
         AND (
@@ -593,19 +617,31 @@ WHERE (
   AND (
     sqlc.arg(revision_source)::text = ''
     OR (
+      sqlc.arg(revision_source)::text = 'needs_revision'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
+    )
+    OR (
       sqlc.arg(revision_source)::text = 'item_analysis'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
       sqlc.arg(revision_source)::text = 'reviewer'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
       sqlc.arg(revision_source)::text = 'workflow'
-      AND q.workflow_status = 'rejected'
+      AND q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> ''
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
@@ -733,7 +769,7 @@ WHERE author_username = sqlc.arg(author_username)::text
   AND COALESCE(media_asset_ids::text, 'null') = COALESCE(sqlc.arg(media_asset_ids)::jsonb::text, 'null')
   AND status = 'draft'
   AND workflow_status = sqlc.arg(workflow_status)::text
-  AND workflow_status IN ('draft', 'review', 'submitted')
+  AND workflow_status IN ('konsep', 'diperiksa')
   AND source_question_id IS NULL
   AND supersedes_question_id IS NULL
   AND created_at >= NOW() - INTERVAL '15 minutes'
@@ -997,19 +1033,21 @@ ORDER BY q.code, s.nama;
 -- name: GetCbtQuestionSummaryCounts :one
 SELECT
   COUNT(*)::bigint AS total,
-  COUNT(*) FILTER (WHERE q.status = 'draft')::bigint AS draft,
-  COUNT(*) FILTER (WHERE q.workflow_status IN ('review', 'submitted'))::bigint AS review,
-  COUNT(*) FILTER (WHERE q.workflow_status = 'rejected')::bigint AS rejected,
-  COUNT(*) FILTER (WHERE q.workflow_status = 'approved')::bigint AS approved,
+  COUNT(*) FILTER (WHERE q.workflow_status = 'konsep' AND q.status <> 'archived')::bigint AS draft,
+  COUNT(*) FILTER (WHERE q.workflow_status = 'diperiksa')::bigint AS review,
+  COUNT(*) FILTER (WHERE q.workflow_status = 'konsep'
+      AND q.status = 'draft'
+      AND btrim(q.review_notes) <> '')::bigint AS rejected,
+  COUNT(*) FILTER (WHERE q.workflow_status = 'siap_pakai')::bigint AS approved,
   COUNT(*) FILTER (WHERE q.status = 'published')::bigint AS published,
   COALESCE(SUM(pkg_usage.package_count), 0)::bigint AS package_usage,
   COUNT(*) FILTER (
     WHERE q.author_username = sqlc.arg(actor_username)::text
       AND q.status = 'draft'
-      AND q.workflow_status = 'draft'
+      AND q.workflow_status = 'konsep'
   )::bigint AS my_draft,
   COUNT(*) FILTER (
-    WHERE q.workflow_status IN ('review', 'submitted')
+    WHERE q.workflow_status = 'diperiksa'
       AND (
         sqlc.arg(is_admin)::bool
         OR q.author_username = sqlc.arg(actor_username)::text
@@ -1034,11 +1072,13 @@ SELECT
   )::bigint AS my_review_waiting,
   COUNT(*) FILTER (
     WHERE q.status = 'draft'
-      AND q.workflow_status IN ('revision_needed', 'rejected')
+      AND q.workflow_status = 'konsep'
+      AND btrim(q.review_notes) <> ''
   )::bigint AS revision_needed,
   COUNT(*) FILTER (
     WHERE q.status = 'draft'
-      AND q.workflow_status = 'reviewed'
+      AND q.workflow_status = 'diperiksa'
+      AND btrim(q.reviewer_username) <> ''
       AND (
         sqlc.arg(is_admin)::bool
         OR q.author_username = sqlc.arg(actor_username)::text
@@ -1056,7 +1096,7 @@ SELECT
   )::bigint AS approval_waiting,
   COUNT(*) FILTER (
     WHERE q.status = 'published'
-       OR q.workflow_status IN ('approved', 'published')
+       OR q.workflow_status = 'siap_pakai'
   )::bigint AS package_ready,
   COUNT(*) FILTER (
     WHERE COALESCE(NULLIF(btrim(q.target_level), ''), '') = ''
@@ -1078,7 +1118,7 @@ WHERE TRUE
   AND (
     sqlc.arg(is_admin)::bool
     OR q.status = 'published'
-    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('approved', 'published'))
+    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('siap_pakai'))
     OR q.author_username = sqlc.arg(actor_username)::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -1091,8 +1131,8 @@ WHERE TRUE
       SELECT 1 FROM bank_soal_reviewer_scopes rs
       WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
         AND (
-          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+          (rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
         )
         AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
         AND (
@@ -1110,7 +1150,7 @@ WHERE TRUE
   AND (
     sqlc.arg(is_admin)::bool
     OR q.status = 'published'
-    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('approved', 'published'))
+    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('siap_pakai'))
     OR q.author_username = sqlc.arg(actor_username)::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -1123,8 +1163,8 @@ WHERE TRUE
       SELECT 1 FROM bank_soal_reviewer_scopes rs
       WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
         AND (
-          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+          (rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
         )
         AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
         AND (
@@ -1144,7 +1184,7 @@ WHERE TRUE
   AND (
     sqlc.arg(is_admin)::bool
     OR q.status = 'published'
-    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('approved', 'published'))
+    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('siap_pakai'))
     OR q.author_username = sqlc.arg(actor_username)::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -1157,8 +1197,8 @@ WHERE TRUE
       SELECT 1 FROM bank_soal_reviewer_scopes rs
       WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
         AND (
-          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+          (rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
         )
         AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
         AND (
@@ -1180,7 +1220,7 @@ WHERE TRUE
   AND (
     sqlc.arg(is_admin)::bool
     OR q.status = 'published'
-    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('approved', 'published'))
+    OR (sqlc.arg(can_use_in_package)::bool AND q.workflow_status IN ('siap_pakai'))
     OR q.author_username = sqlc.arg(actor_username)::text
     OR EXISTS (
       SELECT 1 FROM cbt_event_members m
@@ -1193,8 +1233,8 @@ WHERE TRUE
       SELECT 1 FROM bank_soal_reviewer_scopes rs
       WHERE rs.user_id = sqlc.arg(actor_user_id)::uuid
         AND (
-          (rs.can_review = TRUE AND q.workflow_status IN ('submitted', 'review', 'revision_needed', 'reviewed'))
-          OR (rs.can_approve = TRUE AND q.workflow_status IN ('reviewed', 'approved', 'published'))
+          (rs.can_review = TRUE AND q.workflow_status IN ('diperiksa'))
+          OR (rs.can_approve = TRUE AND q.workflow_status IN ('diperiksa', 'siap_pakai'))
         )
         AND (rs.subject_id IS NULL OR rs.subject_id = q.subject_id)
         AND (

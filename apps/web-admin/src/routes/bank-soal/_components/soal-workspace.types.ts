@@ -230,7 +230,7 @@ export type QuestionSavePayload = {
 	answer_key: string;
 	difficulty: string;
 	status: 'draft';
-	workflow_status: 'draft' | 'review';
+	workflow_status: 'konsep' | 'diperiksa';
 	target_level: string;
 	academic_phase: string;
 	cp_ref: string;

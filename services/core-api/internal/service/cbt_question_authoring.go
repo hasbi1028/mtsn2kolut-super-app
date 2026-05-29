@@ -59,7 +59,7 @@ func (s *CbtQuestion) createWithAudit(ctx context.Context, input SaveCbtQuestion
 		return db.CbtQuestion{}, err
 	}
 	if createInputBypassesWorkflow(input) {
-		err := fmt.Errorf("%w: soal baru hanya boleh dibuat sebagai draft atau diajukan review", domain.ErrBadRequest)
+		err := fmt.Errorf("%w: soal baru hanya boleh dibuat sebagai konsep atau diajukan untuk diperiksa", domain.ErrBadRequest)
 		logging.Warn(ctx, "cbt_question_create_validation_failed", append(questionInputLogAttrs(input, actor), slog.String("validation_field", "workflow_status"), slog.String("error", err.Error()))...)
 		return db.CbtQuestion{}, err
 	}
@@ -167,10 +167,7 @@ func createInputBypassesWorkflow(input SaveCbtQuestionInput) bool {
 	workflowStatus := normalizeWorkflowStatus(input.WorkflowStatus)
 	return status == string(db.CbtQuestionStatusEnumPublished) ||
 		status == string(db.CbtQuestionStatusEnumArchived) ||
-		workflowStatus == "reviewed" ||
-		workflowStatus == "approved" ||
-		workflowStatus == "published" ||
-		workflowStatus == "archived"
+		workflowStatus == "siap_pakai"
 }
 
 func (s *CbtQuestion) Update(ctx context.Context, input SaveCbtQuestionInput) (db.CbtQuestion, error) {
@@ -233,8 +230,8 @@ func (s *CbtQuestion) DeleteWithActor(ctx context.Context, id pgtype.UUID, actor
 	if err := s.requireModifyQuestion(ctx, actor, current); err != nil {
 		return err
 	}
-	if current.WorkflowStatus != "" && current.WorkflowStatus != "draft" && current.WorkflowStatus != "rejected" {
-		return fmt.Errorf("%w: soal hanya dapat dihapus saat masih draft atau sudah ditolak dan belum dipakai", domain.ErrConflict)
+	if current.WorkflowStatus != "" && normalizeWorkflowStatus(current.WorkflowStatus) != "konsep" {
+		return fmt.Errorf("%w: soal hanya dapat dihapus saat masih konsep dan belum dipakai", domain.ErrConflict)
 	}
 	if current.Status != "" && current.Status != db.CbtQuestionStatusEnumDraft {
 		return fmt.Errorf("%w: soal hanya dapat dihapus saat belum terbit", domain.ErrConflict)
@@ -368,14 +365,19 @@ func (s *CbtQuestion) requireModifyQuestion(ctx context.Context, actor CbtQuesti
 	if strings.TrimSpace(current.AuthorUsername) == "" || strings.TrimSpace(current.AuthorUsername) != actor.Username {
 		return domain.ErrForbidden
 	}
-	workflowStatus := strings.TrimSpace(current.WorkflowStatus)
-	if workflowStatus != "" && workflowStatus != "draft" && workflowStatus != "rejected" {
+	workflowStatus := normalizeWorkflowStatus(current.WorkflowStatus)
+	isReturnedRevision := strings.TrimSpace(current.WorkflowStatus) == "revision_needed" ||
+		(workflowStatus == "konsep" && strings.TrimSpace(current.ReviewerUsername) != "" && strings.TrimSpace(current.ReviewNotes) != "")
+	if isReturnedRevision && !revisionNeededInlineEditable(current) {
+		return fmt.Errorf("%w: soal revisi tidak lagi aman untuk diedit langsung. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
+	}
+	if workflowStatus != "" && workflowStatus != "konsep" {
 		if !revisionNeededInlineEditable(current) {
-			return fmt.Errorf("%w: soal sedang atau sudah masuk alur review. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
+			return fmt.Errorf("%w: soal sedang diperiksa atau sudah siap pakai. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
 		}
 	}
 	if current.Status != "" && current.Status != db.CbtQuestionStatusEnumDraft {
-		return fmt.Errorf("%w: soal tidak lagi berstatus draft. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
+		return fmt.Errorf("%w: soal tidak lagi berstatus konsep. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
 	}
 	if current.EventID.Valid {
 		return s.requireCreateQuestion(ctx, actor, current.EventID, current.SubjectID)
@@ -384,9 +386,11 @@ func (s *CbtQuestion) requireModifyQuestion(ctx context.Context, actor CbtQuesti
 }
 
 func revisionNeededInlineEditable(current db.GetCbtQuestionRow) bool {
-	workflowStatus := strings.TrimSpace(current.WorkflowStatus)
+	workflowStatus := normalizeWorkflowStatus(current.WorkflowStatus)
 	status := strings.TrimSpace(string(current.Status))
-	return workflowStatus == "revision_needed" &&
+	return workflowStatus == "konsep" &&
+		strings.TrimSpace(current.ReviewerUsername) != "" &&
+		strings.TrimSpace(current.ReviewNotes) != "" &&
 		(status == "" || status == string(db.CbtQuestionStatusEnumDraft)) &&
 		current.IsLatestVersion &&
 		!questionUsageLocked(current.PackageCount, current.AnswerCount)
@@ -609,14 +613,14 @@ func (s *CbtQuestion) actorCanSeeBankSoalAnswerMaterial(ctx context.Context, act
 		return false, nil
 	}
 	workflowStatus = normalizeWorkflowStatus(workflowStatus)
-	if actor.HasPermission("bank_soal.review") && workflowStatusIn(workflowStatus, "submitted", "review", "revision_needed", "reviewed") {
+	if actor.HasPermission("bank_soal.review") && workflowStatusIn(workflowStatus, "diperiksa") {
 		return s.q.CanBankSoalUserReview(ctx, db.CanBankSoalUserReviewParams{
 			UserID:     actor.UserID,
 			SubjectID:  subjectID,
 			GradeLevel: workflowScopeGradeLevel(targetLevel),
 		})
 	}
-	if (actor.HasPermission("bank_soal.approve") || actor.HasPermission("bank_soal.publish")) && workflowStatusIn(workflowStatus, "reviewed", "approved", "published") {
+	if (actor.HasPermission("bank_soal.approve") || actor.HasPermission("bank_soal.publish")) && workflowStatusIn(workflowStatus, "diperiksa", "siap_pakai") {
 		return s.q.CanBankSoalUserApprove(ctx, db.CanBankSoalUserApproveParams{
 			UserID:     actor.UserID,
 			SubjectID:  subjectID,
@@ -863,18 +867,19 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 	if out.AuthoringMode == "beginner" {
 		out.Difficulty = db.CbtQuestionDifficultyEnumMedium
 		out.Status = db.CbtQuestionStatusEnumDraft
-		if out.WorkflowStatus != "review" && out.WorkflowStatus != "submitted" && out.WorkflowStatus != "revision_needed" {
-			out.WorkflowStatus = "draft"
-			out.ReviewerUsername = ""
+		if out.WorkflowStatus != "diperiksa" {
+			out.WorkflowStatus = "konsep"
 		}
 		out.ApproverUsername = ""
 		out.WriterNotes = ""
-		out.ReviewNotes = ""
+		if strings.TrimSpace(out.ReviewNotes) == "" {
+			out.ReviewerUsername = ""
+		}
 	}
-	if out.WorkflowStatus == "draft" {
+	if out.WorkflowStatus == "konsep" && strings.TrimSpace(out.ReviewNotes) == "" {
 		out.ReviewerUsername = ""
 	}
-	if out.WorkflowStatus != "approved" && out.WorkflowStatus != "published" {
+	if out.WorkflowStatus != "siap_pakai" {
 		out.ApproverUsername = ""
 	}
 	if out.QuestionText == "" && out.StemHTML != "" {
@@ -947,7 +952,7 @@ func questionTargetLevelText(value string) pgtype.Text {
 }
 
 func validateQuestion(input SaveCbtQuestionInput) error {
-	requiresCompleteContent := input.WorkflowStatus != "draft" || input.Status != db.CbtQuestionStatusEnumDraft
+	requiresCompleteContent := input.WorkflowStatus != "konsep" || input.Status != db.CbtQuestionStatusEnumDraft
 	if input.AuthoringMode == "beginner" {
 		if !beginnerSupportsQuestionType(input.QuestionType) {
 			return fmt.Errorf("mode beginner belum mendukung tipe soal ini")
@@ -989,8 +994,8 @@ func validateQuestion(input SaveCbtQuestionInput) error {
 		return fmt.Errorf("question_type tidak didukung")
 	}
 
-	if input.Status == db.CbtQuestionStatusEnumPublished && input.WorkflowStatus != "approved" && input.WorkflowStatus != "published" {
-		return fmt.Errorf("soal hanya boleh dipublish jika workflow_status sudah approved")
+	if input.Status == db.CbtQuestionStatusEnumPublished && input.WorkflowStatus != "siap_pakai" {
+		return fmt.Errorf("soal hanya boleh dipublish jika workflow_status sudah siap_pakai")
 	}
 
 	return nil
@@ -1291,18 +1296,20 @@ func normalizeAuthoringMode(value string) string {
 
 func normalizeWorkflowStatus(value string) string {
 	switch strings.TrimSpace(strings.ToLower(value)) {
-	case "", "draft":
-		return "draft"
-	case "review", "submitted", "revision_needed", "reviewed", "approved", "published", "rejected", "archived":
-		return strings.TrimSpace(strings.ToLower(value))
+	case "", "draft", "revision", "revision_needed", "rejected", "archived", "konsep":
+		return "konsep"
+	case "review", "submitted", "reviewed", "diperiksa":
+		return "diperiksa"
+	case "approved", "published", "siap_pakai":
+		return "siap_pakai"
 	default:
-		return "draft"
+		return "konsep"
 	}
 }
 
 func workflowStatusSetsReviewer(value string) bool {
-	switch strings.TrimSpace(strings.ToLower(value)) {
-	case "revision_needed", "reviewed", "approved", "rejected":
+	switch normalizeWorkflowStatus(value) {
+	case "konsep", "diperiksa", "siap_pakai":
 		return true
 	default:
 		return false
@@ -1311,7 +1318,7 @@ func workflowStatusSetsReviewer(value string) bool {
 
 func workflowStatusSetsApprover(value string) bool {
 	switch strings.TrimSpace(strings.ToLower(value)) {
-	case "approved", "published":
+	case "approved", "published", "siap_pakai":
 		return true
 	default:
 		return false
@@ -1615,7 +1622,7 @@ func suggestQuestionAuthoringMode(questionType, stemLatex, stimulusLatex, academ
 		strings.TrimSpace(cognitiveLevel) != "" || hotsFlag {
 		return "advance"
 	}
-	if strings.TrimSpace(workflowStatus) != "" && strings.TrimSpace(workflowStatus) != "draft" {
+	if strings.TrimSpace(workflowStatus) != "" && normalizeWorkflowStatus(workflowStatus) != "konsep" {
 		return "advance"
 	}
 	if strings.TrimSpace(writerNotes) != "" || strings.TrimSpace(reviewNotes) != "" || strings.TrimSpace(rubricHTML) != "" {

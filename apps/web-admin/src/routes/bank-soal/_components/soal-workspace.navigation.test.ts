@@ -23,12 +23,12 @@ describe('Bank Soal composer route navigation helpers', () => {
 		const params = new URLSearchParams({
 			event_id: 'event 1',
 			subject_id: 'subject/1',
-			workflow_status: 'review',
+			workflow_status: 'diperiksa',
 			question_id: 'query-id',
 			redirect: 'https://example.test',
 		});
 
-		expect(bankSoalListHref(params)).toBe('/bank-soal?event_id=event+1&subject_id=subject%2F1&workflow_status=review');
-		expect(bankSoalQuestionDetailHref('path/id', params)).toBe('/bank-soal/soal/path%2Fid?event_id=event+1&subject_id=subject%2F1&workflow_status=review');
+		expect(bankSoalListHref(params)).toBe('/bank-soal?event_id=event+1&subject_id=subject%2F1&workflow_status=diperiksa');
+		expect(bankSoalQuestionDetailHref('path/id', params)).toBe('/bank-soal/soal/path%2Fid?event_id=event+1&subject_id=subject%2F1&workflow_status=diperiksa');
 	});
 });

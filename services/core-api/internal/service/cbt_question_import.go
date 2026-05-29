@@ -135,7 +135,7 @@ func (s *CbtQuestion) ImportLegacyCSV(ctx context.Context, input ImportLegacyQue
 			MaterialTopic:    firstCSVValue(row, "material_topic", "materialtopic", "materi", "topik"),
 			CognitiveLevel:   firstCSVValue(row, "cognitive_level", "cognitivelevel", "level_kognitif", "levelkognitif"),
 			HotsFlag:         importBoolean(row, "hots_flag", "hotsflag", "hots"),
-			WorkflowStatus:   "draft",
+			WorkflowStatus:   "konsep",
 			AuthorUsername:   actor.Username,
 			ReviewerUsername: "",
 			ApproverUsername: "",

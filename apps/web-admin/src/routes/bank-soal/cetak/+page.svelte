@@ -97,7 +97,7 @@
 	let authors = $state<Author[]>([]);
 	let authorFilter = $state('');
 	let subjectFilter = $state('');
-	type WorkflowFilter = 'draft' | 'submitted' | 'review' | 'reviewed' | 'revision_needed' | 'approved' | 'published' | 'rejected' | 'archived';
+	type WorkflowFilter = 'konsep' | 'diperiksa' | 'siap_pakai';
 	let workflowFilters = $state<WorkflowFilter[]>([]);
 	let workflowDropdownOpen = $state(false);
 	let typeFilter = $state('');
@@ -115,15 +115,9 @@
 
 	const workflowOptions = [
 		{ value: '', label: 'Semua status' },
-		{ value: 'draft', label: 'Draft' },
-		{ value: 'submitted', label: 'Diajukan' },
-		{ value: 'review', label: 'Review' },
-		{ value: 'revision_needed', label: 'Perlu Revisi' },
-		{ value: 'reviewed', label: 'Sudah Direview' },
-		{ value: 'approved', label: 'Disetujui' },
-		{ value: 'published', label: 'Terbit' },
-		{ value: 'rejected', label: 'Ditolak' },
-		{ value: 'archived', label: 'Arsip' }
+		{ value: 'konsep', label: 'Konsep' },
+		{ value: 'diperiksa', label: 'Diperiksa' },
+		{ value: 'siap_pakai', label: 'Siap Pakai' }
 	];
 
 	const sortOptions = [
@@ -174,7 +168,7 @@
 		sortQuestions(
 			questions.filter((question) => {
 				if (subjectFilter && question.subject_id !== subjectFilter) return false;
-				if (workflowFilters.length > 0 && !workflowFilters.includes((question.workflow_status ?? question.status ?? '') as WorkflowFilter)) return false;
+				if (workflowFilters.length > 0 && !workflowFilters.includes(normalizeWorkflowStatus(question.workflow_status ?? question.status) as WorkflowFilter)) return false;
 				if (typeFilter && question.question_type !== typeFilter) return false;
 				if (dateFrom && normalizeDate(question.created_at) < dateFrom) return false;
 				if (dateTo && normalizeDate(question.created_at) > dateTo) return false;
@@ -407,7 +401,16 @@
 	}
 
 	function workflowLabel(value: string | undefined): string {
-		return workflowOptions.find((option) => option.value === value)?.label ?? compactText(value, 'Belum ada status');
+		const status = normalizeWorkflowStatus(value);
+		return workflowOptions.find((option) => option.value === status)?.label ?? compactText(value, 'Belum ada status');
+	}
+
+	function normalizeWorkflowStatus(value: string | undefined | null): string {
+		const status = (value ?? '').trim().toLowerCase();
+		if (['konsep', 'draft', 'revision', 'revision_needed', 'rejected', 'archived'].includes(status)) return 'konsep';
+		if (['diperiksa', 'review', 'submitted', 'reviewed'].includes(status)) return 'diperiksa';
+		if (['siap_pakai', 'approved', 'published'].includes(status)) return 'siap_pakai';
+		return status;
 	}
 
 	function difficultyLabel(value: string | undefined): string {

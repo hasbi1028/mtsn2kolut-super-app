@@ -120,7 +120,7 @@ func normalizeWorkflowAction(action string) string {
 func normalizeRevisionSource(value string) string {
 	normalized := strings.TrimSpace(value)
 	switch normalized {
-	case "item_analysis", "reviewer", "workflow":
+	case "needs_revision", "item_analysis", "reviewer", "workflow":
 		return normalized
 	default:
 		return ""
@@ -153,21 +153,15 @@ func normalizeQuestionStatusFilter(value string) string {
 
 func normalizeQuestionWorkflowStatuses(values []string, legacy string) []string {
 	allowed := map[string]struct{}{
-		"draft":           {},
-		"submitted":       {},
-		"review":          {},
-		"revision_needed": {},
-		"reviewed":        {},
-		"approved":        {},
-		"published":       {},
-		"rejected":        {},
-		"archived":        {},
+		"konsep":     {},
+		"diperiksa":  {},
+		"siap_pakai": {},
 	}
 	seen := make(map[string]struct{}, len(values)+1)
 	out := make([]string, 0, len(values)+1)
 	add := func(raw string) {
 		for _, part := range strings.Split(raw, ",") {
-			normalized := strings.TrimSpace(strings.ToLower(part))
+			normalized := normalizeWorkflowStatus(part)
 			if _, ok := allowed[normalized]; !ok {
 				continue
 			}
@@ -249,21 +243,21 @@ func (s *CbtQuestion) SubmitForReview(ctx context.Context, id pgtype.UUID, actor
 		return db.CbtQuestion{}, normalizeNoRows(err)
 	}
 	fromStatus := strings.TrimSpace(current.WorkflowStatus)
-	if workflowStatusIn(fromStatus, "submitted", "review") {
+	if workflowStatusIn(fromStatus, "diperiksa") {
 		return cbtQuestionFromCurrent(current), nil
 	}
-	if !workflowStatusIn(fromStatus, "draft", "revision_needed", "rejected") {
-		return db.CbtQuestion{}, fmt.Errorf("%w: hanya draft, revision_needed, atau rejected yang dapat diajukan review", domain.ErrConflict)
+	if !workflowStatusIn(fromStatus, "konsep") {
+		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal konsep yang dapat diajukan untuk diperiksa", domain.ErrConflict)
 	}
 	if !actor.IsAdmin() && (strings.TrimSpace(current.AuthorUsername) == "" || current.AuthorUsername != actor.Username) {
 		return db.CbtQuestion{}, domain.ErrForbidden
 	}
 	input := questionInputFromCurrent(current, actor.Username)
 	input.Actor = workflowMutationActor(actor)
-	input.WorkflowStatus = "submitted"
+	input.WorkflowStatus = "diperiksa"
 	input.ReviewerUsername = ""
 	input.ReviewNotes = mergeNotes(current.ReviewNotes, reviewNotes)
-	return s.updateWithWorkflowAudit(ctx, input, actor, "submit_for_review", reviewNotes, map[string]any{"workflow_status": "submitted"}, fromStatus, "submitted")
+	return s.updateWithWorkflowAudit(ctx, input, actor, "submit_for_review", reviewNotes, map[string]any{"workflow_status": "diperiksa"}, fromStatus, "diperiksa")
 }
 
 func (s *CbtQuestion) RequestRevision(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
@@ -273,30 +267,30 @@ func (s *CbtQuestion) RequestRevision(ctx context.Context, id pgtype.UUID, actor
 		return db.CbtQuestion{}, normalizeNoRows(err)
 	}
 	fromStatus := strings.TrimSpace(current.WorkflowStatus)
-	if workflowStatusIn(fromStatus, "submitted", "review") {
+	if workflowStatusIn(fromStatus, "diperiksa") {
 		if err := s.requireBankSoalReviewer(ctx, actor, current); err != nil {
 			return db.CbtQuestion{}, err
 		}
-	} else if workflowStatusIn(fromStatus, "reviewed", "approved") {
+	} else if workflowStatusIn(fromStatus, "siap_pakai") {
 		if err := s.requireBankSoalApprover(ctx, actor, current, false); err != nil {
 			return db.CbtQuestion{}, err
 		}
 	} else {
-		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal submitted, review, reviewed, atau approved yang dapat diminta revisi", domain.ErrConflict)
+		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal diperiksa atau siap pakai yang dapat dikembalikan ke konsep", domain.ErrConflict)
 	}
 	if current.Status != "" && current.Status != db.CbtQuestionStatusEnumDraft {
 		return db.CbtQuestion{}, fmt.Errorf("%w: soal yang sudah terbit harus dibuat sebagai revisi baru", domain.ErrConflict)
 	}
 	input := questionInputFromCurrent(current, actor.Username)
 	input.Actor = workflowMutationActor(actor)
-	input.WorkflowStatus = "revision_needed"
+	input.WorkflowStatus = "konsep"
 	input.ReviewerUsername = actor.Username
 	input.ApproverUsername = ""
 	input.ReviewNotes = mergeNotes(current.ReviewNotes, reviewNotes)
 	if strings.TrimSpace(input.ReviewNotes) == "" {
 		input.ReviewNotes = "Perlu revisi berdasarkan review."
 	}
-	return s.updateWithWorkflowAudit(ctx, input, actor, "request_revision", reviewNotes, map[string]any{"workflow_status": "revision_needed"}, fromStatus, "revision_needed")
+	return s.updateWithWorkflowAudit(ctx, input, actor, "request_revision", reviewNotes, map[string]any{"workflow_status": "konsep", "revision_flag": true}, fromStatus, "konsep")
 }
 
 func (s *CbtQuestion) MarkReviewed(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
@@ -306,19 +300,19 @@ func (s *CbtQuestion) MarkReviewed(ctx context.Context, id pgtype.UUID, actor Cb
 		return db.CbtQuestion{}, normalizeNoRows(err)
 	}
 	fromStatus := strings.TrimSpace(current.WorkflowStatus)
-	if !workflowStatusIn(fromStatus, "submitted", "review") {
-		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal submitted atau review yang dapat ditandai layak", domain.ErrConflict)
+	if !workflowStatusIn(fromStatus, "diperiksa") {
+		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal diperiksa yang dapat ditandai layak", domain.ErrConflict)
 	}
 	if err := s.requireBankSoalReviewer(ctx, actor, current); err != nil {
 		return db.CbtQuestion{}, err
 	}
 	input := questionInputFromCurrent(current, actor.Username)
 	input.Actor = workflowMutationActor(actor)
-	input.WorkflowStatus = "reviewed"
+	input.WorkflowStatus = "diperiksa"
 	input.ReviewerUsername = actor.Username
 	input.ApproverUsername = ""
 	input.ReviewNotes = mergeNotes(current.ReviewNotes, reviewNotes)
-	return s.updateWithWorkflowAudit(ctx, input, actor, "mark_reviewed", reviewNotes, map[string]any{"workflow_status": "reviewed"}, fromStatus, "reviewed")
+	return s.updateWithWorkflowAudit(ctx, input, actor, "mark_reviewed", reviewNotes, map[string]any{"workflow_status": "diperiksa", "reviewed": true}, fromStatus, "diperiksa")
 }
 
 func (s *CbtQuestion) Approve(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
@@ -328,18 +322,18 @@ func (s *CbtQuestion) Approve(ctx context.Context, id pgtype.UUID, actor CbtQues
 		return db.CbtQuestion{}, normalizeNoRows(err)
 	}
 	fromStatus := strings.TrimSpace(current.WorkflowStatus)
-	if !workflowStatusIn(fromStatus, "reviewed", "submitted", "review") {
-		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal reviewed yang dapat disetujui", domain.ErrConflict)
+	if !workflowStatusIn(fromStatus, "diperiksa") {
+		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal diperiksa yang dapat disetujui", domain.ErrConflict)
 	}
 	if err := s.requireBankSoalApprover(ctx, actor, current, false); err != nil {
 		return db.CbtQuestion{}, err
 	}
 	input := questionInputFromCurrent(current, actor.Username)
 	input.Actor = workflowMutationActor(actor)
-	input.WorkflowStatus = "approved"
+	input.WorkflowStatus = "siap_pakai"
 	input.ApproverUsername = actor.Username
 	input.ReviewNotes = mergeNotes(current.ReviewNotes, reviewNotes)
-	return s.updateWithWorkflowAudit(ctx, input, actor, "approve", reviewNotes, map[string]any{"workflow_status": "approved"}, fromStatus, "approved")
+	return s.updateWithWorkflowAudit(ctx, input, actor, "approve", reviewNotes, map[string]any{"workflow_status": "siap_pakai"}, fromStatus, "siap_pakai")
 }
 
 func (s *CbtQuestion) Reject(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
@@ -349,19 +343,19 @@ func (s *CbtQuestion) Reject(ctx context.Context, id pgtype.UUID, actor CbtQuest
 		return db.CbtQuestion{}, normalizeNoRows(err)
 	}
 	fromStatus := strings.TrimSpace(current.WorkflowStatus)
-	if !workflowStatusIn(fromStatus, "submitted", "review", "reviewed") {
-		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal submitted, review, atau reviewed yang dapat ditolak", domain.ErrConflict)
+	if !workflowStatusIn(fromStatus, "diperiksa") {
+		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal diperiksa yang dapat ditolak", domain.ErrConflict)
 	}
 	if err := s.requireBankSoalReviewer(ctx, actor, current); err != nil {
 		return db.CbtQuestion{}, err
 	}
 	input := questionInputFromCurrent(current, actor.Username)
 	input.Actor = workflowMutationActor(actor)
-	input.WorkflowStatus = "rejected"
+	input.WorkflowStatus = "konsep"
 	input.ReviewerUsername = actor.Username
 	input.ApproverUsername = ""
 	input.ReviewNotes = mergeNotes(current.ReviewNotes, reviewNotes)
-	return s.updateWithWorkflowAudit(ctx, input, actor, "reject", reviewNotes, map[string]any{"workflow_status": "rejected"}, fromStatus, "rejected")
+	return s.updateWithWorkflowAudit(ctx, input, actor, "reject", reviewNotes, map[string]any{"workflow_status": "konsep", "rejected": true}, fromStatus, "konsep")
 }
 
 func (s *CbtQuestion) ReturnToRevision(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
@@ -375,18 +369,18 @@ func (s *CbtQuestion) Publish(ctx context.Context, id pgtype.UUID, actor CbtQues
 		return db.CbtQuestion{}, normalizeNoRows(err)
 	}
 	fromStatus := strings.TrimSpace(current.WorkflowStatus)
-	if current.WorkflowStatus != "approved" {
-		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal approved yang dapat dipublish", domain.ErrConflict)
+	if !workflowStatusIn(current.WorkflowStatus, "siap_pakai") {
+		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal siap pakai yang dapat dipublish", domain.ErrConflict)
 	}
 	if err := s.requireBankSoalApprover(ctx, actor, current, true); err != nil {
 		return db.CbtQuestion{}, err
 	}
 	input := questionInputFromCurrent(current, actor.Username)
 	input.Actor = workflowMutationActor(actor)
-	input.WorkflowStatus = "published"
+	input.WorkflowStatus = "siap_pakai"
 	input.ApproverUsername = actor.Username
 	input.Status = db.CbtQuestionStatusEnumPublished
-	return s.updateWithWorkflowAudit(ctx, input, actor, "publish", "", map[string]any{"workflow_status": "published", "status": db.CbtQuestionStatusEnumPublished}, fromStatus, "published")
+	return s.updateWithWorkflowAudit(ctx, input, actor, "publish", "", map[string]any{"workflow_status": "siap_pakai", "status": db.CbtQuestionStatusEnumPublished}, fromStatus, "siap_pakai")
 }
 
 func (s *CbtQuestion) Archive(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor) (db.CbtQuestion, error) {
@@ -396,8 +390,8 @@ func (s *CbtQuestion) Archive(ctx context.Context, id pgtype.UUID, actor CbtQues
 		return db.CbtQuestion{}, normalizeNoRows(err)
 	}
 	fromStatus := strings.TrimSpace(current.WorkflowStatus)
-	if !workflowStatusIn(fromStatus, "approved", "published", "rejected") {
-		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal approved, published, atau rejected yang dapat diarsipkan", domain.ErrConflict)
+	if !workflowStatusIn(fromStatus, "siap_pakai", "konsep") {
+		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal konsep atau siap pakai yang dapat diarsipkan", domain.ErrConflict)
 	}
 	if err := s.requireBankSoalApprover(ctx, actor, current, false); err != nil {
 		return db.CbtQuestion{}, err
@@ -407,9 +401,9 @@ func (s *CbtQuestion) Archive(ctx context.Context, id pgtype.UUID, actor CbtQues
 	}
 	input := questionInputFromCurrent(current, actor.Username)
 	input.Actor = workflowMutationActor(actor)
-	input.WorkflowStatus = "archived"
+	input.WorkflowStatus = normalizeWorkflowStatus(current.WorkflowStatus)
 	input.Status = db.CbtQuestionStatusEnumArchived
-	return s.updateWithWorkflowAudit(ctx, input, actor, "archive", "", map[string]any{"workflow_status": "archived", "status": db.CbtQuestionStatusEnumArchived}, fromStatus, "archived")
+	return s.updateWithWorkflowAudit(ctx, input, actor, "archive", "", map[string]any{"workflow_status": input.WorkflowStatus, "status": db.CbtQuestionStatusEnumArchived}, fromStatus, input.WorkflowStatus)
 }
 
 func (s *CbtQuestion) RestoreArchive(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor, notes string) (db.CbtQuestion, error) {
@@ -419,7 +413,7 @@ func (s *CbtQuestion) RestoreArchive(ctx context.Context, id pgtype.UUID, actor 
 		return db.CbtQuestion{}, normalizeNoRows(err)
 	}
 	fromStatus := strings.TrimSpace(current.WorkflowStatus)
-	if !workflowStatusIn(fromStatus, "archived") || current.Status != db.CbtQuestionStatusEnumArchived {
+	if current.Status != db.CbtQuestionStatusEnumArchived {
 		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal arsip yang dapat dipulihkan", domain.ErrConflict)
 	}
 	if err := s.requireBankSoalApprover(ctx, actor, current, false); err != nil {
@@ -430,7 +424,7 @@ func (s *CbtQuestion) RestoreArchive(ctx context.Context, id pgtype.UUID, actor 
 	}
 	input := questionInputFromCurrent(current, actor.Username)
 	input.Actor = workflowMutationActor(actor)
-	input.WorkflowStatus = "rejected"
+	input.WorkflowStatus = "konsep"
 	input.Status = db.CbtQuestionStatusEnumDraft
 	input.ReviewerUsername = actor.Username
 	input.ApproverUsername = ""
@@ -439,13 +433,13 @@ func (s *CbtQuestion) RestoreArchive(ctx context.Context, id pgtype.UUID, actor 
 		input.ReviewNotes = "Dipulihkan dari arsip untuk ditinjau ulang."
 	}
 	metadata := map[string]any{
-		"workflow_status": "rejected",
+		"workflow_status": "konsep",
 		"status":          db.CbtQuestionStatusEnumDraft,
-		"restore_target":  "draft_rejected",
+		"restore_target":  "konsep",
 		"package_count":   current.PackageCount,
 		"answer_count":    current.AnswerCount,
 	}
-	return s.updateWithWorkflowAudit(ctx, input, actor, "restore_archive", notes, metadata, fromStatus, "rejected")
+	return s.updateWithWorkflowAudit(ctx, input, actor, "restore_archive", notes, metadata, fromStatus, "konsep")
 }
 
 func workflowMutationActor(actor CbtQuestionActor) CbtQuestionActor {
@@ -459,9 +453,9 @@ func workflowMutationActor(actor CbtQuestionActor) CbtQuestionActor {
 }
 
 func workflowStatusIn(value string, allowed ...string) bool {
-	value = strings.TrimSpace(strings.ToLower(value))
+	value = normalizeWorkflowStatus(value)
 	for _, item := range allowed {
-		if value == strings.TrimSpace(strings.ToLower(item)) {
+		if value == normalizeWorkflowStatus(item) {
 			return true
 		}
 	}
@@ -607,7 +601,7 @@ func (s *CbtQuestion) DuplicateAsDraft(ctx context.Context, id pgtype.UUID, acto
 	input.Actor = actor
 	input.ID = pgtype.UUID{}
 	input.Status = db.CbtQuestionStatusEnumDraft
-	input.WorkflowStatus = "draft"
+	input.WorkflowStatus = "konsep"
 	input.ReviewerUsername = ""
 	input.ApproverUsername = ""
 	input.ReviewNotes = ""
@@ -635,7 +629,7 @@ func (s *CbtQuestion) DuplicateForRevision(ctx context.Context, id pgtype.UUID, 
 	input.Actor = actor
 	input.ID = pgtype.UUID{}
 	input.Status = db.CbtQuestionStatusEnumDraft
-	input.WorkflowStatus = "rejected"
+	input.WorkflowStatus = "konsep"
 	input.ReviewerUsername = actor.Username
 	input.ApproverUsername = ""
 	input.ReviewNotes = mergeNotes(current.ReviewNotes, reviewNotes)
@@ -659,7 +653,7 @@ func (s *CbtQuestion) DuplicateForRevision(ctx context.Context, id pgtype.UUID, 
 		return db.CbtQuestion{}, err
 	}
 	if createInputBypassesWorkflow(input) {
-		return db.CbtQuestion{}, fmt.Errorf("%w: soal baru hanya boleh dibuat sebagai draft atau diajukan review", domain.ErrBadRequest)
+		return db.CbtQuestion{}, fmt.Errorf("%w: soal baru hanya boleh dibuat sebagai konsep atau diajukan untuk diperiksa", domain.ErrBadRequest)
 	}
 	params, err := buildCreateQuestionParams(input)
 	if err != nil {

@@ -148,7 +148,7 @@
 				tone: 'red' as const,
 				title: 'Antrian Revisi Soal',
 				badge: `${revisionTotal} ${revisionSourceFilter ? 'sesuai filter' : 'perlu diperbaiki'}`,
-				description: 'Buka, koreksi isi/kunci/rubrik, lalu ajukan review ulang.',
+				description: 'Buka, koreksi isi/kunci/rubrik, lalu ajukan pemeriksaan ulang.',
 				buttonLabel: 'Lihat Semua Revisi',
 				empty: 'Tidak ada revisi pada sumber ini.',
 				items: revisionQueue,
@@ -158,22 +158,22 @@
 		if (action === 'review') {
 			return {
 				tone: 'amber' as const,
-				title: 'Antrian Review Soal',
+				title: 'Antrian Pemeriksaan Soal',
 				badge: `${reviewTotal} menunggu keputusan`,
 				description: 'Periksa soal yang diajukan guru, setujui, atau kembalikan dengan catatan revisi.',
-				buttonLabel: 'Lihat Semua Menunggu Review',
-				empty: 'Belum ada soal yang menunggu review pada filter ini.',
+				buttonLabel: 'Lihat Semua Diperiksa',
+				empty: 'Belum ada soal yang menunggu pemeriksaan pada filter ini.',
 				items: reviewQueue,
 				onShowAll: onShowPendingReviews
 			};
 		}
 		return {
 			tone: 'green' as const,
-				title: 'Layak Review',
-				badge: `${approvedTotal} menunggu approval`,
-				description: 'Soal sudah ditandai layak reviewer dan menunggu approver/publisher.',
-				buttonLabel: 'Lihat Semua Layak Review',
-				empty: 'Belum ada soal layak review yang menunggu approval.',
+				title: 'Siap Pakai',
+				badge: `${approvedTotal} siap dipakai`,
+				description: 'Soal sudah layak dan bisa dipakai di paket asesmen.',
+				buttonLabel: 'Lihat Semua Siap Pakai',
+				empty: 'Belum ada soal siap pakai pada filter ini.',
 			items: approvedQueue,
 			onShowAll: onShowApprovedQuestions
 		};

@@ -209,7 +209,7 @@ func TestCbtQuestionCreateAccessAndWorkflowGuards(t *testing.T) {
 	ctx := context.Background()
 	subjectID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000004001")
 	createdID := mustQuestionUUID(t, "00000000-0000-0000-0000-000000004002")
-	store := &fakeQuestionStore{createRow: db.CbtQuestion{ID: createdID, SubjectID: subjectID, WorkflowStatus: "draft", AuthorUsername: "guru"}}
+	store := &fakeQuestionStore{createRow: db.CbtQuestion{ID: createdID, SubjectID: subjectID, WorkflowStatus: "konsep", AuthorUsername: "guru"}}
 	svc := NewCbtQuestion(nil)
 	svc.q = store
 
@@ -231,8 +231,8 @@ func TestCbtQuestionCreateAccessAndWorkflowGuards(t *testing.T) {
 	if row.ID != createdID || store.createCalls != 1 || store.auditCalls != 1 {
 		t.Fatalf("Create() row/calls = %+v createCalls=%d auditCalls=%d, want created row and audit", row, store.createCalls, store.auditCalls)
 	}
-	if store.createParams.AuthorUsername != "guru" || store.createParams.WorkflowStatus != "draft" || store.createParams.Status != db.CbtQuestionStatusEnumDraft {
-		t.Fatalf("Create() params = %+v, want draft authored by guru", store.createParams)
+	if store.createParams.AuthorUsername != "guru" || store.createParams.WorkflowStatus != "konsep" || store.createParams.Status != db.CbtQuestionStatusEnumDraft {
+		t.Fatalf("Create() params = %+v, want konsep authored by guru", store.createParams)
 	}
 
 	store.createCalls = 0
@@ -384,7 +384,7 @@ func TestCbtQuestionDuplicateForRevisionSetsVersionSourceAndAccess(t *testing.T)
 			AuthorUsername: "author",
 		},
 		membersByUser:     []db.CbtEventMember{{EventID: eventID, SubjectID: subjectID, Role: db.CbtEventMemberRolePembuatSoal}},
-		createRow:         db.CbtQuestion{ID: newID, EventID: eventID, SubjectID: subjectID, WorkflowStatus: "rejected", Status: db.CbtQuestionStatusEnumDraft},
+		createRow:         db.CbtQuestion{ID: newID, EventID: eventID, SubjectID: subjectID, WorkflowStatus: "konsep", Status: db.CbtQuestionStatusEnumDraft},
 		nextVersionNumber: 5,
 	}
 	svc := NewCbtQuestion(nil)
@@ -406,8 +406,8 @@ func TestCbtQuestionDuplicateForRevisionSetsVersionSourceAndAccess(t *testing.T)
 	if store.createParams.VersionGroupID != versionGroupID || store.createParams.VersionNumber != 5 || !store.createParams.IsLatestVersion {
 		t.Fatalf("DuplicateForRevision() version params = group %v number %d latest %v, want group v5 latest", store.createParams.VersionGroupID, store.createParams.VersionNumber, store.createParams.IsLatestVersion)
 	}
-	if store.createParams.WorkflowStatus != "rejected" || store.createParams.Status != db.CbtQuestionStatusEnumDraft {
-		t.Fatalf("DuplicateForRevision() workflow/status = %q/%q, want rejected/draft", store.createParams.WorkflowStatus, store.createParams.Status)
+	if store.createParams.WorkflowStatus != "konsep" || store.createParams.Status != db.CbtQuestionStatusEnumDraft {
+		t.Fatalf("DuplicateForRevision() workflow/status = %q/%q, want konsep/draft", store.createParams.WorkflowStatus, store.createParams.Status)
 	}
 }
 

@@ -419,7 +419,7 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 	if len(rows) != 1 || total != 7 {
 		t.Fatalf("ListFiltered() rows/total = %d/%d, want 1/7", len(rows), total)
 	}
-	if store.listFilterArg.AuthorUsername != "guru.ipa" || store.listFilterArg.ScopeFilter != "event_pool" || len(store.listFilterArg.WorkflowStatuses) != 1 || store.listFilterArg.WorkflowStatuses[0] != "draft" || store.listFilterArg.StatusFilter != "published" || store.listFilterArg.QuestionType != "multiple_choice" || store.listFilterArg.TargetLevel != "VIII" || store.listFilterArg.DifficultyFilter != "hard" || store.listFilterArg.CognitiveLevel != "C3" || store.listFilterArg.MaterialTopic != "bilangan" || store.listFilterArg.MetadataFilter != "gap" || store.listFilterArg.HotsFilter != "true" || store.listFilterArg.RevisionSource != "item_analysis" || store.listFilterArg.SearchQuery != "aljabar" || store.listFilterArg.SortOrder != "code_asc" {
+	if store.listFilterArg.AuthorUsername != "guru.ipa" || store.listFilterArg.ScopeFilter != "event_pool" || len(store.listFilterArg.WorkflowStatuses) != 1 || store.listFilterArg.WorkflowStatuses[0] != "konsep" || store.listFilterArg.StatusFilter != "published" || store.listFilterArg.QuestionType != "multiple_choice" || store.listFilterArg.TargetLevel != "VIII" || store.listFilterArg.DifficultyFilter != "hard" || store.listFilterArg.CognitiveLevel != "C3" || store.listFilterArg.MaterialTopic != "bilangan" || store.listFilterArg.MetadataFilter != "gap" || store.listFilterArg.HotsFilter != "true" || store.listFilterArg.RevisionSource != "item_analysis" || store.listFilterArg.SearchQuery != "aljabar" || store.listFilterArg.SortOrder != "code_asc" {
 		t.Fatalf("ListFiltered() arg = %+v, want trimmed filters", store.listFilterArg)
 	}
 	if store.countArg.AuthorUsername != store.listFilterArg.AuthorUsername || store.countArg.ScopeFilter != store.listFilterArg.ScopeFilter || !sameStringSlice(store.countArg.WorkflowStatuses, store.listFilterArg.WorkflowStatuses) || store.countArg.StatusFilter != store.listFilterArg.StatusFilter || store.countArg.TargetLevel != store.listFilterArg.TargetLevel || store.countArg.DifficultyFilter != store.listFilterArg.DifficultyFilter || store.countArg.CognitiveLevel != store.listFilterArg.CognitiveLevel || store.countArg.MaterialTopic != store.listFilterArg.MaterialTopic || store.countArg.MetadataFilter != store.listFilterArg.MetadataFilter || store.countArg.RevisionSource != store.listFilterArg.RevisionSource || store.countArg.SearchQuery != store.listFilterArg.SearchQuery {
@@ -724,23 +724,25 @@ func TestCbtQuestionMediaAssetIDsAreValidated(t *testing.T) {
 	})
 }
 
-func TestCbtQuestionUpdateAllowsSafeRevisionNeededDraft(t *testing.T) {
+func TestCbtQuestionUpdateAllowsSafeRevisionDraft(t *testing.T) {
 	questionID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
 	subjectID := pgtype.UUID{Bytes: [16]byte{7}, Valid: true}
 	store := &fakeQuestionStore{
 		current: db.GetCbtQuestionRow{
-			ID:              questionID,
-			SubjectID:       subjectID,
-			AuthorUsername:  "guru.a",
-			Status:          db.CbtQuestionStatusEnumDraft,
-			WorkflowStatus:  "revision_needed",
-			IsLatestVersion: true,
-			QuestionType:    "multiple_choice",
-			OptionA:         "A",
-			OptionB:         "B",
-			OptionC:         "C",
-			OptionD:         "D",
-			AnswerKey:       "A",
+			ID:               questionID,
+			SubjectID:        subjectID,
+			AuthorUsername:   "guru.a",
+			Status:           db.CbtQuestionStatusEnumDraft,
+			WorkflowStatus:   "konsep",
+			IsLatestVersion:  true,
+			QuestionType:     "multiple_choice",
+			ReviewerUsername: "reviewer",
+			ReviewNotes:      "perbaiki",
+			OptionA:          "A",
+			OptionB:          "B",
+			OptionC:          "C",
+			OptionD:          "D",
+			AnswerKey:        "A",
 		},
 	}
 	svc := &CbtQuestion{q: store}
@@ -764,8 +766,8 @@ func TestCbtQuestionUpdateAllowsSafeRevisionNeededDraft(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Update(safe revision_needed) error = %v", err)
 	}
-	if store.updateCalls != 1 || store.updateParams.WorkflowStatus != "revision_needed" {
-		t.Fatalf("Update(safe revision_needed) update = %d/%q, want one revision_needed update", store.updateCalls, store.updateParams.WorkflowStatus)
+	if store.updateCalls != 1 || store.updateParams.WorkflowStatus != "konsep" {
+		t.Fatalf("Update(safe revision_needed) update = %d/%q, want one konsep update", store.updateCalls, store.updateParams.WorkflowStatus)
 	}
 	if store.auditCalls != 1 || store.auditLogs[0].Action != "update" {
 		t.Fatalf("Update(safe revision_needed) audit = calls %d logs %+v, want update audit", store.auditCalls, store.auditLogs)
@@ -781,15 +783,15 @@ func TestCbtQuestionUpdateRejectsUnsafeRevisionNeededDraft(t *testing.T) {
 	}{
 		{
 			name:    "not latest",
-			current: db.GetCbtQuestionRow{ID: questionID, SubjectID: subjectID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "revision_needed", IsLatestVersion: false},
+			current: db.GetCbtQuestionRow{ID: questionID, SubjectID: subjectID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "revision_needed", ReviewerUsername: "reviewer", ReviewNotes: "perbaiki", IsLatestVersion: false},
 		},
 		{
 			name:    "package usage",
-			current: db.GetCbtQuestionRow{ID: questionID, SubjectID: subjectID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "revision_needed", IsLatestVersion: true, PackageCount: 1},
+			current: db.GetCbtQuestionRow{ID: questionID, SubjectID: subjectID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "revision_needed", ReviewerUsername: "reviewer", ReviewNotes: "perbaiki", IsLatestVersion: true, PackageCount: 1},
 		},
 		{
 			name:    "student answer usage",
-			current: db.GetCbtQuestionRow{ID: questionID, SubjectID: subjectID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "revision_needed", IsLatestVersion: true, AnswerCount: 1},
+			current: db.GetCbtQuestionRow{ID: questionID, SubjectID: subjectID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "revision_needed", ReviewerUsername: "reviewer", ReviewNotes: "perbaiki", IsLatestVersion: true, AnswerCount: 1},
 		},
 	}
 	for _, tt := range tests {
@@ -884,7 +886,7 @@ func TestCbtQuestionDeleteWithActorRejectsNonDraftOrUsedQuestion(t *testing.T) {
 		},
 		{
 			name:    "revision needed workflow",
-			current: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "revision_needed"},
+			current: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "revision_needed", ReviewerUsername: "reviewer", ReviewNotes: "perbaiki", IsLatestVersion: false},
 		},
 		{
 			name:    "published status",
@@ -1202,8 +1204,8 @@ func TestCbtQuestionReviewerCanApproveAssignedEventQuestion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Approve(reviewer) error = %v", err)
 	}
-	if store.updateParams.WorkflowStatus != "approved" {
-		t.Fatalf("Approve(reviewer) workflow = %q, want approved", store.updateParams.WorkflowStatus)
+	if store.updateParams.WorkflowStatus != "siap_pakai" {
+		t.Fatalf("Approve(reviewer) workflow = %q, want siap_pakai", store.updateParams.WorkflowStatus)
 	}
 
 	store.updateParams = db.UpdateCbtQuestionParams{}
@@ -1291,11 +1293,11 @@ func TestCbtQuestionRequestRevisionAndMarkReviewedWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RequestRevision() error = %v", err)
 	}
-	if row.WorkflowStatus != "revision_needed" || row.ReviewerUsername != "admin" || store.updateParams.ApproverUsername != "" {
-		t.Fatalf("RequestRevision() row/update = %+v/%+v, want revision_needed by reviewer and cleared approver", row, store.updateParams)
+	if row.WorkflowStatus != "konsep" || row.ReviewerUsername != "admin" || store.updateParams.ApproverUsername != "" {
+		t.Fatalf("RequestRevision() row/update = %+v/%+v, want konsep by reviewer and cleared approver", row, store.updateParams)
 	}
-	if len(store.workflowEvents) != 1 || store.workflowEvents[0].FromStatus != "submitted" || store.workflowEvents[0].ToStatus != "revision_needed" || store.workflowEvents[0].Action != "request_revision" {
-		t.Fatalf("RequestRevision() workflow events = %+v, want submitted -> revision_needed", store.workflowEvents)
+	if len(store.workflowEvents) != 1 || store.workflowEvents[0].FromStatus != "submitted" || store.workflowEvents[0].ToStatus != "konsep" || store.workflowEvents[0].Action != "request_revision" {
+		t.Fatalf("RequestRevision() workflow events = %+v, want submitted -> konsep", store.workflowEvents)
 	}
 	if store.updateParams.ReviewNotes != "perbaiki indikator" {
 		t.Fatalf("RequestRevision() review notes = %q, want provided revision note", store.updateParams.ReviewNotes)
@@ -1307,20 +1309,20 @@ func TestCbtQuestionRequestRevisionAndMarkReviewedWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MarkReviewed() error = %v", err)
 	}
-	if row.WorkflowStatus != "reviewed" || row.ReviewerUsername != "admin" {
-		t.Fatalf("MarkReviewed() row = %+v, want reviewed by admin", row)
+	if row.WorkflowStatus != "diperiksa" || row.ReviewerUsername != "admin" {
+		t.Fatalf("MarkReviewed() row = %+v, want diperiksa by admin", row)
 	}
-	if len(store.workflowEvents) != 1 || store.workflowEvents[0].Action != "mark_reviewed" || store.workflowEvents[0].ToStatus != "reviewed" {
+	if len(store.workflowEvents) != 1 || store.workflowEvents[0].Action != "mark_reviewed" || store.workflowEvents[0].ToStatus != "diperiksa" {
 		t.Fatalf("MarkReviewed() workflow events = %+v, want mark_reviewed event", store.workflowEvents)
 	}
 
-	store = &fakeQuestionStore{current: workflowQuestionRow(questionID, "approved")}
+	store = &fakeQuestionStore{current: workflowQuestionRow(questionID, "siap_pakai")}
 	svc = &CbtQuestion{q: store}
 	row, err = svc.ReturnToRevision(context.Background(), questionID, actor, "turunkan ke revisi")
 	if err != nil {
 		t.Fatalf("ReturnToRevision() error = %v", err)
 	}
-	if row.WorkflowStatus != "revision_needed" || len(store.workflowEvents) != 1 || store.workflowEvents[0].Action != "request_revision" {
+	if row.WorkflowStatus != "konsep" || len(store.workflowEvents) != 1 || store.workflowEvents[0].Action != "request_revision" {
 		t.Fatalf("ReturnToRevision() row/events = %+v/%+v, want RequestRevision alias", row, store.workflowEvents)
 	}
 }
@@ -1339,17 +1341,17 @@ func TestCbtQuestionRestoreArchiveAllowsUnusedArchivedQuestion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RestoreArchive(unused archived) error = %v", err)
 	}
-	if row.Status != db.CbtQuestionStatusEnumDraft || row.WorkflowStatus != "rejected" {
-		t.Fatalf("RestoreArchive(unused archived) row = %+v, want draft/rejected", row)
+	if row.Status != db.CbtQuestionStatusEnumDraft || row.WorkflowStatus != "konsep" {
+		t.Fatalf("RestoreArchive(unused archived) row = %+v, want draft/konsep", row)
 	}
-	if store.updateCalls != 1 || store.updateParams.Status != db.CbtQuestionStatusEnumDraft || store.updateParams.WorkflowStatus != "rejected" {
-		t.Fatalf("RestoreArchive(unused archived) update = calls %d params %+v, want one draft/rejected update", store.updateCalls, store.updateParams)
+	if store.updateCalls != 1 || store.updateParams.Status != db.CbtQuestionStatusEnumDraft || store.updateParams.WorkflowStatus != "konsep" {
+		t.Fatalf("RestoreArchive(unused archived) update = calls %d params %+v, want one draft/konsep update", store.updateCalls, store.updateParams)
 	}
 	if store.updateParams.ReviewerUsername != "admin" || store.updateParams.ApproverUsername != "" {
 		t.Fatalf("RestoreArchive(unused archived) reviewer/approver = %q/%q, want admin/empty", store.updateParams.ReviewerUsername, store.updateParams.ApproverUsername)
 	}
-	if len(store.workflowEvents) != 1 || store.workflowEvents[0].Action != "restore_archive" || store.workflowEvents[0].FromStatus != "archived" || store.workflowEvents[0].ToStatus != "rejected" {
-		t.Fatalf("RestoreArchive(unused archived) workflow events = %+v, want archived -> rejected restore event", store.workflowEvents)
+	if len(store.workflowEvents) != 1 || store.workflowEvents[0].Action != "restore_archive" || store.workflowEvents[0].FromStatus != "archived" || store.workflowEvents[0].ToStatus != "konsep" {
+		t.Fatalf("RestoreArchive(unused archived) workflow events = %+v, want archived -> konsep restore event", store.workflowEvents)
 	}
 	if store.auditCalls != 1 || len(store.auditLogs) != 1 || store.auditLogs[0].Action != "restore_archive" {
 		t.Fatalf("RestoreArchive(unused archived) audit = calls %d logs %+v, want restore audit", store.auditCalls, store.auditLogs)
@@ -1427,10 +1429,10 @@ func TestCbtQuestionBulkWorkflowRestoresArchivedQuestions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BulkWorkflow(restore_archive) error = %v", err)
 	}
-	if result.Action != "restore_archive" || result.Success != 1 || result.Failed != 0 || len(result.Items) != 1 || result.Items[0].Workflow != "rejected" {
-		t.Fatalf("BulkWorkflow(restore_archive) result = %+v, want one rejected success", result)
+	if result.Action != "restore_archive" || result.Success != 1 || result.Failed != 0 || len(result.Items) != 1 || result.Items[0].Workflow != "konsep" {
+		t.Fatalf("BulkWorkflow(restore_archive) result = %+v, want one konsep success", result)
 	}
-	if store.updateParams.Status != db.CbtQuestionStatusEnumDraft || store.updateParams.WorkflowStatus != "rejected" || len(store.workflowEvents) != 1 || store.workflowEvents[0].Action != "restore_archive" {
+	if store.updateParams.Status != db.CbtQuestionStatusEnumDraft || store.updateParams.WorkflowStatus != "konsep" || len(store.workflowEvents) != 1 || store.workflowEvents[0].Action != "restore_archive" {
 		t.Fatalf("BulkWorkflow(restore_archive) update/events = %+v/%+v, want restore", store.updateParams, store.workflowEvents)
 	}
 }
@@ -1454,7 +1456,7 @@ func TestCbtQuestionBulkWorkflowActionNormalizationAndItemResults(t *testing.T) 
 	if result.Action != "request_revision" || result.Total != 2 || result.Success != 2 || result.Failed != 0 {
 		t.Fatalf("BulkWorkflow() result = %+v, want normalized action and two successes", result)
 	}
-	if len(result.Items) != 2 || !result.Items[0].OK || result.Items[0].Workflow != "revision_needed" || result.Items[1].QuestionID != secondID {
+	if len(result.Items) != 2 || !result.Items[0].OK || result.Items[0].Workflow != "konsep" || result.Items[1].QuestionID != secondID {
 		t.Fatalf("BulkWorkflow() items = %+v, want per-question success items", result.Items)
 	}
 	if store.updateCalls != 2 || len(store.workflowEvents) != 2 {
@@ -1476,16 +1478,16 @@ func TestCbtQuestionApplyBulkWorkflowItemDispatchAndUnsupported(t *testing.T) {
 	if _, err := svc.applyBulkWorkflowItem(context.Background(), questionID, "mark_reviewed", actor, "ok"); err != nil {
 		t.Fatalf("applyBulkWorkflowItem(mark_reviewed) error = %v", err)
 	}
-	if store.updateParams.WorkflowStatus != "reviewed" || len(store.workflowEvents) != 1 || store.workflowEvents[0].Action != "mark_reviewed" {
+	if store.updateParams.WorkflowStatus != "diperiksa" || len(store.workflowEvents) != 1 || store.workflowEvents[0].Action != "mark_reviewed" {
 		t.Fatalf("applyBulkWorkflowItem(mark_reviewed) update/events = %+v/%+v", store.updateParams, store.workflowEvents)
 	}
 
-	store = &fakeQuestionStore{current: workflowQuestionRow(questionID, "approved")}
+	store = &fakeQuestionStore{current: workflowQuestionRow(questionID, "siap_pakai")}
 	svc = &CbtQuestion{q: store}
 	if _, err := svc.applyBulkWorkflowItem(context.Background(), questionID, "publish", actor, "ignored"); err != nil {
 		t.Fatalf("applyBulkWorkflowItem(publish) error = %v", err)
 	}
-	if store.updateParams.WorkflowStatus != "published" || store.updateParams.Status != db.CbtQuestionStatusEnumPublished {
+	if store.updateParams.WorkflowStatus != "siap_pakai" || store.updateParams.Status != db.CbtQuestionStatusEnumPublished {
 		t.Fatalf("applyBulkWorkflowItem(publish) update = %+v, want published status", store.updateParams)
 	}
 
@@ -1564,7 +1566,7 @@ func TestCbtQuestionExportCSVMapsStructuredTypes(t *testing.T) {
 	if got.Count != 2 || !strings.HasPrefix(got.Filename, "bank-soal-") {
 		t.Fatalf("ExportCSV() result = %+v, want count and generated filename", got)
 	}
-	if store.listFilterArg.LimitCount != 2000 || len(store.listFilterArg.WorkflowStatuses) != 1 || store.listFilterArg.WorkflowStatuses[0] != "draft" || store.listFilterArg.AuthorUsername != "guru.ipa" {
+	if store.listFilterArg.LimitCount != 2000 || len(store.listFilterArg.WorkflowStatuses) != 1 || store.listFilterArg.WorkflowStatuses[0] != "konsep" || store.listFilterArg.AuthorUsername != "guru.ipa" {
 		t.Fatalf("ExportCSV() list arg = %+v, want default export limit and trimmed workflow", store.listFilterArg)
 	}
 	records, err := csv.NewReader(strings.NewReader(string(got.Content))).ReadAll()
@@ -1795,8 +1797,8 @@ func TestSubmitReviewUpdatesWorkflowAndReviewer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SubmitReview() error = %v", err)
 	}
-	if store.updateParams.WorkflowStatus != "submitted" {
-		t.Fatalf("WorkflowStatus = %q, want submitted", store.updateParams.WorkflowStatus)
+	if store.updateParams.WorkflowStatus != "diperiksa" {
+		t.Fatalf("WorkflowStatus = %q, want diperiksa", store.updateParams.WorkflowStatus)
 	}
 	if store.updateParams.ReviewerUsername != "" {
 		t.Fatalf("ReviewerUsername = %q, want empty until reviewer action", store.updateParams.ReviewerUsername)
@@ -1836,14 +1838,14 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Approve() error = %v", err)
 		}
-		if store.updateParams.WorkflowStatus != "approved" || store.updateParams.ReviewerUsername != "waka" {
-			t.Fatalf("Approve() params = %+v, want approved reviewer waka", store.updateParams)
+		if store.updateParams.WorkflowStatus != "siap_pakai" || store.updateParams.ReviewerUsername != "waka" {
+			t.Fatalf("Approve() params = %+v, want siap_pakai reviewer waka", store.updateParams)
 		}
 		if !store.updateParams.ReviewedAt.Valid || store.updateParams.ReviewNotes != "siap" {
 			t.Fatalf("Approve() review timestamp/notes = %v/%q, want valid/siap", store.updateParams.ReviewedAt, store.updateParams.ReviewNotes)
 		}
-		if len(store.workflowEvents) != 1 || store.workflowEvents[0].FromStatus != "review" || store.workflowEvents[0].ToStatus != "approved" {
-			t.Fatalf("Approve() workflow events = %+v, want review -> approved", store.workflowEvents)
+		if len(store.workflowEvents) != 1 || store.workflowEvents[0].FromStatus != "review" || store.workflowEvents[0].ToStatus != "siap_pakai" {
+			t.Fatalf("Approve() workflow events = %+v, want review -> siap_pakai", store.workflowEvents)
 		}
 		var metadata map[string]string
 		if err := json.Unmarshal(store.workflowEvents[0].Metadata, &metadata); err != nil {
@@ -1862,8 +1864,8 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Reject() error = %v", err)
 		}
-		if store.updateParams.WorkflowStatus != "rejected" || store.updateParams.ReviewerUsername != "waka" {
-			t.Fatalf("Reject() params = %+v, want rejected reviewer waka", store.updateParams)
+		if store.updateParams.WorkflowStatus != "konsep" || store.updateParams.ReviewerUsername != "waka" {
+			t.Fatalf("Reject() params = %+v, want konsep reviewer waka", store.updateParams)
 		}
 		if !store.updateParams.ReviewedAt.Valid || store.updateParams.ReviewNotes != "perbaiki opsi C" {
 			t.Fatalf("Reject() review timestamp/notes = %v/%q, want valid/notes", store.updateParams.ReviewedAt, store.updateParams.ReviewNotes)
@@ -1875,7 +1877,7 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 
 	t.Run("publish sets published status and approver", func(t *testing.T) {
 		approved := current
-		approved.WorkflowStatus = "approved"
+		approved.WorkflowStatus = "siap_pakai"
 		store := &fakeQuestionStore{current: approved}
 		svc := &CbtQuestion{q: store}
 
@@ -1883,8 +1885,8 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Publish() error = %v", err)
 		}
-		if store.updateParams.Status != db.CbtQuestionStatusEnumPublished || store.updateParams.WorkflowStatus != "published" {
-			t.Fatalf("Publish() params = %+v, want published workflow", store.updateParams)
+		if store.updateParams.Status != db.CbtQuestionStatusEnumPublished || store.updateParams.WorkflowStatus != "siap_pakai" {
+			t.Fatalf("Publish() params = %+v, want published status with siap_pakai workflow", store.updateParams)
 		}
 		if store.updateParams.ApproverUsername != "kepala" || !store.updateParams.ApprovedAt.Valid {
 			t.Fatalf("Publish() approver = %q/%v, want kepala with timestamp", store.updateParams.ApproverUsername, store.updateParams.ApprovedAt)
@@ -1893,7 +1895,7 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 
 	t.Run("publish allows granular permission without admin role", func(t *testing.T) {
 		approved := current
-		approved.WorkflowStatus = "approved"
+		approved.WorkflowStatus = "siap_pakai"
 		store := &fakeQuestionStore{current: approved, canApprove: true}
 		svc := &CbtQuestion{q: store}
 		publisherID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
@@ -1960,7 +1962,7 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		if store.createCalls != 1 {
 			t.Fatalf("CreateCbtQuestion() calls = %d, want 1", store.createCalls)
 		}
-		if store.createParams.Code != "Q-1-COPY" || store.createParams.Status != db.CbtQuestionStatusEnumDraft || store.createParams.WorkflowStatus != "draft" {
+		if store.createParams.Code != "Q-1-COPY" || store.createParams.Status != db.CbtQuestionStatusEnumDraft || store.createParams.WorkflowStatus != "konsep" {
 			t.Fatalf("DuplicateAsDraft() create params = %+v, want clean draft copy", store.createParams)
 		}
 		if store.createParams.ReviewerUsername != "" || store.createParams.ApproverUsername != "" || store.createParams.ReviewNotes != "" {
@@ -1971,7 +1973,7 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		}
 	})
 
-	t.Run("duplicate for revision creates rejected draft copy with notes", func(t *testing.T) {
+	t.Run("duplicate for revision creates konsep draft copy with notes", func(t *testing.T) {
 		store := &fakeQuestionStore{current: current, nextVersionNumber: 4}
 		svc := &CbtQuestion{q: store}
 
@@ -1982,8 +1984,8 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		if store.createCalls != 1 {
 			t.Fatalf("CreateCbtQuestion() calls = %d, want 1", store.createCalls)
 		}
-		if !strings.HasPrefix(store.createParams.Code, "Q-1-REV-") || store.createParams.Status != db.CbtQuestionStatusEnumDraft || store.createParams.WorkflowStatus != "rejected" {
-			t.Fatalf("DuplicateForRevision() create params = %+v, want rejected draft revision copy", store.createParams)
+		if !strings.HasPrefix(store.createParams.Code, "Q-1-REV-") || store.createParams.Status != db.CbtQuestionStatusEnumDraft || store.createParams.WorkflowStatus != "konsep" {
+			t.Fatalf("DuplicateForRevision() create params = %+v, want konsep draft revision copy", store.createParams)
 		}
 		if store.createParams.ReviewerUsername != "reviewer" || store.createParams.ApproverUsername != "" || store.createParams.ReviewNotes != "Daya pembeda rendah" {
 			t.Fatalf("DuplicateForRevision() reviewer/approver/notes = %q/%q/%q, want reviewer/no approver/notes", store.createParams.ReviewerUsername, store.createParams.ApproverUsername, store.createParams.ReviewNotes)
@@ -2027,8 +2029,8 @@ func TestCbtQuestionBulkWorkflowReturnsPerItemResults(t *testing.T) {
 	if got.Total != 1 || got.Success != 1 || got.Failed != 0 || len(got.Items) != 1 || !got.Items[0].OK {
 		t.Fatalf("BulkWorkflow() result = %+v, want one successful item", got)
 	}
-	if store.updateParams.WorkflowStatus != "approved" || store.auditCalls != 1 || store.auditLogs[0].Action != "approve" {
-		t.Fatalf("BulkWorkflow() update/audit = %+v/%+v, want approved audit", store.updateParams, store.auditLogs)
+	if store.updateParams.WorkflowStatus != "siap_pakai" || store.auditCalls != 1 || store.auditLogs[0].Action != "approve" {
+		t.Fatalf("BulkWorkflow() update/audit = %+v/%+v, want siap_pakai audit", store.updateParams, store.auditLogs)
 	}
 }
 
@@ -2053,8 +2055,8 @@ func TestNormalizeQuestionInputBeginnerDefaultsToDraft(t *testing.T) {
 	if got.Status != db.CbtQuestionStatusEnumDraft {
 		t.Fatalf("Status = %q, want draft", got.Status)
 	}
-	if got.WorkflowStatus != "draft" {
-		t.Fatalf("WorkflowStatus = %q, want draft", got.WorkflowStatus)
+	if got.WorkflowStatus != "konsep" {
+		t.Fatalf("WorkflowStatus = %q, want konsep", got.WorkflowStatus)
 	}
 	if got.Difficulty != db.CbtQuestionDifficultyEnumMedium {
 		t.Fatalf("Difficulty = %q, want medium", got.Difficulty)
@@ -2144,8 +2146,8 @@ func TestCbtQuestionBuildUpdatePublishedParams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildUpdateQuestionParams() error = %v", err)
 	}
-	if params.ID != current.ID || params.QuestionType != "essay" || params.Status != db.CbtQuestionStatusEnumPublished || params.WorkflowStatus != "approved" {
-		t.Fatalf("buildUpdateQuestionParams() identity/status = %+v, want published approved essay", params)
+	if params.ID != current.ID || params.QuestionType != "essay" || params.Status != db.CbtQuestionStatusEnumPublished || params.WorkflowStatus != "siap_pakai" {
+		t.Fatalf("buildUpdateQuestionParams() identity/status = %+v, want published siap_pakai essay", params)
 	}
 	if params.ReviewerUsername != "reviewer-baru" || !params.ReviewedAt.Valid {
 		t.Fatalf("buildUpdateQuestionParams() reviewer = %q/%v, want reviewer-baru with timestamp", params.ReviewerUsername, params.ReviewedAt)
@@ -2334,8 +2336,8 @@ func TestCbtQuestionNormalizeAndEncodingHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("normalizeQuestionInput(draft partial) error = %v", err)
 	}
-	if draft.WorkflowStatus != "draft" || len(draft.Options) != 0 {
-		t.Fatalf("normalizeQuestionInput(draft partial) workflow/options = %q/%d, want draft/0", draft.WorkflowStatus, len(draft.Options))
+	if draft.WorkflowStatus != "konsep" || len(draft.Options) != 0 {
+		t.Fatalf("normalizeQuestionInput(draft partial) workflow/options = %q/%d, want konsep/0", draft.WorkflowStatus, len(draft.Options))
 	}
 
 	matchingDraft, err := normalizeQuestionInput(SaveCbtQuestionInput{
@@ -2432,11 +2434,11 @@ func TestCbtQuestionNormalizeAndEncodingHelpers(t *testing.T) {
 	if got := normalizeAuthoringMode("ADVANCE"); got != "advance" {
 		t.Fatalf("normalizeAuthoringMode() = %q, want advance", got)
 	}
-	if got := normalizeWorkflowStatus("approved"); got != "approved" {
-		t.Fatalf("normalizeWorkflowStatus(approved) = %q, want approved", got)
+	if got := normalizeWorkflowStatus("approved"); got != "siap_pakai" {
+		t.Fatalf("normalizeWorkflowStatus(approved) = %q, want siap_pakai", got)
 	}
-	if got := normalizeWorkflowStatus("published"); got != "published" {
-		t.Fatalf("normalizeWorkflowStatus(published) = %q, want published", got)
+	if got := normalizeWorkflowStatus("published"); got != "siap_pakai" {
+		t.Fatalf("normalizeWorkflowStatus(published) = %q, want siap_pakai", got)
 	}
 
 	sixOptions, err := normalizeQuestionInput(SaveCbtQuestionInput{

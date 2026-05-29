@@ -45,8 +45,8 @@ func TestCbtQuestionMegaWorkflowTransitionsWriteAuditAndEvents(t *testing.T) {
 		if err != nil {
 			t.Fatalf("SubmitForReview() error = %v", err)
 		}
-		if row.WorkflowStatus != "submitted" || store.updateParams.WorkflowStatus != "submitted" || store.updateParams.ReviewerUsername != "" {
-			t.Fatalf("SubmitForReview() workflow/reviewer = row %q params %q reviewer %q, want submitted with blank reviewer", row.WorkflowStatus, store.updateParams.WorkflowStatus, store.updateParams.ReviewerUsername)
+		if row.WorkflowStatus != "diperiksa" || store.updateParams.WorkflowStatus != "diperiksa" || store.updateParams.ReviewerUsername != "" {
+			t.Fatalf("SubmitForReview() workflow/reviewer = row %q params %q reviewer %q, want diperiksa with blank reviewer", row.WorkflowStatus, store.updateParams.WorkflowStatus, store.updateParams.ReviewerUsername)
 		}
 		if store.auditCalls != 1 || len(store.workflowEvents) != 1 {
 			t.Fatalf("SubmitForReview() audit/events = %d/%d, want 1/1", store.auditCalls, len(store.workflowEvents))
@@ -55,14 +55,14 @@ func TestCbtQuestionMegaWorkflowTransitionsWriteAuditAndEvents(t *testing.T) {
 			t.Fatalf("SubmitForReview() audit = %+v", store.auditLogs[0])
 		}
 		event := store.workflowEvents[0]
-		if event.FromStatus != "draft" || event.ToStatus != "submitted" || event.Action != "submit_for_review" {
-			t.Fatalf("SubmitForReview() event = %+v, want draft->submitted submit_for_review", event)
+		if event.FromStatus != "draft" || event.ToStatus != "diperiksa" || event.Action != "submit_for_review" {
+			t.Fatalf("SubmitForReview() event = %+v, want draft->diperiksa submit_for_review", event)
 		}
 		var meta map[string]any
 		if err := json.Unmarshal(event.Metadata, &meta); err != nil {
 			t.Fatalf("workflow metadata is not JSON: %v", err)
 		}
-		if meta["workflow_status"] != "submitted" || meta["to_publication_status"] != string(db.CbtQuestionStatusEnumDraft) {
+		if meta["workflow_status"] != "diperiksa" || meta["to_publication_status"] != string(db.CbtQuestionStatusEnumDraft) {
 			t.Fatalf("SubmitForReview() metadata = %#v, want workflow/publication status", meta)
 		}
 	})
@@ -77,11 +77,11 @@ func TestCbtQuestionMegaWorkflowTransitionsWriteAuditAndEvents(t *testing.T) {
 		if err != nil {
 			t.Fatalf("SubmitForReview(revision_needed safe) error = %v", err)
 		}
-		if row.WorkflowStatus != "submitted" || store.updateParams.WorkflowStatus != "submitted" {
-			t.Fatalf("SubmitForReview(revision_needed safe) row/update = %+v/%+v, want submitted", row, store.updateParams)
+		if row.WorkflowStatus != "diperiksa" || store.updateParams.WorkflowStatus != "diperiksa" {
+			t.Fatalf("SubmitForReview(revision_needed safe) row/update = %+v/%+v, want diperiksa", row, store.updateParams)
 		}
-		if len(store.workflowEvents) != 1 || store.workflowEvents[0].FromStatus != "revision_needed" || store.workflowEvents[0].ToStatus != "submitted" {
-			t.Fatalf("SubmitForReview(revision_needed safe) events = %+v, want revision_needed -> submitted", store.workflowEvents)
+		if len(store.workflowEvents) != 1 || store.workflowEvents[0].FromStatus != "revision_needed" || store.workflowEvents[0].ToStatus != "diperiksa" {
+			t.Fatalf("SubmitForReview(revision_needed safe) events = %+v, want revision_needed -> diperiksa", store.workflowEvents)
 		}
 	})
 
@@ -108,16 +108,16 @@ func TestCbtQuestionMegaWorkflowTransitionsWriteAuditAndEvents(t *testing.T) {
 		if err != nil {
 			t.Fatalf("MarkReviewed() error = %v", err)
 		}
-		if row.WorkflowStatus != "reviewed" || row.ReviewerUsername != "reviewer" || store.updateParams.ApproverUsername != "" {
+		if row.WorkflowStatus != "diperiksa" || row.ReviewerUsername != "reviewer" || store.updateParams.ApproverUsername != "" {
 			t.Fatalf("MarkReviewed() row/update = %+v / %+v", row, store.updateParams)
 		}
-		if store.auditLogs[0].Action != "mark_reviewed" || store.workflowEvents[0].FromStatus != "submitted" || store.workflowEvents[0].ToStatus != "reviewed" {
+		if store.auditLogs[0].Action != "mark_reviewed" || store.workflowEvents[0].FromStatus != "submitted" || store.workflowEvents[0].ToStatus != "diperiksa" {
 			t.Fatalf("MarkReviewed() audit/event = %+v / %+v", store.auditLogs[0], store.workflowEvents[0])
 		}
 	})
 
 	t.Run("publisher publishes approved question and status", func(t *testing.T) {
-		current := megaQuestionBase(questionID, "approved")
+		current := megaQuestionBase(questionID, "siap_pakai")
 		current.ApproverUsername = "lead"
 		store := &fakeQuestionStore{current: current, canApprove: true}
 		svc := &CbtQuestion{q: store}
@@ -127,11 +127,11 @@ func TestCbtQuestionMegaWorkflowTransitionsWriteAuditAndEvents(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Publish() error = %v", err)
 		}
-		if row.WorkflowStatus != "published" || row.Status != db.CbtQuestionStatusEnumPublished || row.ApproverUsername != "publisher" {
+		if row.WorkflowStatus != "siap_pakai" || row.Status != db.CbtQuestionStatusEnumPublished || row.ApproverUsername != "publisher" {
 			t.Fatalf("Publish() row = %+v, want published status and publisher approver", row)
 		}
-		if store.updateParams.Status != db.CbtQuestionStatusEnumPublished || store.updateParams.WorkflowStatus != "published" {
-			t.Fatalf("Publish() update params = %+v, want published/published", store.updateParams)
+		if store.updateParams.Status != db.CbtQuestionStatusEnumPublished || store.updateParams.WorkflowStatus != "siap_pakai" {
+			t.Fatalf("Publish() update params = %+v, want published/siap_pakai", store.updateParams)
 		}
 		var meta map[string]any
 		if err := json.Unmarshal(store.workflowEvents[0].Metadata, &meta); err != nil {
@@ -336,8 +336,8 @@ func TestCbtQuestionMegaBulkWorkflowResults(t *testing.T) {
 	if result.Action != "submit_for_review" || result.Total != 2 || result.Success != 2 || result.Failed != 0 {
 		t.Fatalf("BulkWorkflow(submit alias) result = %+v, want normalized action with two successes against fake current", result)
 	}
-	if len(result.Items) != 2 || !result.Items[0].OK || result.Items[0].Workflow != "submitted" {
-		t.Fatalf("BulkWorkflow(submit alias) items = %+v, want submitted successes", result.Items)
+	if len(result.Items) != 2 || !result.Items[0].OK || result.Items[0].Workflow != "diperiksa" {
+		t.Fatalf("BulkWorkflow(submit alias) items = %+v, want diperiksa successes", result.Items)
 	}
 	if store.updateCalls != 2 || store.auditCalls != 2 || len(store.workflowEvents) != 2 {
 		t.Fatalf("BulkWorkflow(submit alias) update/audit/events = %d/%d/%d, want 2/2/2", store.updateCalls, store.auditCalls, len(store.workflowEvents))

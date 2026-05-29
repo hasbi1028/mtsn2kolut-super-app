@@ -40,6 +40,13 @@
 	function subjectName(question: Question) {
 		return question.subject_name || question.subject_code || (question.subject_id ? subjects.find((item) => item.id === question.subject_id)?.name : '') || 'Tanpa Mapel';
 	}
+	function normalizeWorkflowStatus(value?: string | null) {
+		const status = (value ?? '').trim().toLowerCase();
+		if (['konsep', 'draft', 'revision', 'revision_needed', 'rejected', 'archived'].includes(status)) return 'konsep';
+		if (['diperiksa', 'review', 'submitted', 'reviewed'].includes(status)) return 'diperiksa';
+		if (['siap_pakai', 'approved', 'published'].includes(status)) return 'siap_pakai';
+		return status;
+	}
 
 	async function fetchPayload(): Promise<Payload> {
 		const params = new URLSearchParams({ limit: '300', offset: '0' });
@@ -67,7 +74,7 @@
 			key: subject,
 			subject,
 			total: group.length,
-			approved: group.filter((item) => ['approved', 'published'].includes(item.workflow_status ?? item.status ?? '')).length,
+			approved: group.filter((item) => normalizeWorkflowStatus(item.workflow_status ?? item.status) === 'siap_pakai').length,
 			kdCount: kd.size,
 			topicCount: topics.size,
 			missingKd: group.filter((item) => !item.kd_ref?.trim() && !item.cp_ref?.trim() && !item.tp_ref?.trim()).length,
