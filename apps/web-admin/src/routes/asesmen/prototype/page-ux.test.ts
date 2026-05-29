@@ -12,12 +12,14 @@ describe('asesmen frontend-only prototype', () => {
 	});
 
 	it('does not call backend, BFF, or mutate data', () => {
-		expect(pageSource).not.toContain('fetch(');
-		expect(pageSource).not.toContain('/api/asesmen');
-		expect(pageSource).not.toContain('/api/cbt');
-		expect(pageSource).not.toContain('method:');
-		expect(modelSource).not.toContain('/api/asesmen');
-		expect(modelSource).not.toContain('/api/cbt');
+		for (const source of [pageSource, modelSource]) {
+			expect(source).not.toContain('fetch(');
+			expect(source).not.toContain('/api/asesmen');
+			expect(source).not.toContain('/api/cbt');
+			expect(source).not.toContain('/api/exam');
+			expect(source).not.toContain('/api/cbt-portal');
+			expect(source).not.toContain('method:');
+		}
 	});
 
 	it('uses the numbered A0-A5 review flow', () => {
@@ -25,6 +27,21 @@ describe('asesmen frontend-only prototype', () => {
 		for (const label of ['A1', 'A2', 'A3', 'A4', 'A5', 'Persiapan Ujian', 'Dokumen & Cetak', 'Pelaksanaan Hari-H', 'Ruang Saya', 'Hasil & Penutupan']) {
 			expect(modelSource).toContain(label);
 		}
+	});
+
+	it('keeps A9 as a secondary complete-mode lane', () => {
+		expect(pageSource).toContain('A9 · Mode Lengkap Panitia');
+		expect(modelSource).toContain('advancedPrototypeLinks');
+		expect(modelSource).toContain('hiddenFromMainFlow');
+		expect(pageSource).toContain('Disembunyikan dari alur utama');
+	});
+
+	it('adds compact operational details without becoming a production console', () => {
+		expect(pageSource).toContain('Daftar kerja ringkas');
+		expect(pageSource).toContain('Preview Ruang');
+		expect(modelSource).toContain('8 ruang');
+		expect(modelSource).toContain('Susun 8 ruang otomatis');
+		expect(modelSource).toContain('Hubungi Admin');
 	});
 
 	it('keeps the prototype compact and avoids demo/local CTA', () => {
