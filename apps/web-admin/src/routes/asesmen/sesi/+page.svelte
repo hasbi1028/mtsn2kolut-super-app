@@ -144,6 +144,8 @@
 	let browserTimeZoneMismatch = $derived(browserTimeZone !== '' && browserTimeZone !== 'Asia/Makassar');
 	let createSessionHref = $derived(`${resolve('/asesmen/sesi/new')}${eventId ? `?event_id=${encodeURIComponent(eventId)}` : ''}`);
 
+	const sessionActionCopyChecklist = ['Lihat detail', 'Batalkan sesi', 'Hapus sesi'];
+
 	const statusLabel: Record<string, string> = {
 		draft: 'Konsep', scheduled: 'Terjadwal', active: 'Berlangsung',
 		finished: 'Selesai', cancelled: 'Dibatalkan',
@@ -1460,10 +1462,10 @@
 									<div class="flex gap-1 flex-wrap">
 										{#if s.status === 'draft'}
 									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
-										Lanjutkan setup
+										Buka detail
 									</a>
 									<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'scheduled')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">
-										Siap jadwal
+										Atur jadwal
 									</LoadingButton>
 								{:else if s.status === 'scheduled'}
 									<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowOperationalIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">Mulai sesi</LoadingButton>
@@ -1474,10 +1476,10 @@
 									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
 										Pantau sesi
 									</a>
-									<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan</LoadingButton>
+									<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan sesi</LoadingButton>
 								{:else if s.status === 'finished'}
 									<a href={resolve(`/asesmen/sesi/${s.id}/minutes`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
-										BA Sesi
+										Lihat BA Sesi
 									</a>
 									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
 										Detail
@@ -1555,19 +1557,19 @@
 							</div>
 							<div class="mt-4 flex flex-wrap gap-2">
 								{#if s.status === 'draft'}
-									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">Lanjutkan setup</a>
-									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'scheduled')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">Siap jadwal</LoadingButton>
+									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">Buka detail</a>
+									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'scheduled')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">Atur jadwal</LoadingButton>
 								{:else if s.status === 'scheduled'}
 									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowOperationalIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">Mulai sesi</LoadingButton>
-									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">Detail</a>
+									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">Buka detail</a>
 								{:else if s.status === 'active'}
 									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">Pantau sesi</a>
-									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan</LoadingButton>
+									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan sesi</LoadingButton>
 								{:else if s.status === 'finished'}
-									<a href={resolve(`/asesmen/sesi/${s.id}/minutes`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">BA Sesi</a>
-									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">Detail</a>
+									<a href={resolve(`/asesmen/sesi/${s.id}/minutes`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">Lihat BA Sesi</a>
+									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">Buka detail</a>
 								{:else}
-									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">Detail</a>
+									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">Buka detail</a>
 								{/if}
 							</div>
 						</div>

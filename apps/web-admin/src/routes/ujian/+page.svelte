@@ -48,6 +48,10 @@
 	let doubtfulQuestions = $state(new Set<string>());
 	let watermarkTime = $state('');
 	let participantPollInterval: ReturnType<typeof setInterval> | undefined;
+	let countdownInterval: ReturnType<typeof setInterval> | undefined;
+	let timeRemainingSeconds = $state<number | null>(null);
+	let waitingAutoCheckBusy = false;
+	let syncingPendingAnswers = $state(false);
 	let seenCommandIds = $state(new Set<string>());
 
 	let queryCard = $derived($page.url.searchParams.get('card') ?? $page.url.searchParams.get('token') ?? '');
@@ -66,6 +70,9 @@
 	let participantWatermark = $derived(participantLabel ? `Peserta ${participantLabel}` : 'Peserta belum tercatat');
 	let sessionTitleLabel = $derived(session.title ?? session.subject ?? 'Sesi ujian');
 	let sessionIdLabel = $derived(session.id ? `Sesi ${session.id}` : '');
+	let pendingAnswerCount = $derived(Object.keys(pendingAnswers).length);
+	let timeRemainingLabel = $derived(formatTimeRemaining(timeRemainingSeconds));
+	let timeRemainingClass = $derived(timeRemainingSeconds === null ? 'border-slate-200 bg-slate-50 text-slate-700' : timeRemainingSeconds <= 5 * 60 ? 'border-red-200 bg-red-50 text-red-800' : timeRemainingSeconds <= 10 * 60 ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-emerald-200 bg-emerald-50 text-emerald-900');
 	let watermarkLine = $derived(
 		[
 			studentName,
@@ -101,6 +108,36 @@
 		return btoa(unescape(encodeURIComponent(raw))).slice(0, 128);
 	}
 
+	function formatTimeRemaining(seconds: number | null) {
+		if (seconds === null || !Number.isFinite(seconds)) return 'Waktu menunggu';
+		const safe = Math.max(0, Math.floor(seconds));
+		const h = Math.floor(safe / 3600);
+		const m = Math.floor((safe % 3600) / 60);
+		const sec = safe % 60;
+		if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+		return `${m}:${String(sec).padStart(2, '0')}`;
+	}
+
+	function setExamPayload(nextPayload: ExamPayload | null) {
+		payload = nextPayload;
+		timeRemainingSeconds = typeof nextPayload?.time_remaining_seconds === 'number' ? nextPayload.time_remaining_seconds : null;
+	}
+
+	function startCountdown() {
+		if (!browser) return;
+		stopCountdown();
+		if (timeRemainingSeconds === null) return;
+		countdownInterval = setInterval(() => {
+			if (portalStep !== 'exam' || submitted) return;
+			timeRemainingSeconds = Math.max(0, (timeRemainingSeconds ?? 0) - 1);
+		}, 1000);
+	}
+
+	function stopCountdown() {
+		if (countdownInterval) clearInterval(countdownInterval);
+		countdownInterval = undefined;
+	}
+
 	function resetExamState() {
 		submitted = false;
 		answers = {};
@@ -111,10 +148,12 @@
 		portalAuthToken = '';
 		authenticatedByCard = false;
 		stopParticipantRuntimePolling();
+		stopCountdown();
+		timeRemainingSeconds = null;
 	}
 
 	function activateDemo() {
-		payload = {
+		setExamPayload({
 			student: { nama: 'Ahmad Demo', nis: '24001', class_name: 'IX A', room_name: 'Ruang DEMO 01', seat_no: 12 },
 			session: { title: 'DEMO Portal Ujian Peserta', subject: 'Informatika', status: 'active', started: true },
 			questions: [
@@ -124,7 +163,7 @@
 			],
 			total_questions: 3,
 			time_remaining_seconds: 45 * 60
-		};
+		});
 		portalStep = 'confirm';
 		addTelemetry('MODE DEMO siap tanpa database');
 	}
@@ -203,7 +242,7 @@
 				});
 				const body = await response.json();
 				if (!response.ok) throw new Error(body.error ?? body.message ?? 'Login gagal');
-				payload = normalizePortalPayload(body);
+				setExamPayload(normalizePortalPayload(body));
 				portalStep = 'confirm';
 				addTelemetry('Kredensial ujian diterima');
 				return;
@@ -216,7 +255,7 @@
 			});
 			const body = await response.json();
 			if (!response.ok) throw new Error(body.error ?? body.message ?? 'Verifikasi kartu gagal');
-			payload = normalizeCardVerifyPayload(body);
+			setExamPayload(normalizeCardVerifyPayload(body));
 			portalStep = 'confirm';
 			addTelemetry('QR/kode kartu dan PIN diterima');
 		} catch (error) {
@@ -233,16 +272,17 @@
 			return;
 		}
 		portalStep = sessionAlreadyOpen(payload) ? 'exam' : 'waiting';
+		if (portalStep === 'exam') startCountdown();
 		addTelemetry(portalStep === 'exam' ? 'Identitas dikonfirmasi — ujian dibuka' : 'Identitas dikonfirmasi — menunggu pengawas membuka ujian');
 	}
 
-	async function startPortalExam() {
+	async function startPortalExam(silent = false) {
 		if (!portalAuthToken || !activeParticipantId) {
 			errorMessage = 'Data kartu belum lengkap. Silakan scan ulang atau panggil pengawas.';
 			return;
 		}
-		loading = true;
-		errorMessage = '';
+		if (!silent) loading = true;
+		if (!silent) errorMessage = '';
 		try {
 			const response = await fetch(`/api/cbt-portal/participants/${encodeURIComponent(activeParticipantId)}/start`, {
 				method: 'POST',
@@ -262,21 +302,22 @@
 			}
 			const startedPayload = normalizePortalPayload(body);
 			const priorPayload = payload;
-			payload = {
+			setExamPayload({
 				...startedPayload,
 				student: {
 					...(priorPayload?.student ?? priorPayload?.participant ?? {}),
 					...(startedPayload.student ?? startedPayload.participant ?? {})
 				},
 				room: startedPayload.room ?? priorPayload?.room
-			};
+			});
 			portalStep = 'exam';
+			startCountdown();
 			addTelemetry('Identitas dikonfirmasi — ujian dibuka');
 			startParticipantRuntimePolling();
 		} catch (error) {
-			errorMessage = friendlyError(error);
+			if (!silent) errorMessage = friendlyError(error);
 		} finally {
-			loading = false;
+			if (!silent) loading = false;
 		}
 	}
 
@@ -290,15 +331,28 @@
 		stopParticipantRuntimePolling();
 		void sendPortalHeartbeat();
 		void pollPortalCommands();
+		if (portalStep === 'waiting') void autoCheckPortalStart();
 		participantPollInterval = setInterval(() => {
 			void sendPortalHeartbeat();
 			void pollPortalCommands();
+			if (portalStep === 'waiting') void autoCheckPortalStart();
+			if (portalStep === 'exam' && Object.keys(pendingAnswers).length > 0) void syncPendingAnswers();
 		}, 5000);
 	}
 
 	function stopParticipantRuntimePolling() {
 		if (participantPollInterval) clearInterval(participantPollInterval);
 		participantPollInterval = undefined;
+	}
+
+	async function autoCheckPortalStart() {
+		if (waitingAutoCheckBusy || portalStep !== 'waiting') return;
+		waitingAutoCheckBusy = true;
+		try {
+			await startPortalExam(true);
+		} finally {
+			waitingAutoCheckBusy = false;
+		}
 	}
 
 	async function sendPortalHeartbeat() {
@@ -352,6 +406,25 @@
 		}).catch(() => undefined);
 	}
 
+	async function syncAnswer(questionId: string, answer: string, quiet = false) {
+		const response = await fetch(authenticatedByCard ? `/api/cbt-portal/participants/${encodeURIComponent(activeParticipantId)}/answer` : '/api/exam/answer', {
+			method: 'POST',
+			headers: authenticatedByCard
+				? { 'content-type': 'application/json', authorization: `Bearer ${portalAuthToken}` }
+				: {
+						'content-type': 'application/json',
+						'x-exam-token': examAccessToken.trim(),
+						'x-device-fingerprint': deviceFingerprint.trim()
+					},
+			body: JSON.stringify({ question_id: questionId, answer })
+		});
+		if (!response.ok) throw new Error('Jawaban belum tersinkron');
+		const next = { ...pendingAnswers };
+		delete next[questionId];
+		pendingAnswers = next;
+		if (!quiet) addTelemetry(`Jawaban ${questionId} tersinkron`);
+	}
+
 	async function saveAnswer(questionId: string, answer: string) {
 		answers = { ...answers, [questionId]: answer };
 		if (demoMode) {
@@ -360,24 +433,27 @@
 		}
 		pendingAnswers = { ...pendingAnswers, [questionId]: answer };
 		try {
-			const response = await fetch(authenticatedByCard ? `/api/cbt-portal/participants/${encodeURIComponent(activeParticipantId)}/answer` : '/api/exam/answer', {
-				method: 'POST',
-				headers: authenticatedByCard
-					? { 'content-type': 'application/json', authorization: `Bearer ${portalAuthToken}` }
-					: {
-							'content-type': 'application/json',
-							'x-exam-token': examAccessToken.trim(),
-							'x-device-fingerprint': deviceFingerprint.trim()
-						},
-				body: JSON.stringify({ question_id: questionId, answer })
-			});
-			if (!response.ok) throw new Error('Jawaban belum tersinkron');
-			const next = { ...pendingAnswers };
-			delete next[questionId];
-			pendingAnswers = next;
-			addTelemetry(`Jawaban ${questionId} tersinkron`);
+			await syncAnswer(questionId, answer);
 		} catch {
 			addTelemetry(`Jawaban ${questionId} aman lokal, menunggu sinkron`);
+		}
+	}
+
+	async function syncPendingAnswers() {
+		const entries = Object.entries(pendingAnswers);
+		if (entries.length === 0 || syncingPendingAnswers || demoMode) return;
+		syncingPendingAnswers = true;
+		try {
+			for (const [questionId, answer] of entries) {
+				try {
+					await syncAnswer(questionId, answer, true);
+				} catch {
+					// Tetap simpan lokal; retry berikutnya akan mencoba lagi.
+				}
+			}
+			if (Object.keys(pendingAnswers).length === 0) addTelemetry('Semua jawaban tertunda berhasil disinkron ulang');
+		} finally {
+			syncingPendingAnswers = false;
 		}
 	}
 
@@ -389,7 +465,10 @@
 			return;
 		}
 		if (Object.keys(pendingAnswers).length > 0) {
-			errorMessage = 'Masih ada jawaban yang belum tersinkron. Coba simpan ulang sebelum kirim jawaban.';
+			await syncPendingAnswers();
+		}
+		if (Object.keys(pendingAnswers).length > 0) {
+			errorMessage = 'Masih ada jawaban yang belum tersinkron. Tekan Sinkron ulang jawaban atau panggil pengawas sebelum kirim jawaban.';
 			return;
 		}
 		if (!confirm('Kirim jawaban sekarang? Periksa kembali soal yang masih ragu-ragu sebelum lanjut.')) return;
@@ -495,7 +574,7 @@
 		const onBlur = () => { addTelemetry('Halaman ujian tidak aktif sesaat'); void reportPortalEvent('web_focus_lost', { reason: 'window_blur' }); };
 		const onFocus = () => { addTelemetry('Halaman ujian aktif kembali'); void reportPortalEvent('web_focus_restored', { reason: 'window_focus' }); };
 		const onOffline = () => addTelemetry('Koneksi terputus, jawaban disimpan sementara');
-		const onOnline = () => addTelemetry('Koneksi kembali tersambung');
+		const onOnline = () => { addTelemetry('Koneksi kembali tersambung'); void syncPendingAnswers(); };
 		const onVisibility = () => void reportPortalEvent(document.hidden ? 'web_visibility_hidden' : 'web_visibility_visible', { reason: document.hidden ? 'document_hidden' : 'document_visible' });
 		const onCopy = (event: ClipboardEvent) => blockExamClipboard(event, 'copy_attempt');
 		const onCut = (event: ClipboardEvent) => blockExamClipboard(event, 'cut_attempt');
@@ -533,7 +612,7 @@
 		};
 	});
 
-	onDestroy(() => stopParticipantRuntimePolling());
+	onDestroy(() => { stopParticipantRuntimePolling(); stopCountdown(); });
 </script>
 
 <svelte:head>
@@ -585,10 +664,11 @@
 				<section class="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-5 text-center">
 					<div class="mx-auto grid size-16 place-items-center rounded-full bg-amber-400 text-sm font-black text-amber-950">SIAP</div>
 					<h2 class="mt-4 text-2xl font-black">Menunggu pengawas</h2>
-					<p class="mt-2 text-sm text-amber-950">Identitas sudah benar. Tetap di halaman ini sampai pengawas menekan <b>Mulai Ujian</b>.</p>
+					<p class="mt-2 text-sm text-amber-950">Identitas sudah benar. Tetap di halaman ini. Sistem akan mengecek otomatis sampai pengawas menekan <b>Mulai Ujian</b>.</p>
 					<div class="mt-4 rounded-2xl bg-white/70 p-3 text-sm"><b>{studentName}</b><br />{session.title ?? 'Sesi Ujian'} · {student.room_name ?? 'Ruang belum tercatat'}</div>
 					{#if authenticatedByCard}
-						<button class="mt-4 min-h-12 w-full rounded-2xl bg-emerald-700 px-4 font-black text-white disabled:opacity-60" disabled={loading} onclick={startPortalExam}>{loading ? 'Mengecek...' : 'Cek Lagi'}</button>
+						<button class="mt-4 min-h-12 w-full rounded-2xl bg-emerald-700 px-4 font-black text-white disabled:opacity-60" disabled={loading} onclick={() => startPortalExam()}>{loading ? 'Mengecek...' : 'Cek Lagi Sekarang'}</button>
+						<p class="mt-2 text-xs font-semibold text-amber-900">Cek otomatis berjalan tiap 5 detik.</p>
 					{/if}
 				</section>
 			{:else if payload && portalStep === 'exam'}
@@ -632,6 +712,9 @@
 								<textarea class="mt-4 min-h-40 w-full select-text rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-950" placeholder="Tulis jawaban..." value={answers[currentQuestion.id] ?? ''} onpaste={(event) => blockExamClipboard(event, 'paste_attempt')} ondrop={(event) => blockExamClipboard(event, 'drop_attempt')} onblur={(event) => saveAnswer(currentQuestion.id, event.currentTarget.value)}></textarea>
 							{/if}
 							<p class="mt-3 rounded-xl bg-slate-50 p-2 text-xs text-slate-600">{pendingAnswers[currentQuestion.id] ? 'Aman lokal, menunggu sinkron' : answers[currentQuestion.id] ? 'Tersimpan' : 'Belum dijawab'}</p>
+							{#if pendingAnswerCount > 0}
+								<button class="mt-2 min-h-10 w-full rounded-xl border border-amber-300 bg-amber-50 px-3 text-xs font-black text-amber-950 disabled:opacity-60" disabled={syncingPendingAnswers} onclick={syncPendingAnswers}>{syncingPendingAnswers ? 'Menyinkron...' : `Sinkron ulang ${pendingAnswerCount} jawaban`}</button>
+							{/if}
 						</article>
 					{/if}
 

@@ -217,7 +217,14 @@
 		liveMode = 'idle';
 	}
 
+	function confirmRoomStatusChange(status: 'active' | 'finished') {
+		const roomName = card?.room_name ?? room?.room_name ?? 'ruang ini';
+		if (status === 'active') return window.confirm(`Mulai ujian untuk ${roomName}?\n\nPastikan peserta sudah duduk sesuai ruangan dan panitia siap membantu bila ada kendala.`);
+		return window.confirm(`Tutup ujian untuk ${roomName}?\n\nPastikan semua peserta sudah selesai/submitted atau sudah ada arahan admin. Tindakan ini berisiko bila masih ada peserta mengerjakan.`);
+	}
+
 	async function updateStatus(status: 'active' | 'finished') {
+		if (!confirmRoomStatusChange(status)) return;
 		if (demoMode) {
 			demoRoomStatus = status === 'active' ? 'Ujian Dibuka' : 'Ujian Ditutup';
 			return;
@@ -643,12 +650,12 @@
 							</div>
 
 							<div class="grid gap-2">
-								<button class="min-h-14 rounded-2xl bg-emerald-700 px-4 text-base font-black text-white disabled:opacity-60" disabled={Boolean(actionBusy) || room?.session_status === 'active'} onclick={() => void updateStatus('active')}>{actionBusy === 'status-active' ? 'Memproses...' : 'Mulai Ujian'}</button>
+								<button class="min-h-14 rounded-2xl bg-emerald-700 px-4 text-base font-black text-white disabled:opacity-60" disabled={Boolean(actionBusy) || room?.session_status === 'active'} onclick={() => void updateStatus('active')}>{actionBusy === 'status-active' ? 'Memproses...' : 'Mulai Ujian (konfirmasi)'}</button>
 								<div class="grid grid-cols-2 gap-2">
 									<button class="min-h-12 rounded-2xl bg-amber-500 px-3 text-sm font-black text-amber-950" onclick={() => void contactAdmin({ source: 'ruang' })}>Hubungi Admin</button>
 									<button class="min-h-12 rounded-2xl border border-slate-300 px-3 text-sm font-black {audioAlertsEnabled ? 'bg-emerald-700 text-white' : 'bg-white text-slate-900'}" onclick={() => audioAlertsEnabled = !audioAlertsEnabled}>Audio {audioAlertsEnabled ? 'ON' : 'OFF'}</button>
 								</div>
-								<button class="min-h-12 rounded-2xl bg-slate-900 px-4 text-sm font-black text-white disabled:opacity-60" disabled={Boolean(actionBusy) || room?.session_status === 'finished'} onclick={() => void updateStatus('finished')}>Tutup Ujian</button>
+								<button class="min-h-12 rounded-2xl bg-slate-900 px-4 text-sm font-black text-white disabled:opacity-60" disabled={Boolean(actionBusy) || room?.session_status === 'finished'} onclick={() => void updateStatus('finished')}>Tutup Ujian (konfirmasi)</button>
 							</div>
 
 							<div class="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">

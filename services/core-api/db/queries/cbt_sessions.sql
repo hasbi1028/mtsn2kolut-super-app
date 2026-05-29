@@ -89,7 +89,7 @@ DELETE FROM cbt_exam_sessions WHERE id = $1 AND status = 'draft';
 SELECT
   ep.id, ep.session_id, ep.student_id,
   s.nis, s.nama, s.gender,
-  ep.token, ep.room_id, ep.seat_no, ep.joined_at, ep.submitted_at, ep.score,
+  ''::text AS token, ep.room_id, ep.seat_no, ep.joined_at, ep.submitted_at, ep.score,
   ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
   ep.violation_count, ep.risk_score, ep.risk_level, ep.locked_at, ep.locked_reason,
   ep.last_heartbeat, ep.created_at,
@@ -104,7 +104,7 @@ ORDER BY s.nama ASC;
 SELECT
   ep.id, ep.session_id, ep.student_id,
   s.nis, s.nama, s.gender,
-  ep.token, ep.room_id, ep.seat_no, ep.joined_at, ep.submitted_at, ep.score,
+  ''::text AS token, ep.room_id, ep.seat_no, ep.joined_at, ep.submitted_at, ep.score,
   ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
   ep.violation_count, ep.risk_score, ep.risk_level, ep.locked_at, ep.locked_reason,
   ep.last_heartbeat, ep.created_at,
@@ -470,7 +470,7 @@ SELECT
   ep.id AS participant_id,
   ep.student_id,
   s.nis, s.nama,
-  ep.token,
+  ''::text AS token,
   ep.room_id,
   COALESCE(r.room_name, '') AS room_name,
   ep.seat_no,
@@ -516,7 +516,7 @@ ORDER BY r.room_name ASC NULLS LAST, ep.seat_no ASC NULLS LAST, s.nama ASC;
 
 -- name: ListParticipantsByRoom :many
 SELECT
-  ep.id, ep.student_id, ep.token, ep.room_id, ep.seat_no,
+  ep.id, ep.student_id, ''::text AS token, ep.room_id, ep.seat_no,
   s.nis, s.nama, s.gender,
   s.class_id,
   COALESCE(c.level, '') AS class_level,

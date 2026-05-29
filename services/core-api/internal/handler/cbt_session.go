@@ -28,6 +28,8 @@ type CbtSession struct {
 	audit cbtSessionAuditWriter
 }
 
+const cbtProctorJSONBodyLimitBytes int64 = 16 * 1024
+
 type cbtSessionAuditWriter interface {
 	CreateAuditLog(ctx context.Context, arg db.CreateAuditLogParams) (db.AuditLog, error)
 }
@@ -482,6 +484,7 @@ func (h *CbtSession) Create(w http.ResponseWriter, r *http.Request) {
 		ScheduledEnd    string `json:"scheduled_end"`
 		Status          string `json:"status"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, cbtProctorJSONBodyLimitBytes)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
@@ -1599,6 +1602,7 @@ func (h *CbtSession) AcknowledgeProctorEvent(w http.ResponseWriter, r *http.Requ
 		Notes string `json:"notes"`
 	}
 	if r.Body != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, cbtProctorJSONBodyLimitBytes)
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			api.BadRequest(w, "Data yang dikirim tidak valid")
 			return
@@ -1801,6 +1805,7 @@ func decodeOptionalProctorActionBody(w http.ResponseWriter, r *http.Request) (pr
 	if r.Body == nil {
 		return body, true
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, cbtProctorJSONBodyLimitBytes)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		if errors.Is(err, io.EOF) {
 			return body, true
@@ -1846,6 +1851,7 @@ func (h *CbtSession) FlagParticipant(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Flag bool `json:"flag"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, cbtProctorJSONBodyLimitBytes)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return

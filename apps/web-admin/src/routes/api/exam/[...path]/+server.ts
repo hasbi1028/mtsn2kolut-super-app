@@ -1,5 +1,6 @@
 import { env } from '$env/dynamic/private';
 import type { RequestEvent } from '@sveltejs/kit';
+import { readLimitedRequestText, RequestPayloadError } from '$lib/server/api';
 
 const API_BASE = (env.API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 const EXAM_BODY_LIMIT_BYTES = 96 * 1024;
@@ -36,14 +37,17 @@ function safeClientAddress(event: RequestEvent): string {
 
 async function requestBody(request: Request): Promise<BodyInit | undefined> {
 	if (request.method === 'GET' || request.method === 'HEAD') return undefined;
-	const text = await request.text();
-	if (new TextEncoder().encode(text).byteLength > EXAM_BODY_LIMIT_BYTES) {
-		throw new Response(JSON.stringify({ error: 'Payload ujian terlalu besar' }), {
-			status: 413,
-			headers: { 'Content-Type': 'application/json' }
-		});
+	try {
+		return await readLimitedRequestText(request, EXAM_BODY_LIMIT_BYTES);
+	} catch (error) {
+		if (error instanceof RequestPayloadError) {
+			throw new Response(JSON.stringify({ error: 'Payload ujian terlalu besar' }), {
+				status: 413,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
+		throw error;
 	}
-	return text;
 }
 
 type JSONValue = null | boolean | number | string | JSONValue[] | { [key: string]: JSONValue };

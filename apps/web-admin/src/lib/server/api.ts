@@ -82,7 +82,7 @@ export async function readOptionalRequestJson<T>(request: Request, fallback: T, 
 	}
 }
 
-async function readLimitedRequestText(request: Request, maxBytes: number): Promise<string> {
+export async function readLimitedRequestText(request: Request, maxBytes: number): Promise<string> {
 	const contentLength = request.headers.get('content-length');
 	if (contentLength && Number(contentLength) > maxBytes) {
 		throw new RequestPayloadError('Payload JSON terlalu besar');
