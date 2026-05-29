@@ -40,7 +40,7 @@ export function summarizeWorkflowReadiness(sessions: AsesmenWorkflowSessionLike[
 }
 
 export function workflowReadinessClass(tone: AsesmenWorkflowReadiness['tone']) {
-	if (tone === 'warning') return 'bg-amber-100 text-amber-900';
-	if (tone === 'success') return 'bg-emerald-100 text-emerald-800';
-	return 'bg-slate-100 text-slate-700';
+	if (tone === 'warning') return 'bg-warning/15 text-warning';
+	if (tone === 'success') return 'bg-success/15 text-success';
+	return 'bg-muted text-muted-foreground';
 }

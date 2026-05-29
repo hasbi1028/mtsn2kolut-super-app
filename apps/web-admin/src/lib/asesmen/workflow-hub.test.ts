@@ -40,8 +40,8 @@ describe('asesmen workflow hub helpers', () => {
 	});
 
 	it('maps readiness tones to the existing compact badge classes', () => {
-		expect(workflowReadinessClass('warning')).toContain('amber');
-		expect(workflowReadinessClass('success')).toContain('emerald');
-		expect(workflowReadinessClass('neutral')).toContain('slate');
+		expect(workflowReadinessClass('warning')).toContain('warning');
+		expect(workflowReadinessClass('success')).toContain('success');
+		expect(workflowReadinessClass('neutral')).toContain('muted');
 	});
 });

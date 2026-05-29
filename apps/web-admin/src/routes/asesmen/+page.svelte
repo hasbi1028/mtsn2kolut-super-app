@@ -142,111 +142,105 @@
 	<title>Ringkasan Asesmen — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
-<main class="min-h-dvh bg-slate-50 px-4 py-5 text-slate-950 md:px-6">
+<main class="min-h-dvh bg-background px-4 py-5 text-foreground md:px-6">
 	<section class="mx-auto max-w-6xl space-y-4">
-		<header class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+		<header class="rounded-2xl border border-border bg-card p-4 shadow-sm">
 			<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 				<div>
-					<p class="text-xs font-bold uppercase tracking-[0.22em] text-emerald-700">Asesmen</p>
+					<p class="text-xs font-bold uppercase tracking-[0.22em] text-primary">Asesmen</p>
 					<h1 class="mt-1 text-2xl font-black tracking-tight md:text-3xl">Ringkasan Asesmen</h1>
-					<p class="mt-1 max-w-2xl text-sm text-slate-600">Satu pintu utama untuk persiapan, dokumen, pelaksanaan ruang, dan hasil.</p>
+					<p class="mt-1 max-w-2xl text-sm text-muted-foreground">Satu pintu utama untuk persiapan, dokumen, pelaksanaan ruang, dan hasil.</p>
 				</div>
 				<div class="flex flex-wrap gap-2 text-sm font-bold">
 					{#if canOpenPreparation}
-						<a class="rounded-xl bg-emerald-700 px-3 py-2 text-white" href="/asesmen/persiapan">Persiapan</a>
-						<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href={documentHubHref}>Dokumen & Cetak</a>
+						<a class="rounded-xl bg-primary px-3 py-2 text-primary-foreground" href="/asesmen/persiapan">Persiapan</a>
+						<a class="rounded-xl border border-border bg-background px-3 py-2 text-foreground hover:bg-muted" href={documentHubHref}>Dokumen & Cetak</a>
 					{/if}
 					{#if canOpenExecution}
-						<a class={canOpenPreparation ? 'rounded-xl border border-slate-300 bg-white px-3 py-2' : 'rounded-xl bg-emerald-700 px-3 py-2 text-white'} href="/asesmen/pelaksanaan">Pelaksanaan</a>
+						<a class={canOpenPreparation ? 'rounded-xl border border-border bg-background px-3 py-2 text-foreground hover:bg-muted' : 'rounded-xl bg-primary px-3 py-2 text-primary-foreground'} href="/asesmen/pelaksanaan">Pelaksanaan</a>
 					{/if}
 					{#if canOpenResults}
-						<a class="rounded-xl border border-slate-300 bg-white px-3 py-2" href="/asesmen/hasil">Hasil</a>
+						<a class="rounded-xl border border-border bg-background px-3 py-2 text-foreground hover:bg-muted" href="/asesmen/hasil">Hasil</a>
 					{/if}
 				</div>
 			</div>
 		</header>
 
-		{#if errorMessage}<div class="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">{errorMessage}</div>{/if}
+		{#if errorMessage}<div class="rounded-2xl border border-destructive/25 bg-destructive/10 p-3 text-sm font-semibold text-destructive">{errorMessage}</div>{/if}
 		{#if loading}
-			<div class="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">Memuat ringkasan ujian...</div>
+			<div class="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">Memuat ringkasan ujian...</div>
 		{:else}
-			<section class="grid gap-3 md:grid-cols-4">
-				<div class="rounded-2xl border border-slate-200 bg-white p-4">
-					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Sesi aktif</p>
+			<section class="grid gap-3 md:grid-cols-3">
+				<div class="rounded-2xl border border-border bg-card p-4">
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Sesi aktif</p>
 					<p class="mt-2 text-3xl font-black">{sessions.length}</p>
-					<p class="text-sm text-slate-600">sesi ujian tercatat</p>
+					<p class="text-sm text-muted-foreground">sesi ujian tercatat</p>
 				</div>
-				<div class="rounded-2xl border border-slate-200 bg-white p-4">
-					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Berjalan</p>
+				<div class="rounded-2xl border border-border bg-card p-4">
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Berjalan</p>
 					<p class="mt-2 text-3xl font-black">{runningSessions}</p>
-					<p class="text-sm text-slate-600">sesi sedang berjalan</p>
+					<p class="text-sm text-muted-foreground">sesi sedang berjalan</p>
 				</div>
-				<div class="rounded-2xl border border-slate-200 bg-white p-4">
-					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Belum ditempatkan</p>
+				<div class="rounded-2xl border border-border bg-card p-4">
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Belum ditempatkan</p>
 					<p class="mt-2 text-3xl font-black">{unassignedParticipantCount}</p>
-					<p class="text-sm text-slate-600">peserta perlu ruang</p>
-				</div>
-				<div class="rounded-2xl border border-slate-200 bg-white p-4">
-					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Dokumen</p>
-					<p class="mt-2 text-3xl font-black">Siap</p>
-					<p class="text-sm text-slate-600">kartu, lembar pengawas, arsip</p>
+					<p class="text-sm text-muted-foreground">peserta perlu ruang</p>
 				</div>
 			</section>
 
 			<section class="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
 				<div class="space-y-4">
-					<div class="rounded-2xl border border-slate-200 bg-white p-4">
+					<div class="rounded-2xl border border-border bg-card p-4">
 						<div class="flex items-center justify-between gap-3">
 							<div>
 								<h2 class="text-lg font-black">Sesi terdekat</h2>
-								<p class="text-sm text-slate-600">Pantau sesi terdekat tanpa masuk ke halaman teknis kecuali diperlukan.</p>
+								<p class="text-sm text-muted-foreground">Pantau sesi terdekat tanpa masuk ke halaman teknis kecuali diperlukan.</p>
 							</div>
 							</div>
-						<div class="mt-3 divide-y divide-slate-100">
+						<div class="mt-3 divide-y divide-border">
 							{#each latestSessions as session (session.id)}
 								<article class="flex items-center justify-between gap-3 py-3">
 									<div class="min-w-0">
 										<p class="truncate font-bold">{session.title ?? 'Sesi Ujian'}</p>
-										<p class="text-xs text-slate-500">{session.package_title ?? 'Paket ujian'} · {fmtDate(session.scheduled_start)}</p>
+										<p class="text-xs text-muted-foreground">{session.package_title ?? 'Paket ujian'} · {fmtDate(session.scheduled_start)}</p>
 									</div>
-									<span class="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-bold">{statusLabel(session.status ?? session.session_status)}</span>
+									<span class="shrink-0 rounded-full bg-muted px-2 py-1 text-[11px] font-bold text-muted-foreground">{statusLabel(session.status ?? session.session_status)}</span>
 								</article>
 							{/each}
-							{#if latestSessions.length === 0}<p class="py-4 text-sm text-slate-500">Belum ada sesi ujian.</p>{/if}
+							{#if latestSessions.length === 0}<p class="py-4 text-sm text-muted-foreground">Belum ada sesi ujian.</p>{/if}
 						</div>
 					</div>
 
-					<div class="rounded-2xl border border-slate-200 bg-white p-4">
+					<div class="rounded-2xl border border-border bg-card p-4">
 						<h2 class="text-lg font-black">Paket siap ujian</h2>
-						<div class="mt-3 divide-y divide-slate-100">
+						<div class="mt-3 divide-y divide-border">
 							{#each latestPackages as pkg (pkg.id)}
 								<article class="flex items-center justify-between gap-3 py-3">
 									<div class="min-w-0">
 										<p class="truncate font-bold">{pkg.title ?? 'Paket Ujian'}</p>
-										<p class="text-xs text-slate-500">{pkg.subject ?? 'Mapel'} · {pkg.level ?? 'Tingkat'} · {pkg.question_count ?? 0} soal</p>
+										<p class="text-xs text-muted-foreground">{pkg.subject ?? 'Mapel'} · {pkg.level ?? 'Tingkat'} · {pkg.question_count ?? 0} soal</p>
 									</div>
-									<span class="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-bold">Siap dipilih</span>
+									<span class="shrink-0 rounded-full bg-muted px-2 py-1 text-[11px] font-bold text-muted-foreground">Siap dipilih</span>
 								</article>
 							{/each}
-							{#if latestPackages.length === 0}<p class="py-4 text-sm text-slate-500">Belum ada paket ujian.</p>{/if}
+							{#if latestPackages.length === 0}<p class="py-4 text-sm text-muted-foreground">Belum ada paket ujian.</p>{/if}
 						</div>
 					</div>
 				</div>
 
-				<aside class="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm">
-					<p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Arah kerja</p>
+				<aside class="rounded-2xl border border-primary/25 bg-card p-4 shadow-sm">
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Arah kerja</p>
 					<div class="mt-2 flex flex-wrap items-center gap-2">
 						<h2 class="text-xl font-black">Langkah berikutnya</h2>
 						<span class={`rounded-full px-2.5 py-1 text-xs font-bold ${readinessClass()}`}>{readinessLabel()}</span>
 					</div>
-					<p class="mt-2 text-sm leading-6 text-slate-600">
-						Gunakan halaman ini untuk memilih fase kerja. Detail teknis seperti kegiatan, paket, sesi, ruang, dan perangkat dibuka dari fase terkait agar alur tidak bercabang terlalu banyak.
+					<p class="mt-2 text-sm leading-6 text-muted-foreground">
+						Gunakan halaman ini untuk memilih fase kerja: Persiapan, Pelaksanaan, atau Hasil. Detail teknis tetap dibuka dari halaman terkait.
+					</p>
+					<p class="mt-4 rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">
+						Bank Soal menyusun soal. Asesmen menyiapkan kegiatan, mencetak dokumen, menjalankan ruang, dan menutup hasil.
 					</p>
 
-					<div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
-						<p class="font-bold text-slate-900">Batas sederhana:</p>
-						<p>Bank Soal untuk menyusun soal. Asesmen cukup untuk menyiapkan kegiatan, mencetak dokumen, menjalankan ruang, dan menutup hasil.</p>
-					</div>
 				</aside>
 			</section>
 		{/if}

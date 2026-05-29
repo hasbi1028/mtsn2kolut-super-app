@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-const CBT_SURFACES = import.meta.glob('../../routes/asesmen/{kegiatan,sesi}/**/+page.svelte', {
+const CBT_SURFACES = import.meta.glob([
+	'../../routes/asesmen/+page.svelte',
+	'../../routes/asesmen/{kegiatan,sesi}/**/+page.svelte'
+], {
 	eager: true,
 	query: '?raw',
 	import: 'default'
 }) as Record<string, string>;
 
 const INCLUDED_SURFACES = [
+	'../../routes/asesmen/+page.svelte',
 	'../../routes/asesmen/kegiatan/+page.svelte',
 	'../../routes/asesmen/kegiatan/new/+page.svelte',
 	'../../routes/asesmen/sesi/+page.svelte',
