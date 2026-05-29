@@ -76,7 +76,6 @@
 	let successMessage = $state('');
 	let card = $state<ProctorCard | null>(null);
 	let dashboard = $state<PortalDashboard | null>(null);
-	let demoRoomStatus = $state<'Menunggu' | 'Ujian Dibuka' | 'Bantuan Admin Diminta' | 'Ujian Ditutup'>('Menunggu');
 	let liveMode = $state<'idle' | 'polling' | 'paused'>('idle');
 	let seenEventIds = $state(new Set<string>());
 	let recentAlertEvents = $state<ProctoringEvent[]>([]);
@@ -90,7 +89,6 @@
 	let hasPrimedEvents = false;
 
 	let queryCard = $derived($page.url.searchParams.get('card') ?? $page.url.searchParams.get('token') ?? '');
-	let demoMode = $derived($page.url.searchParams.get('demo') === '1');
 	let participants = $derived(dashboard?.participants ?? []);
 	let events = $derived(dashboard?.events ?? []);
 	let room = $derived(dashboard?.room ?? null);
@@ -124,20 +122,13 @@
 
 	$effect(() => {
 		if (queryCard && !token) token = queryCard;
-		if (demoMode && !card) activateDemo();
 	});
 
 	onMount(() => {
-		if (card && !demoMode) startLivePolling();
+		if (card) startLivePolling();
 	});
 
 	onDestroy(() => stopLivePolling());
-
-	function activateDemo() {
-		card = demoCard();
-		dashboard = demoDashboard(card);
-		primeSeenEvents(dashboard.events ?? []);
-	}
 
 	async function verifyCard() {
 		loading = true;
@@ -168,7 +159,6 @@
 	}
 
 	async function loadPortalDashboard(background = false) {
-		if (demoMode) return;
 		if (!background) loading = true;
 		else backgroundBusy = true;
 		errorMessage = '';
@@ -199,7 +189,7 @@
 
 	function startLivePolling() {
 		stopLivePolling();
-		if (demoMode || !card) return;
+		if (!card) return;
 		liveMode = 'polling';
 		pollInterval = setInterval(() => {
 			if (typeof document !== 'undefined' && document.hidden) {
@@ -225,10 +215,6 @@
 
 	async function updateStatus(status: 'active' | 'finished') {
 		if (!confirmRoomStatusChange(status)) return;
-		if (demoMode) {
-			demoRoomStatus = status === 'active' ? 'Ujian Dibuka' : 'Ujian Ditutup';
-			return;
-		}
 		actionBusy = `status-${status}`;
 		errorMessage = '';
 		successMessage = '';
@@ -249,31 +235,18 @@
 	}
 
 	async function acknowledgeEvent(event: ProctoringEvent) {
-		if (demoMode) {
-			markDemoEventHandled(event.id, `Kejadian ${event.nama ?? 'peserta'} ditandai sudah diperiksa.`);
-			return;
-		}
 		const notes = window.prompt('Catatan pemeriksaan pengawas:', eventReason(event));
 		if (notes === null) return;
 		await portalAction(`/api/exam/proctor/portal/participants/${encodeURIComponent(event.participant_id)}/acknowledge`, { event_id: event.id, notes }, `Kejadian ${event.nama ?? 'peserta'} ditandai sudah diperiksa.`);
 	}
 
 	async function incidentAction(event: ProctoringEvent, action: 'warning_given' | 'cleared' | 'escalated') {
-		if (demoMode) {
-			markDemoEventHandled(event.id, `${proctorIncidentActionLabel(action)} DEMO dicatat untuk ${event.nama ?? 'peserta'}.`);
-			return;
-		}
 		const notes = window.prompt(`Catatan ${proctorIncidentActionLabel(action)}:`, eventReason(event));
 		if (notes === null) return;
 		await portalAction(`/api/exam/proctor/portal/participants/${encodeURIComponent(event.participant_id)}/incident-action`, { event_id: event.id, action, notes }, 'Tindakan insiden tersimpan.');
 	}
 
 	async function sendWarning(row: ProctoringRow) {
-		if (demoMode) {
-			successMessage = `Peringatan DEMO dikirim ke ${row.nama ?? 'peserta'}.`;
-			highlightParticipant(row.participant_id);
-			return;
-		}
 		const message = window.prompt('Instruksi/peringatan ke aplikasi siswa:', 'Tetap di aplikasi ujian dan ikuti arahan pengawas.');
 		if (!message?.trim()) return;
 		await portalAction(`/api/exam/proctor/portal/participants/${encodeURIComponent(row.participant_id)}/command`, { command_type: 'warning_message', message }, `Peringatan dikirim ke ${row.nama ?? 'peserta'}.`);
@@ -300,19 +273,6 @@
 		}
 	}
 
-	function markDemoEventHandled(eventId: string, message: string) {
-		const current = dashboard;
-		if (current) {
-			dashboard = {
-				...current,
-				room: current.room ? { ...current.room, suspicious_count: Math.max((current.room.suspicious_count ?? 1) - 1, 0) } : current.room,
-				events: (current.events ?? []).filter((item) => item.id !== eventId)
-			};
-		}
-		recentAlertEvents = recentAlertEvents.filter((item) => item.id !== eventId);
-		successMessage = message;
-	}
-
 	function buildAdminHelpText(context: AdminHelpContext = { source: 'ruang' }) {
 		const latest = context.event ?? alertEvents[0];
 		const row = context.row;
@@ -337,11 +297,6 @@
 		const text = buildAdminHelpText(context);
 		queueAdminHelp(text, context);
 		if (browser) navigator.clipboard?.writeText(text).catch(() => undefined);
-		if (demoMode) {
-			demoRoomStatus = 'Bantuan Admin Diminta';
-			successMessage = 'Permintaan bantuan admin DEMO masuk antrean dan teks siap dikirim.';
-			return;
-		}
 		if (context.event?.id && context.event.participant_id) {
 			await portalAction(
 				`/api/exam/proctor/portal/participants/${encodeURIComponent(context.event.participant_id)}/incident-action`,
@@ -455,27 +410,6 @@
 		}, 15500);
 	}
 
-	function demoCard(): ProctorCard {
-		return { card_type: 'proctor', event_title: 'MODE DEMO Pengawasan CBT', session_id: 'demo-session', room_id: 'demo-room', session_title: 'Simulasi Pengawasan Portal Web', session_status: 'demo', scheduled_start: new Date().toISOString(), scheduled_end: new Date(Date.now() + 45 * 60_000).toISOString(), room_name: 'Ruang DEMO 01', proctor_name: 'Lembar Pengawas Ruang', proctor_role: 'pengawas_ruang', package_title: 'Informatika — Contoh lokal' };
-	}
-
-	function demoDashboard(demoCardValue: ProctorCard): PortalDashboard {
-		const now = new Date().toISOString();
-		return {
-			card: demoCardValue,
-			room: { room_name: demoCardValue.room_name, session_title: demoCardValue.session_title, session_status: 'scheduled', package_title: demoCardValue.package_title, participant_count: 32, submitted_count: 0, online_count: 29, suspicious_count: 2 },
-			participants: [
-				{ participant_id: 'demo-1', nama: 'Ahmad Demo', nis: '24001', seat_no: 12, last_heartbeat: now, risk_level: 'high', suspicious_flag: true, app_switch_count: 4, screenshot_attempt: 1 },
-				{ participant_id: 'demo-2', nama: 'Siti Demo', nis: '24002', seat_no: 18, last_heartbeat: new Date(Date.now() - 9 * 60_000).toISOString(), risk_level: 'warning', suspicious_flag: false, app_switch_count: 1, screenshot_attempt: 0 },
-				{ participant_id: 'demo-3', nama: 'Budi Demo', nis: '24003', seat_no: 22, last_heartbeat: now, risk_level: 'locked', locked_at: now, suspicious_flag: true, app_switch_count: 5, screenshot_attempt: 2 }
-			],
-			events: [
-				{ id: 'demo-e1', participant_id: 'demo-1', event_type: 'app_switch', event_data: { state: 'paused' }, created_at: now, nama: 'Ahmad Demo', nis: '24001', room_name: demoCardValue.room_name },
-				{ id: 'demo-e2', participant_id: 'demo-3', event_type: 'anti_cheat_violation', event_data: { reason: 'anti_cheat_locked' }, created_at: now, nama: 'Budi Demo', nis: '24003', room_name: demoCardValue.room_name }
-			]
-		};
-	}
-
 	function heartbeatState(row: ProctoringRow): 'submitted' | 'online' | 'stale' | 'offline' {
 		if (row.submitted_at) return 'submitted';
 		if (!row.last_heartbeat) return 'offline';
@@ -587,7 +521,7 @@
 		<header class="rounded-[1.75rem] border border-emerald-200 bg-emerald-50 p-4 text-slate-950 shadow-sm">
 			<p class="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-700">MTsN 2 Kolaka Utara</p>
 			<h1 class="mt-1 text-2xl font-black">Portal Pengawasan Ruang</h1>
-			<p class="mt-2 text-sm text-slate-700">{demoMode ? 'MODE DEMO meniru alur pengawasan ruang ujian nyata tanpa API/database.' : 'Scan QR pada Lembar Pengawas Ruang, masukkan PIN ruang, lalu pantau peserta tanpa login admin.'}</p>
+			<p class="mt-2 text-sm text-slate-700">Scan QR pada Lembar Pengawas Ruang, masukkan PIN ruang, lalu pantau peserta tanpa login admin.</p>
 		</header>
 
 		{#if card}
@@ -600,7 +534,7 @@
 							<p class="truncate text-xs text-slate-600">{card.session_title ?? room?.session_title ?? 'Sesi CBT'}</p>
 						</div>
 						<div class="shrink-0 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-right text-[10px] font-bold text-emerald-800">
-							<p>{demoMode ? 'DEMO' : liveMode === 'polling' ? 'LIVE' : liveMode === 'paused' ? 'JEDA' : 'SIAP'}</p>
+							<p>{liveMode === 'polling' ? 'LIVE' : liveMode === 'paused' ? 'JEDA' : 'SIAP'}</p>
 							<p class="font-medium normal-case">{backgroundBusy ? 'sinkron...' : '3–5 dtk'}</p>
 						</div>
 					</div>
@@ -638,7 +572,7 @@
 							</div>
 							<div class={`rounded-[1.5rem] border p-4 ${signalClass()}`}>
 								<p class="text-xs font-bold uppercase tracking-[0.18em]">Status Ruang</p>
-								<p class="mt-1 text-2xl font-black">{demoMode ? demoRoomStatus : signalLabel()}</p>
+								<p class="mt-1 text-2xl font-black">{signalLabel()}</p>
 								<p class="mt-2 text-sm opacity-80">{card.package_title ?? room?.package_title ?? 'Paket ujian'} · {fmtDt(card.scheduled_start)}</p>
 							</div>
 
@@ -786,17 +720,13 @@
 			</section>
 		{:else}
 			<section class="rounded-2xl border border-slate-200 bg-white p-5 text-slate-950 shadow-sm">
-				<h2 class="text-xl font-bold">{demoMode ? 'MODE DEMO Portal Pengawasan' : 'Masuk dengan Lembar Pengawas Ruang'}</h2>
-				<p class="mt-1 text-sm text-slate-600">{demoMode ? 'Demo langsung menampilkan ruang contoh.' : 'Kode QR biasanya terisi otomatis setelah scan. Jika tidak, ketik kode lembar ruang secara manual.'}</p>
+				<h2 class="text-xl font-bold">Masuk dengan Lembar Pengawas Ruang</h2>
+				<p class="mt-1 text-sm text-slate-600">Kode QR biasanya terisi otomatis setelah scan. Jika tidak, ketik kode lembar ruang secara manual.</p>
 				<div class="mt-4 grid gap-3 sm:grid-cols-2">
 					<label class="space-y-1 text-sm font-medium">Kode QR / Kode Lembar<input class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-950" bind:value={token} autocomplete="off" /></label>
 					<label class="space-y-1 text-sm font-medium">PIN<input class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-xl tracking-[0.4em] text-slate-950" bind:value={pin} inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="••••" /></label>
 				</div>
-				{#if !demoMode}
-					<button class="mt-4 w-full rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white disabled:opacity-60" disabled={loading} onclick={verifyCard}>{loading ? 'Memeriksa...' : 'Buka Ruang Pengawasan'}</button>
-				{:else}
-					<button class="mt-4 w-full rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white" onclick={activateDemo}>Mulai DEMO Pengawasan</button>
-				{/if}
+				<button class="mt-4 w-full rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white disabled:opacity-60" disabled={loading} onclick={verifyCard}>{loading ? 'Memeriksa...' : 'Buka Ruang Pengawasan'}</button>
 			</section>
 		{/if}
 	</section>

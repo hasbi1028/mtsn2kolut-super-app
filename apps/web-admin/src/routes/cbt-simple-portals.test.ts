@@ -24,8 +24,9 @@ describe('simple CBT mobile web portals', () => {
 		}
 	});
 
-	it('keeps the student demo as a one-question-at-a-time click-through flow', () => {
-		expect(studentPortalSource).toContain("demoMode && !payload) activateDemo()");
+	it('keeps the student portal as a one-question-at-a-time real card flow', () => {
+		expect(studentPortalSource).not.toContain('demoMode');
+		expect(studentPortalSource).not.toContain('activateDemo');
 		expect(studentPortalSource).toContain("portalStep = 'confirm'");
 		expect(studentPortalSource).toContain('Soal {Math.min(activeQuestionIndex + 1, questions.length)} dari {questions.length}');
 		expect(studentPortalSource).toContain('Sebelumnya');
@@ -50,10 +51,12 @@ describe('simple CBT mobile web portals', () => {
 		expect(studentPortalSource).toContain('textarea class="mt-4 min-h-40 w-full select-text');
 	});
 
-	it('keeps the proctor demo simple and actionable without admin-only unlock controls', () => {
+	it('keeps the proctor portal simple and actionable without demo or admin-only unlock controls', () => {
 		expect(proctorPortalSource).toContain("activeTab = $state<'ruang' | 'peringatan' | 'peserta'>('ruang')");
 		expect(proctorPortalSource).toContain('Ruang = buka/tutup ujian, Peringatan = cek masalah peserta, Peserta = lihat status per siswa.');
-		expect(proctorPortalSource).toContain('markDemoEventHandled');
+		expect(proctorPortalSource).not.toContain('demoMode');
+		expect(proctorPortalSource).not.toContain('activateDemo');
+		expect(proctorPortalSource).not.toContain('markDemoEventHandled');
 		expect(proctorPortalSource).not.toContain('disabled={Boolean(actionBusy) || demoMode}');
 		expect(proctorPortalSource).not.toContain('unlockParticipant');
 		expect(proctorPortalSource).not.toContain('/unlock');

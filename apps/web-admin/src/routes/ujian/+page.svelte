@@ -55,7 +55,6 @@
 	let seenCommandIds = $state(new Set<string>());
 
 	let queryCard = $derived($page.url.searchParams.get('card') ?? $page.url.searchParams.get('token') ?? '');
-	let demoMode = $derived($page.url.searchParams.get('demo') === '1');
 	let questions = $derived(payload?.questions ?? []);
 	let currentQuestion = $derived(questions[Math.min(activeQuestionIndex, Math.max(questions.length - 1, 0))]);
 	let answeredCount = $derived(Object.values(answers).filter((answer) => answer.trim().length > 0).length);
@@ -150,22 +149,6 @@
 		stopParticipantRuntimePolling();
 		stopCountdown();
 		timeRemainingSeconds = null;
-	}
-
-	function activateDemo() {
-		setExamPayload({
-			student: { nama: 'Ahmad Demo', nis: '24001', class_name: 'IX A', room_name: 'Ruang DEMO 01', seat_no: 12 },
-			session: { title: 'DEMO Portal Ujian Peserta', subject: 'Informatika', status: 'active', started: true },
-			questions: [
-				{ id: 'demo-q1', type: 'multiple_choice', text: 'Perangkat yang digunakan untuk mengolah data sesuai instruksi program disebut ....', options: [{ label: 'A', text: 'Komputer' }, { label: 'B', text: 'Printer' }, { label: 'C', text: 'Scanner' }, { label: 'D', text: 'Speaker' }] },
-				{ id: 'demo-q2', type: 'multiple_choice', text: 'Sikap yang benar saat ujian berbasis web adalah ....', options: [{ label: 'A', text: 'Membuka tab lain saat pengawas tidak melihat' }, { label: 'B', text: 'Tetap di halaman ujian dan mengikuti arahan pengawas' }, { label: 'C', text: 'Membagikan PIN kepada teman' }, { label: 'D', text: 'Menutup browser sebelum submit' }] },
-				{ id: 'demo-q3', type: 'essay', text: 'Tuliskan dua contoh perilaku jujur saat mengikuti ujian digital.' }
-			],
-			total_questions: 3,
-			time_remaining_seconds: 45 * 60
-		});
-		portalStep = 'confirm';
-		addTelemetry('MODE DEMO siap tanpa database');
 	}
 
 	function normalizePortalPayload(body: unknown): ExamPayload {
@@ -427,10 +410,6 @@
 
 	async function saveAnswer(questionId: string, answer: string) {
 		answers = { ...answers, [questionId]: answer };
-		if (demoMode) {
-			addTelemetry(`Jawaban soal ${questionId} tersimpan di DEMO`);
-			return;
-		}
 		pendingAnswers = { ...pendingAnswers, [questionId]: answer };
 		try {
 			await syncAnswer(questionId, answer);
@@ -441,7 +420,7 @@
 
 	async function syncPendingAnswers() {
 		const entries = Object.entries(pendingAnswers);
-		if (entries.length === 0 || syncingPendingAnswers || demoMode) return;
+		if (entries.length === 0 || syncingPendingAnswers) return;
 		syncingPendingAnswers = true;
 		try {
 			for (const [questionId, answer] of entries) {
@@ -458,12 +437,6 @@
 	}
 
 	async function submitExam() {
-		if (demoMode) {
-			if (!confirm('Kirim jawaban DEMO sekarang? Pastikan semua soal penting sudah diperiksa.')) return;
-			submitted = true;
-			addTelemetry('Ujian DEMO dikumpulkan');
-			return;
-		}
 		if (Object.keys(pendingAnswers).length > 0) {
 			await syncPendingAnswers();
 		}
@@ -560,7 +533,6 @@
 	$effect(() => {
 		const token = queryCard;
 		if (token && !cardToken) cardToken = token;
-		if (demoMode && !payload) activateDemo();
 	});
 
 	$effect(() => {
@@ -735,7 +707,6 @@
 					{/if}
 					<button class="min-h-14 w-full rounded-2xl bg-emerald-700 px-4 text-base font-black text-white disabled:opacity-60" disabled={loading} onclick={portalLogin}>{loading ? 'Memproses...' : 'Lanjutkan'}</button>
 					<button class="w-full text-sm font-bold text-emerald-700 underline" type="button" onclick={() => (showLegacyTokenLogin = !showLegacyTokenLogin)}>{showLegacyTokenLogin ? 'Kembali ke QR + PIN' : 'Cara lain bila QR belum bisa dipakai'}</button>
-					{#if demoMode}<p class="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">MODE DEMO aktif untuk latihan tanpa database.</p>{/if}
 				</section>
 			{/if}
 
