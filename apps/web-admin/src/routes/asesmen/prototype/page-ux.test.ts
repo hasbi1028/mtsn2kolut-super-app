@@ -71,6 +71,19 @@ describe('asesmen CBT reference prototype', () => {
 		expect(pageSource).toContain('Siswa dan pengawas terasa seperti aplikasi HP');
 	});
 
+
+	it('adds production promotion map, approval checklist, and backend wave boundaries', () => {
+		for (const label of ['05 · Peta Promosi Produksi', '06 · Checklist Persetujuan', '07 · Gelombang Backend Nanti']) {
+			expect(pageSource).toContain(label);
+		}
+		for (const modelAnchor of ['productionLanes', 'approvalChecklist', 'backendWaves']) {
+			expect(modelSource).toContain(modelAnchor);
+		}
+		expect(modelSource).toContain('route lama tetap hidup');
+		expect(modelSource).toContain('public route tetap tidak login admin');
+		expect(modelSource).toContain('Aksi sensitif tetap admin');
+	});
+
 	it('does not keep the old A0-A9 prototype anchors or demo CTA', () => {
 		expect(pageSource).not.toContain('A0 · Asesmen / Ujian Digital');
 		expect(pageSource).not.toContain('A9 · Mode Lengkap Panitia');

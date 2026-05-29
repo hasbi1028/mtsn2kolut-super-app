@@ -6,6 +6,9 @@
 		legacyMenuGroups,
 		mobileScreens,
 		portalPreviews,
+		productionLanes,
+		approvalChecklist,
+		backendWaves,
 		readinessCards,
 		resultSummaries,
 		roomBlueprints,
@@ -194,6 +197,66 @@
 					{/each}
 				</div>
 				<p class="mt-3 text-xs font-bold text-slate-500">HAL 1 / 1 (TOTAL 4) · contoh statis untuk review UI</p>
+			</section>
+
+			<section class="rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm">
+				<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+					<div>
+						<p class="text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">05 · Peta Promosi Produksi</p>
+						<h2 class="text-xl font-black text-slate-950">Dari prototype ke produksi dibuat bertahap, bukan sekali lompat</h2>
+						<p class="mt-1 text-sm leading-6 text-slate-600">Bagian ini memperjelas keputusan setelah Bapak setujui tampilan: mana yang masuk admin Super App, mana yang menjadi portal publik, dan mana yang tetap Mode Rinci Admin.</p>
+					</div>
+					<span class="w-fit rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-black text-blue-800">rencana rollout</span>
+				</div>
+				<div class="mt-3 grid gap-2">
+					{#each productionLanes as lane (lane.lane)}
+						<article class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+							<div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+								<div class="min-w-0">
+									<p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{lane.target}</p>
+									<h3 class="text-sm font-black text-slate-950">{lane.lane}</h3>
+									<p class="mt-1 text-xs leading-5 text-slate-600">{lane.action}</p>
+									<p class="mt-1 text-xs font-semibold leading-5 text-slate-500">{lane.note}</p>
+								</div>
+								<span class={`w-fit rounded-full border px-2 py-1 text-[10px] font-black ${toneClass[lane.tone]}`}>{lane.status}</span>
+							</div>
+						</article>
+					{/each}
+				</div>
+			</section>
+
+			<section class="rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm">
+				<p class="text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">06 · Checklist Persetujuan</p>
+				<h2 class="text-xl font-black text-slate-950">Yang perlu Bapak nilai sebelum saya promosi ke halaman produksi</h2>
+				<div class="mt-3 grid gap-2 lg:grid-cols-2">
+					{#each approvalChecklist as item (item.label)}
+						<div class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+							<div class="flex items-start gap-2">
+								<span class="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-emerald-100 text-xs font-black text-emerald-800">✓</span>
+								<div>
+									<h3 class="text-sm font-black text-slate-950">{item.label}</h3>
+									<p class="mt-1 text-xs leading-5 text-slate-600">{item.detail}</p>
+									<p class="mt-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Reviewer: {item.owner}</p>
+								</div>
+							</div>
+						</div>
+					{/each}
+				</div>
+			</section>
+
+			<section class="rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm">
+				<p class="text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">07 · Gelombang Backend Nanti</p>
+				<h2 class="text-xl font-black text-slate-950">Integrasi data dilakukan setelah UI disetujui</h2>
+				<div class="mt-3 overflow-x-auto rounded-2xl border border-slate-200">
+					<table class="w-full min-w-[720px] border-collapse text-left text-sm">
+						<thead class="bg-slate-50 text-[11px] uppercase tracking-[0.14em] text-slate-500"><tr><th class="p-3">Wave</th><th class="p-3">Cakupan</th><th class="p-3">Safety gate</th></tr></thead>
+						<tbody>
+							{#each backendWaves as wave (wave.phase)}
+								<tr class="border-t border-slate-100"><td class="p-3 font-black text-slate-950">{wave.phase}</td><td class="p-3 text-slate-600">{wave.scope}</td><td class="p-3 text-slate-600">{wave.safeGate}</td></tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
 			</section>
 		</div>
 

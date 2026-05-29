@@ -85,6 +85,28 @@ export type ResultSummary = {
 	tone: StatusTone;
 };
 
+
+export type ProductionLane = {
+	lane: string;
+	target: string;
+	action: string;
+	status: string;
+	note: string;
+	tone: StatusTone;
+};
+
+export type ApprovalChecklist = {
+	label: string;
+	detail: string;
+	owner: string;
+};
+
+export type BackendWave = {
+	phase: string;
+	scope: string;
+	safeGate: string;
+};
+
 export const sourceNotes = [
 	'Rujukan: domain cbt.mtsn2kolut.sch.id dan repo lokal /home/servermtsn2kolut/cbt-ujian',
 	'Bank Soal sengaja tidak dijadikan fokus prototype ini',
@@ -241,4 +263,28 @@ export const excludedSurfaces = [
 	'Form import soal CSV tidak jadi alur utama operator',
 	'Pengaturan sistem dan backup tetap di Mode Lengkap',
 	'Data sensitif siswa/staf tidak dipakai sebagai data mock'
+];
+
+export const productionLanes: ProductionLane[] = [
+	{ lane: 'Admin CBT Ringkas', target: '/asesmen', action: 'Ganti launcher Asesmen menjadi Command Center CBT', status: 'promosi setelah disetujui', note: 'Halaman produksi tetap protected dan permission-based', tone: 'blue' },
+	{ lane: 'Persiapan & Cetak', target: '/asesmen/persiapan + kegiatan/cetak', action: 'Satukan ruang, jadwal, kartu peserta, dan lembar pengawas', status: 'tahap UI produksi', note: 'Tidak menghapus route lama; hanya menata pintu utama', tone: 'green' },
+	{ lane: 'Portal Ujian Peserta', target: '/ujian', action: 'Jadikan web-mobile sebagai runtime resmi tahun ini', status: 'butuh integrasi bertahap', note: 'QR+PIN, identitas, waiting room, soal satu layar', tone: 'amber' },
+	{ lane: 'Portal Pengawasan Ruang', target: '/pengawas-ujian', action: 'Pengawas masuk dari lembar ruang, bukan dashboard admin', status: 'butuh endpoint card-gated', note: 'Tab Ruang, Peringatan, Peserta + Hubungi Admin', tone: 'amber' },
+	{ lane: 'Mode Rinci Admin', target: '/asesmen/sesi/[id]/proctoring', action: 'Tetap hidup untuk admin/operator teknis', status: 'jangan dihapus', note: 'Unlock, audit log, raw event, dan investigasi tetap di sini', tone: 'slate' }
+];
+
+export const approvalChecklist: ApprovalChecklist[] = [
+	{ label: 'Istilah sudah familiar', detail: 'Dashboard, Ruang Ujian, Jadwal Sesi, Kartu QR, Proctoring Live, Rekap Nilai', owner: 'Kepala/Operator' },
+	{ label: 'Portal siswa cukup sederhana', detail: 'Scan QR, PIN, identitas, tunggu pengawas, soal satu layar, kirim final', owner: 'Siswa' },
+	{ label: 'Portal pengawas tidak teknis', detail: 'Ruang, Peringatan, Peserta, Mulai Ujian, Hubungi Admin', owner: 'Pengawas' },
+	{ label: 'Bank Soal tetap terpisah', detail: 'Tidak dimasukkan ke alur utama prototype ini', owner: 'Guru/Reviewer' },
+	{ label: 'Aksi sensitif tetap admin', detail: 'Buka kunci, reset perangkat, audit mentah, backup, dan pengaturan tidak muncul di portal sederhana', owner: 'Admin' }
+];
+
+export const backendWaves: BackendWave[] = [
+	{ phase: 'Wave 1', scope: 'Promosi UI admin ringkas tanpa migrasi besar', safeGate: 'route lama tetap hidup, sidebar hanya disederhanakan' },
+	{ phase: 'Wave 2', scope: 'Data read-only dashboard, ruang, jadwal, dan rekap', safeGate: 'hanya GET/BFF aman; tidak ada write produksi dulu' },
+	{ phase: 'Wave 3', scope: 'QR+PIN kartu peserta dan lembar pengawas ruang', safeGate: 'token opaque, PIN hashed, raw credential hanya untuk cetak resmi' },
+	{ phase: 'Wave 4', scope: 'Portal siswa dan pengawas card-gated', safeGate: 'public route tetap tidak login admin dan tidak bocorkan answer key' },
+	{ phase: 'Wave 5', scope: 'Aksi hari-H: mulai/tutup sesi, Hubungi Admin, submit/retry', safeGate: 'konfirmasi, audit, dan role/card gate sebelum mutation' }
 ];
