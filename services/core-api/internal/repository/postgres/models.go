@@ -908,6 +908,68 @@ type ArchiveDocument struct {
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }
 
+type AssessmentAccessCard struct {
+	ID             pgtype.UUID        `json:"id"`
+	CardType       string             `json:"card_type"`
+	SessionID      pgtype.UUID        `json:"session_id"`
+	RoomID         pgtype.UUID        `json:"room_id"`
+	ParticipantID  pgtype.UUID        `json:"participant_id"`
+	TokenHash      string             `json:"token_hash"`
+	PinHash        string             `json:"pin_hash"`
+	Status         string             `json:"status"`
+	FailedAttempts int32              `json:"failed_attempts"`
+	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AssessmentExam struct {
+	ID         pgtype.UUID        `json:"id"`
+	Title      string             `json:"title"`
+	SubjectID  pgtype.UUID        `json:"subject_id"`
+	GradeLevel pgtype.Int2        `json:"grade_level"`
+	Status     string             `json:"status"`
+	StartsAt   pgtype.Timestamptz `json:"starts_at"`
+	EndsAt     pgtype.Timestamptz `json:"ends_at"`
+	CreatedBy  pgtype.UUID        `json:"created_by"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AssessmentParticipant struct {
+	ID          pgtype.UUID        `json:"id"`
+	SessionID   pgtype.UUID        `json:"session_id"`
+	RoomID      pgtype.UUID        `json:"room_id"`
+	StudentID   pgtype.UUID        `json:"student_id"`
+	Status      string             `json:"status"`
+	StartedAt   pgtype.Timestamptz `json:"started_at"`
+	SubmittedAt pgtype.Timestamptz `json:"submitted_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AssessmentRoom struct {
+	ID        pgtype.UUID        `json:"id"`
+	SessionID pgtype.UUID        `json:"session_id"`
+	Code      string             `json:"code"`
+	Name      string             `json:"name"`
+	Capacity  int32              `json:"capacity"`
+	Status    string             `json:"status"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AssessmentSession struct {
+	ID        pgtype.UUID        `json:"id"`
+	ExamID    pgtype.UUID        `json:"exam_id"`
+	Title     string             `json:"title"`
+	StartsAt  pgtype.Timestamptz `json:"starts_at"`
+	EndsAt    pgtype.Timestamptz `json:"ends_at"`
+	Status    string             `json:"status"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type AttendanceRecord struct {
 	ID          pgtype.UUID        `json:"id"`
 	EmployeeID  pgtype.UUID        `json:"employee_id"`

@@ -1,0 +1,98 @@
+package handler
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"mtsn2kolut-super-app/backend/internal/service"
+)
+
+type fakeAssessmentExamHandlerService struct {
+	listCalled    bool
+	createInput   service.AssessmentExamInput
+	prepareCalled bool
+	listItems     []service.AssessmentExamView
+	createItem    service.AssessmentExamView
+	prepareResult service.AssessmentPrepareRoomsResult
+}
+
+func (f *fakeAssessmentExamHandlerService) List(context.Context, string, string, int32, int32) ([]service.AssessmentExamView, error) {
+	f.listCalled = true
+	return f.listItems, nil
+}
+
+func (f *fakeAssessmentExamHandlerService) Get(context.Context, pgtype.UUID) (service.AssessmentExamView, error) {
+	return service.AssessmentExamView{}, nil
+}
+
+func (f *fakeAssessmentExamHandlerService) Create(_ context.Context, input service.AssessmentExamInput) (service.AssessmentExamView, error) {
+	f.createInput = input
+	return f.createItem, nil
+}
+
+func (f *fakeAssessmentExamHandlerService) Update(context.Context, pgtype.UUID, service.AssessmentExamInput) (service.AssessmentExamView, error) {
+	return service.AssessmentExamView{}, nil
+}
+
+func (f *fakeAssessmentExamHandlerService) PrepareRooms(context.Context, pgtype.UUID) (service.AssessmentPrepareRoomsResult, error) {
+	f.prepareCalled = true
+	return f.prepareResult, nil
+}
+
+func (f *fakeAssessmentExamHandlerService) IssueCards(context.Context, pgtype.UUID) (service.AssessmentIssueCardsResult, error) {
+	return service.AssessmentIssueCardsResult{}, nil
+}
+
+func TestAssessmentExamListRequiresAssessmentRead(t *testing.T) {
+	svc := &fakeAssessmentExamHandlerService{}
+	h := NewAssessmentExam(svc)
+	rec := httptest.NewRecorder()
+	req := withClaims(httptest.NewRequest(http.MethodGet, "/api/asesmen/exams", nil), jwt.MapClaims{"roles": []any{"siswa"}})
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("List status = %d, want forbidden", rec.Code)
+	}
+	if svc.listCalled {
+		t.Fatal("List called service despite forbidden role")
+	}
+}
+
+func TestAssessmentExamCreateDecodesDraftInput(t *testing.T) {
+	svc := &fakeAssessmentExamHandlerService{createItem: service.AssessmentExamView{ID: "exam-1", Title: "PAT", Status: "draft"}}
+	h := NewAssessmentExam(svc)
+	rec := httptest.NewRecorder()
+	req := adminRequest(http.MethodPost, "/api/asesmen/exams", `{"title":" PAT ","grade_level":8}`)
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("Create status = %d, want created; body=%s", rec.Code, rec.Body.String())
+	}
+	if svc.createInput.Title != " PAT " || !svc.createInput.GradeLevel.Valid || svc.createInput.GradeLevel.Int16 != 8 {
+		t.Fatalf("create input = %+v, want decoded title and grade", svc.createInput)
+	}
+}
+
+func TestAssessmentExamPrepareRoomsUsesRouteID(t *testing.T) {
+	svc := &fakeAssessmentExamHandlerService{prepareResult: service.AssessmentPrepareRoomsResult{ExamID: "11111111-1111-1111-1111-111111111111", RoomCount: 1}}
+	h := NewAssessmentExam(svc)
+	rec := httptest.NewRecorder()
+	req := withRouteParam(adminRequest(http.MethodPost, "/api/asesmen/exams/11111111-1111-1111-1111-111111111111/prepare-rooms", ""), "id", "11111111-1111-1111-1111-111111111111")
+
+	h.PrepareRooms(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PrepareRooms status = %d, want ok; body=%s", rec.Code, rec.Body.String())
+	}
+	if !svc.prepareCalled || !strings.Contains(rec.Body.String(), "room_count") {
+		t.Fatalf("PrepareRooms did not call service or serialize result: called=%v body=%s", svc.prepareCalled, rec.Body.String())
+	}
+}
