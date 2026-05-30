@@ -654,6 +654,9 @@
 					</div>
 				</div>
 				<div class="flex flex-wrap gap-2">
+					<a href="/asesmen/cbt" class="rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-900 shadow-sm hover:bg-emerald-100">
+						Mode CBT Familiar
+					</a>
 					<a href="/asesmen/prototype" class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm hover:border-emerald-300 hover:text-emerald-800">
 						Lihat Prototype
 					</a>
