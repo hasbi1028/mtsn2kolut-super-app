@@ -59,6 +59,7 @@ const SCHEDULE_PAGE_PREFIXES = ['/jadwal'] as const;
 const GRADES_PREFIXES = ['/grades', '/api/grades'] as const;
 const JOURNAL_PREFIXES = ['/journal', '/api/journal'] as const;
 const EMPLOYEE_PREFIXES = ['/employees', '/api/employees'] as const;
+const ASESMEN_PREFIXES = ['/asesmen', '/api/asesmen'] as const;
 
 export { isPublicPath };
 
@@ -241,6 +242,11 @@ function employeePermission(pathname: string, method: string): string[] | undefi
 	return isReadMethod(method) ? ['employees.read', 'employees.manage'] : ['employees.manage'];
 }
 
+function asesmenPermission(pathname: string, method: string): string[] | undefined {
+	if (!ASESMEN_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix))) return undefined;
+	return isReadMethod(method) ? ['asesmen.read'] : ['asesmen.manage', 'asesmen.event_manage'];
+}
+
 function systemBackupPermission(pathname: string, method: string): string[] | undefined {
 	if (!matchesPathSegment(pathname, '/api/system/backups')) return undefined;
 	if (method === 'POST' && /^\/api\/system\/backups\/[^/]+\/(validate-restore|restore-command)\/?$/.test(pathname)) return ['backup.restore_plan'];
@@ -281,6 +287,7 @@ export function requiredPermissionsForPath(pathname: string, method: string): st
 		?? gradesPermission(pathname, method)
 		?? journalPermission(pathname, method)
 		?? employeePermission(pathname, method)
+		?? asesmenPermission(pathname, method)
 		?? bankSoalPermission(pathname, method)
 		?? staffOperationPermission(pathname, method)
 		?? [];
