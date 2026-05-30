@@ -179,90 +179,120 @@
 	</section>
 
 	{#if showCreateForm}
-		<section class="rounded-2xl border border-border bg-card p-4 shadow-sm">
-			<div class="mb-4 flex flex-col gap-1 border-b border-border pb-3">
-				<h2 class="text-base font-semibold text-foreground">Buat Kegiatan Baru</h2>
-				<p class="text-xs leading-5 text-muted-foreground">
-					Step 2 ini masih frontend-only. Tombol simpan hanya menambah preview lokal di layar,
-					belum menulis database/API.
-				</p>
-			</div>
+		<div class="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+			<button
+				type="button"
+				class="absolute inset-0 bg-slate-950/35 backdrop-blur-[1px]"
+				aria-label="Tutup form buat kegiatan"
+				onclick={toggleCreateForm}
+			></button>
 
-			<form class="space-y-4" onsubmit={(event) => { event.preventDefault(); submitPreview(); }}>
-				<div class="grid gap-3 md:grid-cols-2">
-					<label class="space-y-1.5">
-						<span class="text-xs font-medium text-muted-foreground">Nama kegiatan</span>
-						<input
-							class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-							placeholder="Contoh: UAS Genap"
-							bind:value={draft.nama}
-						/>
-					</label>
-					<label class="space-y-1.5">
-						<span class="text-xs font-medium text-muted-foreground">Jenis kegiatan</span>
-						<select class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.jenis}>
-							<option>Ujian Semester</option>
-							<option>Gladi CBT</option>
-							<option>Tryout</option>
-							<option>Simulasi</option>
-						</select>
-					</label>
+			<aside class="relative flex h-full w-full max-w-xl flex-col border-l border-border bg-card shadow-2xl sm:w-[34rem]">
+				<div class="border-b border-border px-5 py-4">
+					<div class="flex items-start justify-between gap-3">
+						<div class="space-y-1">
+							<p class="text-xs font-semibold tracking-[0.18em] text-muted-foreground uppercase">Step 2 · Preview Lokal</p>
+							<h2 id="drawer-title" class="text-lg font-bold text-foreground">Buat Kegiatan Baru</h2>
+							<p class="text-xs leading-5 text-muted-foreground">
+								Isi data dasar kegiatan. Form ini belum menulis database/API, hanya menambah
+								preview lokal di daftar.
+							</p>
+						</div>
+						<button
+							type="button"
+							class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-bold text-muted-foreground hover:bg-muted"
+							aria-label="Tutup"
+							onclick={toggleCreateForm}
+						>
+							×
+						</button>
+					</div>
 				</div>
 
-				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-					<label class="space-y-1.5">
-						<span class="text-xs font-medium text-muted-foreground">Tahun ajaran</span>
-						<input class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.tahunAjaran} />
-					</label>
-					<label class="space-y-1.5">
-						<span class="text-xs font-medium text-muted-foreground">Semester</span>
-						<select class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.semester}>
-							<option>Ganjil</option>
-							<option>Genap</option>
-						</select>
-					</label>
-					<label class="space-y-1.5">
-						<span class="text-xs font-medium text-muted-foreground">Tanggal mulai</span>
-						<input type="date" class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.tanggalMulai} />
-					</label>
-					<label class="space-y-1.5">
-						<span class="text-xs font-medium text-muted-foreground">Tanggal selesai</span>
-						<input type="date" class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.tanggalSelesai} />
-					</label>
-				</div>
+				<form class="flex min-h-0 flex-1 flex-col" onsubmit={(event) => { event.preventDefault(); submitPreview(); }}>
+					<div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+						<div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+							Tahap ini untuk menyepakati bentuk input dulu. Data akan hilang saat halaman dimuat ulang.
+						</div>
 
-				<div class="grid gap-3 md:grid-cols-[0.8fr_1.2fr]">
-					<label class="space-y-1.5">
-						<span class="text-xs font-medium text-muted-foreground">Mode pelaksanaan</span>
-						<select class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.mode}>
-							<option>CBT Web</option>
-							<option>Android</option>
-							<option>Web / Android</option>
-							<option>Kertas / Campuran</option>
-						</select>
-					</label>
-					<label class="space-y-1.5">
-						<span class="text-xs font-medium text-muted-foreground">Catatan singkat</span>
-						<input
-							class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-							placeholder="Opsional: misalnya untuk kelas IX atau simulasi internal"
-							bind:value={draft.catatan}
-						/>
-					</label>
-				</div>
+						<label class="space-y-1.5">
+							<span class="text-xs font-medium text-muted-foreground">Nama kegiatan</span>
+							<input
+								class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+								placeholder="Contoh: UAS Genap"
+								bind:value={draft.nama}
+							/>
+						</label>
 
-				{#if formError}
-					<p class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{formError}</p>
-				{/if}
+						<div class="grid gap-3 sm:grid-cols-2">
+							<label class="space-y-1.5">
+								<span class="text-xs font-medium text-muted-foreground">Jenis kegiatan</span>
+								<select class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.jenis}>
+									<option>Ujian Semester</option>
+									<option>Gladi CBT</option>
+									<option>Tryout</option>
+									<option>Simulasi</option>
+								</select>
+							</label>
+							<label class="space-y-1.5">
+								<span class="text-xs font-medium text-muted-foreground">Mode pelaksanaan</span>
+								<select class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.mode}>
+									<option>CBT Web</option>
+									<option>Android</option>
+									<option>Web / Android</option>
+									<option>Kertas / Campuran</option>
+								</select>
+							</label>
+						</div>
 
-				<div class="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end">
-					<button type="button" class="rounded-md border px-4 py-2 text-sm font-semibold text-foreground" onclick={resetDraft}>Reset</button>
-					<button type="submit" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
-						Tambah Preview Lokal
-					</button>
-				</div>
-			</form>
-		</section>
+						<div class="grid gap-3 sm:grid-cols-2">
+							<label class="space-y-1.5">
+								<span class="text-xs font-medium text-muted-foreground">Tahun ajaran</span>
+								<input class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.tahunAjaran} />
+							</label>
+							<label class="space-y-1.5">
+								<span class="text-xs font-medium text-muted-foreground">Semester</span>
+								<select class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.semester}>
+									<option>Ganjil</option>
+									<option>Genap</option>
+								</select>
+							</label>
+						</div>
+
+						<div class="grid gap-3 sm:grid-cols-2">
+							<label class="space-y-1.5">
+								<span class="text-xs font-medium text-muted-foreground">Tanggal mulai</span>
+								<input type="date" class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.tanggalMulai} />
+							</label>
+							<label class="space-y-1.5">
+								<span class="text-xs font-medium text-muted-foreground">Tanggal selesai</span>
+								<input type="date" class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.tanggalSelesai} />
+							</label>
+						</div>
+
+						<label class="space-y-1.5">
+							<span class="text-xs font-medium text-muted-foreground">Catatan singkat</span>
+							<textarea
+								class="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+								placeholder="Opsional: misalnya untuk kelas IX atau simulasi internal"
+								bind:value={draft.catatan}
+							></textarea>
+						</label>
+
+						{#if formError}
+							<p class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{formError}</p>
+						{/if}
+					</div>
+
+					<div class="flex flex-col gap-2 border-t border-border bg-card px-5 py-4 sm:flex-row sm:justify-end">
+						<button type="button" class="rounded-md border px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted" onclick={resetDraft}>Reset</button>
+						<button type="submit" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+							Tambah Preview Lokal
+						</button>
+					</div>
+				</form>
+			</aside>
+		</div>
 	{/if}
 
 	{#if formNotice}
