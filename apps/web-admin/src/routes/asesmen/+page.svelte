@@ -9,6 +9,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { readClientApiData } from '$lib/client/api';
+	import { summarizeAssessmentPrintDocuments, type AssessmentPrintDocument } from '$lib/asesmen/document-print-readiness';
 	type Exam = {
 		id: string;
 		title: string;
@@ -122,6 +123,7 @@
 	let totalCapacity = $derived(roomCount * capacityPerRoom);
 	let canSaveRooms = $derived(Boolean(selectedExam && roomPreview && roomPreview.exam_id === selectedExam.id && !roomBusy));
 	let hasPlacementSummary = $derived(Boolean(roomPreview?.applied && roomPreview.rooms.some((room) => (room.class_summary?.length ?? 0) > 0)));
+	let printDocuments = $derived(summarizeAssessmentPrintDocuments(selectedExam ?? {}));
 
 	onMount(() => {
 		void loadInitialData();
@@ -304,6 +306,32 @@
 		}
 	}
 
+	function handlePrintDocumentAction(document: AssessmentPrintDocument) {
+		if (!selectedExam) {
+			error = 'Pilih ujian dulu sebelum membuka Dokumen & Cetak.';
+			return;
+		}
+		if (!document.ready) {
+			notice = document.detail;
+			return;
+		}
+		if (document.id === 'participant-cards' && document.dangerous) {
+			const ok = window.confirm('Terbitkan QR+PIN untuk kartu peserta ujian ini? Aksi ini sengaja dipisah dari Simpan Ruang agar tidak membuat token tanpa sengaja.');
+			if (!ok) return;
+			void runExamAction(selectedExam, 'issue-cards');
+			return;
+		}
+		if (document.id === 'participant-cards') {
+			notice = 'Permukaan cetak kartu peserta sudah dipisah. Data kartu akan tampil setelah endpoint cetak penuh diaktifkan.';
+			return;
+		}
+		if (document.id === 'supervisor-sheets') {
+			notice = 'Lembar Pengawas Ruang siap sebagai dokumen per ruang. Tidak ada PIN peserta yang dibuat dari tombol ini.';
+			return;
+		}
+		notice = 'Checklist arsip siap dibaca. Simpan kartu peserta, lembar pengawas, daftar hadir, dan berita acara setelah ujian selesai.';
+	}
+
 	function formatClassSummary(items?: AssignmentClassSummary[]) {
 		if (!items || items.length === 0) return 'Belum ada peserta';
 		return items.map((item) => `${item.class_code || item.class_name || 'Tanpa rombel'} ${item.count}`).join(' · ');
@@ -444,7 +472,7 @@
 								</div>
 								<div class="flex flex-wrap gap-2">
 									<button class="rounded-2xl border border-slate-300 px-3 py-2 text-xs font-black text-slate-700 hover:border-emerald-300 hover:text-emerald-800" onclick={() => selectExamForRooms(exam)}>Pilih Ruang</button>
-									<button class="rounded-2xl border border-slate-300 px-3 py-2 text-xs font-black text-slate-700 hover:border-emerald-300 hover:text-emerald-800 disabled:cursor-wait disabled:opacity-60" disabled={actionExamId === exam.id} onclick={() => runExamAction(exam, 'issue-cards')}>Cek Kartu</button>
+									<button class="rounded-2xl border border-slate-300 px-3 py-2 text-xs font-black text-slate-700 hover:border-emerald-300 hover:text-emerald-800 disabled:cursor-wait disabled:opacity-60" disabled={actionExamId === exam.id} onclick={() => { selectExamForRooms(exam); notice = 'Ujian dipilih. Buka panel Dokumen & Cetak di bawah untuk aksi kartu yang aman.'; }}>Dokumen</button>
 								</div>
 							</div>
 						{/each}
@@ -566,6 +594,46 @@
 						<p class="border-t border-slate-200 bg-slate-50 p-3 text-xs font-bold leading-5 text-slate-600">{roomPreview.message}</p>
 					{/if}
 				</div>
+			</div>
+		</section>
+
+		<section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+			<div class="flex flex-col gap-3 border-b border-slate-200 pb-3 lg:flex-row lg:items-end lg:justify-between">
+				<div>
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Dokumen & Cetak</p>
+					<h2 class="mt-1 text-xl font-black text-slate-950">Kartu peserta dan lembar pengawas</h2>
+					<p class="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+						Aksi cetak dibuat terpisah dari Simpan Ruang. QR+PIN hanya dicoba diterbitkan saat panitia menekan tombol khusus dan menyetujui konfirmasi.
+					</p>
+				</div>
+				{#if selectedExam}
+					<div class="rounded-2xl bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700">
+						Dokumen untuk: <span class="text-slate-950">{selectedExam.title}</span>
+					</div>
+				{/if}
+			</div>
+
+			<div class="mt-4 divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200">
+				{#each printDocuments as document (document.id)}
+					<div class="grid gap-3 p-4 lg:grid-cols-[1fr_auto] lg:items-center">
+						<div class="min-w-0">
+							<div class="flex flex-wrap items-center gap-2">
+								<h3 class="font-black text-slate-950">{document.title}</h3>
+								<span class={`rounded-full px-2 py-0.5 text-[11px] font-black uppercase ${document.ready ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{document.status}</span>
+								<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-black text-slate-600">{document.countLabel}</span>
+							</div>
+							<p class="mt-1 text-sm leading-6 text-slate-600">{document.description}</p>
+							<p class="mt-1 text-xs font-bold leading-5 text-slate-500">{document.detail}</p>
+						</div>
+						<button
+							class={`w-fit rounded-2xl px-4 py-2 text-sm font-black shadow-sm disabled:cursor-not-allowed disabled:opacity-50 ${document.dangerous ? 'border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100' : document.ready ? 'border border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-50' : 'border border-slate-200 bg-slate-50 text-slate-500'}`}
+							disabled={!selectedExam || actionExamId === selectedExam.id}
+							onclick={() => handlePrintDocumentAction(document)}
+						>
+							{actionExamId === selectedExam?.id && document.id === 'participant-cards' ? 'Memproses...' : document.primaryAction}
+						</button>
+					</div>
+				{/each}
 			</div>
 		</section>
 

@@ -80,6 +80,7 @@ describe('route access helpers', () => {
 
 		expect(requiredPermissionsForPath('/asesmen', 'GET')).toEqual(['asesmen.read']);
 		expect(requiredPermissionsForPath('/asesmen/prototype', 'GET')).toEqual(['asesmen.read']);
+		expect(requiredPermissionsForPath('/api/asesmen/exams/exam-1/issue-cards', 'POST')).toEqual(['asesmen.cards_issue', 'asesmen.manage']);
 		expect(canAccessProtectedRoute(undefined, '/asesmen', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute(plainGuru, '/asesmen', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute(assessmentReader, '/asesmen', 'GET')).toBe(true);
@@ -319,3 +320,4 @@ describe('route access helpers', () => {
 		expect(hasAnyPermission({ id: '1', username: 'rbac', role: '', roles: [], permissions: [' users.read '] }, ['users.read'])).toBe(true);
 	});
 });
+

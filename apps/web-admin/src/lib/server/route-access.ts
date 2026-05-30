@@ -211,6 +211,9 @@ function isBankSoalGuruFallbackPath(pathname: string, method: string) {
 
 function asesmenPermission(pathname: string, method: string): string[] | undefined {
 	if (!ASESMEN_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix))) return undefined;
+	if (matchesPathSegment(pathname, '/api/asesmen/exams') && pathname.endsWith('/issue-cards') && method === 'POST') {
+		return ['asesmen.cards_issue', 'asesmen.manage'];
+	}
 	return isReadMethod(method) ? ['asesmen.read'] : ['asesmen.manage'];
 }
 

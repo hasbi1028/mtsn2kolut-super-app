@@ -5,20 +5,22 @@ import { describe, expect, it } from 'vitest';
 const pageSource = readFileSync(join(process.cwd(), 'src/routes/asesmen/+page.svelte'), 'utf8');
 
 describe('/asesmen production shell', () => {
-	it('uses the simple CBT command-center copy without backend coupling', () => {
+	it('uses the simple CBT command-center copy with production-backed exam actions', () => {
 		expect(pageSource).toContain('Command Center CBT');
 		expect(pageSource).toContain('CBT Web');
 		expect(pageSource).toContain('Alur sederhana untuk panitia');
-		expect(pageSource).not.toContain('fetch(');
-		expect(pageSource).not.toContain('/api/');
+		expect(pageSource).toContain('/api/asesmen/exams');
+		expect(pageSource).toContain('Promise.allSettled');
 	});
 
-	it('shows only the four primary preparation lanes and marks future actions inactive', () => {
-		for (const label of ['Siapkan Ujian', 'Atur Peserta & Ruang', 'Cetak Kartu & Lembar Pengawas', 'Pelaksanaan & Hasil']) {
+	it('shows the primary preparation lanes and safe document print lane', () => {
+		for (const label of ['Siapkan Ujian', 'Atur 8 Ruang', 'Cetak Kartu & Pengawas', 'Pelaksanaan & Hasil']) {
 			expect(pageSource).toContain(label);
 		}
-		expect(pageSource).toContain('Tahap berikutnya');
-		expect(pageSource).toContain('Belum aktif');
+		expect(pageSource).toContain('Dokumen & Cetak');
+		expect(pageSource).toContain('Kartu peserta dan lembar pengawas');
+		expect(pageSource).toContain('QR+PIN hanya dicoba diterbitkan saat panitia menekan tombol khusus');
+		expect(pageSource).toContain('window.confirm');
 	});
 
 	it('keeps Bank Soal separate and exposes the prototype as a review-only link', () => {
