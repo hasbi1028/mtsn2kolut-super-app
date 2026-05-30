@@ -115,15 +115,19 @@
 		}
 	}
 
-	async function runExamAction(exam: Exam, action: 'prepare-rooms' | 'issue-cards') {
+	async function runExamAction(exam: Exam, action: 'prepare-rooms' | 'issue-cards' | 'assignment-apply') {
 		if (actionExamId) return;
 		actionExamId = exam.id;
 		error = '';
 		notice = '';
 		try {
+			const body = action === 'assignment-apply'
+				? JSON.stringify({ room_count: 8, capacity_per_room: 30, mix_policy: 'mixed' })
+				: undefined;
 			const result = await fetch(`/api/asesmen/exams/${encodeURIComponent(exam.id)}/${action}`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' }
+				headers: { 'Content-Type': 'application/json' },
+				body
 			}).then((response) => readClientApiData<ActionResult>(response, 'Aksi asesmen belum dapat dijalankan'));
 			notice = result.message ?? 'Aksi asesmen selesai.';
 			await loadExams();
@@ -260,7 +264,7 @@
 									<p class="text-xs font-bold text-slate-500">Sesi {exam.session_count ?? 0} · Ruang {exam.room_count ?? 0} · Peserta {exam.participant_count ?? 0} · Kartu {exam.card_count ?? 0}</p>
 								</div>
 								<div class="flex flex-wrap gap-2">
-									<button class="rounded-2xl border border-slate-300 px-3 py-2 text-xs font-black text-slate-700 hover:border-emerald-300 hover:text-emerald-800 disabled:cursor-wait disabled:opacity-60" disabled={actionExamId === exam.id} onclick={() => runExamAction(exam, 'prepare-rooms')}>Siapkan Ruang</button>
+									<button class="rounded-2xl border border-slate-300 px-3 py-2 text-xs font-black text-slate-700 hover:border-emerald-300 hover:text-emerald-800 disabled:cursor-wait disabled:opacity-60" disabled={actionExamId === exam.id} onclick={() => runExamAction(exam, 'assignment-apply')}>Buat 8 Ruang</button>
 									<button class="rounded-2xl border border-slate-300 px-3 py-2 text-xs font-black text-slate-700 hover:border-emerald-300 hover:text-emerald-800 disabled:cursor-wait disabled:opacity-60" disabled={actionExamId === exam.id} onclick={() => runExamAction(exam, 'issue-cards')}>Cek Kartu</button>
 								</div>
 							</div>

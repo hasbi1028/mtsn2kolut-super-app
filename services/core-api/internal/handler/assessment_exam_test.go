@@ -17,9 +17,14 @@ type fakeAssessmentExamHandlerService struct {
 	listCalled    bool
 	createInput   service.AssessmentExamInput
 	prepareCalled bool
+	previewCalled bool
+	applyCalled   bool
+	assignmentReq service.AssessmentAssignmentRequest
 	listItems     []service.AssessmentExamView
 	createItem    service.AssessmentExamView
 	prepareResult service.AssessmentPrepareRoomsResult
+	previewResult service.AssessmentAssignmentResult
+	applyResult   service.AssessmentAssignmentResult
 }
 
 func (f *fakeAssessmentExamHandlerService) List(context.Context, string, string, int32, int32) ([]service.AssessmentExamView, error) {
@@ -47,6 +52,18 @@ func (f *fakeAssessmentExamHandlerService) PrepareRooms(context.Context, pgtype.
 
 func (f *fakeAssessmentExamHandlerService) IssueCards(context.Context, pgtype.UUID) (service.AssessmentIssueCardsResult, error) {
 	return service.AssessmentIssueCardsResult{}, nil
+}
+
+func (f *fakeAssessmentExamHandlerService) AssignmentPreview(_ context.Context, _ pgtype.UUID, req service.AssessmentAssignmentRequest) (service.AssessmentAssignmentResult, error) {
+	f.previewCalled = true
+	f.assignmentReq = req
+	return f.previewResult, nil
+}
+
+func (f *fakeAssessmentExamHandlerService) AssignmentApply(_ context.Context, _ pgtype.UUID, req service.AssessmentAssignmentRequest) (service.AssessmentAssignmentResult, error) {
+	f.applyCalled = true
+	f.assignmentReq = req
+	return f.applyResult, nil
 }
 
 func TestAssessmentExamListRequiresAssessmentRead(t *testing.T) {
@@ -94,5 +111,42 @@ func TestAssessmentExamPrepareRoomsUsesRouteID(t *testing.T) {
 	}
 	if !svc.prepareCalled || !strings.Contains(rec.Body.String(), "room_count") {
 		t.Fatalf("PrepareRooms did not call service or serialize result: called=%v body=%s", svc.prepareCalled, rec.Body.String())
+	}
+}
+
+func TestAssessmentExamAssignmentPreviewDecodesPolicy(t *testing.T) {
+	svc := &fakeAssessmentExamHandlerService{
+		previewResult: service.AssessmentAssignmentResult{
+			ExamID: "11111111-1111-1111-1111-111111111111",
+			Rooms:  []service.AssessmentAssignmentRoom{{Code: "R01", Capacity: 8}},
+		},
+	}
+	h := NewAssessmentExam(svc)
+	rec := httptest.NewRecorder()
+	req := withRouteParam(adminRequest(http.MethodPost, "/api/asesmen/exams/11111111-1111-1111-1111-111111111111/assignment-preview", `{"room_count":8,"capacity_per_room":30,"mix_policy":"mixed"}`), "id", "11111111-1111-1111-1111-111111111111")
+
+	h.AssignmentPreview(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("AssignmentPreview status = %d, want ok; body=%s", rec.Code, rec.Body.String())
+	}
+	if !svc.previewCalled || svc.assignmentReq.RoomCount != 8 || svc.assignmentReq.CapacityPerRoom != 30 || svc.assignmentReq.MixPolicy != "mixed" {
+		t.Fatalf("preview call=%v req=%+v, want decoded assignment request", svc.previewCalled, svc.assignmentReq)
+	}
+}
+
+func TestAssessmentExamAssignmentApplyRequiresManage(t *testing.T) {
+	svc := &fakeAssessmentExamHandlerService{}
+	h := NewAssessmentExam(svc)
+	rec := httptest.NewRecorder()
+	req := withRouteParam(withClaims(httptest.NewRequest(http.MethodPost, "/api/asesmen/exams/11111111-1111-1111-1111-111111111111/assignment-apply", strings.NewReader(`{"room_count":1,"capacity_per_room":30}`)), jwt.MapClaims{"roles": []any{"staf"}}), "id", "11111111-1111-1111-1111-111111111111")
+
+	h.AssignmentApply(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("AssignmentApply status = %d, want forbidden", rec.Code)
+	}
+	if svc.applyCalled {
+		t.Fatal("AssignmentApply called service despite forbidden role")
 	}
 }

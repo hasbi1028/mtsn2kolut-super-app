@@ -409,3 +409,52 @@ func (q *Queries) UpdateAssessmentExam(ctx context.Context, arg UpdateAssessment
 	)
 	return i, err
 }
+
+const upsertAssessmentRoom = `-- name: UpsertAssessmentRoom :one
+INSERT INTO assessment_rooms (
+  session_id,
+  code,
+  name,
+  capacity,
+  status
+) VALUES (
+  $1,
+  $2,
+  $3,
+  $4,
+  'draft'
+)
+ON CONFLICT (session_id, code) DO UPDATE
+SET name = EXCLUDED.name,
+    capacity = EXCLUDED.capacity,
+    updated_at = now()
+RETURNING id, session_id, code, name, capacity, status, created_at, updated_at
+`
+
+type UpsertAssessmentRoomParams struct {
+	SessionID pgtype.UUID `json:"session_id"`
+	Code      string      `json:"code"`
+	Name      string      `json:"name"`
+	Capacity  int32       `json:"capacity"`
+}
+
+func (q *Queries) UpsertAssessmentRoom(ctx context.Context, arg UpsertAssessmentRoomParams) (AssessmentRoom, error) {
+	row := q.db.QueryRow(ctx, upsertAssessmentRoom,
+		arg.SessionID,
+		arg.Code,
+		arg.Name,
+		arg.Capacity,
+	)
+	var i AssessmentRoom
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.Code,
+		&i.Name,
+		&i.Capacity,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

@@ -38,6 +38,7 @@ type assessmentExamStore interface {
 	GetFirstAssessmentSessionByExam(ctx context.Context, examID pgtype.UUID) (db.AssessmentSession, error)
 	CreateAssessmentSession(ctx context.Context, arg db.CreateAssessmentSessionParams) (db.AssessmentSession, error)
 	CreateAssessmentRoom(ctx context.Context, arg db.CreateAssessmentRoomParams) (db.AssessmentRoom, error)
+	UpsertAssessmentRoom(ctx context.Context, arg db.UpsertAssessmentRoomParams) (db.AssessmentRoom, error)
 	CountAssessmentRoomsByExam(ctx context.Context, examID pgtype.UUID) (int64, error)
 	CountAssessmentParticipantsByExam(ctx context.Context, examID pgtype.UUID) (int64, error)
 	CountAssessmentCardsByExam(ctx context.Context, examID pgtype.UUID) (int64, error)
@@ -91,12 +92,47 @@ type AssessmentPrepareRoomsResult struct {
 	AlreadyReady bool   `json:"already_ready"`
 }
 
+const (
+	AssessmentMixPolicyMixed        = "mixed"
+	AssessmentMixPolicyClassGrouped = "class_grouped"
+)
+
 type AssessmentIssueCardsResult struct {
 	ExamID           string `json:"exam_id"`
 	RoomCount        int64  `json:"room_count"`
 	ParticipantCount int64  `json:"participant_count"`
 	CardCount        int64  `json:"card_count"`
 	Message          string `json:"message"`
+}
+
+type AssessmentAssignmentRequest struct {
+	RoomCount       int32    `json:"room_count"`
+	CapacityPerRoom int32    `json:"capacity_per_room"`
+	ClassIDs        []string `json:"class_ids,omitempty"`
+	MixPolicy       string   `json:"mix_policy,omitempty"`
+}
+
+type AssessmentAssignmentRoom struct {
+	Code          string `json:"code"`
+	Name          string `json:"name"`
+	Capacity      int32  `json:"capacity"`
+	AssignedCount int64  `json:"assigned_count"`
+}
+
+type AssessmentAssignmentResult struct {
+	ExamID            string                     `json:"exam_id"`
+	SessionID         string                     `json:"session_id,omitempty"`
+	MixPolicy         string                     `json:"mix_policy"`
+	RoomCount         int32                      `json:"room_count"`
+	CapacityPerRoom   int32                      `json:"capacity_per_room"`
+	TotalParticipants int64                      `json:"total_participants"`
+	AssignedTotal     int64                      `json:"assigned_total"`
+	UnassignedTotal   int64                      `json:"unassigned_total"`
+	ParticipantCount  int64                      `json:"participant_count"`
+	CardCount         int64                      `json:"card_count"`
+	Rooms             []AssessmentAssignmentRoom `json:"rooms"`
+	Message           string                     `json:"message"`
+	Applied           bool                       `json:"applied"`
 }
 
 func (s *AssessmentExam) List(ctx context.Context, search, status string, limit, offset int32) ([]AssessmentExamView, error) {
@@ -246,6 +282,126 @@ func (s *AssessmentExam) IssueCards(ctx context.Context, id pgtype.UUID) (Assess
 		CardCount:        cardCount,
 		Message:          "Penerbitan QR+PIN belum diaktifkan sampai peserta ujian tersambung. Tidak ada token mentah yang dibuat pada tahap ini.",
 	}, nil
+}
+
+func (s *AssessmentExam) AssignmentPreview(ctx context.Context, id pgtype.UUID, input AssessmentAssignmentRequest) (AssessmentAssignmentResult, error) {
+	exam, err := s.Get(ctx, id)
+	if err != nil {
+		return AssessmentAssignmentResult{}, err
+	}
+	normalized, err := normalizeAssessmentAssignmentRequest(input)
+	if err != nil {
+		return AssessmentAssignmentResult{}, err
+	}
+	participantCount, err := s.q.CountAssessmentParticipantsByExam(ctx, id)
+	if err != nil {
+		return AssessmentAssignmentResult{}, err
+	}
+	result := buildAssessmentAssignmentResult(exam.ID, "", normalized, participantCount, false)
+	return result, nil
+}
+
+func (s *AssessmentExam) AssignmentApply(ctx context.Context, id pgtype.UUID, input AssessmentAssignmentRequest) (AssessmentAssignmentResult, error) {
+	exam, err := s.Get(ctx, id)
+	if err != nil {
+		return AssessmentAssignmentResult{}, err
+	}
+	normalized, err := normalizeAssessmentAssignmentRequest(input)
+	if err != nil {
+		return AssessmentAssignmentResult{}, err
+	}
+	session, err := s.q.GetFirstAssessmentSessionByExam(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		session, err = s.q.CreateAssessmentSession(ctx, db.CreateAssessmentSessionParams{
+			ExamID:   id,
+			Title:    "Sesi Utama",
+			StartsAt: assessmentTimestamptzFromPtr(exam.StartsAt),
+			EndsAt:   assessmentTimestamptzFromPtr(exam.EndsAt),
+		})
+	}
+	if err != nil {
+		return AssessmentAssignmentResult{}, err
+	}
+	participantCount, err := s.q.CountAssessmentParticipantsByExam(ctx, id)
+	if err != nil {
+		return AssessmentAssignmentResult{}, err
+	}
+	result := buildAssessmentAssignmentResult(exam.ID, assessmentUUIDString(session.ID), normalized, participantCount, true)
+	for _, room := range result.Rooms {
+		if _, err := s.q.UpsertAssessmentRoom(ctx, db.UpsertAssessmentRoomParams{
+			SessionID: session.ID,
+			Code:      room.Code,
+			Name:      room.Name,
+			Capacity:  room.Capacity,
+		}); err != nil {
+			return AssessmentAssignmentResult{}, err
+		}
+	}
+	cardCount, err := s.q.CountAssessmentCardsByExam(ctx, id)
+	if err != nil {
+		return AssessmentAssignmentResult{}, err
+	}
+	result.CardCount = cardCount
+	result.Message = "Ruang ujian tersimpan. Peserta dan kartu ujian belum dibuat pada tahap fondasi ini."
+	return result, nil
+}
+
+func normalizeAssessmentAssignmentRequest(input AssessmentAssignmentRequest) (AssessmentAssignmentRequest, error) {
+	if input.RoomCount < 1 || input.RoomCount > 20 {
+		return input, fmt.Errorf("%w: jumlah ruang harus 1 sampai 20", domain.ErrBadRequest)
+	}
+	if input.CapacityPerRoom < 1 || input.CapacityPerRoom > 50 {
+		return input, fmt.Errorf("%w: kapasitas per ruang harus 1 sampai 50", domain.ErrBadRequest)
+	}
+	input.MixPolicy = strings.TrimSpace(input.MixPolicy)
+	if input.MixPolicy == "" {
+		input.MixPolicy = AssessmentMixPolicyMixed
+	}
+	if input.MixPolicy != AssessmentMixPolicyMixed && input.MixPolicy != AssessmentMixPolicyClassGrouped {
+		return input, fmt.Errorf("%w: kebijakan campur peserta tidak valid", domain.ErrBadRequest)
+	}
+	return input, nil
+}
+
+func buildAssessmentAssignmentResult(examID, sessionID string, input AssessmentAssignmentRequest, totalParticipants int64, applied bool) AssessmentAssignmentResult {
+	rooms := make([]AssessmentAssignmentRoom, 0, input.RoomCount)
+	remaining := totalParticipants
+	for i := int32(1); i <= input.RoomCount; i++ {
+		assigned := int64(0)
+		if remaining > 0 {
+			assigned = int64(input.CapacityPerRoom)
+			if remaining < assigned {
+				assigned = remaining
+			}
+			remaining -= assigned
+		}
+		code := fmt.Sprintf("R%02d", i)
+		rooms = append(rooms, AssessmentAssignmentRoom{
+			Code:          code,
+			Name:          fmt.Sprintf("Ruang Ujian %d", i),
+			Capacity:      input.CapacityPerRoom,
+			AssignedCount: assigned,
+		})
+	}
+	assignedTotal := totalParticipants - remaining
+	message := "Preview ruang ujian siap. Belum ada peserta terdaftar pada asesmen ini."
+	if totalParticipants > 0 {
+		message = "Preview ruang ujian siap. Simpan untuk membuat ruang; pembagian peserta detail menyusul pada tahap berikutnya."
+	}
+	return AssessmentAssignmentResult{
+		ExamID:            examID,
+		SessionID:         sessionID,
+		MixPolicy:         input.MixPolicy,
+		RoomCount:         input.RoomCount,
+		CapacityPerRoom:   input.CapacityPerRoom,
+		TotalParticipants: totalParticipants,
+		AssignedTotal:     assignedTotal,
+		UnassignedTotal:   remaining,
+		ParticipantCount:  totalParticipants,
+		Rooms:             rooms,
+		Message:           message,
+		Applied:           applied,
+	}
 }
 
 func normalizeAssessmentExamInput(input AssessmentExamInput, create bool) (AssessmentExamInput, error) {

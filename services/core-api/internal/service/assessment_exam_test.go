@@ -23,6 +23,7 @@ type fakeAssessmentExamStore struct {
 	firstSessionErr error
 	createdSession  db.AssessmentSession
 	createdRoom     db.AssessmentRoom
+	createdRooms    []db.CreateAssessmentRoomParams
 	roomCount       int64
 	participantCnt  int64
 	cardCount       int64
@@ -58,6 +59,16 @@ func (f *fakeAssessmentExamStore) CreateAssessmentSession(context.Context, db.Cr
 
 func (f *fakeAssessmentExamStore) CreateAssessmentRoom(context.Context, db.CreateAssessmentRoomParams) (db.AssessmentRoom, error) {
 	return f.createdRoom, nil
+}
+
+func (f *fakeAssessmentExamStore) UpsertAssessmentRoom(_ context.Context, arg db.UpsertAssessmentRoomParams) (db.AssessmentRoom, error) {
+	f.createdRooms = append(f.createdRooms, db.CreateAssessmentRoomParams{
+		SessionID: arg.SessionID,
+		Code:      arg.Code,
+		Name:      arg.Name,
+		Capacity:  arg.Capacity,
+	})
+	return db.AssessmentRoom{ID: mustPgUUIDAssessmentTest("33333333-3333-3333-3333-333333333333"), SessionID: arg.SessionID, Code: arg.Code, Name: arg.Name, Capacity: arg.Capacity}, nil
 }
 
 func (f *fakeAssessmentExamStore) CountAssessmentRoomsByExam(context.Context, pgtype.UUID) (int64, error) {
@@ -140,6 +151,89 @@ func TestAssessmentExamPrepareRoomsCreatesDefaultRoom(t *testing.T) {
 	}
 	if result.SessionID == "" || result.RoomID == "" || result.RoomCount != 1 {
 		t.Fatalf("result = %+v, want default session and room", result)
+	}
+}
+
+func TestAssessmentExamAssignmentPreviewEmptyParticipants(t *testing.T) {
+	examID := mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111")
+	now := time.Date(2026, 5, 30, 8, 0, 0, 0, time.UTC)
+	store := &fakeAssessmentExamStore{
+		getRow: db.GetAssessmentExamRow{
+			ID:        examID,
+			Title:     "PAT",
+			Status:    AssessmentExamStatusDraft,
+			CreatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+			UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+		},
+		participantCnt: 0,
+	}
+	svc := NewAssessmentExamWithStore(store)
+
+	result, err := svc.AssignmentPreview(context.Background(), examID, AssessmentAssignmentRequest{RoomCount: 3, CapacityPerRoom: 8})
+	if err != nil {
+		t.Fatalf("AssignmentPreview err = %v", err)
+	}
+	if result.TotalParticipants != 0 || len(result.Rooms) != 3 {
+		t.Fatalf("result = %+v, want three empty rooms and zero participants", result)
+	}
+	for i, room := range result.Rooms {
+		wantCode := []string{"R01", "R02", "R03"}[i]
+		if room.Code != wantCode || room.Capacity != 8 || room.AssignedCount != 0 {
+			t.Fatalf("room[%d] = %+v, want %s capacity 8 empty", i, room, wantCode)
+		}
+	}
+	if result.Message == "" {
+		t.Fatal("message is empty, want clear no-participant message")
+	}
+}
+
+func TestAssessmentExamAssignmentPreviewValidation(t *testing.T) {
+	svc := NewAssessmentExamWithStore(&fakeAssessmentExamStore{})
+	examID := mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111")
+	cases := []AssessmentAssignmentRequest{
+		{RoomCount: 0, CapacityPerRoom: 8},
+		{RoomCount: 21, CapacityPerRoom: 8},
+		{RoomCount: 2, CapacityPerRoom: 0},
+		{RoomCount: 2, CapacityPerRoom: 51},
+		{RoomCount: 2, CapacityPerRoom: 8, MixPolicy: "invalid"},
+	}
+	for _, tc := range cases {
+		_, err := svc.AssignmentPreview(context.Background(), examID, tc)
+		if !errors.Is(err, domain.ErrBadRequest) {
+			t.Fatalf("AssignmentPreview(%+v) err = %v, want bad request", tc, err)
+		}
+	}
+}
+
+func TestAssessmentExamAssignmentApplyUpsertsRoomsOnly(t *testing.T) {
+	examID := mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111")
+	sessionID := mustPgUUIDAssessmentTest("22222222-2222-2222-2222-222222222222")
+	now := time.Date(2026, 5, 30, 8, 0, 0, 0, time.UTC)
+	store := &fakeAssessmentExamStore{
+		getRow: db.GetAssessmentExamRow{
+			ID:        examID,
+			Title:     "PAT",
+			Status:    AssessmentExamStatusDraft,
+			CreatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+			UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+		},
+		firstSessionErr: pgx.ErrNoRows,
+		createdSession:  db.AssessmentSession{ID: sessionID},
+	}
+	svc := NewAssessmentExamWithStore(store)
+
+	result, err := svc.AssignmentApply(context.Background(), examID, AssessmentAssignmentRequest{RoomCount: 2, CapacityPerRoom: 12, MixPolicy: AssessmentMixPolicyClassGrouped})
+	if err != nil {
+		t.Fatalf("AssignmentApply err = %v", err)
+	}
+	if result.SessionID != sessionID.String() || len(store.createdRooms) != 2 {
+		t.Fatalf("result=%+v createdRooms=%+v, want two upserted rooms on created session", result, store.createdRooms)
+	}
+	if store.createdRooms[0].Code != "R01" || store.createdRooms[1].Code != "R02" || store.createdRooms[0].Capacity != 12 {
+		t.Fatalf("createdRooms=%+v, want deterministic R01/R02 capacity 12", store.createdRooms)
+	}
+	if result.CardCount != 0 {
+		t.Fatalf("card count = %d, want no card issuance", result.CardCount)
 	}
 }
 

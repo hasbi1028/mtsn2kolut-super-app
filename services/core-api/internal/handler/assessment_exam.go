@@ -21,6 +21,8 @@ type assessmentExamService interface {
 	Update(ctx context.Context, id pgtype.UUID, input service.AssessmentExamInput) (service.AssessmentExamView, error)
 	PrepareRooms(ctx context.Context, id pgtype.UUID) (service.AssessmentPrepareRoomsResult, error)
 	IssueCards(ctx context.Context, id pgtype.UUID) (service.AssessmentIssueCardsResult, error)
+	AssignmentPreview(ctx context.Context, id pgtype.UUID, input service.AssessmentAssignmentRequest) (service.AssessmentAssignmentResult, error)
+	AssignmentApply(ctx context.Context, id pgtype.UUID, input service.AssessmentAssignmentRequest) (service.AssessmentAssignmentResult, error)
 }
 
 type AssessmentExam struct {
@@ -143,6 +145,48 @@ func (h *AssessmentExam) IssueCards(w http.ResponseWriter, r *http.Request) {
 	result, err := h.svc.IssueCards(r.Context(), id)
 	if err != nil {
 		writeDomainOrInternal(w, err, "Kartu ujian belum dapat diterbitkan")
+		return
+	}
+	api.OK(w, result)
+}
+
+func (h *AssessmentExam) AssignmentPreview(w http.ResponseWriter, r *http.Request) {
+	if !assessmentManageAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, ok := assessmentURLID(w, r)
+	if !ok {
+		return
+	}
+	var req service.AssessmentAssignmentRequest
+	if !decodeJSON(w, r, &req, 32<<10, disallowUnknownJSONFields) {
+		return
+	}
+	result, err := h.svc.AssignmentPreview(r.Context(), id, req)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Preview ruang ujian belum dapat dibuat")
+		return
+	}
+	api.OK(w, result)
+}
+
+func (h *AssessmentExam) AssignmentApply(w http.ResponseWriter, r *http.Request) {
+	if !assessmentManageAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, ok := assessmentURLID(w, r)
+	if !ok {
+		return
+	}
+	var req service.AssessmentAssignmentRequest
+	if !decodeJSON(w, r, &req, 32<<10, disallowUnknownJSONFields) {
+		return
+	}
+	result, err := h.svc.AssignmentApply(r.Context(), id, req)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Pembagian ruang ujian belum dapat disimpan")
 		return
 	}
 	api.OK(w, result)

@@ -105,6 +105,26 @@ SET name = EXCLUDED.name,
     updated_at = now()
 RETURNING *;
 
+-- name: UpsertAssessmentRoom :one
+INSERT INTO assessment_rooms (
+  session_id,
+  code,
+  name,
+  capacity,
+  status
+) VALUES (
+  sqlc.arg(session_id),
+  sqlc.arg(code),
+  sqlc.arg(name),
+  sqlc.arg(capacity),
+  'draft'
+)
+ON CONFLICT (session_id, code) DO UPDATE
+SET name = EXCLUDED.name,
+    capacity = EXCLUDED.capacity,
+    updated_at = now()
+RETURNING *;
+
 -- name: CountAssessmentRoomsByExam :one
 SELECT COUNT(DISTINCT r.id)::bigint
 FROM assessment_sessions s
