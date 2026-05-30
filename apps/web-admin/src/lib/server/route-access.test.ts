@@ -73,6 +73,12 @@ describe('route access helpers', () => {
 		expect(isBankSoalPath('/bank-soalship')).toBe(false);
 	});
 
+
+	it('requires card issue permission for assessment participant card endpoints', () => {
+		expect(requiredPermissionsForPath('/api/asesmen/exams/exam-1/participant-cards', 'GET')).toEqual(['asesmen.cards_issue', 'asesmen.manage']);
+		expect(requiredPermissionsForPath('/api/asesmen/exams/exam-1/issue-cards', 'POST')).toEqual(['asesmen.cards_issue', 'asesmen.manage']);
+	});
+
 	it('guards the rebuilt Asesmen shell by asesmen.read permission while keeping admin fallback', () => {
 		const plainGuru = { id: '1', username: 'guru', role: 'guru', roles: ['guru'], permissions: [] };
 		const assessmentReader = { id: '2', username: 'panitia', role: '', roles: [], permissions: ['asesmen.read'] };

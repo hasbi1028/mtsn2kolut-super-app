@@ -31,6 +31,8 @@ type fakeAssessmentExamStore struct {
 	placementRows         []db.ListAssessmentParticipantPlacementsByExamRow
 	movedParticipantArg   db.MoveAssessmentParticipantSeatParams
 	movedParticipant      db.MoveAssessmentParticipantSeatRow
+	cardTargets           []db.ListAssessmentParticipantCardTargetsByExamRow
+	createdCards          []db.CreateAssessmentParticipantAccessCardParams
 	roomForMove           db.GetAssessmentRoomByIDAndExamRow
 	roomForMoveErr        error
 	clearedParticipantSet bool
@@ -106,6 +108,16 @@ func (f *fakeAssessmentExamStore) ClearAssessmentParticipantRooms(context.Contex
 func (f *fakeAssessmentExamStore) AssignAssessmentParticipantRoom(_ context.Context, arg db.AssignAssessmentParticipantRoomParams) error {
 	f.assignedParticipants = append(f.assignedParticipants, arg)
 	return nil
+}
+
+func (f *fakeAssessmentExamStore) ListAssessmentParticipantCardTargetsByExam(context.Context, pgtype.UUID) ([]db.ListAssessmentParticipantCardTargetsByExamRow, error) {
+	return f.cardTargets, nil
+}
+
+func (f *fakeAssessmentExamStore) CreateAssessmentParticipantAccessCard(_ context.Context, arg db.CreateAssessmentParticipantAccessCardParams) (db.AssessmentAccessCard, error) {
+	f.createdCards = append(f.createdCards, arg)
+	cardID := mustPgUUIDAssessmentTest("cccccccc-0000-0000-0000-000000000001")
+	return db.AssessmentAccessCard{ID: cardID, CardType: "participant", SessionID: arg.SessionID, ParticipantID: arg.ParticipantID, TokenHash: arg.TokenHash, PinHash: arg.PinHash, Status: "active"}, nil
 }
 
 func (f *fakeAssessmentExamStore) ListAssessmentParticipantPlacementsByExam(context.Context, pgtype.UUID) ([]db.ListAssessmentParticipantPlacementsByExamRow, error) {
@@ -539,6 +551,105 @@ func TestAssessmentExamMoveParticipantSeatValidatesRoomAndSeat(t *testing.T) {
 	_, err = svc.MoveParticipantSeat(context.Background(), examID, AssessmentParticipantSeatInput{ParticipantID: participantID.String(), RoomID: roomID.String(), SeatNo: 31})
 	if !errors.Is(err, domain.ErrBadRequest) {
 		t.Fatalf("MoveParticipantSeat over capacity err = %v, want bad request", err)
+	}
+}
+
+func TestAssessmentExamIssueParticipantCardsCreatesSeparateQRPIN(t *testing.T) {
+	examID := mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111")
+	sessionID := mustPgUUIDAssessmentTest("22222222-2222-2222-2222-222222222222")
+	participantID := mustPgUUIDAssessmentTest("aaaaaaaa-0000-0000-0000-000000000001")
+	studentID := mustPgUUIDAssessmentTest("bbbbbbbb-0000-0000-0000-000000000001")
+	roomID := mustPgUUIDAssessmentTest("33333333-3333-3333-3333-333333333333")
+	now := time.Date(2026, 5, 30, 8, 0, 0, 0, time.UTC)
+	store := &fakeAssessmentExamStore{
+		getRow: db.GetAssessmentExamRow{ID: examID, Title: "Gladi", Status: AssessmentExamStatusDraft, CreatedAt: pgtype.Timestamptz{Time: now, Valid: true}, UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true}},
+		cardTargets: []db.ListAssessmentParticipantCardTargetsByExamRow{{
+			ParticipantID: participantID,
+			SessionID:     sessionID,
+			StudentID:     studentID,
+			StudentName:   "Ahmad",
+			Nis:           "123",
+			Nisn:          "456",
+			ClassCode:     "VIIA",
+			ClassName:     "VII A",
+			GradeLevel:    7,
+			RoomID:        roomID,
+			RoomCode:      "R01",
+			RoomName:      "Ruang Ujian 1",
+			SeatNo:        3,
+			Status:        "registered",
+		}},
+	}
+	svc := NewAssessmentExamWithStore(store)
+
+	cards, err := svc.IssueParticipantCards(context.Background(), examID, AssessmentCardIssueInput{})
+	if err != nil {
+		t.Fatalf("IssueParticipantCards err = %v", err)
+	}
+	if len(cards.Cards) != 1 || cards.Cards[0].Token == "" || cards.Cards[0].PIN == "" || cards.Cards[0].QRPath == "" {
+		t.Fatalf("cards = %+v, want newly issued raw token, PIN, and QR path", cards)
+	}
+	if len(store.createdCards) != 1 {
+		t.Fatalf("created cards = %d, want one", len(store.createdCards))
+	}
+	if store.createdCards[0].ParticipantID != participantID || store.createdCards[0].SessionID != sessionID || store.createdCards[0].TokenHash == cards.Cards[0].Token || store.createdCards[0].PinHash == cards.Cards[0].PIN {
+		t.Fatalf("created card arg = %+v, card=%+v; want hashed secrets for participant", store.createdCards[0], cards.Cards[0])
+	}
+}
+
+func TestAssessmentExamIssueParticipantCardsSkipsExistingUnlessRegenerate(t *testing.T) {
+	examID := mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111")
+	sessionID := mustPgUUIDAssessmentTest("22222222-2222-2222-2222-222222222222")
+	participantID := mustPgUUIDAssessmentTest("aaaaaaaa-0000-0000-0000-000000000001")
+	cardID := mustPgUUIDAssessmentTest("cccccccc-0000-0000-0000-000000000001")
+	now := time.Date(2026, 5, 30, 8, 0, 0, 0, time.UTC)
+	store := &fakeAssessmentExamStore{
+		getRow: db.GetAssessmentExamRow{ID: examID, Title: "Gladi", Status: AssessmentExamStatusDraft, CreatedAt: pgtype.Timestamptz{Time: now, Valid: true}, UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true}},
+		cardTargets: []db.ListAssessmentParticipantCardTargetsByExamRow{{
+			ParticipantID: participantID,
+			SessionID:     sessionID,
+			StudentName:   "Ahmad",
+			CardID:        cardID,
+			CardStatus:    "active",
+		}},
+	}
+	svc := NewAssessmentExamWithStore(store)
+
+	cards, err := svc.IssueParticipantCards(context.Background(), examID, AssessmentCardIssueInput{})
+	if err != nil {
+		t.Fatalf("IssueParticipantCards existing err = %v", err)
+	}
+	if len(cards.Cards) != 1 || cards.Cards[0].Token != "" || cards.Cards[0].PIN != "" || len(store.createdCards) != 0 {
+		t.Fatalf("cards=%+v created=%d, want existing card without raw secrets and no insert", cards, len(store.createdCards))
+	}
+
+	cards, err = svc.IssueParticipantCards(context.Background(), examID, AssessmentCardIssueInput{Regenerate: true})
+	if err != nil {
+		t.Fatalf("IssueParticipantCards regenerate err = %v", err)
+	}
+	if len(cards.Cards) != 1 || cards.Cards[0].Token == "" || cards.Cards[0].PIN == "" || len(store.createdCards) != 1 {
+		t.Fatalf("cards=%+v created=%d, want regenerated raw secrets", cards, len(store.createdCards))
+	}
+}
+
+func TestAssessmentExamListParticipantCardsNeverReturnsSecrets(t *testing.T) {
+	examID := mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111")
+	sessionID := mustPgUUIDAssessmentTest("22222222-2222-2222-2222-222222222222")
+	participantID := mustPgUUIDAssessmentTest("aaaaaaaa-0000-0000-0000-000000000001")
+	cardID := mustPgUUIDAssessmentTest("cccccccc-0000-0000-0000-000000000001")
+	now := time.Date(2026, 5, 30, 8, 0, 0, 0, time.UTC)
+	store := &fakeAssessmentExamStore{
+		getRow:      db.GetAssessmentExamRow{ID: examID, Title: "Gladi", Status: AssessmentExamStatusDraft, CreatedAt: pgtype.Timestamptz{Time: now, Valid: true}, UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true}},
+		cardTargets: []db.ListAssessmentParticipantCardTargetsByExamRow{{ParticipantID: participantID, SessionID: sessionID, StudentName: "Ahmad", CardID: cardID, CardStatus: "active"}},
+	}
+	svc := NewAssessmentExamWithStore(store)
+
+	cards, err := svc.ListParticipantCards(context.Background(), examID)
+	if err != nil {
+		t.Fatalf("ListParticipantCards err = %v", err)
+	}
+	if len(cards) != 1 || cards[0].CardID == "" || cards[0].Token != "" || cards[0].PIN != "" {
+		t.Fatalf("cards = %+v, want card metadata without raw secrets", cards)
 	}
 }
 

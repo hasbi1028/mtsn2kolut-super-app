@@ -21,6 +21,8 @@ type assessmentExamService interface {
 	Update(ctx context.Context, id pgtype.UUID, input service.AssessmentExamInput) (service.AssessmentExamView, error)
 	PrepareRooms(ctx context.Context, id pgtype.UUID) (service.AssessmentPrepareRoomsResult, error)
 	IssueCards(ctx context.Context, id pgtype.UUID) (service.AssessmentIssueCardsResult, error)
+	ListParticipantCards(ctx context.Context, id pgtype.UUID) ([]service.AssessmentParticipantCardView, error)
+	IssueParticipantCards(ctx context.Context, id pgtype.UUID, input service.AssessmentCardIssueInput) (service.AssessmentParticipantCardIssueResult, error)
 	AssignmentPreview(ctx context.Context, id pgtype.UUID, input service.AssessmentAssignmentRequest) (service.AssessmentAssignmentResult, error)
 	AssignmentApply(ctx context.Context, id pgtype.UUID, input service.AssessmentAssignmentRequest) (service.AssessmentAssignmentResult, error)
 	ListParticipantPlacements(ctx context.Context, id pgtype.UUID) ([]service.AssessmentParticipantPlacementView, error)
@@ -135,6 +137,23 @@ func (h *AssessmentExam) PrepareRooms(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, result)
 }
 
+func (h *AssessmentExam) ListParticipantCards(w http.ResponseWriter, r *http.Request) {
+	if !assessmentCardsAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, ok := assessmentURLID(w, r)
+	if !ok {
+		return
+	}
+	items, err := h.svc.ListParticipantCards(r.Context(), id)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Daftar kartu peserta belum dapat dibuka")
+		return
+	}
+	api.OK(w, map[string]any{"items": items})
+}
+
 func (h *AssessmentExam) IssueCards(w http.ResponseWriter, r *http.Request) {
 	if !assessmentCardsAllowed(r) {
 		api.Forbidden(w)
@@ -144,9 +163,15 @@ func (h *AssessmentExam) IssueCards(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := h.svc.IssueCards(r.Context(), id)
+	var req service.AssessmentCardIssueInput
+	if r.Body != nil && r.ContentLength != 0 {
+		if !decodeJSON(w, r, &req, 32<<10, disallowUnknownJSONFields) {
+			return
+		}
+	}
+	result, err := h.svc.IssueParticipantCards(r.Context(), id, req)
 	if err != nil {
-		writeDomainOrInternal(w, err, "Kartu ujian belum dapat diterbitkan")
+		writeDomainOrInternal(w, err, "Kartu peserta belum dapat diterbitkan")
 		return
 	}
 	api.OK(w, result)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
@@ -51,14 +52,21 @@ type assessmentExamStore interface {
 	ListAssessmentParticipantPlacementsByExam(ctx context.Context, examID pgtype.UUID) ([]db.ListAssessmentParticipantPlacementsByExamRow, error)
 	GetAssessmentRoomByIDAndExam(ctx context.Context, arg db.GetAssessmentRoomByIDAndExamParams) (db.GetAssessmentRoomByIDAndExamRow, error)
 	MoveAssessmentParticipantSeat(ctx context.Context, arg db.MoveAssessmentParticipantSeatParams) (db.MoveAssessmentParticipantSeatRow, error)
+	ListAssessmentParticipantCardTargetsByExam(ctx context.Context, examID pgtype.UUID) ([]db.ListAssessmentParticipantCardTargetsByExamRow, error)
+	CreateAssessmentParticipantAccessCard(ctx context.Context, arg db.CreateAssessmentParticipantAccessCardParams) (db.AssessmentAccessCard, error)
 }
 
 type AssessmentExam struct {
-	q assessmentExamStore
+	q    assessmentExamStore
+	pool *pgxpool.Pool
 }
 
 func NewAssessmentExam(q *db.Queries) *AssessmentExam {
 	return &AssessmentExam{q: q}
+}
+
+func NewAssessmentExamWithPool(pool *pgxpool.Pool) *AssessmentExam {
+	return &AssessmentExam{q: db.New(pool), pool: pool}
 }
 
 func NewAssessmentExamWithStore(q assessmentExamStore) *AssessmentExam {
@@ -175,6 +183,42 @@ type AssessmentParticipantSeatInput struct {
 	ParticipantID string `json:"participant_id"`
 	RoomID        string `json:"room_id"`
 	SeatNo        int32  `json:"seat_no"`
+}
+
+type AssessmentCardIssueInput struct {
+	Regenerate   bool  `json:"regenerate"`
+	ExpiresHours int32 `json:"expires_hours,omitempty"`
+}
+
+type AssessmentParticipantCardView struct {
+	CardID         string `json:"card_id,omitempty"`
+	ParticipantID  string `json:"participant_id"`
+	SessionID      string `json:"session_id"`
+	RoomID         string `json:"room_id,omitempty"`
+	StudentID      string `json:"student_id"`
+	StudentName    string `json:"student_name"`
+	NIS            string `json:"nis,omitempty"`
+	NISN           string `json:"nisn,omitempty"`
+	ClassCode      string `json:"class_code"`
+	ClassName      string `json:"class_name"`
+	GradeLevel     int32  `json:"grade_level"`
+	RoomCode       string `json:"room_code,omitempty"`
+	RoomName       string `json:"room_name,omitempty"`
+	SeatNo         int32  `json:"seat_no,omitempty"`
+	Status         string `json:"status"`
+	FailedAttempts int32  `json:"failed_attempts"`
+	CardCreatedAt  string `json:"card_created_at,omitempty"`
+	CardExpiresAt  string `json:"card_expires_at,omitempty"`
+	Token          string `json:"token,omitempty"`
+	PIN            string `json:"pin,omitempty"`
+	QRPath         string `json:"qr_path,omitempty"`
+}
+
+type AssessmentParticipantCardIssueResult struct {
+	ExamID  string                          `json:"exam_id"`
+	Count   int                             `json:"count"`
+	Cards   []AssessmentParticipantCardView `json:"cards"`
+	Message string                          `json:"message"`
 }
 
 func (s *AssessmentExam) List(ctx context.Context, search, status string, limit, offset int32) ([]AssessmentExamView, error) {
@@ -406,6 +450,110 @@ func (s *AssessmentExam) AssignmentApply(ctx context.Context, id pgtype.UUID, in
 		result.Message = "Ruang ujian tersimpan. Belum ada peserta dari rombel terpilih; kartu/QR+PIN belum diterbitkan."
 	}
 	return result, nil
+}
+
+func (s *AssessmentExam) ListParticipantCards(ctx context.Context, id pgtype.UUID) ([]AssessmentParticipantCardView, error) {
+	if _, err := s.Get(ctx, id); err != nil {
+		return nil, err
+	}
+	rows, err := s.q.ListAssessmentParticipantCardTargetsByExam(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	cards := make([]AssessmentParticipantCardView, 0, len(rows))
+	for _, row := range rows {
+		cards = append(cards, assessmentParticipantCardTargetView(row, "", ""))
+	}
+	return cards, nil
+}
+
+func (s *AssessmentExam) issueParticipantCardsInStore(ctx context.Context, store assessmentExamStore, id pgtype.UUID, input AssessmentCardIssueInput, refreshAfterLock bool) ([]AssessmentParticipantCardView, int, error) {
+	rows, err := store.ListAssessmentParticipantCardTargetsByExam(ctx, id)
+	if err != nil {
+		return nil, 0, err
+	}
+	if refreshAfterLock {
+		// The first SELECT ... FOR UPDATE serializes issuance on participant rows.
+		// Re-read in a fresh statement after locks are acquired so a concurrent
+		// non-regenerate request sees cards inserted by the prior transaction and
+		// does not overwrite/return a second raw token+PIN set.
+		rows, err = store.ListAssessmentParticipantCardTargetsByExam(ctx, id)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+	cards := make([]AssessmentParticipantCardView, 0, len(rows))
+	if len(rows) == 0 {
+		return cards, 0, nil
+	}
+	expiresAt := cardExpiresAt(input.ExpiresHours)
+	issued := 0
+	for _, row := range rows {
+		if row.CardID.Valid && !input.Regenerate {
+			cards = append(cards, assessmentParticipantCardTargetView(row, "", ""))
+			continue
+		}
+		token, pin, err := newCardSecrets()
+		if err != nil {
+			return nil, 0, err
+		}
+		card, err := store.CreateAssessmentParticipantAccessCard(ctx, db.CreateAssessmentParticipantAccessCardParams{
+			SessionID:     row.SessionID,
+			ParticipantID: row.ParticipantID,
+			TokenHash:     hashCardSecret(token),
+			PinHash:       hashCardSecret(pin),
+			ExpiresAt:     expiresAt,
+		})
+		if err != nil {
+			return nil, 0, err
+		}
+		row.CardID = card.ID
+		row.CardStatus = card.Status
+		row.FailedAttempts = card.FailedAttempts
+		row.CardCreatedAt = card.CreatedAt
+		row.CardExpiresAt = card.ExpiresAt
+		item := assessmentParticipantCardTargetView(row, token, pin)
+		item.QRPath = "/ujian?card=" + token
+		cards = append(cards, item)
+		issued++
+	}
+	return cards, issued, nil
+}
+
+func (s *AssessmentExam) IssueParticipantCards(ctx context.Context, id pgtype.UUID, input AssessmentCardIssueInput) (AssessmentParticipantCardIssueResult, error) {
+	exam, err := s.Get(ctx, id)
+	if err != nil {
+		return AssessmentParticipantCardIssueResult{}, err
+	}
+	var cards []AssessmentParticipantCardView
+	var issued int
+	if s.pool != nil {
+		tx, err := s.pool.Begin(ctx)
+		if err != nil {
+			return AssessmentParticipantCardIssueResult{}, err
+		}
+		defer tx.Rollback(ctx) //nolint:errcheck
+		cards, issued, err = s.issueParticipantCardsInStore(ctx, db.New(tx), id, input, true)
+		if err != nil {
+			return AssessmentParticipantCardIssueResult{}, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return AssessmentParticipantCardIssueResult{}, err
+		}
+	} else {
+		cards, issued, err = s.issueParticipantCardsInStore(ctx, s.q, id, input, false)
+		if err != nil {
+			return AssessmentParticipantCardIssueResult{}, err
+		}
+	}
+	if len(cards) == 0 {
+		return AssessmentParticipantCardIssueResult{ExamID: exam.ID, Cards: []AssessmentParticipantCardView{}, Message: "Belum ada peserta untuk diterbitkan kartu."}, nil
+	}
+	message := fmt.Sprintf("%d kartu peserta siap. PIN hanya tampil pada hasil terbitkan ini; cetak/simpan PDF sekarang.", len(cards))
+	if issued == 0 {
+		message = "Kartu peserta sudah pernah diterbitkan. Untuk melihat PIN mentah lagi, gunakan regenerasi dengan sengaja."
+	}
+	return AssessmentParticipantCardIssueResult{ExamID: exam.ID, Count: len(cards), Cards: cards, Message: message}, nil
 }
 
 func (s *AssessmentExam) ListParticipantPlacements(ctx context.Context, id pgtype.UUID) ([]AssessmentParticipantPlacementView, error) {
@@ -716,6 +864,31 @@ func normalizeAssessmentExamInput(input AssessmentExamInput, create bool) (Asses
 	return input, nil
 }
 
+func assessmentParticipantCardTargetView(row db.ListAssessmentParticipantCardTargetsByExamRow, token, pin string) AssessmentParticipantCardView {
+	return AssessmentParticipantCardView{
+		CardID:         assessmentUUIDString(row.CardID),
+		ParticipantID:  assessmentUUIDString(row.ParticipantID),
+		SessionID:      assessmentUUIDString(row.SessionID),
+		RoomID:         assessmentUUIDString(row.RoomID),
+		StudentID:      assessmentUUIDString(row.StudentID),
+		StudentName:    row.StudentName,
+		NIS:            row.Nis,
+		NISN:           row.Nisn,
+		ClassCode:      row.ClassCode,
+		ClassName:      row.ClassName,
+		GradeLevel:     row.GradeLevel,
+		RoomCode:       row.RoomCode,
+		RoomName:       row.RoomName,
+		SeatNo:         row.SeatNo,
+		Status:         firstNonEmpty(row.CardStatus, "not_issued"),
+		FailedAttempts: row.FailedAttempts,
+		CardCreatedAt:  timeString(row.CardCreatedAt),
+		CardExpiresAt:  timeString(row.CardExpiresAt),
+		Token:          token,
+		PIN:            pin,
+	}
+}
+
 func assessmentParticipantPlacementListRowView(row db.ListAssessmentParticipantPlacementsByExamRow) AssessmentParticipantPlacementView {
 	roomID := row.RoomID
 	if row.RoomIDActual.Valid {
@@ -779,6 +952,7 @@ func assessmentExamListRowView(row db.ListAssessmentExamsRow) AssessmentExamView
 		SessionCount:     row.SessionCount,
 		RoomCount:        row.RoomCount,
 		ParticipantCount: row.ParticipantCount,
+		CardCount:        row.CardCount,
 	}
 }
 

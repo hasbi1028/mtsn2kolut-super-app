@@ -86,6 +86,36 @@
 		status: string;
 	};
 
+	type ParticipantCard = {
+		card_id?: string;
+		participant_id: string;
+		session_id: string;
+		room_id?: string;
+		student_id: string;
+		student_name: string;
+		nis?: string;
+		nisn?: string;
+		class_code: string;
+		class_name: string;
+		grade_level: number;
+		room_code?: string;
+		room_name?: string;
+		seat_no?: number;
+		status: string;
+		card_created_at?: string;
+		card_expires_at?: string;
+		token?: string;
+		pin?: string;
+		qr_path?: string;
+	};
+
+	type ParticipantCardIssueResult = {
+		exam_id: string;
+		count: number;
+		cards: ParticipantCard[];
+		message?: string;
+	};
+
 	const steps = [
 		{
 			label: 'Siapkan Ujian',
@@ -135,6 +165,10 @@
 	let selectedParticipantId = $state('');
 	let manualRoomId = $state('');
 	let manualSeatNo = $state(1);
+	let participantCards = $state<ParticipantCard[]>([]);
+	let cardBusy = $state(false);
+	let cardError = $state('');
+	let cardIssuedNow = $state(false);
 
 	let selectedExam = $derived(exams.find((exam) => exam.id === selectedExamId) ?? exams[0] ?? null);
 	let activeRombels = $derived(rombels.filter((rombel) => rombel.is_active !== false));
@@ -248,6 +282,9 @@
 		selectedParticipantId = '';
 		manualRoomId = '';
 		manualSeatNo = 1;
+		participantCards = [];
+		cardError = '';
+		cardIssuedNow = false;
 		if ((exam.participant_count ?? 0) > 0) {
 			void loadParticipantPlacements(exam);
 		}
@@ -397,6 +434,58 @@
 		}
 	}
 
+
+	async function loadParticipantCards(exam = selectedExam) {
+		if (!exam || cardBusy) return;
+		cardBusy = true;
+		cardError = '';
+		try {
+			participantCards = await fetch(`/api/asesmen/exams/${encodeURIComponent(exam.id)}/participant-cards`).then((response) =>
+				readClientApiData<ParticipantCard[]>(response, 'Daftar kartu peserta belum dapat dimuat')
+			);
+			cardIssuedNow = participantCards.some((card) => Boolean(card.token || card.pin));
+		} catch (err) {
+			cardError = err instanceof Error ? err.message : 'Daftar kartu peserta belum dapat dimuat';
+			participantCards = [];
+		} finally {
+			cardBusy = false;
+		}
+	}
+
+	async function issueParticipantCards(exam = selectedExam, regenerate = false) {
+		if (!exam || cardBusy) return;
+		const text = regenerate
+			? 'Regenerasi QR+PIN kartu peserta? PIN lama tidak dipakai lagi. Cetak hasil baru sekarang.'
+			: 'Terbitkan QR+PIN untuk kartu peserta ujian ini? PIN hanya tampil setelah proses ini, jadi cetak/simpan PDF sekarang.';
+		if (!window.confirm(text)) return;
+		cardBusy = true;
+		cardError = '';
+		notice = '';
+		try {
+			const result = await fetch(`/api/asesmen/exams/${encodeURIComponent(exam.id)}/issue-cards`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ regenerate })
+			}).then((response) => readClientApiData<ParticipantCardIssueResult>(response, 'Kartu peserta belum dapat diterbitkan'));
+			participantCards = result.cards ?? [];
+			cardIssuedNow = participantCards.some((card) => Boolean(card.token || card.pin));
+			notice = result.message ?? 'Kartu peserta siap dicetak.';
+			await loadExams();
+		} catch (err) {
+			cardError = err instanceof Error ? err.message : 'Kartu peserta belum dapat diterbitkan';
+		} finally {
+			cardBusy = false;
+		}
+	}
+
+	function printParticipantCards() {
+		if (participantCards.length === 0) {
+			cardError = 'Muat atau terbitkan kartu peserta dulu sebelum mencetak.';
+			return;
+		}
+		window.print();
+	}
+
 	function handlePrintDocumentAction(document: AssessmentPrintDocument) {
 		if (!selectedExam) {
 			error = 'Pilih ujian dulu sebelum membuka Dokumen & Cetak.';
@@ -407,13 +496,12 @@
 			return;
 		}
 		if (document.id === 'participant-cards' && document.dangerous) {
-			const ok = window.confirm('Terbitkan QR+PIN untuk kartu peserta ujian ini? Aksi ini sengaja dipisah dari Simpan Ruang agar tidak membuat token tanpa sengaja.');
-			if (!ok) return;
-			void runExamAction(selectedExam, 'issue-cards');
+			void issueParticipantCards(selectedExam);
 			return;
 		}
 		if (document.id === 'participant-cards') {
-			notice = 'Permukaan cetak kartu peserta sudah dipisah. Data kartu akan tampil setelah endpoint cetak penuh diaktifkan.';
+			void loadParticipantCards(selectedExam);
+			notice = 'Daftar kartu peserta dimuat. Jika PIN tidak tampil, berarti kartu lama sudah pernah diterbitkan; gunakan regenerasi hanya bila perlu.';
 			return;
 		}
 		if (document.id === 'supervisor-sheets') {
@@ -795,6 +883,53 @@
 						</button>
 					</div>
 				{/each}
+			</div>
+
+			<div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 print:border-0 print:bg-white print:p-0">
+				<div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between print:hidden">
+					<div>
+						<p class="text-sm font-black text-slate-950">Daftar Kartu Peserta</p>
+						<p class="text-xs font-bold leading-5 text-slate-500">PIN mentah hanya tampil saat baru diterbitkan/regenerasi. Cetak segera setelah terbit.</p>
+					</div>
+					<div class="flex flex-wrap gap-2">
+						<button class="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:border-emerald-300 hover:text-emerald-800 disabled:cursor-wait disabled:opacity-60" disabled={!selectedExam || cardBusy} onclick={() => loadParticipantCards()}>{cardBusy ? 'Memuat...' : 'Muat Kartu'}</button>
+						<button class="rounded-2xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-black text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50" disabled={!selectedExam || cardBusy || (selectedExam.participant_count ?? 0) === 0} onclick={() => issueParticipantCards(selectedExam, (selectedExam?.card_count ?? 0) > 0)}>{(selectedExam?.card_count ?? 0) > 0 ? 'Regenerasi PIN' : 'Terbitkan QR+PIN'}</button>
+						<button class="rounded-2xl bg-emerald-700 px-3 py-2 text-xs font-black text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300" disabled={participantCards.length === 0} onclick={printParticipantCards}>Cetak</button>
+					</div>
+				</div>
+				{#if cardError}
+					<p class="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700 print:hidden">{cardError}</p>
+				{/if}
+				{#if participantCards.length === 0}
+					<p class="mt-3 text-sm font-semibold text-slate-500 print:hidden">Belum ada kartu dimuat. Pilih ujian, lalu klik Muat Kartu atau Terbitkan QR+PIN.</p>
+				{:else}
+					{#if cardIssuedNow}
+						<p class="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-900 print:hidden">PIN sedang tampil dari proses terbitkan/regenerasi. Cetak atau simpan PDF sekarang.</p>
+					{/if}
+					<div class="mt-4 grid gap-3 print:grid-cols-2 sm:grid-cols-2 lg:grid-cols-3">
+						{#each participantCards as card (card.participant_id)}
+							<div class="break-inside-avoid rounded-2xl border border-slate-300 bg-white p-3 text-sm shadow-sm print:shadow-none">
+								<div class="flex items-start justify-between gap-3 border-b border-slate-200 pb-2">
+									<div class="min-w-0">
+										<p class="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700">Kartu Peserta CBT</p>
+										<h3 class="truncate text-base font-black text-slate-950">{card.student_name}</h3>
+										<p class="text-xs font-bold text-slate-500">{card.class_code || card.class_name || 'Tanpa rombel'} · {card.nis || card.nisn || 'tanpa NIS'}</p>
+									</div>
+									<span class="rounded-xl bg-emerald-50 px-2 py-1 text-xs font-black text-emerald-800">{card.room_code || '—'} / {card.seat_no || '-'}</span>
+								</div>
+								<div class="mt-3 grid grid-cols-[5.5rem_1fr] gap-2 text-xs">
+									<div class="flex h-20 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-center font-black text-slate-500">QR<br />{card.token ? 'READY' : 'HASH'}</div>
+									<div class="space-y-1.5">
+										<p><span class="font-bold text-slate-500">Token:</span> <span class="font-black text-slate-950">{card.token || '••••••••'}</span></p>
+										<p><span class="font-bold text-slate-500">PIN:</span> <span class="font-black text-slate-950">{card.pin || '••••'}</span></p>
+										<p><span class="font-bold text-slate-500">Status:</span> {card.status}</p>
+										<p class="text-[11px] font-semibold text-slate-500">Masuk via /ujian lalu scan/isi QR+PIN.</p>
+									</div>
+								</div>
+							</div>
+						{/each}
+					</div>
+				{/if}
 			</div>
 		</section>
 

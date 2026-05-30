@@ -19,10 +19,13 @@ type fakeAssessmentExamHandlerService struct {
 	prepareCalled        bool
 	previewCalled        bool
 	applyCalled          bool
+	listCardsCalled      bool
+	issueCardsCalled     bool
 	listPlacementsCalled bool
 	moveSeatCalled       bool
 	assignmentReq        service.AssessmentAssignmentRequest
 	seatInput            service.AssessmentParticipantSeatInput
+	cardIssueInput       service.AssessmentCardIssueInput
 	listItems            []service.AssessmentExamView
 	createItem           service.AssessmentExamView
 	prepareResult        service.AssessmentPrepareRoomsResult
@@ -30,6 +33,8 @@ type fakeAssessmentExamHandlerService struct {
 	applyResult          service.AssessmentAssignmentResult
 	placements           []service.AssessmentParticipantPlacementView
 	movedPlacement       service.AssessmentParticipantPlacementView
+	participantCards     []service.AssessmentParticipantCardView
+	issueCardsResult     service.AssessmentParticipantCardIssueResult
 }
 
 func (f *fakeAssessmentExamHandlerService) List(context.Context, string, string, int32, int32) ([]service.AssessmentExamView, error) {
@@ -57,6 +62,17 @@ func (f *fakeAssessmentExamHandlerService) PrepareRooms(context.Context, pgtype.
 
 func (f *fakeAssessmentExamHandlerService) IssueCards(context.Context, pgtype.UUID) (service.AssessmentIssueCardsResult, error) {
 	return service.AssessmentIssueCardsResult{}, nil
+}
+
+func (f *fakeAssessmentExamHandlerService) ListParticipantCards(context.Context, pgtype.UUID) ([]service.AssessmentParticipantCardView, error) {
+	f.listCardsCalled = true
+	return f.participantCards, nil
+}
+
+func (f *fakeAssessmentExamHandlerService) IssueParticipantCards(_ context.Context, _ pgtype.UUID, input service.AssessmentCardIssueInput) (service.AssessmentParticipantCardIssueResult, error) {
+	f.issueCardsCalled = true
+	f.cardIssueInput = input
+	return f.issueCardsResult, nil
 }
 
 func (f *fakeAssessmentExamHandlerService) AssignmentPreview(_ context.Context, _ pgtype.UUID, req service.AssessmentAssignmentRequest) (service.AssessmentAssignmentResult, error) {
@@ -197,5 +213,40 @@ func TestAssessmentExamMoveParticipantSeatDecodesManualPlacement(t *testing.T) {
 	}
 	if !svc.moveSeatCalled || svc.seatInput.ParticipantID != "aaaaaaaa-0000-0000-0000-000000000001" || svc.seatInput.RoomID != "33333333-3333-3333-3333-333333333333" || svc.seatInput.SeatNo != 7 {
 		t.Fatalf("move call=%v input=%+v, want decoded manual placement", svc.moveSeatCalled, svc.seatInput)
+	}
+}
+
+func TestAssessmentExamListParticipantCardsRequiresCardsPermission(t *testing.T) {
+	svc := &fakeAssessmentExamHandlerService{}
+	h := NewAssessmentExam(svc)
+	rec := httptest.NewRecorder()
+	req := withRouteParam(withClaims(httptest.NewRequest(http.MethodGet, "/api/asesmen/exams/11111111-1111-1111-1111-111111111111/participant-cards", nil), jwt.MapClaims{"roles": []any{"guru"}}), "id", "11111111-1111-1111-1111-111111111111")
+
+	h.ListParticipantCards(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("ListParticipantCards status = %d, want forbidden", rec.Code)
+	}
+	if svc.listCardsCalled {
+		t.Fatal("ListParticipantCards called service without cards permission")
+	}
+}
+
+func TestAssessmentExamIssueCardsDecodesRegenerate(t *testing.T) {
+	svc := &fakeAssessmentExamHandlerService{issueCardsResult: service.AssessmentParticipantCardIssueResult{Count: 1, Cards: []service.AssessmentParticipantCardView{{ParticipantID: "p1", Token: "t", PIN: "1234"}}}}
+	h := NewAssessmentExam(svc)
+	rec := httptest.NewRecorder()
+	req := withRouteParam(withClaims(httptest.NewRequest(http.MethodPost, "/api/asesmen/exams/11111111-1111-1111-1111-111111111111/issue-cards", strings.NewReader(`{"regenerate":true,"expires_hours":72}`)), jwt.MapClaims{"roles": []any{"admin"}}), "id", "11111111-1111-1111-1111-111111111111")
+
+	h.IssueCards(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("IssueCards status = %d, want ok; body=%s", rec.Code, rec.Body.String())
+	}
+	if !svc.issueCardsCalled || !svc.cardIssueInput.Regenerate || svc.cardIssueInput.ExpiresHours != 72 {
+		t.Fatalf("issue cards called=%v input=%+v, want decoded regenerate/expires", svc.issueCardsCalled, svc.cardIssueInput)
+	}
+	if !strings.Contains(rec.Body.String(), "pin") || !strings.Contains(rec.Body.String(), "token") {
+		t.Fatalf("IssueCards body=%s, want issued raw token/PIN in POST response", rec.Body.String())
 	}
 }

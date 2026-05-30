@@ -53,7 +53,7 @@ func (q *Queries) ClearAssessmentParticipantRooms(ctx context.Context, sessionID
 const countAssessmentCardsByExam = `-- name: CountAssessmentCardsByExam :one
 SELECT COUNT(DISTINCT c.id)::bigint
 FROM assessment_sessions s
-JOIN assessment_access_cards c ON c.session_id = s.id
+JOIN assessment_access_cards c ON c.session_id = s.id AND c.card_type = 'participant'
 WHERE s.exam_id = $1
 `
 
@@ -141,6 +141,68 @@ func (q *Queries) CreateAssessmentExam(ctx context.Context, arg CreateAssessment
 		&i.StartsAt,
 		&i.EndsAt,
 		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createAssessmentParticipantAccessCard = `-- name: CreateAssessmentParticipantAccessCard :one
+INSERT INTO assessment_access_cards (
+  card_type,
+  session_id,
+  participant_id,
+  token_hash,
+  pin_hash,
+  status,
+  expires_at
+) VALUES (
+  'participant',
+  $1,
+  $2,
+  $3,
+  $4,
+  'active',
+  $5
+)
+ON CONFLICT (participant_id) DO UPDATE
+SET token_hash = EXCLUDED.token_hash,
+    pin_hash = EXCLUDED.pin_hash,
+    status = 'active',
+    failed_attempts = 0,
+    expires_at = EXCLUDED.expires_at,
+    updated_at = now()
+RETURNING id, card_type, session_id, room_id, participant_id, token_hash, pin_hash, status, failed_attempts, expires_at, created_at, updated_at
+`
+
+type CreateAssessmentParticipantAccessCardParams struct {
+	SessionID     pgtype.UUID        `json:"session_id"`
+	ParticipantID pgtype.UUID        `json:"participant_id"`
+	TokenHash     string             `json:"token_hash"`
+	PinHash       string             `json:"pin_hash"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+}
+
+func (q *Queries) CreateAssessmentParticipantAccessCard(ctx context.Context, arg CreateAssessmentParticipantAccessCardParams) (AssessmentAccessCard, error) {
+	row := q.db.QueryRow(ctx, createAssessmentParticipantAccessCard,
+		arg.SessionID,
+		arg.ParticipantID,
+		arg.TokenHash,
+		arg.PinHash,
+		arg.ExpiresAt,
+	)
+	var i AssessmentAccessCard
+	err := row.Scan(
+		&i.ID,
+		&i.CardType,
+		&i.SessionID,
+		&i.RoomID,
+		&i.ParticipantID,
+		&i.TokenHash,
+		&i.PinHash,
+		&i.Status,
+		&i.FailedAttempts,
+		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -252,7 +314,7 @@ FROM assessment_exams e
 LEFT JOIN assessment_sessions s ON s.exam_id = e.id
 LEFT JOIN assessment_rooms r ON r.session_id = s.id
 LEFT JOIN assessment_participants p ON p.session_id = s.id
-LEFT JOIN assessment_access_cards c ON c.session_id = s.id
+LEFT JOIN assessment_access_cards c ON c.session_id = s.id AND c.card_type = 'participant'
 WHERE e.id = $1
 GROUP BY e.id
 `
@@ -433,11 +495,13 @@ SELECT
   e.id, e.title, e.subject_id, e.grade_level, e.status, e.starts_at, e.ends_at, e.created_by, e.created_at, e.updated_at,
   COUNT(DISTINCT s.id)::bigint AS session_count,
   COUNT(DISTINCT r.id)::bigint AS room_count,
-  COUNT(DISTINCT p.id)::bigint AS participant_count
+  COUNT(DISTINCT p.id)::bigint AS participant_count,
+  COUNT(DISTINCT ac.id)::bigint AS card_count
 FROM assessment_exams e
 LEFT JOIN assessment_sessions s ON s.exam_id = e.id
 LEFT JOIN assessment_rooms r ON r.session_id = s.id
 LEFT JOIN assessment_participants p ON p.session_id = s.id
+LEFT JOIN assessment_access_cards ac ON ac.session_id = s.id AND ac.card_type = 'participant'
 WHERE ($1::text = '' OR e.status = $1::text)
   AND ($2::text = '' OR e.title ILIKE '%' || $2::text || '%')
 GROUP BY e.id
@@ -467,6 +531,7 @@ type ListAssessmentExamsRow struct {
 	SessionCount     int64              `json:"session_count"`
 	RoomCount        int64              `json:"room_count"`
 	ParticipantCount int64              `json:"participant_count"`
+	CardCount        int64              `json:"card_count"`
 }
 
 func (q *Queries) ListAssessmentExams(ctx context.Context, arg ListAssessmentExamsParams) ([]ListAssessmentExamsRow, error) {
@@ -497,6 +562,124 @@ func (q *Queries) ListAssessmentExams(ctx context.Context, arg ListAssessmentExa
 			&i.SessionCount,
 			&i.RoomCount,
 			&i.ParticipantCount,
+			&i.CardCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAssessmentParticipantCardTargetsByExam = `-- name: ListAssessmentParticipantCardTargetsByExam :many
+SELECT
+  p.id AS participant_id,
+  p.session_id,
+  p.room_id,
+  p.student_id,
+  p.status,
+  COALESCE(p.seat_no, 0)::int AS seat_no,
+  s.nama AS student_name,
+  s.nis,
+  s.nisn,
+  s.class_id,
+  COALESCE(c.code, '') AS class_code,
+  COALESCE(c.name, '') AS class_name,
+  CASE UPPER(NULLIF(btrim(c.level::text), ''))
+    WHEN '7' THEN 7
+    WHEN 'VII' THEN 7
+    WHEN '8' THEN 8
+    WHEN 'VIII' THEN 8
+    WHEN '9' THEN 9
+    WHEN 'IX' THEN 9
+    ELSE 0
+  END::int AS grade_level,
+  COALESCE(r.code, '') AS room_code,
+  COALESCE(r.name, '') AS room_name,
+  COALESCE(r.capacity, 0)::int AS room_capacity,
+  ac.id AS card_id,
+  COALESCE(ac.status, 'not_issued') AS card_status,
+  COALESCE(ac.failed_attempts, 0)::int AS failed_attempts,
+  ac.expires_at AS card_expires_at,
+  ac.created_at AS card_created_at
+FROM assessment_participants p
+JOIN assessment_sessions sess ON sess.id = p.session_id
+JOIN students s ON s.id = p.student_id
+LEFT JOIN school_classes c ON c.id = s.class_id
+LEFT JOIN assessment_rooms r ON r.id = p.room_id
+LEFT JOIN assessment_access_cards ac ON ac.participant_id = p.id AND ac.card_type = 'participant'
+WHERE sess.exam_id = $1
+ORDER BY COALESCE(r.code, 'ZZZ'), COALESCE(p.seat_no, 9999),
+  CASE UPPER(NULLIF(btrim(c.level::text), ''))
+    WHEN '7' THEN 7
+    WHEN 'VII' THEN 7
+    WHEN '8' THEN 8
+    WHEN 'VIII' THEN 8
+    WHEN '9' THEN 9
+    WHEN 'IX' THEN 9
+    ELSE 0
+  END, COALESCE(c.code, ''), s.nama, p.id
+FOR UPDATE OF p
+`
+
+type ListAssessmentParticipantCardTargetsByExamRow struct {
+	ParticipantID  pgtype.UUID        `json:"participant_id"`
+	SessionID      pgtype.UUID        `json:"session_id"`
+	RoomID         pgtype.UUID        `json:"room_id"`
+	StudentID      pgtype.UUID        `json:"student_id"`
+	Status         string             `json:"status"`
+	SeatNo         int32              `json:"seat_no"`
+	StudentName    string             `json:"student_name"`
+	Nis            string             `json:"nis"`
+	Nisn           string             `json:"nisn"`
+	ClassID        pgtype.UUID        `json:"class_id"`
+	ClassCode      string             `json:"class_code"`
+	ClassName      string             `json:"class_name"`
+	GradeLevel     int32              `json:"grade_level"`
+	RoomCode       string             `json:"room_code"`
+	RoomName       string             `json:"room_name"`
+	RoomCapacity   int32              `json:"room_capacity"`
+	CardID         pgtype.UUID        `json:"card_id"`
+	CardStatus     string             `json:"card_status"`
+	FailedAttempts int32              `json:"failed_attempts"`
+	CardExpiresAt  pgtype.Timestamptz `json:"card_expires_at"`
+	CardCreatedAt  pgtype.Timestamptz `json:"card_created_at"`
+}
+
+func (q *Queries) ListAssessmentParticipantCardTargetsByExam(ctx context.Context, examID pgtype.UUID) ([]ListAssessmentParticipantCardTargetsByExamRow, error) {
+	rows, err := q.db.Query(ctx, listAssessmentParticipantCardTargetsByExam, examID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAssessmentParticipantCardTargetsByExamRow{}
+	for rows.Next() {
+		var i ListAssessmentParticipantCardTargetsByExamRow
+		if err := rows.Scan(
+			&i.ParticipantID,
+			&i.SessionID,
+			&i.RoomID,
+			&i.StudentID,
+			&i.Status,
+			&i.SeatNo,
+			&i.StudentName,
+			&i.Nis,
+			&i.Nisn,
+			&i.ClassID,
+			&i.ClassCode,
+			&i.ClassName,
+			&i.GradeLevel,
+			&i.RoomCode,
+			&i.RoomName,
+			&i.RoomCapacity,
+			&i.CardID,
+			&i.CardStatus,
+			&i.FailedAttempts,
+			&i.CardExpiresAt,
+			&i.CardCreatedAt,
 		); err != nil {
 			return nil, err
 		}

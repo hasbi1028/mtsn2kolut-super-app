@@ -3,11 +3,13 @@ SELECT
   e.*,
   COUNT(DISTINCT s.id)::bigint AS session_count,
   COUNT(DISTINCT r.id)::bigint AS room_count,
-  COUNT(DISTINCT p.id)::bigint AS participant_count
+  COUNT(DISTINCT p.id)::bigint AS participant_count,
+  COUNT(DISTINCT ac.id)::bigint AS card_count
 FROM assessment_exams e
 LEFT JOIN assessment_sessions s ON s.exam_id = e.id
 LEFT JOIN assessment_rooms r ON r.session_id = s.id
 LEFT JOIN assessment_participants p ON p.session_id = s.id
+LEFT JOIN assessment_access_cards ac ON ac.session_id = s.id AND ac.card_type = 'participant'
 WHERE (sqlc.arg(status_filter)::text = '' OR e.status = sqlc.arg(status_filter)::text)
   AND (sqlc.arg(search)::text = '' OR e.title ILIKE '%' || sqlc.arg(search)::text || '%')
 GROUP BY e.id
@@ -26,7 +28,7 @@ FROM assessment_exams e
 LEFT JOIN assessment_sessions s ON s.exam_id = e.id
 LEFT JOIN assessment_rooms r ON r.session_id = s.id
 LEFT JOIN assessment_participants p ON p.session_id = s.id
-LEFT JOIN assessment_access_cards c ON c.session_id = s.id
+LEFT JOIN assessment_access_cards c ON c.session_id = s.id AND c.card_type = 'participant'
 WHERE e.id = sqlc.arg(id)
 GROUP BY e.id;
 
@@ -140,7 +142,7 @@ WHERE s.exam_id = sqlc.arg(exam_id);
 -- name: CountAssessmentCardsByExam :one
 SELECT COUNT(DISTINCT c.id)::bigint
 FROM assessment_sessions s
-JOIN assessment_access_cards c ON c.session_id = s.id
+JOIN assessment_access_cards c ON c.session_id = s.id AND c.card_type = 'participant'
 WHERE s.exam_id = sqlc.arg(exam_id);
 
 -- name: ListAssessmentCandidateStudentsByClassIDs :many
@@ -335,3 +337,81 @@ JOIN assessment_participants p ON p.id = u.participant_id
 JOIN students s ON s.id = p.student_id
 LEFT JOIN school_classes c ON c.id = s.class_id
 LEFT JOIN assessment_rooms r ON r.id = p.room_id;
+
+
+-- name: ListAssessmentParticipantCardTargetsByExam :many
+SELECT
+  p.id AS participant_id,
+  p.session_id,
+  p.room_id,
+  p.student_id,
+  p.status,
+  COALESCE(p.seat_no, 0)::int AS seat_no,
+  s.nama AS student_name,
+  s.nis,
+  s.nisn,
+  s.class_id,
+  COALESCE(c.code, '') AS class_code,
+  COALESCE(c.name, '') AS class_name,
+  CASE UPPER(NULLIF(btrim(c.level::text), ''))
+    WHEN '7' THEN 7
+    WHEN 'VII' THEN 7
+    WHEN '8' THEN 8
+    WHEN 'VIII' THEN 8
+    WHEN '9' THEN 9
+    WHEN 'IX' THEN 9
+    ELSE 0
+  END::int AS grade_level,
+  COALESCE(r.code, '') AS room_code,
+  COALESCE(r.name, '') AS room_name,
+  COALESCE(r.capacity, 0)::int AS room_capacity,
+  ac.id AS card_id,
+  COALESCE(ac.status, 'not_issued') AS card_status,
+  COALESCE(ac.failed_attempts, 0)::int AS failed_attempts,
+  ac.expires_at AS card_expires_at,
+  ac.created_at AS card_created_at
+FROM assessment_participants p
+JOIN assessment_sessions sess ON sess.id = p.session_id
+JOIN students s ON s.id = p.student_id
+LEFT JOIN school_classes c ON c.id = s.class_id
+LEFT JOIN assessment_rooms r ON r.id = p.room_id
+LEFT JOIN assessment_access_cards ac ON ac.participant_id = p.id AND ac.card_type = 'participant'
+WHERE sess.exam_id = sqlc.arg(exam_id)
+ORDER BY COALESCE(r.code, 'ZZZ'), COALESCE(p.seat_no, 9999),
+  CASE UPPER(NULLIF(btrim(c.level::text), ''))
+    WHEN '7' THEN 7
+    WHEN 'VII' THEN 7
+    WHEN '8' THEN 8
+    WHEN 'VIII' THEN 8
+    WHEN '9' THEN 9
+    WHEN 'IX' THEN 9
+    ELSE 0
+  END, COALESCE(c.code, ''), s.nama, p.id
+FOR UPDATE OF p;
+
+-- name: CreateAssessmentParticipantAccessCard :one
+INSERT INTO assessment_access_cards (
+  card_type,
+  session_id,
+  participant_id,
+  token_hash,
+  pin_hash,
+  status,
+  expires_at
+) VALUES (
+  'participant',
+  sqlc.arg(session_id),
+  sqlc.arg(participant_id),
+  sqlc.arg(token_hash),
+  sqlc.arg(pin_hash),
+  'active',
+  sqlc.narg(expires_at)
+)
+ON CONFLICT (participant_id) DO UPDATE
+SET token_hash = EXCLUDED.token_hash,
+    pin_hash = EXCLUDED.pin_hash,
+    status = 'active',
+    failed_attempts = 0,
+    expires_at = EXCLUDED.expires_at,
+    updated_at = now()
+RETURNING *;
