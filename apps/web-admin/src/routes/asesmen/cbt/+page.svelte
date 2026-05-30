@@ -1,140 +1,23 @@
+<script lang="ts">
+	import CbtFeatureSurface from './CbtFeatureSurface.svelte';
+
+	const actions = [{"label": "Buat/kelola ujian", "href": "/asesmen", "tone": "primary"}, {"label": "Dokumen & Cetak", "href": "/asesmen/cbt/dokumen", "tone": "soft"}];
+	const stats = [{"label": "Ujian", "value": "Draft/Aktif", "detail": "Dikelola dari /asesmen"}, {"label": "Ruang", "value": "R01–R08", "detail": "Preview dan simpan 8 ruang"}, {"label": "Portal", "value": "Web-first", "detail": "/ujian dan /pengawas-ujian"}, {"label": "Dokumen", "value": "Terpisah", "detail": "QR+PIN tidak otomatis"}];
+	const steps = [{"label": "Persiapan", "detail": "Buat draft ujian, pilih rombel, mapel, dan pastikan Bank Soal siap.", "badge": "Tahap 1"}, {"label": "Paket & Jadwal", "detail": "Mapping paket per rombel/mapel, atur tanggal, durasi, dan status sesi.", "badge": "Tahap 2"}, {"label": "Ruang & Dokumen", "detail": "Preview pembagian R01–R08, simpan kursi, lalu cetak dokumen.", "badge": "Tahap 3"}, {"label": "Pelaksanaan & Hasil", "detail": "Pengawas monitor ruang, peserta ujian, lalu rekap hasil.", "badge": "Tahap 4"}];
+	const features = [{"title": "Quick Start Ujian", "detail": "Membuka Command Center produksi untuk membuat draft ujian, load rombel/mapel/paket, dan menjalankan aksi backend yang sudah ada.", "status": "backend", "actions": [{"label": "Buka Command Center", "href": "/asesmen", "tone": "primary"}]}, {"title": "Kesiapan ruang", "detail": "Shortcut ke panel ruang untuk auto-placement, validasi kapasitas, dan manual pindah kursi.", "status": "fitur", "actions": [{"label": "Ruang", "href": "/asesmen/cbt/ruang", "tone": "soft"}]}, {"title": "Cetak aman", "detail": "Kartu peserta QR+PIN, lembar pengawas, denah, daftar hadir, dan BA dikelompokkan dalam satu hub.", "status": "dokumen", "actions": [{"label": "Cetak", "href": "/asesmen/cbt/dokumen", "tone": "soft"}]}, {"title": "Portal hari-H", "detail": "Peserta memakai /ujian, pengawas memakai /pengawas-ujian; admin tetap di Super App.", "status": "portal", "actions": [{"label": "Portal Peserta", "href": "/ujian?demo=1", "tone": "soft"}, {"label": "Portal Pengawas", "href": "/pengawas-ujian?demo=1", "tone": "soft"}]}];
+</script>
+
 <svelte:head>
-  <title>Dashboard Utama</title>
-  <meta
-    name="description"
-    content="Panel familiar dari CBT lama: kesiapan data, sesi hari ini, ruang, proctoring, dan pintasan tindakan harian dalam satu layar."
-  />
+	<title>Dashboard Utama</title>
+	<meta name="description" content="Panel harian yang menggabungkan alur legacy CBT dengan aksi Super App: buat ujian, siapkan paket, bagi ruang, cetak kartu, monitor, dan rekap." />
 </svelte:head>
 
-<div class="space-y-4 pb-10">
-  <header class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-    <p class="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">
-      Command Center CBT
-    </p>
-    <div
-      class="mt-2 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between"
-    >
-      <div>
-        <h1 class="text-3xl font-black tracking-tight md:text-4xl">
-          Dashboard Utama
-        </h1>
-        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-          Panel familiar dari CBT lama: kesiapan data, sesi hari ini, ruang,
-          proctoring, dan pintasan tindakan harian dalam satu layar.
-        </p>
-      </div>
-      <div class="flex flex-wrap gap-2">
-        <a
-          href="/asesmen/persiapan"
-          class="rounded-2xl bg-emerald-700 text-white hover:bg-emerald-800 px-4 py-2 text-sm font-black shadow-sm"
-          >Mulai Persiapan</a
-        >
-        <a
-          href="/asesmen"
-          class="rounded-2xl border border-slate-300 bg-white text-slate-700 hover:border-emerald-300 hover:text-emerald-800 px-4 py-2 text-sm font-black shadow-sm"
-          >Mode Ringkas</a
-        >
-      </div>
-    </div>
-  </header>
-
-  <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p
-        class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400"
-      >
-        Siswa
-      </p>
-      <p class="mt-2 text-3xl font-black text-slate-950">—</p>
-      <p class="mt-1 text-xs font-semibold text-slate-500">
-        Ambil dari Data Siswa Super App
-      </p>
-    </div>
-    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p
-        class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400"
-      >
-        Ruang
-      </p>
-      <p class="mt-2 text-3xl font-black text-slate-950">8</p>
-      <p class="mt-1 text-xs font-semibold text-slate-500">
-        Target ruang operasional
-      </p>
-    </div>
-    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p
-        class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400"
-      >
-        Sesi Aktif
-      </p>
-      <p class="mt-2 text-3xl font-black text-slate-950">—</p>
-      <p class="mt-1 text-xs font-semibold text-slate-500">
-        Dari jadwal asesmen
-      </p>
-    </div>
-    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p
-        class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400"
-      >
-        Alert
-      </p>
-      <p class="mt-2 text-3xl font-black text-slate-950">0</p>
-      <p class="mt-1 text-xs font-semibold text-slate-500">
-        Tindak lanjut pengawas
-      </p>
-    </div>
-  </section>
-
-  <section class="rounded-3xl border border-slate-200 bg-white shadow-sm">
-    <div class="border-b border-slate-200 p-4">
-      <h2 class="text-lg font-black text-slate-950">Daftar operasional</h2>
-      <p class="text-sm font-semibold text-slate-500">
-        Pola tabel familiar: filter kecil, aksi jelas, dan status ringkas.
-      </p>
-    </div>
-    <div class="divide-y divide-slate-200">
-      <div
-        class="grid gap-3 p-4 text-sm md:grid-cols-[1fr_auto] md:items-center"
-      >
-        <div>
-          <p class="font-black text-slate-950">Kesiapan Peserta</p>
-          <p class="mt-1 text-slate-600">
-            Cek data siswa, kelas, ruang, dan kartu peserta sebelum sesi dibuka.
-          </p>
-        </div>
-        <span
-          class="w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-800"
-          >Pusat Data</span
-        >
-      </div>
-      <div
-        class="grid gap-3 p-4 text-sm md:grid-cols-[1fr_auto] md:items-center"
-      >
-        <div>
-          <p class="font-black text-slate-950">Agenda Hari Ini</p>
-          <p class="mt-1 text-slate-600">
-            Tinjau jadwal sesi dan ruang yang berjalan hari ini.
-          </p>
-        </div>
-        <span
-          class="w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-800"
-          >Pelaksanaan</span
-        >
-      </div>
-      <div
-        class="grid gap-3 p-4 text-sm md:grid-cols-[1fr_auto] md:items-center"
-      >
-        <div>
-          <p class="font-black text-slate-950">Kekurangan Operasional</p>
-          <p class="mt-1 text-slate-600">
-            Tampilkan peserta tanpa ruang/kartu dan paket yang belum siap.
-          </p>
-        </div>
-        <span
-          class="w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-800"
-          >Perlu Dicek</span
-        >
-      </div>
-    </div>
-  </section>
-</div>
+<CbtFeatureSurface
+	title="Dashboard Utama"
+	eyebrow="Command Center CBT"
+	description="Panel harian yang menggabungkan alur legacy CBT dengan aksi Super App: buat ujian, siapkan paket, bagi ruang, cetak kartu, monitor, dan rekap."
+	{actions}
+	{stats}
+	{steps}
+	{features}
+/>
