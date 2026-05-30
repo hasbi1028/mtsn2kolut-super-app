@@ -29,6 +29,26 @@
 		card_count?: number;
 	};
 
+	type AssignmentRoom = {
+		code: string;
+		name: string;
+		capacity: number;
+		assigned_count: number;
+	};
+
+	type AssignmentResult = ActionResult & {
+		exam_id: string;
+		session_id?: string;
+		mix_policy: string;
+		room_count: number;
+		capacity_per_room: number;
+		total_participants: number;
+		assigned_total: number;
+		unassigned_total: number;
+		rooms: AssignmentRoom[];
+		applied?: boolean;
+	};
+
 	const steps = [
 		{
 			label: 'Siapkan Ujian',
@@ -36,14 +56,14 @@
 			status: 'Aktif'
 		},
 		{
-			label: 'Atur Ruang Awal',
-			detail: 'Klik Siapkan Ruang untuk membuat fondasi sesi dan Ruang Ujian 1. Pembagian otomatis peserta menyusul pada tahap berikutnya.',
-			status: 'Fondasi'
+			label: 'Atur 8 Ruang',
+			detail: 'Pilih ujian, cek preview R01–R08, lalu simpan pembagian ruang tanpa membuat token peserta.',
+			status: 'Dikerjakan'
 		},
 		{
 			label: 'Cetak Kartu & Pengawas',
-			detail: 'Tombol sudah aman: belum menerbitkan token mentah sampai peserta ujian tersambung.',
-			status: 'Aman'
+			detail: 'Tetap aman: QR+PIN dan kartu belum diterbitkan sampai peserta ujian tersambung.',
+			status: 'Berikutnya'
 		},
 		{
 			label: 'Pelaksanaan & Hasil',
@@ -62,6 +82,17 @@
 	let gradeLevel = $state('7');
 	let startsAt = $state('');
 	let endsAt = $state('');
+	let selectedExamId = $state<string | null>(null);
+	let roomCount = $state(8);
+	let capacityPerRoom = $state(30);
+	let mixPolicy = $state<'mixed' | 'class_grouped'>('mixed');
+	let roomPreview = $state<AssignmentResult | null>(null);
+	let roomPreviewExamId = $state<string | null>(null);
+	let roomBusy = $state(false);
+
+	let selectedExam = $derived(exams.find((exam) => exam.id === selectedExamId) ?? exams[0] ?? null);
+	let totalCapacity = $derived(roomCount * capacityPerRoom);
+	let canSaveRooms = $derived(Boolean(selectedExam && roomPreview && roomPreview.exam_id === selectedExam.id && !roomBusy));
 
 	onMount(() => {
 		void loadExams();
@@ -74,6 +105,14 @@
 			exams = await fetch('/api/asesmen/exams?limit=12').then((response) =>
 				readClientApiData<Exam[]>(response, 'Daftar asesmen belum dapat dimuat')
 			);
+			if (exams.length > 0 && (!selectedExamId || !exams.some((exam) => exam.id === selectedExamId))) {
+				selectedExamId = exams[0].id;
+			}
+			if (exams.length === 0) {
+				selectedExamId = null;
+				roomPreview = null;
+				roomPreviewExamId = null;
+			}
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Daftar asesmen belum dapat dimuat';
 			exams = [];
@@ -88,6 +127,23 @@
 		return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 	}
 
+	function assignmentPayload() {
+		return {
+			room_count: Number(roomCount),
+			capacity_per_room: Number(capacityPerRoom),
+			mix_policy: mixPolicy
+		};
+	}
+
+	function selectExamForRooms(exam: Exam) {
+		selectedExamId = exam.id;
+		error = '';
+		notice = '';
+		if (roomPreviewExamId !== exam.id) {
+			roomPreview = null;
+		}
+	}
+
 	async function createDraft() {
 		const trimmedTitle = title.trim();
 		if (!trimmedTitle || saving) return;
@@ -95,7 +151,7 @@
 		error = '';
 		notice = '';
 		try {
-			await fetch('/api/asesmen/exams', {
+			const created = await fetch('/api/asesmen/exams', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -105,8 +161,11 @@
 					ends_at: toISO(endsAt)
 				})
 			}).then((response) => readClientApiData<Exam>(response, 'Draft ujian belum dapat dibuat'));
-			notice = 'Draft ujian tersimpan.';
+			notice = 'Draft ujian tersimpan. Lanjutkan ke panel Atur Ruang.';
 			title = '';
+			selectedExamId = created.id;
+			roomPreview = null;
+			roomPreviewExamId = null;
 			await loadExams();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Draft ujian belum dapat dibuat';
@@ -115,19 +174,62 @@
 		}
 	}
 
-	async function runExamAction(exam: Exam, action: 'prepare-rooms' | 'issue-cards' | 'assignment-apply') {
+	async function previewRooms(exam = selectedExam) {
+		if (!exam || roomBusy) return;
+		roomBusy = true;
+		actionExamId = exam.id;
+		error = '';
+		notice = '';
+		try {
+			const result = await fetch(`/api/asesmen/exams/${encodeURIComponent(exam.id)}/assignment-preview`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(assignmentPayload())
+			}).then((response) => readClientApiData<AssignmentResult>(response, 'Preview ruang belum dapat dibuat'));
+			roomPreview = result;
+			roomPreviewExamId = exam.id;
+			notice = result.message ?? 'Preview ruang siap.';
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Preview ruang belum dapat dibuat';
+		} finally {
+			roomBusy = false;
+			actionExamId = null;
+		}
+	}
+
+	async function saveRooms(exam = selectedExam) {
+		if (!exam || roomBusy) return;
+		roomBusy = true;
+		actionExamId = exam.id;
+		error = '';
+		notice = '';
+		try {
+			const result = await fetch(`/api/asesmen/exams/${encodeURIComponent(exam.id)}/assignment-apply`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(assignmentPayload())
+			}).then((response) => readClientApiData<AssignmentResult>(response, 'Ruang ujian belum dapat disimpan'));
+			roomPreview = result;
+			roomPreviewExamId = exam.id;
+			notice = result.message ?? 'Ruang ujian tersimpan.';
+			await loadExams();
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Ruang ujian belum dapat disimpan';
+		} finally {
+			roomBusy = false;
+			actionExamId = null;
+		}
+	}
+
+	async function runExamAction(exam: Exam, action: 'issue-cards') {
 		if (actionExamId) return;
 		actionExamId = exam.id;
 		error = '';
 		notice = '';
 		try {
-			const body = action === 'assignment-apply'
-				? JSON.stringify({ room_count: 8, capacity_per_room: 30, mix_policy: 'mixed' })
-				: undefined;
 			const result = await fetch(`/api/asesmen/exams/${encodeURIComponent(exam.id)}/${action}`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body
+				headers: { 'Content-Type': 'application/json' }
 			}).then((response) => readClientApiData<ActionResult>(response, 'Aksi asesmen belum dapat dijalankan'));
 			notice = result.message ?? 'Aksi asesmen selesai.';
 			await loadExams();
@@ -158,7 +260,7 @@
 					<div class="space-y-2">
 						<h1 class="text-3xl font-black tracking-tight text-slate-950 md:text-5xl">Command Center CBT</h1>
 						<p class="max-w-3xl text-base leading-7 text-slate-600">
-							Alur sederhana untuk panitia: buat draft ujian, siapkan ruang awal, lalu lanjutkan peserta dan kartu saat fondasi backend berikutnya siap.
+							Alur sederhana untuk panitia: buat draft ujian, atur 8 ruang, lalu lanjut peserta dan kartu setelah fondasi ruang rapi.
 						</p>
 					</div>
 				</div>
@@ -186,7 +288,7 @@
 					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Asesmen Ujian</p>
 					<h2 class="text-xl font-black text-slate-950">Checklist ringkas panitia</h2>
 				</div>
-				<p class="text-sm font-semibold text-slate-500">Produksi awal — sudah tersambung ke backend asesmen.</p>
+				<p class="text-sm font-semibold text-slate-500">Produksi awal — fokus ruang ujian dulu.</p>
 			</div>
 
 			<div class="divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200">
@@ -254,23 +356,110 @@
 				{:else}
 					<div class="divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200">
 						{#each exams as exam (exam.id)}
-							<div class="grid gap-3 p-4 lg:grid-cols-[1fr_auto] lg:items-center">
+							<div class={`grid gap-3 p-4 lg:grid-cols-[1fr_auto] lg:items-center ${selectedExamId === exam.id ? 'bg-emerald-50/60' : ''}`}>
 								<div class="min-w-0 space-y-1">
 									<div class="flex flex-wrap items-center gap-2">
 										<h3 class="font-black text-slate-950">{exam.title}</h3>
 										<span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-black uppercase text-emerald-800">{exam.status}</span>
+										{#if selectedExamId === exam.id}
+											<span class="rounded-full bg-white px-2 py-0.5 text-[11px] font-black uppercase text-emerald-800">Dipilih</span>
+										{/if}
 									</div>
 									<p class="text-sm text-slate-600">Kelas {exam.grade_level ?? '-'} · {formatDate(exam.starts_at)}</p>
 									<p class="text-xs font-bold text-slate-500">Sesi {exam.session_count ?? 0} · Ruang {exam.room_count ?? 0} · Peserta {exam.participant_count ?? 0} · Kartu {exam.card_count ?? 0}</p>
 								</div>
 								<div class="flex flex-wrap gap-2">
-									<button class="rounded-2xl border border-slate-300 px-3 py-2 text-xs font-black text-slate-700 hover:border-emerald-300 hover:text-emerald-800 disabled:cursor-wait disabled:opacity-60" disabled={actionExamId === exam.id} onclick={() => runExamAction(exam, 'assignment-apply')}>Buat 8 Ruang</button>
+									<button class="rounded-2xl border border-slate-300 px-3 py-2 text-xs font-black text-slate-700 hover:border-emerald-300 hover:text-emerald-800" onclick={() => selectExamForRooms(exam)}>Pilih Ruang</button>
 									<button class="rounded-2xl border border-slate-300 px-3 py-2 text-xs font-black text-slate-700 hover:border-emerald-300 hover:text-emerald-800 disabled:cursor-wait disabled:opacity-60" disabled={actionExamId === exam.id} onclick={() => runExamAction(exam, 'issue-cards')}>Cek Kartu</button>
 								</div>
 							</div>
 						{/each}
 					</div>
 				{/if}
+			</div>
+		</section>
+
+		<section class="rounded-3xl border border-emerald-200 bg-white p-4 shadow-sm">
+			<div class="flex flex-col gap-3 border-b border-slate-200 pb-3 lg:flex-row lg:items-end lg:justify-between">
+				<div>
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Ruang Ujian</p>
+					<h2 class="mt-1 text-xl font-black text-slate-950">Atur ruang dulu, peserta menyusul</h2>
+					<p class="mt-1 text-sm leading-6 text-slate-600">
+						Preview ini membuat ruang R01 sampai R{String(roomCount).padStart(2, '0')}. Simpan ruang tidak membuat kartu, PIN, atau token peserta.
+					</p>
+				</div>
+				{#if selectedExam}
+					<div class="rounded-2xl bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700">
+						Dipilih: <span class="text-slate-950">{selectedExam.title}</span>
+					</div>
+				{/if}
+			</div>
+
+			<div class="mt-4 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+				<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+					<div class="grid gap-3 sm:grid-cols-2">
+						<label class="space-y-1.5 text-sm font-bold text-slate-700">
+							<span>Jumlah ruang</span>
+							<input type="number" min="1" max="20" class="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500" bind:value={roomCount} />
+						</label>
+						<label class="space-y-1.5 text-sm font-bold text-slate-700">
+							<span>Kapasitas/ruang</span>
+							<input type="number" min="1" max="50" class="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500" bind:value={capacityPerRoom} />
+						</label>
+					</div>
+					<label class="mt-3 block space-y-1.5 text-sm font-bold text-slate-700">
+						<span>Kebijakan ruang</span>
+						<select class="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500" bind:value={mixPolicy}>
+							<option value="mixed">Campur seimbang</option>
+							<option value="class_grouped">Kelompok per kelas</option>
+						</select>
+					</label>
+					<div class="mt-3 rounded-2xl border border-dashed border-slate-300 bg-white p-3 text-sm leading-6 text-slate-600">
+						<p><strong class="text-slate-800">Total kapasitas:</strong> {totalCapacity} kursi.</p>
+						<p>Default UAS: 8 ruang × 30 peserta. Validasi backend membatasi 1–20 ruang dan 1–50 kursi/ruang.</p>
+					</div>
+					<div class="mt-4 flex flex-wrap gap-2">
+						<button class="rounded-2xl border border-emerald-300 bg-white px-4 py-2 text-sm font-black text-emerald-800 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50" disabled={!selectedExam || roomBusy} onclick={() => previewRooms()}>
+							{roomBusy ? 'Memproses...' : 'Preview Ruang'}
+						</button>
+						<button class="rounded-2xl bg-emerald-700 px-4 py-2 text-sm font-black text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300" disabled={!canSaveRooms} onclick={() => saveRooms()}>
+							Simpan Ruang
+						</button>
+					</div>
+				</div>
+
+				<div class="rounded-2xl border border-slate-200 bg-white">
+					{#if !selectedExam}
+						<p class="p-4 text-sm leading-6 text-slate-600">Pilih atau buat draft ujian dulu untuk melihat preview ruang.</p>
+					{:else if !roomPreview || roomPreviewExamId !== selectedExam.id}
+						<div class="p-4 text-sm leading-6 text-slate-600">
+							<p class="font-bold text-slate-800">Belum ada preview untuk ujian ini.</p>
+							<p>Klik <strong>Preview Ruang</strong> untuk melihat R01–R{String(roomCount).padStart(2, '0')} sebelum disimpan.</p>
+						</div>
+					{:else}
+						<div class="grid grid-cols-2 gap-2 border-b border-slate-200 p-3 text-xs font-black text-slate-600 sm:grid-cols-4">
+							<div class="rounded-xl bg-slate-50 p-2">Ruang<br /><span class="text-lg text-slate-950">{roomPreview.room_count}</span></div>
+							<div class="rounded-xl bg-slate-50 p-2">Kapasitas<br /><span class="text-lg text-slate-950">{roomPreview.room_count * roomPreview.capacity_per_room}</span></div>
+							<div class="rounded-xl bg-slate-50 p-2">Peserta<br /><span class="text-lg text-slate-950">{roomPreview.total_participants}</span></div>
+							<div class={`rounded-xl p-2 ${roomPreview.unassigned_total > 0 ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-800'}`}>Belum masuk<br /><span class="text-lg">{roomPreview.unassigned_total}</span></div>
+						</div>
+						<div class="max-h-[360px] overflow-y-auto">
+							<div class="divide-y divide-slate-200">
+								{#each roomPreview.rooms as room}
+									<div class="grid grid-cols-[4.5rem_1fr_auto] items-center gap-3 p-3 text-sm">
+										<span class="rounded-xl bg-emerald-50 px-2 py-1 text-center font-black text-emerald-800">{room.code}</span>
+										<div class="min-w-0">
+											<p class="truncate font-black text-slate-950">{room.name}</p>
+											<p class="text-xs font-bold text-slate-500">Terisi {room.assigned_count} dari {room.capacity}</p>
+										</div>
+										<span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">{room.capacity} kursi</span>
+									</div>
+								{/each}
+							</div>
+						</div>
+						<p class="border-t border-slate-200 bg-slate-50 p-3 text-xs font-bold leading-5 text-slate-600">{roomPreview.message}</p>
+					{/if}
+				</div>
 			</div>
 		</section>
 

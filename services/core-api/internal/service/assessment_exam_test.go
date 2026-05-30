@@ -187,6 +187,33 @@ func TestAssessmentExamAssignmentPreviewEmptyParticipants(t *testing.T) {
 	}
 }
 
+func TestAssessmentExamAssignmentPreviewReportsCapacityShortage(t *testing.T) {
+	examID := mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111")
+	now := time.Date(2026, 5, 30, 8, 0, 0, 0, time.UTC)
+	store := &fakeAssessmentExamStore{
+		getRow: db.GetAssessmentExamRow{
+			ID:        examID,
+			Title:     "PAT",
+			Status:    AssessmentExamStatusDraft,
+			CreatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+			UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+		},
+		participantCnt: 65,
+	}
+	svc := NewAssessmentExamWithStore(store)
+
+	result, err := svc.AssignmentPreview(context.Background(), examID, AssessmentAssignmentRequest{RoomCount: 2, CapacityPerRoom: 30, MixPolicy: AssessmentMixPolicyMixed})
+	if err != nil {
+		t.Fatalf("AssignmentPreview err = %v", err)
+	}
+	if result.AssignedTotal != 60 || result.UnassignedTotal != 5 {
+		t.Fatalf("result = %+v, want 60 assigned and 5 unassigned", result)
+	}
+	if result.Rooms[0].AssignedCount != 30 || result.Rooms[1].AssignedCount != 30 {
+		t.Fatalf("rooms = %+v, want capacity-respecting deterministic fill", result.Rooms)
+	}
+}
+
 func TestAssessmentExamAssignmentPreviewValidation(t *testing.T) {
 	svc := NewAssessmentExamWithStore(&fakeAssessmentExamStore{})
 	examID := mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111")
