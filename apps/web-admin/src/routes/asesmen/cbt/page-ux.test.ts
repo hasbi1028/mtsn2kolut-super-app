@@ -38,6 +38,10 @@ describe('Mode CBT Familiar production module', () => {
 		expect(proctoringSource).toContain('Antrian bantuan admin');
 		expect(rekapSource).toContain('Koreksi essay');
 		expect(docsSource).toContain('Lembar pengawas ruang');
+		expect(docsSource).toContain('participant-cards');
+		expect(docsSource).toContain('issue-cards');
+		expect(docsSource).toContain('Terbitkan QR+PIN');
+		expect(docsSource).toContain('Daftar Kartu Peserta');
 	});
 
 	it('keeps the dashboard production-facing and linked to the simplified command center', () => {
