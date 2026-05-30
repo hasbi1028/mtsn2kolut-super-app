@@ -27,6 +27,10 @@ type assessmentExamService interface {
 	AssignmentApply(ctx context.Context, id pgtype.UUID, input service.AssessmentAssignmentRequest) (service.AssessmentAssignmentResult, error)
 	ListParticipantPlacements(ctx context.Context, id pgtype.UUID) ([]service.AssessmentParticipantPlacementView, error)
 	MoveParticipantSeat(ctx context.Context, id pgtype.UUID, input service.AssessmentParticipantSeatInput) (service.AssessmentParticipantPlacementView, error)
+	ListPackageMaps(ctx context.Context, id pgtype.UUID) ([]service.AssessmentPackageMapView, error)
+	SavePackageMaps(ctx context.Context, id pgtype.UUID, input service.AssessmentPackageMapRequest) (service.AssessmentPackageMapSaveResult, error)
+	DeletePackageMap(ctx context.Context, examID, mapID pgtype.UUID) error
+	ListPackageOptions(ctx context.Context, subjectID pgtype.UUID) ([]service.AssessmentPackageOptionView, error)
 }
 
 type AssessmentExam struct {
@@ -135,6 +139,83 @@ func (h *AssessmentExam) PrepareRooms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, result)
+}
+
+func (h *AssessmentExam) ListPackageMaps(w http.ResponseWriter, r *http.Request) {
+	if !assessmentManageAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, ok := assessmentURLID(w, r)
+	if !ok {
+		return
+	}
+	items, err := h.svc.ListPackageMaps(r.Context(), id)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Pemetaan paket belum dapat dibuka")
+		return
+	}
+	api.OK(w, map[string]any{"items": items})
+}
+
+func (h *AssessmentExam) SavePackageMaps(w http.ResponseWriter, r *http.Request) {
+	if !assessmentManageAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, ok := assessmentURLID(w, r)
+	if !ok {
+		return
+	}
+	var req service.AssessmentPackageMapRequest
+	if !decodeJSON(w, r, &req, 64<<10, disallowUnknownJSONFields) {
+		return
+	}
+	result, err := h.svc.SavePackageMaps(r.Context(), id, req)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Pemetaan paket belum dapat disimpan")
+		return
+	}
+	api.OK(w, result)
+}
+
+func (h *AssessmentExam) DeletePackageMap(w http.ResponseWriter, r *http.Request) {
+	if !assessmentManageAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	examID, ok := assessmentURLID(w, r)
+	if !ok {
+		return
+	}
+	mapID, err := parseUUID(chi.URLParam(r, "mapID"))
+	if err != nil {
+		api.BadRequest(w, "ID pemetaan paket tidak valid")
+		return
+	}
+	if err := h.svc.DeletePackageMap(r.Context(), examID, mapID); err != nil {
+		writeDomainOrInternal(w, err, "Pemetaan paket belum dapat dihapus")
+		return
+	}
+	api.OK(w, map[string]any{"message": "Pemetaan paket dihapus"})
+}
+
+func (h *AssessmentExam) ListPackageOptions(w http.ResponseWriter, r *http.Request) {
+	if !assessmentAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	subjectID, err := optionalUUIDQuery(r, "subject_id")
+	if err != nil {
+		api.BadRequest(w, "Mata pelajaran tidak valid")
+		return
+	}
+	items, err := h.svc.ListPackageOptions(r.Context(), subjectID)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Daftar paket belum dapat dibuka")
+		return
+	}
+	api.OK(w, map[string]any{"items": items})
 }
 
 func (h *AssessmentExam) ListParticipantCards(w http.ResponseWriter, r *http.Request) {

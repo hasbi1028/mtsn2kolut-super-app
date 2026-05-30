@@ -936,6 +936,18 @@ type AssessmentExam struct {
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
+type AssessmentExamPackageMap struct {
+	ID        pgtype.UUID        `json:"id"`
+	ExamID    pgtype.UUID        `json:"exam_id"`
+	ClassID   pgtype.UUID        `json:"class_id"`
+	SubjectID pgtype.UUID        `json:"subject_id"`
+	PackageID pgtype.UUID        `json:"package_id"`
+	SlotLabel string             `json:"slot_label"`
+	Notes     string             `json:"notes"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type AssessmentParticipant struct {
 	ID          pgtype.UUID        `json:"id"`
 	SessionID   pgtype.UUID        `json:"session_id"`

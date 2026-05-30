@@ -68,6 +68,30 @@
 		total_students?: number;
 	};
 
+	type SubjectOption = { id: string; code: string; name: string; is_active?: boolean };
+	type PackageOption = {
+		id: string;
+		subject_id: string;
+		subject_code: string;
+		subject_name: string;
+		title: string;
+		duration_minutes: number;
+		question_count: number;
+		session_count: number;
+		locked?: boolean;
+	};
+	type PackageMap = {
+		id: string;
+		class_id: string;
+		class_code: string;
+		class_name: string;
+		subject_id: string;
+		subject_name: string;
+		package_id: string;
+		package_title: string;
+		slot_label?: string;
+	};
+
 	type ParticipantPlacement = {
 		participant_id: string;
 		session_id: string;
@@ -169,6 +193,15 @@
 	let cardBusy = $state(false);
 	let cardError = $state('');
 	let cardIssuedNow = $state(false);
+	let subjects = $state<SubjectOption[]>([]);
+	let packageOptions = $state<PackageOption[]>([]);
+	let packageMaps = $state<PackageMap[]>([]);
+	let packageBusy = $state(false);
+	let packageError = $state('');
+	let selectedPackageClassId = $state('');
+	let selectedPackageSubjectId = $state('');
+	let selectedPackageId = $state('');
+	let packageSlotLabel = $state('');
 
 	let selectedExam = $derived(exams.find((exam) => exam.id === selectedExamId) ?? exams[0] ?? null);
 	let activeRombels = $derived(rombels.filter((rombel) => rombel.is_active !== false));
@@ -194,18 +227,27 @@
 	let selectedParticipant = $derived(participantPlacements.find((item) => item.participant_id === selectedParticipantId) ?? null);
 	let selectedManualRoom = $derived(manualRooms.find((room) => room.id === manualRoomId) ?? null);
 	let canSaveManualSeat = $derived(Boolean(selectedExam && selectedParticipantId && manualRoomId && manualSeatNo > 0 && !participantBusy));
+	let activeSubjects = $derived(subjects.filter((subject) => subject.is_active !== false));
+	let filteredPackageOptions = $derived(packageOptions.filter((pkg) => !selectedPackageSubjectId || pkg.subject_id === selectedPackageSubjectId));
+	let canSavePackageMap = $derived(Boolean(selectedExam && selectedPackageClassId && selectedPackageSubjectId && selectedPackageId && !packageBusy));
 
 	onMount(() => {
 		void loadInitialData();
 	});
 
 	async function loadInitialData() {
-		const [examResult, rombelResult] = await Promise.allSettled([loadExams(), loadRombels()]);
+		const [examResult, rombelResult, subjectResult, packageResult] = await Promise.allSettled([loadExams(), loadRombels(), loadSubjects(), loadPackageOptions()]);
 		if (examResult.status === 'rejected') {
 			error = examResult.reason instanceof Error ? examResult.reason.message : 'Daftar asesmen belum dapat dimuat';
 		}
 		if (rombelResult.status === 'rejected') {
 			classError = rombelResult.reason instanceof Error ? rombelResult.reason.message : 'Daftar rombel belum dapat dimuat';
+		}
+		if (subjectResult.status === 'rejected') {
+			packageError = subjectResult.reason instanceof Error ? subjectResult.reason.message : 'Daftar mapel belum dapat dimuat';
+		}
+		if (packageResult.status === 'rejected') {
+			packageError = packageResult.reason instanceof Error ? packageResult.reason.message : 'Daftar paket belum dapat dimuat';
 		}
 	}
 
@@ -241,6 +283,67 @@
 		} catch (err) {
 			classError = err instanceof Error ? err.message : 'Daftar rombel belum dapat dimuat';
 			rombels = [];
+		}
+	}
+
+
+	async function loadSubjects() {
+		try {
+			subjects = await fetch('/api/academic/subjects').then((response) =>
+				readClientApiData<SubjectOption[]>(response, 'Daftar mapel belum dapat dimuat')
+			);
+		} catch (err) {
+			packageError = err instanceof Error ? err.message : 'Daftar mapel belum dapat dimuat';
+		}
+	}
+
+	async function loadPackageOptions() {
+		try {
+			const data = await fetch('/api/asesmen/packages/options').then((response) =>
+				readClientApiData<PackageOption[]>(response, 'Daftar paket belum dapat dimuat')
+			);
+			packageOptions = data;
+		} catch (err) {
+			packageError = err instanceof Error ? err.message : 'Daftar paket belum dapat dimuat';
+		}
+	}
+
+	async function loadPackageMaps(exam = selectedExam) {
+		if (!exam) return;
+		packageBusy = true;
+		packageError = '';
+		try {
+			packageMaps = await fetch(`/api/asesmen/exams/${encodeURIComponent(exam.id)}/package-maps`).then((response) =>
+				readClientApiData<PackageMap[]>(response, 'Pemetaan paket belum dapat dimuat')
+			);
+		} catch (err) {
+			packageError = err instanceof Error ? err.message : 'Pemetaan paket belum dapat dimuat';
+			packageMaps = [];
+		} finally {
+			packageBusy = false;
+		}
+	}
+
+	async function savePackageMap() {
+		if (!selectedExam || !canSavePackageMap) return;
+		packageBusy = true;
+		packageError = '';
+		notice = '';
+		try {
+			const result = await fetch(`/api/asesmen/exams/${encodeURIComponent(selectedExam.id)}/package-maps`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					items: [{ class_id: selectedPackageClassId, subject_id: selectedPackageSubjectId, package_id: selectedPackageId, slot_label: packageSlotLabel }]
+				})
+			}).then((response) => readClientApiData<{ message?: string }>(response, 'Pemetaan paket belum dapat disimpan'));
+			notice = result.message ?? 'Paket per rombel tersimpan.';
+			selectedPackageId = '';
+			await loadPackageMaps(selectedExam);
+		} catch (err) {
+			packageError = err instanceof Error ? err.message : 'Pemetaan paket belum dapat disimpan';
+		} finally {
+			packageBusy = false;
 		}
 	}
 
@@ -285,6 +388,7 @@
 		participantCards = [];
 		cardError = '';
 		cardIssuedNow = false;
+		void loadPackageMaps(exam);
 		if ((exam.participant_count ?? 0) > 0) {
 			void loadParticipantPlacements(exam);
 		}
@@ -663,6 +767,81 @@
 				{/if}
 			</div>
 		</section>
+
+		<section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+			<div class="flex flex-col gap-3 border-b border-slate-200 pb-3 lg:flex-row lg:items-end lg:justify-between">
+				<div>
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Jadwal & Paket</p>
+					<h2 class="mt-1 text-xl font-black text-slate-950">Paket soal per rombel</h2>
+					<p class="mt-1 text-sm leading-6 text-slate-600">Sederhana: pilih ujian, rombel, mapel, lalu paket. Paket yang sama boleh dipakai bersama oleh beberapa rombel.</p>
+				</div>
+				<button class="rounded-2xl border border-slate-300 px-3 py-2 text-xs font-black text-slate-700 hover:border-emerald-300 hover:text-emerald-800 disabled:opacity-60" disabled={!selectedExam || packageBusy} onclick={() => loadPackageMaps()}>Muat Pemetaan</button>
+			</div>
+			{#if packageError}
+				<p class="mt-3 rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-800">{packageError}</p>
+			{/if}
+			<div class="mt-4 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+				<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+					<div class="grid gap-3 sm:grid-cols-2">
+						<label class="space-y-1.5 text-sm font-bold text-slate-700">
+							<span>Rombel</span>
+							<select class="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500" bind:value={selectedPackageClassId}>
+								<option value="">Pilih rombel</option>
+								{#each activeRombels as rombel (rombel.id)}
+									<option value={rombel.id}>{rombel.code || rombel.name}</option>
+								{/each}
+							</select>
+						</label>
+						<label class="space-y-1.5 text-sm font-bold text-slate-700">
+							<span>Mapel / slot</span>
+							<select class="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500" bind:value={selectedPackageSubjectId} onchange={() => { selectedPackageId = ''; }}>
+								<option value="">Pilih mapel</option>
+								{#each activeSubjects as subject (subject.id)}
+									<option value={subject.id}>{subject.code ? `${subject.code} · ${subject.name}` : subject.name}</option>
+								{/each}
+							</select>
+						</label>
+					</div>
+					<label class="mt-3 block space-y-1.5 text-sm font-bold text-slate-700">
+						<span>Paket soal</span>
+						<select class="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500" bind:value={selectedPackageId}>
+							<option value="">Pilih paket</option>
+							{#each filteredPackageOptions as pkg (pkg.id)}
+								<option value={pkg.id}>{pkg.subject_code} · {pkg.title} ({pkg.question_count} soal)</option>
+							{/each}
+						</select>
+					</label>
+					<label class="mt-3 block space-y-1.5 text-sm font-bold text-slate-700">
+						<span>Label jadwal singkat</span>
+						<input class="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500" bind:value={packageSlotLabel} placeholder="Contoh: Hari 1 - Sesi 1" />
+					</label>
+					<button class="mt-4 rounded-2xl bg-emerald-700 px-4 py-2 text-sm font-black text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300" disabled={!canSavePackageMap} onclick={savePackageMap}>
+						{packageBusy ? 'Menyimpan...' : 'Simpan Paket Rombel'}
+					</button>
+				</div>
+				<div class="rounded-2xl border border-slate-200 bg-white">
+					{#if !selectedExam}
+						<p class="p-4 text-sm leading-6 text-slate-600">Pilih draft ujian dulu dari daftar atas.</p>
+					{:else if packageMaps.length === 0}
+						<p class="p-4 text-sm leading-6 text-slate-600">Belum ada paket per rombel untuk ujian ini. Simpan satu pemetaan dari form kiri.</p>
+					{:else}
+						<div class="divide-y divide-slate-200">
+							{#each packageMaps as item (item.id)}
+								<div class="grid gap-2 p-3 text-sm sm:grid-cols-[1fr_auto] sm:items-center">
+									<div>
+										<p class="font-black text-slate-950">{item.class_code || item.class_name} · {item.subject_name}</p>
+										<p class="text-slate-600">{item.package_title}</p>
+										{#if item.slot_label}<p class="text-xs font-bold text-slate-500">{item.slot_label}</p>{/if}
+									</div>
+									<span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-800">Tersimpan</span>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			</div>
+		</section>
+
 
 		<section class="rounded-3xl border border-emerald-200 bg-white p-4 shadow-sm">
 			<div class="flex flex-col gap-3 border-b border-slate-200 pb-3 lg:flex-row lg:items-end lg:justify-between">

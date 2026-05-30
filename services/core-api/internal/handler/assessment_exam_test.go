@@ -98,6 +98,22 @@ func (f *fakeAssessmentExamHandlerService) AssignmentApply(_ context.Context, _ 
 	return f.applyResult, nil
 }
 
+func (f *fakeAssessmentExamHandlerService) ListPackageMaps(context.Context, pgtype.UUID) ([]service.AssessmentPackageMapView, error) {
+	return nil, nil
+}
+
+func (f *fakeAssessmentExamHandlerService) SavePackageMaps(context.Context, pgtype.UUID, service.AssessmentPackageMapRequest) (service.AssessmentPackageMapSaveResult, error) {
+	return service.AssessmentPackageMapSaveResult{Count: 1}, nil
+}
+
+func (f *fakeAssessmentExamHandlerService) DeletePackageMap(context.Context, pgtype.UUID, pgtype.UUID) error {
+	return nil
+}
+
+func (f *fakeAssessmentExamHandlerService) ListPackageOptions(context.Context, pgtype.UUID) ([]service.AssessmentPackageOptionView, error) {
+	return nil, nil
+}
+
 func TestAssessmentExamListRequiresAssessmentRead(t *testing.T) {
 	svc := &fakeAssessmentExamHandlerService{}
 	h := NewAssessmentExam(svc)

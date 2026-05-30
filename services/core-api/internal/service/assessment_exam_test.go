@@ -39,6 +39,10 @@ type fakeAssessmentExamStore struct {
 	roomCount             int64
 	participantCnt        int64
 	cardCount             int64
+	packageMapRows        []db.ListAssessmentExamPackageMapsRow
+	packageOptions        []db.ListAssessmentPackageOptionsRow
+	upsertedPackageMaps   []db.UpsertAssessmentExamPackageMapParams
+	deletePackageMapArg   db.DeleteAssessmentExamPackageMapParams
 	createArg             db.CreateAssessmentExamParams
 	updateArg             db.UpdateAssessmentExamParams
 }
@@ -143,6 +147,24 @@ func (f *fakeAssessmentExamStore) CountAssessmentParticipantsByExam(context.Cont
 
 func (f *fakeAssessmentExamStore) CountAssessmentCardsByExam(context.Context, pgtype.UUID) (int64, error) {
 	return f.cardCount, nil
+}
+
+func (f *fakeAssessmentExamStore) ListAssessmentExamPackageMaps(context.Context, pgtype.UUID) ([]db.ListAssessmentExamPackageMapsRow, error) {
+	return f.packageMapRows, nil
+}
+
+func (f *fakeAssessmentExamStore) UpsertAssessmentExamPackageMap(_ context.Context, arg db.UpsertAssessmentExamPackageMapParams) (db.AssessmentExamPackageMap, error) {
+	f.upsertedPackageMaps = append(f.upsertedPackageMaps, arg)
+	return db.AssessmentExamPackageMap{ID: mustPgUUIDAssessmentTest("99999999-9999-9999-9999-999999999999"), ExamID: arg.ExamID, ClassID: arg.ClassID, SubjectID: arg.SubjectID, PackageID: arg.PackageID, SlotLabel: arg.SlotLabel, Notes: arg.Notes}, nil
+}
+
+func (f *fakeAssessmentExamStore) DeleteAssessmentExamPackageMap(_ context.Context, arg db.DeleteAssessmentExamPackageMapParams) (int64, error) {
+	f.deletePackageMapArg = arg
+	return 1, nil
+}
+
+func (f *fakeAssessmentExamStore) ListAssessmentPackageOptions(context.Context, pgtype.UUID) ([]db.ListAssessmentPackageOptionsRow, error) {
+	return f.packageOptions, nil
 }
 
 func TestAssessmentExamCreateValidation(t *testing.T) {
@@ -659,4 +681,41 @@ func mustPgUUIDAssessmentTest(raw string) pgtype.UUID {
 		panic(err)
 	}
 	return id
+}
+
+func TestAssessmentExamPackageMapsSharedPackagePerRombel(t *testing.T) {
+	examID := mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111")
+	classA := mustPgUUIDAssessmentTest("aaaaaaaa-1111-1111-1111-111111111111")
+	classB := mustPgUUIDAssessmentTest("bbbbbbbb-1111-1111-1111-111111111111")
+	subjectID := mustPgUUIDAssessmentTest("22222222-2222-2222-2222-222222222222")
+	packageID := mustPgUUIDAssessmentTest("33333333-3333-3333-3333-333333333333")
+	store := &fakeAssessmentExamStore{getRow: db.GetAssessmentExamRow{ID: examID, Title: "PAT", Status: "draft"}}
+	svc := NewAssessmentExamWithStore(store)
+
+	result, err := svc.SavePackageMaps(context.Background(), examID, AssessmentPackageMapRequest{Items: []AssessmentPackageMapInput{
+		{ClassID: assessmentUUIDString(classA), SubjectID: assessmentUUIDString(subjectID), PackageID: assessmentUUIDString(packageID), SlotLabel: "Hari 1 - Matematika"},
+		{ClassID: assessmentUUIDString(classB), SubjectID: assessmentUUIDString(subjectID), PackageID: assessmentUUIDString(packageID), SlotLabel: "Hari 1 - Matematika"},
+	}})
+	if err != nil {
+		t.Fatalf("SavePackageMaps returned error: %v", err)
+	}
+	if result.Count != 2 {
+		t.Fatalf("saved count = %d, want 2", result.Count)
+	}
+	if len(store.upsertedPackageMaps) != 2 {
+		t.Fatalf("upsert calls = %d, want 2", len(store.upsertedPackageMaps))
+	}
+	for i, arg := range store.upsertedPackageMaps {
+		if arg.ExamID != examID || arg.SubjectID != subjectID || arg.PackageID != packageID {
+			t.Fatalf("upsert[%d] = %+v, want shared package for same subject", i, arg)
+		}
+	}
+}
+
+func TestAssessmentExamPackageMapsRejectMissingIDs(t *testing.T) {
+	svc := NewAssessmentExamWithStore(&fakeAssessmentExamStore{})
+	_, err := svc.SavePackageMaps(context.Background(), mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111"), AssessmentPackageMapRequest{Items: []AssessmentPackageMapInput{{ClassID: "", SubjectID: "bad", PackageID: ""}}})
+	if err == nil {
+		t.Fatal("SavePackageMaps error = nil, want validation error")
+	}
 }

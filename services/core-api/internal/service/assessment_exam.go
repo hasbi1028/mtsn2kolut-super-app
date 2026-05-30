@@ -54,6 +54,10 @@ type assessmentExamStore interface {
 	MoveAssessmentParticipantSeat(ctx context.Context, arg db.MoveAssessmentParticipantSeatParams) (db.MoveAssessmentParticipantSeatRow, error)
 	ListAssessmentParticipantCardTargetsByExam(ctx context.Context, examID pgtype.UUID) ([]db.ListAssessmentParticipantCardTargetsByExamRow, error)
 	CreateAssessmentParticipantAccessCard(ctx context.Context, arg db.CreateAssessmentParticipantAccessCardParams) (db.AssessmentAccessCard, error)
+	ListAssessmentExamPackageMaps(ctx context.Context, examID pgtype.UUID) ([]db.ListAssessmentExamPackageMapsRow, error)
+	UpsertAssessmentExamPackageMap(ctx context.Context, arg db.UpsertAssessmentExamPackageMapParams) (db.AssessmentExamPackageMap, error)
+	DeleteAssessmentExamPackageMap(ctx context.Context, arg db.DeleteAssessmentExamPackageMapParams) (int64, error)
+	ListAssessmentPackageOptions(ctx context.Context, subjectID pgtype.UUID) ([]db.ListAssessmentPackageOptionsRow, error)
 }
 
 type AssessmentExam struct {
@@ -219,6 +223,57 @@ type AssessmentParticipantCardIssueResult struct {
 	Count   int                             `json:"count"`
 	Cards   []AssessmentParticipantCardView `json:"cards"`
 	Message string                          `json:"message"`
+}
+
+type AssessmentPackageMapInput struct {
+	ID        string `json:"id,omitempty"`
+	ClassID   string `json:"class_id"`
+	SubjectID string `json:"subject_id"`
+	PackageID string `json:"package_id"`
+	SlotLabel string `json:"slot_label,omitempty"`
+	Notes     string `json:"notes,omitempty"`
+}
+
+type AssessmentPackageMapRequest struct {
+	Items []AssessmentPackageMapInput `json:"items"`
+}
+
+type AssessmentPackageMapView struct {
+	ID              string `json:"id"`
+	ExamID          string `json:"exam_id"`
+	ClassID         string `json:"class_id"`
+	ClassCode       string `json:"class_code"`
+	ClassName       string `json:"class_name"`
+	GradeLevel      int32  `json:"grade_level"`
+	SubjectID       string `json:"subject_id"`
+	SubjectCode     string `json:"subject_code"`
+	SubjectName     string `json:"subject_name"`
+	PackageID       string `json:"package_id"`
+	PackageTitle    string `json:"package_title"`
+	DurationMinutes int32  `json:"duration_minutes"`
+	SlotLabel       string `json:"slot_label,omitempty"`
+	Notes           string `json:"notes,omitempty"`
+}
+
+type AssessmentPackageOptionView struct {
+	ID              string `json:"id"`
+	EventID         string `json:"event_id,omitempty"`
+	SubjectID       string `json:"subject_id"`
+	SubjectCode     string `json:"subject_code"`
+	SubjectName     string `json:"subject_name"`
+	Title           string `json:"title"`
+	Description     string `json:"description,omitempty"`
+	DurationMinutes int32  `json:"duration_minutes"`
+	QuestionCount   int32  `json:"question_count"`
+	SessionCount    int32  `json:"session_count"`
+	Locked          bool   `json:"locked"`
+	SnapshotVersion int32  `json:"snapshot_version"`
+}
+
+type AssessmentPackageMapSaveResult struct {
+	ExamID  string `json:"exam_id"`
+	Count   int    `json:"count"`
+	Message string `json:"message"`
 }
 
 func (s *AssessmentExam) List(ctx context.Context, search, status string, limit, offset int32) ([]AssessmentExamView, error) {
@@ -450,6 +505,113 @@ func (s *AssessmentExam) AssignmentApply(ctx context.Context, id pgtype.UUID, in
 		result.Message = "Ruang ujian tersimpan. Belum ada peserta dari rombel terpilih; kartu/QR+PIN belum diterbitkan."
 	}
 	return result, nil
+}
+
+func (s *AssessmentExam) ListPackageMaps(ctx context.Context, id pgtype.UUID) ([]AssessmentPackageMapView, error) {
+	if _, err := s.Get(ctx, id); err != nil {
+		return nil, err
+	}
+	rows, err := s.q.ListAssessmentExamPackageMaps(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]AssessmentPackageMapView, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, assessmentPackageMapView(row))
+	}
+	return items, nil
+}
+
+func (s *AssessmentExam) SavePackageMaps(ctx context.Context, id pgtype.UUID, input AssessmentPackageMapRequest) (AssessmentPackageMapSaveResult, error) {
+	if _, err := s.Get(ctx, id); err != nil {
+		return AssessmentPackageMapSaveResult{}, err
+	}
+	if s.pool != nil {
+		tx, err := s.pool.Begin(ctx)
+		if err != nil {
+			return AssessmentPackageMapSaveResult{}, err
+		}
+		defer tx.Rollback(ctx) //nolint:errcheck
+		result, err := s.savePackageMapsInStore(ctx, db.New(tx), id, input)
+		if err != nil {
+			return AssessmentPackageMapSaveResult{}, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return AssessmentPackageMapSaveResult{}, err
+		}
+		return result, nil
+	}
+	return s.savePackageMapsInStore(ctx, s.q, id, input)
+}
+
+func (s *AssessmentExam) savePackageMapsInStore(ctx context.Context, store assessmentExamStore, id pgtype.UUID, input AssessmentPackageMapRequest) (AssessmentPackageMapSaveResult, error) {
+	if len(input.Items) == 0 {
+		return AssessmentPackageMapSaveResult{}, fmt.Errorf("%w: minimal satu paket per rombel harus dipilih", domain.ErrBadRequest)
+	}
+	seen := map[string]bool{}
+	for _, item := range input.Items {
+		classID, err := assessmentUUIDFromString(item.ClassID, "rombel")
+		if err != nil {
+			return AssessmentPackageMapSaveResult{}, err
+		}
+		subjectID, err := assessmentUUIDFromString(item.SubjectID, "mata pelajaran")
+		if err != nil {
+			return AssessmentPackageMapSaveResult{}, err
+		}
+		packageID, err := assessmentUUIDFromString(item.PackageID, "paket soal")
+		if err != nil {
+			return AssessmentPackageMapSaveResult{}, err
+		}
+		key := assessmentUUIDString(classID) + ":" + assessmentUUIDString(subjectID)
+		if seen[key] {
+			return AssessmentPackageMapSaveResult{}, fmt.Errorf("%w: satu rombel hanya boleh punya satu paket untuk mapel yang sama", domain.ErrBadRequest)
+		}
+		seen[key] = true
+		_, err = store.UpsertAssessmentExamPackageMap(ctx, db.UpsertAssessmentExamPackageMapParams{
+			ExamID:    id,
+			ClassID:   classID,
+			SubjectID: subjectID,
+			PackageID: packageID,
+			SlotLabel: strings.TrimSpace(item.SlotLabel),
+			Notes:     strings.TrimSpace(item.Notes),
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return AssessmentPackageMapSaveResult{}, fmt.Errorf("%w: paket tidak aktif atau mapel paket tidak sesuai", domain.ErrBadRequest)
+		}
+		if err != nil {
+			return AssessmentPackageMapSaveResult{}, err
+		}
+	}
+	return AssessmentPackageMapSaveResult{ExamID: assessmentUUIDString(id), Count: len(input.Items), Message: "Paket per rombel tersimpan. Paket yang sama boleh dipakai bersama oleh beberapa rombel."}, nil
+}
+
+func (s *AssessmentExam) DeletePackageMap(ctx context.Context, examID, mapID pgtype.UUID) error {
+	if _, err := s.Get(ctx, examID); err != nil {
+		return err
+	}
+	if !mapID.Valid {
+		return fmt.Errorf("%w: id pemetaan paket tidak valid", domain.ErrBadRequest)
+	}
+	rows, err := s.q.DeleteAssessmentExamPackageMap(ctx, db.DeleteAssessmentExamPackageMapParams{ExamID: examID, ID: mapID})
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (s *AssessmentExam) ListPackageOptions(ctx context.Context, subjectID pgtype.UUID) ([]AssessmentPackageOptionView, error) {
+	rows, err := s.q.ListAssessmentPackageOptions(ctx, subjectID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]AssessmentPackageOptionView, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, assessmentPackageOptionView(row))
+	}
+	return items, nil
 }
 
 func (s *AssessmentExam) ListParticipantCards(ctx context.Context, id pgtype.UUID) ([]AssessmentParticipantCardView, error) {
@@ -974,6 +1136,25 @@ func assessmentExamGetRowView(row db.GetAssessmentExamRow) AssessmentExamView {
 		CardCount:        row.CardCount,
 	}
 	return view
+}
+
+func assessmentPackageMapView(row db.ListAssessmentExamPackageMapsRow) AssessmentPackageMapView {
+	return AssessmentPackageMapView{
+		ID: assessmentUUIDString(row.ID), ExamID: assessmentUUIDString(row.ExamID), ClassID: assessmentUUIDString(row.ClassID),
+		ClassCode: row.ClassCode, ClassName: row.ClassName, GradeLevel: row.GradeLevel,
+		SubjectID: assessmentUUIDString(row.SubjectID), SubjectCode: row.SubjectCode, SubjectName: row.SubjectName,
+		PackageID: assessmentUUIDString(row.PackageID), PackageTitle: row.PackageTitle, DurationMinutes: row.DurationMinutes,
+		SlotLabel: row.SlotLabel, Notes: row.Notes,
+	}
+}
+
+func assessmentPackageOptionView(row db.ListAssessmentPackageOptionsRow) AssessmentPackageOptionView {
+	return AssessmentPackageOptionView{
+		ID: assessmentUUIDString(row.ID), EventID: assessmentUUIDString(row.EventID), SubjectID: assessmentUUIDString(row.SubjectID),
+		SubjectCode: row.SubjectCode, SubjectName: row.SubjectName, Title: row.Title, Description: row.Description,
+		DurationMinutes: row.DurationMinutes, QuestionCount: row.QuestionCount, SessionCount: row.SessionCount,
+		Locked: row.LockedAt.Valid, SnapshotVersion: row.SnapshotVersion,
+	}
 }
 
 func assessmentTimestamptzFromPtr(value *time.Time) pgtype.Timestamptz {
