@@ -329,12 +329,28 @@ SELECT
   s.class_id,
   COALESCE(c.code, '') AS class_code,
   COALESCE(c.name, '') AS class_name,
-  COALESCE(c.level, 0)::int AS grade_level
+  CASE UPPER(NULLIF(btrim(c.level::text), ''))
+    WHEN '7' THEN 7
+    WHEN 'VII' THEN 7
+    WHEN '8' THEN 8
+    WHEN 'VIII' THEN 8
+    WHEN '9' THEN 9
+    WHEN 'IX' THEN 9
+    ELSE 0
+  END::int AS grade_level
 FROM students s
 LEFT JOIN school_classes c ON c.id = s.class_id
 WHERE s.is_active = TRUE
   AND s.class_id = ANY($1::uuid[])
-ORDER BY COALESCE(c.level, 0), COALESCE(c.code, ''), s.nama
+ORDER BY CASE UPPER(NULLIF(btrim(c.level::text), ''))
+    WHEN '7' THEN 7
+    WHEN 'VII' THEN 7
+    WHEN '8' THEN 8
+    WHEN 'VIII' THEN 8
+    WHEN '9' THEN 9
+    WHEN 'IX' THEN 9
+    ELSE 0
+  END, COALESCE(c.code, ''), s.nama
 `
 
 type ListAssessmentCandidateStudentsByClassIDsRow struct {
@@ -469,12 +485,28 @@ SELECT
   s.class_id,
   COALESCE(c.code, '') AS class_code,
   COALESCE(c.name, '') AS class_name,
-  COALESCE(c.level, 0)::int AS grade_level
+  CASE UPPER(NULLIF(btrim(c.level::text), ''))
+    WHEN '7' THEN 7
+    WHEN 'VII' THEN 7
+    WHEN '8' THEN 8
+    WHEN 'VIII' THEN 8
+    WHEN '9' THEN 9
+    WHEN 'IX' THEN 9
+    ELSE 0
+  END::int AS grade_level
 FROM assessment_participants p
 JOIN students s ON s.id = p.student_id
 LEFT JOIN school_classes c ON c.id = s.class_id
 WHERE p.session_id = $1
-ORDER BY COALESCE(c.level, 0), COALESCE(c.code, ''), s.nama, p.id
+ORDER BY CASE UPPER(NULLIF(btrim(c.level::text), ''))
+    WHEN '7' THEN 7
+    WHEN 'VII' THEN 7
+    WHEN '8' THEN 8
+    WHEN 'VIII' THEN 8
+    WHEN '9' THEN 9
+    WHEN 'IX' THEN 9
+    ELSE 0
+  END, COALESCE(c.code, ''), s.nama, p.id
 `
 
 type ListAssessmentParticipantsForAssignmentRow struct {
