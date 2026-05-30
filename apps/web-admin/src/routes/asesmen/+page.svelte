@@ -29,11 +29,20 @@
 		card_count?: number;
 	};
 
+	type AssignmentClassSummary = {
+		class_code: string;
+		class_name?: string;
+		grade_level?: number;
+		count: number;
+	};
+
 	type AssignmentRoom = {
 		code: string;
 		name: string;
 		capacity: number;
 		assigned_count: number;
+		grade_levels?: number[];
+		class_summary?: AssignmentClassSummary[];
 	};
 
 	type AssignmentResult = ActionResult & {
@@ -112,6 +121,7 @@
 	);
 	let totalCapacity = $derived(roomCount * capacityPerRoom);
 	let canSaveRooms = $derived(Boolean(selectedExam && roomPreview && roomPreview.exam_id === selectedExam.id && !roomBusy));
+	let hasPlacementSummary = $derived(Boolean(roomPreview?.applied && roomPreview.rooms.some((room) => (room.class_summary?.length ?? 0) > 0)));
 
 	onMount(() => {
 		void loadInitialData();
@@ -292,6 +302,16 @@
 		} finally {
 			actionExamId = null;
 		}
+	}
+
+	function formatClassSummary(items?: AssignmentClassSummary[]) {
+		if (!items || items.length === 0) return 'Belum ada peserta';
+		return items.map((item) => `${item.class_code || item.class_name || 'Tanpa rombel'} ${item.count}`).join(' · ');
+	}
+
+	function formatGradeLevels(levels?: number[]) {
+		if (!levels || levels.length === 0) return '—';
+		return levels.map((level) => `Kelas ${level}`).join(', ');
 	}
 
 	function formatDate(value?: string) {
@@ -525,17 +545,24 @@
 						<div class="max-h-[360px] overflow-y-auto">
 							<div class="divide-y divide-slate-200">
 								{#each roomPreview.rooms as room}
-									<div class="grid grid-cols-[4.5rem_1fr_auto] items-center gap-3 p-3 text-sm">
-										<span class="rounded-xl bg-emerald-50 px-2 py-1 text-center font-black text-emerald-800">{room.code}</span>
+									<div class="grid gap-3 p-3 text-sm sm:grid-cols-[4.5rem_1fr_auto] sm:items-start">
+										<span class="w-fit rounded-xl bg-emerald-50 px-2 py-1 text-center font-black text-emerald-800">{room.code}</span>
 										<div class="min-w-0">
 											<p class="truncate font-black text-slate-950">{room.name}</p>
-											<p class="text-xs font-bold text-slate-500">Terisi {room.assigned_count} dari {room.capacity}</p>
+											<p class="text-xs font-bold text-slate-500">Terisi {room.assigned_count} dari {room.capacity} · {formatGradeLevels(room.grade_levels)}</p>
+											<p class="mt-1 text-xs font-semibold leading-5 text-slate-600">{formatClassSummary(room.class_summary)}</p>
 										</div>
-										<span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">{room.capacity} kursi</span>
+										<span class="w-fit rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">{room.capacity} kursi</span>
 									</div>
 								{/each}
 							</div>
 						</div>
+						{#if hasPlacementSummary}
+							<div class="border-t border-emerald-100 bg-emerald-50 p-3 text-xs font-bold leading-5 text-emerald-900">
+								<p class="font-black">Ringkasan hasil penempatan siap.</p>
+								<p>Peserta sudah tersimpan per ruang dan kursi. Tahap berikutnya baru cetak kartu peserta dan lembar pengawas; token/QR+PIN belum dibuat dari panel ini.</p>
+							</div>
+						{/if}
 						<p class="border-t border-slate-200 bg-slate-50 p-3 text-xs font-bold leading-5 text-slate-600">{roomPreview.message}</p>
 					{/if}
 				</div>

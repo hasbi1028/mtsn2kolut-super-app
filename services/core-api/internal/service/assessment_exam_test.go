@@ -348,9 +348,9 @@ func TestAssessmentExamAssignmentApplyEnrollsClassStudentsAndAssignsSeats(t *tes
 			{StudentID: student3, ClassID: classID, StudentName: "C"},
 		},
 		participants: []db.ListAssessmentParticipantsForAssignmentRow{
-			{ParticipantID: student1, SessionID: sessionID, StudentID: student1, StudentName: "A"},
-			{ParticipantID: student2, SessionID: sessionID, StudentID: student2, StudentName: "B"},
-			{ParticipantID: student3, SessionID: sessionID, StudentID: student3, StudentName: "C"},
+			{ParticipantID: student1, SessionID: sessionID, StudentID: student1, StudentName: "A", ClassCode: "7A", ClassName: "VII A", GradeLevel: 7},
+			{ParticipantID: student2, SessionID: sessionID, StudentID: student2, StudentName: "B", ClassCode: "7A", ClassName: "VII A", GradeLevel: 7},
+			{ParticipantID: student3, SessionID: sessionID, StudentID: student3, StudentName: "C", ClassCode: "7A", ClassName: "VII A", GradeLevel: 7},
 		},
 	}
 	svc := NewAssessmentExamWithStore(store)
@@ -370,6 +370,12 @@ func TestAssessmentExamAssignmentApplyEnrollsClassStudentsAndAssignsSeats(t *tes
 	}
 	if store.assignedParticipants[0].RoomID == store.assignedParticipants[2].RoomID {
 		t.Fatalf("assigned rooms = %+v, want third participant in second room", store.assignedParticipants)
+	}
+	if len(result.Rooms[0].ClassSummary) != 1 || result.Rooms[0].ClassSummary[0].ClassCode != "7A" || result.Rooms[0].ClassSummary[0].Count != 2 {
+		t.Fatalf("room 1 class summary = %+v, want 2 students from 7A", result.Rooms[0].ClassSummary)
+	}
+	if len(result.Rooms[1].ClassSummary) != 1 || result.Rooms[1].ClassSummary[0].Count != 1 {
+		t.Fatalf("room 2 class summary = %+v, want 1 remaining student", result.Rooms[1].ClassSummary)
 	}
 	if result.CardCount != 0 {
 		t.Fatalf("card count = %d, want no card issuance", result.CardCount)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -117,11 +118,20 @@ type AssessmentAssignmentRequest struct {
 	MixPolicy       string   `json:"mix_policy,omitempty"`
 }
 
+type AssessmentAssignmentClassSummary struct {
+	ClassCode  string `json:"class_code"`
+	ClassName  string `json:"class_name"`
+	GradeLevel int32  `json:"grade_level"`
+	Count      int64  `json:"count"`
+}
+
 type AssessmentAssignmentRoom struct {
-	Code          string `json:"code"`
-	Name          string `json:"name"`
-	Capacity      int32  `json:"capacity"`
-	AssignedCount int64  `json:"assigned_count"`
+	Code          string                             `json:"code"`
+	Name          string                             `json:"name"`
+	Capacity      int32                              `json:"capacity"`
+	AssignedCount int64                              `json:"assigned_count"`
+	GradeLevels   []int32                            `json:"grade_levels,omitempty"`
+	ClassSummary  []AssessmentAssignmentClassSummary `json:"class_summary,omitempty"`
 }
 
 type AssessmentAssignmentResult struct {
@@ -340,6 +350,7 @@ func (s *AssessmentExam) AssignmentApply(ctx context.Context, id pgtype.UUID, in
 		return AssessmentAssignmentResult{}, err
 	}
 	result := buildAssessmentAssignmentResult(exam.ID, assessmentUUIDString(session.ID), normalized, int64(len(participants)), true)
+	result.Rooms = attachAssessmentRoomComposition(result.Rooms, participants)
 	roomsByCode := make(map[string]db.AssessmentRoom, len(result.Rooms))
 	for _, room := range result.Rooms {
 		savedRoom, err := s.q.UpsertAssessmentRoom(ctx, db.UpsertAssessmentRoomParams{
@@ -428,6 +439,45 @@ func (s *AssessmentExam) assignAssessmentParticipantsToRooms(ctx context.Context
 		}
 	}
 	return nil
+}
+
+func attachAssessmentRoomComposition(rooms []AssessmentAssignmentRoom, participants []db.ListAssessmentParticipantsForAssignmentRow) []AssessmentAssignmentRoom {
+	if len(rooms) == 0 || len(participants) == 0 {
+		return rooms
+	}
+	participantIndex := 0
+	for roomIndex := range rooms {
+		classCounts := map[string]*AssessmentAssignmentClassSummary{}
+		classOrder := make([]string, 0)
+		gradeSeen := map[int32]bool{}
+		grades := make([]int32, 0)
+		for seat := int32(1); seat <= rooms[roomIndex].Capacity && participantIndex < len(participants); seat++ {
+			participant := participants[participantIndex]
+			classCode := strings.TrimSpace(participant.ClassCode)
+			className := strings.TrimSpace(participant.ClassName)
+			if classCode == "" {
+				classCode = "Tanpa Rombel"
+			}
+			key := fmt.Sprintf("%d|%s|%s", participant.GradeLevel, classCode, className)
+			if _, ok := classCounts[key]; !ok {
+				classCounts[key] = &AssessmentAssignmentClassSummary{ClassCode: classCode, ClassName: className, GradeLevel: participant.GradeLevel}
+				classOrder = append(classOrder, key)
+			}
+			classCounts[key].Count++
+			if participant.GradeLevel > 0 && !gradeSeen[participant.GradeLevel] {
+				gradeSeen[participant.GradeLevel] = true
+				grades = append(grades, participant.GradeLevel)
+			}
+			participantIndex++
+		}
+		sort.Slice(grades, func(i, j int) bool { return grades[i] < grades[j] })
+		rooms[roomIndex].GradeLevels = grades
+		rooms[roomIndex].ClassSummary = make([]AssessmentAssignmentClassSummary, 0, len(classOrder))
+		for _, key := range classOrder {
+			rooms[roomIndex].ClassSummary = append(rooms[roomIndex].ClassSummary, *classCounts[key])
+		}
+	}
+	return rooms
 }
 
 func assessmentUUIDsFromStrings(rawIDs []string) ([]pgtype.UUID, error) {
