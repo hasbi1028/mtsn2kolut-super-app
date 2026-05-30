@@ -50,6 +50,19 @@
 		applied: boolean;
 	};
 
+	type ParticipantPlacement = {
+		participant_id: string;
+		room_id?: string;
+		student_name: string;
+		nis?: string;
+		class_code: string;
+		class_name: string;
+		room_code?: string;
+		room_name?: string;
+		room_capacity?: number;
+		seat_no?: number;
+	};
+
 	type KegiatanUjian = {
 		id: string;
 		nama: string;
@@ -96,15 +109,19 @@
 	let capacityPerRoom = $state(30);
 	let mixPolicy = $state<'mixed' | 'class_grouped'>('mixed');
 	let assignmentPreview = $state<AssignmentResult | null>(null);
+	let participantPlacements = $state<ParticipantPlacement[]>([]);
+	let workingParticipantId = $state('');
 	let formError = $state('');
 	let formNotice = $state('');
 	let listError = $state('');
 	let assignmentError = $state('');
 	let assignmentNotice = $state('');
+	let placementError = $state('');
 	let loading = $state(true);
 	let saving = $state(false);
 	let loadingRombel = $state(false);
 	let workingAssignment = $state(false);
+	let loadingPlacements = $state(false);
 
 	const totalPeserta = $derived(kegiatan.reduce((total, item) => total + item.peserta, 0));
 	const totalRuang = $derived(kegiatan.reduce((total, item) => total + item.ruang, 0));
@@ -112,6 +129,7 @@
 	const selectedKegiatan = $derived(kegiatan.find((item) => item.id === selectedKegiatanId) ?? null);
 	const selectedRombel = $derived(rombelOptions.filter((item) => selectedClassIds.includes(item.id)));
 	const selectedStudentTotal = $derived(selectedRombel.reduce((total, item) => total + Number(item.total_students ?? 0), 0));
+	const manualRoomOptions = $derived(Array.from(new Map(participantPlacements.filter((item) => item.room_id).map((item) => [item.room_id, item])).values()));
 
 	const preparationChecklist = [
 		'Data kegiatan lengkap',
@@ -228,8 +246,10 @@
 
 	function resetAssignmentState() {
 		assignmentPreview = null;
+		participantPlacements = [];
 		assignmentError = '';
 		assignmentNotice = '';
+		placementError = '';
 	}
 
 	function toggleCreateForm() {
@@ -340,6 +360,7 @@
 			});
 			assignmentPreview = await readClientApiData<AssignmentResult>(response);
 			assignmentNotice = 'Ruang dan peserta tersimpan. Kartu/QR+PIN belum diterbitkan.';
+			await loadParticipantPlacements();
 			await loadKegiatan();
 		} catch (error) {
 			assignmentError = error instanceof Error ? error.message : 'Ruang dan peserta belum dapat disimpan.';
@@ -347,6 +368,45 @@
 			workingAssignment = false;
 		}
 	}
+
+	async function loadParticipantPlacements() {
+		if (!selectedKegiatan) return;
+		placementError = '';
+		loadingPlacements = true;
+		try {
+			const response = await fetch(clientApiPath`/api/asesmen/exams/${selectedKegiatan.id}/participants`);
+			participantPlacements = await readClientApiData<ParticipantPlacement[]>(response);
+		} catch (error) {
+			placementError = error instanceof Error ? error.message : 'Daftar peserta ruang belum dapat dibuka.';
+		} finally {
+			loadingPlacements = false;
+		}
+	}
+
+	function shuffleManualView() {
+		participantPlacements = [...participantPlacements].sort(() => Math.random() - 0.5);
+	}
+
+	async function moveParticipantSeat(participant: ParticipantPlacement, roomId: string, seatNo: number) {
+		if (!selectedKegiatan || !roomId || !seatNo) return;
+		placementError = '';
+		workingParticipantId = participant.participant_id;
+		try {
+			const response = await fetch(clientApiPath`/api/asesmen/exams/${selectedKegiatan.id}/participants/seat`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ participant_id: participant.participant_id, room_id: roomId, seat_no: Number(seatNo) })
+			});
+			const updated = await readClientApiData<ParticipantPlacement>(response);
+			participantPlacements = participantPlacements.map((item) => item.participant_id === updated.participant_id ? updated : item);
+			assignmentNotice = `Peserta ${updated.student_name} dipindah ke ${updated.room_code || 'ruang baru'} kursi ${updated.seat_no || '-'}.`;
+		} catch (error) {
+			placementError = error instanceof Error ? error.message : 'Perubahan ruang/kursi belum dapat disimpan.';
+		} finally {
+			workingParticipantId = '';
+		}
+	}
+
 </script>
 
 <svelte:head>
@@ -441,6 +501,18 @@
 
 						{#if assignmentPreview}
 							<div class="mt-4 rounded-lg border bg-background p-3"><div class="grid gap-2 text-sm sm:grid-cols-4"><div><p class="text-xs text-muted-foreground">Peserta</p><p class="text-xl font-bold">{assignmentPreview.total_participants}</p></div><div><p class="text-xs text-muted-foreground">Tertampung</p><p class="text-xl font-bold">{assignmentPreview.assigned_total}</p></div><div><p class="text-xs text-muted-foreground">Sisa</p><p class="text-xl font-bold">{assignmentPreview.unassigned_total}</p></div><div><p class="text-xs text-muted-foreground">Status</p><p class="text-sm font-semibold">{assignmentPreview.applied ? 'Tersimpan' : 'Preview'}</p></div></div><p class="mt-2 text-xs leading-5 text-muted-foreground">{assignmentPreview.message}</p><div class="mt-3 grid gap-2 sm:grid-cols-2">{#each assignmentPreview.rooms as room}<div class="rounded-md border px-3 py-2 text-sm"><div class="flex justify-between gap-2"><strong>{room.code}</strong><span>{room.assigned_count}/{room.capacity}</span></div><p class="mt-1 text-xs text-muted-foreground">{room.name}</p></div>{/each}</div></div>
+						{/if}
+					</section>
+
+
+					<section class="rounded-xl border border-sky-200 bg-sky-50/50 p-4">
+						<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+							<div><p class="text-xs font-semibold tracking-[0.16em] text-sky-700 uppercase">Mode Manual · Acak Sendiri</p><h3 class="text-base font-bold text-foreground">Atur peserta per ruang dan nomor kursi</h3><p class="mt-1 text-xs leading-5 text-muted-foreground">Ambil daftar peserta setelah simpan ruang. Tombol Acak Tampilan hanya mengubah urutan tampil agar Bapak bisa memilih manual; penyimpanan tetap per peserta lewat tombol Pindah.</p></div>
+							<div class="flex flex-wrap gap-2"><button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void loadParticipantPlacements()} disabled={loadingPlacements}>{loadingPlacements ? 'Memuat…' : 'Ambil Peserta'}</button><button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={shuffleManualView} disabled={participantPlacements.length === 0}>Acak Tampilan</button></div>
+						</div>
+						{#if placementError}<p class="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{placementError}</p>{/if}
+						{#if participantPlacements.length === 0}<p class="mt-3 rounded-lg border border-dashed bg-background px-3 py-3 text-sm text-muted-foreground">Belum ada peserta dimuat. Simpan ruang & peserta dulu, lalu klik Ambil Peserta untuk edit manual.</p>{:else}
+							<div class="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">{#each participantPlacements as placement (placement.participant_id)}<div class="grid gap-2 rounded-lg border bg-background p-3 text-sm sm:grid-cols-[1fr_8rem_6rem_5rem]"><div class="min-w-0"><p class="truncate font-semibold text-foreground">{placement.student_name}</p><p class="text-xs text-muted-foreground">{placement.class_code} · {placement.room_code || 'Belum ruang'} · Kursi {placement.seat_no || '-'}</p></div><select class="rounded-md border bg-card px-2 py-2 text-xs" value={placement.room_id || ''} onchange={(event) => (placement.room_id = event.currentTarget.value)}>{#each manualRoomOptions as room}<option value={room.room_id}>{room.room_code} · {room.room_name}</option>{/each}</select><input class="rounded-md border bg-card px-2 py-2 text-xs" type="number" min="1" max={placement.room_capacity || capacityPerRoom} value={placement.seat_no || 1} oninput={(event) => (placement.seat_no = Number(event.currentTarget.value))} /><button type="button" class="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60" onclick={() => void moveParticipantSeat(placement, placement.room_id || '', Number(placement.seat_no || 1))} disabled={workingParticipantId === placement.participant_id}>{workingParticipantId === placement.participant_id ? '...' : 'Pindah'}</button></div>{/each}</div>
 						{/if}
 					</section>
 

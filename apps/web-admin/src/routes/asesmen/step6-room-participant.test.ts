@@ -13,4 +13,13 @@ describe('/asesmen Step 6 room and participant workflow', () => {
 		expect(source).toContain('/assignment-apply');
 		expect(source).toContain('Kartu/QR+PIN belum diterbitkan');
 	});
+
+	it('keeps a granular manual mode for operator-controlled seat shuffling', () => {
+		const source = pageSource();
+		expect(source).toContain('Mode Manual · Acak Sendiri');
+		expect(source).toContain('/participants');
+		expect(source).toContain('/participants/seat');
+		expect(source).toContain('Acak Tampilan');
+		expect(source).toContain('Pindah');
+	});
 });
