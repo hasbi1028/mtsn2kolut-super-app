@@ -39,6 +39,5 @@ describe('UI policy access evaluation', () => {
 			'bank-soal-overview',
 			'bank-soal-authoring'
 		]);
-		expect(preview.hiddenDashboardWidgets.map((widget) => widget.id)).toContain('teacher-assessment');
 	});
 });

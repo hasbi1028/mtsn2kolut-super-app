@@ -1,11 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-	fetchStudentPortalCbtSchedule,
 	fetchStudentPortalProfile,
 	fetchStudentPortalResults,
-	fetchStudentPortalSchedule,
-	revealStudentPortalCbtToken
+	fetchStudentPortalSchedule
 } from './student-portal';
 
 describe('student portal client helpers', () => {
@@ -33,24 +31,4 @@ describe('student portal client helpers', () => {
 		await expect(fetchStudentPortalProfile(fetcher)).rejects.toThrow('forbidden');
 	});
 
-	it('fetches CBT schedule and reveals token through room-token gate', async () => {
-		const cbt = { schedule: [{ participant_id: 'participant-1', token_masked: 'ABCD-••••' }] };
-		const reveal = { token: 'student-token', expires_at: '2026-05-11T00:15:00+08:00' };
-		const fetcher = vi
-			.fn()
-			.mockResolvedValueOnce(new Response(JSON.stringify({ data: cbt }), { status: 200 }))
-			.mockResolvedValueOnce(new Response(JSON.stringify({ data: reveal }), { status: 200 }));
-
-		await expect(fetchStudentPortalCbtSchedule(fetcher)).resolves.toEqual(cbt);
-		await expect(revealStudentPortalCbtToken('participant 1', 'ROOM-1', fetcher)).resolves.toEqual(reveal);
-		expect(fetcher).toHaveBeenNthCalledWith(1, '/api/portal/siswa/cbt');
-		expect(fetcher).toHaveBeenNthCalledWith(
-			2,
-			'/api/portal/siswa/cbt/participant%201/reveal-token',
-			expect.objectContaining({
-				method: 'POST',
-				body: JSON.stringify({ room_token: 'ROOM-1' })
-			})
-		);
-	});
 });

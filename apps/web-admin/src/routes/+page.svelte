@@ -180,16 +180,14 @@
 		if (isSiswa) {
 			return {
 				eyebrow: 'Beranda Siswa',
-				title: 'Mulai dari jadwal, ujian, dan data akademik pribadi.',
+				title: 'Mulai dari jadwal dan data akademik pribadi.',
 				description: 'Ruang ini memprioritaskan informasi yang langsung dibutuhkan siswa setelah login.',
 				primary: [
 					{ label: 'Portal Siswa', href: '/portal/siswa', description: 'Buka data profil, kelas, dan informasi akademik siswa.' },
-					{ label: 'Portal Ujian Web', href: '/ujian', description: 'Jalur resmi ujian siswa tahun ini tanpa instalasi APK.', variant: 'outline' }
+					{ label: 'Jadwal Saya', href: '/jadwal', description: 'Lihat jadwal belajar yang terhubung.', variant: 'outline' }
 				],
-				secondary: [
-					{ label: 'Arsip APK CBT', href: '/asesmen/aplikasi-siswa/release', description: 'Arsip APK nonaktif/tahap lanjutan, bukan instruksi utama ujian.' }
-				],
-				watchlist: ['Cek jadwal belajar terbaru.', 'Pastikan sesi ujian dan ruang CBT sudah benar.', 'Hubungi wali kelas jika data profil belum sesuai.']
+				secondary: [],
+				watchlist: ['Cek jadwal belajar terbaru.', 'Cek jadwal belajar terbaru.', 'Hubungi wali kelas jika data profil belum sesuai.']
 			};
 		}
 		if (isParent) {
@@ -199,18 +197,18 @@
 				description: 'Dirancang agar orang tua cepat melihat anak terhubung, jadwal, dan informasi penting madrasah.',
 				primary: [
 					{ label: 'Portal Orang Tua', href: '/portal/orang-tua', description: 'Pantau data anak dan jadwal yang terhubung.' },
-					{ label: 'Portal Ujian Web', href: '/ujian', description: 'Jalur resmi ujian siswa tahun ini; tidak perlu instalasi APK.', variant: 'outline' }
+					{ label: 'Pengumuman', href: '/pengumuman', description: 'Lihat pengumuman resmi madrasah.', variant: 'outline' }
 				],
 				secondary: [
 					{ label: 'Pengumuman', href: '/pengumuman', description: 'Lihat pengumuman resmi madrasah.' }
 				],
-				watchlist: ['Pastikan semua anak sudah terhubung ke akun orang tua.', 'Cek jadwal anak secara berkala.', 'Simpan informasi Portal Ujian Web jika madrasah membuka asesmen.']
+				watchlist: ['Pastikan semua anak sudah terhubung ke akun orang tua.', 'Cek jadwal anak secara berkala.', 'Pantau pengumuman madrasah secara berkala.']
 			};
 		}
 		if (isGuru) {
 			return {
 				eyebrow: 'Beranda Guru',
-				title: 'Fokus ke jurnal, nilai, bank soal, dan asesmen.',
+				title: 'Fokus ke jurnal, nilai, dan bank soal.',
 				description: 'Pintasan ini mengikuti pekerjaan harian guru agar tidak perlu mencari menu di sidebar panjang.',
 				primary: [
 					{ label: 'Jurnal Kelas', href: '/journal', description: 'Isi atau cek jurnal pembelajaran hari ini.' },
@@ -219,10 +217,9 @@
 				],
 				secondary: [
 					{ label: 'Jadwal Mengajar', href: '/akademik/jadwal', description: 'Lihat slot jadwal kelas dan mapel.' },
-					{ label: 'Rapor Siswa', href: '/grades/rapor', description: 'Cek nilai akhir dan deskripsi capaian.' },
-					{ label: 'Persiapan Asesmen', href: '/asesmen/persiapan', description: 'Cek kesiapan paket dan sesi asesmen.' }
+					{ label: 'Rapor Siswa', href: '/grades/rapor', description: 'Cek nilai akhir dan deskripsi capaian.' }
 				],
-				watchlist: ['Jurnal kelas yang belum diisi.', 'Nilai atau esai yang belum lengkap.', 'Jadwal mengajar dan asesmen aktif.']
+				watchlist: ['Jurnal kelas yang belum diisi.', 'Nilai atau esai yang belum lengkap.', 'Jadwal mengajar aktif.']
 			};
 		}
 		if (isStaff) {
@@ -244,19 +241,19 @@
 		}
 		return {
 			eyebrow: 'Beranda Admin',
-			title: 'Pantau kesiapan akademik, rapor, CBT, dan layanan madrasah.',
+			title: 'Pantau kesiapan akademik, rapor, dan layanan madrasah.',
 			description: 'Admin mendapat ringkasan prioritas untuk mengawasi operasional utama MTsN 2 Kolaka Utara.',
 			primary: [
 				{ label: 'Kesiapan Akademik & Rapor', href: '/akademik/kesiapan', description: 'Cek masalah wali kelas, jadwal, nilai, dan rapor.' },
 				{ label: 'Rombel', href: '/akademik/rombel', description: 'Kelola kelas, wali kelas, dan siswa per rombel.' },
-				{ label: 'Persiapan Asesmen', href: '/asesmen/persiapan', description: 'Pantau kesiapan kegiatan CBT.' }
+				{ label: 'Bank Soal', href: '/bank-soal', description: 'Kelola bank soal madrasah.' }
 			],
 			secondary: [
 				{ label: 'Jadwal', href: '/akademik/jadwal', description: 'Cek jadwal dan potensi bentrok.' },
 				{ label: 'Rapor Siswa', href: '/grades/rapor', description: 'Kelola pengaturan dan cetak rapor.' },
 				{ label: 'Monitor PUSAKA', href: '/pusaka', description: 'Pantau integrasi kehadiran pegawai.' }
 			],
-			watchlist: ['Kesiapan akademik dan rapor yang belum lengkap.', 'Kegiatan CBT mendekati pelaksanaan.', 'Sinkronisasi PUSAKA dan tindak lanjut Tata Usaha.']
+			watchlist: ['Kesiapan akademik dan rapor yang belum lengkap.', 'Bank Soal dan data akademik yang perlu dirapikan.', 'Sinkronisasi PUSAKA dan tindak lanjut Tata Usaha.']
 		};
 	});
 
@@ -265,12 +262,6 @@
 		return readClientApiData<T>(res, `Respons ${path} tidak valid.`);
 	}
 
-	async function loadUngradedEssaysForSessions(sessions: CbtSessionSummary[]): Promise<EssayQueueItem[]> {
-		const essayLists = await Promise.all(
-			sessions.map((session) => fetchJSON<EssayQueueItem[]>(clientApiPath`/api/asesmen/sessions/${session.id}/ungraded-essays`))
-		);
-		return essayLists.flat();
-	}
 
 	function fmtDateTime(iso: string) {
 		if (!iso) return '—';
@@ -339,7 +330,7 @@
 		}
 
 		const [sessions, students, timetable, academicStats] = await Promise.all([
-			dashboardAccess.assessmentSessions ? fetchJSON<CbtSessionSummary[]>('/api/asesmen/sessions') : Promise.resolve([]),
+			Promise.resolve([] as CbtSessionSummary[]),
 			dashboardAccess.studentSummary ? fetchJSON<StudentSummary[]>('/api/students') : Promise.resolve([]),
 			dashboardAccess.teacherTimetable ? fetchJSON<{ timetable: TimetableEntry[] }>('/api/portal/guru/timetable') : Promise.resolve({ timetable: [] }),
 			dashboardAccess.academicStats ? fetchJSON<AcademicStats>('/api/academic/stats') : Promise.resolve(null)
@@ -349,7 +340,7 @@
 		payload.guruTimetable = timetable.timetable ?? [];
 
 		if (dashboardAccess.assessmentSessions || dashboardAccess.studentSummary || dashboardAccess.teacherTimetable) {
-			const essays = dashboardAccess.ungradedEssays ? await loadUngradedEssaysForSessions(sessions) : [];
+			const essays: EssayQueueItem[] = [];
 			const activeSessions = sessions.filter((session) => session.status === 'active' || session.status === 'scheduled');
 			const subjects = new Set(activeSessions.map((session) => session.package_title));
 			payload.guruStats = {

@@ -17,8 +17,8 @@ describe('route access helpers', () => {
 		expect(isPublicPath('/')).toBe(true);
 		expect(isPublicPath('/berita/arsip-kegiatan')).toBe(true);
 		expect(isPublicPath('/api/cbt-portal/participants/participant-1/start')).toBe(false);
-		expect(isPublicPath('/ujian')).toBe(true);
-		expect(isPublicPath('/pengawas-ujian')).toBe(true);
+		expect(isPublicPath('/ujian')).toBe(false);
+		expect(isPublicPath('/pengawas-ujian')).toBe(false);
 		expect(isPublicPath('/beritaship')).toBe(false);
 		expect(isPublicPath('/dashboard')).toBe(false);
 	});
@@ -76,26 +76,7 @@ describe('route access helpers', () => {
 	});
 
 
-	it('requires card issue permission for assessment participant card endpoints', () => {
-		expect(requiredPermissionsForPath('/api/asesmen/exams/exam-1/participant-cards', 'GET')).toEqual(['asesmen.cards_issue', 'asesmen.manage']);
-		expect(requiredPermissionsForPath('/api/asesmen/exams/exam-1/issue-cards', 'POST')).toEqual(['asesmen.cards_issue', 'asesmen.manage']);
-	});
 
-	it('guards the rebuilt Asesmen shell by asesmen.read permission while keeping admin fallback', () => {
-		const plainGuru = { id: '1', username: 'guru', role: 'guru', roles: ['guru'], permissions: [] };
-		const assessmentReader = { id: '2', username: 'panitia', role: '', roles: [], permissions: ['asesmen.read'] };
-		const admin = { id: '3', username: 'admin', role: 'admin', roles: ['admin'], permissions: [] };
-
-		expect(requiredPermissionsForPath('/asesmen', 'GET')).toEqual(['asesmen.read']);
-		expect(requiredPermissionsForPath('/asesmen/prototype', 'GET')).toEqual(['asesmen.read']);
-		expect(requiredPermissionsForPath('/asesmen/persiapan', 'GET')).toEqual(['asesmen.read']);
-		expect(requiredPermissionsForPath('/asesmen/dokumen', 'GET')).toEqual(['asesmen.read']);
-		expect(requiredPermissionsForPath('/api/asesmen/exams/exam-1/issue-cards', 'POST')).toEqual(['asesmen.cards_issue', 'asesmen.manage']);
-		expect(canAccessProtectedRoute(undefined, '/asesmen', 'GET')).toBe(false);
-		expect(canAccessProtectedRoute(plainGuru, '/asesmen', 'GET')).toBe(false);
-		expect(canAccessProtectedRoute(assessmentReader, '/asesmen', 'GET')).toBe(true);
-		expect(canAccessProtectedRoute(admin, '/asesmen', 'GET')).toBe(true);
-	});
 
 	it('matches student master paths without broad admin-only exposure for read BFF', () => {
 		expect(isStudentPagePath('/students')).toBe(true);
@@ -300,7 +281,6 @@ describe('route access helpers', () => {
 		expect(requiredPermissionsForPath('/bank-soal/tambah', 'GET')).toEqual(['bank_soal.create']);
 		expect(requiredPermissionsForPath('/bank-soal/verifikasi', 'GET')).toEqual(['bank_soal.review']);
 		expect(requiredPermissionsForPath('/bank-soal/impor', 'GET')).toEqual(['bank_soal.import']);
-		expect(requiredPermissionsForPath('/asesmen', 'GET')).toEqual(['asesmen.read']);
 		expect(requiredPermissionsForPath('/bank-soal/alat', 'GET')).toEqual(['bank_soal.analytics', 'bank_soal.publish', 'bank_soal.settings']);
 		expect(requiredPermissionsForPath('/bank-soal/pengaturan', 'GET')).toEqual(['bank_soal.settings']);
 		expect(requiredPermissionsForPath('/api/bank-soal/questions', 'POST')).toEqual(['bank_soal.create']);

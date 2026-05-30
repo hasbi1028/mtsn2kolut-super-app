@@ -50,13 +50,6 @@ export const DASHBOARD_WIDGETS = [
 		adminDefault: true
 	},
 	{
-		id: 'teacher-assessment',
-		label: 'Asesmen Guru',
-		description: 'Sesi asesmen dan antrean koreksi guru.',
-		permissions: ['asesmen.read', 'asesmen.proctor', 'asesmen.result_read', 'asesmen.score'],
-		audienceRoles: ['guru']
-	},
-	{
 		id: 'teacher-students',
 		label: 'Siswa Diampu',
 		description: 'Ringkasan siswa yang dapat dipantau guru.',
@@ -139,19 +132,18 @@ export function dashboardDataAccessForUser(user: UIAccessSubject | undefined): D
 	const isParent = roles.includes('ortu');
 	const canUseStudentPortal = isSiswa && dashboardWidgetEvaluation(DASHBOARD_WIDGETS.find((widget) => widget.id === 'student-portal')!, user).allowed;
 	const canUseParentPortal = isParent && dashboardWidgetEvaluation(DASHBOARD_WIDGETS.find((widget) => widget.id === 'parent-portal')!, user).allowed;
-	const hasAssessment = isGuru && hasPermission(user, ['asesmen.read', 'asesmen.proctor', 'asesmen.result_read', 'asesmen.score']);
 	const hasStudents = isGuru && hasPermission(user, ['students.read']);
 	const hasTimetable = isGuru && hasPermission(user, ['academic.read', 'journal.read', 'journal.manage', 'journal.read_all', 'journal.manage_all']);
 	const hasBankSoal = admin || hasPermission(user, ['bank_soal.read', 'bank_soal.create', 'bank_soal.review', 'bank_soal.import', 'bank_soal.settings', 'bank_soal.analytics']);
 
 	return {
 		academicStats: admin || hasPermission(user, ['academic.read']),
-		assessmentSessions: hasAssessment,
+		assessmentSessions: false,
 		bankSoal: hasBankSoal,
 		parentPortal: canUseParentPortal,
 		studentPortal: canUseStudentPortal,
 		studentSummary: hasStudents,
 		teacherTimetable: hasTimetable,
-		ungradedEssays: hasAssessment && hasPermission(user, ['asesmen.score'])
+		ungradedEssays: false
 	};
 }

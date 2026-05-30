@@ -66,25 +66,6 @@ export type StudentPortalResultItem = {
 	room_name: string;
 };
 
-export type StudentPortalCbtScheduleStatus = 'upcoming' | 'token_window' | 'active' | 'submitted' | 'closed' | 'locked';
-
-export type StudentPortalCbtScheduleItem = {
-	participant_id: string;
-	session_id: string;
-	session_title: string;
-	package_title: string;
-	scheduled_start: string;
-	scheduled_end: string;
-	duration_minutes: number;
-	room_id: string | null;
-	room_name: string | null;
-	seat_no: number | null;
-	status: StudentPortalCbtScheduleStatus;
-	can_reveal_token: boolean;
-	requires_room_token: boolean;
-	token_masked: string | null;
-};
-
 export type StudentPortalProfilePayload = {
 	student: StudentPortalProfile;
 };
@@ -95,15 +76,6 @@ export type StudentPortalSchedulePayload = {
 
 export type StudentPortalResultsPayload = {
 	results: StudentPortalResultItem[];
-};
-
-export type StudentPortalCbtSchedulePayload = {
-	schedule: StudentPortalCbtScheduleItem[];
-};
-
-export type StudentPortalCbtRevealPayload = {
-	token: string;
-	expires_at: string;
 };
 
 export async function fetchStudentPortalPreviewStudents(fetcher: FetchLike = fetch) {
@@ -129,21 +101,3 @@ export async function fetchStudentPortalResults(fetcher: FetchLike = fetch, stud
 	return readClientApiData<StudentPortalResultsPayload>(res, 'Gagal memuat hasil portal siswa.');
 }
 
-export async function fetchStudentPortalCbtSchedule(fetcher: FetchLike = fetch, studentID = '') {
-	const url = studentID ? clientApiPath`/api/portal/preview/students/${studentID}/cbt` : '/api/portal/siswa/cbt';
-	const res = await fetcher(url);
-	return readClientApiData<StudentPortalCbtSchedulePayload>(res, 'Gagal memuat jadwal CBT portal siswa.');
-}
-
-export async function revealStudentPortalCbtToken(
-	participantID: string,
-	roomToken: string,
-	fetcher: FetchLike = fetch
-) {
-	const res = await fetcher(clientApiPath`/api/portal/siswa/cbt/${participantID}/reveal-token`, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ room_token: roomToken })
-	});
-	return readClientApiData<StudentPortalCbtRevealPayload>(res, 'Token ujian belum dapat dibuka.');
-}
