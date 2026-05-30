@@ -15,7 +15,7 @@
 	let { children, data } = $props();
 	let isLogin = $derived(page.url.pathname === '/login');
 	let isMaintenancePage = $derived(page.url.pathname === '/maintenance');
-	let isExamFallbackPage = $derived(false);
+	let isExamFallbackPage = $derived(page.url.pathname === '/ujian' || page.url.pathname === '/pengawas-ujian');
 	let pwaRegistrationStarted = $state(false);
 	let isPublicSite = $derived(isPublicSitePath(page.url.pathname, Boolean(data.user)));
 	let branding = $derived(data.branding ?? defaultBranding);

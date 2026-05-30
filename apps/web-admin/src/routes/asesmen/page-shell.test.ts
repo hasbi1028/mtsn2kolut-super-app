@@ -9,12 +9,13 @@ describe('/asesmen production shell', () => {
 		expect(pageSource).toContain('Command Center CBT');
 		expect(pageSource).toContain('CBT Web');
 		expect(pageSource).toContain('Alur sederhana untuk panitia');
+		expect(pageSource).toContain('siapkan ujian, jalankan ruang, buka portal peserta, lalu tutup hasil');
 		expect(pageSource).toContain('/api/asesmen/exams');
 		expect(pageSource).toContain('Promise.allSettled');
 	});
 
 	it('shows the primary preparation lanes and safe document print lane', () => {
-		for (const label of ['Siapkan Ujian', 'Atur 8 Ruang', 'Cetak Kartu & Pengawas', 'Pelaksanaan & Hasil']) {
+		for (const label of ['Persiapan', 'Paket & Jadwal', 'Ruang & Dokumen', 'Pelaksanaan & Hasil']) {
 			expect(pageSource).toContain(label);
 		}
 		expect(pageSource).toContain('Dokumen & Cetak');

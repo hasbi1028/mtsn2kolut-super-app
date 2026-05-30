@@ -142,24 +142,24 @@
 
 	const steps = [
 		{
-			label: 'Siapkan Ujian',
-			detail: 'Buat draft ujian dulu: nama, tingkat kelas, tanggal dan jam. Paket soal tetap di Bank Soal.',
-			status: 'Aktif'
+			label: 'Persiapan',
+			detail: 'Buat draft ujian, pilih kegiatan, siapkan rombel, dan pastikan Bank Soal tetap sebagai sumber paket.',
+			status: 'Alur 1'
 		},
 		{
-			label: 'Atur 8 Ruang',
-			detail: 'Pilih ujian, cek preview R01–R08, lalu simpan pembagian ruang tanpa membuat token peserta.',
-			status: 'Dikerjakan'
+			label: 'Paket & Jadwal',
+			detail: 'Pilih paket per rombel/mapel, atur tanggal, sesi, durasi, lalu validasi kesiapan sebelum ruang dibuka.',
+			status: 'Alur 2'
 		},
 		{
-			label: 'Cetak Kartu & Pengawas',
-			detail: 'Tetap aman: QR+PIN dan kartu belum diterbitkan sampai peserta ujian tersambung.',
-			status: 'Berikutnya'
+			label: 'Ruang & Dokumen',
+			detail: 'Preview R01–R08, simpan penempatan, lalu terbitkan QR+PIN hanya dari Dokumen & Cetak saat siap.',
+			status: 'Alur 3'
 		},
 		{
 			label: 'Pelaksanaan & Hasil',
-			detail: 'Nanti hanya tampilkan pantauan ruang dan rekap nilai penting, bukan konsol teknis yang ramai.',
-			status: 'Berikutnya'
+			detail: 'Pengawas memakai portal sederhana, panitia memantau ruang, lalu menutup rekap hasil tanpa konsol teknis yang ramai.',
+			status: 'Alur 4'
 		}
 	];
 
@@ -649,7 +649,7 @@
 					<div class="space-y-2">
 						<h1 class="text-3xl font-black tracking-tight text-slate-950 md:text-5xl">Command Center CBT</h1>
 						<p class="max-w-3xl text-base leading-7 text-slate-600">
-							Alur sederhana untuk panitia: buat draft ujian, atur 8 ruang, lalu lanjut peserta dan kartu setelah fondasi ruang rapi.
+							Alur sederhana untuk panitia: siapkan ujian, jalankan ruang, buka portal peserta, lalu tutup hasil.
 						</p>
 					</div>
 				</div>
@@ -658,7 +658,7 @@
 						Lihat Prototype
 					</a>
 					<a href="/bank-soal" class="rounded-2xl bg-emerald-700 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-emerald-800">
-						Buka Bank Soal
+						Bank Soal
 					</a>
 				</div>
 			</div>
@@ -675,9 +675,9 @@
 			<div class="mb-3 flex flex-col gap-1 border-b border-slate-200 pb-3 sm:flex-row sm:items-end sm:justify-between">
 				<div>
 					<p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Asesmen Ujian</p>
-					<h2 class="text-xl font-black text-slate-950">Checklist ringkas panitia</h2>
+					<h2 class="text-xl font-black text-slate-950">Alur utama panitia</h2>
 				</div>
-				<p class="text-sm font-semibold text-slate-500">Produksi awal — fokus ruang ujian dulu.</p>
+				<p class="text-sm font-semibold text-slate-500">Persiapan → Paket & Jadwal → Ruang & Dokumen → Pelaksanaan → Hasil.</p>
 			</div>
 
 			<div class="divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200">

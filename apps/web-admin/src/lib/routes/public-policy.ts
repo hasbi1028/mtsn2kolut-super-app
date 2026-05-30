@@ -21,6 +21,7 @@ const PUBLIC_API_PREFIXES = [
 ] as const;
 
 const PUBLIC_PAGE_PREFIXES = ['/s/idc/', '/portal/siswa/qr-login'] as const;
+const PUBLIC_EXAM_PAGE_EXACT_PATHS = ['/ujian', '/pengawas-ujian'] as const;
 
 const PUBLIC_AUTH_EXACT_PATHS = ['/login', '/maintenance', '/manifest.webmanifest'] as const;
 
@@ -41,6 +42,7 @@ export function isPublicPath(pathname: string) {
 	if (isPublicSitePath(pathname)) return true;
 	if (PUBLIC_PAGE_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix))) return true;
 	if (PUBLIC_AUTH_EXACT_PATHS.includes(pathname as (typeof PUBLIC_AUTH_EXACT_PATHS)[number])) return true;
+	if (PUBLIC_EXAM_PAGE_EXACT_PATHS.includes(pathname as (typeof PUBLIC_EXAM_PAGE_EXACT_PATHS)[number])) return true;
 	if (PUBLIC_API_EXACT_PATHS.includes(pathname as (typeof PUBLIC_API_EXACT_PATHS)[number])) return true;
 	return PUBLIC_API_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
 }

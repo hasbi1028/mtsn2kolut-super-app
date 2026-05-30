@@ -134,7 +134,14 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	{
 		group: 'Asesmen',
 		items: [
-			{ href: '/asesmen', label: 'Asesmen Ujian', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.read'] }
+			{ kind: 'folder', id: 'asesmen-alur-utama', label: 'Alur Utama', icon: 'clipboard', children: [
+				{ href: '/asesmen', label: 'Command Center CBT', icon: 'grid', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
+				{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
+				{ href: '/asesmen/paket-jadwal', label: 'Paket & Jadwal', icon: 'calendar', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
+				{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
+				{ href: '/asesmen/hasil', label: 'Hasil', icon: 'printer', roles: ['admin', 'guru'], permissions: ['asesmen.result_read', 'asesmen.result_manage', 'asesmen.read'] },
+				{ href: '/asesmen/dokumen', label: 'Dokumen & Cetak', icon: 'printer', roles: ['admin', 'guru'], permissions: ['asesmen.cards_issue', 'asesmen.manage', 'asesmen.read'] }
+			]}
 		]
 	},
 	{

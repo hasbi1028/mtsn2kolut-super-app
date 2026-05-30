@@ -17,6 +17,8 @@ describe('route access helpers', () => {
 		expect(isPublicPath('/')).toBe(true);
 		expect(isPublicPath('/berita/arsip-kegiatan')).toBe(true);
 		expect(isPublicPath('/api/cbt-portal/participants/participant-1/start')).toBe(false);
+		expect(isPublicPath('/ujian')).toBe(true);
+		expect(isPublicPath('/pengawas-ujian')).toBe(true);
 		expect(isPublicPath('/beritaship')).toBe(false);
 		expect(isPublicPath('/dashboard')).toBe(false);
 	});
@@ -86,6 +88,8 @@ describe('route access helpers', () => {
 
 		expect(requiredPermissionsForPath('/asesmen', 'GET')).toEqual(['asesmen.read']);
 		expect(requiredPermissionsForPath('/asesmen/prototype', 'GET')).toEqual(['asesmen.read']);
+		expect(requiredPermissionsForPath('/asesmen/persiapan', 'GET')).toEqual(['asesmen.read']);
+		expect(requiredPermissionsForPath('/asesmen/dokumen', 'GET')).toEqual(['asesmen.read']);
 		expect(requiredPermissionsForPath('/api/asesmen/exams/exam-1/issue-cards', 'POST')).toEqual(['asesmen.cards_issue', 'asesmen.manage']);
 		expect(canAccessProtectedRoute(undefined, '/asesmen', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute(plainGuru, '/asesmen', 'GET')).toBe(false);

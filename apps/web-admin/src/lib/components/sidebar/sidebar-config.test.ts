@@ -41,6 +41,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 
 	it('supports 3-level breadcrumbs for nested sidebar leaves', () => {
 		expect(sidebarBreadcrumbLabel(byHref.get('/bank-soal/tambah')!)).toBe('Bank Soal › Tambah Soal');
+		expect(sidebarBreadcrumbLabel(byHref.get('/asesmen')!)).toBe('Asesmen › Alur Utama › Command Center CBT');
 		expect(sidebarBreadcrumbLabel(byHref.get('/settings/backups')!)).toBe('Pengaturan › Sistem & Audit › Backup & Restore');
 	});
 
@@ -77,14 +78,29 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(hrefs.some((href) => href.startsWith('/cbt/questions'))).toBe(false);
 	});
 
-	it('shows one simplified assessment entry while hiding technical prototype/detail routes', () => {
-		expect(hrefsByGroup('Asesmen')).toEqual(['/asesmen']);
-		expect(labelsByGroup('Asesmen')).toEqual(['Asesmen Ujian']);
-		expect(sidebarBreadcrumbLabel(byHref.get('/asesmen')!)).toBe('Asesmen › Asesmen Ujian');
+	it('shows the simplified assessment Alur Utama while hiding technical prototype/detail routes', () => {
+		expect(hrefsByGroup('Asesmen')).toEqual([
+			'/asesmen',
+			'/asesmen/persiapan',
+			'/asesmen/paket-jadwal',
+			'/asesmen/pelaksanaan',
+			'/asesmen/hasil',
+			'/asesmen/dokumen'
+		]);
+		expect(labelsByGroup('Asesmen')).toEqual([
+			'Command Center CBT',
+			'Persiapan',
+			'Paket & Jadwal',
+			'Pelaksanaan',
+			'Hasil',
+			'Dokumen & Cetak'
+		]);
+		expect(sidebarBreadcrumbLabel(byHref.get('/asesmen')!)).toBe('Asesmen › Alur Utama › Command Center CBT');
 		expect(hrefs).not.toContain('/asesmen/prototype');
 		expect(hrefs).not.toContain('/asesmen/kegiatan');
 		expect(hrefs).not.toContain('/asesmen/paket');
 		expect(hrefs).not.toContain('/asesmen/sesi');
+		expect(hrefs).not.toContain('/ujian');
 	});
 
 	it('separates Bank Soal as a standalone module outside CBT routes', () => {
@@ -114,7 +130,8 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(byHref.get('/bank-soal/verifikasi')?.permissions).toEqual(['bank_soal.review', 'bank_soal.publish']);
 		expect(byHref.get('/bank-soal/analisis-butir')).toBeUndefined();
 		expect(byHref.get('/asesmen')?.permissions).toEqual(['asesmen.read']);
-		expect(byHref.get('/asesmen/persiapan')).toBeUndefined();
+		expect(byHref.get('/asesmen/persiapan')?.permissions).toEqual(['asesmen.read']);
+		expect(byHref.get('/asesmen/dokumen')?.permissions).toEqual(['asesmen.cards_issue', 'asesmen.manage', 'asesmen.read']);
 	});
 
 	it('hides guru role-only academic, student, assessment, and bank-soal surfaces without permissions', () => {
@@ -123,6 +140,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(visibleHrefs).not.toContain('/students');
 		expect(visibleHrefs).not.toContain('/bank-soal');
 		expect(visibleHrefs).not.toContain('/asesmen/pelaksanaan');
+		expect(visibleHrefs).not.toContain('/asesmen');
 	});
 
 
