@@ -349,6 +349,7 @@ func (s *AssessmentExam) AssignmentApply(ctx context.Context, id pgtype.UUID, in
 	if err != nil {
 		return AssessmentAssignmentResult{}, err
 	}
+	participants = orderAssessmentParticipantsForMixPolicy(participants, normalized.MixPolicy)
 	result := buildAssessmentAssignmentResult(exam.ID, assessmentUUIDString(session.ID), normalized, int64(len(participants)), true)
 	result.Rooms = attachAssessmentRoomComposition(result.Rooms, participants)
 	roomsByCode := make(map[string]db.AssessmentRoom, len(result.Rooms))
@@ -439,6 +440,50 @@ func (s *AssessmentExam) assignAssessmentParticipantsToRooms(ctx context.Context
 		}
 	}
 	return nil
+}
+
+func orderAssessmentParticipantsForMixPolicy(participants []db.ListAssessmentParticipantsForAssignmentRow, mixPolicy string) []db.ListAssessmentParticipantsForAssignmentRow {
+	if mixPolicy != AssessmentMixPolicyMixed || len(participants) < 2 {
+		return participants
+	}
+	groups := make(map[string][]db.ListAssessmentParticipantsForAssignmentRow)
+	order := make([]string, 0)
+	for _, participant := range participants {
+		key := assessmentParticipantClassKey(participant)
+		if _, ok := groups[key]; !ok {
+			order = append(order, key)
+		}
+		groups[key] = append(groups[key], participant)
+	}
+	if len(order) < 2 {
+		return participants
+	}
+	mixed := make([]db.ListAssessmentParticipantsForAssignmentRow, 0, len(participants))
+	for {
+		added := false
+		for _, key := range order {
+			bucket := groups[key]
+			if len(bucket) == 0 {
+				continue
+			}
+			mixed = append(mixed, bucket[0])
+			groups[key] = bucket[1:]
+			added = true
+		}
+		if !added {
+			break
+		}
+	}
+	return mixed
+}
+
+func assessmentParticipantClassKey(participant db.ListAssessmentParticipantsForAssignmentRow) string {
+	classCode := strings.TrimSpace(participant.ClassCode)
+	className := strings.TrimSpace(participant.ClassName)
+	if classCode == "" {
+		classCode = "Tanpa Rombel"
+	}
+	return fmt.Sprintf("%d|%s|%s", participant.GradeLevel, classCode, className)
 }
 
 func attachAssessmentRoomComposition(rooms []AssessmentAssignmentRoom, participants []db.ListAssessmentParticipantsForAssignmentRow) []AssessmentAssignmentRoom {

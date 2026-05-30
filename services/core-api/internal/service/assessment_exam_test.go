@@ -382,6 +382,70 @@ func TestAssessmentExamAssignmentApplyEnrollsClassStudentsAndAssignsSeats(t *tes
 	}
 }
 
+func TestAssessmentExamAssignmentApplyMixedPolicyInterleavesRombelPerRoom(t *testing.T) {
+	examID := mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111")
+	sessionID := mustPgUUIDAssessmentTest("22222222-2222-2222-2222-222222222222")
+	now := time.Date(2026, 5, 30, 8, 0, 0, 0, time.UTC)
+	classes := []string{"VIIA", "VIIB", "VIIIA", "VIIIC"}
+	participants := make([]db.ListAssessmentParticipantsForAssignmentRow, 0, 20)
+	for _, classCode := range classes {
+		for i := 1; i <= 5; i++ {
+			participantID := mustPgUUIDAssessmentTest("aaaaaaaa-0000-0000-0000-000000000001")
+			participantID.Bytes[15] = byte(len(participants) + 1)
+			grade := int32(7)
+			if classCode == "VIIIA" || classCode == "VIIIC" {
+				grade = 8
+			}
+			participants = append(participants, db.ListAssessmentParticipantsForAssignmentRow{
+				ParticipantID: participantID,
+				SessionID:     sessionID,
+				StudentID:     participantID,
+				StudentName:   classCode,
+				ClassCode:     classCode,
+				ClassName:     classCode,
+				GradeLevel:    grade,
+			})
+		}
+	}
+	store := &fakeAssessmentExamStore{
+		getRow: db.GetAssessmentExamRow{
+			ID:        examID,
+			Title:     "Gladi Campur",
+			Status:    AssessmentExamStatusDraft,
+			CreatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+			UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+		},
+		firstSession: db.AssessmentSession{ID: sessionID},
+		participants: participants,
+	}
+	svc := NewAssessmentExamWithStore(store)
+
+	result, err := svc.AssignmentApply(context.Background(), examID, AssessmentAssignmentRequest{RoomCount: 1, CapacityPerRoom: 20, MixPolicy: AssessmentMixPolicyMixed})
+	if err != nil {
+		t.Fatalf("AssignmentApply err = %v", err)
+	}
+	if len(result.Rooms) != 1 {
+		t.Fatalf("rooms = %+v, want one room", result.Rooms)
+	}
+	counts := map[string]int64{}
+	for _, item := range result.Rooms[0].ClassSummary {
+		counts[item.ClassCode] = item.Count
+	}
+	for _, classCode := range classes {
+		if counts[classCode] != 5 {
+			t.Fatalf("class summary = %+v, want %s count 5 in the same room", result.Rooms[0].ClassSummary, classCode)
+		}
+	}
+	assignedByClass := map[string]int{}
+	for seatIndex, assigned := range store.assignedParticipants {
+		original := participants[int(assigned.ParticipantID.Bytes[15])-1]
+		assignedByClass[original.ClassCode]++
+		if seatIndex < 4 && assignedByClass[original.ClassCode] != 1 {
+			t.Fatalf("first four seats = %+v, want one student from each rombel before repeating", store.assignedParticipants[:4])
+		}
+	}
+}
+
 func mustPgUUIDAssessmentTest(raw string) pgtype.UUID {
 	var id pgtype.UUID
 	if err := id.Scan(raw); err != nil {
