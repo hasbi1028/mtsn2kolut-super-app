@@ -29,8 +29,10 @@ describe('Mode CBT Familiar production module', () => {
 		expect(componentSource).toContain('Alur kerja');
 		expect(componentSource).toContain('Fitur operasional');
 		expect(dashboardSource).toContain('Quick Start Ujian');
-		expect(ruangSource).toContain('Auto placement mixed');
-		expect(ruangSource).toContain('Validasi kapasitas');
+		expect(ruangSource).toContain('assignment-preview');
+		expect(ruangSource).toContain('assignment-apply');
+		expect(ruangSource).toContain('participants/seat');
+		expect(ruangSource).toContain('Simpan Pindahan');
 		expect(paketSource).toContain('/api/asesmen/packages/options');
 		expect(sesiSource).toContain('Kontrol buka/tutup');
 		expect(proctoringSource).toContain('Antrian bantuan admin');
