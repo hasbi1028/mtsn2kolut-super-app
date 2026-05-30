@@ -14,6 +14,8 @@
 		catatan: string;
 	};
 
+	type DetailFeatureKey = 'paket' | 'peserta' | 'ruang' | 'sesi' | 'cetak' | 'hasil';
+
 	type DraftKegiatan = {
 		nama: string;
 		jenis: string;
@@ -65,6 +67,7 @@
 
 	let showCreateForm = $state(false);
 	let selectedKegiatanId = $state<string | null>(null);
+	let activeDetailFeature = $state<DetailFeatureKey | null>(null);
 	let draft = $state<DraftKegiatan>({ ...emptyDraft });
 	let formError = $state('');
 	let formNotice = $state('');
@@ -84,6 +87,17 @@
 		'Lembar pengawas siap cetak',
 		'Siap pelaksanaan'
 	] as const;
+
+	const detailFeatures: Array<{ key: DetailFeatureKey; label: string; description: string }> = [
+		{ key: 'paket', label: 'Paket Soal', description: 'Nanti untuk memilih/menautkan paket soal ke kegiatan.' },
+		{ key: 'peserta', label: 'Peserta', description: 'Nanti untuk menambahkan siswa peserta kegiatan.' },
+		{ key: 'ruang', label: 'Ruang', description: 'Nanti untuk menyiapkan ruang, kapasitas, dan tempat duduk.' },
+		{ key: 'sesi', label: 'Sesi', description: 'Nanti untuk jadwal sesi ujian per ruang/paket.' },
+		{ key: 'cetak', label: 'Cetak', description: 'Nanti untuk kartu peserta dan lembar pengawas.' },
+		{ key: 'hasil', label: 'Hasil', description: 'Nanti untuk rekap nilai dan arsip pelaksanaan.' }
+	];
+
+	const activeFeature = $derived(detailFeatures.find((feature) => feature.key === activeDetailFeature) ?? null);
 
 	const statusTone: Record<KegiatanStatus, string> = {
 		Draft: 'border-amber-200 bg-amber-50 text-amber-700',
@@ -130,12 +144,14 @@
 
 	function openKegiatanDetail(id: string) {
 		selectedKegiatanId = id;
+		activeDetailFeature = null;
 		showCreateForm = false;
 		formNotice = '';
 	}
 
 	function closeKegiatanDetail() {
 		selectedKegiatanId = null;
+		activeDetailFeature = null;
 	}
 
 	function submitPreview() {
@@ -332,7 +348,7 @@
 				<div class="border-b border-border px-5 py-4">
 					<div class="flex items-start justify-between gap-3">
 						<div class="min-w-0 space-y-2">
-							<p class="text-xs font-semibold tracking-[0.18em] text-muted-foreground uppercase">Step 3 · Detail Kegiatan</p>
+							<p class="text-xs font-semibold tracking-[0.18em] text-muted-foreground uppercase">Step 4 · Detail Kegiatan</p>
 							<h2 id="detail-drawer-title" class="truncate text-lg font-bold text-foreground">{selectedKegiatan.nama}</h2>
 							<div class="flex flex-wrap items-center gap-2">
 								<span class={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone[selectedKegiatan.status]}`}>{selectedKegiatan.status}</span>
@@ -364,6 +380,30 @@
 					</section>
 
 					<section class="rounded-xl border bg-background p-4">
+						<h3 class="text-sm font-semibold text-foreground">Menu Dalam Kegiatan</h3>
+						<p class="mt-1 text-xs leading-5 text-muted-foreground">Launcher kecil untuk menguji struktur turunan kegiatan. Semua masih placeholder, belum membuka route/API.</p>
+						<div class="mt-3 grid gap-2 sm:grid-cols-2">
+							{#each detailFeatures as feature}
+								<button
+									type="button"
+									class={`rounded-lg border px-3 py-2 text-left text-sm transition ${activeDetailFeature === feature.key ? 'border-primary bg-primary/10 text-primary' : 'bg-card text-foreground hover:bg-muted'}`}
+									onclick={() => (activeDetailFeature = feature.key)}
+								>
+									<span class="block font-semibold">{feature.label}</span>
+									<span class="mt-1 block text-[11px] leading-4 text-muted-foreground">{feature.description}</span>
+								</button>
+							{/each}
+						</div>
+
+						{#if activeFeature}
+							<div class="mt-3 rounded-lg border border-dashed bg-muted/30 px-3 py-3">
+								<p class="text-sm font-semibold text-foreground">{activeFeature.label}</p>
+								<p class="mt-1 text-xs leading-5 text-muted-foreground">{activeFeature.description} Pada step ini hanya dipakai untuk review arah menu, belum ada data asli.</p>
+							</div>
+						{/if}
+					</section>
+
+					<section class="rounded-xl border bg-background p-4">
 						<h3 class="text-sm font-semibold text-foreground">Checklist Persiapan</h3>
 						<p class="mt-1 text-xs leading-5 text-muted-foreground">Belum bisa dicentang permanen. Ini hanya kerangka alur sebelum backend dibuat.</p>
 						<div class="mt-3 space-y-2">
@@ -378,8 +418,8 @@
 					</section>
 
 					<section class="rounded-xl border border-dashed bg-muted/30 p-4">
-						<h3 class="text-sm font-semibold text-foreground">Batas Step 3</h3>
-						<p class="mt-1 text-xs leading-5 text-muted-foreground">Detail ini masih shell frontend-only. Tombol fitur paket, peserta, ruang, sesi, cetak, pelaksanaan, dan hasil akan ditambahkan satu per satu setelah alur ini disetujui.</p>
+						<h3 class="text-sm font-semibold text-foreground">Batas Step 4</h3>
+						<p class="mt-1 text-xs leading-5 text-muted-foreground">Detail ini masih shell frontend-only. Menu paket, peserta, ruang, sesi, cetak, dan hasil sudah berupa placeholder untuk validasi alur, belum membuka route/API.</p>
 					</section>
 				</div>
 
@@ -416,7 +456,7 @@
 	<section class="rounded-2xl border border-border bg-card shadow-sm">
 		<div class="border-b border-border px-4 py-3">
 			<h2 class="text-base font-semibold text-foreground">Daftar Kegiatan</h2>
-			<p class="text-xs text-muted-foreground">Step 3: klik Kelola untuk melihat detail shell dan checklist persiapan.</p>
+			<p class="text-xs text-muted-foreground">Step 4: klik Kelola untuk melihat detail, checklist, dan menu turunan placeholder.</p>
 		</div>
 
 		<div class="divide-y divide-border">
@@ -475,7 +515,7 @@
 			<li>Belum membuat tabel/database baru.</li>
 			<li>Form hanya membuat preview lokal di browser, belum tersimpan permanen.</li>
 			<li>Detail kegiatan sudah berupa shell/drawer, belum menyimpan checklist permanen.</li>
-			<li>Belum menampilkan fitur paket, peserta, ruang, sesi, kartu, proctoring, atau hasil.</li>
+			<li>Menu paket, peserta, ruang, sesi, cetak, dan hasil masih placeholder tanpa route/API.</li>
 		</ul>
 	</section>
 </div>
