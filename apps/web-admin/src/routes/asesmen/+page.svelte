@@ -64,6 +64,7 @@
 	]);
 
 	let showCreateForm = $state(false);
+	let selectedKegiatanId = $state<string | null>(null);
 	let draft = $state<DraftKegiatan>({ ...emptyDraft });
 	let formError = $state('');
 	let formNotice = $state('');
@@ -71,6 +72,18 @@
 	const totalPeserta = $derived(kegiatan.reduce((total, item) => total + item.peserta, 0));
 	const totalRuang = $derived(kegiatan.reduce((total, item) => total + item.ruang, 0));
 	const totalSesi = $derived(kegiatan.reduce((total, item) => total + item.sesi, 0));
+	const selectedKegiatan = $derived(kegiatan.find((item) => item.id === selectedKegiatanId) ?? null);
+
+	const preparationChecklist = [
+		'Data kegiatan lengkap',
+		'Paket soal dipilih',
+		'Peserta ditambahkan',
+		'Ruang disiapkan',
+		'Jadwal sesi dibuat',
+		'Kartu peserta siap cetak',
+		'Lembar pengawas siap cetak',
+		'Siap pelaksanaan'
+	] as const;
 
 	const statusTone: Record<KegiatanStatus, string> = {
 		Draft: 'border-amber-200 bg-amber-50 text-amber-700',
@@ -110,8 +123,19 @@
 
 	function toggleCreateForm() {
 		showCreateForm = !showCreateForm;
+		if (showCreateForm) selectedKegiatanId = null;
 		formNotice = '';
 		if (showCreateForm) formError = '';
+	}
+
+	function openKegiatanDetail(id: string) {
+		selectedKegiatanId = id;
+		showCreateForm = false;
+		formNotice = '';
+	}
+
+	function closeKegiatanDetail() {
+		selectedKegiatanId = null;
 	}
 
 	function submitPreview() {
@@ -295,6 +319,77 @@
 		</div>
 	{/if}
 
+	{#if selectedKegiatan}
+		<div class="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-labelledby="detail-drawer-title">
+			<button
+				type="button"
+				class="absolute inset-0 bg-slate-950/35 backdrop-blur-[1px]"
+				aria-label="Tutup detail kegiatan"
+				onclick={closeKegiatanDetail}
+			></button>
+
+			<aside class="relative flex h-full w-full max-w-xl flex-col border-l border-border bg-card shadow-2xl sm:w-[34rem]">
+				<div class="border-b border-border px-5 py-4">
+					<div class="flex items-start justify-between gap-3">
+						<div class="min-w-0 space-y-2">
+							<p class="text-xs font-semibold tracking-[0.18em] text-muted-foreground uppercase">Step 3 · Detail Kegiatan</p>
+							<h2 id="detail-drawer-title" class="truncate text-lg font-bold text-foreground">{selectedKegiatan.nama}</h2>
+							<div class="flex flex-wrap items-center gap-2">
+								<span class={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone[selectedKegiatan.status]}`}>{selectedKegiatan.status}</span>
+								<span class="rounded-full border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">{selectedKegiatan.jenis}</span>
+								<span class="rounded-full border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">{selectedKegiatan.mode}</span>
+							</div>
+						</div>
+						<button
+							type="button"
+							class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-bold text-muted-foreground hover:bg-muted"
+							aria-label="Tutup detail"
+							onclick={closeKegiatanDetail}
+						>
+							×
+						</button>
+					</div>
+				</div>
+
+				<div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+					<section class="rounded-xl border bg-background p-4">
+						<h3 class="text-sm font-semibold text-foreground">Ringkasan</h3>
+						<div class="mt-3 grid gap-2 text-sm">
+							<div class="flex justify-between gap-3"><span class="text-muted-foreground">Tanggal</span><strong class="text-right font-semibold">{selectedKegiatan.periode}</strong></div>
+							<div class="flex justify-between gap-3"><span class="text-muted-foreground">Peserta</span><strong>{selectedKegiatan.peserta}</strong></div>
+							<div class="flex justify-between gap-3"><span class="text-muted-foreground">Ruang</span><strong>{selectedKegiatan.ruang}</strong></div>
+							<div class="flex justify-between gap-3"><span class="text-muted-foreground">Sesi</span><strong>{selectedKegiatan.sesi}</strong></div>
+						</div>
+						<p class="mt-3 rounded-lg bg-muted/50 px-3 py-2 text-xs leading-5 text-muted-foreground">{selectedKegiatan.catatan}</p>
+					</section>
+
+					<section class="rounded-xl border bg-background p-4">
+						<h3 class="text-sm font-semibold text-foreground">Checklist Persiapan</h3>
+						<p class="mt-1 text-xs leading-5 text-muted-foreground">Belum bisa dicentang permanen. Ini hanya kerangka alur sebelum backend dibuat.</p>
+						<div class="mt-3 space-y-2">
+							{#each preparationChecklist as label, index}
+								<div class="flex items-center gap-3 rounded-lg border bg-card px-3 py-2 text-sm">
+									<span class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold text-muted-foreground">{index + 1}</span>
+									<span class="min-w-0 flex-1 text-foreground">{label}</span>
+									<span class="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Nanti</span>
+								</div>
+							{/each}
+						</div>
+					</section>
+
+					<section class="rounded-xl border border-dashed bg-muted/30 p-4">
+						<h3 class="text-sm font-semibold text-foreground">Batas Step 3</h3>
+						<p class="mt-1 text-xs leading-5 text-muted-foreground">Detail ini masih shell frontend-only. Tombol fitur paket, peserta, ruang, sesi, cetak, pelaksanaan, dan hasil akan ditambahkan satu per satu setelah alur ini disetujui.</p>
+					</section>
+				</div>
+
+				<div class="border-t border-border bg-card px-5 py-4">
+					<button type="button" class="w-full rounded-md border px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted" onclick={closeKegiatanDetail}>Tutup Detail</button>
+				</div>
+			</aside>
+		</div>
+	{/if}
+
 	{#if formNotice}
 		<p class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700" role="status">{formNotice}</p>
 	{/if}
@@ -321,7 +416,7 @@
 	<section class="rounded-2xl border border-border bg-card shadow-sm">
 		<div class="border-b border-border px-4 py-3">
 			<h2 class="text-base font-semibold text-foreground">Daftar Kegiatan</h2>
-			<p class="text-xs text-muted-foreground">Step 2: form awal sudah bisa membuat preview lokal, belum masuk fitur detail yang kompleks.</p>
+			<p class="text-xs text-muted-foreground">Step 3: klik Kelola untuk melihat detail shell dan checklist persiapan.</p>
 		</div>
 
 		<div class="divide-y divide-border">
@@ -345,19 +440,28 @@
 							<p class="max-w-2xl text-xs leading-5 text-muted-foreground">{item.catatan}</p>
 						</div>
 
-						<div class="grid min-w-full grid-cols-3 gap-2 text-center sm:min-w-[18rem]">
-							<div class="rounded-lg border bg-background p-2">
-								<p class="text-[11px] text-muted-foreground">Peserta</p>
-								<p class="text-lg font-bold">{item.peserta}</p>
+						<div class="space-y-2 sm:min-w-[18rem]">
+							<div class="grid min-w-full grid-cols-3 gap-2 text-center">
+								<div class="rounded-lg border bg-background p-2">
+									<p class="text-[11px] text-muted-foreground">Peserta</p>
+									<p class="text-lg font-bold">{item.peserta}</p>
+								</div>
+								<div class="rounded-lg border bg-background p-2">
+									<p class="text-[11px] text-muted-foreground">Ruang</p>
+									<p class="text-lg font-bold">{item.ruang}</p>
+								</div>
+								<div class="rounded-lg border bg-background p-2">
+									<p class="text-[11px] text-muted-foreground">Sesi</p>
+									<p class="text-lg font-bold">{item.sesi}</p>
+								</div>
 							</div>
-							<div class="rounded-lg border bg-background p-2">
-								<p class="text-[11px] text-muted-foreground">Ruang</p>
-								<p class="text-lg font-bold">{item.ruang}</p>
-							</div>
-							<div class="rounded-lg border bg-background p-2">
-								<p class="text-[11px] text-muted-foreground">Sesi</p>
-								<p class="text-lg font-bold">{item.sesi}</p>
-							</div>
+							<button
+								type="button"
+								class="w-full rounded-md border bg-background px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted"
+								onclick={() => openKegiatanDetail(item.id)}
+							>
+								Kelola
+							</button>
 						</div>
 					</div>
 				</article>
@@ -370,8 +474,8 @@
 		<ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-muted-foreground">
 			<li>Belum membuat tabel/database baru.</li>
 			<li>Form hanya membuat preview lokal di browser, belum tersimpan permanen.</li>
-			<li>Belum menampilkan paket, peserta, ruang, sesi, kartu, proctoring, atau hasil.</li>
-			<li>Tujuannya menguji bentuk input Kegiatan sebelum backend dibuat.</li>
+			<li>Detail kegiatan sudah berupa shell/drawer, belum menyimpan checklist permanen.</li>
+			<li>Belum menampilkan fitur paket, peserta, ruang, sesi, kartu, proctoring, atau hasil.</li>
 		</ul>
 	</section>
 </div>
