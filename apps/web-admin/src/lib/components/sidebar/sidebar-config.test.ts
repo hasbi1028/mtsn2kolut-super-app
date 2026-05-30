@@ -28,6 +28,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'Siswa & Orang Tua',
 			'Nilai & Rapor',
 			'Bank Soal',
+			'Asesmen',
 			'Tata Usaha',
 			'Aset & Layanan',
 			'Website',
@@ -51,15 +52,16 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'4 Siswa & Orang Tua',
 			'5 Nilai & Rapor',
 			'6 Bank Soal',
-			'7 Tata Usaha',
-			'8 Aset & Layanan',
-			'9 Website',
-			'10 Pegawai & Kehadiran',
-			'11 Pengaturan'
+			'7 Asesmen',
+			'8 Tata Usaha',
+			'9 Aset & Layanan',
+			'10 Website',
+			'11 Pegawai & Kehadiran',
+			'12 Pengaturan'
 		]);
 		expect(numberedByHref.get('/bank-soal/tambah')).toMatchObject({ section: '6.2', numberedLabel: '6.2 Tambah Soal' });
 		expect(sidebarNumberedBreadcrumbLabel(numberedByHref.get('/settings/backups')!)).toBe(
-			'11 Pengaturan › 11.3 Sistem & Audit › 11.3.3 Backup & Restore'
+			'12 Pengaturan › 12.3 Sistem & Audit › 12.3.3 Backup & Restore'
 		);
 	});
 
@@ -75,14 +77,18 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(hrefs.some((href) => href.startsWith('/cbt/questions'))).toBe(false);
 	});
 
-	it('keeps assessment navigation removed from the sidebar', () => {
-		expect(hrefsByGroup('Asesmen')).toEqual([]);
-		expect(sidebarNavGroups.some((group) => group.group === 'Asesmen')).toBe(false);
+	it('shows one simplified assessment entry while hiding technical prototype/detail routes', () => {
+		expect(hrefsByGroup('Asesmen')).toEqual(['/asesmen']);
+		expect(labelsByGroup('Asesmen')).toEqual(['Asesmen Ujian']);
+		expect(sidebarBreadcrumbLabel(byHref.get('/asesmen')!)).toBe('Asesmen › Asesmen Ujian');
+		expect(hrefs).not.toContain('/asesmen/prototype');
+		expect(hrefs).not.toContain('/asesmen/kegiatan');
+		expect(hrefs).not.toContain('/asesmen/paket');
+		expect(hrefs).not.toContain('/asesmen/sesi');
 	});
 
 	it('separates Bank Soal as a standalone module outside CBT routes', () => {
 		expect(sidebarNavGroups.findIndex((group) => group.group === 'Bank Soal')).toBeGreaterThanOrEqual(0);
-		expect(sidebarNavGroups.some((group) => group.group === 'Asesmen')).toBe(false);
 		expect(sidebarNavGroups.some((group) => group.group === 'CBT')).toBe(false);
 		expect(hrefsByGroup('Bank Soal')).toEqual([
 			'/bank-soal',
@@ -107,7 +113,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(byHref.get('/settings/rbac')?.permissions).toEqual(['roles.read']);
 		expect(byHref.get('/bank-soal/verifikasi')?.permissions).toEqual(['bank_soal.review', 'bank_soal.publish']);
 		expect(byHref.get('/bank-soal/analisis-butir')).toBeUndefined();
-		expect(byHref.get('/asesmen')).toBeUndefined();
+		expect(byHref.get('/asesmen')?.permissions).toEqual(['asesmen.read']);
 		expect(byHref.get('/asesmen/persiapan')).toBeUndefined();
 	});
 

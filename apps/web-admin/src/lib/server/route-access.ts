@@ -36,6 +36,7 @@ const GURU_SAFE_ASSESSMENT_SUPPORT_READ_PATHS = new Set([
 const GURU_SAFE_ASSESSMENT_SUPPORT_READ_PREFIXES = [] as const;
 
 const BANK_SOAL_PREFIXES = ['/bank-soal', '/api/bank-soal'] as const;
+const ASESMEN_PREFIXES = ['/asesmen', '/api/asesmen'] as const;
 
 const STAFF_OPERATION_PREFIXES = [
 	'/document-cycles',
@@ -208,6 +209,11 @@ function isBankSoalGuruFallbackPath(pathname: string, method: string) {
 		&& !matchesPathSegment(pathname, '/bank-soal/pengaturan');
 }
 
+function asesmenPermission(pathname: string, method: string): string[] | undefined {
+	if (!ASESMEN_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix))) return undefined;
+	return isReadMethod(method) ? ['asesmen.read'] : ['asesmen.manage'];
+}
+
 function staffOperationPermission(pathname: string, method: string): string[] | undefined {
 	if (!isStaffOperationPath(pathname)) return undefined;
 	if (matchesPathSegment(pathname, '/library') || matchesPathSegment(pathname, '/api/library')) return isReadMethod(method) ? ['library.read'] : ['library.manage'];
@@ -282,6 +288,7 @@ export function requiredPermissionsForPath(pathname: string, method: string): st
 		?? journalPermission(pathname, method)
 		?? employeePermission(pathname, method)
 		?? bankSoalPermission(pathname, method)
+		?? asesmenPermission(pathname, method)
 		?? staffOperationPermission(pathname, method)
 		?? [];
 }

@@ -48,7 +48,9 @@ describe('route access helpers', () => {
 
 	it('keeps Bank Soal and Asesmen route boundaries explicit for admin and guru access', () => {
 		expect(isPublicPath('/bank-soal')).toBe(false);
+		expect(isPublicPath('/asesmen')).toBe(false);
 		expect(isAdminOnlyPath('/bank-soal')).toBe(false);
+		expect(isAdminOnlyPath('/asesmen')).toBe(false);
 		const finalBankSoalRoutes = [
 			'/bank-soal',
 			'/bank-soal/daftar',
@@ -69,6 +71,19 @@ describe('route access helpers', () => {
 		expect(isBankSoalPath('/bank-soal/analisis-butir')).toBe(true);
 		expect(isBankSoalPath('/api/bank-soal/summary')).toBe(true);
 		expect(isBankSoalPath('/bank-soalship')).toBe(false);
+	});
+
+	it('guards the rebuilt Asesmen shell by asesmen.read permission while keeping admin fallback', () => {
+		const plainGuru = { id: '1', username: 'guru', role: 'guru', roles: ['guru'], permissions: [] };
+		const assessmentReader = { id: '2', username: 'panitia', role: '', roles: [], permissions: ['asesmen.read'] };
+		const admin = { id: '3', username: 'admin', role: 'admin', roles: ['admin'], permissions: [] };
+
+		expect(requiredPermissionsForPath('/asesmen', 'GET')).toEqual(['asesmen.read']);
+		expect(requiredPermissionsForPath('/asesmen/prototype', 'GET')).toEqual(['asesmen.read']);
+		expect(canAccessProtectedRoute(undefined, '/asesmen', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute(plainGuru, '/asesmen', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute(assessmentReader, '/asesmen', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(admin, '/asesmen', 'GET')).toBe(true);
 	});
 
 	it('matches student master paths without broad admin-only exposure for read BFF', () => {
@@ -274,6 +289,7 @@ describe('route access helpers', () => {
 		expect(requiredPermissionsForPath('/bank-soal/tambah', 'GET')).toEqual(['bank_soal.create']);
 		expect(requiredPermissionsForPath('/bank-soal/verifikasi', 'GET')).toEqual(['bank_soal.review']);
 		expect(requiredPermissionsForPath('/bank-soal/impor', 'GET')).toEqual(['bank_soal.import']);
+		expect(requiredPermissionsForPath('/asesmen', 'GET')).toEqual(['asesmen.read']);
 		expect(requiredPermissionsForPath('/bank-soal/alat', 'GET')).toEqual(['bank_soal.analytics', 'bank_soal.publish', 'bank_soal.settings']);
 		expect(requiredPermissionsForPath('/bank-soal/pengaturan', 'GET')).toEqual(['bank_soal.settings']);
 		expect(requiredPermissionsForPath('/api/bank-soal/questions', 'POST')).toEqual(['bank_soal.create']);

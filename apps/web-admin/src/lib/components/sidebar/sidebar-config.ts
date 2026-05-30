@@ -132,6 +132,12 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		]
 	},
 	{
+		group: 'Asesmen',
+		items: [
+			{ href: '/asesmen', label: 'Asesmen Ujian', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.read'] }
+		]
+	},
+	{
 		group: 'Tata Usaha',
 		items: [
 			{ kind: 'folder', id: 'persuratan', label: 'Persuratan', icon: 'mail', children: [
