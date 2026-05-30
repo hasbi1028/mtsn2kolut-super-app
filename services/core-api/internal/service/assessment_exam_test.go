@@ -28,6 +28,11 @@ type fakeAssessmentExamStore struct {
 	participants          []db.ListAssessmentParticipantsForAssignmentRow
 	upsertedParticipants  []db.UpsertAssessmentParticipantParams
 	assignedParticipants  []db.AssignAssessmentParticipantRoomParams
+	placementRows         []db.ListAssessmentParticipantPlacementsByExamRow
+	movedParticipantArg   db.MoveAssessmentParticipantSeatParams
+	movedParticipant      db.MoveAssessmentParticipantSeatRow
+	roomForMove           db.GetAssessmentRoomByIDAndExamRow
+	roomForMoveErr        error
 	clearedParticipantSet bool
 	roomCount             int64
 	participantCnt        int64
@@ -101,6 +106,19 @@ func (f *fakeAssessmentExamStore) ClearAssessmentParticipantRooms(context.Contex
 func (f *fakeAssessmentExamStore) AssignAssessmentParticipantRoom(_ context.Context, arg db.AssignAssessmentParticipantRoomParams) error {
 	f.assignedParticipants = append(f.assignedParticipants, arg)
 	return nil
+}
+
+func (f *fakeAssessmentExamStore) ListAssessmentParticipantPlacementsByExam(context.Context, pgtype.UUID) ([]db.ListAssessmentParticipantPlacementsByExamRow, error) {
+	return f.placementRows, nil
+}
+
+func (f *fakeAssessmentExamStore) GetAssessmentRoomByIDAndExam(context.Context, db.GetAssessmentRoomByIDAndExamParams) (db.GetAssessmentRoomByIDAndExamRow, error) {
+	return f.roomForMove, f.roomForMoveErr
+}
+
+func (f *fakeAssessmentExamStore) MoveAssessmentParticipantSeat(_ context.Context, arg db.MoveAssessmentParticipantSeatParams) (db.MoveAssessmentParticipantSeatRow, error) {
+	f.movedParticipantArg = arg
+	return f.movedParticipant, nil
 }
 
 func (f *fakeAssessmentExamStore) CountAssessmentRoomsByExam(context.Context, pgtype.UUID) (int64, error) {
@@ -443,6 +461,84 @@ func TestAssessmentExamAssignmentApplyMixedPolicyInterleavesRombelPerRoom(t *tes
 		if seatIndex < 4 && assignedByClass[original.ClassCode] != 1 {
 			t.Fatalf("first four seats = %+v, want one student from each rombel before repeating", store.assignedParticipants[:4])
 		}
+	}
+}
+
+func TestAssessmentExamListParticipantPlacementsReturnsManualEditRows(t *testing.T) {
+	examID := mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111")
+	participantID := mustPgUUIDAssessmentTest("aaaaaaaa-0000-0000-0000-000000000001")
+	roomID := mustPgUUIDAssessmentTest("33333333-3333-3333-3333-333333333333")
+	now := time.Date(2026, 5, 30, 8, 0, 0, 0, time.UTC)
+	store := &fakeAssessmentExamStore{
+		getRow: db.GetAssessmentExamRow{
+			ID:        examID,
+			Title:     "Gladi Manual",
+			Status:    AssessmentExamStatusDraft,
+			CreatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+			UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+		},
+		placementRows: []db.ListAssessmentParticipantPlacementsByExamRow{{
+			ParticipantID: participantID,
+			StudentName:   "Ahmad",
+			ClassCode:     "VIIA",
+			ClassName:     "VII A",
+			GradeLevel:    7,
+			RoomID:        roomID,
+			RoomCode:      "R01",
+			RoomName:      "Ruang Ujian 1",
+			RoomCapacity:  30,
+			SeatNo:        12,
+		}},
+	}
+	svc := NewAssessmentExamWithStore(store)
+
+	items, err := svc.ListParticipantPlacements(context.Background(), examID)
+	if err != nil {
+		t.Fatalf("ListParticipantPlacements err = %v", err)
+	}
+	if len(items) != 1 || items[0].ParticipantID != participantID.String() || items[0].RoomCode != "R01" || items[0].SeatNo != 12 {
+		t.Fatalf("items = %+v, want manual placement row with room and seat", items)
+	}
+}
+
+func TestAssessmentExamMoveParticipantSeatValidatesRoomAndSeat(t *testing.T) {
+	examID := mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111")
+	participantID := mustPgUUIDAssessmentTest("aaaaaaaa-0000-0000-0000-000000000001")
+	roomID := mustPgUUIDAssessmentTest("33333333-3333-3333-3333-333333333333")
+	now := time.Date(2026, 5, 30, 8, 0, 0, 0, time.UTC)
+	store := &fakeAssessmentExamStore{
+		getRow: db.GetAssessmentExamRow{
+			ID:        examID,
+			Title:     "Gladi Manual",
+			Status:    AssessmentExamStatusDraft,
+			CreatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+			UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+		},
+		roomForMove: db.GetAssessmentRoomByIDAndExamRow{ID: roomID, Capacity: 30},
+		movedParticipant: db.MoveAssessmentParticipantSeatRow{
+			ParticipantID: participantID,
+			StudentName:   "Ahmad",
+			RoomID:        roomID,
+			RoomCode:      "R02",
+			SeatNo:        7,
+		},
+	}
+	svc := NewAssessmentExamWithStore(store)
+
+	item, err := svc.MoveParticipantSeat(context.Background(), examID, AssessmentParticipantSeatInput{ParticipantID: participantID.String(), RoomID: roomID.String(), SeatNo: 7})
+	if err != nil {
+		t.Fatalf("MoveParticipantSeat err = %v", err)
+	}
+	if item.ParticipantID != participantID.String() || item.RoomID != roomID.String() || item.SeatNo != 7 {
+		t.Fatalf("item = %+v, want moved participant", item)
+	}
+	if store.movedParticipantArg.ParticipantID != participantID || store.movedParticipantArg.RoomID != roomID || store.movedParticipantArg.SeatNo.Int32 != 7 {
+		t.Fatalf("move arg = %+v, want participant/room/seat", store.movedParticipantArg)
+	}
+
+	_, err = svc.MoveParticipantSeat(context.Background(), examID, AssessmentParticipantSeatInput{ParticipantID: participantID.String(), RoomID: roomID.String(), SeatNo: 31})
+	if !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("MoveParticipantSeat over capacity err = %v, want bad request", err)
 	}
 }
 

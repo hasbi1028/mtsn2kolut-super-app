@@ -48,6 +48,9 @@ type assessmentExamStore interface {
 	CountAssessmentRoomsByExam(ctx context.Context, examID pgtype.UUID) (int64, error)
 	CountAssessmentParticipantsByExam(ctx context.Context, examID pgtype.UUID) (int64, error)
 	CountAssessmentCardsByExam(ctx context.Context, examID pgtype.UUID) (int64, error)
+	ListAssessmentParticipantPlacementsByExam(ctx context.Context, examID pgtype.UUID) ([]db.ListAssessmentParticipantPlacementsByExamRow, error)
+	GetAssessmentRoomByIDAndExam(ctx context.Context, arg db.GetAssessmentRoomByIDAndExamParams) (db.GetAssessmentRoomByIDAndExamRow, error)
+	MoveAssessmentParticipantSeat(ctx context.Context, arg db.MoveAssessmentParticipantSeatParams) (db.MoveAssessmentParticipantSeatRow, error)
 }
 
 type AssessmentExam struct {
@@ -148,6 +151,30 @@ type AssessmentAssignmentResult struct {
 	Rooms             []AssessmentAssignmentRoom `json:"rooms"`
 	Message           string                     `json:"message"`
 	Applied           bool                       `json:"applied"`
+}
+
+type AssessmentParticipantPlacementView struct {
+	ParticipantID string `json:"participant_id"`
+	SessionID     string `json:"session_id"`
+	RoomID        string `json:"room_id,omitempty"`
+	StudentID     string `json:"student_id"`
+	StudentName   string `json:"student_name"`
+	NIS           string `json:"nis,omitempty"`
+	NISN          string `json:"nisn,omitempty"`
+	ClassCode     string `json:"class_code"`
+	ClassName     string `json:"class_name"`
+	GradeLevel    int32  `json:"grade_level"`
+	RoomCode      string `json:"room_code,omitempty"`
+	RoomName      string `json:"room_name,omitempty"`
+	RoomCapacity  int32  `json:"room_capacity,omitempty"`
+	SeatNo        int32  `json:"seat_no,omitempty"`
+	Status        string `json:"status"`
+}
+
+type AssessmentParticipantSeatInput struct {
+	ParticipantID string `json:"participant_id"`
+	RoomID        string `json:"room_id"`
+	SeatNo        int32  `json:"seat_no"`
 }
 
 func (s *AssessmentExam) List(ctx context.Context, search, status string, limit, offset int32) ([]AssessmentExamView, error) {
@@ -381,6 +408,58 @@ func (s *AssessmentExam) AssignmentApply(ctx context.Context, id pgtype.UUID, in
 	return result, nil
 }
 
+func (s *AssessmentExam) ListParticipantPlacements(ctx context.Context, id pgtype.UUID) ([]AssessmentParticipantPlacementView, error) {
+	if _, err := s.Get(ctx, id); err != nil {
+		return nil, err
+	}
+	rows, err := s.q.ListAssessmentParticipantPlacementsByExam(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]AssessmentParticipantPlacementView, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, assessmentParticipantPlacementListRowView(row))
+	}
+	return items, nil
+}
+
+func (s *AssessmentExam) MoveParticipantSeat(ctx context.Context, examID pgtype.UUID, input AssessmentParticipantSeatInput) (AssessmentParticipantPlacementView, error) {
+	if _, err := s.Get(ctx, examID); err != nil {
+		return AssessmentParticipantPlacementView{}, err
+	}
+	participantID, err := assessmentUUIDFromString(input.ParticipantID, "peserta")
+	if err != nil {
+		return AssessmentParticipantPlacementView{}, err
+	}
+	roomID, err := assessmentUUIDFromString(input.RoomID, "ruang")
+	if err != nil {
+		return AssessmentParticipantPlacementView{}, err
+	}
+	room, err := s.q.GetAssessmentRoomByIDAndExam(ctx, db.GetAssessmentRoomByIDAndExamParams{ExamID: examID, RoomID: roomID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return AssessmentParticipantPlacementView{}, fmt.Errorf("%w: ruang ujian tidak ditemukan pada asesmen ini", domain.ErrBadRequest)
+	}
+	if err != nil {
+		return AssessmentParticipantPlacementView{}, err
+	}
+	if input.SeatNo < 1 || input.SeatNo > room.Capacity {
+		return AssessmentParticipantPlacementView{}, fmt.Errorf("%w: nomor kursi harus 1 sampai %d", domain.ErrBadRequest, room.Capacity)
+	}
+	row, err := s.q.MoveAssessmentParticipantSeat(ctx, db.MoveAssessmentParticipantSeatParams{
+		ExamID:        examID,
+		ParticipantID: participantID,
+		RoomID:        roomID,
+		SeatNo:        pgtype.Int4{Int32: input.SeatNo, Valid: true},
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return AssessmentParticipantPlacementView{}, fmt.Errorf("%w: peserta tidak ditemukan pada asesmen ini", domain.ErrBadRequest)
+	}
+	if err != nil {
+		return AssessmentParticipantPlacementView{}, err
+	}
+	return assessmentParticipantPlacementMoveRowView(row), nil
+}
+
 func (s *AssessmentExam) assignmentPreviewParticipantCount(ctx context.Context, examID pgtype.UUID, input AssessmentAssignmentRequest) (int64, error) {
 	if len(input.ClassIDs) == 0 {
 		return s.q.CountAssessmentParticipantsByExam(ctx, examID)
@@ -525,6 +604,18 @@ func attachAssessmentRoomComposition(rooms []AssessmentAssignmentRoom, participa
 	return rooms
 }
 
+func assessmentUUIDFromString(raw, label string) (pgtype.UUID, error) {
+	var id pgtype.UUID
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return id, fmt.Errorf("%w: id %s wajib diisi", domain.ErrBadRequest, label)
+	}
+	if err := id.Scan(trimmed); err != nil || !id.Valid {
+		return id, fmt.Errorf("%w: id %s tidak valid", domain.ErrBadRequest, label)
+	}
+	return id, nil
+}
+
 func assessmentUUIDsFromStrings(rawIDs []string) ([]pgtype.UUID, error) {
 	ids := make([]pgtype.UUID, 0, len(rawIDs))
 	seen := make(map[string]bool, len(rawIDs))
@@ -623,6 +714,54 @@ func normalizeAssessmentExamInput(input AssessmentExamInput, create bool) (Asses
 		return input, fmt.Errorf("%w: status asesmen tidak valid", domain.ErrBadRequest)
 	}
 	return input, nil
+}
+
+func assessmentParticipantPlacementListRowView(row db.ListAssessmentParticipantPlacementsByExamRow) AssessmentParticipantPlacementView {
+	roomID := row.RoomID
+	if row.RoomIDActual.Valid {
+		roomID = row.RoomIDActual
+	}
+	return AssessmentParticipantPlacementView{
+		ParticipantID: assessmentUUIDString(row.ParticipantID),
+		SessionID:     assessmentUUIDString(row.SessionID),
+		RoomID:        assessmentUUIDString(roomID),
+		StudentID:     assessmentUUIDString(row.StudentID),
+		StudentName:   row.StudentName,
+		NIS:           row.Nis,
+		NISN:          row.Nisn,
+		ClassCode:     row.ClassCode,
+		ClassName:     row.ClassName,
+		GradeLevel:    row.GradeLevel,
+		RoomCode:      row.RoomCode,
+		RoomName:      row.RoomName,
+		RoomCapacity:  row.RoomCapacity,
+		SeatNo:        row.SeatNo,
+		Status:        row.Status,
+	}
+}
+
+func assessmentParticipantPlacementMoveRowView(row db.MoveAssessmentParticipantSeatRow) AssessmentParticipantPlacementView {
+	roomID := row.RoomID
+	if row.RoomIDActual.Valid {
+		roomID = row.RoomIDActual
+	}
+	return AssessmentParticipantPlacementView{
+		ParticipantID: assessmentUUIDString(row.ParticipantID),
+		SessionID:     assessmentUUIDString(row.SessionID),
+		RoomID:        assessmentUUIDString(roomID),
+		StudentID:     assessmentUUIDString(row.StudentID),
+		StudentName:   row.StudentName,
+		NIS:           row.Nis,
+		NISN:          row.Nisn,
+		ClassCode:     row.ClassCode,
+		ClassName:     row.ClassName,
+		GradeLevel:    row.GradeLevel,
+		RoomCode:      row.RoomCode,
+		RoomName:      row.RoomName,
+		RoomCapacity:  row.RoomCapacity,
+		SeatNo:        row.SeatNo,
+		Status:        row.Status,
+	}
 }
 
 func assessmentExamListRowView(row db.ListAssessmentExamsRow) AssessmentExamView {

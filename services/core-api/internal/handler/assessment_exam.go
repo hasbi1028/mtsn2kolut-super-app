@@ -23,6 +23,8 @@ type assessmentExamService interface {
 	IssueCards(ctx context.Context, id pgtype.UUID) (service.AssessmentIssueCardsResult, error)
 	AssignmentPreview(ctx context.Context, id pgtype.UUID, input service.AssessmentAssignmentRequest) (service.AssessmentAssignmentResult, error)
 	AssignmentApply(ctx context.Context, id pgtype.UUID, input service.AssessmentAssignmentRequest) (service.AssessmentAssignmentResult, error)
+	ListParticipantPlacements(ctx context.Context, id pgtype.UUID) ([]service.AssessmentParticipantPlacementView, error)
+	MoveParticipantSeat(ctx context.Context, id pgtype.UUID, input service.AssessmentParticipantSeatInput) (service.AssessmentParticipantPlacementView, error)
 }
 
 type AssessmentExam struct {
@@ -190,6 +192,44 @@ func (h *AssessmentExam) AssignmentApply(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	api.OK(w, result)
+}
+
+func (h *AssessmentExam) ListParticipantPlacements(w http.ResponseWriter, r *http.Request) {
+	if !assessmentManageAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, ok := assessmentURLID(w, r)
+	if !ok {
+		return
+	}
+	items, err := h.svc.ListParticipantPlacements(r.Context(), id)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Daftar peserta ruang belum dapat dibuka")
+		return
+	}
+	api.OK(w, map[string]any{"items": items})
+}
+
+func (h *AssessmentExam) MoveParticipantSeat(w http.ResponseWriter, r *http.Request) {
+	if !assessmentManageAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, ok := assessmentURLID(w, r)
+	if !ok {
+		return
+	}
+	var req service.AssessmentParticipantSeatInput
+	if !decodeJSON(w, r, &req, 32<<10, disallowUnknownJSONFields) {
+		return
+	}
+	item, err := h.svc.MoveParticipantSeat(r.Context(), id, req)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Perubahan ruang/kursi peserta belum dapat disimpan")
+		return
+	}
+	api.OK(w, item)
 }
 
 func decodeAssessmentExamRequest(w http.ResponseWriter, r *http.Request) (assessmentExamRequest, bool) {

@@ -68,6 +68,24 @@
 		total_students?: number;
 	};
 
+	type ParticipantPlacement = {
+		participant_id: string;
+		session_id: string;
+		room_id?: string;
+		student_id: string;
+		student_name: string;
+		nis?: string;
+		nisn?: string;
+		class_code: string;
+		class_name: string;
+		grade_level: number;
+		room_code?: string;
+		room_name?: string;
+		room_capacity?: number;
+		seat_no?: number;
+		status: string;
+	};
+
 	const steps = [
 		{
 			label: 'Siapkan Ujian',
@@ -111,6 +129,12 @@
 	let rombels = $state<Rombel[]>([]);
 	let selectedClassIds = $state<Set<string>>(new Set());
 	let classError = $state('');
+	let participantPlacements = $state<ParticipantPlacement[]>([]);
+	let participantBusy = $state(false);
+	let participantError = $state('');
+	let selectedParticipantId = $state('');
+	let manualRoomId = $state('');
+	let manualSeatNo = $state(1);
 
 	let selectedExam = $derived(exams.find((exam) => exam.id === selectedExamId) ?? exams[0] ?? null);
 	let activeRombels = $derived(rombels.filter((rombel) => rombel.is_active !== false));
@@ -124,6 +148,18 @@
 	let canSaveRooms = $derived(Boolean(selectedExam && roomPreview && roomPreview.exam_id === selectedExam.id && !roomBusy));
 	let hasPlacementSummary = $derived(Boolean(roomPreview?.applied && roomPreview.rooms.some((room) => (room.class_summary?.length ?? 0) > 0)));
 	let printDocuments = $derived(summarizeAssessmentPrintDocuments(selectedExam ?? {}));
+	let manualRooms = $derived(
+		Array.from(
+			new Map(
+				participantPlacements
+					.filter((item) => item.room_id)
+					.map((item) => [item.room_id, { id: item.room_id ?? '', code: item.room_code ?? 'Ruang', name: item.room_name ?? item.room_code ?? 'Ruang', capacity: item.room_capacity ?? 0 }])
+			).values()
+		).sort((a, b) => a.code.localeCompare(b.code))
+	);
+	let selectedParticipant = $derived(participantPlacements.find((item) => item.participant_id === selectedParticipantId) ?? null);
+	let selectedManualRoom = $derived(manualRooms.find((room) => room.id === manualRoomId) ?? null);
+	let canSaveManualSeat = $derived(Boolean(selectedExam && selectedParticipantId && manualRoomId && manualSeatNo > 0 && !participantBusy));
 
 	onMount(() => {
 		void loadInitialData();
@@ -208,6 +244,13 @@
 		if (roomPreviewExamId !== exam.id) {
 			roomPreview = null;
 		}
+		participantPlacements = [];
+		selectedParticipantId = '';
+		manualRoomId = '';
+		manualSeatNo = 1;
+		if ((exam.participant_count ?? 0) > 0) {
+			void loadParticipantPlacements(exam);
+		}
 	}
 
 	async function createDraft() {
@@ -279,11 +322,59 @@
 			roomPreviewExamId = exam.id;
 			notice = result.message ?? 'Ruang ujian tersimpan.';
 			await loadExams();
+			await loadParticipantPlacements(exam);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Ruang ujian belum dapat disimpan';
 		} finally {
 			roomBusy = false;
 			actionExamId = null;
+		}
+	}
+
+
+	async function loadParticipantPlacements(exam = selectedExam) {
+		if (!exam || participantBusy) return;
+		participantBusy = true;
+		participantError = '';
+		try {
+			participantPlacements = await fetch(`/api/asesmen/exams/${encodeURIComponent(exam.id)}/participants`).then((response) =>
+				readClientApiData<ParticipantPlacement[]>(response, 'Daftar peserta ruang belum dapat dimuat')
+			);
+			if (participantPlacements.length > 0 && !participantPlacements.some((item) => item.participant_id === selectedParticipantId)) {
+				chooseParticipant(participantPlacements[0]);
+			}
+		} catch (err) {
+			participantError = err instanceof Error ? err.message : 'Daftar peserta ruang belum dapat dimuat';
+			participantPlacements = [];
+		} finally {
+			participantBusy = false;
+		}
+	}
+
+	function chooseParticipant(item: ParticipantPlacement) {
+		selectedParticipantId = item.participant_id;
+		manualRoomId = item.room_id ?? '';
+		manualSeatNo = item.seat_no && item.seat_no > 0 ? item.seat_no : 1;
+	}
+
+	async function saveManualSeat(exam = selectedExam) {
+		if (!exam || !canSaveManualSeat) return;
+		participantBusy = true;
+		participantError = '';
+		notice = '';
+		try {
+			await fetch(`/api/asesmen/exams/${encodeURIComponent(exam.id)}/participants/seat`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ participant_id: selectedParticipantId, room_id: manualRoomId, seat_no: Number(manualSeatNo) })
+			}).then((response) => readClientApiData<ParticipantPlacement>(response, 'Perubahan ruang/kursi belum dapat disimpan'));
+			notice = 'Perubahan ruang/kursi peserta tersimpan.';
+			await loadParticipantPlacements(exam);
+			await loadExams();
+		} catch (err) {
+			participantError = err instanceof Error ? err.message : 'Perubahan ruang/kursi belum dapat disimpan';
+		} finally {
+			participantBusy = false;
 		}
 	}
 
@@ -335,6 +426,10 @@
 	function formatClassSummary(items?: AssignmentClassSummary[]) {
 		if (!items || items.length === 0) return 'Belum ada peserta';
 		return items.map((item) => `${item.class_code || item.class_name || 'Tanpa rombel'} ${item.count}`).join(' · ');
+	}
+
+	function formatParticipantLabel(item: ParticipantPlacement) {
+		return `${item.student_name} · ${item.class_code || item.class_name || 'Tanpa rombel'} · ${item.room_code || 'Belum ruang'}-${item.seat_no || '-'}`;
 	}
 
 	function formatGradeLevels(levels?: number[]) {
@@ -595,6 +690,72 @@
 					{/if}
 				</div>
 			</div>
+		</section>
+
+
+		<section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+			<div class="flex flex-col gap-3 border-b border-slate-200 pb-3 lg:flex-row lg:items-end lg:justify-between">
+				<div>
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Edit Manual</p>
+					<h2 class="mt-1 text-xl font-black text-slate-950">Campur siswa manual</h2>
+					<p class="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+						Setelah Simpan Ruang, panitia bisa pindahkan peserta ke ruang/kursi tertentu tanpa mengulang pembagian otomatis.
+					</p>
+				</div>
+				<button class="w-fit rounded-2xl border border-slate-300 px-3 py-2 text-xs font-black text-slate-700 hover:border-emerald-300 hover:text-emerald-800 disabled:cursor-wait disabled:opacity-60" disabled={!selectedExam || participantBusy} onclick={() => loadParticipantPlacements()}>
+					{participantBusy ? 'Memuat...' : 'Muat Peserta'}
+				</button>
+			</div>
+
+			{#if participantError}
+				<p class="mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-800" role="alert">{participantError}</p>
+			{/if}
+
+			{#if !selectedExam}
+				<p class="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">Pilih ujian dulu.</p>
+			{:else if participantPlacements.length === 0}
+				<p class="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm leading-6 text-slate-600">Belum ada peserta yang bisa diedit. Simpan pembagian ruang dulu, lalu klik Muat Peserta.</p>
+			{:else}
+				<div class="mt-4 grid gap-4 lg:grid-cols-[1fr_0.85fr]">
+					<div class="max-h-80 overflow-y-auto rounded-2xl border border-slate-200">
+						<div class="divide-y divide-slate-200">
+							{#each participantPlacements as item (item.participant_id)}
+								<button class={`grid w-full gap-2 p-3 text-left text-sm hover:bg-emerald-50 sm:grid-cols-[1fr_auto] ${selectedParticipantId === item.participant_id ? 'bg-emerald-50' : 'bg-white'}`} onclick={() => chooseParticipant(item)}>
+									<span class="min-w-0">
+										<span class="block truncate font-black text-slate-950">{item.student_name}</span>
+										<span class="text-xs font-bold text-slate-500">{item.class_code || item.class_name || 'Tanpa rombel'} · {item.nis || item.nisn || 'tanpa NIS'}</span>
+									</span>
+									<span class="w-fit rounded-xl bg-slate-100 px-2 py-1 text-xs font-black text-slate-700">{item.room_code || '—'} / {item.seat_no || '-'}</span>
+								</button>
+							{/each}
+						</div>
+					</div>
+
+					<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+						<p class="text-sm font-black text-slate-950">Form pindah ruang/kursi</p>
+						{#if selectedParticipant}
+							<p class="mt-1 text-xs font-bold leading-5 text-slate-600">{formatParticipantLabel(selectedParticipant)}</p>
+						{/if}
+						<label class="mt-3 block space-y-1.5 text-sm font-bold text-slate-700">
+							<span>Ruang tujuan</span>
+							<select class="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500" bind:value={manualRoomId}>
+								<option value="">Pilih ruang</option>
+								{#each manualRooms as room (room.id)}
+									<option value={room.id}>{room.code} · {room.name}</option>
+								{/each}
+							</select>
+						</label>
+						<label class="mt-3 block space-y-1.5 text-sm font-bold text-slate-700">
+							<span>Nomor kursi {selectedManualRoom ? `(maks. ${selectedManualRoom.capacity})` : ''}</span>
+							<input type="number" min="1" max={selectedManualRoom?.capacity || 50} class="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500" bind:value={manualSeatNo} />
+						</label>
+						<button class="mt-4 rounded-2xl bg-emerald-700 px-4 py-2 text-sm font-black text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300" disabled={!canSaveManualSeat} onclick={() => saveManualSeat()}>
+							{participantBusy ? 'Menyimpan...' : 'Simpan Pindahan'}
+						</button>
+						<p class="mt-3 text-xs font-semibold leading-5 text-slate-500">Jika kursi sudah dipakai peserta lain, backend akan menolak agar tidak ada kursi ganda.</p>
+					</div>
+				</div>
+			{/if}
 		</section>
 
 		<section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">

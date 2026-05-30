@@ -238,3 +238,100 @@ SET room_id = sqlc.arg(room_id),
     updated_at = now()
 WHERE id = sqlc.arg(participant_id)
   AND session_id = sqlc.arg(session_id);
+
+
+-- name: ListAssessmentParticipantPlacementsByExam :many
+SELECT
+  p.id AS participant_id,
+  p.session_id,
+  p.room_id,
+  p.student_id,
+  p.status,
+  COALESCE(p.seat_no, 0)::int AS seat_no,
+  s.nama AS student_name,
+  s.nis,
+  s.nisn,
+  s.class_id,
+  COALESCE(c.code, '') AS class_code,
+  COALESCE(c.name, '') AS class_name,
+  CASE UPPER(NULLIF(btrim(c.level::text), ''))
+    WHEN '7' THEN 7
+    WHEN 'VII' THEN 7
+    WHEN '8' THEN 8
+    WHEN 'VIII' THEN 8
+    WHEN '9' THEN 9
+    WHEN 'IX' THEN 9
+    ELSE 0
+  END::int AS grade_level,
+  r.id AS room_id_actual,
+  COALESCE(r.code, '') AS room_code,
+  COALESCE(r.name, '') AS room_name,
+  COALESCE(r.capacity, 0)::int AS room_capacity
+FROM assessment_participants p
+JOIN assessment_sessions sess ON sess.id = p.session_id
+JOIN students s ON s.id = p.student_id
+LEFT JOIN school_classes c ON c.id = s.class_id
+LEFT JOIN assessment_rooms r ON r.id = p.room_id
+WHERE sess.exam_id = sqlc.arg(exam_id)
+ORDER BY COALESCE(r.code, 'ZZZ'), COALESCE(p.seat_no, 9999),
+  CASE UPPER(NULLIF(btrim(c.level::text), ''))
+    WHEN '7' THEN 7
+    WHEN 'VII' THEN 7
+    WHEN '8' THEN 8
+    WHEN 'VIII' THEN 8
+    WHEN '9' THEN 9
+    WHEN 'IX' THEN 9
+    ELSE 0
+  END, COALESCE(c.code, ''), s.nama, p.id;
+
+-- name: GetAssessmentRoomByIDAndExam :one
+SELECT r.id, r.session_id, r.code, r.name, r.capacity
+FROM assessment_rooms r
+JOIN assessment_sessions s ON s.id = r.session_id
+WHERE s.exam_id = sqlc.arg(exam_id)
+  AND r.id = sqlc.arg(room_id)
+LIMIT 1;
+
+-- name: MoveAssessmentParticipantSeat :one
+WITH updated AS (
+  UPDATE assessment_participants p
+  SET room_id = sqlc.arg(room_id),
+      seat_no = sqlc.arg(seat_no),
+      updated_at = now()
+  FROM assessment_sessions sess
+  WHERE p.id = sqlc.arg(participant_id)
+    AND p.session_id = sess.id
+    AND sess.exam_id = sqlc.arg(exam_id)
+  RETURNING p.id AS participant_id
+)
+SELECT
+  p.id AS participant_id,
+  p.session_id,
+  p.room_id,
+  p.student_id,
+  p.status,
+  COALESCE(p.seat_no, 0)::int AS seat_no,
+  s.nama AS student_name,
+  s.nis,
+  s.nisn,
+  s.class_id,
+  COALESCE(c.code, '') AS class_code,
+  COALESCE(c.name, '') AS class_name,
+  CASE UPPER(NULLIF(btrim(c.level::text), ''))
+    WHEN '7' THEN 7
+    WHEN 'VII' THEN 7
+    WHEN '8' THEN 8
+    WHEN 'VIII' THEN 8
+    WHEN '9' THEN 9
+    WHEN 'IX' THEN 9
+    ELSE 0
+  END::int AS grade_level,
+  r.id AS room_id_actual,
+  COALESCE(r.code, '') AS room_code,
+  COALESCE(r.name, '') AS room_name,
+  COALESCE(r.capacity, 0)::int AS room_capacity
+FROM updated u
+JOIN assessment_participants p ON p.id = u.participant_id
+JOIN students s ON s.id = p.student_id
+LEFT JOIN school_classes c ON c.id = s.class_id
+LEFT JOIN assessment_rooms r ON r.id = p.room_id;

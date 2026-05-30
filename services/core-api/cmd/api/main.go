@@ -493,6 +493,8 @@ func main() {
 		r.With(requireAssessmentManage).Post("/api/asesmen/exams/{id}/prepare-rooms", assessmentExamH.PrepareRooms)
 		r.With(requireAssessmentManage).Post("/api/asesmen/exams/{id}/assignment-preview", assessmentExamH.AssignmentPreview)
 		r.With(requireAssessmentManage).Post("/api/asesmen/exams/{id}/assignment-apply", assessmentExamH.AssignmentApply)
+		r.With(requireAssessmentManage).Get("/api/asesmen/exams/{id}/participants", assessmentExamH.ListParticipantPlacements)
+		r.With(requireAssessmentManage).Patch("/api/asesmen/exams/{id}/participants/seat", assessmentExamH.MoveParticipantSeat)
 		r.With(requireAssessmentCardsIssue).Post("/api/asesmen/exams/{id}/issue-cards", assessmentExamH.IssueCards)
 
 		r.Group(func(r chi.Router) {

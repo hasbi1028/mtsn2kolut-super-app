@@ -296,6 +296,41 @@ func (q *Queries) GetAssessmentExam(ctx context.Context, id pgtype.UUID) (GetAss
 	return i, err
 }
 
+const getAssessmentRoomByIDAndExam = `-- name: GetAssessmentRoomByIDAndExam :one
+SELECT r.id, r.session_id, r.code, r.name, r.capacity
+FROM assessment_rooms r
+JOIN assessment_sessions s ON s.id = r.session_id
+WHERE s.exam_id = $1
+  AND r.id = $2
+LIMIT 1
+`
+
+type GetAssessmentRoomByIDAndExamParams struct {
+	ExamID pgtype.UUID `json:"exam_id"`
+	RoomID pgtype.UUID `json:"room_id"`
+}
+
+type GetAssessmentRoomByIDAndExamRow struct {
+	ID        pgtype.UUID `json:"id"`
+	SessionID pgtype.UUID `json:"session_id"`
+	Code      string      `json:"code"`
+	Name      string      `json:"name"`
+	Capacity  int32       `json:"capacity"`
+}
+
+func (q *Queries) GetAssessmentRoomByIDAndExam(ctx context.Context, arg GetAssessmentRoomByIDAndExamParams) (GetAssessmentRoomByIDAndExamRow, error) {
+	row := q.db.QueryRow(ctx, getAssessmentRoomByIDAndExam, arg.ExamID, arg.RoomID)
+	var i GetAssessmentRoomByIDAndExamRow
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.Code,
+		&i.Name,
+		&i.Capacity,
+	)
+	return i, err
+}
+
 const getFirstAssessmentSessionByExam = `-- name: GetFirstAssessmentSessionByExam :one
 SELECT id, exam_id, title, starts_at, ends_at, status, created_at, updated_at
 FROM assessment_sessions
@@ -473,6 +508,109 @@ func (q *Queries) ListAssessmentExams(ctx context.Context, arg ListAssessmentExa
 	return items, nil
 }
 
+const listAssessmentParticipantPlacementsByExam = `-- name: ListAssessmentParticipantPlacementsByExam :many
+SELECT
+  p.id AS participant_id,
+  p.session_id,
+  p.room_id,
+  p.student_id,
+  p.status,
+  COALESCE(p.seat_no, 0)::int AS seat_no,
+  s.nama AS student_name,
+  s.nis,
+  s.nisn,
+  s.class_id,
+  COALESCE(c.code, '') AS class_code,
+  COALESCE(c.name, '') AS class_name,
+  CASE UPPER(NULLIF(btrim(c.level::text), ''))
+    WHEN '7' THEN 7
+    WHEN 'VII' THEN 7
+    WHEN '8' THEN 8
+    WHEN 'VIII' THEN 8
+    WHEN '9' THEN 9
+    WHEN 'IX' THEN 9
+    ELSE 0
+  END::int AS grade_level,
+  r.id AS room_id_actual,
+  COALESCE(r.code, '') AS room_code,
+  COALESCE(r.name, '') AS room_name,
+  COALESCE(r.capacity, 0)::int AS room_capacity
+FROM assessment_participants p
+JOIN assessment_sessions sess ON sess.id = p.session_id
+JOIN students s ON s.id = p.student_id
+LEFT JOIN school_classes c ON c.id = s.class_id
+LEFT JOIN assessment_rooms r ON r.id = p.room_id
+WHERE sess.exam_id = $1
+ORDER BY COALESCE(r.code, 'ZZZ'), COALESCE(p.seat_no, 9999),
+  CASE UPPER(NULLIF(btrim(c.level::text), ''))
+    WHEN '7' THEN 7
+    WHEN 'VII' THEN 7
+    WHEN '8' THEN 8
+    WHEN 'VIII' THEN 8
+    WHEN '9' THEN 9
+    WHEN 'IX' THEN 9
+    ELSE 0
+  END, COALESCE(c.code, ''), s.nama, p.id
+`
+
+type ListAssessmentParticipantPlacementsByExamRow struct {
+	ParticipantID pgtype.UUID `json:"participant_id"`
+	SessionID     pgtype.UUID `json:"session_id"`
+	RoomID        pgtype.UUID `json:"room_id"`
+	StudentID     pgtype.UUID `json:"student_id"`
+	Status        string      `json:"status"`
+	SeatNo        int32       `json:"seat_no"`
+	StudentName   string      `json:"student_name"`
+	Nis           string      `json:"nis"`
+	Nisn          string      `json:"nisn"`
+	ClassID       pgtype.UUID `json:"class_id"`
+	ClassCode     string      `json:"class_code"`
+	ClassName     string      `json:"class_name"`
+	GradeLevel    int32       `json:"grade_level"`
+	RoomIDActual  pgtype.UUID `json:"room_id_actual"`
+	RoomCode      string      `json:"room_code"`
+	RoomName      string      `json:"room_name"`
+	RoomCapacity  int32       `json:"room_capacity"`
+}
+
+func (q *Queries) ListAssessmentParticipantPlacementsByExam(ctx context.Context, examID pgtype.UUID) ([]ListAssessmentParticipantPlacementsByExamRow, error) {
+	rows, err := q.db.Query(ctx, listAssessmentParticipantPlacementsByExam, examID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAssessmentParticipantPlacementsByExamRow{}
+	for rows.Next() {
+		var i ListAssessmentParticipantPlacementsByExamRow
+		if err := rows.Scan(
+			&i.ParticipantID,
+			&i.SessionID,
+			&i.RoomID,
+			&i.StudentID,
+			&i.Status,
+			&i.SeatNo,
+			&i.StudentName,
+			&i.Nis,
+			&i.Nisn,
+			&i.ClassID,
+			&i.ClassCode,
+			&i.ClassName,
+			&i.GradeLevel,
+			&i.RoomIDActual,
+			&i.RoomCode,
+			&i.RoomName,
+			&i.RoomCapacity,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAssessmentParticipantsForAssignment = `-- name: ListAssessmentParticipantsForAssignment :many
 SELECT
   p.id AS participant_id,
@@ -553,6 +691,108 @@ func (q *Queries) ListAssessmentParticipantsForAssignment(ctx context.Context, s
 		return nil, err
 	}
 	return items, nil
+}
+
+const moveAssessmentParticipantSeat = `-- name: MoveAssessmentParticipantSeat :one
+WITH updated AS (
+  UPDATE assessment_participants p
+  SET room_id = $1,
+      seat_no = $2,
+      updated_at = now()
+  FROM assessment_sessions sess
+  WHERE p.id = $3
+    AND p.session_id = sess.id
+    AND sess.exam_id = $4
+  RETURNING p.id AS participant_id
+)
+SELECT
+  p.id AS participant_id,
+  p.session_id,
+  p.room_id,
+  p.student_id,
+  p.status,
+  COALESCE(p.seat_no, 0)::int AS seat_no,
+  s.nama AS student_name,
+  s.nis,
+  s.nisn,
+  s.class_id,
+  COALESCE(c.code, '') AS class_code,
+  COALESCE(c.name, '') AS class_name,
+  CASE UPPER(NULLIF(btrim(c.level::text), ''))
+    WHEN '7' THEN 7
+    WHEN 'VII' THEN 7
+    WHEN '8' THEN 8
+    WHEN 'VIII' THEN 8
+    WHEN '9' THEN 9
+    WHEN 'IX' THEN 9
+    ELSE 0
+  END::int AS grade_level,
+  r.id AS room_id_actual,
+  COALESCE(r.code, '') AS room_code,
+  COALESCE(r.name, '') AS room_name,
+  COALESCE(r.capacity, 0)::int AS room_capacity
+FROM updated u
+JOIN assessment_participants p ON p.id = u.participant_id
+JOIN students s ON s.id = p.student_id
+LEFT JOIN school_classes c ON c.id = s.class_id
+LEFT JOIN assessment_rooms r ON r.id = p.room_id
+`
+
+type MoveAssessmentParticipantSeatParams struct {
+	RoomID        pgtype.UUID `json:"room_id"`
+	SeatNo        pgtype.Int4 `json:"seat_no"`
+	ParticipantID pgtype.UUID `json:"participant_id"`
+	ExamID        pgtype.UUID `json:"exam_id"`
+}
+
+type MoveAssessmentParticipantSeatRow struct {
+	ParticipantID pgtype.UUID `json:"participant_id"`
+	SessionID     pgtype.UUID `json:"session_id"`
+	RoomID        pgtype.UUID `json:"room_id"`
+	StudentID     pgtype.UUID `json:"student_id"`
+	Status        string      `json:"status"`
+	SeatNo        int32       `json:"seat_no"`
+	StudentName   string      `json:"student_name"`
+	Nis           string      `json:"nis"`
+	Nisn          string      `json:"nisn"`
+	ClassID       pgtype.UUID `json:"class_id"`
+	ClassCode     string      `json:"class_code"`
+	ClassName     string      `json:"class_name"`
+	GradeLevel    int32       `json:"grade_level"`
+	RoomIDActual  pgtype.UUID `json:"room_id_actual"`
+	RoomCode      string      `json:"room_code"`
+	RoomName      string      `json:"room_name"`
+	RoomCapacity  int32       `json:"room_capacity"`
+}
+
+func (q *Queries) MoveAssessmentParticipantSeat(ctx context.Context, arg MoveAssessmentParticipantSeatParams) (MoveAssessmentParticipantSeatRow, error) {
+	row := q.db.QueryRow(ctx, moveAssessmentParticipantSeat,
+		arg.RoomID,
+		arg.SeatNo,
+		arg.ParticipantID,
+		arg.ExamID,
+	)
+	var i MoveAssessmentParticipantSeatRow
+	err := row.Scan(
+		&i.ParticipantID,
+		&i.SessionID,
+		&i.RoomID,
+		&i.StudentID,
+		&i.Status,
+		&i.SeatNo,
+		&i.StudentName,
+		&i.Nis,
+		&i.Nisn,
+		&i.ClassID,
+		&i.ClassCode,
+		&i.ClassName,
+		&i.GradeLevel,
+		&i.RoomIDActual,
+		&i.RoomCode,
+		&i.RoomName,
+		&i.RoomCapacity,
+	)
+	return i, err
 }
 
 const updateAssessmentExam = `-- name: UpdateAssessmentExam :one

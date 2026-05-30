@@ -14,17 +14,22 @@ import (
 )
 
 type fakeAssessmentExamHandlerService struct {
-	listCalled    bool
-	createInput   service.AssessmentExamInput
-	prepareCalled bool
-	previewCalled bool
-	applyCalled   bool
-	assignmentReq service.AssessmentAssignmentRequest
-	listItems     []service.AssessmentExamView
-	createItem    service.AssessmentExamView
-	prepareResult service.AssessmentPrepareRoomsResult
-	previewResult service.AssessmentAssignmentResult
-	applyResult   service.AssessmentAssignmentResult
+	listCalled           bool
+	createInput          service.AssessmentExamInput
+	prepareCalled        bool
+	previewCalled        bool
+	applyCalled          bool
+	listPlacementsCalled bool
+	moveSeatCalled       bool
+	assignmentReq        service.AssessmentAssignmentRequest
+	seatInput            service.AssessmentParticipantSeatInput
+	listItems            []service.AssessmentExamView
+	createItem           service.AssessmentExamView
+	prepareResult        service.AssessmentPrepareRoomsResult
+	previewResult        service.AssessmentAssignmentResult
+	applyResult          service.AssessmentAssignmentResult
+	placements           []service.AssessmentParticipantPlacementView
+	movedPlacement       service.AssessmentParticipantPlacementView
 }
 
 func (f *fakeAssessmentExamHandlerService) List(context.Context, string, string, int32, int32) ([]service.AssessmentExamView, error) {
@@ -58,6 +63,17 @@ func (f *fakeAssessmentExamHandlerService) AssignmentPreview(_ context.Context, 
 	f.previewCalled = true
 	f.assignmentReq = req
 	return f.previewResult, nil
+}
+
+func (f *fakeAssessmentExamHandlerService) ListParticipantPlacements(context.Context, pgtype.UUID) ([]service.AssessmentParticipantPlacementView, error) {
+	f.listPlacementsCalled = true
+	return f.placements, nil
+}
+
+func (f *fakeAssessmentExamHandlerService) MoveParticipantSeat(_ context.Context, _ pgtype.UUID, input service.AssessmentParticipantSeatInput) (service.AssessmentParticipantPlacementView, error) {
+	f.moveSeatCalled = true
+	f.seatInput = input
+	return f.movedPlacement, nil
 }
 
 func (f *fakeAssessmentExamHandlerService) AssignmentApply(_ context.Context, _ pgtype.UUID, req service.AssessmentAssignmentRequest) (service.AssessmentAssignmentResult, error) {
@@ -148,5 +164,38 @@ func TestAssessmentExamAssignmentApplyRequiresManage(t *testing.T) {
 	}
 	if svc.applyCalled {
 		t.Fatal("AssignmentApply called service despite forbidden role")
+	}
+}
+
+func TestAssessmentExamListParticipantPlacementsRequiresManage(t *testing.T) {
+	svc := &fakeAssessmentExamHandlerService{}
+	h := NewAssessmentExam(svc)
+	rec := httptest.NewRecorder()
+	req := withRouteParam(withClaims(httptest.NewRequest(http.MethodGet, "/api/asesmen/exams/11111111-1111-1111-1111-111111111111/participants", nil), jwt.MapClaims{"roles": []any{"staf"}}), "id", "11111111-1111-1111-1111-111111111111")
+
+	h.ListParticipantPlacements(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("ListParticipantPlacements status = %d, want forbidden", rec.Code)
+	}
+	if svc.listPlacementsCalled {
+		t.Fatal("ListParticipantPlacements called service despite missing manage permission")
+	}
+}
+
+func TestAssessmentExamMoveParticipantSeatDecodesManualPlacement(t *testing.T) {
+	svc := &fakeAssessmentExamHandlerService{movedPlacement: service.AssessmentParticipantPlacementView{ParticipantID: "aaaaaaaa-0000-0000-0000-000000000001", RoomCode: "R02", SeatNo: 7}}
+	h := NewAssessmentExam(svc)
+	rec := httptest.NewRecorder()
+	body := `{"participant_id":"aaaaaaaa-0000-0000-0000-000000000001","room_id":"33333333-3333-3333-3333-333333333333","seat_no":7}`
+	req := withRouteParam(adminRequest(http.MethodPatch, "/api/asesmen/exams/11111111-1111-1111-1111-111111111111/participants/seat", body), "id", "11111111-1111-1111-1111-111111111111")
+
+	h.MoveParticipantSeat(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("MoveParticipantSeat status = %d, want ok; body=%s", rec.Code, rec.Body.String())
+	}
+	if !svc.moveSeatCalled || svc.seatInput.ParticipantID != "aaaaaaaa-0000-0000-0000-000000000001" || svc.seatInput.RoomID != "33333333-3333-3333-3333-333333333333" || svc.seatInput.SeatNo != 7 {
+		t.Fatalf("move call=%v input=%+v, want decoded manual placement", svc.moveSeatCalled, svc.seatInput)
 	}
 }
