@@ -49,6 +49,15 @@
 		applied?: boolean;
 	};
 
+	type Rombel = {
+		id: string;
+		code: string;
+		name: string;
+		level?: number;
+		is_active?: boolean;
+		total_students?: number;
+	};
+
 	const steps = [
 		{
 			label: 'Siapkan Ujian',
@@ -89,14 +98,34 @@
 	let roomPreview = $state<AssignmentResult | null>(null);
 	let roomPreviewExamId = $state<string | null>(null);
 	let roomBusy = $state(false);
+	let rombels = $state<Rombel[]>([]);
+	let selectedClassIds = $state<Set<string>>(new Set());
+	let classError = $state('');
 
 	let selectedExam = $derived(exams.find((exam) => exam.id === selectedExamId) ?? exams[0] ?? null);
+	let activeRombels = $derived(rombels.filter((rombel) => rombel.is_active !== false));
+	let selectedClassCount = $derived(selectedClassIds.size);
+	let selectedStudentEstimate = $derived(
+		activeRombels
+			.filter((rombel) => selectedClassIds.has(rombel.id))
+			.reduce((total, rombel) => total + (rombel.total_students ?? 0), 0)
+	);
 	let totalCapacity = $derived(roomCount * capacityPerRoom);
 	let canSaveRooms = $derived(Boolean(selectedExam && roomPreview && roomPreview.exam_id === selectedExam.id && !roomBusy));
 
 	onMount(() => {
-		void loadExams();
+		void loadInitialData();
 	});
+
+	async function loadInitialData() {
+		const [examResult, rombelResult] = await Promise.allSettled([loadExams(), loadRombels()]);
+		if (examResult.status === 'rejected') {
+			error = examResult.reason instanceof Error ? examResult.reason.message : 'Daftar asesmen belum dapat dimuat';
+		}
+		if (rombelResult.status === 'rejected') {
+			classError = rombelResult.reason instanceof Error ? rombelResult.reason.message : 'Daftar rombel belum dapat dimuat';
+		}
+	}
 
 	async function loadExams() {
 		loading = true;
@@ -121,6 +150,30 @@
 		}
 	}
 
+	async function loadRombels() {
+		classError = '';
+		try {
+			rombels = await fetch('/api/academic/rombel').then((response) =>
+				readClientApiData<Rombel[]>(response, 'Daftar rombel belum dapat dimuat')
+			);
+		} catch (err) {
+			classError = err instanceof Error ? err.message : 'Daftar rombel belum dapat dimuat';
+			rombels = [];
+		}
+	}
+
+	function toggleClass(id: string) {
+		const next = new Set(selectedClassIds);
+		if (next.has(id)) {
+			next.delete(id);
+		} else {
+			next.add(id);
+		}
+		selectedClassIds = next;
+		roomPreview = null;
+		roomPreviewExamId = null;
+	}
+
 	function toISO(value: string) {
 		if (!value) return undefined;
 		const date = new Date(value);
@@ -131,7 +184,8 @@
 		return {
 			room_count: Number(roomCount),
 			capacity_per_room: Number(capacityPerRoom),
-			mix_policy: mixPolicy
+			mix_policy: mixPolicy,
+			class_ids: Array.from(selectedClassIds)
 		};
 	}
 
@@ -414,8 +468,33 @@
 							<option value="class_grouped">Kelompok per kelas</option>
 						</select>
 					</label>
+					<div class="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
+						<div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+							<div>
+								<p class="text-sm font-black text-slate-800">Pilih rombel peserta</p>
+								<p class="text-xs font-semibold text-slate-500">Opsional. Jika dipilih, siswa aktif dari rombel ini akan didaftarkan dan masuk ruang saat disimpan.</p>
+							</div>
+							<span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">{selectedClassCount} rombel · ±{selectedStudentEstimate} siswa</span>
+						</div>
+						{#if classError}
+							<p class="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">{classError}</p>
+						{:else if activeRombels.length === 0}
+							<p class="mt-2 text-xs font-semibold text-slate-500">Daftar rombel belum tersedia.</p>
+						{:else}
+							<div class="mt-3 grid max-h-44 gap-2 overflow-y-auto sm:grid-cols-2">
+								{#each activeRombels as rombel (rombel.id)}
+									<label class="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:border-emerald-300">
+										<input type="checkbox" class="h-4 w-4 rounded border-slate-300" checked={selectedClassIds.has(rombel.id)} onchange={() => toggleClass(rombel.id)} />
+										<span class="min-w-0 flex-1 truncate">{rombel.code || rombel.name}</span>
+										<span class="shrink-0 text-slate-400">{rombel.total_students ?? 0}</span>
+									</label>
+								{/each}
+							</div>
+						{/if}
+					</div>
 					<div class="mt-3 rounded-2xl border border-dashed border-slate-300 bg-white p-3 text-sm leading-6 text-slate-600">
 						<p><strong class="text-slate-800">Total kapasitas:</strong> {totalCapacity} kursi.</p>
+						<p>{selectedClassCount > 0 ? `Preview memakai ±${selectedStudentEstimate} siswa dari rombel terpilih.` : 'Tanpa rombel, preview hanya memakai peserta yang sudah pernah terdaftar.'}</p>
 						<p>Default UAS: 8 ruang × 30 peserta. Validasi backend membatasi 1–20 ruang dan 1–50 kursi/ruang.</p>
 					</div>
 					<div class="mt-4 flex flex-wrap gap-2">

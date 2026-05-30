@@ -946,6 +946,7 @@ type AssessmentParticipant struct {
 	SubmittedAt pgtype.Timestamptz `json:"submitted_at"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	SeatNo      pgtype.Int4        `json:"seat_no"`
 }
 
 type AssessmentRoom struct {

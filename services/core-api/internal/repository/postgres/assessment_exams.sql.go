@@ -11,6 +11,45 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const assignAssessmentParticipantRoom = `-- name: AssignAssessmentParticipantRoom :exec
+UPDATE assessment_participants
+SET room_id = $1,
+    seat_no = $2,
+    updated_at = now()
+WHERE id = $3
+  AND session_id = $4
+`
+
+type AssignAssessmentParticipantRoomParams struct {
+	RoomID        pgtype.UUID `json:"room_id"`
+	SeatNo        pgtype.Int4 `json:"seat_no"`
+	ParticipantID pgtype.UUID `json:"participant_id"`
+	SessionID     pgtype.UUID `json:"session_id"`
+}
+
+func (q *Queries) AssignAssessmentParticipantRoom(ctx context.Context, arg AssignAssessmentParticipantRoomParams) error {
+	_, err := q.db.Exec(ctx, assignAssessmentParticipantRoom,
+		arg.RoomID,
+		arg.SeatNo,
+		arg.ParticipantID,
+		arg.SessionID,
+	)
+	return err
+}
+
+const clearAssessmentParticipantRooms = `-- name: ClearAssessmentParticipantRooms :exec
+UPDATE assessment_participants
+SET room_id = NULL,
+    seat_no = NULL,
+    updated_at = now()
+WHERE session_id = $1
+`
+
+func (q *Queries) ClearAssessmentParticipantRooms(ctx context.Context, sessionID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, clearAssessmentParticipantRooms, sessionID)
+	return err
+}
+
 const countAssessmentCardsByExam = `-- name: CountAssessmentCardsByExam :one
 SELECT COUNT(DISTINCT c.id)::bigint
 FROM assessment_sessions s
@@ -281,6 +320,63 @@ func (q *Queries) GetFirstAssessmentSessionByExam(ctx context.Context, examID pg
 	return i, err
 }
 
+const listAssessmentCandidateStudentsByClassIDs = `-- name: ListAssessmentCandidateStudentsByClassIDs :many
+SELECT
+  s.id AS student_id,
+  s.nama AS student_name,
+  s.nis,
+  s.nisn,
+  s.class_id,
+  COALESCE(c.code, '') AS class_code,
+  COALESCE(c.name, '') AS class_name,
+  COALESCE(c.level, 0)::int AS grade_level
+FROM students s
+LEFT JOIN school_classes c ON c.id = s.class_id
+WHERE s.is_active = TRUE
+  AND s.class_id = ANY($1::uuid[])
+ORDER BY COALESCE(c.level, 0), COALESCE(c.code, ''), s.nama
+`
+
+type ListAssessmentCandidateStudentsByClassIDsRow struct {
+	StudentID   pgtype.UUID `json:"student_id"`
+	StudentName string      `json:"student_name"`
+	Nis         string      `json:"nis"`
+	Nisn        string      `json:"nisn"`
+	ClassID     pgtype.UUID `json:"class_id"`
+	ClassCode   string      `json:"class_code"`
+	ClassName   string      `json:"class_name"`
+	GradeLevel  int32       `json:"grade_level"`
+}
+
+func (q *Queries) ListAssessmentCandidateStudentsByClassIDs(ctx context.Context, classIds []pgtype.UUID) ([]ListAssessmentCandidateStudentsByClassIDsRow, error) {
+	rows, err := q.db.Query(ctx, listAssessmentCandidateStudentsByClassIDs, classIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAssessmentCandidateStudentsByClassIDsRow{}
+	for rows.Next() {
+		var i ListAssessmentCandidateStudentsByClassIDsRow
+		if err := rows.Scan(
+			&i.StudentID,
+			&i.StudentName,
+			&i.Nis,
+			&i.Nisn,
+			&i.ClassID,
+			&i.ClassCode,
+			&i.ClassName,
+			&i.GradeLevel,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAssessmentExams = `-- name: ListAssessmentExams :many
 SELECT
   e.id, e.title, e.subject_id, e.grade_level, e.status, e.starts_at, e.ends_at, e.created_by, e.created_at, e.updated_at,
@@ -361,6 +457,72 @@ func (q *Queries) ListAssessmentExams(ctx context.Context, arg ListAssessmentExa
 	return items, nil
 }
 
+const listAssessmentParticipantsForAssignment = `-- name: ListAssessmentParticipantsForAssignment :many
+SELECT
+  p.id AS participant_id,
+  p.session_id,
+  p.room_id,
+  p.student_id,
+  p.status,
+  COALESCE(p.seat_no, 0)::int AS seat_no,
+  s.nama AS student_name,
+  s.class_id,
+  COALESCE(c.code, '') AS class_code,
+  COALESCE(c.name, '') AS class_name,
+  COALESCE(c.level, 0)::int AS grade_level
+FROM assessment_participants p
+JOIN students s ON s.id = p.student_id
+LEFT JOIN school_classes c ON c.id = s.class_id
+WHERE p.session_id = $1
+ORDER BY COALESCE(c.level, 0), COALESCE(c.code, ''), s.nama, p.id
+`
+
+type ListAssessmentParticipantsForAssignmentRow struct {
+	ParticipantID pgtype.UUID `json:"participant_id"`
+	SessionID     pgtype.UUID `json:"session_id"`
+	RoomID        pgtype.UUID `json:"room_id"`
+	StudentID     pgtype.UUID `json:"student_id"`
+	Status        string      `json:"status"`
+	SeatNo        int32       `json:"seat_no"`
+	StudentName   string      `json:"student_name"`
+	ClassID       pgtype.UUID `json:"class_id"`
+	ClassCode     string      `json:"class_code"`
+	ClassName     string      `json:"class_name"`
+	GradeLevel    int32       `json:"grade_level"`
+}
+
+func (q *Queries) ListAssessmentParticipantsForAssignment(ctx context.Context, sessionID pgtype.UUID) ([]ListAssessmentParticipantsForAssignmentRow, error) {
+	rows, err := q.db.Query(ctx, listAssessmentParticipantsForAssignment, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAssessmentParticipantsForAssignmentRow{}
+	for rows.Next() {
+		var i ListAssessmentParticipantsForAssignmentRow
+		if err := rows.Scan(
+			&i.ParticipantID,
+			&i.SessionID,
+			&i.RoomID,
+			&i.StudentID,
+			&i.Status,
+			&i.SeatNo,
+			&i.StudentName,
+			&i.ClassID,
+			&i.ClassCode,
+			&i.ClassName,
+			&i.GradeLevel,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateAssessmentExam = `-- name: UpdateAssessmentExam :one
 UPDATE assessment_exams
 SET title = $1,
@@ -406,6 +568,44 @@ func (q *Queries) UpdateAssessmentExam(ctx context.Context, arg UpdateAssessment
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const upsertAssessmentParticipant = `-- name: UpsertAssessmentParticipant :one
+INSERT INTO assessment_participants (
+  session_id,
+  student_id,
+  status
+) VALUES (
+  $1,
+  $2,
+  'registered'
+)
+ON CONFLICT (session_id, student_id) DO UPDATE
+SET updated_at = now()
+RETURNING id, session_id, room_id, student_id, status, started_at, submitted_at, created_at, updated_at, seat_no
+`
+
+type UpsertAssessmentParticipantParams struct {
+	SessionID pgtype.UUID `json:"session_id"`
+	StudentID pgtype.UUID `json:"student_id"`
+}
+
+func (q *Queries) UpsertAssessmentParticipant(ctx context.Context, arg UpsertAssessmentParticipantParams) (AssessmentParticipant, error) {
+	row := q.db.QueryRow(ctx, upsertAssessmentParticipant, arg.SessionID, arg.StudentID)
+	var i AssessmentParticipant
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.RoomID,
+		&i.StudentID,
+		&i.Status,
+		&i.StartedAt,
+		&i.SubmittedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SeatNo,
 	)
 	return i, err
 }

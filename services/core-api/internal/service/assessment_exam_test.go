@@ -14,21 +14,26 @@ import (
 )
 
 type fakeAssessmentExamStore struct {
-	listRows        []db.ListAssessmentExamsRow
-	getRow          db.GetAssessmentExamRow
-	getErr          error
-	created         db.AssessmentExam
-	updated         db.AssessmentExam
-	firstSession    db.AssessmentSession
-	firstSessionErr error
-	createdSession  db.AssessmentSession
-	createdRoom     db.AssessmentRoom
-	createdRooms    []db.CreateAssessmentRoomParams
-	roomCount       int64
-	participantCnt  int64
-	cardCount       int64
-	createArg       db.CreateAssessmentExamParams
-	updateArg       db.UpdateAssessmentExamParams
+	listRows              []db.ListAssessmentExamsRow
+	getRow                db.GetAssessmentExamRow
+	getErr                error
+	created               db.AssessmentExam
+	updated               db.AssessmentExam
+	firstSession          db.AssessmentSession
+	firstSessionErr       error
+	createdSession        db.AssessmentSession
+	createdRoom           db.AssessmentRoom
+	createdRooms          []db.CreateAssessmentRoomParams
+	candidateStudents     []db.ListAssessmentCandidateStudentsByClassIDsRow
+	participants          []db.ListAssessmentParticipantsForAssignmentRow
+	upsertedParticipants  []db.UpsertAssessmentParticipantParams
+	assignedParticipants  []db.AssignAssessmentParticipantRoomParams
+	clearedParticipantSet bool
+	roomCount             int64
+	participantCnt        int64
+	cardCount             int64
+	createArg             db.CreateAssessmentExamParams
+	updateArg             db.UpdateAssessmentExamParams
 }
 
 func (f *fakeAssessmentExamStore) ListAssessmentExams(context.Context, db.ListAssessmentExamsParams) ([]db.ListAssessmentExamsRow, error) {
@@ -68,7 +73,34 @@ func (f *fakeAssessmentExamStore) UpsertAssessmentRoom(_ context.Context, arg db
 		Name:      arg.Name,
 		Capacity:  arg.Capacity,
 	})
-	return db.AssessmentRoom{ID: mustPgUUIDAssessmentTest("33333333-3333-3333-3333-333333333333"), SessionID: arg.SessionID, Code: arg.Code, Name: arg.Name, Capacity: arg.Capacity}, nil
+	roomID := mustPgUUIDAssessmentTest("33333333-3333-3333-3333-333333333333")
+	if arg.Code == "R02" {
+		roomID = mustPgUUIDAssessmentTest("44444444-4444-4444-4444-444444444444")
+	}
+	return db.AssessmentRoom{ID: roomID, SessionID: arg.SessionID, Code: arg.Code, Name: arg.Name, Capacity: arg.Capacity}, nil
+}
+
+func (f *fakeAssessmentExamStore) ListAssessmentCandidateStudentsByClassIDs(context.Context, []pgtype.UUID) ([]db.ListAssessmentCandidateStudentsByClassIDsRow, error) {
+	return f.candidateStudents, nil
+}
+
+func (f *fakeAssessmentExamStore) UpsertAssessmentParticipant(_ context.Context, arg db.UpsertAssessmentParticipantParams) (db.AssessmentParticipant, error) {
+	f.upsertedParticipants = append(f.upsertedParticipants, arg)
+	return db.AssessmentParticipant{ID: arg.StudentID, SessionID: arg.SessionID, StudentID: arg.StudentID, Status: "registered"}, nil
+}
+
+func (f *fakeAssessmentExamStore) ListAssessmentParticipantsForAssignment(context.Context, pgtype.UUID) ([]db.ListAssessmentParticipantsForAssignmentRow, error) {
+	return f.participants, nil
+}
+
+func (f *fakeAssessmentExamStore) ClearAssessmentParticipantRooms(context.Context, pgtype.UUID) error {
+	f.clearedParticipantSet = true
+	return nil
+}
+
+func (f *fakeAssessmentExamStore) AssignAssessmentParticipantRoom(_ context.Context, arg db.AssignAssessmentParticipantRoomParams) error {
+	f.assignedParticipants = append(f.assignedParticipants, arg)
+	return nil
 }
 
 func (f *fakeAssessmentExamStore) CountAssessmentRoomsByExam(context.Context, pgtype.UUID) (int64, error) {
@@ -258,6 +290,86 @@ func TestAssessmentExamAssignmentApplyUpsertsRoomsOnly(t *testing.T) {
 	}
 	if store.createdRooms[0].Code != "R01" || store.createdRooms[1].Code != "R02" || store.createdRooms[0].Capacity != 12 {
 		t.Fatalf("createdRooms=%+v, want deterministic R01/R02 capacity 12", store.createdRooms)
+	}
+	if result.CardCount != 0 {
+		t.Fatalf("card count = %d, want no card issuance", result.CardCount)
+	}
+}
+
+func TestAssessmentExamAssignmentPreviewCountsSelectedClassStudents(t *testing.T) {
+	examID := mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111")
+	classID := mustPgUUIDAssessmentTest("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	now := time.Date(2026, 5, 30, 8, 0, 0, 0, time.UTC)
+	store := &fakeAssessmentExamStore{
+		getRow: db.GetAssessmentExamRow{
+			ID:        examID,
+			Title:     "PAT",
+			Status:    AssessmentExamStatusDraft,
+			CreatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+			UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+		},
+		candidateStudents: []db.ListAssessmentCandidateStudentsByClassIDsRow{
+			{StudentID: mustPgUUIDAssessmentTest("aaaaaaaa-0000-0000-0000-000000000001"), ClassID: classID, StudentName: "A"},
+			{StudentID: mustPgUUIDAssessmentTest("aaaaaaaa-0000-0000-0000-000000000002"), ClassID: classID, StudentName: "B"},
+			{StudentID: mustPgUUIDAssessmentTest("aaaaaaaa-0000-0000-0000-000000000003"), ClassID: classID, StudentName: "C"},
+		},
+	}
+	svc := NewAssessmentExamWithStore(store)
+
+	result, err := svc.AssignmentPreview(context.Background(), examID, AssessmentAssignmentRequest{RoomCount: 2, CapacityPerRoom: 2, ClassIDs: []string{classID.String()}})
+	if err != nil {
+		t.Fatalf("AssignmentPreview err = %v", err)
+	}
+	if result.TotalParticipants != 3 || result.AssignedTotal != 3 || result.UnassignedTotal != 0 {
+		t.Fatalf("result = %+v, want three selected-class participants fully assigned", result)
+	}
+}
+
+func TestAssessmentExamAssignmentApplyEnrollsClassStudentsAndAssignsSeats(t *testing.T) {
+	examID := mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111")
+	sessionID := mustPgUUIDAssessmentTest("22222222-2222-2222-2222-222222222222")
+	classID := mustPgUUIDAssessmentTest("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	student1 := mustPgUUIDAssessmentTest("aaaaaaaa-0000-0000-0000-000000000001")
+	student2 := mustPgUUIDAssessmentTest("aaaaaaaa-0000-0000-0000-000000000002")
+	student3 := mustPgUUIDAssessmentTest("aaaaaaaa-0000-0000-0000-000000000003")
+	now := time.Date(2026, 5, 30, 8, 0, 0, 0, time.UTC)
+	store := &fakeAssessmentExamStore{
+		getRow: db.GetAssessmentExamRow{
+			ID:        examID,
+			Title:     "PAT",
+			Status:    AssessmentExamStatusDraft,
+			CreatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+			UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+		},
+		firstSession: db.AssessmentSession{ID: sessionID},
+		candidateStudents: []db.ListAssessmentCandidateStudentsByClassIDsRow{
+			{StudentID: student1, ClassID: classID, StudentName: "A"},
+			{StudentID: student2, ClassID: classID, StudentName: "B"},
+			{StudentID: student3, ClassID: classID, StudentName: "C"},
+		},
+		participants: []db.ListAssessmentParticipantsForAssignmentRow{
+			{ParticipantID: student1, SessionID: sessionID, StudentID: student1, StudentName: "A"},
+			{ParticipantID: student2, SessionID: sessionID, StudentID: student2, StudentName: "B"},
+			{ParticipantID: student3, SessionID: sessionID, StudentID: student3, StudentName: "C"},
+		},
+	}
+	svc := NewAssessmentExamWithStore(store)
+
+	result, err := svc.AssignmentApply(context.Background(), examID, AssessmentAssignmentRequest{RoomCount: 2, CapacityPerRoom: 2, ClassIDs: []string{classID.String()}})
+	if err != nil {
+		t.Fatalf("AssignmentApply err = %v", err)
+	}
+	if result.AssignedTotal != 3 || len(store.upsertedParticipants) != 3 || len(store.assignedParticipants) != 3 {
+		t.Fatalf("result=%+v upserted=%d assigned=%d, want three participants enrolled and assigned", result, len(store.upsertedParticipants), len(store.assignedParticipants))
+	}
+	if !store.clearedParticipantSet {
+		t.Fatal("participants were not cleared before reassignment")
+	}
+	if store.assignedParticipants[0].SeatNo.Int32 != 1 || store.assignedParticipants[1].SeatNo.Int32 != 2 || store.assignedParticipants[2].SeatNo.Int32 != 1 {
+		t.Fatalf("assigned seats = %+v, want R01 seats 1-2 then R02 seat 1", store.assignedParticipants)
+	}
+	if store.assignedParticipants[0].RoomID == store.assignedParticipants[2].RoomID {
+		t.Fatalf("assigned rooms = %+v, want third participant in second room", store.assignedParticipants)
 	}
 	if result.CardCount != 0 {
 		t.Fatalf("card count = %d, want no card issuance", result.CardCount)

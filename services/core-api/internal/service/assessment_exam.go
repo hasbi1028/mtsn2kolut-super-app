@@ -39,6 +39,11 @@ type assessmentExamStore interface {
 	CreateAssessmentSession(ctx context.Context, arg db.CreateAssessmentSessionParams) (db.AssessmentSession, error)
 	CreateAssessmentRoom(ctx context.Context, arg db.CreateAssessmentRoomParams) (db.AssessmentRoom, error)
 	UpsertAssessmentRoom(ctx context.Context, arg db.UpsertAssessmentRoomParams) (db.AssessmentRoom, error)
+	ListAssessmentCandidateStudentsByClassIDs(ctx context.Context, classIds []pgtype.UUID) ([]db.ListAssessmentCandidateStudentsByClassIDsRow, error)
+	UpsertAssessmentParticipant(ctx context.Context, arg db.UpsertAssessmentParticipantParams) (db.AssessmentParticipant, error)
+	ListAssessmentParticipantsForAssignment(ctx context.Context, sessionID pgtype.UUID) ([]db.ListAssessmentParticipantsForAssignmentRow, error)
+	ClearAssessmentParticipantRooms(ctx context.Context, sessionID pgtype.UUID) error
+	AssignAssessmentParticipantRoom(ctx context.Context, arg db.AssignAssessmentParticipantRoomParams) error
 	CountAssessmentRoomsByExam(ctx context.Context, examID pgtype.UUID) (int64, error)
 	CountAssessmentParticipantsByExam(ctx context.Context, examID pgtype.UUID) (int64, error)
 	CountAssessmentCardsByExam(ctx context.Context, examID pgtype.UUID) (int64, error)
@@ -293,11 +298,14 @@ func (s *AssessmentExam) AssignmentPreview(ctx context.Context, id pgtype.UUID, 
 	if err != nil {
 		return AssessmentAssignmentResult{}, err
 	}
-	participantCount, err := s.q.CountAssessmentParticipantsByExam(ctx, id)
+	participantCount, err := s.assignmentPreviewParticipantCount(ctx, id, normalized)
 	if err != nil {
 		return AssessmentAssignmentResult{}, err
 	}
 	result := buildAssessmentAssignmentResult(exam.ID, "", normalized, participantCount, false)
+	if len(normalized.ClassIDs) > 0 && participantCount > 0 {
+		result.Message = "Preview peserta dan ruang siap. Simpan untuk mendaftarkan siswa dari rombel terpilih dan menempatkan mereka ke ruang."
+	}
 	return result, nil
 }
 
@@ -322,28 +330,125 @@ func (s *AssessmentExam) AssignmentApply(ctx context.Context, id pgtype.UUID, in
 	if err != nil {
 		return AssessmentAssignmentResult{}, err
 	}
-	participantCount, err := s.q.CountAssessmentParticipantsByExam(ctx, id)
+	if len(normalized.ClassIDs) > 0 {
+		if err := s.upsertAssessmentParticipantsFromClasses(ctx, session.ID, normalized); err != nil {
+			return AssessmentAssignmentResult{}, err
+		}
+	}
+	participants, err := s.q.ListAssessmentParticipantsForAssignment(ctx, session.ID)
 	if err != nil {
 		return AssessmentAssignmentResult{}, err
 	}
-	result := buildAssessmentAssignmentResult(exam.ID, assessmentUUIDString(session.ID), normalized, participantCount, true)
+	result := buildAssessmentAssignmentResult(exam.ID, assessmentUUIDString(session.ID), normalized, int64(len(participants)), true)
+	roomsByCode := make(map[string]db.AssessmentRoom, len(result.Rooms))
 	for _, room := range result.Rooms {
-		if _, err := s.q.UpsertAssessmentRoom(ctx, db.UpsertAssessmentRoomParams{
+		savedRoom, err := s.q.UpsertAssessmentRoom(ctx, db.UpsertAssessmentRoomParams{
 			SessionID: session.ID,
 			Code:      room.Code,
 			Name:      room.Name,
 			Capacity:  room.Capacity,
-		}); err != nil {
+		})
+		if err != nil {
 			return AssessmentAssignmentResult{}, err
 		}
+		roomsByCode[room.Code] = savedRoom
+	}
+	if err := s.assignAssessmentParticipantsToRooms(ctx, session.ID, participants, result.Rooms, roomsByCode); err != nil {
+		return AssessmentAssignmentResult{}, err
 	}
 	cardCount, err := s.q.CountAssessmentCardsByExam(ctx, id)
 	if err != nil {
 		return AssessmentAssignmentResult{}, err
 	}
 	result.CardCount = cardCount
-	result.Message = "Ruang ujian tersimpan. Peserta dan kartu ujian belum dibuat pada tahap fondasi ini."
+	if len(participants) > 0 {
+		result.Message = "Ruang dan peserta tersimpan. Siswa sudah masuk ruang secara berurutan; kartu/QR+PIN belum diterbitkan."
+	} else {
+		result.Message = "Ruang ujian tersimpan. Belum ada peserta dari rombel terpilih; kartu/QR+PIN belum diterbitkan."
+	}
 	return result, nil
+}
+
+func (s *AssessmentExam) assignmentPreviewParticipantCount(ctx context.Context, examID pgtype.UUID, input AssessmentAssignmentRequest) (int64, error) {
+	if len(input.ClassIDs) == 0 {
+		return s.q.CountAssessmentParticipantsByExam(ctx, examID)
+	}
+	classIDs, err := assessmentUUIDsFromStrings(input.ClassIDs)
+	if err != nil {
+		return 0, err
+	}
+	students, err := s.q.ListAssessmentCandidateStudentsByClassIDs(ctx, classIDs)
+	if err != nil {
+		return 0, err
+	}
+	return int64(len(students)), nil
+}
+
+func (s *AssessmentExam) upsertAssessmentParticipantsFromClasses(ctx context.Context, sessionID pgtype.UUID, input AssessmentAssignmentRequest) error {
+	classIDs, err := assessmentUUIDsFromStrings(input.ClassIDs)
+	if err != nil {
+		return err
+	}
+	students, err := s.q.ListAssessmentCandidateStudentsByClassIDs(ctx, classIDs)
+	if err != nil {
+		return err
+	}
+	for _, student := range students {
+		if _, err := s.q.UpsertAssessmentParticipant(ctx, db.UpsertAssessmentParticipantParams{SessionID: sessionID, StudentID: student.StudentID}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *AssessmentExam) assignAssessmentParticipantsToRooms(ctx context.Context, sessionID pgtype.UUID, participants []db.ListAssessmentParticipantsForAssignmentRow, rooms []AssessmentAssignmentRoom, roomsByCode map[string]db.AssessmentRoom) error {
+	if len(participants) == 0 {
+		return nil
+	}
+	if err := s.q.ClearAssessmentParticipantRooms(ctx, sessionID); err != nil {
+		return err
+	}
+	participantIndex := 0
+	for _, plannedRoom := range rooms {
+		savedRoom, ok := roomsByCode[plannedRoom.Code]
+		if !ok {
+			return fmt.Errorf("%w: ruang %s belum tersimpan", domain.ErrBadRequest, plannedRoom.Code)
+		}
+		for seat := int32(1); seat <= plannedRoom.Capacity && participantIndex < len(participants); seat++ {
+			participant := participants[participantIndex]
+			if err := s.q.AssignAssessmentParticipantRoom(ctx, db.AssignAssessmentParticipantRoomParams{
+				RoomID:        savedRoom.ID,
+				SeatNo:        pgtype.Int4{Int32: seat, Valid: true},
+				ParticipantID: participant.ParticipantID,
+				SessionID:     sessionID,
+			}); err != nil {
+				return err
+			}
+			participantIndex++
+		}
+	}
+	return nil
+}
+
+func assessmentUUIDsFromStrings(rawIDs []string) ([]pgtype.UUID, error) {
+	ids := make([]pgtype.UUID, 0, len(rawIDs))
+	seen := make(map[string]bool, len(rawIDs))
+	for _, raw := range rawIDs {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" || seen[trimmed] {
+			continue
+		}
+		var id pgtype.UUID
+		if err := id.Scan(trimmed); err != nil || !id.Valid {
+			return nil, fmt.Errorf("%w: rombel peserta tidak valid", domain.ErrBadRequest)
+		}
+		seen[trimmed] = true
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("%w: pilih minimal satu rombel peserta", domain.ErrBadRequest)
+	}
+	return ids, nil
 }
 
 func normalizeAssessmentAssignmentRequest(input AssessmentAssignmentRequest) (AssessmentAssignmentRequest, error) {

@@ -142,3 +142,67 @@ SELECT COUNT(DISTINCT c.id)::bigint
 FROM assessment_sessions s
 JOIN assessment_access_cards c ON c.session_id = s.id
 WHERE s.exam_id = sqlc.arg(exam_id);
+
+-- name: ListAssessmentCandidateStudentsByClassIDs :many
+SELECT
+  s.id AS student_id,
+  s.nama AS student_name,
+  s.nis,
+  s.nisn,
+  s.class_id,
+  COALESCE(c.code, '') AS class_code,
+  COALESCE(c.name, '') AS class_name,
+  COALESCE(c.level, 0)::int AS grade_level
+FROM students s
+LEFT JOIN school_classes c ON c.id = s.class_id
+WHERE s.is_active = TRUE
+  AND s.class_id = ANY(sqlc.arg(class_ids)::uuid[])
+ORDER BY COALESCE(c.level, 0), COALESCE(c.code, ''), s.nama;
+
+-- name: UpsertAssessmentParticipant :one
+INSERT INTO assessment_participants (
+  session_id,
+  student_id,
+  status
+) VALUES (
+  sqlc.arg(session_id),
+  sqlc.arg(student_id),
+  'registered'
+)
+ON CONFLICT (session_id, student_id) DO UPDATE
+SET updated_at = now()
+RETURNING *;
+
+-- name: ListAssessmentParticipantsForAssignment :many
+SELECT
+  p.id AS participant_id,
+  p.session_id,
+  p.room_id,
+  p.student_id,
+  p.status,
+  COALESCE(p.seat_no, 0)::int AS seat_no,
+  s.nama AS student_name,
+  s.class_id,
+  COALESCE(c.code, '') AS class_code,
+  COALESCE(c.name, '') AS class_name,
+  COALESCE(c.level, 0)::int AS grade_level
+FROM assessment_participants p
+JOIN students s ON s.id = p.student_id
+LEFT JOIN school_classes c ON c.id = s.class_id
+WHERE p.session_id = sqlc.arg(session_id)
+ORDER BY COALESCE(c.level, 0), COALESCE(c.code, ''), s.nama, p.id;
+
+-- name: ClearAssessmentParticipantRooms :exec
+UPDATE assessment_participants
+SET room_id = NULL,
+    seat_no = NULL,
+    updated_at = now()
+WHERE session_id = sqlc.arg(session_id);
+
+-- name: AssignAssessmentParticipantRoom :exec
+UPDATE assessment_participants
+SET room_id = sqlc.arg(room_id),
+    seat_no = sqlc.arg(seat_no),
+    updated_at = now()
+WHERE id = sqlc.arg(participant_id)
+  AND session_id = sqlc.arg(session_id);
