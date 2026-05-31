@@ -7,7 +7,9 @@ const pageSource = () => readFileSync(path.resolve(process.cwd(), 'src/routes/as
 describe('/asesmen Step 6 room and participant workflow', () => {
 	it('exposes room planning controls and calls preview/apply endpoints from the detail drawer', () => {
 		const source = pageSource();
-		expect(source).toContain('Langkah 3 · Ruang & Peserta');
+		expect(source).toContain('Langkah 3 · Peserta & Ruang');
+		expect(source).toContain("{ key: 'ruang', label: 'Peserta & Ruang'");
+		expect(source).not.toContain("{ key: 'peserta', label: 'Peserta'");
 		expect(source).toContain('/api/academic/rombel');
 		expect(source).toContain('/assignment-preview');
 		expect(source).toContain('/assignment-apply');
@@ -92,6 +94,19 @@ describe('/asesmen Step 6 room and participant workflow', () => {
 			expect(source).toContain('disabled={workingAssignment || !packageGateReady}');
 			expect(source).toContain('disabled={checkingCards || !selectedKegiatan || !packageGateReady}');
 			expect(source).toContain('if (!packageGateReady)');
+		});
+	});
+
+
+	describe('/asesmen P1 UI-only Sesi and Hasil panels', () => {
+		it('keeps Sesi and Hasil visible as UI/UX placeholders instead of empty panels', () => {
+			const source = pageSource();
+			expect(source).toContain('Langkah 4 · Sesi');
+			expect(source).toContain('Rancangan sesi ujian');
+			expect(source).toContain('Fokus UI/UX dulu');
+			expect(source).toContain('Langkah 6 · Hasil');
+			expect(source).toContain('Ringkasan hasil dan arsip');
+			expect(source).toContain('Belum ada data hasil yang dibuka pada P1');
 		});
 	});
 
