@@ -53,4 +53,14 @@ describe('/asesmen Step 6 room and participant workflow', () => {
 		expect(source).toContain('student_id,nomor_peserta,nama,rombel,ruang,urutan');
 		expect(source).toContain('Import → Validasi → Preview → Simpan');
 	});
+
+	it('does not send UI-only toggle fields that the backend JSON decoder rejects', () => {
+		const source = pageSource();
+		const payloadStart = source.indexOf('function assignmentPayload()');
+		const payloadEnd = source.indexOf('function csvCell', payloadStart);
+		const payloadSource = source.slice(payloadStart, payloadEnd);
+		expect(payloadSource).toContain('mix_policy: backendMixPolicy()');
+		expect(payloadSource).not.toContain('balance_rooms');
+		expect(payloadSource).not.toContain('spread_rombel');
+	});
 });

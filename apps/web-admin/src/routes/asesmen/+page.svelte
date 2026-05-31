@@ -310,8 +310,6 @@
 			room_count: Number(roomCount),
 			capacity_per_room: Number(capacityPerRoom),
 			mix_policy: backendMixPolicy(),
-			balance_rooms: balanceRooms,
-			spread_rombel: spreadRombel,
 			class_ids: selectedClassIds
 		};
 	}
