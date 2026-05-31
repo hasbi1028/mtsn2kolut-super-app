@@ -34,10 +34,13 @@
 		assigned_count: number;
 	};
 
+	type AssignmentMixPolicy = 'mixed' | 'class_grouped';
+	type AssignmentUiMode = 'balanced_all' | 'mixed_rombel' | 'class_grouped' | 'ordered_participant' | 'csv_manual';
+
 	type AssignmentResult = {
 		exam_id: string;
 		session_id?: string;
-		mix_policy: 'mixed' | 'class_grouped';
+		mix_policy: AssignmentMixPolicy;
 		room_count: number;
 		capacity_per_room: number;
 		total_participants: number;
@@ -52,9 +55,12 @@
 
 	type ParticipantPlacement = {
 		participant_id: string;
+		session_id?: string;
 		room_id?: string;
+		student_id?: string;
 		student_name: string;
 		nis?: string;
+		nisn?: string;
 		class_code: string;
 		class_name: string;
 		room_code?: string;
@@ -107,7 +113,9 @@
 	let selectedClassIds = $state<string[]>([]);
 	let roomCount = $state(8);
 	let capacityPerRoom = $state(30);
-	let mixPolicy = $state<'mixed' | 'class_grouped'>('mixed');
+	let assignmentMode = $state<AssignmentUiMode>('balanced_all');
+	let balanceRooms = $state(true);
+	let spreadRombel = $state(true);
 	let assignmentPreview = $state<AssignmentResult | null>(null);
 	let participantPlacements = $state<ParticipantPlacement[]>([]);
 	let workingParticipantId = $state('');
@@ -117,6 +125,7 @@
 	let assignmentError = $state('');
 	let assignmentNotice = $state('');
 	let placementError = $state('');
+	let csvImportNotice = $state('');
 	let loading = $state(true);
 	let saving = $state(false);
 	let loadingRombel = $state(false);
@@ -130,6 +139,14 @@
 	const selectedRombel = $derived(rombelOptions.filter((item) => selectedClassIds.includes(item.id)));
 	const selectedStudentTotal = $derived(selectedRombel.reduce((total, item) => total + Number(item.total_students ?? 0), 0));
 	const manualRoomOptions = $derived(Array.from(new Map(participantPlacements.filter((item) => item.room_id).map((item) => [item.room_id, item])).values()));
+
+	const assignmentModeDescriptions: Record<AssignmentUiMode, string> = {
+		balanced_all: 'Rekomendasi default: peserta disebar seimbang ke semua ruang dan rombel diusahakan tidak berkumpul.',
+		mixed_rombel: 'Sistem mengacak peserta dengan target komposisi rombel bercampur di setiap ruang.',
+		class_grouped: 'Peserta dari rombel yang sama ditempatkan berdekatan/seruang selama kapasitas cukup.',
+		ordered_participant: 'Peserta ditempatkan mengikuti urutan data peserta untuk administrasi yang mudah dicari.',
+		csv_manual: 'Manual dari CSV: Download Template CSV, isi ruang dan urutan, lalu Import CSV untuk divalidasi sebelum disimpan.'
+	};
 
 	const preparationChecklist = [
 		'Data kegiatan lengkap',
@@ -250,6 +267,7 @@
 		assignmentError = '';
 		assignmentNotice = '';
 		placementError = '';
+		csvImportNotice = '';
 	}
 
 	function toggleCreateForm() {
@@ -282,13 +300,133 @@
 			: [...selectedClassIds, id];
 	}
 
+	function backendMixPolicy(): AssignmentMixPolicy {
+		if (!spreadRombel || assignmentMode === 'class_grouped' || assignmentMode === 'ordered_participant') return 'class_grouped';
+		return 'mixed';
+	}
+
 	function assignmentPayload() {
 		return {
 			room_count: Number(roomCount),
 			capacity_per_room: Number(capacityPerRoom),
-			mix_policy: mixPolicy,
+			mix_policy: backendMixPolicy(),
+			balance_rooms: balanceRooms,
+			spread_rombel: spreadRombel,
 			class_ids: selectedClassIds
 		};
+	}
+
+	function csvCell(value: unknown) {
+		const text = String(value ?? '');
+		return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+	}
+
+	function downloadCsv(filename: string, content: string) {
+		const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = filename;
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+		URL.revokeObjectURL(url);
+	}
+
+	function downloadPlacementTemplateCsv() {
+		const header = 'student_id,nomor_peserta,nama,rombel,ruang,urutan';
+		const rows = participantPlacements.length > 0
+			? participantPlacements.map((item) => [
+				item.student_id || item.participant_id,
+				item.nis || item.nisn || '',
+				item.student_name,
+				item.class_code || item.class_name,
+				item.room_code || 'R01',
+				item.seat_no || 1
+			].map(csvCell).join(','))
+			: ['contoh-student-id,250001,Nama Siswa,9A,R01,1'];
+		downloadCsv(`template-penempatan-${selectedKegiatan?.nama || 'asesmen'}.csv`, [header, ...rows].join('\n'));
+		csvImportNotice = 'Template CSV siap. Kolom ruang memakai kode ruang seperti R01, R02; urutan adalah nomor kursi.';
+	}
+
+	function parseCsvLine(line: string) {
+		const cells: string[] = [];
+		let current = '';
+		let quoted = false;
+		for (let index = 0; index < line.length; index++) {
+			const char = line[index];
+			if (char === '"') {
+				if (quoted && line[index + 1] === '"') {
+					current += '"';
+					index++;
+				} else {
+					quoted = !quoted;
+				}
+			} else if (char === ',' && !quoted) {
+				cells.push(current.trim());
+				current = '';
+			} else {
+				current += char;
+			}
+		}
+		cells.push(current.trim());
+		return cells;
+	}
+
+	async function handlePlacementCsvImport(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		placementError = '';
+		csvImportNotice = '';
+		try {
+			if (participantPlacements.length === 0) await loadParticipantPlacements();
+			if (participantPlacements.length === 0) throw new Error('Ambil/simpan peserta ruang dulu sebelum import CSV.');
+			const text = await file.text();
+			const lines = text.split(/\r?\n/).filter((line) => line.trim());
+			if (lines.length < 2) throw new Error('CSV wajib berisi header dan minimal satu baris peserta.');
+			const headers = parseCsvLine(lines[0]).map((item) => item.toLowerCase());
+			const indexOf = (name: string) => headers.indexOf(name);
+			const studentIndex = indexOf('student_id');
+			const numberIndex = indexOf('nomor_peserta');
+			const nameIndex = indexOf('nama');
+			const roomIndex = indexOf('ruang');
+			const seatIndex = indexOf('urutan');
+			if (roomIndex < 0 || seatIndex < 0) throw new Error('CSV wajib memiliki kolom ruang dan urutan.');
+			const roomByCode = new Map(manualRoomOptions.map((room) => [String(room.room_code || '').toUpperCase(), room]));
+			const seen = new Set<string>();
+			const moves: Array<{ participant: ParticipantPlacement; roomId: string; seatNo: number }> = [];
+			for (const [lineIndex, line] of lines.slice(1).entries()) {
+				const cells = parseCsvLine(line);
+				const studentId = studentIndex >= 0 ? cells[studentIndex] : '';
+				const number = numberIndex >= 0 ? cells[numberIndex] : '';
+				const name = nameIndex >= 0 ? cells[nameIndex] : '';
+				const roomCode = String(cells[roomIndex] || '').toUpperCase();
+				const seatNo = Number(cells[seatIndex]);
+				const participant = participantPlacements.find((item) =>
+					(studentId && (item.student_id === studentId || item.participant_id === studentId)) ||
+					(number && (item.nis === number || item.nisn === number)) ||
+					(name && item.student_name.trim().toLowerCase() === name.trim().toLowerCase())
+				);
+				if (!participant) throw new Error(`Baris ${lineIndex + 2}: peserta tidak ditemukan.`);
+				if (seen.has(participant.participant_id)) throw new Error(`Baris ${lineIndex + 2}: peserta dobel di CSV.`);
+				seen.add(participant.participant_id);
+				const room = roomByCode.get(roomCode);
+				if (!room?.room_id) throw new Error(`Baris ${lineIndex + 2}: kode ruang ${roomCode || '-'} tidak valid.`);
+				const capacity = room.room_capacity || capacityPerRoom;
+				if (!Number.isInteger(seatNo) || seatNo < 1 || seatNo > capacity) throw new Error(`Baris ${lineIndex + 2}: urutan harus 1 sampai ${capacity}.`);
+				moves.push({ participant, roomId: room.room_id, seatNo });
+			}
+			for (const move of moves) {
+				await moveParticipantSeat(move.participant, move.roomId, move.seatNo);
+			}
+			await loadParticipantPlacements();
+			csvImportNotice = `Import CSV valid dan ${moves.length} penempatan tersimpan. Import → Validasi → Preview → Simpan selesai.`;
+		} catch (error) {
+			placementError = error instanceof Error ? error.message : 'Import CSV belum dapat diproses.';
+		} finally {
+			input.value = '';
+		}
 	}
 
 	async function submitKegiatan() {
@@ -490,7 +628,31 @@
 							{#if loadingRombel}<p class="mt-3 text-sm text-muted-foreground">Memuat rombel…</p>{:else if rombelOptions.length === 0}<p class="mt-3 text-sm text-muted-foreground">Belum ada rombel aktif yang bisa dipilih.</p>{:else}<div class="mt-3 grid max-h-56 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">{#each rombelOptions as rombel}<label class="flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted/60"><input type="checkbox" class="mt-1" checked={selectedClassIds.includes(rombel.id)} onchange={() => toggleClass(rombel.id)} /><span class="min-w-0"><span class="block font-semibold text-foreground">{rombel.code || rombel.name}</span><span class="block text-xs text-muted-foreground">{rombel.name} · {rombel.total_students ?? 0} siswa</span></span></label>{/each}</div>{/if}
 						</div>
 
-						<div class="mt-4 rounded-lg border bg-background p-3"><h4 class="text-sm font-semibold text-foreground">② Atur Acak</h4><div class="mt-3 grid gap-3 sm:grid-cols-3"><label class="space-y-1"><span class="text-xs font-medium text-muted-foreground">Jumlah ruang</span><input type="number" min="1" max="20" class="w-full rounded-md border bg-background px-3 py-2 text-sm" bind:value={roomCount} /></label><label class="space-y-1"><span class="text-xs font-medium text-muted-foreground">Kapasitas/ruang</span><input type="number" min="1" max="50" class="w-full rounded-md border bg-background px-3 py-2 text-sm" bind:value={capacityPerRoom} /></label><label class="space-y-1"><span class="text-xs font-medium text-muted-foreground">Pola acak</span><select class="w-full rounded-md border bg-background px-3 py-2 text-sm" bind:value={mixPolicy}><option value="mixed">Campur rombel</option><option value="class_grouped">Kelompok kelas</option></select></label></div></div>
+						<div class="mt-4 rounded-lg border bg-background p-3">
+							<div class="flex flex-wrap items-start justify-between gap-2">
+								<div>
+									<h4 class="text-sm font-semibold text-foreground">② Atur Acak</h4>
+									<p class="mt-1 text-xs leading-5 text-muted-foreground">Pilih metode pembagian. Default terbaik: Acak merata ke seluruh ruang.</p>
+								</div>
+								<span class="rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">Rekomendasi: merata</span>
+							</div>
+							<div class="mt-3 grid gap-3 sm:grid-cols-3">
+								<label class="space-y-1"><span class="text-xs font-medium text-muted-foreground">Jumlah ruang</span><input type="number" min="1" max="20" class="w-full rounded-md border bg-background px-3 py-2 text-sm" bind:value={roomCount} /></label>
+								<label class="space-y-1"><span class="text-xs font-medium text-muted-foreground">Kapasitas/ruang</span><input type="number" min="1" max="50" class="w-full rounded-md border bg-background px-3 py-2 text-sm" bind:value={capacityPerRoom} /></label>
+								<label class="space-y-1"><span class="text-xs font-medium text-muted-foreground">Metode pembagian</span><select class="w-full rounded-md border bg-background px-3 py-2 text-sm" bind:value={assignmentMode}><option value="balanced_all">Acak merata ke seluruh ruang</option><option value="mixed_rombel">Acak campur rombel</option><option value="class_grouped">Kelompok per rombel</option><option value="ordered_participant">Urut nomor peserta</option><option value="csv_manual">Manual dari CSV</option></select></label>
+							</div>
+							<p class="mt-2 rounded-lg bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">{assignmentModeDescriptions[assignmentMode]}</p>
+							<div class="mt-3 grid gap-2 sm:grid-cols-2">
+								<label class="flex items-start gap-2 rounded-lg border bg-card px-3 py-2 text-xs text-muted-foreground"><input type="checkbox" class="mt-1" bind:checked={balanceRooms} /><span><strong class="block text-foreground">Seimbangkan jumlah peserta per ruang</strong><span>Ruang dibuat tidak timpang selama kapasitas masih cukup.</span></span></label>
+								<label class="flex items-start gap-2 rounded-lg border bg-card px-3 py-2 text-xs text-muted-foreground"><input type="checkbox" class="mt-1" bind:checked={spreadRombel} /><span><strong class="block text-foreground">Usahakan rombel tidak berkumpul</strong><span>Sistem memakai pola campur bila mode memungkinkan.</span></span></label>
+							</div>
+							{#if assignmentMode === 'csv_manual'}
+								<div class="mt-3 rounded-lg border border-dashed bg-muted/20 px-3 py-3">
+									<p class="text-xs font-semibold text-foreground">Manual dari CSV</p>
+									<p class="mt-1 text-xs leading-5 text-muted-foreground">Import → Validasi → Preview → Simpan. Gunakan tombol di Mode Manual untuk Download Template CSV dan Import CSV setelah peserta/ruang tersedia.</p>
+								</div>
+							{/if}
+						</div>
 
 						{#if assignmentError}<p class="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{assignmentError}</p>{/if}
 						{#if assignmentNotice}<p class="mt-3 rounded-md border border-emerald-300 bg-emerald-100 px-3 py-2 text-sm font-medium text-emerald-800" role="status">{assignmentNotice}</p>{/if}
@@ -504,9 +666,10 @@
 					<section class="rounded-xl border border-sky-200 bg-sky-50/50 p-4">
 						<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 							<div><p class="text-xs font-semibold tracking-[0.16em] text-sky-700 uppercase">Mode Manual · Acak Sendiri</p><h3 class="text-base font-bold text-foreground">Atur peserta per ruang dan nomor kursi</h3><p class="mt-1 text-xs leading-5 text-muted-foreground">Ambil daftar peserta setelah simpan ruang. Tombol Acak Tampilan hanya mengubah urutan tampil agar Bapak bisa memilih manual; penyimpanan tetap per peserta lewat tombol Pindah.</p></div>
-							<div class="flex flex-wrap gap-2"><button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void loadParticipantPlacements()} disabled={loadingPlacements}>{loadingPlacements ? 'Memuat…' : 'Ambil Peserta'}</button><button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={shuffleManualView} disabled={participantPlacements.length === 0}>Acak Tampilan</button></div>
+							<div class="flex flex-wrap gap-2"><button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void loadParticipantPlacements()} disabled={loadingPlacements}>{loadingPlacements ? 'Memuat…' : 'Ambil Peserta'}</button><button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={shuffleManualView} disabled={participantPlacements.length === 0}>Acak Tampilan</button><button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={downloadPlacementTemplateCsv}>Download Template CSV</button><label class="cursor-pointer rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted">Import CSV<input class="sr-only" type="file" accept=".csv,text/csv" onchange={(event) => void handlePlacementCsvImport(event)} /></label></div>
 						</div>
 						{#if placementError}<p class="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{placementError}</p>{/if}
+						{#if csvImportNotice}<p class="mt-3 rounded-md border border-sky-300 bg-sky-100 px-3 py-2 text-sm font-medium text-sky-800" role="status">{csvImportNotice}</p>{/if}
 						{#if participantPlacements.length === 0}<p class="mt-3 rounded-lg border border-dashed bg-background px-3 py-3 text-sm text-muted-foreground">Belum ada peserta dimuat. Simpan ruang & peserta dulu, lalu klik Ambil Peserta untuk edit manual.</p>{:else}
 							<div class="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">{#each participantPlacements as placement (placement.participant_id)}<div class="grid gap-2 rounded-lg border bg-background p-3 text-sm sm:grid-cols-[1fr_8rem_6rem_5rem]"><div class="min-w-0"><p class="truncate font-semibold text-foreground">{placement.student_name}</p><p class="text-xs text-muted-foreground">{placement.class_code} · {placement.room_code || 'Belum ruang'} · Kursi {placement.seat_no || '-'}</p></div><select class="rounded-md border bg-card px-2 py-2 text-xs" value={placement.room_id || ''} onchange={(event) => (placement.room_id = event.currentTarget.value)}>{#each manualRoomOptions as room}<option value={room.room_id}>{room.room_code} · {room.room_name}</option>{/each}</select><input class="rounded-md border bg-card px-2 py-2 text-xs" type="number" min="1" max={placement.room_capacity || capacityPerRoom} value={placement.seat_no || 1} oninput={(event) => (placement.seat_no = Number(event.currentTarget.value))} /><button type="button" class="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60" onclick={() => void moveParticipantSeat(placement, placement.room_id || '', Number(placement.seat_no || 1))} disabled={workingParticipantId === placement.participant_id}>{workingParticipantId === placement.participant_id ? '...' : 'Pindah'}</button></div>{/each}</div>
 						{/if}

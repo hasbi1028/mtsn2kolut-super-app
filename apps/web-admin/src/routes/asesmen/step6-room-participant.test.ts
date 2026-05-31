@@ -32,4 +32,25 @@ describe('/asesmen Step 6 room and participant workflow', () => {
 		expect(source).toContain('Peta Ruang Visual');
 		expect(source).toContain('Simpan Penempatan');
 	});
+
+	it('offers operator-friendly randomization choices with a recommended default', () => {
+		const source = pageSource();
+		expect(source).toContain('Acak merata ke seluruh ruang');
+		expect(source).toContain('Acak campur rombel');
+		expect(source).toContain('Kelompok per rombel');
+		expect(source).toContain('Urut nomor peserta');
+		expect(source).toContain('Manual dari CSV');
+		expect(source).toContain('Seimbangkan jumlah peserta per ruang');
+		expect(source).toContain('Usahakan rombel tidak berkumpul');
+	});
+
+	it('supports CSV template export and import through preview-first manual placement', () => {
+		const source = pageSource();
+		expect(source).toContain('downloadPlacementTemplateCsv');
+		expect(source).toContain('handlePlacementCsvImport');
+		expect(source).toContain('Download Template CSV');
+		expect(source).toContain('Import CSV');
+		expect(source).toContain('student_id,nomor_peserta,nama,rombel,ruang,urutan');
+		expect(source).toContain('Import → Validasi → Preview → Simpan');
+	});
 });
