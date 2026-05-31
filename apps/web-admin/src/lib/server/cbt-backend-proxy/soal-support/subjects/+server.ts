@@ -8,7 +8,7 @@ type AcademicPayload = {
 
 export const GET = async (event: RequestEvent) => {
 	try {
-		const data = await proxy(event).get<AcademicPayload>('/api/academic');
+		const data = await proxy(event).get<AcademicPayload>('/api/academic/subjects');
 		return json({ subjects: Array.isArray(data.subjects) ? data.subjects : [] });
 	} catch (e) {
 		return handleRouteError(e, 'cbt/soal-support/subjects GET');

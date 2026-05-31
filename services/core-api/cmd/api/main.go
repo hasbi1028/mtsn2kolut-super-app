@@ -330,6 +330,7 @@ func main() {
 		})
 
 		r.Get("/api/academic", academicH.Overview)
+		r.Get("/api/academic/subjects", academicH.ListSubjectsOnly)
 		r.Get("/api/academic/dashboard", academicH.GetDashboard)
 		r.Get("/api/academic/readiness", academicH.GetReadiness)
 		r.Get("/api/academic/stats", academicH.GetStats)

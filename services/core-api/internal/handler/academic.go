@@ -96,6 +96,19 @@ func (h *Academic) Overview(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Academic) ListSubjectsOnly(w http.ResponseWriter, r *http.Request) {
+	if !academicSubjectListAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	rows, err := h.svc.ListSubjects(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]any{"subjects": rows})
+}
+
 func (h *Academic) GetStats(w http.ResponseWriter, r *http.Request) {
 	if !academicReadAccessAllowed(r) {
 		api.Forbidden(w)

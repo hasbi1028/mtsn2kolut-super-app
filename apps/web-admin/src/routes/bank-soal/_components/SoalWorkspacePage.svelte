@@ -1140,9 +1140,9 @@
 			fetch('/api/bank-soal/soal-support/subjects').then((response) =>
 				readClientApiData<AcademicPayload>(response, 'Gagal memuat data akademik')
 			),
-			fetch('/api/asesmen/events').then((response) =>
-				readClientApiData<EventsPayload>(response, 'Gagal memuat kegiatan ujian')
-			),
+			fetch('/api/asesmen/events')
+				.then((response) => readClientApiData<EventsPayload>(response, 'Gagal memuat kegiatan ujian'))
+				.catch(() => [] as CbtEvent[]),
 			targetsPromise,
 		]);
 		const loadedQuestions = questionPayload.items ?? [];

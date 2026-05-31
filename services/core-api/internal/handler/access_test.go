@@ -47,3 +47,38 @@ func TestAcademicReadAccessAllowedRejectsUnrelatedClaims(t *testing.T) {
 		t.Fatalf("academicReadAccessAllowed() = true, want false for missing claims")
 	}
 }
+
+func TestAcademicSubjectListAccessAllowedAcceptsBankSoalComposerPermissions(t *testing.T) {
+	tests := []struct {
+		name   string
+		claims jwt.MapClaims
+	}{
+		{
+			name:   "bank soal create permission can load composer subject dropdown",
+			claims: jwt.MapClaims{"permissions": []any{"bank_soal.create"}},
+		},
+		{
+			name:   "bank soal read permission can load composer subject dropdown",
+			claims: jwt.MapClaims{"permissions": []string{"bank_soal.read"}},
+		},
+		{
+			name:   "academic read permission remains allowed",
+			claims: jwt.MapClaims{"permissions": []any{"academic.read"}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := withClaims(httptest.NewRequest(http.MethodGet, "/api/academic/subjects", nil), tt.claims)
+			if !academicSubjectListAccessAllowed(req) {
+				t.Fatalf("academicSubjectListAccessAllowed() = false, want true")
+			}
+		})
+	}
+}
+
+func TestAcademicSubjectListAccessAllowedRejectsMissingClaims(t *testing.T) {
+	if academicSubjectListAccessAllowed(httptest.NewRequest(http.MethodGet, "/api/academic/subjects", nil)) {
+		t.Fatalf("academicSubjectListAccessAllowed() = true, want false for missing claims")
+	}
+}

@@ -42,3 +42,7 @@ func academicReadAccessAllowed(r *http.Request) bool {
 	return mw.HasAnyRole(claims, "admin", "guru", "staf", "kesiswaan") ||
 		mw.HasAnyPermission(claims, "academic.read", "academic.manage")
 }
+
+func academicSubjectListAccessAllowed(r *http.Request) bool {
+	return academicReadAccessAllowed(r) || cbtAccessAllowed(r)
+}
