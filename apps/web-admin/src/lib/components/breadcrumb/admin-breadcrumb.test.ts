@@ -6,6 +6,11 @@ const adminPermissions = [
 	'dashboard.read',
 	'bank_soal.read',
 	'bank_soal.create',
+	'bank_soal.import',
+	'bank_soal.review',
+	'bank_soal.publish',
+	'bank_soal.analytics',
+	'bank_soal.settings',
 	'students.read',
 	'academic.read',
 	'letters.read',
@@ -41,6 +46,13 @@ const routedAdminModuleSamples = [
 	'/bank-soal/soal/01000000-0000-0000-0000-000000000000',
 	'/bank-soal/impor',
 	'/bank-soal/verifikasi',
+	'/bank-soal/laporan',
+	'/bank-soal/cetak',
+	'/bank-soal/penerbitan',
+	'/bank-soal/analisis-butir',
+	'/bank-soal/mapel-kd',
+	'/bank-soal/alat',
+	'/bank-soal/pengaturan',
 	'/tu',
 	'/tu/surat-masuk',
 	'/tu/surat-keluar',
@@ -79,6 +91,10 @@ describe('admin breadcrumb resolver', () => {
 			'Tambah Soal'
 		]);
 		expect(tambahSoalCrumbs.map((crumb) => crumb.section)).toEqual(['6', '6.2']);
+
+		const laporanCrumbs = buildAdminBreadcrumbs('/bank-soal/laporan', adminRoles, adminPermissions);
+		expect(laporanCrumbs.map((crumb) => crumb.label)).toEqual(['Bank Soal', 'Laporan']);
+		expect(laporanCrumbs.map((crumb) => crumb.section)).toEqual(['6', '6.5']);
 	});
 
 	it('keeps Asesmen fallback breadcrumbs after the standalone Paket Soal group', () => {

@@ -74,6 +74,13 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'/paket-soal',
 			'/bank-soal/tambah',
 			'/bank-soal/impor',
+			'/bank-soal/laporan',
+			'/bank-soal/cetak',
+			'/bank-soal/penerbitan',
+			'/bank-soal/analisis-butir',
+			'/bank-soal/mapel-kd',
+			'/bank-soal/alat',
+			'/bank-soal/pengaturan',
 			'/governance/actions/calendar',
 			'/governance/actions/meeting-pack',
 			'/settings/maintenance'
@@ -90,7 +97,14 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'/bank-soal',
 			'/bank-soal/tambah',
 			'/bank-soal/impor',
-			'/bank-soal/verifikasi'
+			'/bank-soal/verifikasi',
+			'/bank-soal/laporan',
+			'/bank-soal/cetak',
+			'/bank-soal/penerbitan',
+			'/bank-soal/analisis-butir',
+			'/bank-soal/mapel-kd',
+			'/bank-soal/alat',
+			'/bank-soal/pengaturan'
 		]);
 		expect(hrefsByGroup('Bank Soal').every((href) => !href.startsWith('/cbt/'))).toBe(true);
 	});
@@ -108,7 +122,8 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(byHref.get('/settings/users')?.permissions).toEqual(['users.read']);
 		expect(byHref.get('/settings/rbac')?.permissions).toEqual(['roles.read']);
 		expect(byHref.get('/bank-soal/verifikasi')?.permissions).toEqual(['bank_soal.review', 'bank_soal.publish']);
-		expect(byHref.get('/bank-soal/analisis-butir')).toBeUndefined();
+		expect(byHref.get('/bank-soal/laporan')?.permissions).toEqual(['bank_soal.read', 'bank_soal.analytics', 'bank_soal.review']);
+		expect(byHref.get('/bank-soal/analisis-butir')?.permissions).toEqual(['bank_soal.analytics']);
 		});
 
 		it('hides guru role-only academic, student, assessment, and bank-soal surfaces without permissions', () => {
@@ -135,8 +150,13 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], ['bank_soal.read', 'bank_soal.create'])
 		).map((item) => item.href);
 		expect(visibleHrefs).toEqual(expect.arrayContaining(['/bank-soal', '/bank-soal/tambah', '/settings/account']));
+		expect(visibleHrefs).toContain('/bank-soal/laporan');
+		expect(visibleHrefs).toContain('/bank-soal/cetak');
+		expect(visibleHrefs).toContain('/bank-soal/mapel-kd');
 		expect(visibleHrefs).not.toContain('/bank-soal/verifikasi');
 		expect(visibleHrefs).not.toContain('/bank-soal/daftar');
+		expect(visibleHrefs).not.toContain('/bank-soal/alat');
+		expect(visibleHrefs).not.toContain('/bank-soal/pengaturan');
 	});
 
 

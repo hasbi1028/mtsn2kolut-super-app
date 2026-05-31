@@ -152,11 +152,11 @@ const fallbackPatterns: BreadcrumbPattern[] = [
 		]
 	},
 	{
-		match: /^\/bank-soal\/(analisis-butir|cetak|laporan|mapel-kd|pengaturan|alat|penerbitan|daftar)\/?$/,
+		match: /^\/bank-soal\/soal\/[^/]+\/?$/,
 		crumbs: [
 			{ label: 'Bank Soal', section: '6' },
 			{ label: 'Daftar Soal', href: '/bank-soal', section: '6.1' },
-			{ label: 'Fitur Bank Soal', section: '6.5' }
+			{ label: 'Detail Soal', section: '6.1.1' }
 		]
 	}
 ];
