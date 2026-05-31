@@ -56,6 +56,7 @@
 	};
 
 	type QuestionsPayload = QuestionPoolItem[] | { items?: QuestionPoolItem[] };
+	type SubjectsPayload = SubjectOption[] | { subjects?: SubjectOption[] };
 
 	type PackageReadiness = PackageReadinessStatus;
 
@@ -220,7 +221,8 @@
 		loadingSubjects = true;
 		try {
 			const response = await fetch('/api/bank-soal/soal-support/subjects');
-			subjectOptions = await readClientApiData<SubjectOption[]>(response);
+			const payload = await readClientApiData<SubjectsPayload>(response);
+			subjectOptions = Array.isArray(payload) ? payload : payload.subjects ?? [];
 		} catch {
 			subjectOptions = [];
 		} finally {
