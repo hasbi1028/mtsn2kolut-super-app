@@ -62,8 +62,7 @@
 		{ name: 'Daftar Soal', path: resolve('/bank-soal'), desc: 'Pencarian, filter, halaman daftar, dan aksi per soal.', required: 'read' },
 		{ name: 'Penyusun soal', path: resolve('/bank-soal/tambah'), desc: 'Pembuatan/edit soal dengan pratinjau siswa.', required: 'create' },
 		{ name: 'Pemeriksaan', path: resolve('/bank-soal/verifikasi'), desc: 'Antrean pemeriksaan, catatan pemeriksa soal, siap pakai/revisi.', required: 'review' },
-		{ name: 'Impor', path: resolve('/bank-soal/impor'), desc: 'Pratinjau cek data dan impor final.', required: 'import' },
-		{ name: 'Daftar Soal', path: resolve('/bank-soal'), desc: 'Bank Soal tetap aktif setelah modul Asesmen/CBT lama dihapus.', required: 'read' }
+		{ name: 'Impor', path: resolve('/bank-soal/impor'), desc: 'Pratinjau cek data dan impor final.', required: 'import' }
 	] as const;
 
 	let { data }: { data: PageData } = $props();
