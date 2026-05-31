@@ -84,9 +84,9 @@ func (f *fakeAssessmentExamStore) UpsertAssessmentRoom(_ context.Context, arg db
 		Name:      arg.Name,
 		Capacity:  arg.Capacity,
 	})
-	roomID := mustPgUUIDAssessmentTest("33333333-3333-3333-3333-333333333333")
-	if arg.Code == "R02" {
-		roomID = mustPgUUIDAssessmentTest("44444444-4444-4444-4444-444444444444")
+	roomID := mustPgUUIDAssessmentTest("33333333-3333-3333-3333-333333333300")
+	if len(arg.Code) == 3 && arg.Code[0] == 'R' {
+		roomID.Bytes[15] = (arg.Code[1]-'0')*10 + (arg.Code[2] - '0')
 	}
 	return db.AssessmentRoom{ID: roomID, SessionID: arg.SessionID, Code: arg.Code, Name: arg.Name, Capacity: arg.Capacity}, nil
 }
@@ -298,6 +298,35 @@ func TestAssessmentExamAssignmentPreviewReportsCapacityShortage(t *testing.T) {
 	}
 }
 
+func TestAssessmentExamAssignmentPreviewBalancesParticipantsAcrossAllRooms(t *testing.T) {
+	examID := mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111")
+	now := time.Date(2026, 5, 30, 8, 0, 0, 0, time.UTC)
+	store := &fakeAssessmentExamStore{
+		getRow: db.GetAssessmentExamRow{
+			ID:        examID,
+			Title:     "UAS Merata",
+			Status:    AssessmentExamStatusDraft,
+			CreatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+			UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+		},
+		participantCnt: 120,
+	}
+	svc := NewAssessmentExamWithStore(store)
+
+	result, err := svc.AssignmentPreview(context.Background(), examID, AssessmentAssignmentRequest{RoomCount: 8, CapacityPerRoom: 30, MixPolicy: AssessmentMixPolicyMixed})
+	if err != nil {
+		t.Fatalf("AssignmentPreview err = %v", err)
+	}
+	if result.AssignedTotal != 120 || result.UnassignedTotal != 0 {
+		t.Fatalf("result = %+v, want all 120 participants assigned", result)
+	}
+	for i, room := range result.Rooms {
+		if room.AssignedCount != 15 {
+			t.Fatalf("room[%d] = %+v, want balanced 15 participants per room", i, room)
+		}
+	}
+}
+
 func TestAssessmentExamAssignmentPreviewValidation(t *testing.T) {
 	svc := NewAssessmentExamWithStore(&fakeAssessmentExamStore{})
 	examID := mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111")
@@ -345,6 +374,61 @@ func TestAssessmentExamAssignmentApplyUpsertsRoomsOnly(t *testing.T) {
 	}
 	if result.CardCount != 0 {
 		t.Fatalf("card count = %d, want no card issuance", result.CardCount)
+	}
+}
+
+func TestAssessmentExamAssignmentApplyBalancesParticipantsAcrossAllRooms(t *testing.T) {
+	examID := mustPgUUIDAssessmentTest("11111111-1111-1111-1111-111111111111")
+	sessionID := mustPgUUIDAssessmentTest("22222222-2222-2222-2222-222222222222")
+	now := time.Date(2026, 5, 30, 8, 0, 0, 0, time.UTC)
+	participants := make([]db.ListAssessmentParticipantsForAssignmentRow, 0, 120)
+	for i := 1; i <= 120; i++ {
+		participantID := mustPgUUIDAssessmentTest("aaaaaaaa-0000-0000-0000-000000000001")
+		participantID.Bytes[14] = byte(i / 256)
+		participantID.Bytes[15] = byte(i % 256)
+		participants = append(participants, db.ListAssessmentParticipantsForAssignmentRow{
+			ParticipantID: participantID,
+			SessionID:     sessionID,
+			StudentID:     participantID,
+			StudentName:   "Siswa",
+			ClassCode:     "9A",
+			ClassName:     "IX A",
+			GradeLevel:    9,
+		})
+	}
+	store := &fakeAssessmentExamStore{
+		getRow: db.GetAssessmentExamRow{
+			ID:        examID,
+			Title:     "UAS Merata",
+			Status:    AssessmentExamStatusDraft,
+			CreatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+			UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true},
+		},
+		firstSession: db.AssessmentSession{ID: sessionID},
+		participants: participants,
+	}
+	svc := NewAssessmentExamWithStore(store)
+
+	result, err := svc.AssignmentApply(context.Background(), examID, AssessmentAssignmentRequest{RoomCount: 8, CapacityPerRoom: 30, MixPolicy: AssessmentMixPolicyMixed})
+	if err != nil {
+		t.Fatalf("AssignmentApply err = %v", err)
+	}
+	if result.AssignedTotal != 120 || result.UnassignedTotal != 0 || len(store.assignedParticipants) != 120 {
+		t.Fatalf("result=%+v assigned=%d, want all 120 assigned", result, len(store.assignedParticipants))
+	}
+	roomCounts := map[byte]int{}
+	for _, assigned := range store.assignedParticipants {
+		roomCounts[assigned.RoomID.Bytes[15]]++
+	}
+	for roomNo := byte(1); roomNo <= 8; roomNo++ {
+		if roomCounts[roomNo] != 15 {
+			t.Fatalf("roomCounts = %+v, want room %d to contain 15 participants", roomCounts, roomNo)
+		}
+	}
+	for i, room := range result.Rooms {
+		if room.AssignedCount != 15 {
+			t.Fatalf("result room[%d] = %+v, want balanced 15 participants", i, room)
+		}
 	}
 }
 

@@ -815,7 +815,7 @@ func (s *AssessmentExam) assignAssessmentParticipantsToRooms(ctx context.Context
 		if !ok {
 			return fmt.Errorf("%w: ruang %s belum tersimpan", domain.ErrBadRequest, plannedRoom.Code)
 		}
-		for seat := int32(1); seat <= plannedRoom.Capacity && participantIndex < len(participants); seat++ {
+		for seat := int32(1); seat <= int32(plannedRoom.AssignedCount) && participantIndex < len(participants); seat++ {
 			participant := participants[participantIndex]
 			if err := s.q.AssignAssessmentParticipantRoom(ctx, db.AssignAssessmentParticipantRoomParams{
 				RoomID:        savedRoom.ID,
@@ -885,7 +885,7 @@ func attachAssessmentRoomComposition(rooms []AssessmentAssignmentRoom, participa
 		classOrder := make([]string, 0)
 		gradeSeen := map[int32]bool{}
 		grades := make([]int32, 0)
-		for seat := int32(1); seat <= rooms[roomIndex].Capacity && participantIndex < len(participants); seat++ {
+		for seat := int64(1); seat <= rooms[roomIndex].AssignedCount && participantIndex < len(participants); seat++ {
 			participant := participants[participantIndex]
 			classCode := strings.TrimSpace(participant.ClassCode)
 			className := strings.TrimSpace(participant.ClassName)
@@ -966,15 +966,25 @@ func normalizeAssessmentAssignmentRequest(input AssessmentAssignmentRequest) (As
 
 func buildAssessmentAssignmentResult(examID, sessionID string, input AssessmentAssignmentRequest, totalParticipants int64, applied bool) AssessmentAssignmentResult {
 	rooms := make([]AssessmentAssignmentRoom, 0, input.RoomCount)
-	remaining := totalParticipants
+	remainingCapacity := int64(input.RoomCount) * int64(input.CapacityPerRoom)
+	assignedTotal := totalParticipants
+	if assignedTotal > remainingCapacity {
+		assignedTotal = remainingCapacity
+	}
+	unassignedTotal := totalParticipants - assignedTotal
+	basePerRoom := int64(0)
+	extraRooms := int64(0)
+	if input.RoomCount > 0 {
+		basePerRoom = assignedTotal / int64(input.RoomCount)
+		extraRooms = assignedTotal % int64(input.RoomCount)
+	}
 	for i := int32(1); i <= input.RoomCount; i++ {
-		assigned := int64(0)
-		if remaining > 0 {
+		assigned := basePerRoom
+		if int64(i) <= extraRooms {
+			assigned++
+		}
+		if assigned > int64(input.CapacityPerRoom) {
 			assigned = int64(input.CapacityPerRoom)
-			if remaining < assigned {
-				assigned = remaining
-			}
-			remaining -= assigned
 		}
 		code := fmt.Sprintf("R%02d", i)
 		rooms = append(rooms, AssessmentAssignmentRoom{
@@ -984,10 +994,9 @@ func buildAssessmentAssignmentResult(examID, sessionID string, input AssessmentA
 			AssignedCount: assigned,
 		})
 	}
-	assignedTotal := totalParticipants - remaining
 	message := "Preview ruang ujian siap. Belum ada peserta terdaftar pada asesmen ini."
 	if totalParticipants > 0 {
-		message = "Preview ruang ujian siap. Simpan untuk membuat ruang; pembagian peserta detail menyusul pada tahap berikutnya."
+		message = "Preview ruang ujian siap. Peserta disebar merata ke seluruh ruang sesuai kapasitas; simpan untuk menerapkan penempatan."
 	}
 	return AssessmentAssignmentResult{
 		ExamID:            examID,
@@ -997,7 +1006,7 @@ func buildAssessmentAssignmentResult(examID, sessionID string, input AssessmentA
 		CapacityPerRoom:   input.CapacityPerRoom,
 		TotalParticipants: totalParticipants,
 		AssignedTotal:     assignedTotal,
-		UnassignedTotal:   remaining,
+		UnassignedTotal:   unassignedTotal,
 		ParticipantCount:  totalParticipants,
 		Rooms:             rooms,
 		Message:           message,
