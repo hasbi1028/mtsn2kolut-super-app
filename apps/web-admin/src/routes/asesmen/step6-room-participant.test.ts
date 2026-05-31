@@ -22,4 +22,14 @@ describe('/asesmen Step 6 room and participant workflow', () => {
 		expect(source).toContain('Acak Tampilan');
 		expect(source).toContain('Pindah');
 	});
+
+	it('uses the recommended 4-stage wizard with room visual review', () => {
+		const source = pageSource();
+		expect(source).toContain('① Pilih Rombel');
+		expect(source).toContain('② Atur Acak');
+		expect(source).toContain('③ Review Ruang');
+		expect(source).toContain('④ Manual');
+		expect(source).toContain('Peta Ruang Visual');
+		expect(source).toContain('Simpan Penempatan');
+	});
 });
