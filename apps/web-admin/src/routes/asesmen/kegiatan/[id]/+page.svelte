@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
 	import { summarizeDocumentPrintStatus } from '$lib/asesmen/document-print-readiness';
 
@@ -197,6 +198,7 @@
 	const packageSubjectCount = $derived(new Set(packageMaps.filter((item) => item.subject_id).map((item) => item.subject_id)).size);
 	const packageGateReady = $derived(packageReadyCount > 0);
 	const packageGateMessage = 'Tautkan minimal satu Paket Soal siap sebelum lanjut ke ruang, sesi, cetak kartu, atau pelaksanaan.';
+	const routeKegiatanId = $derived(page.params.id ?? '');
 
 	const assignmentModeDescriptions: Record<AssignmentUiMode, string> = {
 		balanced_all: 'Rekomendasi default: peserta disebar seimbang ke semua ruang dan rombel diusahakan tidak berkumpul.',
@@ -243,9 +245,10 @@
 		archived: 'Arsip'
 	};
 
-	onMount(() => {
-		void loadKegiatan();
-		void loadRombelOptions();
+	onMount(async () => {
+		await loadKegiatan();
+		await loadRombelOptions();
+		if (routeKegiatanId) openKegiatanDetail(routeKegiatanId);
 	});
 
 	function formatDateLabel(value?: string) {
@@ -823,7 +826,7 @@
 </script>
 
 <svelte:head>
-	<title>Kegiatan Ujian CBT | MTsN 2 Kolut</title>
+	<title>Detail Kegiatan Asesmen | MTsN 2 Kolut</title>
 </svelte:head>
 
 <div class="space-y-5 pb-16">
@@ -845,35 +848,14 @@
 
 	{#if listError}<p class="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive" role="alert">{listError}</p>{/if}
 
-	{#if showCreateForm}
-		<section class="rounded-2xl border border-primary/20 bg-card shadow-sm" aria-labelledby="create-kegiatan-title">
-			<div class="border-b border-border bg-muted/20 px-5 py-4">
-				<div class="flex items-start justify-between gap-3">
-					<div class="space-y-1"><p class="text-xs font-semibold tracking-[0.18em] text-primary uppercase">Langkah 1 · Kegiatan</p><h2 id="create-kegiatan-title" class="text-lg font-bold text-foreground">Buat Kegiatan Baru</h2><p class="text-xs leading-5 text-muted-foreground">Form sekarang tampil penuh di halaman, bukan drawer. Setelah tersimpan, lanjut pilih Paket Soal dari detail kegiatan.</p></div>
-					<button type="button" class="rounded-md border px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted" aria-label="Tutup form" onclick={toggleCreateForm}>Tutup</button>
-				</div>
-			</div>
-			<form onsubmit={(event) => { event.preventDefault(); void submitKegiatan(); }}>
-				<div class="grid gap-4 px-5 py-4 lg:grid-cols-2">
-						<div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">Kegiatan akan tersimpan sebagai draft. Kartu/QR+PIN belum diterbitkan pada tahap ini.</div>
-						<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Nama kegiatan</span><input class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Contoh: UAS Genap" bind:value={draft.nama} /></label>
-						<div class="grid gap-3 sm:grid-cols-2"><label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Jenis kegiatan</span><select class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.jenis}><option>Ujian Semester</option><option>Gladi CBT</option><option>Tryout</option><option>Simulasi</option></select></label><label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Mode pelaksanaan</span><select class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.mode}><option>CBT Web</option><option>Android</option><option>Web / Android</option><option>Kertas / Campuran</option></select></label></div>
-						<div class="grid gap-3 sm:grid-cols-2"><label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Tahun ajaran</span><input class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.tahunAjaran} /></label><label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Semester</span><select class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.semester}><option>Ganjil</option><option>Genap</option></select></label></div>
-						<div class="grid gap-3 sm:grid-cols-2"><label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Tanggal mulai</span><input type="date" class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.tanggalMulai} /></label><label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Tanggal selesai</span><input type="date" class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.tanggalSelesai} /></label></div>
-						<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Catatan singkat</span><textarea class="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Opsional untuk operator; belum disimpan sebagai kolom khusus." bind:value={draft.catatan}></textarea></label>
-						{#if formError}<p class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{formError}</p>{/if}
-				</div>
-				<div class="flex flex-col gap-2 border-t border-border bg-muted/20 px-5 py-4 sm:flex-row sm:justify-end"><button type="button" class="rounded-md border px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted" onclick={resetDraft} disabled={saving}>Reset</button><button type="submit" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" disabled={saving}>{saving ? 'Menyimpan…' : 'Simpan Kegiatan'}</button></div>
-			</form>
-		</section>
-	{/if}
+	<div class="flex flex-wrap items-center gap-2"><a href="/asesmen" class="rounded-md border bg-background px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">← Kembali ke Daftar Asesmen</a><button type="button" class="rounded-md border bg-background px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted" onclick={loadKegiatan} disabled={loading}>{loading ? 'Memuat…' : 'Muat Ulang'}</button></div>
 
 	{#if selectedKegiatan}
 		<section class="rounded-2xl border border-primary/20 bg-card shadow-sm" aria-labelledby="detail-kegiatan-title">
 			<div class="border-b border-border bg-muted/20 px-5 py-4">
 				<div class="flex items-start justify-between gap-3">
 					<div class="min-w-0 space-y-2"><p class="text-xs font-semibold tracking-[0.18em] text-primary uppercase">Detail Kegiatan · Halaman Penuh</p><h2 id="detail-kegiatan-title" class="truncate text-xl font-bold text-foreground">{selectedKegiatan.nama}</h2><div class="flex flex-wrap items-center gap-2"><span class={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone[selectedKegiatan.status]}`}>{selectedKegiatan.status}</span><span class="rounded-full border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">{selectedKegiatan.mode}</span><span class="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">Alur vertikal, bukan drawer</span></div></div>
-					<button type="button" class="rounded-md border px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted" aria-label="Tutup detail" onclick={closeKegiatanDetail}>Tutup Detail</button>
+					<a class="rounded-md border px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted" aria-label="Kembali ke daftar asesmen" href="/asesmen">Kembali ke Daftar</a>
 				</div>
 			</div>
 			<div class="grid gap-4 px-5 pt-4 pb-5 xl:grid-cols-[20rem_minmax(0,1fr)]">
@@ -1078,65 +1060,7 @@
 				</div>
 			</div>
 		</section>
+	{:else if !loading}
+		<section class="rounded-2xl border border-dashed border-border bg-card p-6 text-center shadow-sm"><p class="text-sm font-semibold text-foreground">Kegiatan tidak ditemukan atau belum bisa dimuat.</p><p class="mt-1 text-xs text-muted-foreground">Kembali ke daftar asesmen, lalu pilih kegiatan yang tersedia.</p><a href="/asesmen" class="mt-4 inline-flex rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Kembali ke Daftar</a></section>
 	{/if}
-
-	{#if formNotice}<p class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700" role="status">{formNotice}</p>{/if}
-
-	<section class="rounded-2xl border border-border bg-card p-3 shadow-sm">
-		<div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-			<span class="rounded-full border bg-background px-3 py-1"><strong class="text-foreground">{kegiatan.length}</strong> kegiatan</span>
-			<span class="rounded-full border bg-background px-3 py-1"><strong class="text-foreground">{totalPeserta}</strong> peserta</span>
-			<span class="rounded-full border bg-background px-3 py-1"><strong class="text-foreground">{totalRuang}</strong> ruang</span>
-			<span class="rounded-full border bg-background px-3 py-1"><strong class="text-foreground">{totalSesi}</strong> sesi</span>
-			<span class="ml-auto hidden text-[11px] sm:inline">Alur: Paket Soal → Peserta & Ruang → Sesi → Cetak → Hasil</span>
-		</div>
-	</section>
-
-	<section class="rounded-2xl border border-border bg-card shadow-sm">
-		<div class="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-			<div>
-				<h2 class="text-base font-semibold text-foreground">Daftar Kegiatan</h2>
-				<p class="text-xs text-muted-foreground">Pilih satu kegiatan, lalu lanjutkan pekerjaan di panel detail halaman penuh.</p>
-			</div>
-			<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={toggleCreateForm}>Buat Kegiatan</button>
-		</div>
-		{#if loading}
-			<p class="px-4 py-8 text-center text-sm text-muted-foreground">Memuat kegiatan…</p>
-		{:else if kegiatan.length === 0}
-			<div class="px-4 py-8 text-center"><p class="text-sm font-semibold text-foreground">Belum ada kegiatan.</p><p class="mt-1 text-xs text-muted-foreground">Klik Buat Kegiatan untuk membuat draft pertama.</p></div>
-		{:else}
-			<div class="overflow-x-auto">
-				<table class="min-w-[780px] w-full text-sm">
-					<thead class="bg-muted/40 text-left text-xs font-semibold text-muted-foreground">
-						<tr>
-							<th class="px-4 py-2">Status</th>
-							<th class="px-4 py-2">Kegiatan</th>
-							<th class="px-4 py-2">Periode</th>
-							<th class="px-4 py-2 text-center">Peserta</th>
-							<th class="px-4 py-2 text-center">Ruang</th>
-							<th class="px-4 py-2 text-center">Sesi</th>
-							<th class="px-4 py-2 text-center">Kartu</th>
-							<th class="px-4 py-2 text-right">Aksi</th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-border">
-						{#each kegiatan as item (item.id)}
-							<tr class="hover:bg-muted/30">
-								<td class="px-4 py-3"><span class={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone[item.status]}`}>{item.status}</span></td>
-								<td class="max-w-[260px] px-4 py-3"><p class="truncate font-semibold text-foreground">{item.nama}</p><p class="truncate text-xs text-muted-foreground">{item.mode}</p></td>
-								<td class="px-4 py-3 text-xs text-muted-foreground">{item.periode}</td>
-								<td class="px-4 py-3 text-center font-semibold">{item.peserta}</td>
-								<td class="px-4 py-3 text-center font-semibold">{item.ruang}</td>
-								<td class="px-4 py-3 text-center font-semibold">{item.sesi}</td>
-								<td class="px-4 py-3 text-center text-xs text-muted-foreground">{item.kartu > 0 ? `${item.kartu} terbit` : 'Belum'}</td>
-								<td class="px-4 py-3 text-right"><a class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" aria-label={`Kelola ${item.nama}`} href={`/asesmen/kegiatan/${item.id}`}>Kelola</a></td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{/if}
-	</section>
-
-	<section class="rounded-2xl border border-dashed border-border bg-muted/20 p-4"><h2 class="text-sm font-semibold text-foreground">Catatan alur</h2><p class="mt-1 text-sm leading-6 text-muted-foreground">Bank Soal tetap menjadi tempat membuat soal. Halaman ini hanya mengatur kegiatan ujian: paket, peserta, ruang, sesi, cetak, dan pelaksanaan.</p></section>
 </div>
