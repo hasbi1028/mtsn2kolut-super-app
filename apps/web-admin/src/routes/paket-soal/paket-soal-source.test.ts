@@ -21,4 +21,11 @@ describe('/paket-soal builder source contract', () => {
 		expect(source).toContain('subject_id: defaultBuilderSubjectId(),');
 		expect(source).toContain('{subjectOptionLabel(subject)}');
 	});
+
+	it('keeps readiness guards before saving or locking packages', () => {
+		expect(source).toContain("builderError = 'Pilih minimal 1 soal dari Bank Soal.';");
+		expect(source).toContain("builderError = 'Paket sudah terkunci. Gunakan Clone/Revisi untuk mengubah.';");
+		expect(source).toContain("builderError = 'Paket belum siap dikunci. Lengkapi target soal dan metadata dulu.';");
+		expect(source).toContain('disabled={packageActionBusy !== null || activeLocked || !activeReadiness?.ready}');
+	});
 });

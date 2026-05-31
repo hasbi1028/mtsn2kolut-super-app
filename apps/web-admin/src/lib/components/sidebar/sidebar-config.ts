@@ -134,7 +134,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	{
 		group: 'Paket Soal',
 		items: [
-			{ href: '/paket-soal', label: 'Paket Soal', icon: 'package', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'bank_soal.read'] }
+			{ href: '/paket-soal', label: 'Paket Soal', icon: 'package', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.package_manage'] }
 		]
 	},
 	{

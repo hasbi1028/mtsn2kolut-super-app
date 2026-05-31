@@ -75,7 +75,14 @@ describe('route access helpers', () => {
 		expect(isBankSoalPath('/bank-soalship')).toBe(false);
 		expect(isPaketSoalPath('/paket-soal')).toBe(true);
 		expect(isPaketSoalPath('/paket-soalship')).toBe(false);
-		expect(requiredPermissionsForPath('/paket-soal', 'GET')).toEqual(['asesmen.read', 'bank_soal.read']);
+		expect(requiredPermissionsForPath('/paket-soal', 'GET')).toEqual(['asesmen.package_manage']);
+		expect(requiredPermissionsForPath('/api/asesmen/package-options', 'GET')).toEqual(['asesmen.read', 'asesmen.package_manage']);
+		expect(requiredPermissionsForPath('/api/asesmen/packages/pkg-1/questions', 'PUT')).toEqual(['asesmen.manage', 'asesmen.package_manage']);
+		expect(canAccessProtectedRoute({ id: 'paket', username: 'paket-manager', role: 'guru', roles: ['guru'], permissions: ['asesmen.package_manage'] }, '/paket-soal', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ id: 'paket', username: 'paket-manager', role: 'guru', roles: ['guru'], permissions: ['asesmen.package_manage'] }, '/api/bank-soal/questions', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ id: 'paket-read', username: 'asesmen-read', role: 'guru', roles: ['guru'], permissions: ['asesmen.read'] }, '/paket-soal', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute({ id: 'paket-bank-only', username: 'bank-only', role: 'guru', roles: ['guru'], permissions: ['bank_soal.read'] }, '/paket-soal', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute({ id: 'paket-plain', username: 'plain', role: 'guru', roles: ['guru'], permissions: [] }, '/paket-soal', 'GET')).toBe(false);
 	});
 
 

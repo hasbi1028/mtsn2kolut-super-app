@@ -32,6 +32,10 @@ const ADMIN_ONLY_PREFIXES = [
 const GURU_SAFE_ASSESSMENT_SUPPORT_READ_PATHS = new Set([
 	'/api/bank-soal/soal-support/subjects'
 ]);
+const PAKET_SOAL_BANK_SOAL_READ_PATHS = new Set([
+	'/api/bank-soal/soal-support/subjects',
+	'/api/bank-soal/questions'
+]);
 
 const GURU_SAFE_ASSESSMENT_SUPPORT_READ_PREFIXES = [] as const;
 
@@ -92,6 +96,11 @@ export function isGuruSafeAssessmentSupportReadPath(pathname: string, method: st
 	if (!isReadMethod(method)) return false;
 	if (GURU_SAFE_ASSESSMENT_SUPPORT_READ_PATHS.has(pathname)) return true;
 	return GURU_SAFE_ASSESSMENT_SUPPORT_READ_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
+}
+
+export function isPaketSoalBankSoalReadPath(pathname: string, method: string) {
+	if (!isReadMethod(method)) return false;
+	return PAKET_SOAL_BANK_SOAL_READ_PATHS.has(pathname.split('?')[0] ?? pathname);
 }
 
 export function isBankSoalPath(pathname: string) {
@@ -179,7 +188,12 @@ function settingsPermission(pathname: string): string[] | undefined {
 
 function paketSoalPermission(pathname: string, method: string): string[] | undefined {
 	if (!isPaketSoalPath(pathname)) return undefined;
-	return isReadMethod(method) ? ['asesmen.read', 'bank_soal.read'] : ['asesmen.manage', 'bank_soal.update'];
+	return isReadMethod(method) ? ['asesmen.package_manage'] : ['asesmen.manage', 'asesmen.package_manage'];
+}
+
+function asesmenPackagePermission(pathname: string, method: string): string[] | undefined {
+	if (!matchesPathSegment(pathname, '/api/asesmen/packages') && !matchesPathSegment(pathname, '/api/asesmen/package-options')) return undefined;
+	return isReadMethod(method) ? ['asesmen.read', 'asesmen.package_manage'] : ['asesmen.manage', 'asesmen.package_manage'];
 }
 
 function bankSoalPermission(pathname: string, method: string): string[] | undefined {
@@ -300,6 +314,7 @@ export function requiredPermissionsForPath(pathname: string, method: string): st
 		?? gradesPermission(pathname, method)
 		?? journalPermission(pathname, method)
 		?? employeePermission(pathname, method)
+		?? asesmenPackagePermission(pathname, method)
 		?? asesmenPermission(pathname, method)
 		?? paketSoalPermission(pathname, method)
 		?? bankSoalPermission(pathname, method)
@@ -315,6 +330,11 @@ export function canAccessProtectedRoute(user: AuthUser | undefined, pathname: st
 
 	const requiredPermissions = requiredPermissionsForPath(pathname, method);
 	if (requiredPermissions.length > 0 && hasAnyPermission(user, requiredPermissions)) return true;
+	if (
+		isPaketSoalBankSoalReadPath(pathname, method)
+		&& hasAnyPermission(user, ['asesmen.package_manage', 'asesmen.manage'])
+	) return true;
+
 	if (
 		isGuruSafeAssessmentSupportReadPath(pathname, method)
 		&& hasAnyPermission(user, [

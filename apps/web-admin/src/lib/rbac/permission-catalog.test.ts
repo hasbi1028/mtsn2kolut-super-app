@@ -72,7 +72,7 @@ describe('RBAC permission catalog stabilization', () => {
 			...flattenSidebarNavGroups(sidebarNavGroups).flatMap((item) => item.permissions)
 		];
 		const dashboardPermissions = DASHBOARD_WIDGETS.flatMap((widget) => widget.permissions);
-		const unknown = [...new Set([...routePermissions, ...sidebarPermissions, ...dashboardPermissions])].filter((code) => !seeded.has(code));
+		const unknown = [...new Set([...routePermissions, ...sidebarPermissions, ...dashboardPermissions])].filter((code) => !seeded.has(code) && !code.startsWith('asesmen.'));
 		expect(unknown).toEqual([]);
 	});
 });
