@@ -186,6 +186,8 @@
 	const documentPrintSummary = $derived(summarizeDocumentPrintStatus({ participantCount: selectedKegiatan?.peserta ?? 0, roomCount: selectedKegiatan?.ruang ?? 0, cardCount: selectedKegiatan?.kartu ?? 0 }));
 	const packageReadyCount = $derived(packageMaps.filter((item) => item.class_id && item.package_id).length);
 	const packageSubjectCount = $derived(new Set(packageMaps.filter((item) => item.subject_id).map((item) => item.subject_id)).size);
+	const packageGateReady = $derived(packageReadyCount > 0);
+	const packageGateMessage = 'Tautkan minimal satu Paket Soal siap sebelum lanjut ke ruang, sesi, cetak kartu, atau pelaksanaan.';
 
 	const assignmentModeDescriptions: Record<AssignmentUiMode, string> = {
 		balanced_all: 'Rekomendasi default: peserta disebar seimbang ke semua ruang dan rombel diusahakan tidak berkumpul.',
@@ -661,6 +663,10 @@
 
 	async function previewAssignment() {
 		if (!selectedKegiatan) return;
+		if (!packageGateReady) {
+			assignmentError = packageGateMessage;
+			return;
+		}
 		assignmentError = '';
 		assignmentNotice = '';
 		workingAssignment = true;
@@ -680,6 +686,10 @@
 
 	async function applyAssignment() {
 		if (!selectedKegiatan) return;
+		if (!packageGateReady) {
+			assignmentError = packageGateMessage;
+			return;
+		}
 		assignmentError = '';
 		assignmentNotice = '';
 		workingAssignment = true;
@@ -743,6 +753,10 @@
 
 	async function checkParticipantCards() {
 		if (!selectedKegiatan) return;
+		if (!packageGateReady) {
+			documentError = packageGateMessage;
+			return;
+		}
 		documentError = '';
 		documentNotice = '';
 		checkingCards = true;
@@ -759,6 +773,10 @@
 
 	async function issueParticipantCards() {
 		if (!selectedKegiatan || issuingCards) return;
+		if (!packageGateReady) {
+			documentError = packageGateMessage;
+			return;
+		}
 		if (selectedKegiatan.peserta <= 0 || selectedKegiatan.ruang <= 0) {
 			documentError = 'Lengkapi peserta dan simpan ruang sebelum menerbitkan QR+PIN.';
 			return;
@@ -798,7 +816,7 @@
 				<p class="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">Asesmen / CBT</p>
 				<h1 class="text-2xl font-bold tracking-tight text-foreground md:text-3xl">Kegiatan Ujian</h1>
 				<p class="max-w-3xl text-sm leading-6 text-muted-foreground">
-					Step 6: kegiatan, ruang, dan peserta sudah tersambung ke API Asesmen. Operator dapat preview pembagian ruang dulu sebelum menyimpan peserta dan kursi.
+					Slice 1: Kegiatan Asesmen memakai Paket Soal sebagai pintu pertama. Operator menautkan paket siap/locked dulu sebelum lanjut ke ruang, sesi, cetak, dan pelaksanaan.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
@@ -899,6 +917,13 @@
 						</div>
 					</section>
 
+					{#if !packageGateReady}
+						<div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800" role="status">
+							<strong class="block text-amber-900">Paket Soal belum siap</strong>
+							{packageGateMessage}
+						</div>
+					{/if}
+
 					<section class="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
 						<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 							<div><p class="text-xs font-semibold tracking-[0.16em] text-emerald-700 uppercase">Step 6 · Ruang & Peserta</p><h3 class="text-base font-bold text-foreground">Wizard penempatan ruang</h3><p class="mt-1 text-xs leading-5 text-muted-foreground">Alur baru: pilih rombel → atur pola acak → review peta ruang visual → edit manual bila perlu. Kartu/QR+PIN belum diterbitkan.</p></div>
@@ -941,7 +966,7 @@
 						{#if assignmentError}<p class="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{assignmentError}</p>{/if}
 						{#if assignmentNotice}<p class="mt-3 rounded-md border border-emerald-300 bg-emerald-100 px-3 py-2 text-sm font-medium text-emerald-800" role="status">{assignmentNotice}</p>{/if}
 
-						<div class="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end"><button type="button" class="rounded-md border bg-background px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-60" onclick={() => void previewAssignment()} disabled={workingAssignment}>{workingAssignment ? 'Memproses…' : 'Preview Pembagian Ruang'}</button><button type="button" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void applyAssignment()} disabled={workingAssignment}>{workingAssignment ? 'Menyimpan…' : 'Simpan Penempatan'}</button></div>
+						<div class="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end"><button type="button" class="rounded-md border bg-background px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-60" onclick={() => void previewAssignment()} disabled={workingAssignment || !packageGateReady} title={!packageGateReady ? packageGateMessage : undefined}>{workingAssignment ? 'Memproses…' : 'Preview Pembagian Ruang'}</button><button type="button" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void applyAssignment()} disabled={workingAssignment || !packageGateReady} title={!packageGateReady ? packageGateMessage : undefined}>{workingAssignment ? 'Menyimpan…' : 'Simpan Penempatan'}</button></div>
 
 						<div class="mt-4 rounded-lg border bg-background p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="text-sm font-semibold text-foreground">③ Review Ruang · Peta Ruang Visual</h4><p class="text-xs text-muted-foreground">Klik preview untuk melihat isi ruang sebelum simpan.</p></div>{#if assignmentPreview}<div class="mt-3 grid gap-2 sm:grid-cols-2">{#each assignmentPreview.rooms as room}<div class="rounded-xl border bg-card p-3 text-sm"><div class="flex items-center justify-between gap-2"><strong>{room.code}</strong><span class="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold">{room.assigned_count}/{room.capacity}</span></div><div class="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div class="h-full rounded-full bg-emerald-500" style={`width: ${Math.min(100, Math.round((room.assigned_count / Math.max(1, room.capacity)) * 100))}%`}></div></div><p class="mt-2 text-xs text-muted-foreground">{room.name}</p></div>{/each}</div><div class="mt-3 grid gap-2 text-sm sm:grid-cols-4"><div><p class="text-xs text-muted-foreground">Peserta</p><p class="text-xl font-bold">{assignmentPreview.total_participants}</p></div><div><p class="text-xs text-muted-foreground">Tertampung</p><p class="text-xl font-bold">{assignmentPreview.assigned_total}</p></div><div><p class="text-xs text-muted-foreground">Sisa</p><p class="text-xl font-bold">{assignmentPreview.unassigned_total}</p></div><div><p class="text-xs text-muted-foreground">Status</p><p class="text-sm font-semibold">{assignmentPreview.applied ? 'Tersimpan' : 'Preview'}</p></div></div><p class="mt-2 text-xs leading-5 text-muted-foreground">{assignmentPreview.message}</p>{:else}<p class="mt-3 rounded-lg border border-dashed bg-muted/30 px-3 py-3 text-sm text-muted-foreground">Belum ada preview. Pilih rombel dan klik Preview Pembagian Ruang.</p>{/if}</div>
 					</section>
@@ -966,7 +991,7 @@
 								<h3 class="text-base font-bold text-foreground">Kartu peserta dan lembar pengawas</h3>
 								<p class="mt-1 text-xs leading-5 text-muted-foreground">Terbitkan QR+PIN hanya setelah peserta, ruang, dan kursi final. PIN hanya tampil pada hasil terbitkan, jadi cetak/simpan PDF segera.</p>
 							</div>
-							<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void checkParticipantCards()} disabled={checkingCards || !selectedKegiatan}>{checkingCards ? 'Mengecek…' : 'Cek Kartu'}</button>
+							<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void checkParticipantCards()} disabled={checkingCards || !selectedKegiatan || !packageGateReady} title={!packageGateReady ? packageGateMessage : undefined}>{checkingCards ? 'Mengecek…' : 'Cek Kartu'}</button>
 						</div>
 						{#if documentError}<p class="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{documentError}</p>{/if}
 						{#if documentNotice}<p class="mt-3 rounded-md border border-violet-300 bg-violet-100 px-3 py-2 text-sm font-medium text-violet-800" role="status">{documentNotice}</p>{/if}
@@ -974,7 +999,7 @@
 							<div class="grid gap-3 p-3 text-sm sm:grid-cols-[1fr_9rem_10rem] sm:items-center">
 								<div class="min-w-0"><p class="font-semibold text-foreground">Kartu Peserta</p><p class="mt-1 text-xs leading-5 text-muted-foreground">QR login, PIN, ruang, dan nomor kursi per siswa.</p></div>
 								<span class="rounded-full border bg-card px-2.5 py-1 text-center text-[11px] font-semibold text-muted-foreground">{documentPrintSummary.participantCards.label}</span>
-								<div class="flex flex-wrap gap-2 sm:justify-end"><button type="button" class="rounded-md border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void checkParticipantCards()} disabled={checkingCards}>Daftar Kartu</button><button type="button" class="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void issueParticipantCards()} disabled={issuingCards || documentPrintSummary.participantCards.state === 'blocked'}>{issuingCards ? 'Menerbitkan…' : 'Terbitkan QR+PIN'}</button></div>
+								<div class="flex flex-wrap gap-2 sm:justify-end"><button type="button" class="rounded-md border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void checkParticipantCards()} disabled={checkingCards || !packageGateReady} title={!packageGateReady ? packageGateMessage : undefined}>Daftar Kartu</button><button type="button" class="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void issueParticipantCards()} disabled={issuingCards || !packageGateReady || documentPrintSummary.participantCards.state === 'blocked'} title={!packageGateReady ? packageGateMessage : undefined}>{issuingCards ? 'Menerbitkan…' : 'Terbitkan QR+PIN'}</button></div>
 								<p class="sm:col-span-3 text-xs leading-5 text-muted-foreground">{documentPrintSummary.participantCards.description}</p>
 							</div>
 							<div class="grid gap-3 p-3 text-sm sm:grid-cols-[1fr_9rem_10rem] sm:items-center">
@@ -1005,5 +1030,5 @@
 
 	<section class="rounded-2xl border border-border bg-card shadow-sm"><div class="border-b border-border px-4 py-3"><h2 class="text-base font-semibold text-foreground">Daftar Kegiatan</h2><p class="text-xs text-muted-foreground">Data dibaca dari API Asesmen native.</p></div>{#if loading}<p class="px-4 py-8 text-center text-sm text-muted-foreground">Memuat kegiatan…</p>{:else if kegiatan.length === 0}<div class="px-4 py-8 text-center"><p class="text-sm font-semibold text-foreground">Belum ada kegiatan.</p><p class="mt-1 text-xs text-muted-foreground">Klik Buat Kegiatan untuk membuat draft pertama.</p></div>{:else}<div class="divide-y divide-border">{#each kegiatan as item (item.id)}<article class="p-4 transition-colors hover:bg-muted/30"><div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div class="min-w-0 space-y-2"><div class="flex flex-wrap items-center gap-2"><span class={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone[item.status]}`}>{item.status}</span><span class="rounded-full border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">{item.jenis}</span><span class="rounded-full border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">{item.mode}</span></div><h3 class="truncate text-lg font-bold text-foreground">{item.nama}</h3><p class="text-sm text-muted-foreground">Tanggal: {item.periode}</p><p class="max-w-2xl text-xs leading-5 text-muted-foreground">{item.catatan}</p></div><div class="space-y-2 sm:min-w-[18rem]"><div class="grid min-w-full grid-cols-3 gap-2 text-center"><div class="rounded-lg border bg-background p-2"><p class="text-[11px] text-muted-foreground">Peserta</p><p class="text-lg font-bold">{item.peserta}</p></div><div class="rounded-lg border bg-background p-2"><p class="text-[11px] text-muted-foreground">Ruang</p><p class="text-lg font-bold">{item.ruang}</p></div><div class="rounded-lg border bg-background p-2"><p class="text-[11px] text-muted-foreground">Sesi</p><p class="text-lg font-bold">{item.sesi}</p></div></div><button type="button" class="w-full rounded-md border bg-background px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted" onclick={() => openKegiatanDetail(item.id)}>Kelola</button></div></div></article>{/each}</div>{/if}</section>
 
-	<section class="rounded-2xl border border-dashed border-border bg-muted/30 p-4"><h2 class="text-sm font-semibold text-foreground">Batas step 6</h2><ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-muted-foreground"><li>Tidak membuat tabel `kegiatan` baru; memakai tabel native `assessment_exams` yang sudah ada.</li><li>Ruang dan peserta disimpan melalui API assignment preview/apply yang sudah ada.</li><li>QR+PIN, cetak kartu, paket soal, sesi lanjutan, dan hasil tetap disambungkan bertahap agar aman.</li></ul></section>
+	<section class="rounded-2xl border border-dashed border-border bg-muted/30 p-4"><h2 class="text-sm font-semibold text-foreground">Batas Slice 1</h2><ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-muted-foreground"><li>Tidak membuat tabel `kegiatan` baru; memakai tabel native `assessment_exams` yang sudah ada.</li><li>Paket Soal menjadi gerbang awal sebelum ruang, sesi, cetak kartu, dan pelaksanaan.</li><li>QR+PIN, cetak template khusus, jadwal sesi detail, dan hasil tetap disambungkan bertahap agar aman.</li></ul></section>
 </div>

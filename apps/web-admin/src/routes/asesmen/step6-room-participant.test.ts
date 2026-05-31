@@ -63,6 +63,28 @@ describe('/asesmen Step 6 room and participant workflow', () => {
 		expect(payloadSource).not.toContain('balance_rooms');
 		expect(payloadSource).not.toContain('spread_rombel');
 	});
+
+	describe('/asesmen Slice 1 package mapping gate', () => {
+		it('exposes package mapping controls before room/session/print work', () => {
+			const source = pageSource();
+			expect(source).toContain('Slice 1: Kegiatan Asesmen memakai Paket Soal');
+			expect(source).toContain('Step 7A · Paket Soal & Sesi');
+			expect(source).toContain('/api/asesmen/package-options');
+			expect(source).toContain('/package-maps');
+			expect(source).toContain('Simpan Paket Soal');
+			expect(source).toContain('Buka Modul Paket');
+		});
+
+		it('gates room and card actions until at least one package mapping exists', () => {
+			const source = pageSource();
+			expect(source).toContain('const packageGateReady = $derived(packageReadyCount > 0)');
+			expect(source).toContain('Tautkan minimal satu Paket Soal siap sebelum lanjut');
+			expect(source).toContain('disabled={workingAssignment || !packageGateReady}');
+			expect(source).toContain('disabled={checkingCards || !selectedKegiatan || !packageGateReady}');
+			expect(source).toContain('if (!packageGateReady)');
+		});
+	});
+
 	describe('/asesmen Step 7 document and print workflow', () => {
 		it('exposes a compact Dokumen & Cetak panel with guarded QR+PIN issuance', () => {
 			const source = pageSource();
