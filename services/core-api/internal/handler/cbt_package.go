@@ -411,7 +411,7 @@ func (h *CbtPackage) Archive(w http.ResponseWriter, r *http.Request) {
 }
 
 func packageWriteAllowed(r *http.Request) bool {
-	return hasAnyRole(r, "admin") || hasAnyPermission(r, "asesmen.package_manage")
+	return hasAnyRole(r, "admin") || hasAnyPermission(r, "asesmen.package_manage", "asesmen.manage")
 }
 
 func packageQuestionInput(rawIDs []string, rawWeights map[string]int32, rawQuestions []struct {
