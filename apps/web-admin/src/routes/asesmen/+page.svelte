@@ -70,6 +70,38 @@
 		seat_no?: number;
 	};
 
+	type AssessmentPackageOption = {
+		id: string;
+		subject_id: string;
+		subject_code?: string;
+		subject_name: string;
+		title: string;
+		description?: string;
+		duration_minutes: number;
+		question_count: number;
+		session_count: number;
+		locked?: boolean;
+		snapshot_version?: number;
+	};
+
+	type AssessmentPackageMap = {
+		id: string;
+		exam_id?: string;
+		class_id: string;
+		class_code?: string;
+		class_name?: string;
+		grade_level?: number;
+		subject_id: string;
+		subject_code?: string;
+		subject_name: string;
+		package_id: string;
+		package_title?: string;
+		duration_minutes?: number;
+		slot_label?: string;
+		notes?: string;
+	};
+	type EditablePackageMap = AssessmentPackageMap & { local_id: string; is_new?: boolean };
+
 	type KegiatanUjian = {
 		id: string;
 		nama: string;
@@ -120,6 +152,8 @@
 	let spreadRombel = $state(true);
 	let assignmentPreview = $state<AssignmentResult | null>(null);
 	let participantPlacements = $state<ParticipantPlacement[]>([]);
+	let packageOptions = $state<AssessmentPackageOption[]>([]);
+	let packageMaps = $state<EditablePackageMap[]>([]);
 	let workingParticipantId = $state('');
 	let formError = $state('');
 	let formNotice = $state('');
@@ -127,6 +161,8 @@
 	let assignmentError = $state('');
 	let assignmentNotice = $state('');
 	let placementError = $state('');
+	let packageError = $state('');
+	let packageNotice = $state('');
 	let csvImportNotice = $state('');
 	let documentNotice = $state('');
 	let documentError = $state('');
@@ -137,6 +173,8 @@
 	let loadingRombel = $state(false);
 	let workingAssignment = $state(false);
 	let loadingPlacements = $state(false);
+	let loadingPackages = $state(false);
+	let savingPackages = $state(false);
 
 	const totalPeserta = $derived(kegiatan.reduce((total, item) => total + item.peserta, 0));
 	const totalRuang = $derived(kegiatan.reduce((total, item) => total + item.ruang, 0));
@@ -146,6 +184,8 @@
 	const selectedStudentTotal = $derived(selectedRombel.reduce((total, item) => total + Number(item.total_students ?? 0), 0));
 	const manualRoomOptions = $derived(Array.from(new Map(participantPlacements.filter((item) => item.room_id).map((item) => [item.room_id, item])).values()));
 	const documentPrintSummary = $derived(summarizeDocumentPrintStatus({ participantCount: selectedKegiatan?.peserta ?? 0, roomCount: selectedKegiatan?.ruang ?? 0, cardCount: selectedKegiatan?.kartu ?? 0 }));
+	const packageReadyCount = $derived(packageMaps.filter((item) => item.class_id && item.package_id).length);
+	const packageSubjectCount = $derived(new Set(packageMaps.filter((item) => item.subject_id).map((item) => item.subject_id)).size);
 
 	const assignmentModeDescriptions: Record<AssignmentUiMode, string> = {
 		balanced_all: 'Rekomendasi default: peserta disebar seimbang ke semua ruang dan rombel diusahakan tidak berkumpul.',
@@ -278,6 +318,8 @@
 		csvImportNotice = '';
 		documentNotice = '';
 		documentError = '';
+		packageError = '';
+		packageNotice = '';
 	}
 
 	function toggleCreateForm() {
@@ -289,11 +331,13 @@
 
 	function openKegiatanDetail(id: string) {
 		selectedKegiatanId = id;
-		activeDetailFeature = 'ruang';
+		activeDetailFeature = 'paket';
 		showCreateForm = false;
 		formNotice = '';
 		resetAssignmentState();
 		if (rombelOptions.length === 0) void loadRombelOptions();
+		void loadPackageOptions();
+		void loadPackageMaps(id);
 	}
 
 	function closeKegiatanDetail() {
@@ -434,6 +478,147 @@
 			placementError = error instanceof Error ? error.message : 'Import CSV belum dapat diproses.';
 		} finally {
 			input.value = '';
+		}
+	}
+
+
+	function packageOptionLabel(option: AssessmentPackageOption) {
+		const count = `${option.question_count ?? 0} soal`;
+		const duration = option.duration_minutes ? ` · ${option.duration_minutes} menit` : '';
+		return `${option.subject_name} · ${option.title} (${count}${duration})`;
+	}
+
+	function selectedPackageOption(packageId: string) {
+		return packageOptions.find((option) => option.id === packageId) ?? null;
+	}
+
+	function mapPackageRows(items: AssessmentPackageMap[]): EditablePackageMap[] {
+		return items.map((item) => ({ ...item, local_id: item.id || crypto.randomUUID(), is_new: false }));
+	}
+
+	async function loadPackageOptions() {
+		loadingPackages = true;
+		packageError = '';
+		try {
+			const response = await fetch('/api/asesmen/package-options');
+			packageOptions = await readClientApiData<AssessmentPackageOption[]>(response);
+		} catch (error) {
+			packageError = error instanceof Error ? error.message : 'Daftar paket soal belum dapat dibuka.';
+			packageOptions = [];
+		} finally {
+			loadingPackages = false;
+		}
+	}
+
+	async function loadPackageMaps(examId = selectedKegiatan?.id) {
+		if (!examId) return;
+		loadingPackages = true;
+		packageError = '';
+		try {
+			const response = await fetch(clientApiPath`/api/asesmen/exams/${examId}/package-maps`);
+			const items = await readClientApiData<AssessmentPackageMap[]>(response);
+			packageMaps = mapPackageRows(items);
+		} catch (error) {
+			packageError = error instanceof Error ? error.message : 'Pemetaan paket belum dapat dibuka.';
+			packageMaps = [];
+		} finally {
+			loadingPackages = false;
+		}
+	}
+
+	function addPackageMapRow() {
+		const firstClass = selectedClassIds[0] || rombelOptions[0]?.id || '';
+		const firstPackage = packageOptions[0] ?? null;
+		packageMaps = [
+			...packageMaps,
+			{
+				local_id: crypto.randomUUID(),
+				id: '',
+				class_id: firstClass,
+				subject_id: firstPackage?.subject_id ?? '',
+				subject_name: firstPackage?.subject_name ?? '',
+				package_id: firstPackage?.id ?? '',
+				package_title: firstPackage?.title ?? '',
+				slot_label: 'Sesi Utama',
+				notes: '',
+				is_new: true
+			}
+		];
+		packageNotice = '';
+	}
+
+	function updatePackageMapRow(localId: string, patch: Partial<EditablePackageMap>) {
+		packageMaps = packageMaps.map((item) => {
+			if (item.local_id !== localId) return item;
+			const next = { ...item, ...patch };
+			if (patch.package_id !== undefined) {
+				const option = selectedPackageOption(patch.package_id);
+				next.subject_id = option?.subject_id ?? '';
+				next.subject_name = option?.subject_name ?? '';
+				next.subject_code = option?.subject_code ?? '';
+				next.package_title = option?.title ?? '';
+				next.duration_minutes = option?.duration_minutes ?? 0;
+			}
+			return next;
+		});
+	}
+
+	function removePackageMapRow(localId: string) {
+		packageMaps = packageMaps.filter((item) => item.local_id !== localId);
+	}
+
+	async function deletePackageMap(row: EditablePackageMap) {
+		if (!selectedKegiatan || !row.id) {
+			removePackageMapRow(row.local_id);
+			return;
+		}
+		const ok = window.confirm('Hapus tautan paket soal untuk rombel ini?');
+		if (!ok) return;
+		packageError = '';
+		try {
+			await fetch(clientApiPath`/api/asesmen/exams/${selectedKegiatan.id}/package-maps/${row.id}`, { method: 'DELETE' }).then((response) => readClientApiData<unknown>(response));
+			packageNotice = 'Tautan paket dihapus.';
+			await loadPackageMaps();
+		} catch (error) {
+			packageError = error instanceof Error ? error.message : 'Tautan paket belum dapat dihapus.';
+		}
+	}
+
+	async function savePackageMaps() {
+		if (!selectedKegiatan || savingPackages) return;
+		packageError = '';
+		packageNotice = '';
+		const items = packageMaps
+			.filter((item) => item.class_id || item.package_id)
+			.map((item) => ({
+				class_id: item.class_id,
+				subject_id: item.subject_id,
+				package_id: item.package_id,
+				slot_label: item.slot_label || 'Sesi Utama',
+				notes: item.notes || ''
+			}));
+		if (items.length === 0) {
+			packageError = 'Tambahkan minimal satu rombel dan paket soal.';
+			return;
+		}
+		if (items.some((item) => !item.class_id || !item.subject_id || !item.package_id)) {
+			packageError = 'Setiap baris wajib punya rombel dan paket soal.';
+			return;
+		}
+		savingPackages = true;
+		try {
+			const response = await fetch(clientApiPath`/api/asesmen/exams/${selectedKegiatan.id}/package-maps`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ items })
+			});
+			const result = await readClientApiData<{ count: number; message: string }>(response);
+			packageNotice = result.message || `${result.count} tautan paket tersimpan.`;
+			await loadPackageMaps();
+		} catch (error) {
+			packageError = error instanceof Error ? error.message : 'Paket soal belum dapat disimpan.';
+		} finally {
+			savingPackages = false;
 		}
 	}
 
@@ -667,7 +852,50 @@
 					<section class="rounded-xl border bg-background p-4">
 						<h3 class="text-sm font-semibold text-foreground">Menu Dalam Kegiatan</h3>
 						<div class="mt-3 grid gap-2 sm:grid-cols-3">{#each detailFeatures as feature}<button type="button" class={`rounded-lg border px-3 py-2 text-left text-sm transition ${activeDetailFeature === feature.key ? 'border-primary bg-primary/10 text-primary' : 'bg-card text-foreground hover:bg-muted'}`} onclick={() => (activeDetailFeature = feature.key)}><span class="block font-semibold">{feature.label}</span><span class="mt-1 block text-[11px] leading-4 text-muted-foreground">{feature.description}</span></button>{/each}</div>
-						{#if activeFeature && activeFeature.key !== 'ruang' && activeFeature.key !== 'peserta'}<div class="mt-3 rounded-lg border border-dashed bg-muted/30 px-3 py-3"><p class="text-sm font-semibold text-foreground">{activeFeature.label}</p><p class="mt-1 text-xs leading-5 text-muted-foreground">{activeFeature.description} Belum dibuka pada step ini agar migrasi tetap kecil dan aman.</p></div>{/if}
+						{#if activeFeature && !['paket', 'ruang', 'peserta', 'cetak'].includes(activeFeature.key)}<div class="mt-3 rounded-lg border border-dashed bg-muted/30 px-3 py-3"><p class="text-sm font-semibold text-foreground">{activeFeature.label}</p><p class="mt-1 text-xs leading-5 text-muted-foreground">{activeFeature.description} Belum dibuka pada step ini agar migrasi tetap kecil dan aman.</p></div>{/if}
+					</section>
+
+					<section class="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4">
+						<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+							<div>
+								<p class="text-xs font-semibold tracking-[0.16em] text-indigo-700 uppercase">Step 7A · Paket Soal & Sesi</p>
+								<h3 class="text-base font-bold text-foreground">Tautkan paket soal ke rombel</h3>
+								<p class="mt-1 text-xs leading-5 text-muted-foreground">Pilih paket dari Bank Soal untuk tiap rombel/mapel. Tahap ini belum menerbitkan kartu, QR, atau PIN.</p>
+							</div>
+							<div class="flex flex-wrap gap-2">
+								<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void loadPackageOptions()} disabled={loadingPackages}>{loadingPackages ? 'Memuat…' : 'Refresh Paket'}</button>
+								<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={addPackageMapRow}>Tambah Baris</button>
+							</div>
+						</div>
+						<div class="mt-3 grid gap-2 sm:grid-cols-3">
+							<div class="rounded-lg border bg-background px-3 py-2"><p class="text-xs text-muted-foreground">Pemetaan aktif</p><p class="text-xl font-bold text-foreground">{packageReadyCount}</p></div>
+							<div class="rounded-lg border bg-background px-3 py-2"><p class="text-xs text-muted-foreground">Mapel terhubung</p><p class="text-xl font-bold text-foreground">{packageSubjectCount}</p></div>
+							<div class="rounded-lg border bg-background px-3 py-2"><p class="text-xs text-muted-foreground">Paket tersedia</p><p class="text-xl font-bold text-foreground">{packageOptions.length}</p></div>
+						</div>
+						{#if packageError}<p class="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{packageError}</p>{/if}
+						{#if packageNotice}<p class="mt-3 rounded-md border border-indigo-300 bg-indigo-100 px-3 py-2 text-sm font-medium text-indigo-800" role="status">{packageNotice}</p>{/if}
+						<div class="mt-4 divide-y rounded-xl border bg-background">
+							{#if loadingPackages && packageMaps.length === 0}
+								<p class="p-4 text-sm text-muted-foreground">Memuat paket soal…</p>
+							{:else if packageMaps.length === 0}
+								<div class="p-4 text-sm text-muted-foreground"><p class="font-semibold text-foreground">Belum ada paket soal tertaut.</p><p class="mt-1 text-xs leading-5">Klik Tambah Baris, pilih rombel dan paket. Jika daftar paket kosong, buat/aktifkan paket dulu di Bank Soal.</p></div>
+							{:else}
+								{#each packageMaps as row (row.local_id)}
+									<div class="grid gap-3 p-3 text-sm lg:grid-cols-[1fr_1.4fr_8rem_1fr_5rem] lg:items-end">
+										<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Rombel</span><select class="min-w-0 w-full rounded-md border bg-card px-3 py-2 text-sm" value={row.class_id} onchange={(event) => updatePackageMapRow(row.local_id, { class_id: event.currentTarget.value })}>{#each rombelOptions as rombel}<option value={rombel.id}>{rombel.code || rombel.name} · {rombel.total_students ?? 0} siswa</option>{/each}</select></label>
+										<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Paket soal</span><select class="min-w-0 w-full rounded-md border bg-card px-3 py-2 text-sm" value={row.package_id} onchange={(event) => updatePackageMapRow(row.local_id, { package_id: event.currentTarget.value })}><option value="">Pilih paket</option>{#each packageOptions as option}<option value={option.id}>{packageOptionLabel(option)}</option>{/each}</select></label>
+										<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Sesi/slot</span><input class="min-w-0 w-full rounded-md border bg-card px-3 py-2 text-sm" value={row.slot_label || ''} oninput={(event) => updatePackageMapRow(row.local_id, { slot_label: event.currentTarget.value })} placeholder="Sesi Utama" /></label>
+										<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Catatan</span><input class="min-w-0 w-full rounded-md border bg-card px-3 py-2 text-sm" value={row.notes || ''} oninput={(event) => updatePackageMapRow(row.local_id, { notes: event.currentTarget.value })} placeholder="Opsional" /></label>
+										<button type="button" class="rounded-md border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void deletePackageMap(row)}>Hapus</button>
+										<p class="lg:col-span-5 text-xs leading-5 text-muted-foreground">Mapel: {row.subject_name || selectedPackageOption(row.package_id)?.subject_name || '-'} · Durasi: {row.duration_minutes || selectedPackageOption(row.package_id)?.duration_minutes || 0} menit. Satu rombel tidak boleh punya dua paket untuk mapel yang sama.</p>
+									</div>
+								{/each}
+							{/if}
+						</div>
+						<div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+							<p class="text-xs leading-5 text-muted-foreground">Rekomendasi awal: isi paket per rombel dulu, lalu lanjutkan sesi/jadwal detail pada iterasi berikutnya sebelum Cetak Kartu.</p>
+							<button type="button" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void savePackageMaps()} disabled={savingPackages || packageMaps.length === 0}>{savingPackages ? 'Menyimpan…' : 'Simpan Paket Soal'}</button>
+						</div>
 					</section>
 
 					<section class="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
