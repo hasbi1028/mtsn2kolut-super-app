@@ -33,6 +33,16 @@ describe('/asesmen Step 6 room and participant workflow', () => {
 		expect(source).toContain('Simpan Penempatan');
 	});
 
+	it('shows compact saved placement summary with room composition and no card issuance side effect', () => {
+		const source = pageSource();
+		expect(source).toContain('Ringkasan hasil penempatan tersimpan');
+		expect(source).toContain('QR+PIN dan kartu peserta belum diterbitkan dari tahap ini');
+		expect(source).toContain('grade_levels?: number[]');
+		expect(source).toContain('class_summary?: AssignmentClassSummary[]');
+		expect(source).toContain('classSummaryLabel(summary)');
+		expect(source).toContain('Komposisi rombel tampil setelah penempatan disimpan');
+	});
+
 	it('offers operator-friendly randomization choices with a recommended default', () => {
 		const source = pageSource();
 		expect(source).toContain('Acak merata ke seluruh ruang');

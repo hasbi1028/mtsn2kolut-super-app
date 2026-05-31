@@ -28,11 +28,20 @@
 		total_students?: number;
 	};
 
+	type AssignmentClassSummary = {
+		class_code: string;
+		class_name: string;
+		grade_level: number;
+		count: number;
+	};
+
 	type AssignmentRoom = {
 		code: string;
 		name: string;
 		capacity: number;
 		assigned_count: number;
+		grade_levels?: number[];
+		class_summary?: AssignmentClassSummary[];
 	};
 
 	type AssignmentMixPolicy = 'mixed' | 'class_grouped';
@@ -354,6 +363,15 @@
 		selectedClassIds = selectedClassIds.includes(id)
 			? selectedClassIds.filter((item) => item !== id)
 			: [...selectedClassIds, id];
+	}
+
+	function gradeLabel(level: number) {
+		return level > 0 ? `Kelas ${level}` : 'Tanpa tingkat';
+	}
+
+	function classSummaryLabel(item: AssignmentClassSummary) {
+		const code = item.class_code || item.class_name || 'Tanpa Rombel';
+		return `${code} ${item.count}`;
 	}
 
 	function backendMixPolicy(): AssignmentMixPolicy {
@@ -968,7 +986,7 @@
 
 						<div class="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end"><button type="button" class="rounded-md border bg-background px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-60" onclick={() => void previewAssignment()} disabled={workingAssignment || !packageGateReady} title={!packageGateReady ? packageGateMessage : undefined}>{workingAssignment ? 'Memproses…' : 'Preview Pembagian Ruang'}</button><button type="button" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void applyAssignment()} disabled={workingAssignment || !packageGateReady} title={!packageGateReady ? packageGateMessage : undefined}>{workingAssignment ? 'Menyimpan…' : 'Simpan Penempatan'}</button></div>
 
-						<div class="mt-4 rounded-lg border bg-background p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="text-sm font-semibold text-foreground">③ Review Ruang · Peta Ruang Visual</h4><p class="text-xs text-muted-foreground">Klik preview untuk melihat isi ruang sebelum simpan.</p></div>{#if assignmentPreview}<div class="mt-3 grid gap-2 sm:grid-cols-2">{#each assignmentPreview.rooms as room}<div class="rounded-xl border bg-card p-3 text-sm"><div class="flex items-center justify-between gap-2"><strong>{room.code}</strong><span class="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold">{room.assigned_count}/{room.capacity}</span></div><div class="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div class="h-full rounded-full bg-emerald-500" style={`width: ${Math.min(100, Math.round((room.assigned_count / Math.max(1, room.capacity)) * 100))}%`}></div></div><p class="mt-2 text-xs text-muted-foreground">{room.name}</p></div>{/each}</div><div class="mt-3 grid gap-2 text-sm sm:grid-cols-4"><div><p class="text-xs text-muted-foreground">Peserta</p><p class="text-xl font-bold">{assignmentPreview.total_participants}</p></div><div><p class="text-xs text-muted-foreground">Tertampung</p><p class="text-xl font-bold">{assignmentPreview.assigned_total}</p></div><div><p class="text-xs text-muted-foreground">Sisa</p><p class="text-xl font-bold">{assignmentPreview.unassigned_total}</p></div><div><p class="text-xs text-muted-foreground">Status</p><p class="text-sm font-semibold">{assignmentPreview.applied ? 'Tersimpan' : 'Preview'}</p></div></div><p class="mt-2 text-xs leading-5 text-muted-foreground">{assignmentPreview.message}</p>{:else}<p class="mt-3 rounded-lg border border-dashed bg-muted/30 px-3 py-3 text-sm text-muted-foreground">Belum ada preview. Pilih rombel dan klik Preview Pembagian Ruang.</p>{/if}</div>
+						<div class="mt-4 rounded-lg border bg-background p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="text-sm font-semibold text-foreground">③ Review Ruang · Peta Ruang Visual</h4><p class="text-xs text-muted-foreground">Klik preview untuk melihat isi ruang sebelum simpan.</p></div>{#if assignmentPreview}{#if assignmentPreview.applied}<div class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800"><strong class="block text-emerald-900">Ringkasan hasil penempatan tersimpan</strong>Peserta sudah ditempatkan ke ruang/kursi. QR+PIN dan kartu peserta belum diterbitkan dari tahap ini.</div>{/if}<div class="mt-3 grid gap-2 sm:grid-cols-2">{#each assignmentPreview.rooms as room}<div class="rounded-xl border bg-card p-3 text-sm"><div class="flex items-center justify-between gap-2"><strong>{room.code}</strong><span class="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold">{room.assigned_count}/{room.capacity}</span></div><div class="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div class="h-full rounded-full bg-emerald-500" style={`width: ${Math.min(100, Math.round((room.assigned_count / Math.max(1, room.capacity)) * 100))}%`}></div></div><p class="mt-2 text-xs text-muted-foreground">{room.name}</p>{#if room.grade_levels?.length}<div class="mt-2 flex flex-wrap gap-1">{#each room.grade_levels as level}<span class="rounded-full border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{gradeLabel(level)}</span>{/each}</div>{/if}{#if room.class_summary?.length}<div class="mt-2 flex flex-wrap gap-1">{#each room.class_summary as summary}<span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700" title={`${summary.class_name || summary.class_code} · ${summary.count} siswa`}>{classSummaryLabel(summary)}</span>{/each}</div>{:else}<p class="mt-2 text-[11px] text-muted-foreground">Komposisi rombel tampil setelah penempatan disimpan.</p>{/if}</div>{/each}</div><div class="mt-3 grid gap-2 text-sm sm:grid-cols-4"><div><p class="text-xs text-muted-foreground">Peserta</p><p class="text-xl font-bold">{assignmentPreview.total_participants}</p></div><div><p class="text-xs text-muted-foreground">Tertampung</p><p class="text-xl font-bold">{assignmentPreview.assigned_total}</p></div><div><p class="text-xs text-muted-foreground">Sisa</p><p class="text-xl font-bold">{assignmentPreview.unassigned_total}</p></div><div><p class="text-xs text-muted-foreground">Status</p><p class="text-sm font-semibold">{assignmentPreview.applied ? 'Tersimpan' : 'Preview'}</p></div></div><p class="mt-2 text-xs leading-5 text-muted-foreground">{assignmentPreview.message}</p>{:else}<p class="mt-3 rounded-lg border border-dashed bg-muted/30 px-3 py-3 text-sm text-muted-foreground">Belum ada preview. Pilih rombel dan klik Preview Pembagian Ruang.</p>{/if}</div>
 					</section>
 
 
