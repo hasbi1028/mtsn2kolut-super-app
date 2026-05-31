@@ -846,17 +846,15 @@
 	{#if listError}<p class="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive" role="alert">{listError}</p>{/if}
 
 	{#if showCreateForm}
-		<div class="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
-			<button type="button" class="absolute inset-0 bg-slate-950/35 backdrop-blur-[1px]" aria-label="Tutup form buat kegiatan" onclick={toggleCreateForm}></button>
-			<aside class="relative flex h-full w-full max-w-xl flex-col border-l border-border bg-card shadow-2xl sm:w-[34rem]">
-				<div class="border-b border-border px-5 py-4">
-					<div class="flex items-start justify-between gap-3">
-						<div class="space-y-1"><p class="text-xs font-semibold tracking-[0.18em] text-muted-foreground uppercase">Langkah 1 · Kegiatan</p><h2 id="drawer-title" class="text-lg font-bold text-foreground">Buat Kegiatan Baru</h2><p class="text-xs leading-5 text-muted-foreground">Data dasar kegiatan tersimpan sebagai draft ujian.</p></div>
-						<button type="button" class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-bold text-muted-foreground hover:bg-muted" aria-label="Tutup" onclick={toggleCreateForm}>×</button>
-					</div>
+		<section class="rounded-2xl border border-primary/20 bg-card shadow-sm" aria-labelledby="create-kegiatan-title">
+			<div class="border-b border-border bg-muted/20 px-5 py-4">
+				<div class="flex items-start justify-between gap-3">
+					<div class="space-y-1"><p class="text-xs font-semibold tracking-[0.18em] text-primary uppercase">Langkah 1 · Kegiatan</p><h2 id="create-kegiatan-title" class="text-lg font-bold text-foreground">Buat Kegiatan Baru</h2><p class="text-xs leading-5 text-muted-foreground">Form sekarang tampil penuh di halaman, bukan drawer. Setelah tersimpan, lanjut pilih Paket Soal dari detail kegiatan.</p></div>
+					<button type="button" class="rounded-md border px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted" aria-label="Tutup form" onclick={toggleCreateForm}>Tutup</button>
 				</div>
-				<form class="flex min-h-0 flex-1 flex-col" onsubmit={(event) => { event.preventDefault(); void submitKegiatan(); }}>
-					<div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pt-4 pb-20">
+			</div>
+			<form onsubmit={(event) => { event.preventDefault(); void submitKegiatan(); }}>
+				<div class="grid gap-4 px-5 py-4 lg:grid-cols-2">
 						<div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">Kegiatan akan tersimpan sebagai draft. Kartu/QR+PIN belum diterbitkan pada tahap ini.</div>
 						<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Nama kegiatan</span><input class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Contoh: UAS Genap" bind:value={draft.nama} /></label>
 						<div class="grid gap-3 sm:grid-cols-2"><label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Jenis kegiatan</span><select class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.jenis}><option>Ujian Semester</option><option>Gladi CBT</option><option>Tryout</option><option>Simulasi</option></select></label><label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Mode pelaksanaan</span><select class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.mode}><option>CBT Web</option><option>Android</option><option>Web / Android</option><option>Kertas / Campuran</option></select></label></div>
@@ -864,24 +862,22 @@
 						<div class="grid gap-3 sm:grid-cols-2"><label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Tanggal mulai</span><input type="date" class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.tanggalMulai} /></label><label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Tanggal selesai</span><input type="date" class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.tanggalSelesai} /></label></div>
 						<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Catatan singkat</span><textarea class="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Opsional untuk operator; belum disimpan sebagai kolom khusus." bind:value={draft.catatan}></textarea></label>
 						{#if formError}<p class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{formError}</p>{/if}
-					</div>
-					<div class="flex flex-col gap-2 border-t border-border bg-card px-5 py-4 sm:flex-row sm:justify-end"><button type="button" class="rounded-md border px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted" onclick={resetDraft} disabled={saving}>Reset</button><button type="submit" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" disabled={saving}>{saving ? 'Menyimpan…' : 'Simpan Kegiatan'}</button></div>
-				</form>
-			</aside>
-		</div>
+				</div>
+				<div class="flex flex-col gap-2 border-t border-border bg-muted/20 px-5 py-4 sm:flex-row sm:justify-end"><button type="button" class="rounded-md border px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted" onclick={resetDraft} disabled={saving}>Reset</button><button type="submit" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" disabled={saving}>{saving ? 'Menyimpan…' : 'Simpan Kegiatan'}</button></div>
+			</form>
+		</section>
 	{/if}
 
 	{#if selectedKegiatan}
-		<div class="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-labelledby="detail-drawer-title">
-			<button type="button" class="absolute inset-0 bg-slate-950/35 backdrop-blur-[1px]" aria-label="Tutup detail kegiatan" onclick={closeKegiatanDetail}></button>
-			<aside class="relative flex h-full w-full max-w-2xl flex-col border-l border-border bg-card shadow-2xl sm:w-[42rem]">
-				<div class="border-b border-border px-5 py-4">
-					<div class="flex items-start justify-between gap-3">
-						<div class="min-w-0 space-y-2"><p class="text-xs font-semibold tracking-[0.18em] text-muted-foreground uppercase">Detail Kegiatan</p><h2 id="detail-drawer-title" class="truncate text-lg font-bold text-foreground">{selectedKegiatan.nama}</h2><div class="flex flex-wrap items-center gap-2"><span class={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone[selectedKegiatan.status]}`}>{selectedKegiatan.status}</span><span class="rounded-full border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">{selectedKegiatan.mode}</span></div></div>
-						<button type="button" class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-bold text-muted-foreground hover:bg-muted" aria-label="Tutup detail" onclick={closeKegiatanDetail}>×</button>
-					</div>
+		<section class="rounded-2xl border border-primary/20 bg-card shadow-sm" aria-labelledby="detail-kegiatan-title">
+			<div class="border-b border-border bg-muted/20 px-5 py-4">
+				<div class="flex items-start justify-between gap-3">
+					<div class="min-w-0 space-y-2"><p class="text-xs font-semibold tracking-[0.18em] text-primary uppercase">Detail Kegiatan · Halaman Penuh</p><h2 id="detail-kegiatan-title" class="truncate text-xl font-bold text-foreground">{selectedKegiatan.nama}</h2><div class="flex flex-wrap items-center gap-2"><span class={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone[selectedKegiatan.status]}`}>{selectedKegiatan.status}</span><span class="rounded-full border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">{selectedKegiatan.mode}</span><span class="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">Alur vertikal, bukan drawer</span></div></div>
+					<button type="button" class="rounded-md border px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted" aria-label="Tutup detail" onclick={closeKegiatanDetail}>Tutup Detail</button>
 				</div>
-				<div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pt-4 pb-20">
+			</div>
+			<div class="grid gap-4 px-5 pt-4 pb-5 xl:grid-cols-[20rem_minmax(0,1fr)]">
+				<aside class="space-y-4">
 					<section class="rounded-xl border bg-background p-4"><h3 class="text-sm font-semibold text-foreground">Ringkasan</h3><div class="mt-3 grid gap-2 text-sm"><div class="flex justify-between gap-3"><span class="text-muted-foreground">Tanggal</span><strong class="text-right font-semibold">{selectedKegiatan.periode}</strong></div><div class="flex justify-between gap-3"><span class="text-muted-foreground">Peserta</span><strong>{selectedKegiatan.peserta}</strong></div><div class="flex justify-between gap-3"><span class="text-muted-foreground">Ruang</span><strong>{selectedKegiatan.ruang}</strong></div><div class="flex justify-between gap-3"><span class="text-muted-foreground">Sesi</span><strong>{selectedKegiatan.sesi}</strong></div></div><p class="mt-3 rounded-lg bg-muted/50 px-3 py-2 text-xs leading-5 text-muted-foreground">{selectedKegiatan.catatan}</p></section>
 
 					<section class="rounded-xl border bg-background p-3">
@@ -889,9 +885,11 @@
 							<h3 class="text-sm font-semibold text-foreground">Alur Kegiatan</h3>
 							<p class="text-[11px] text-muted-foreground">UI ringkas</p>
 						</div>
-						<div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">{#each detailFeatures as feature}<button type="button" class={`rounded-lg border px-3 py-2 text-left text-sm transition ${activeDetailFeature === feature.key ? 'border-primary bg-primary/10 text-primary shadow-sm' : 'bg-card text-foreground hover:bg-muted'}`} aria-pressed={activeDetailFeature === feature.key} onclick={() => (activeDetailFeature = feature.key)}><span class="block text-sm font-semibold leading-5">{feature.label}</span><span class="mt-0.5 hidden text-[11px] leading-4 text-muted-foreground sm:block">{feature.description}</span></button>{/each}</div>
+						<div class="mt-3 space-y-2">{#each detailFeatures as feature, index}<button type="button" class={`flex w-full gap-3 rounded-lg border px-3 py-3 text-left text-sm transition ${activeDetailFeature === feature.key ? 'border-primary bg-primary/10 text-primary shadow-sm' : 'bg-card text-foreground hover:bg-muted'}`} aria-pressed={activeDetailFeature === feature.key} onclick={() => (activeDetailFeature = feature.key)}><span class={`mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${activeDetailFeature === feature.key ? 'border-primary bg-primary text-primary-foreground' : 'bg-background text-muted-foreground'}`}>{index + 1}</span><span class="min-w-0"><span class="block text-sm font-semibold leading-5">{feature.label}</span><span class="mt-0.5 block text-[11px] leading-4 text-muted-foreground">{feature.description}</span></span></button>{/each}</div>
 					</section>
+				</aside>
 
+				<div class="min-w-0 space-y-4">
 					{#if activeDetailFeature === 'paket'}
 					<section class="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4">
 						<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -1078,9 +1076,8 @@
 					<section class="rounded-xl border bg-background p-4"><h3 class="text-sm font-semibold text-foreground">Checklist Persiapan</h3><div class="mt-3 space-y-2">{#each preparationChecklist as label, index}<div class="flex items-center gap-3 rounded-lg border bg-card px-3 py-2 text-sm"><span class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold text-muted-foreground">{index + 1}</span><span class="min-w-0 flex-1 text-foreground">{label}</span><span class="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Bertahap</span></div>{/each}</div></section>
 					{/if}
 				</div>
-				<div class="border-t border-border bg-card px-5 py-4"><button type="button" class="w-full rounded-md border px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted" onclick={closeKegiatanDetail}>Tutup Detail</button></div>
-			</aside>
-		</div>
+			</div>
+		</section>
 	{/if}
 
 	{#if formNotice}<p class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700" role="status">{formNotice}</p>{/if}
@@ -1099,7 +1096,7 @@
 		<div class="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
 			<div>
 				<h2 class="text-base font-semibold text-foreground">Daftar Kegiatan</h2>
-				<p class="text-xs text-muted-foreground">Pilih satu kegiatan, lalu lanjutkan pekerjaan dari drawer kanan.</p>
+				<p class="text-xs text-muted-foreground">Pilih satu kegiatan, lalu lanjutkan pekerjaan di panel detail halaman penuh.</p>
 			</div>
 			<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={toggleCreateForm}>Buat Kegiatan</button>
 		</div>
