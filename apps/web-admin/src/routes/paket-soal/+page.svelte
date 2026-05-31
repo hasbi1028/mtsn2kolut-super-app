@@ -98,6 +98,7 @@
 
 	let packages = $state<PackageOption[]>([]);
 	let subjectOptions = $state<SubjectOption[]>([]);
+	let subjectPublishedCounts = $state<Record<string, number>>({});
 	let questionPool = $state<QuestionPoolItem[]>([]);
 	let selectedQuestionIds = $state<Set<string>>(new Set());
 	let loading = $state(true);
@@ -181,6 +182,7 @@
 	onMount(() => {
 		void loadPackages();
 		void loadSubjects();
+		void loadSubjectQuestionCounts();
 	});
 
 	async function loadPackages() {
@@ -230,6 +232,28 @@
 		}
 	}
 
+	async function loadSubjectQuestionCounts() {
+		try {
+			const params = new URLSearchParams({
+				status: 'published',
+				workflow_status: 'published',
+				limit: '500',
+				sort: 'newest'
+			});
+			const response = await fetch(clientApiPathWithQuery('/api/bank-soal/questions', params));
+			const payload = await readClientApiData<QuestionsPayload>(response);
+			const items = Array.isArray(payload) ? payload : payload.items ?? [];
+			const next: Record<string, number> = {};
+			for (const item of items) {
+				if (!item.subject_id) continue;
+				next[item.subject_id] = (next[item.subject_id] ?? 0) + 1;
+			}
+			subjectPublishedCounts = next;
+		} catch {
+			subjectPublishedCounts = {};
+		}
+	}
+
 	async function loadQuestionPool(subjectId = draft.subject_id, clearSelection = true) {
 		builderError = '';
 		builderNotice = '';
@@ -261,7 +285,13 @@
 		}
 	}
 
-	function openBuilder() {
+	async function openBuilder() {
+		if (normalizedSubjects.length === 0) {
+			await loadSubjects();
+		}
+		if (Object.keys(subjectPublishedCounts).length === 0) {
+			await loadSubjectQuestionCounts();
+		}
 		builderMode = 'create';
 		activePackageId = '';
 		activeDetail = null;
@@ -271,7 +301,7 @@
 		draft = {
 			title: '',
 			description: '',
-			subject_id: draft.subject_id || (normalizedSubjects.length > 0 ? subjectId(normalizedSubjects[0]) : ''),
+			subject_id: defaultBuilderSubjectId(),
 			duration_minutes: 90,
 			randomize_questions: true,
 			randomize_options: true,
@@ -500,6 +530,20 @@
 		return item.subject_code ?? item.code ?? '-';
 	}
 
+	function subjectPublishedCount(id: string) {
+		return subjectPublishedCounts[id] ?? 0;
+	}
+
+	function subjectOptionLabel(item: SubjectOption) {
+		const id = subjectId(item);
+		const count = subjectPublishedCount(id);
+		return `${subjectCode(item)} · ${subjectName(item)} (${count} soal terbit)`;
+	}
+
+	function defaultBuilderSubjectId() {
+		return subjectId(normalizedSubjects.find((item) => subjectPublishedCount(subjectId(item)) > 0) ?? normalizedSubjects[0] ?? {} as SubjectOption);
+	}
+
 	function questionTypeLabel(value = '') {
 		const normalized = value.toLowerCase();
 		if (normalized === 'multiple_choice' || normalized === 'pg') return 'PG';
@@ -592,7 +636,7 @@
 				<a class="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-semibold text-foreground hover:bg-muted" href="/bank-soal">Buka Bank Soal</a>
 				<a class="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-semibold text-foreground hover:bg-muted" href="/asesmen">Pakai di Asesmen</a>
 				<button type="button" class="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-semibold text-foreground hover:bg-muted" onclick={() => void loadPackages()} disabled={loading}>{loading ? 'Memuat…' : 'Refresh'}</button>
-				<button type="button" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90" onclick={openBuilder}>Buat Paket</button>
+				<button type="button" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90" onclick={() => void openBuilder()}>Buat Paket</button>
 			</div>
 		</div>
 	</section>
@@ -705,7 +749,7 @@
 							<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Judul paket</span><input class="w-full rounded-md border bg-card px-3 py-2 text-sm" placeholder="Contoh: Paket UAS IPA VII" bind:value={draft.title} disabled={activeLocked} /></label>
 							<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Mata pelajaran</span><select class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={draft.subject_id} onchange={() => void loadQuestionPool(draft.subject_id, true)} disabled={loadingSubjects || builderMode === 'edit' || activeLocked}>
 								<option value="">Pilih mapel</option>
-								{#each normalizedSubjects as subject}<option value={subjectId(subject)}>{subjectCode(subject)} · {subjectName(subject)}</option>{/each}
+								{#each normalizedSubjects as subject}<option value={subjectId(subject)}>{subjectOptionLabel(subject)}</option>{/each}
 							</select></label>
 							<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Deskripsi</span><textarea class="min-h-20 w-full rounded-md border bg-card px-3 py-2 text-sm" placeholder="Opsional" bind:value={draft.description} disabled={activeLocked}></textarea></label>
 							<div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">

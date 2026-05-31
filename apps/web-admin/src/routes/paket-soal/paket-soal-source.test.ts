@@ -13,4 +13,12 @@ describe('/paket-soal builder source contract', () => {
 		expect(source).toContain('subjectOptions = Array.isArray(payload) ? payload : payload.subjects ?? []');
 		expect(source).not.toContain('subjectOptions = await readClientApiData<SubjectOption[]>(response)');
 	});
+
+	it('shows published-question counts and defaults new builder to an available subject', () => {
+		expect(source).toContain('let subjectPublishedCounts = $state<Record<string, number>>({});');
+		expect(source).toContain("workflow_status: 'published'");
+		expect(source).toContain('function defaultBuilderSubjectId()');
+		expect(source).toContain('subject_id: defaultBuilderSubjectId(),');
+		expect(source).toContain('{subjectOptionLabel(subject)}');
+	});
 });
