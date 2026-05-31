@@ -49,6 +49,60 @@
 
 	type QuestionsPayload = QuestionPoolItem[] | { items?: QuestionPoolItem[] };
 
+	type PackageReadiness = {
+		status?: string;
+		target_pg_count?: number;
+		target_essay_count?: number;
+		missing_pg_count?: number;
+		missing_essay_count?: number;
+		question_count?: number;
+		pg_count?: number;
+		essay_count?: number;
+		total_points?: number;
+		published_count?: number;
+		unpublished_count?: number;
+		metadata_gap_count?: number;
+		session_count?: number;
+		locked?: boolean;
+		ready?: boolean;
+	};
+
+	type PackageDetailRow = PackageOption & {
+		randomize_questions?: boolean;
+		randomize_options?: boolean;
+		source_mode?: string;
+		draw_pg_count?: number;
+		draw_essay_count?: number;
+		random_seed?: string;
+		is_active?: boolean;
+		locked_at?: unknown;
+		lock_reason?: string;
+	};
+
+	type PackageQuestion = {
+		question_id: string | Record<string, unknown>;
+		question_code?: string;
+		question_text?: string;
+		question_type?: string;
+		position?: number;
+		points?: number;
+		status?: string;
+		workflow_status?: string;
+		target_level?: string | Record<string, unknown> | null;
+		cp_ref?: string;
+		tp_ref?: string;
+		kd_ref?: string;
+		material_topic?: string;
+		cognitive_level?: string;
+		hots_flag?: boolean;
+	};
+
+	type PackageDetail = {
+		package: PackageDetailRow;
+		questions?: PackageQuestion[];
+		readiness?: PackageReadiness;
+	};
+
 	let packages = $state<PackageOption[]>([]);
 	let subjectOptions = $state<SubjectOption[]>([]);
 	let questionPool = $state<QuestionPoolItem[]>([]);
@@ -58,6 +112,11 @@
 	let loadingPool = $state(false);
 	let savingPackage = $state(false);
 	let showBuilder = $state(false);
+	let builderMode = $state<'create' | 'edit'>('create');
+	let activePackageId = $state('');
+	let activeDetail = $state<PackageDetail | null>(null);
+	let loadingDetail = $state(false);
+	let packageActionBusy = $state<'lock' | 'clone' | null>(null);
 	let error = $state('');
 	let builderError = $state('');
 	let builderNotice = $state('');
@@ -74,8 +133,11 @@
 		duration_minutes: 90,
 		randomize_questions: true,
 		randomize_options: true,
+		source_mode: 'teacher_class',
 		draw_pg_count: 0,
-		draw_essay_count: 0
+		draw_essay_count: 0,
+		random_seed: '',
+		is_active: true
 	});
 
 	const subjects = $derived(
@@ -122,6 +184,8 @@
 	const emptyCount = $derived(packages.filter((item) => Number(item.question_count ?? 0) === 0).length);
 	const lockedCount = $derived(packages.filter((item) => item.locked).length);
 	const usedCount = $derived(packages.filter((item) => Number(item.session_count ?? 0) > 0).length);
+	const activeReadiness = $derived(activeDetail?.readiness ?? null);
+	const activeLocked = $derived(Boolean(activeReadiness?.locked || hasValue(activeDetail?.package?.locked_at) || activeDetail?.package?.locked));
 
 	onMount(() => {
 		void loadPackages();
@@ -154,19 +218,19 @@
 		}
 	}
 
-	async function loadQuestionPool() {
+	async function loadQuestionPool(subjectId = draft.subject_id, clearSelection = true) {
 		builderError = '';
 		builderNotice = '';
 		questionPool = [];
-		selectedQuestionIds = new Set();
-		if (!draft.subject_id) {
+		if (clearSelection) selectedQuestionIds = new Set();
+		if (!subjectId) {
 			builderError = 'Pilih mata pelajaran dulu.';
 			return;
 		}
 		loadingPool = true;
 		try {
 			const params = new URLSearchParams({
-				subject_id: draft.subject_id,
+				subject_id: subjectId,
 				workflow_status: 'published',
 				status: 'published',
 				limit: '200',
@@ -186,18 +250,68 @@
 	}
 
 	function openBuilder() {
+		builderMode = 'create';
+		activePackageId = '';
+		activeDetail = null;
 		showBuilder = true;
 		builderError = '';
 		builderNotice = '';
-		if (!draft.subject_id && normalizedSubjects.length > 0) {
-			draft = { ...draft, subject_id: subjectId(normalizedSubjects[0]) };
-		}
-		if (draft.subject_id) void loadQuestionPool();
+		draft = {
+			title: '',
+			description: '',
+			subject_id: draft.subject_id || (normalizedSubjects.length > 0 ? subjectId(normalizedSubjects[0]) : ''),
+			duration_minutes: 90,
+			randomize_questions: true,
+			randomize_options: true,
+			source_mode: 'teacher_class',
+			draw_pg_count: 0,
+			draw_essay_count: 0,
+			random_seed: '',
+			is_active: true
+		};
+		selectedQuestionIds = new Set();
+		if (draft.subject_id) void loadQuestionPool(draft.subject_id, true);
 	}
 
 	function closeBuilder() {
-		if (savingPackage) return;
+		if (savingPackage || packageActionBusy) return;
 		showBuilder = false;
+	}
+
+	async function openPackageDetail(item: PackageOption) {
+		builderMode = 'edit';
+		activePackageId = item.id;
+		showBuilder = true;
+		loadingDetail = true;
+		builderError = '';
+		builderNotice = '';
+		questionPool = [];
+		selectedQuestionIds = new Set();
+		try {
+			const response = await fetch(`/api/asesmen/packages/${encodeURIComponent(item.id)}`);
+			const detail = await readClientApiData<PackageDetail>(response);
+			activeDetail = detail;
+			const pkg = detail.package;
+			draft = {
+				title: pkg.title ?? item.title,
+				description: pkg.description ?? item.description ?? '',
+				subject_id: uuidValue(pkg.subject_id) || item.subject_id,
+				duration_minutes: Number(pkg.duration_minutes ?? item.duration_minutes ?? 90),
+				randomize_questions: Boolean(pkg.randomize_questions),
+				randomize_options: Boolean(pkg.randomize_options),
+				source_mode: pkg.source_mode || 'teacher_class',
+				draw_pg_count: Number(pkg.draw_pg_count ?? detail.readiness?.target_pg_count ?? 0),
+				draw_essay_count: Number(pkg.draw_essay_count ?? detail.readiness?.target_essay_count ?? 0),
+				random_seed: pkg.random_seed ?? '',
+				is_active: pkg.is_active ?? true
+			};
+			selectedQuestionIds = new Set((detail.questions ?? []).map((q) => uuidValue(q.question_id)).filter(Boolean));
+			await loadQuestionPool(draft.subject_id, false);
+		} catch (e) {
+			builderError = e instanceof Error ? e.message : 'Detail paket belum dapat dibuka.';
+		} finally {
+			loadingDetail = false;
+		}
 	}
 
 	function toggleQuestion(id: string) {
@@ -232,34 +346,53 @@
 			builderError = 'Pilih minimal 1 soal dari Bank Soal.';
 			return;
 		}
+		if (builderMode === 'edit' && activeLocked) {
+			builderError = 'Paket sudah terkunci. Gunakan Clone/Revisi untuk mengubah.';
+			return;
+		}
 		savingPackage = true;
 		try {
 			const questionIds = Array.from(selectedQuestionIds);
-			const weights = Object.fromEntries(questionIds.map((id) => [id, 1]));
-			const response = await fetch('/api/asesmen/packages', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					event_id: '',
-					subject_id: draft.subject_id,
-					title,
-					description: draft.description.trim(),
-					duration_minutes: Number(draft.duration_minutes),
-					randomize_questions: draft.randomize_questions,
-					randomize_options: draft.randomize_options,
-					source_mode: 'teacher_class',
-					draw_pg_count: Number(draft.draw_pg_count || selectedPgCount),
-					draw_essay_count: Number(draft.draw_essay_count || selectedEssayCount),
-					random_seed: '',
-					is_active: true,
-					question_ids: questionIds,
-					question_weights: weights
-				})
-			});
-			await readClientApiData<unknown>(response);
-			builderNotice = `Paket “${title}” tersimpan dengan ${questionIds.length} soal.`;
-			draft = { ...draft, title: '', description: '', draw_pg_count: 0, draw_essay_count: 0 };
-			selectedQuestionIds = new Set();
+			const weights = Object.fromEntries(questionIds.map((id) => [id, questionPoint(id)]));
+			const payload = {
+				event_id: '',
+				subject_id: draft.subject_id,
+				title,
+				description: draft.description.trim(),
+				duration_minutes: Number(draft.duration_minutes),
+				randomize_questions: draft.randomize_questions,
+				randomize_options: draft.randomize_options,
+				source_mode: draft.source_mode || 'teacher_class',
+				draw_pg_count: Number(draft.draw_pg_count || selectedPgCount),
+				draw_essay_count: Number(draft.draw_essay_count || selectedEssayCount),
+				random_seed: draft.random_seed.trim(),
+				is_active: draft.is_active,
+				question_ids: questionIds,
+				question_weights: weights
+			};
+			if (builderMode === 'edit' && activePackageId) {
+				await readClientApiData<PackageDetail>(await fetch(`/api/asesmen/packages/${encodeURIComponent(activePackageId)}`, {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload)
+				}));
+				const detail = await readClientApiData<PackageDetail>(await fetch(`/api/asesmen/packages/${encodeURIComponent(activePackageId)}/questions`, {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ question_ids: questionIds, question_weights: weights })
+				}));
+				activeDetail = detail;
+				builderNotice = `Paket “${title}” diperbarui dengan ${questionIds.length} soal.`;
+			} else {
+				await readClientApiData<unknown>(await fetch('/api/asesmen/packages', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload)
+				}));
+				builderNotice = `Paket “${title}” tersimpan dengan ${questionIds.length} soal.`;
+				draft = { ...draft, title: '', description: '', draw_pg_count: 0, draw_essay_count: 0 };
+				selectedQuestionIds = new Set();
+			}
 			await loadPackages();
 		} catch (e) {
 			builderError = e instanceof Error ? e.message : 'Paket belum dapat disimpan.';
@@ -267,6 +400,55 @@
 			savingPackage = false;
 		}
 	}
+
+	async function lockActivePackage() {
+		if (!activePackageId || packageActionBusy) return;
+		if (!activeReadiness?.ready) {
+			builderError = 'Paket belum siap dikunci. Lengkapi target soal dan metadata dulu.';
+			return;
+		}
+		const ok = window.confirm('Kunci paket ini? Setelah dikunci, isi soal tidak bisa diedit dan perubahan harus lewat clone/revisi.');
+		if (!ok) return;
+		packageActionBusy = 'lock';
+		builderError = '';
+		try {
+			await readClientApiData<unknown>(await fetch(`/api/asesmen/packages/${encodeURIComponent(activePackageId)}/lock`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ reason: 'Dikunci dari modul Paket Soal' })
+			}));
+			builderNotice = 'Paket berhasil dikunci dan snapshot dibuat.';
+			await openPackageDetail({ ...(activeDetail?.package ?? {}), id: activePackageId } as PackageOption);
+			await loadPackages();
+		} catch (e) {
+			builderError = e instanceof Error ? e.message : 'Paket belum dapat dikunci.';
+		} finally {
+			packageActionBusy = null;
+		}
+	}
+
+	async function cloneActivePackage() {
+		if (!activePackageId || packageActionBusy) return;
+		const title = window.prompt('Judul paket revisi/clone:', `${draft.title} - Revisi`);
+		if (title === null) return;
+		packageActionBusy = 'clone';
+		builderError = '';
+		try {
+			const detail = await readClientApiData<PackageDetail>(await fetch(`/api/asesmen/packages/${encodeURIComponent(activePackageId)}/clone`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ title })
+			}));
+			builderNotice = `Clone paket “${detail.package.title}” berhasil dibuat.`;
+			await loadPackages();
+			await openPackageDetail({ ...detail.package, id: uuidValue(detail.package.id) } as PackageOption);
+		} catch (e) {
+			builderError = e instanceof Error ? e.message : 'Clone paket belum dapat dibuat.';
+		} finally {
+			packageActionBusy = null;
+		}
+	}
+
 
 	function statusLabel(item: PackageOption) {
 		if (item.locked) return 'Terkunci';
@@ -310,6 +492,61 @@
 
 	function hasMetadataGap(item: QuestionPoolItem) {
 		return !item.target_level || !item.cognitive_level || !item.material_topic;
+	}
+
+	function hasPackageQuestionMetadataGap(item: PackageQuestion) {
+		return !textValue(item.target_level) || !item.cognitive_level || !item.material_topic || (!item.tp_ref && !item.kd_ref);
+	}
+
+	function uuidValue(value: unknown): string {
+		if (typeof value === 'string') return value;
+		if (value && typeof value === 'object') {
+			const record = value as Record<string, unknown>;
+			if (typeof record.String === 'string') return record.String;
+			if (typeof record.string === 'string') return record.string;
+		}
+		return '';
+	}
+
+	function textValue(value: unknown): string {
+		if (typeof value === 'string') return value;
+		if (value && typeof value === 'object') {
+			const record = value as Record<string, unknown>;
+			if (typeof record.String === 'string') return record.String;
+			if (typeof record.string === 'string') return record.string;
+		}
+		return '';
+	}
+
+	function hasValue(value: unknown): boolean {
+		if (!value) return false;
+		if (typeof value === 'string') return value.trim() !== '';
+		if (typeof value === 'object') {
+			const record = value as Record<string, unknown>;
+			if (typeof record.Valid === 'boolean') return record.Valid;
+			if (typeof record.valid === 'boolean') return record.valid;
+		}
+		return true;
+	}
+
+	function questionPoint(id: string) {
+		const existing = (activeDetail?.questions ?? []).find((item) => uuidValue(item.question_id) === id);
+		return Number(existing?.points ?? 1);
+	}
+
+	function readinessLabel(readiness: PackageReadiness | null) {
+		if (!readiness) return 'Belum dicek';
+		if (readiness.locked) return 'Terkunci';
+		if (readiness.ready) return 'Siap dikunci';
+		if (readiness.status === 'kosong') return 'Kosong';
+		return 'Perlu dilengkapi';
+	}
+
+	function readinessClass(readiness: PackageReadiness | null) {
+		if (readiness?.locked) return 'border-slate-300 bg-slate-100 text-slate-700';
+		if (readiness?.ready) return 'border-emerald-300 bg-emerald-50 text-emerald-700';
+		if (readiness?.status === 'kosong') return 'border-amber-300 bg-amber-50 text-amber-700';
+		return 'border-orange-300 bg-orange-50 text-orange-700';
 	}
 </script>
 
@@ -398,7 +635,7 @@
 								<td class="px-4 py-3 text-muted-foreground">{item.duration_minutes || 0} menit</td>
 								<td class="px-4 py-3 text-muted-foreground">{item.session_count || 0} sesi</td>
 								<td class="px-4 py-3"><span class={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusClass(item)}`}>{statusLabel(item)}</span></td>
-								<td class="px-4 py-3 text-right"><a class="rounded-md border px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" href={`/asesmen?paket=${item.id}`}>Gunakan</a></td>
+								<td class="px-4 py-3 text-right"><div class="flex justify-end gap-2"><button type="button" class="rounded-md border px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void openPackageDetail(item)}>Detail/Edit</button><a class="rounded-md border px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" href={`/asesmen?paket=${item.id}`}>Gunakan</a></div></td>
 							</tr>
 						{/each}
 					</tbody>
@@ -412,7 +649,7 @@
 		<ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-muted-foreground">
 			<li>Modul mandiri membaca paket aktif dan menjadi jembatan Bank Soal → Paket Soal → Asesmen.</li>
 			<li>Builder membuat paket langsung dari soal terbit, sehingga tidak membuat paket kosong yang belum valid.</li>
-			<li>Iterasi berikutnya: detail/edit paket, validasi kesiapan penuh, lock/snapshot, dan clone/revisi.</li>
+			<li>Detail/edit, validasi kesiapan, lock/snapshot, dan clone/revisi tersedia di aksi Detail/Edit.</li>
 		</ul>
 	</section>
 
@@ -423,9 +660,9 @@
 				<div class="border-b border-border px-5 py-4">
 					<div class="flex items-start justify-between gap-3">
 						<div class="space-y-1">
-							<p class="text-xs font-semibold tracking-[0.18em] text-muted-foreground uppercase">Builder Paket</p>
-							<h2 id="package-builder-title" class="text-lg font-bold text-foreground">Buat Paket dari Bank Soal</h2>
-							<p class="text-xs leading-5 text-muted-foreground">Pilih mapel, ambil soal terbit, lalu simpan sebagai paket siap dipakai Asesmen.</p>
+							<p class="text-xs font-semibold tracking-[0.18em] text-muted-foreground uppercase">{builderMode === 'edit' ? 'Detail Paket' : 'Builder Paket'}</p>
+							<h2 id="package-builder-title" class="text-lg font-bold text-foreground">{builderMode === 'edit' ? 'Detail/Edit Paket Soal' : 'Buat Paket dari Bank Soal'}</h2>
+							<p class="text-xs leading-5 text-muted-foreground">{builderMode === 'edit' ? 'Edit metadata/soal selama belum terkunci, cek kesiapan, lalu lock atau clone.' : 'Pilih mapel, ambil soal terbit, lalu simpan sebagai paket siap dipakai Asesmen.'}</p>
 						</div>
 						<button type="button" class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-bold text-muted-foreground hover:bg-muted" aria-label="Tutup" onclick={closeBuilder}>×</button>
 					</div>
@@ -434,29 +671,58 @@
 					<div class="grid gap-4 lg:grid-cols-[22rem_1fr]">
 						<section class="space-y-4 rounded-xl border bg-background p-4">
 							<h3 class="text-sm font-semibold text-foreground">Metadata Paket</h3>
-							<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Judul paket</span><input class="w-full rounded-md border bg-card px-3 py-2 text-sm" placeholder="Contoh: Paket UAS IPA VII" bind:value={draft.title} /></label>
-							<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Mata pelajaran</span><select class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={draft.subject_id} onchange={() => void loadQuestionPool()} disabled={loadingSubjects}>
+							<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Judul paket</span><input class="w-full rounded-md border bg-card px-3 py-2 text-sm" placeholder="Contoh: Paket UAS IPA VII" bind:value={draft.title} disabled={activeLocked} /></label>
+							<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Mata pelajaran</span><select class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={draft.subject_id} onchange={() => void loadQuestionPool(draft.subject_id, true)} disabled={loadingSubjects || builderMode === 'edit' || activeLocked}>
 								<option value="">Pilih mapel</option>
 								{#each normalizedSubjects as subject}<option value={subjectId(subject)}>{subjectCode(subject)} · {subjectName(subject)}</option>{/each}
 							</select></label>
-							<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Deskripsi</span><textarea class="min-h-20 w-full rounded-md border bg-card px-3 py-2 text-sm" placeholder="Opsional" bind:value={draft.description}></textarea></label>
+							<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Deskripsi</span><textarea class="min-h-20 w-full rounded-md border bg-card px-3 py-2 text-sm" placeholder="Opsional" bind:value={draft.description} disabled={activeLocked}></textarea></label>
 							<div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Durasi menit</span><input type="number" min="1" max="360" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={draft.duration_minutes} /></label>
-								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Target PG</span><input type="number" min="0" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={draft.draw_pg_count} /></label>
-								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Target Essay</span><input type="number" min="0" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={draft.draw_essay_count} /></label>
+								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Durasi menit</span><input type="number" min="1" max="360" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={draft.duration_minutes} disabled={activeLocked} /></label>
+								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Target PG</span><input type="number" min="0" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={draft.draw_pg_count} disabled={activeLocked} /></label>
+								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Target Essay</span><input type="number" min="0" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={draft.draw_essay_count} disabled={activeLocked} /></label>
 							</div>
-							<label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={draft.randomize_questions} /> <span>Acak urutan soal</span></label>
-							<label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={draft.randomize_options} /> <span>Acak opsi PG</span></label>
+							<label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={draft.randomize_questions} disabled={activeLocked} /> <span>Acak urutan soal</span></label>
+							<label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={draft.randomize_options} disabled={activeLocked} /> <span>Acak opsi PG</span></label>
 							<div class="rounded-lg border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
 								<p class="font-semibold text-foreground">Dipilih: {selectedQuestionIds.size} soal</p>
 								<p>PG: {selectedPgCount} · Non-PG/Essay: {selectedEssayCount}</p>
 								<p>Target kosong otomatis memakai jumlah soal yang dipilih.</p>
 							</div>
+							{#if builderMode === 'edit'}
+								<div class="rounded-lg border bg-card p-3 text-xs leading-5">
+									<div class="flex items-center justify-between gap-2"><p class="font-semibold text-foreground">Validasi Kesiapan</p><span class={`rounded-full border px-2 py-1 font-semibold ${readinessClass(activeReadiness)}`}>{readinessLabel(activeReadiness)}</span></div>
+									<p class="mt-2 text-muted-foreground">PG {activeReadiness?.pg_count ?? selectedPgCount}/{activeReadiness?.target_pg_count ?? (draft.draw_pg_count || 20)} · Essay {activeReadiness?.essay_count ?? selectedEssayCount}/{activeReadiness?.target_essay_count ?? (draft.draw_essay_count || 5)}</p>
+									<p class="text-muted-foreground">Gap metadata: {activeReadiness?.metadata_gap_count ?? 0} · Belum terbit: {activeReadiness?.unpublished_count ?? 0} · Poin: {activeReadiness?.total_points ?? selectedQuestionIds.size}</p>
+									{#if activeLocked}<p class="mt-1 font-medium text-slate-700">Terkunci: perubahan harus lewat Clone/Revisi.</p>{/if}
+								</div>
+							{/if}
 							{#if builderError}<p class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{builderError}</p>{/if}
 							{#if builderNotice}<p class="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800" role="status">{builderNotice}</p>{/if}
-							<div class="flex gap-2"><button type="button" class="rounded-md border px-4 py-2 text-sm font-semibold hover:bg-muted" onclick={() => void loadQuestionPool()} disabled={loadingPool || !draft.subject_id}>{loadingPool ? 'Memuat…' : 'Muat Soal'}</button><button type="button" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60" onclick={() => void submitPackage()} disabled={savingPackage}>{savingPackage ? 'Menyimpan…' : 'Simpan Paket'}</button></div>
+							<div class="flex flex-wrap gap-2"><button type="button" class="rounded-md border px-4 py-2 text-sm font-semibold hover:bg-muted" onclick={() => void loadQuestionPool(draft.subject_id, builderMode === 'create')} disabled={loadingPool || !draft.subject_id}>{loadingPool ? 'Memuat…' : 'Muat Soal'}</button><button type="button" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60" onclick={() => void submitPackage()} disabled={savingPackage || activeLocked}>{savingPackage ? 'Menyimpan…' : builderMode === 'edit' ? 'Simpan Edit' : 'Simpan Paket'}</button>{#if builderMode === 'edit'}<button type="button" class="rounded-md border px-4 py-2 text-sm font-semibold hover:bg-muted disabled:opacity-60" onclick={() => void lockActivePackage()} disabled={packageActionBusy !== null || activeLocked || !activeReadiness?.ready}>{packageActionBusy === 'lock' ? 'Mengunci…' : 'Lock Paket'}</button><button type="button" class="rounded-md border px-4 py-2 text-sm font-semibold hover:bg-muted disabled:opacity-60" onclick={() => void cloneActivePackage()} disabled={packageActionBusy !== null}>{packageActionBusy === 'clone' ? 'Clone…' : 'Clone/Revisi'}</button>{/if}</div>
 						</section>
 
+						{#if builderMode === 'edit'}
+							<section class="space-y-3 rounded-xl border bg-background p-4 lg:col-span-2">
+								<div class="flex items-center justify-between gap-2"><h3 class="text-sm font-semibold text-foreground">Soal Saat Ini</h3><p class="text-xs text-muted-foreground">{activeDetail?.questions?.length ?? 0} soal tersimpan</p></div>
+								<div class="overflow-x-auto rounded-lg border">
+									<table class="min-w-[760px] w-full text-left text-sm">
+										<thead class="border-b bg-muted/40 text-xs text-muted-foreground"><tr><th class="px-3 py-2">Urut</th><th class="px-3 py-2">Kode & Soal</th><th class="px-3 py-2">Bentuk</th><th class="px-3 py-2">Level</th><th class="px-3 py-2">Poin</th><th class="px-3 py-2">Mutu</th></tr></thead>
+										<tbody class="divide-y">
+											{#if loadingDetail}
+												<tr><td colspan="6" class="px-3 py-6 text-center text-muted-foreground">Memuat detail…</td></tr>
+											{:else if !activeDetail?.questions?.length}
+												<tr><td colspan="6" class="px-3 py-6 text-center text-muted-foreground">Belum ada soal tersimpan.</td></tr>
+											{:else}
+												{#each activeDetail.questions as q (uuidValue(q.question_id))}
+													<tr><td class="px-3 py-2 text-xs text-muted-foreground">{q.position}</td><td class="px-3 py-2"><p class="font-semibold text-foreground">{q.question_code || 'Tanpa kode'}</p><p class="line-clamp-1 max-w-xl text-xs text-muted-foreground">{q.question_text}</p></td><td class="px-3 py-2 text-xs text-muted-foreground">{questionTypeLabel(q.question_type)}</td><td class="px-3 py-2"><span class="rounded-full border px-2 py-1 text-[11px] font-semibold">{textValue(q.target_level) || 'Kosong'}</span></td><td class="px-3 py-2 text-xs text-muted-foreground">{q.points ?? 1}</td><td class="px-3 py-2"><span class={`rounded-full border px-2 py-1 text-[11px] font-semibold ${hasPackageQuestionMetadataGap(q) ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-emerald-300 bg-emerald-50 text-emerald-700'}`}>{hasPackageQuestionMetadataGap(q) ? 'Gap' : 'OK'}</span></td></tr>
+												{/each}
+											{/if}
+										</tbody>
+									</table>
+								</div>
+							</section>
+						{/if}
 						<section class="space-y-3 rounded-xl border bg-background p-4">
 							<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
 								<div><h3 class="text-sm font-semibold text-foreground">Pool Bank Soal Terbit</h3><p class="text-xs text-muted-foreground">Hanya soal terbit sesuai mapel yang bisa dimasukkan paket.</p></div>
@@ -469,7 +735,7 @@
 							<div class="overflow-x-auto rounded-lg border">
 								<table class="min-w-[860px] w-full text-left text-sm">
 									<thead class="border-b bg-muted/40 text-xs text-muted-foreground">
-										<tr><th class="w-12 px-3 py-3"><input type="checkbox" checked={allSelected} indeterminate={someSelected} onchange={toggleSelectAll} aria-label="Pilih semua soal terlihat" /></th><th class="px-3 py-3 font-semibold">Kode & Soal</th><th class="px-3 py-3 font-semibold">Bentuk</th><th class="px-3 py-3 font-semibold">Tingkat</th><th class="px-3 py-3 font-semibold">Pembuat</th><th class="px-3 py-3 font-semibold">Mutu</th><th class="px-3 py-3 font-semibold">Pakai</th></tr>
+										<tr><th class="w-12 px-3 py-3"><input type="checkbox" checked={allSelected} indeterminate={someSelected} onchange={toggleSelectAll} aria-label="Pilih semua soal terlihat" disabled={activeLocked} /></th><th class="px-3 py-3 font-semibold">Kode & Soal</th><th class="px-3 py-3 font-semibold">Bentuk</th><th class="px-3 py-3 font-semibold">Tingkat</th><th class="px-3 py-3 font-semibold">Pembuat</th><th class="px-3 py-3 font-semibold">Mutu</th><th class="px-3 py-3 font-semibold">Pakai</th></tr>
 									</thead>
 									<tbody class="divide-y">
 										{#if loadingPool}
@@ -479,7 +745,7 @@
 										{:else}
 											{#each availablePool as item (item.id)}
 												<tr class={selectedQuestionIds.has(item.id) ? 'bg-muted/50' : 'hover:bg-muted/30'}>
-													<td class="px-3 py-3"><input type="checkbox" checked={selectedQuestionIds.has(item.id)} onchange={() => toggleQuestion(item.id)} aria-label={`Pilih soal ${item.code || item.id}`} /></td>
+													<td class="px-3 py-3"><input type="checkbox" checked={selectedQuestionIds.has(item.id)} onchange={() => toggleQuestion(item.id)} aria-label={`Pilih soal ${item.code || item.id}`} disabled={activeLocked} /></td>
 													<td class="px-3 py-3"><p class="font-semibold text-foreground">{item.code || 'Tanpa kode'}</p><p class="mt-1 line-clamp-1 max-w-xl text-xs text-muted-foreground">{item.question_text || 'Teks soal kosong'}</p></td>
 													<td class="px-3 py-3 text-xs text-muted-foreground">{questionTypeLabel(item.question_type)}</td>
 													<td class="px-3 py-3"><span class="rounded-full border px-2 py-1 text-[11px] font-semibold">{item.target_level || 'Kosong'}</span></td>
