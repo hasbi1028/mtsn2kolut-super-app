@@ -863,6 +863,7 @@
 								<p class="mt-1 text-xs leading-5 text-muted-foreground">Pilih paket dari Bank Soal untuk tiap rombel/mapel. Tahap ini belum menerbitkan kartu, QR, atau PIN.</p>
 							</div>
 							<div class="flex flex-wrap gap-2">
+								<a class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" href="/paket-soal">Buka Modul Paket</a>
 								<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void loadPackageOptions()} disabled={loadingPackages}>{loadingPackages ? 'Memuat…' : 'Refresh Paket'}</button>
 								<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={addPackageMapRow}>Tambah Baris</button>
 							</div>
@@ -878,7 +879,7 @@
 							{#if loadingPackages && packageMaps.length === 0}
 								<p class="p-4 text-sm text-muted-foreground">Memuat paket soal…</p>
 							{:else if packageMaps.length === 0}
-								<div class="p-4 text-sm text-muted-foreground"><p class="font-semibold text-foreground">Belum ada paket soal tertaut.</p><p class="mt-1 text-xs leading-5">Klik Tambah Baris, pilih rombel dan paket. Jika daftar paket kosong, buat/aktifkan paket dulu di Bank Soal.</p></div>
+								<div class="p-4 text-sm text-muted-foreground"><p class="font-semibold text-foreground">Belum ada paket soal tertaut.</p><p class="mt-1 text-xs leading-5">Klik Tambah Baris, pilih rombel dan paket. Jika daftar paket kosong, buka modul Paket Soal untuk melihat dapur paket yang tersedia.</p></div>
 							{:else}
 								{#each packageMaps as row (row.local_id)}
 									<div class="grid gap-3 p-3 text-sm lg:grid-cols-[1fr_1.4fr_8rem_1fr_5rem] lg:items-end">

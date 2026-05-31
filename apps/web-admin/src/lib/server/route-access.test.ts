@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { canAccessProtectedRoute, hasAnyPermission, hasAnyRole, isAdminOnlyPath, isBankSoalPath, isKesiswaanPath, isMustChangePasswordAllowedPath, isPublicPath, isReadMethod, isStaffOperationPath, isStudentApiPath, isStudentPagePath, requiredPermissionsForPath } from './route-access';
+import { canAccessProtectedRoute, hasAnyPermission, hasAnyRole, isAdminOnlyPath, isBankSoalPath, isKesiswaanPath, isMustChangePasswordAllowedPath, isPaketSoalPath, isPublicPath, isReadMethod, isStaffOperationPath, isStudentApiPath, isStudentPagePath, requiredPermissionsForPath } from './route-access';
 
 describe('route access helpers', () => {
 	it('keeps account settings available while gating system settings', () => {
@@ -73,6 +73,9 @@ describe('route access helpers', () => {
 		expect(isBankSoalPath('/bank-soal/analisis-butir')).toBe(true);
 		expect(isBankSoalPath('/api/bank-soal/summary')).toBe(true);
 		expect(isBankSoalPath('/bank-soalship')).toBe(false);
+		expect(isPaketSoalPath('/paket-soal')).toBe(true);
+		expect(isPaketSoalPath('/paket-soalship')).toBe(false);
+		expect(requiredPermissionsForPath('/paket-soal', 'GET')).toEqual(['asesmen.read', 'bank_soal.read']);
 	});
 
 

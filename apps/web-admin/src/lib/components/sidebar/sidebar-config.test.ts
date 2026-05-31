@@ -28,6 +28,7 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'Siswa & Orang Tua',
 			'Nilai & Rapor',
 			'Bank Soal',
+			'Paket Soal',
 			'Asesmen CBT',
 			'Tata Usaha',
 			'Aset & Layanan',
@@ -52,22 +53,25 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'4 Siswa & Orang Tua',
 			'5 Nilai & Rapor',
 			'6 Bank Soal',
-			'7 Asesmen CBT',
-			'8 Tata Usaha',
-			'9 Aset & Layanan',
-			'10 Website',
-			'11 Pegawai & Kehadiran',
-			'12 Pengaturan'
+			'7 Paket Soal',
+			'8 Asesmen CBT',
+			'9 Tata Usaha',
+			'10 Aset & Layanan',
+			'11 Website',
+			'12 Pegawai & Kehadiran',
+			'13 Pengaturan'
 		]);
 		expect(numberedByHref.get('/bank-soal/tambah')).toMatchObject({ section: '6.2', numberedLabel: '6.2 Tambah Soal' });
-		expect(numberedByHref.get('/asesmen')).toMatchObject({ section: '7.1', numberedLabel: '7.1 Kegiatan Ujian' });
+		expect(numberedByHref.get('/paket-soal')).toMatchObject({ section: '7.1', numberedLabel: '7.1 Paket Soal' });
+		expect(numberedByHref.get('/asesmen')).toMatchObject({ section: '8.1', numberedLabel: '8.1 Kegiatan Ujian' });
 		expect(sidebarNumberedBreadcrumbLabel(numberedByHref.get('/settings/backups')!)).toBe(
-			'12 Pengaturan › 12.3 Sistem & Audit › 12.3.3 Backup & Restore'
+			'13 Pengaturan › 13.3 Sistem & Audit › 13.3.3 Backup & Restore'
 		);
 	});
 
 	it('adds route coverage for important admin index/action pages while excluding dynamic detail routes', () => {
 		expect(hrefs).toEqual(expect.arrayContaining([
+			'/paket-soal',
 			'/bank-soal/tambah',
 			'/bank-soal/impor',
 			'/governance/actions/calendar',

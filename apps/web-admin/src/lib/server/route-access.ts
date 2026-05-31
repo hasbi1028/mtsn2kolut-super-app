@@ -36,6 +36,7 @@ const GURU_SAFE_ASSESSMENT_SUPPORT_READ_PATHS = new Set([
 const GURU_SAFE_ASSESSMENT_SUPPORT_READ_PREFIXES = [] as const;
 
 const BANK_SOAL_PREFIXES = ['/bank-soal', '/api/bank-soal'] as const;
+const PAKET_SOAL_PREFIXES = ['/paket-soal'] as const;
 
 const STAFF_OPERATION_PREFIXES = [
 	'/document-cycles',
@@ -95,6 +96,10 @@ export function isGuruSafeAssessmentSupportReadPath(pathname: string, method: st
 
 export function isBankSoalPath(pathname: string) {
 	return BANK_SOAL_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
+}
+
+export function isPaketSoalPath(pathname: string) {
+	return PAKET_SOAL_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
 }
 
 export function isStaffOperationPath(pathname: string) {
@@ -170,6 +175,11 @@ function settingsPermission(pathname: string): string[] | undefined {
 	if (matchesPathSegment(pathname, '/settings/branding') || matchesPathSegment(pathname, '/api/branding')) return ['settings.branding'];
 	if (pathname === '/settings') return ['settings.account'];
 	return undefined;
+}
+
+function paketSoalPermission(pathname: string, method: string): string[] | undefined {
+	if (!isPaketSoalPath(pathname)) return undefined;
+	return isReadMethod(method) ? ['asesmen.read', 'bank_soal.read'] : ['asesmen.manage', 'bank_soal.update'];
 }
 
 function bankSoalPermission(pathname: string, method: string): string[] | undefined {
@@ -291,6 +301,7 @@ export function requiredPermissionsForPath(pathname: string, method: string): st
 		?? journalPermission(pathname, method)
 		?? employeePermission(pathname, method)
 		?? asesmenPermission(pathname, method)
+		?? paketSoalPermission(pathname, method)
 		?? bankSoalPermission(pathname, method)
 		?? staffOperationPermission(pathname, method)
 		?? [];
