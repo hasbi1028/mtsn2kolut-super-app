@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
+	import { summarizeDocumentPrintStatus } from '$lib/asesmen/document-print-readiness';
 
 	type KegiatanStatus = 'Draft' | 'Siap' | 'Berlangsung' | 'Selesai' | 'Arsip';
 	type DetailFeatureKey = 'paket' | 'peserta' | 'ruang' | 'sesi' | 'cetak' | 'hasil';
@@ -80,6 +81,7 @@
 		ruang: number;
 		sesi: number;
 		catatan: string;
+		kartu: number;
 	};
 
 	type DraftKegiatan = {
@@ -126,6 +128,10 @@
 	let assignmentNotice = $state('');
 	let placementError = $state('');
 	let csvImportNotice = $state('');
+	let documentNotice = $state('');
+	let documentError = $state('');
+	let issuingCards = $state(false);
+	let checkingCards = $state(false);
 	let loading = $state(true);
 	let saving = $state(false);
 	let loadingRombel = $state(false);
@@ -139,6 +145,7 @@
 	const selectedRombel = $derived(rombelOptions.filter((item) => selectedClassIds.includes(item.id)));
 	const selectedStudentTotal = $derived(selectedRombel.reduce((total, item) => total + Number(item.total_students ?? 0), 0));
 	const manualRoomOptions = $derived(Array.from(new Map(participantPlacements.filter((item) => item.room_id).map((item) => [item.room_id, item])).values()));
+	const documentPrintSummary = $derived(summarizeDocumentPrintStatus({ participantCount: selectedKegiatan?.peserta ?? 0, roomCount: selectedKegiatan?.ruang ?? 0, cardCount: selectedKegiatan?.kartu ?? 0 }));
 
 	const assignmentModeDescriptions: Record<AssignmentUiMode, string> = {
 		balanced_all: 'Rekomendasi default: peserta disebar seimbang ke semua ruang dan rombel diusahakan tidak berkumpul.',
@@ -222,7 +229,8 @@
 			sesi: Number(item.session_count ?? 0),
 			catatan: Number(item.card_count ?? 0) > 0
 				? `Data tersimpan di database. Kartu peserta terbit: ${item.card_count}.`
-				: 'Data tersimpan di database. Kartu/QR+PIN belum diterbitkan.'
+				: 'Data tersimpan di database. Kartu/QR+PIN belum diterbitkan.',
+			kartu: Number(item.card_count ?? 0)
 		};
 	}
 
@@ -268,6 +276,8 @@
 		assignmentNotice = '';
 		placementError = '';
 		csvImportNotice = '';
+		documentNotice = '';
+		documentError = '';
 	}
 
 	function toggleCreateForm() {
@@ -543,6 +553,53 @@
 		}
 	}
 
+	type ParticipantCard = { participant_id: string; token?: string; pin?: string; room_code?: string; seat_no?: number };
+	type IssueCardsResult = { count: number; cards: ParticipantCard[]; message: string };
+
+	async function checkParticipantCards() {
+		if (!selectedKegiatan) return;
+		documentError = '';
+		documentNotice = '';
+		checkingCards = true;
+		try {
+			const response = await fetch(clientApiPath`/api/asesmen/exams/${selectedKegiatan.id}/cards`);
+			const cards = await readClientApiData<ParticipantCard[]>(response);
+			documentNotice = `Daftar kartu terbaca: ${cards.length} peserta. Token/PIN mentah hanya tampil setelah tombol Terbitkan QR+PIN.`;
+		} catch (error) {
+			documentError = error instanceof Error ? error.message : 'Daftar kartu peserta belum dapat dibuka.';
+		} finally {
+			checkingCards = false;
+		}
+	}
+
+	async function issueParticipantCards() {
+		if (!selectedKegiatan || issuingCards) return;
+		if (selectedKegiatan.peserta <= 0 || selectedKegiatan.ruang <= 0) {
+			documentError = 'Lengkapi peserta dan simpan ruang sebelum menerbitkan QR+PIN.';
+			return;
+		}
+		const ok = window.confirm('Terbitkan QR+PIN kartu peserta sekarang? PIN hanya tampil pada hasil terbitkan ini; cetak/simpan PDF segera.');
+		if (!ok) return;
+		documentError = '';
+		documentNotice = '';
+		issuingCards = true;
+		try {
+			const response = await fetch(clientApiPath`/api/asesmen/exams/${selectedKegiatan.id}/issue-cards`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ regenerate: false })
+			});
+			const result = await readClientApiData<IssueCardsResult>(response);
+			documentNotice = result.message || `${result.count} kartu peserta siap. PIN hanya tampil pada hasil terbitkan ini.`;
+			kegiatan = kegiatan.map((item) => item.id === selectedKegiatan.id ? { ...item, kartu: result.count, catatan: `Data tersimpan di database. Kartu peserta terbit: ${result.count}.` } : item);
+			await loadKegiatan();
+		} catch (error) {
+			documentError = error instanceof Error ? error.message : 'Kartu peserta belum dapat diterbitkan.';
+		} finally {
+			issuingCards = false;
+		}
+	}
+
 </script>
 
 <svelte:head>
@@ -671,6 +728,39 @@
 						{#if participantPlacements.length === 0}<p class="mt-3 rounded-lg border border-dashed bg-background px-3 py-3 text-sm text-muted-foreground">Belum ada peserta dimuat. Simpan ruang & peserta dulu, lalu klik Ambil Peserta untuk edit manual.</p>{:else}
 							<div class="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">{#each participantPlacements as placement (placement.participant_id)}<div class="grid gap-2 rounded-lg border bg-background p-3 text-sm sm:grid-cols-[1fr_8rem_6rem_5rem]"><div class="min-w-0"><p class="truncate font-semibold text-foreground">{placement.student_name}</p><p class="text-xs text-muted-foreground">{placement.class_code} · {placement.room_code || 'Belum ruang'} · Kursi {placement.seat_no || '-'}</p></div><select class="rounded-md border bg-card px-2 py-2 text-xs" value={placement.room_id || ''} onchange={(event) => (placement.room_id = event.currentTarget.value)}>{#each manualRoomOptions as room}<option value={room.room_id}>{room.room_code} · {room.room_name}</option>{/each}</select><input class="rounded-md border bg-card px-2 py-2 text-xs" type="number" min="1" max={placement.room_capacity || capacityPerRoom} value={placement.seat_no || 1} oninput={(event) => (placement.seat_no = Number(event.currentTarget.value))} /><button type="button" class="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60" onclick={() => void moveParticipantSeat(placement, placement.room_id || '', Number(placement.seat_no || 1))} disabled={workingParticipantId === placement.participant_id}>{workingParticipantId === placement.participant_id ? '...' : 'Pindah'}</button></div>{/each}</div>
 						{/if}
+					</section>
+
+					<section class="rounded-xl border border-violet-200 bg-violet-50/50 p-4">
+						<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+							<div>
+								<p class="text-xs font-semibold tracking-[0.16em] text-violet-700 uppercase">Step 7 · Dokumen & Cetak</p>
+								<h3 class="text-base font-bold text-foreground">Kartu peserta dan lembar pengawas</h3>
+								<p class="mt-1 text-xs leading-5 text-muted-foreground">Terbitkan QR+PIN hanya setelah peserta, ruang, dan kursi final. PIN hanya tampil pada hasil terbitkan, jadi cetak/simpan PDF segera.</p>
+							</div>
+							<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void checkParticipantCards()} disabled={checkingCards || !selectedKegiatan}>{checkingCards ? 'Mengecek…' : 'Cek Kartu'}</button>
+						</div>
+						{#if documentError}<p class="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{documentError}</p>{/if}
+						{#if documentNotice}<p class="mt-3 rounded-md border border-violet-300 bg-violet-100 px-3 py-2 text-sm font-medium text-violet-800" role="status">{documentNotice}</p>{/if}
+						<div class="mt-4 divide-y rounded-xl border bg-background">
+							<div class="grid gap-3 p-3 text-sm sm:grid-cols-[1fr_9rem_10rem] sm:items-center">
+								<div class="min-w-0"><p class="font-semibold text-foreground">Kartu Peserta</p><p class="mt-1 text-xs leading-5 text-muted-foreground">QR login, PIN, ruang, dan nomor kursi per siswa.</p></div>
+								<span class="rounded-full border bg-card px-2.5 py-1 text-center text-[11px] font-semibold text-muted-foreground">{documentPrintSummary.participantCards.label}</span>
+								<div class="flex flex-wrap gap-2 sm:justify-end"><button type="button" class="rounded-md border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void checkParticipantCards()} disabled={checkingCards}>Daftar Kartu</button><button type="button" class="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void issueParticipantCards()} disabled={issuingCards || documentPrintSummary.participantCards.state === 'blocked'}>{issuingCards ? 'Menerbitkan…' : 'Terbitkan QR+PIN'}</button></div>
+								<p class="sm:col-span-3 text-xs leading-5 text-muted-foreground">{documentPrintSummary.participantCards.description}</p>
+							</div>
+							<div class="grid gap-3 p-3 text-sm sm:grid-cols-[1fr_9rem_10rem] sm:items-center">
+								<div class="min-w-0"><p class="font-semibold text-foreground">Lembar Pengawas Ruang</p><p class="mt-1 text-xs leading-5 text-muted-foreground">Daftar hadir dan kursi per ruang; tidak menampilkan PIN peserta.</p></div>
+								<span class="rounded-full border bg-card px-2.5 py-1 text-center text-[11px] font-semibold text-muted-foreground">{documentPrintSummary.supervisorSheets.label}</span>
+								<button type="button" class="rounded-md border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-60" disabled={documentPrintSummary.supervisorSheets.state === 'blocked'} onclick={() => window.print()}>Cetak Lembar</button>
+								<p class="sm:col-span-3 text-xs leading-5 text-muted-foreground">{documentPrintSummary.supervisorSheets.description}</p>
+							</div>
+							<div class="grid gap-3 p-3 text-sm sm:grid-cols-[1fr_9rem_10rem] sm:items-center">
+								<div class="min-w-0"><p class="font-semibold text-foreground">Checklist Arsip</p><p class="mt-1 text-xs leading-5 text-muted-foreground">Daftar kelengkapan dokumen sebelum pelaksanaan dan arsip.</p></div>
+								<span class="rounded-full border bg-card px-2.5 py-1 text-center text-[11px] font-semibold text-muted-foreground">{documentPrintSummary.archiveChecklist.label}</span>
+								<button type="button" class="rounded-md border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => window.print()}>Cetak Checklist</button>
+								<p class="sm:col-span-3 text-xs leading-5 text-muted-foreground">{documentPrintSummary.archiveChecklist.description}</p>
+							</div>
+						</div>
 					</section>
 
 					<section class="rounded-xl border bg-background p-4"><h3 class="text-sm font-semibold text-foreground">Checklist Persiapan</h3><div class="mt-3 space-y-2">{#each preparationChecklist as label, index}<div class="flex items-center gap-3 rounded-lg border bg-card px-3 py-2 text-sm"><span class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold text-muted-foreground">{index + 1}</span><span class="min-w-0 flex-1 text-foreground">{label}</span><span class="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Bertahap</span></div>{/each}</div></section>

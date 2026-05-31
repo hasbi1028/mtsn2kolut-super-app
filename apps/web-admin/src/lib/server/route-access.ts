@@ -244,6 +244,9 @@ function employeePermission(pathname: string, method: string): string[] | undefi
 
 function asesmenPermission(pathname: string, method: string): string[] | undefined {
 	if (!ASESMEN_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix))) return undefined;
+	if (/^\/api\/asesmen\/exams\/[^/]+\/(cards|issue-cards)\/?$/.test(pathname.split('?')[0] ?? pathname)) {
+		return ['asesmen.cards_issue', 'asesmen.manage'];
+	}
 	return isReadMethod(method) ? ['asesmen.read'] : ['asesmen.manage', 'asesmen.event_manage'];
 }
 

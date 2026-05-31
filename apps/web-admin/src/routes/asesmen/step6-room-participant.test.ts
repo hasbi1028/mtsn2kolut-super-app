@@ -63,4 +63,18 @@ describe('/asesmen Step 6 room and participant workflow', () => {
 		expect(payloadSource).not.toContain('balance_rooms');
 		expect(payloadSource).not.toContain('spread_rombel');
 	});
+	describe('/asesmen Step 7 document and print workflow', () => {
+		it('exposes a compact Dokumen & Cetak panel with guarded QR+PIN issuance', () => {
+			const source = pageSource();
+			expect(source).toContain('Step 7 · Dokumen & Cetak');
+			expect(source).toContain('Kartu Peserta');
+			expect(source).toContain('Lembar Pengawas Ruang');
+			expect(source).toContain('Checklist Arsip');
+			expect(source).toContain('/cards');
+			expect(source).toContain('/issue-cards');
+			expect(source).toContain('Terbitkan QR+PIN');
+			expect(source).toContain('PIN hanya tampil pada hasil terbitkan');
+		});
+	});
+
 });

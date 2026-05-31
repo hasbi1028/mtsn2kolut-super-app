@@ -278,6 +278,8 @@ describe('route access helpers', () => {
 		expect(requiredPermissionsForPath('/api/users/user-1/force-password-change', 'POST')).toEqual(['users.reset_password']);
 		expect(requiredPermissionsForPath('/api/users/user-1/status', 'PATCH')).toEqual(['users.deactivate']);
 		expect(requiredPermissionsForPath('/api/users/user-1/profile-link', 'PATCH')).toEqual(['users.update']);
+		expect(requiredPermissionsForPath('/api/asesmen/exams/exam-1/cards', 'GET')).toEqual(['asesmen.cards_issue', 'asesmen.manage']);
+		expect(requiredPermissionsForPath('/api/asesmen/exams/exam-1/issue-cards', 'POST')).toEqual(['asesmen.cards_issue', 'asesmen.manage']);
 		expect(requiredPermissionsForPath('/bank-soal/tambah', 'GET')).toEqual(['bank_soal.create']);
 		expect(requiredPermissionsForPath('/bank-soal/verifikasi', 'GET')).toEqual(['bank_soal.review']);
 		expect(requiredPermissionsForPath('/bank-soal/impor', 'GET')).toEqual(['bank_soal.import']);
