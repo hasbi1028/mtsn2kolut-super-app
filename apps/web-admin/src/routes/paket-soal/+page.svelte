@@ -1,6 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { clientApiPathWithQuery, readClientApiData } from '$lib/client/api';
+	import {
+		buildPackageReadinessCsv,
+		filterPackagesByReadiness,
+		packageReadinessBadge,
+		packageReadiness
+	} from '$lib/asesmen/package-readiness';
+	import type { PackageReadinessFilter, PackageReadinessStatus } from '$lib/asesmen/package-readiness';
 
 	type PackageOption = {
 		id: string;
@@ -15,6 +22,7 @@
 		session_count: number;
 		locked?: boolean;
 		snapshot_version?: number;
+		readiness?: PackageReadinessStatus;
 	};
 
 	type SubjectOption = {
@@ -49,23 +57,7 @@
 
 	type QuestionsPayload = QuestionPoolItem[] | { items?: QuestionPoolItem[] };
 
-	type PackageReadiness = {
-		status?: string;
-		target_pg_count?: number;
-		target_essay_count?: number;
-		missing_pg_count?: number;
-		missing_essay_count?: number;
-		question_count?: number;
-		pg_count?: number;
-		essay_count?: number;
-		total_points?: number;
-		published_count?: number;
-		unpublished_count?: number;
-		metadata_gap_count?: number;
-		session_count?: number;
-		locked?: boolean;
-		ready?: boolean;
-	};
+	type PackageReadiness = PackageReadinessStatus;
 
 	type PackageDetailRow = PackageOption & {
 		randomize_questions?: boolean;
@@ -122,7 +114,7 @@
 	let builderNotice = $state('');
 	let search = $state('');
 	let subjectFilter = $state('all');
-	let readinessFilter = $state<'all' | 'empty' | 'ready' | 'locked' | 'used'>('all');
+	let readinessFilter = $state<PackageReadinessFilter>('all');
 	let poolSearch = $state('');
 	let poolType = $state('all');
 	let poolLevel = $state('all');
@@ -155,18 +147,14 @@
 		].filter(([id]) => Boolean(id))).values())
 			.sort((a, b) => subjectName(a).localeCompare(subjectName(b)))
 	);
-	const filteredPackages = $derived(packages.filter((item) => {
+	const searchedPackages = $derived(packages.filter((item) => {
 		const query = search.trim().toLowerCase();
 		const haystack = `${item.title} ${item.subject_name} ${item.subject_code ?? ''} ${item.description ?? ''}`.toLowerCase();
 		const matchesSearch = !query || haystack.includes(query);
 		const matchesSubject = subjectFilter === 'all' || item.subject_id === subjectFilter;
-		const matchesReadiness = readinessFilter === 'all'
-			|| (readinessFilter === 'empty' && Number(item.question_count ?? 0) === 0)
-			|| (readinessFilter === 'ready' && Number(item.question_count ?? 0) > 0 && !item.locked)
-			|| (readinessFilter === 'locked' && Boolean(item.locked))
-			|| (readinessFilter === 'used' && Number(item.session_count ?? 0) > 0);
-		return matchesSearch && matchesSubject && matchesReadiness;
+		return matchesSearch && matchesSubject;
 	}));
+	const filteredPackages = $derived(filterPackagesByReadiness(searchedPackages, readinessFilter));
 	const availablePool = $derived(questionPool.filter((item) => {
 		const query = poolSearch.trim().toLowerCase();
 		const haystack = `${item.code ?? ''} ${item.question_text ?? ''} ${item.material_topic ?? ''} ${item.author_display_name ?? ''}`.toLowerCase();
@@ -181,9 +169,11 @@
 	const selectedPgCount = $derived(selectedQuestions.filter((item) => isPgType(item.question_type)).length);
 	const selectedEssayCount = $derived(selectedQuestions.filter((item) => !isPgType(item.question_type)).length);
 	const totalQuestions = $derived(packages.reduce((total, item) => total + Number(item.question_count ?? 0), 0));
-	const emptyCount = $derived(packages.filter((item) => Number(item.question_count ?? 0) === 0).length);
-	const lockedCount = $derived(packages.filter((item) => item.locked).length);
-	const usedCount = $derived(packages.filter((item) => Number(item.session_count ?? 0) > 0).length);
+	const emptyCount = $derived(packages.filter((item) => Number(packageReadiness(item).question_count ?? 0) === 0).length);
+	const readyCount = $derived(packages.filter((item) => packageReadiness(item).ready && !packageReadiness(item).locked).length);
+	const gapCount = $derived(packages.filter((item) => Number(packageReadiness(item).metadata_gap_count ?? 0) > 0).length);
+	const lockedCount = $derived(packages.filter((item) => packageReadiness(item).locked || item.locked).length);
+	const usedCount = $derived(packages.filter((item) => Number(packageReadiness(item).session_count ?? item.session_count ?? 0) > 0).length);
 	const activeReadiness = $derived(activeDetail?.readiness ?? null);
 	const activeLocked = $derived(Boolean(activeReadiness?.locked || hasValue(activeDetail?.package?.locked_at) || activeDetail?.package?.locked));
 
@@ -197,7 +187,27 @@
 		error = '';
 		try {
 			const response = await fetch('/api/asesmen/package-options');
-			packages = await readClientApiData<PackageOption[]>(response);
+			const optionItems = await readClientApiData<PackageOption[]>(response);
+			const detailResults = await Promise.allSettled(
+				optionItems.map((item) =>
+					fetch(`/api/asesmen/packages/${encodeURIComponent(item.id)}`)
+						.then((detailResponse) => readClientApiData<PackageDetail>(detailResponse))
+				)
+			);
+			packages = optionItems.map((item, index) => {
+				const result = detailResults[index];
+				const readiness = result?.status === 'fulfilled' ? result.value.readiness : undefined;
+				return {
+					...item,
+					readiness,
+					locked: readiness?.locked ?? item.locked,
+					session_count: readiness?.session_count ?? item.session_count,
+					question_count: readiness?.question_count ?? item.question_count
+				};
+			});
+			if (detailResults.some((result) => result.status === 'rejected')) {
+				error = 'Daftar paket terbuka, tetapi sebagian ringkasan kesiapan belum lengkap. Klik Refresh untuk mencoba lagi.';
+			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Daftar Paket Soal belum dapat dibuka.';
 			packages = [];
@@ -449,19 +459,31 @@
 		}
 	}
 
+	function exportReadinessCsv() {
+		const csv = buildPackageReadinessCsv(filteredPackages);
+		const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		const stamp = new Date().toISOString().slice(0, 10);
+		link.href = url;
+		link.download = `kesiapan-paket-soal-${stamp}.csv`;
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+		URL.revokeObjectURL(url);
+	}
 
 	function statusLabel(item: PackageOption) {
-		if (item.locked) return 'Terkunci';
-		if (Number(item.question_count ?? 0) === 0) return 'Kosong';
-		if (Number(item.session_count ?? 0) > 0) return 'Dipakai';
-		return 'Siap dirakit';
+		return packageReadinessBadge(item).label;
 	}
 
 	function statusClass(item: PackageOption) {
-		if (item.locked) return 'border-slate-300 bg-slate-100 text-slate-700';
-		if (Number(item.question_count ?? 0) === 0) return 'border-amber-300 bg-amber-50 text-amber-700';
-		if (Number(item.session_count ?? 0) > 0) return 'border-sky-300 bg-sky-50 text-sky-700';
-		return 'border-emerald-300 bg-emerald-50 text-emerald-700';
+		const tone = packageReadinessBadge(item).tone;
+		if (tone === 'slate') return 'border-slate-300 bg-slate-100 text-slate-700';
+		if (tone === 'amber') return 'border-amber-300 bg-amber-50 text-amber-700';
+		if (tone === 'sky') return 'border-sky-300 bg-sky-50 text-sky-700';
+		if (tone === 'emerald') return 'border-emerald-300 bg-emerald-50 text-emerald-700';
+		return 'border-orange-300 bg-orange-50 text-orange-700';
 	}
 
 	function subjectId(item: SubjectOption) {
@@ -577,10 +599,11 @@
 		<p class="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive" role="alert">{error}</p>
 	{/if}
 
-	<section class="grid gap-3 md:grid-cols-4">
+	<section class="grid gap-3 md:grid-cols-5">
 		<div class="rounded-xl border bg-background p-4"><p class="text-xs font-medium text-muted-foreground">Total paket</p><p class="mt-1 text-2xl font-bold">{packages.length}</p></div>
 		<div class="rounded-xl border bg-background p-4"><p class="text-xs font-medium text-muted-foreground">Total soal tertaut</p><p class="mt-1 text-2xl font-bold">{totalQuestions}</p></div>
-		<div class="rounded-xl border bg-background p-4"><p class="text-xs font-medium text-muted-foreground">Kosong</p><p class="mt-1 text-2xl font-bold">{emptyCount}</p></div>
+		<div class="rounded-xl border bg-background p-4"><p class="text-xs font-medium text-muted-foreground">Siap dikunci</p><p class="mt-1 text-2xl font-bold">{readyCount}</p></div>
+		<div class="rounded-xl border bg-background p-4"><p class="text-xs font-medium text-muted-foreground">Kosong/gap</p><p class="mt-1 text-2xl font-bold">{emptyCount}/{gapCount}</p></div>
 		<div class="rounded-xl border bg-background p-4"><p class="text-xs font-medium text-muted-foreground">Terkunci/dipakai</p><p class="mt-1 text-2xl font-bold">{lockedCount}/{usedCount}</p></div>
 	</section>
 
@@ -600,7 +623,7 @@
 		<div class="border-b border-border px-4 py-3">
 			<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
 				<div><h2 class="text-base font-semibold text-foreground">Daftar Paket</h2><p class="text-xs text-muted-foreground">Dibaca dari paket aktif yang sudah ada di backend.</p></div>
-				<div class="grid gap-2 sm:grid-cols-3 lg:min-w-[42rem]">
+				<div class="grid gap-2 sm:grid-cols-2 lg:min-w-[50rem] lg:grid-cols-[1.2fr_1fr_1fr_auto]">
 					<input class="min-w-0 rounded-md border bg-background px-3 py-2 text-sm" placeholder="Cari paket/mapel..." bind:value={search} />
 					<select class="min-w-0 rounded-md border bg-background px-3 py-2 text-sm" bind:value={subjectFilter}>
 						<option value="all">Semua mapel</option>
@@ -609,10 +632,14 @@
 					<select class="min-w-0 rounded-md border bg-background px-3 py-2 text-sm" bind:value={readinessFilter}>
 						<option value="all">Semua status</option>
 						<option value="empty">Kosong</option>
-						<option value="ready">Siap dirakit</option>
+						<option value="ready">Siap dikunci</option>
+						<option value="kurang_pg">Kurang PG</option>
+						<option value="kurang_essay">Kurang Essay</option>
+						<option value="metadata_gap">Metadata Gap</option>
 						<option value="locked">Terkunci</option>
 						<option value="used">Dipakai</option>
 					</select>
+					<button type="button" class="rounded-md border bg-background px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-60" onclick={exportReadinessCsv} disabled={filteredPackages.length === 0}>Export CSV</button>
 				</div>
 			</div>
 		</div>
@@ -622,16 +649,17 @@
 			<div class="px-4 py-8 text-center"><p class="text-sm font-semibold text-foreground">Belum ada paket sesuai filter.</p><p class="mt-1 text-xs text-muted-foreground">Klik Buat Paket untuk merakit paket dari soal terbit.</p></div>
 		{:else}
 			<div class="overflow-x-auto">
-				<table class="min-w-[820px] w-full text-left text-sm">
+				<table class="min-w-[980px] w-full text-left text-sm">
 					<thead class="border-b bg-muted/40 text-xs text-muted-foreground">
-						<tr><th class="px-4 py-3 font-semibold">Paket</th><th class="px-4 py-3 font-semibold">Mapel</th><th class="px-4 py-3 font-semibold">Soal</th><th class="px-4 py-3 font-semibold">Durasi</th><th class="px-4 py-3 font-semibold">Pemakaian</th><th class="px-4 py-3 font-semibold">Status</th><th class="px-4 py-3 font-semibold text-right">Aksi</th></tr>
+						<tr><th class="px-4 py-3 font-semibold">Paket</th><th class="px-4 py-3 font-semibold">Mapel</th><th class="px-4 py-3 font-semibold">Komposisi</th><th class="px-4 py-3 font-semibold">Gap</th><th class="px-4 py-3 font-semibold">Durasi</th><th class="px-4 py-3 font-semibold">Pemakaian</th><th class="px-4 py-3 font-semibold">Status</th><th class="px-4 py-3 font-semibold text-right">Aksi</th></tr>
 					</thead>
 					<tbody class="divide-y">
 						{#each filteredPackages as item (item.id)}
 							<tr class="hover:bg-muted/30">
 								<td class="px-4 py-3"><p class="font-semibold text-foreground">{item.title}</p><p class="mt-1 max-w-md truncate text-xs text-muted-foreground">{item.description || 'Belum ada deskripsi.'}</p></td>
 								<td class="px-4 py-3"><p class="font-medium text-foreground">{item.subject_name}</p><p class="text-xs text-muted-foreground">{item.subject_code || '-'}</p></td>
-								<td class="px-4 py-3 font-semibold text-foreground">{item.question_count}</td>
+								<td class="px-4 py-3 text-xs text-muted-foreground"><p class="font-semibold text-foreground">{packageReadiness(item).question_count ?? item.question_count} soal</p><p>PG {packageReadiness(item).pg_count ?? 0}/{packageReadiness(item).target_pg_count ?? 20} · Essay {packageReadiness(item).essay_count ?? 0}/{packageReadiness(item).target_essay_count ?? 5}</p></td>
+								<td class="px-4 py-3 text-xs text-muted-foreground"><p>Metadata: {packageReadiness(item).metadata_gap_count ?? 0}</p><p>Belum terbit: {packageReadiness(item).unpublished_count ?? 0}</p></td>
 								<td class="px-4 py-3 text-muted-foreground">{item.duration_minutes || 0} menit</td>
 								<td class="px-4 py-3 text-muted-foreground">{item.session_count || 0} sesi</td>
 								<td class="px-4 py-3"><span class={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusClass(item)}`}>{statusLabel(item)}</span></td>
@@ -650,6 +678,7 @@
 			<li>Modul mandiri membaca paket aktif dan menjadi jembatan Bank Soal → Paket Soal → Asesmen.</li>
 			<li>Builder membuat paket langsung dari soal terbit, sehingga tidak membuat paket kosong yang belum valid.</li>
 			<li>Detail/edit, validasi kesiapan, lock/snapshot, dan clone/revisi tersedia di aksi Detail/Edit.</li>
+			<li>Daftar paket sekarang bisa difilter Siap/Kurang PG/Kurang Essay/Metadata Gap/Terkunci dan diekspor CSV untuk audit sebelum gladi.</li>
 		</ul>
 	</section>
 
