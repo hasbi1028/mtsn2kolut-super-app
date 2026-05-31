@@ -7,7 +7,7 @@ const pageSource = () => readFileSync(path.resolve(process.cwd(), 'src/routes/as
 describe('/asesmen Step 6 room and participant workflow', () => {
 	it('exposes room planning controls and calls preview/apply endpoints from the detail drawer', () => {
 		const source = pageSource();
-		expect(source).toContain('Step 6 · Ruang & Peserta');
+		expect(source).toContain('Langkah 3 · Ruang & Peserta');
 		expect(source).toContain('/api/academic/rombel');
 		expect(source).toContain('/assignment-preview');
 		expect(source).toContain('/assignment-apply');
@@ -77,8 +77,8 @@ describe('/asesmen Step 6 room and participant workflow', () => {
 	describe('/asesmen Slice 1 package mapping gate', () => {
 		it('exposes package mapping controls before room/session/print work', () => {
 			const source = pageSource();
-			expect(source).toContain('Slice 1: Kegiatan Asesmen memakai Paket Soal');
-			expect(source).toContain('Step 7A · Paket Soal & Sesi');
+			expect(source).toContain('Kelola kegiatan ujian dari satu daftar ringkas');
+			expect(source).toContain('Langkah 2 · Paket Soal');
 			expect(source).toContain('/api/asesmen/package-options');
 			expect(source).toContain('/package-maps');
 			expect(source).toContain('Simpan Paket Soal');
@@ -98,7 +98,7 @@ describe('/asesmen Step 6 room and participant workflow', () => {
 	describe('/asesmen Step 7 document and print workflow', () => {
 		it('exposes a compact Dokumen & Cetak panel with guarded QR+PIN issuance', () => {
 			const source = pageSource();
-			expect(source).toContain('Step 7 · Dokumen & Cetak');
+			expect(source).toContain('Langkah 5 · Dokumen & Cetak');
 			expect(source).toContain('Kartu Peserta');
 			expect(source).toContain('Lembar Pengawas Ruang');
 			expect(source).toContain('Checklist Arsip');

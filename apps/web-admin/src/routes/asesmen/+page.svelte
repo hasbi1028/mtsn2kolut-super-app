@@ -4,7 +4,7 @@
 	import { summarizeDocumentPrintStatus } from '$lib/asesmen/document-print-readiness';
 
 	type KegiatanStatus = 'Draft' | 'Siap' | 'Berlangsung' | 'Selesai' | 'Arsip';
-	type DetailFeatureKey = 'paket' | 'peserta' | 'ruang' | 'sesi' | 'cetak' | 'hasil';
+	type DetailFeatureKey = 'paket' | 'peserta' | 'ruang' | 'manual' | 'sesi' | 'cetak' | 'hasil';
 
 	type AssessmentExam = {
 		id: string;
@@ -221,6 +221,7 @@
 		{ key: 'paket', label: 'Paket Soal', description: 'Menautkan paket soal Bank Soal ke kegiatan.' },
 		{ key: 'peserta', label: 'Peserta', description: 'Menambahkan siswa peserta dari rombel.' },
 		{ key: 'ruang', label: 'Ruang', description: 'Menyiapkan ruang, kapasitas, dan tempat duduk.' },
+		{ key: 'manual', label: 'Mode Lengkap', description: 'Edit manual, CSV, dan alat panitia lanjutan.' },
 		{ key: 'sesi', label: 'Sesi', description: 'Jadwal sesi ujian per ruang/paket.' },
 		{ key: 'cetak', label: 'Cetak', description: 'Kartu peserta dan lembar pengawas.' },
 		{ key: 'hasil', label: 'Hasil', description: 'Rekap nilai dan arsip pelaksanaan.' }
@@ -834,7 +835,7 @@
 				<p class="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">Asesmen / CBT</p>
 				<h1 class="text-2xl font-bold tracking-tight text-foreground md:text-3xl">Kegiatan Ujian</h1>
 				<p class="max-w-3xl text-sm leading-6 text-muted-foreground">
-					Slice 1: Kegiatan Asesmen memakai Paket Soal sebagai pintu pertama. Operator menautkan paket siap/locked dulu sebelum lanjut ke ruang, sesi, cetak, dan pelaksanaan.
+					Kelola kegiatan ujian dari satu daftar ringkas. Tautkan Paket Soal lebih dulu, lalu lanjutkan peserta, ruang, sesi, cetak, dan pelaksanaan.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
@@ -852,13 +853,13 @@
 			<aside class="relative flex h-full w-full max-w-xl flex-col border-l border-border bg-card shadow-2xl sm:w-[34rem]">
 				<div class="border-b border-border px-5 py-4">
 					<div class="flex items-start justify-between gap-3">
-						<div class="space-y-1"><p class="text-xs font-semibold tracking-[0.18em] text-muted-foreground uppercase">Step 5 · Database</p><h2 id="drawer-title" class="text-lg font-bold text-foreground">Buat Kegiatan Baru</h2><p class="text-xs leading-5 text-muted-foreground">Data dasar kegiatan akan tersimpan sebagai draft asesmen.</p></div>
+						<div class="space-y-1"><p class="text-xs font-semibold tracking-[0.18em] text-muted-foreground uppercase">Langkah 1 · Kegiatan</p><h2 id="drawer-title" class="text-lg font-bold text-foreground">Buat Kegiatan Baru</h2><p class="text-xs leading-5 text-muted-foreground">Data dasar kegiatan tersimpan sebagai draft ujian.</p></div>
 						<button type="button" class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-bold text-muted-foreground hover:bg-muted" aria-label="Tutup" onclick={toggleCreateForm}>×</button>
 					</div>
 				</div>
 				<form class="flex min-h-0 flex-1 flex-col" onsubmit={(event) => { event.preventDefault(); void submitKegiatan(); }}>
 					<div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-						<div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">Form ini sudah menulis database. Kartu/QR+PIN belum diterbitkan pada step ini.</div>
+						<div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">Kegiatan akan tersimpan sebagai draft. Kartu/QR+PIN belum diterbitkan pada tahap ini.</div>
 						<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Nama kegiatan</span><input class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Contoh: UAS Genap" bind:value={draft.nama} /></label>
 						<div class="grid gap-3 sm:grid-cols-2"><label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Jenis kegiatan</span><select class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.jenis}><option>Ujian Semester</option><option>Gladi CBT</option><option>Tryout</option><option>Simulasi</option></select></label><label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Mode pelaksanaan</span><select class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.mode}><option>CBT Web</option><option>Android</option><option>Web / Android</option><option>Kertas / Campuran</option></select></label></div>
 						<div class="grid gap-3 sm:grid-cols-2"><label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Tahun ajaran</span><input class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.tahunAjaran} /></label><label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Semester</span><select class="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={draft.semester}><option>Ganjil</option><option>Genap</option></select></label></div>
@@ -887,14 +888,15 @@
 
 					<section class="rounded-xl border bg-background p-4">
 						<h3 class="text-sm font-semibold text-foreground">Menu Dalam Kegiatan</h3>
-						<div class="mt-3 grid gap-2 sm:grid-cols-3">{#each detailFeatures as feature}<button type="button" class={`rounded-lg border px-3 py-2 text-left text-sm transition ${activeDetailFeature === feature.key ? 'border-primary bg-primary/10 text-primary' : 'bg-card text-foreground hover:bg-muted'}`} onclick={() => (activeDetailFeature = feature.key)}><span class="block font-semibold">{feature.label}</span><span class="mt-1 block text-[11px] leading-4 text-muted-foreground">{feature.description}</span></button>{/each}</div>
-						{#if activeFeature && !['paket', 'ruang', 'peserta', 'cetak'].includes(activeFeature.key)}<div class="mt-3 rounded-lg border border-dashed bg-muted/30 px-3 py-3"><p class="text-sm font-semibold text-foreground">{activeFeature.label}</p><p class="mt-1 text-xs leading-5 text-muted-foreground">{activeFeature.description} Belum dibuka pada step ini agar migrasi tetap kecil dan aman.</p></div>{/if}
+						<div class="mt-3 grid gap-2 sm:grid-cols-3">{#each detailFeatures as feature}<button type="button" class={`rounded-lg border px-3 py-2 text-left text-sm transition ${activeDetailFeature === feature.key ? 'border-primary bg-primary/10 text-primary' : 'bg-card text-foreground hover:bg-muted'}`} aria-pressed={activeDetailFeature === feature.key} onclick={() => (activeDetailFeature = feature.key)}><span class="block font-semibold">{feature.label}</span><span class="mt-1 block text-[11px] leading-4 text-muted-foreground">{feature.description}</span></button>{/each}</div>
+						{#if activeFeature && !['paket', 'ruang', 'peserta', 'manual', 'cetak'].includes(activeFeature.key)}<div class="mt-3 rounded-lg border border-dashed bg-muted/30 px-3 py-3"><p class="text-sm font-semibold text-foreground">{activeFeature.label}</p><p class="mt-1 text-xs leading-5 text-muted-foreground">{activeFeature.description} Belum dibuka di tampilan ringkas ini agar alur operator tetap sederhana.</p></div>{/if}
 					</section>
 
+					{#if activeDetailFeature === 'paket'}
 					<section class="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4">
 						<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 							<div>
-								<p class="text-xs font-semibold tracking-[0.16em] text-indigo-700 uppercase">Step 7A · Paket Soal & Sesi</p>
+								<p class="text-xs font-semibold tracking-[0.16em] text-indigo-700 uppercase">Langkah 2 · Paket Soal</p>
 								<h3 class="text-base font-bold text-foreground">Tautkan paket soal ke rombel</h3>
 								<p class="mt-1 text-xs leading-5 text-muted-foreground">Pilih paket dari Bank Soal untuk tiap rombel/mapel. Tahap ini belum menerbitkan kartu, QR, atau PIN.</p>
 							</div>
@@ -934,17 +936,19 @@
 							<button type="button" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void savePackageMaps()} disabled={savingPackages || packageMaps.length === 0}>{savingPackages ? 'Menyimpan…' : 'Simpan Paket Soal'}</button>
 						</div>
 					</section>
+					{/if}
 
-					{#if !packageGateReady}
+					{#if !packageGateReady && activeDetailFeature !== 'paket'}
 						<div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800" role="status">
 							<strong class="block text-amber-900">Paket Soal belum siap</strong>
 							{packageGateMessage}
 						</div>
 					{/if}
 
+					{#if activeDetailFeature === 'ruang' || activeDetailFeature === 'peserta'}
 					<section class="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
 						<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-							<div><p class="text-xs font-semibold tracking-[0.16em] text-emerald-700 uppercase">Step 6 · Ruang & Peserta</p><h3 class="text-base font-bold text-foreground">Wizard penempatan ruang</h3><p class="mt-1 text-xs leading-5 text-muted-foreground">Alur baru: pilih rombel → atur pola acak → review peta ruang visual → edit manual bila perlu. Kartu/QR+PIN belum diterbitkan.</p></div>
+							<div><p class="text-xs font-semibold tracking-[0.16em] text-emerald-700 uppercase">Langkah 3 · Ruang & Peserta</p><h3 class="text-base font-bold text-foreground">Wizard penempatan ruang</h3><p class="mt-1 text-xs leading-5 text-muted-foreground">Alur baru: pilih rombel → atur pola acak → review peta ruang visual → edit manual bila perlu. Kartu/QR+PIN belum diterbitkan.</p></div>
 							<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={loadRombelOptions} disabled={loadingRombel}>{loadingRombel ? 'Memuat…' : 'Refresh Rombel'}</button>
 						</div>
 
@@ -988,8 +992,10 @@
 
 						<div class="mt-4 rounded-lg border bg-background p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="text-sm font-semibold text-foreground">③ Review Ruang · Peta Ruang Visual</h4><p class="text-xs text-muted-foreground">Klik preview untuk melihat isi ruang sebelum simpan.</p></div>{#if assignmentPreview}{#if assignmentPreview.applied}<div class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800"><strong class="block text-emerald-900">Ringkasan hasil penempatan tersimpan</strong>Peserta sudah ditempatkan ke ruang/kursi. QR+PIN dan kartu peserta belum diterbitkan dari tahap ini.</div>{/if}<div class="mt-3 grid gap-2 sm:grid-cols-2">{#each assignmentPreview.rooms as room}<div class="rounded-xl border bg-card p-3 text-sm"><div class="flex items-center justify-between gap-2"><strong>{room.code}</strong><span class="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold">{room.assigned_count}/{room.capacity}</span></div><div class="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div class="h-full rounded-full bg-emerald-500" style={`width: ${Math.min(100, Math.round((room.assigned_count / Math.max(1, room.capacity)) * 100))}%`}></div></div><p class="mt-2 text-xs text-muted-foreground">{room.name}</p>{#if room.grade_levels?.length}<div class="mt-2 flex flex-wrap gap-1">{#each room.grade_levels as level}<span class="rounded-full border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{gradeLabel(level)}</span>{/each}</div>{/if}{#if room.class_summary?.length}<div class="mt-2 flex flex-wrap gap-1">{#each room.class_summary as summary}<span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700" title={`${summary.class_name || summary.class_code} · ${summary.count} siswa`}>{classSummaryLabel(summary)}</span>{/each}</div>{:else}<p class="mt-2 text-[11px] text-muted-foreground">Komposisi rombel tampil setelah penempatan disimpan.</p>{/if}</div>{/each}</div><div class="mt-3 grid gap-2 text-sm sm:grid-cols-4"><div><p class="text-xs text-muted-foreground">Peserta</p><p class="text-xl font-bold">{assignmentPreview.total_participants}</p></div><div><p class="text-xs text-muted-foreground">Tertampung</p><p class="text-xl font-bold">{assignmentPreview.assigned_total}</p></div><div><p class="text-xs text-muted-foreground">Sisa</p><p class="text-xl font-bold">{assignmentPreview.unassigned_total}</p></div><div><p class="text-xs text-muted-foreground">Status</p><p class="text-sm font-semibold">{assignmentPreview.applied ? 'Tersimpan' : 'Preview'}</p></div></div><p class="mt-2 text-xs leading-5 text-muted-foreground">{assignmentPreview.message}</p>{:else}<p class="mt-3 rounded-lg border border-dashed bg-muted/30 px-3 py-3 text-sm text-muted-foreground">Belum ada preview. Pilih rombel dan klik Preview Pembagian Ruang.</p>{/if}</div>
 					</section>
+					{/if}
 
 
+					{#if activeDetailFeature === 'manual'}
 					<section class="rounded-xl border border-sky-200 bg-sky-50/50 p-4">
 						<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 							<div><p class="text-xs font-semibold tracking-[0.16em] text-sky-700 uppercase">Mode Manual · Acak Sendiri</p><h3 class="text-base font-bold text-foreground">Atur peserta per ruang dan nomor kursi</h3><p class="mt-1 text-xs leading-5 text-muted-foreground">Ambil daftar peserta setelah simpan ruang. Tombol Acak Tampilan hanya mengubah urutan tampil agar Bapak bisa memilih manual; penyimpanan tetap per peserta lewat tombol Pindah.</p></div>
@@ -1001,11 +1007,13 @@
 							<div class="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">{#each participantPlacements as placement (placement.participant_id)}<div class="grid gap-2 rounded-lg border bg-background p-3 text-sm sm:grid-cols-[1fr_8rem_6rem_5rem]"><div class="min-w-0"><p class="truncate font-semibold text-foreground">{placement.student_name}</p><p class="text-xs text-muted-foreground">{placement.class_code} · {placement.room_code || 'Belum ruang'} · Kursi {placement.seat_no || '-'}</p></div><select class="rounded-md border bg-card px-2 py-2 text-xs" value={placement.room_id || ''} onchange={(event) => (placement.room_id = event.currentTarget.value)}>{#each manualRoomOptions as room}<option value={room.room_id}>{room.room_code} · {room.room_name}</option>{/each}</select><input class="rounded-md border bg-card px-2 py-2 text-xs" type="number" min="1" max={placement.room_capacity || capacityPerRoom} value={placement.seat_no || 1} oninput={(event) => (placement.seat_no = Number(event.currentTarget.value))} /><button type="button" class="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60" onclick={() => void moveParticipantSeat(placement, placement.room_id || '', Number(placement.seat_no || 1))} disabled={workingParticipantId === placement.participant_id}>{workingParticipantId === placement.participant_id ? '...' : 'Pindah'}</button></div>{/each}</div>
 						{/if}
 					</section>
+					{/if}
 
+					{#if activeDetailFeature === 'cetak'}
 					<section class="rounded-xl border border-violet-200 bg-violet-50/50 p-4">
 						<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 							<div>
-								<p class="text-xs font-semibold tracking-[0.16em] text-violet-700 uppercase">Step 7 · Dokumen & Cetak</p>
+								<p class="text-xs font-semibold tracking-[0.16em] text-violet-700 uppercase">Langkah 5 · Dokumen & Cetak</p>
 								<h3 class="text-base font-bold text-foreground">Kartu peserta dan lembar pengawas</h3>
 								<p class="mt-1 text-xs leading-5 text-muted-foreground">Terbitkan QR+PIN hanya setelah peserta, ruang, dan kursi final. PIN hanya tampil pada hasil terbitkan, jadi cetak/simpan PDF segera.</p>
 							</div>
@@ -1034,8 +1042,11 @@
 							</div>
 						</div>
 					</section>
+					{/if}
 
+					{#if activeDetailFeature === 'manual'}
 					<section class="rounded-xl border bg-background p-4"><h3 class="text-sm font-semibold text-foreground">Checklist Persiapan</h3><div class="mt-3 space-y-2">{#each preparationChecklist as label, index}<div class="flex items-center gap-3 rounded-lg border bg-card px-3 py-2 text-sm"><span class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold text-muted-foreground">{index + 1}</span><span class="min-w-0 flex-1 text-foreground">{label}</span><span class="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Bertahap</span></div>{/each}</div></section>
+					{/if}
 				</div>
 				<div class="border-t border-border bg-card px-5 py-4"><button type="button" class="w-full rounded-md border px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted" onclick={closeKegiatanDetail}>Tutup Detail</button></div>
 			</aside>
@@ -1044,9 +1055,61 @@
 
 	{#if formNotice}<p class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700" role="status">{formNotice}</p>{/if}
 
-	<section class="grid gap-3 md:grid-cols-4"><div class="rounded-xl border bg-background p-4"><p class="text-xs font-medium text-muted-foreground">Kegiatan aktif</p><p class="mt-1 text-2xl font-bold">{kegiatan.length}</p></div><div class="rounded-xl border bg-background p-4"><p class="text-xs font-medium text-muted-foreground">Peserta terhubung</p><p class="mt-1 text-2xl font-bold">{totalPeserta}</p></div><div class="rounded-xl border bg-background p-4"><p class="text-xs font-medium text-muted-foreground">Ruang disiapkan</p><p class="mt-1 text-2xl font-bold">{totalRuang}</p></div><div class="rounded-xl border bg-background p-4"><p class="text-xs font-medium text-muted-foreground">Sesi dibuat</p><p class="mt-1 text-2xl font-bold">{totalSesi}</p></div></section>
+	<section class="rounded-2xl border border-border bg-card p-3 shadow-sm">
+		<div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+			<span class="rounded-full border bg-background px-3 py-1"><strong class="text-foreground">{kegiatan.length}</strong> kegiatan</span>
+			<span class="rounded-full border bg-background px-3 py-1"><strong class="text-foreground">{totalPeserta}</strong> peserta</span>
+			<span class="rounded-full border bg-background px-3 py-1"><strong class="text-foreground">{totalRuang}</strong> ruang</span>
+			<span class="rounded-full border bg-background px-3 py-1"><strong class="text-foreground">{totalSesi}</strong> sesi</span>
+			<span class="ml-auto hidden text-[11px] sm:inline">Alur: Paket Soal → Ruang/Peserta → Sesi → Cetak</span>
+		</div>
+	</section>
 
-	<section class="rounded-2xl border border-border bg-card shadow-sm"><div class="border-b border-border px-4 py-3"><h2 class="text-base font-semibold text-foreground">Daftar Kegiatan</h2><p class="text-xs text-muted-foreground">Data dibaca dari API Asesmen native.</p></div>{#if loading}<p class="px-4 py-8 text-center text-sm text-muted-foreground">Memuat kegiatan…</p>{:else if kegiatan.length === 0}<div class="px-4 py-8 text-center"><p class="text-sm font-semibold text-foreground">Belum ada kegiatan.</p><p class="mt-1 text-xs text-muted-foreground">Klik Buat Kegiatan untuk membuat draft pertama.</p></div>{:else}<div class="divide-y divide-border">{#each kegiatan as item (item.id)}<article class="p-4 transition-colors hover:bg-muted/30"><div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div class="min-w-0 space-y-2"><div class="flex flex-wrap items-center gap-2"><span class={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone[item.status]}`}>{item.status}</span><span class="rounded-full border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">{item.jenis}</span><span class="rounded-full border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">{item.mode}</span></div><h3 class="truncate text-lg font-bold text-foreground">{item.nama}</h3><p class="text-sm text-muted-foreground">Tanggal: {item.periode}</p><p class="max-w-2xl text-xs leading-5 text-muted-foreground">{item.catatan}</p></div><div class="space-y-2 sm:min-w-[18rem]"><div class="grid min-w-full grid-cols-3 gap-2 text-center"><div class="rounded-lg border bg-background p-2"><p class="text-[11px] text-muted-foreground">Peserta</p><p class="text-lg font-bold">{item.peserta}</p></div><div class="rounded-lg border bg-background p-2"><p class="text-[11px] text-muted-foreground">Ruang</p><p class="text-lg font-bold">{item.ruang}</p></div><div class="rounded-lg border bg-background p-2"><p class="text-[11px] text-muted-foreground">Sesi</p><p class="text-lg font-bold">{item.sesi}</p></div></div><button type="button" class="w-full rounded-md border bg-background px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted" onclick={() => openKegiatanDetail(item.id)}>Kelola</button></div></div></article>{/each}</div>{/if}</section>
+	<section class="rounded-2xl border border-border bg-card shadow-sm">
+		<div class="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+			<div>
+				<h2 class="text-base font-semibold text-foreground">Daftar Kegiatan</h2>
+				<p class="text-xs text-muted-foreground">Pilih satu kegiatan, lalu lanjutkan pekerjaan dari drawer kanan.</p>
+			</div>
+			<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={toggleCreateForm}>Buat Kegiatan</button>
+		</div>
+		{#if loading}
+			<p class="px-4 py-8 text-center text-sm text-muted-foreground">Memuat kegiatan…</p>
+		{:else if kegiatan.length === 0}
+			<div class="px-4 py-8 text-center"><p class="text-sm font-semibold text-foreground">Belum ada kegiatan.</p><p class="mt-1 text-xs text-muted-foreground">Klik Buat Kegiatan untuk membuat draft pertama.</p></div>
+		{:else}
+			<div class="overflow-x-auto">
+				<table class="min-w-[780px] w-full text-sm">
+					<thead class="bg-muted/40 text-left text-xs font-semibold text-muted-foreground">
+						<tr>
+							<th class="px-4 py-2">Status</th>
+							<th class="px-4 py-2">Kegiatan</th>
+							<th class="px-4 py-2">Periode</th>
+							<th class="px-4 py-2 text-center">Peserta</th>
+							<th class="px-4 py-2 text-center">Ruang</th>
+							<th class="px-4 py-2 text-center">Sesi</th>
+							<th class="px-4 py-2 text-center">Kartu</th>
+							<th class="px-4 py-2 text-right">Aksi</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-border">
+						{#each kegiatan as item (item.id)}
+							<tr class="hover:bg-muted/30">
+								<td class="px-4 py-3"><span class={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone[item.status]}`}>{item.status}</span></td>
+								<td class="max-w-[260px] px-4 py-3"><p class="truncate font-semibold text-foreground">{item.nama}</p><p class="truncate text-xs text-muted-foreground">{item.mode}</p></td>
+								<td class="px-4 py-3 text-xs text-muted-foreground">{item.periode}</td>
+								<td class="px-4 py-3 text-center font-semibold">{item.peserta}</td>
+								<td class="px-4 py-3 text-center font-semibold">{item.ruang}</td>
+								<td class="px-4 py-3 text-center font-semibold">{item.sesi}</td>
+								<td class="px-4 py-3 text-center text-xs text-muted-foreground">{item.kartu > 0 ? `${item.kartu} terbit` : 'Belum'}</td>
+								<td class="px-4 py-3 text-right"><button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" aria-label={`Kelola ${item.nama}`} onclick={() => openKegiatanDetail(item.id)}>Kelola</button></td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{/if}
+	</section>
 
-	<section class="rounded-2xl border border-dashed border-border bg-muted/30 p-4"><h2 class="text-sm font-semibold text-foreground">Batas Slice 1</h2><ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-muted-foreground"><li>Tidak membuat tabel `kegiatan` baru; memakai tabel native `assessment_exams` yang sudah ada.</li><li>Paket Soal menjadi gerbang awal sebelum ruang, sesi, cetak kartu, dan pelaksanaan.</li><li>QR+PIN, cetak template khusus, jadwal sesi detail, dan hasil tetap disambungkan bertahap agar aman.</li></ul></section>
+	<section class="rounded-2xl border border-dashed border-border bg-muted/20 p-4"><h2 class="text-sm font-semibold text-foreground">Catatan alur</h2><p class="mt-1 text-sm leading-6 text-muted-foreground">Bank Soal tetap menjadi tempat membuat soal. Halaman ini hanya mengatur kegiatan ujian: paket, peserta, ruang, sesi, cetak, dan pelaksanaan.</p></section>
 </div>
