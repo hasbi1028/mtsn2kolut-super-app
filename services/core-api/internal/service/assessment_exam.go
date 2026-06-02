@@ -43,6 +43,7 @@ type assessmentExamStore interface {
 	UpsertAssessmentRoom(ctx context.Context, arg db.UpsertAssessmentRoomParams) (db.AssessmentRoom, error)
 	ListAssessmentCandidateStudentsByClassIDs(ctx context.Context, classIds []pgtype.UUID) ([]db.ListAssessmentCandidateStudentsByClassIDsRow, error)
 	UpsertAssessmentParticipant(ctx context.Context, arg db.UpsertAssessmentParticipantParams) (db.AssessmentParticipant, error)
+	DeleteAssessmentParticipantsOutsideClassIDs(ctx context.Context, arg db.DeleteAssessmentParticipantsOutsideClassIDsParams) (int64, error)
 	ListAssessmentParticipantsForAssignment(ctx context.Context, sessionID pgtype.UUID) ([]db.ListAssessmentParticipantsForAssignmentRow, error)
 	ClearAssessmentParticipantRooms(ctx context.Context, sessionID pgtype.UUID) error
 	AssignAssessmentParticipantRoom(ctx context.Context, arg db.AssignAssessmentParticipantRoomParams) error
@@ -467,7 +468,7 @@ func (s *AssessmentExam) AssignmentApply(ctx context.Context, id pgtype.UUID, in
 		return AssessmentAssignmentResult{}, err
 	}
 	if len(normalized.ClassIDs) > 0 {
-		if err := s.upsertAssessmentParticipantsFromClasses(ctx, session.ID, normalized); err != nil {
+		if err := s.syncAssessmentParticipantsFromClasses(ctx, session.ID, normalized); err != nil {
 			return AssessmentAssignmentResult{}, err
 		}
 	}
@@ -785,9 +786,12 @@ func (s *AssessmentExam) assignmentPreviewParticipantCount(ctx context.Context, 
 	return int64(len(students)), nil
 }
 
-func (s *AssessmentExam) upsertAssessmentParticipantsFromClasses(ctx context.Context, sessionID pgtype.UUID, input AssessmentAssignmentRequest) error {
+func (s *AssessmentExam) syncAssessmentParticipantsFromClasses(ctx context.Context, sessionID pgtype.UUID, input AssessmentAssignmentRequest) error {
 	classIDs, err := assessmentUUIDsFromStrings(input.ClassIDs)
 	if err != nil {
+		return err
+	}
+	if _, err := s.q.DeleteAssessmentParticipantsOutsideClassIDs(ctx, db.DeleteAssessmentParticipantsOutsideClassIDsParams{SessionID: sessionID, ClassIds: classIDs}); err != nil {
 		return err
 	}
 	students, err := s.q.ListAssessmentCandidateStudentsByClassIDs(ctx, classIDs)

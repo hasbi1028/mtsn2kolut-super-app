@@ -27,6 +27,7 @@ type fakeAssessmentExamStore struct {
 	candidateStudents     []db.ListAssessmentCandidateStudentsByClassIDsRow
 	participants          []db.ListAssessmentParticipantsForAssignmentRow
 	upsertedParticipants  []db.UpsertAssessmentParticipantParams
+	deletedOutsideClasses db.DeleteAssessmentParticipantsOutsideClassIDsParams
 	assignedParticipants  []db.AssignAssessmentParticipantRoomParams
 	placementRows         []db.ListAssessmentParticipantPlacementsByExamRow
 	movedParticipantArg   db.MoveAssessmentParticipantSeatParams
@@ -98,6 +99,11 @@ func (f *fakeAssessmentExamStore) ListAssessmentCandidateStudentsByClassIDs(cont
 func (f *fakeAssessmentExamStore) UpsertAssessmentParticipant(_ context.Context, arg db.UpsertAssessmentParticipantParams) (db.AssessmentParticipant, error) {
 	f.upsertedParticipants = append(f.upsertedParticipants, arg)
 	return db.AssessmentParticipant{ID: arg.StudentID, SessionID: arg.SessionID, StudentID: arg.StudentID, Status: "registered"}, nil
+}
+
+func (f *fakeAssessmentExamStore) DeleteAssessmentParticipantsOutsideClassIDs(_ context.Context, arg db.DeleteAssessmentParticipantsOutsideClassIDsParams) (int64, error) {
+	f.deletedOutsideClasses = arg
+	return 0, nil
 }
 
 func (f *fakeAssessmentExamStore) ListAssessmentParticipantsForAssignment(context.Context, pgtype.UUID) ([]db.ListAssessmentParticipantsForAssignmentRow, error) {
@@ -497,6 +503,9 @@ func TestAssessmentExamAssignmentApplyEnrollsClassStudentsAndAssignsSeats(t *tes
 	}
 	if result.AssignedTotal != 3 || len(store.upsertedParticipants) != 3 || len(store.assignedParticipants) != 3 {
 		t.Fatalf("result=%+v upserted=%d assigned=%d, want three participants enrolled and assigned", result, len(store.upsertedParticipants), len(store.assignedParticipants))
+	}
+	if store.deletedOutsideClasses.SessionID != sessionID || len(store.deletedOutsideClasses.ClassIds) != 1 || store.deletedOutsideClasses.ClassIds[0] != classID {
+		t.Fatalf("deletedOutsideClasses=%+v, want session scoped sync to selected class", store.deletedOutsideClasses)
 	}
 	if !store.clearedParticipantSet {
 		t.Fatal("participants were not cleared before reassignment")

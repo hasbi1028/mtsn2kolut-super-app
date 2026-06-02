@@ -303,6 +303,30 @@ func (q *Queries) CreateAssessmentSession(ctx context.Context, arg CreateAssessm
 	return i, err
 }
 
+const deleteAssessmentParticipantsOutsideClassIDs = `-- name: DeleteAssessmentParticipantsOutsideClassIDs :execrows
+DELETE FROM assessment_participants p
+USING students s
+WHERE p.session_id = $1
+  AND s.id = p.student_id
+  AND (
+    s.class_id IS NULL
+    OR NOT (s.class_id = ANY($2::uuid[]))
+  )
+`
+
+type DeleteAssessmentParticipantsOutsideClassIDsParams struct {
+	SessionID pgtype.UUID   `json:"session_id"`
+	ClassIds  []pgtype.UUID `json:"class_ids"`
+}
+
+func (q *Queries) DeleteAssessmentParticipantsOutsideClassIDs(ctx context.Context, arg DeleteAssessmentParticipantsOutsideClassIDsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteAssessmentParticipantsOutsideClassIDs, arg.SessionID, arg.ClassIds)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getAssessmentExam = `-- name: GetAssessmentExam :one
 SELECT
   e.id, e.title, e.subject_id, e.grade_level, e.status, e.starts_at, e.ends_at, e.created_by, e.created_at, e.updated_at,

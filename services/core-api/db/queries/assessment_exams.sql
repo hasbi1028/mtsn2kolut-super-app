@@ -191,6 +191,16 @@ ON CONFLICT (session_id, student_id) DO UPDATE
 SET updated_at = now()
 RETURNING *;
 
+-- name: DeleteAssessmentParticipantsOutsideClassIDs :execrows
+DELETE FROM assessment_participants p
+USING students s
+WHERE p.session_id = sqlc.arg(session_id)
+  AND s.id = p.student_id
+  AND (
+    s.class_id IS NULL
+    OR NOT (s.class_id = ANY(sqlc.arg(class_ids)::uuid[]))
+  );
+
 -- name: ListAssessmentParticipantsForAssignment :many
 SELECT
   p.id AS participant_id,
