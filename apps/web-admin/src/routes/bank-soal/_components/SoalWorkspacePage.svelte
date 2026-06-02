@@ -3115,25 +3115,27 @@
 			</div>
 		</Dialog.Content>
 	</Dialog.Root>
-	<SoalShellHeader
-		reviewHref={reviewFocusHref()}
-		{exportButtonLabel}
-		{exportBusy}
-		{totalItems}
-		onCreate={openCreate}
-		onExport={() => void exportQuestionsCSV()}
-	/>
+	{#if activeMode !== 'composer'}
+		<SoalShellHeader
+			reviewHref={reviewFocusHref()}
+			{exportButtonLabel}
+			{exportBusy}
+			{totalItems}
+			onCreate={openCreate}
+			onExport={() => void exportQuestionsCSV()}
+		/>
 
-	<SoalContextPanel
-		{events}
-		{subjects}
-		{selectedEventId}
-		{filterSubject}
-		{selectedEventTitle}
-		{roleLabel}
-		onEventChange={setSelectedEvent}
-		onSubjectChange={setFilterSubject}
-	/>
+		<SoalContextPanel
+			{events}
+			{subjects}
+			{selectedEventId}
+			{filterSubject}
+			{selectedEventTitle}
+			{roleLabel}
+			onEventChange={setSelectedEvent}
+			onSubjectChange={setFilterSubject}
+		/>
+	{/if}
 
 	{#if activeMode === 'catalog'}
 		<SoalStatusCards cards={statusCards} onSelect={setCatalogStatusFilter} />

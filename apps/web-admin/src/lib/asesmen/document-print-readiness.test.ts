@@ -17,7 +17,7 @@ describe('summarizeDocumentPrintStatus', () => {
 	it('marks participant cards as issuable then printable after QR and PIN exist', () => {
 		expect(summarizeDocumentPrintStatus({ participantCount: 24, roomCount: 4, cardCount: 0 }).participantCards).toMatchObject({
 			state: 'action',
-			label: 'Terbitkan QR+PIN'
+			label: 'Buat QR+PIN'
 		});
 		expect(summarizeDocumentPrintStatus({ participantCount: 24, roomCount: 4, cardCount: 24 }).participantCards).toMatchObject({
 			state: 'ready',

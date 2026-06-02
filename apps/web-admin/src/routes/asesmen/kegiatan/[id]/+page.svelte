@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { page } from '$app/state';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
 	import { summarizeDocumentPrintStatus } from '$lib/asesmen/document-print-readiness';
@@ -111,6 +111,7 @@
 		notes?: string;
 	};
 	type EditablePackageMap = AssessmentPackageMap & { local_id: string; is_new?: boolean };
+	type PackageClassGroup = { class_id: string; local_id: string; rows: EditablePackageMap[] };
 
 	type KegiatanUjian = {
 		id: string;
@@ -176,6 +177,9 @@
 	let csvImportNotice = $state('');
 	let documentNotice = $state('');
 	let documentError = $state('');
+	let printableCards = $state<ParticipantCard[]>([]);
+	let qrImages = $state<Record<string, string>>({});
+	let printMode = $state<'cards' | 'supervisor' | 'checklist' | null>(null);
 	let issuingCards = $state(false);
 	let checkingCards = $state(false);
 	let loading = $state(true);
@@ -196,9 +200,74 @@
 	const documentPrintSummary = $derived(summarizeDocumentPrintStatus({ participantCount: selectedKegiatan?.peserta ?? 0, roomCount: selectedKegiatan?.ruang ?? 0, cardCount: selectedKegiatan?.kartu ?? 0 }));
 	const packageReadyCount = $derived(packageMaps.filter((item) => item.class_id && item.package_id).length);
 	const packageSubjectCount = $derived(new Set(packageMaps.filter((item) => item.subject_id).map((item) => item.subject_id)).size);
+	const packageClassCount = $derived(new Set(packageMaps.filter((item) => item.class_id && item.package_id).map((item) => item.class_id)).size);
+	const packageSelectedCount = $derived(new Set(packageMaps.filter((item) => item.package_id).map((item) => item.package_id)).size);
+	const packageMaxDuration = $derived(packageMaps.reduce((max, item) => Math.max(max, Number(item.duration_minutes || selectedPackageOption(item.package_id)?.duration_minutes || 0)), 0));
+	const packageClassGroups = $derived(buildPackageClassGroups());
 	const packageGateReady = $derived(packageReadyCount > 0);
 	const packageGateMessage = 'Tautkan minimal satu Paket Soal siap sebelum lanjut ke ruang, sesi, cetak kartu, atau pelaksanaan.';
 	const routeKegiatanId = $derived(page.params.id ?? '');
+
+	type StepState = { label: string; tone: string; helper: string };
+
+	function readinessScore(item: KegiatanUjian) {
+		let score = 0;
+		if (packageReadyCount > 0) score += 25;
+		if (item.peserta > 0) score += 20;
+		if (item.ruang > 0) score += 20;
+		if (item.sesi > 0) score += 15;
+		if (item.kartu > 0) score += 20;
+		return Math.min(100, score);
+	}
+
+	function readinessTone(score: number) {
+		if (score >= 80) return 'bg-emerald-500';
+		if (score >= 45) return 'bg-amber-500';
+		return 'bg-slate-400';
+	}
+
+	function readinessChecks(item: KegiatanUjian) {
+		return [
+			{ label: 'Paket soal dipilih', ready: packageReadyCount > 0 },
+			{ label: 'Peserta masuk', ready: item.peserta > 0 },
+			{ label: 'Ruang tersusun', ready: item.ruang > 0 },
+			{ label: 'Sesi dibuat', ready: item.sesi > 0 },
+			{ label: 'QR+PIN/kartu terbit', ready: item.kartu > 0 }
+		];
+	}
+
+	function nextDetailActionKey(item: KegiatanUjian): DetailFeatureKey {
+		if (packageReadyCount <= 0) return 'paket';
+		if (item.peserta <= 0 || item.ruang <= 0) return 'ruang';
+		if (item.sesi <= 0) return 'sesi';
+		if (item.kartu <= 0) return 'cetak';
+		return item.status === 'Selesai' || item.status === 'Arsip' ? 'hasil' : 'cetak';
+	}
+
+	function nextDetailActionLabel(item: KegiatanUjian) {
+		const key = nextDetailActionKey(item);
+		return detailFeatures.find((feature) => feature.key === key)?.label ?? 'Review Kegiatan';
+	}
+
+	function stepState(key: DetailFeatureKey, item: KegiatanUjian): StepState {
+		if (key === 'paket') return packageReadyCount > 0
+			? { label: 'Selesai', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700', helper: `${packageReadyCount} pemetaan aktif` }
+			: { label: 'Berikutnya', tone: 'border-amber-200 bg-amber-50 text-amber-700', helper: 'Wajib sebelum langkah lain' };
+		if (!packageGateReady && key !== 'manual') return { label: 'Terkunci', tone: 'border-slate-200 bg-slate-50 text-slate-500', helper: 'Lengkapi Paket Soal dulu' };
+		if (key === 'ruang') return item.peserta > 0 && item.ruang > 0
+			? { label: 'Selesai', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700', helper: `${item.peserta} peserta · ${item.ruang} ruang` }
+			: { label: nextDetailActionKey(item) === 'ruang' ? 'Berikutnya' : 'Belum lengkap', tone: 'border-amber-200 bg-amber-50 text-amber-700', helper: 'Pilih rombel dan susun kursi' };
+		if (key === 'sesi') return item.sesi > 0
+			? { label: 'Selesai', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700', helper: `${item.sesi} sesi` }
+			: { label: nextDetailActionKey(item) === 'sesi' ? 'Berikutnya' : 'Belum lengkap', tone: 'border-amber-200 bg-amber-50 text-amber-700', helper: 'Jadwal/token belum final' };
+		if (key === 'cetak') return item.kartu > 0
+			? { label: 'Selesai', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700', helper: `${item.kartu} kartu terbit` }
+			: { label: nextDetailActionKey(item) === 'cetak' ? 'Berikutnya' : 'Belum lengkap', tone: 'border-amber-200 bg-amber-50 text-amber-700', helper: 'QR+PIN belum terbit' };
+		if (key === 'hasil') return item.status === 'Selesai' || item.status === 'Arsip'
+			? { label: 'Siap dibuka', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700', helper: 'Rekap dan arsip' }
+			: { label: 'Belum mulai', tone: 'border-slate-200 bg-slate-50 text-slate-500', helper: 'Dibuka setelah pelaksanaan' };
+		return { label: 'Admin', tone: 'border-sky-200 bg-sky-50 text-sky-700', helper: 'CSV dan edit teknis' };
+	}
 
 	const assignmentModeDescriptions: Record<AssignmentUiMode, string> = {
 		balanced_all: 'Rekomendasi default: peserta disebar seimbang ke semua ruang dan rombel diusahakan tidak berkumpul.',
@@ -514,6 +583,117 @@
 		return packageOptions.find((option) => option.id === packageId) ?? null;
 	}
 
+	function classOption(classId: string) {
+		return rombelOptions.find((item) => item.id === classId) ?? null;
+	}
+
+	function classLabel(classId: string) {
+		const item = classOption(classId);
+		return item ? `${item.code || item.name} · ${item.total_students ?? 0} siswa` : 'Pilih rombel';
+	}
+
+	function buildPackageClassGroups(): PackageClassGroup[] {
+		const byClass = new Map<string, EditablePackageMap[]>();
+		for (const row of packageMaps) {
+			const key = row.class_id || row.local_id;
+			const rows = byClass.get(key) ?? [];
+			rows.push(row);
+			byClass.set(key, rows);
+		}
+		return Array.from(byClass.entries()).map(([key, rows]) => ({
+			class_id: rows[0]?.class_id ?? '',
+			local_id: key,
+			rows
+		}));
+	}
+
+	function packageRowsForClass(classId: string) {
+		return packageMaps.filter((item) => item.class_id === classId && item.package_id);
+	}
+
+	function packageCheckedForClass(classId: string, packageId: string) {
+		return packageMaps.some((item) => item.class_id === classId && item.package_id === packageId);
+	}
+
+	function packageOptionForSubjectDuplicate(classId: string, option: AssessmentPackageOption) {
+		return packageMaps.some((item) => item.class_id === classId && item.subject_id === option.subject_id && item.package_id !== option.id);
+	}
+
+	function addPackageClassGroup() {
+		const used = new Set(packageMaps.map((item) => item.class_id).filter(Boolean));
+		const firstClass = selectedClassIds.find((id) => !used.has(id)) || rombelOptions.find((item) => !used.has(item.id))?.id || selectedClassIds[0] || rombelOptions[0]?.id || '';
+		packageMaps = [
+			...packageMaps,
+			{
+				local_id: crypto.randomUUID(),
+				id: '',
+				class_id: firstClass,
+				subject_id: '',
+				subject_name: '',
+				package_id: '',
+				package_title: '',
+				slot_label: 'Sesi Utama',
+				notes: '',
+				is_new: true
+			}
+		];
+		packageNotice = '';
+	}
+
+	function updatePackageClassGroup(localId: string, classId: string) {
+		const group = packageClassGroups.find((item) => item.local_id === localId);
+		if (!group) return;
+		packageMaps = packageMaps.map((item) => group.rows.some((row) => row.local_id === item.local_id) ? { ...item, class_id: classId } : item);
+	}
+
+	function packageRowFromOption(classId: string, option: AssessmentPackageOption): EditablePackageMap {
+		return {
+			local_id: crypto.randomUUID(),
+			id: '',
+			class_id: classId,
+			subject_id: option.subject_id,
+			subject_code: option.subject_code,
+			subject_name: option.subject_name,
+			package_id: option.id,
+			package_title: option.title,
+			duration_minutes: option.duration_minutes,
+			slot_label: 'Sesi Utama',
+			notes: '',
+			is_new: true
+		};
+	}
+
+	async function togglePackageForClass(classId: string, option: AssessmentPackageOption, checked: boolean) {
+		if (!classId) {
+			packageError = 'Pilih rombel dulu sebelum memilih paket.';
+			return;
+		}
+		packageError = '';
+		packageNotice = '';
+		if (checked) {
+			if (packageOptionForSubjectDuplicate(classId, option)) {
+				packageError = `Rombel ${classLabel(classId)} sudah punya paket untuk mapel ${option.subject_name}. Hapus paket mapel itu dulu jika ingin mengganti.`;
+				return;
+			}
+			if (!packageCheckedForClass(classId, option.id)) {
+				const empty = packageMaps.find((item) => item.class_id === classId && !item.package_id);
+				if (empty) {
+					updatePackageMapRow(empty.local_id, { package_id: option.id });
+				} else {
+					packageMaps = [...packageMaps, packageRowFromOption(classId, option)];
+				}
+			}
+			return;
+		}
+		const row = packageMaps.find((item) => item.class_id === classId && item.package_id === option.id);
+		if (!row) return;
+		if (row.id) {
+			await deletePackageMap(row);
+		} else {
+			removePackageMapRow(row.local_id);
+		}
+	}
+
 	function mapPackageRows(items: AssessmentPackageMap[]): EditablePackageMap[] {
 		return items.map((item) => ({ ...item, local_id: item.id || crypto.randomUUID(), is_new: false }));
 	}
@@ -549,24 +729,7 @@
 	}
 
 	function addPackageMapRow() {
-		const firstClass = selectedClassIds[0] || rombelOptions[0]?.id || '';
-		const firstPackage = packageOptions[0] ?? null;
-		packageMaps = [
-			...packageMaps,
-			{
-				local_id: crypto.randomUUID(),
-				id: '',
-				class_id: firstClass,
-				subject_id: firstPackage?.subject_id ?? '',
-				subject_name: firstPackage?.subject_name ?? '',
-				package_id: firstPackage?.id ?? '',
-				package_title: firstPackage?.title ?? '',
-				slot_label: 'Sesi Utama',
-				notes: '',
-				is_new: true
-			}
-		];
-		packageNotice = '';
+		addPackageClassGroup();
 	}
 
 	function updatePackageMapRow(localId: string, patch: Partial<EditablePackageMap>) {
@@ -611,7 +774,7 @@
 		packageError = '';
 		packageNotice = '';
 		const items = packageMaps
-			.filter((item) => item.class_id || item.package_id)
+			.filter((item) => item.class_id && item.package_id)
 			.map((item) => ({
 				class_id: item.class_id,
 				subject_id: item.subject_id,
@@ -624,7 +787,7 @@
 			return;
 		}
 		if (items.some((item) => !item.class_id || !item.subject_id || !item.package_id)) {
-			packageError = 'Setiap baris wajib punya rombel dan paket soal.';
+			packageError = 'Setiap rombel yang disimpan wajib punya paket soal terpilih.';
 			return;
 		}
 		savingPackages = true;
@@ -768,10 +931,131 @@
 		}
 	}
 
-	type ParticipantCard = { participant_id: string; token?: string; pin?: string; room_code?: string; seat_no?: number };
+	type ParticipantCard = {
+		card_id?: string;
+		participant_id: string;
+		session_id?: string;
+		student_id?: string;
+		student_name?: string;
+		nis?: string;
+		nisn?: string;
+		class_code?: string;
+		class_name?: string;
+		room_code?: string;
+		room_name?: string;
+		seat_no?: number;
+		status?: string;
+		token?: string;
+		pin?: string;
+		qr_path?: string;
+	};
 	type IssueCardsResult = { count: number; cards: ParticipantCard[]; message: string };
 
-	async function checkParticipantCards() {
+	const printableCardsSorted = $derived([...printableCards].sort((a, b) => {
+		const room = String(a.room_code || '').localeCompare(String(b.room_code || ''));
+		if (room !== 0) return room;
+		return Number(a.seat_no || 0) - Number(b.seat_no || 0);
+	}));
+	const printableCardPages = $derived(Array.from(
+		{ length: Math.ceil(printableCardsSorted.length / 6) },
+		(_, index) => printableCardsSorted.slice(index * 6, index * 6 + 6)
+	));
+	const printableRoomGroups = $derived(Array.from(printableCardsSorted.reduce((groups, card) => {
+		const key = card.room_code || 'Tanpa ruang';
+		if (!groups.has(key)) groups.set(key, []);
+		groups.get(key)?.push(card);
+		return groups;
+	}, new Map<string, ParticipantCard[]>()).entries()));
+	const printableHasSecrets = $derived(printableCards.some((card) => card.token || card.pin || card.qr_path));
+
+	function cardPrintKey(card: ParticipantCard) {
+		return card.card_id || card.participant_id || card.student_id || `${card.student_name}-${card.seat_no}`;
+	}
+
+	function cardQrValue(card: ParticipantCard) {
+		const rawPath = card.qr_path || (card.token ? `/ujian?card=${card.token}` : '');
+		if (!rawPath) return '';
+		if (/^https?:\/\//.test(rawPath)) return rawPath;
+		return `${window.location.origin}${rawPath.startsWith('/') ? rawPath : `/${rawPath}`}`;
+	}
+
+	async function generateQrImages(cards: ParticipantCard[]) {
+		const next: Record<string, string> = {};
+		const QRCode = await import('qrcode');
+		for (const card of cards) {
+			const value = cardQrValue(card);
+			if (!value) continue;
+			next[cardPrintKey(card)] = await QRCode.toDataURL(value, { errorCorrectionLevel: 'M', margin: 1, width: 180 });
+		}
+		qrImages = next;
+	}
+
+	async function setPrintableCards(cards: ParticipantCard[]) {
+		printableCards = cards;
+		await generateQrImages(cards);
+	}
+
+	function enableDocumentPrintMode() {
+		if (typeof document === 'undefined') return;
+		document.body.classList.add('cbt-document-print');
+	}
+
+	function disableDocumentPrintMode() {
+		if (typeof document === 'undefined') return;
+		document.body.classList.remove('cbt-document-print');
+	}
+
+	onMount(() => {
+		const keepPrintModeActive = () => {
+			if (printMode) enableDocumentPrintMode();
+		};
+		window.addEventListener('beforeprint', keepPrintModeActive);
+		return () => {
+			window.removeEventListener('beforeprint', keepPrintModeActive);
+			disableDocumentPrintMode();
+		};
+	});
+
+	async function printDocument(mode: 'cards' | 'supervisor' | 'checklist') {
+		if ((mode === 'cards' || mode === 'supervisor') && printableCards.some((card) => cardQrValue(card)) && Object.keys(qrImages).length === 0) {
+			await generateQrImages(printableCards);
+		}
+		printMode = mode;
+		await tick();
+		enableDocumentPrintMode();
+		await tick();
+		setTimeout(() => {
+			enableDocumentPrintMode();
+			window.print();
+		}, 150);
+	}
+
+	async function printParticipantCards() {
+		if (!selectedKegiatan) return;
+		if (printableCards.length === 0) await checkParticipantCards(false);
+		if (printableCards.length === 0) return;
+		if (!printableHasSecrets) {
+			documentError = 'PIN lama tidak bisa dibuka dari hash. Pilih PIN Baru & Cetak untuk mengganti PIN dan langsung mencetak kartu.';
+			return;
+		}
+		await printDocument('cards');
+	}
+
+	async function regenerateParticipantCardsAndPrint() {
+		await issueParticipantCards(true);
+		if (printableCards.length > 0 && printableHasSecrets) await printDocument('cards');
+	}
+
+	async function printSupervisorSheets() {
+		if (printableCards.length === 0) await checkParticipantCards(false);
+		if (printableCards.length === 0) {
+			documentError = 'Daftar peserta/kartu belum terbaca untuk lembar pengawas.';
+			return;
+		}
+		await printDocument('supervisor');
+	}
+
+	async function checkParticipantCards(showNotice = true) {
 		if (!selectedKegiatan) return;
 		if (!packageGateReady) {
 			documentError = packageGateMessage;
@@ -783,7 +1067,8 @@
 		try {
 			const response = await fetch(clientApiPath`/api/asesmen/exams/${selectedKegiatan.id}/cards`);
 			const cards = await readClientApiData<ParticipantCard[]>(response);
-			documentNotice = `Daftar kartu terbaca: ${cards.length} peserta. Token/PIN mentah hanya tampil setelah tombol Terbitkan QR+PIN.`;
+			await setPrintableCards(cards);
+			if (showNotice) documentNotice = `Daftar kartu terbaca: ${cards.length} peserta. Jika PIN tidak muncul, gunakan PIN Baru & Cetak.`;
 		} catch (error) {
 			documentError = error instanceof Error ? error.message : 'Daftar kartu peserta belum dapat dibuka.';
 		} finally {
@@ -791,7 +1076,7 @@
 		}
 	}
 
-	async function issueParticipantCards() {
+	async function issueParticipantCards(regenerate = false) {
 		if (!selectedKegiatan || issuingCards) return;
 		if (!packageGateReady) {
 			documentError = packageGateMessage;
@@ -801,7 +1086,9 @@
 			documentError = 'Lengkapi peserta dan simpan ruang sebelum menerbitkan QR+PIN.';
 			return;
 		}
-		const ok = window.confirm('Terbitkan QR+PIN kartu peserta sekarang? PIN hanya tampil pada hasil terbitkan ini; cetak/simpan PDF segera.');
+		const ok = window.confirm(regenerate
+			? 'Buat PIN baru untuk semua kartu peserta? PIN lama akan diganti.'
+			: 'Buat QR+PIN kartu peserta sekarang? Setelah tampil, langsung cetak atau simpan PDF.');
 		if (!ok) return;
 		documentError = '';
 		documentNotice = '';
@@ -810,9 +1097,10 @@
 			const response = await fetch(clientApiPath`/api/asesmen/exams/${selectedKegiatan.id}/issue-cards`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ regenerate: false })
+				body: JSON.stringify({ regenerate })
 			});
 			const result = await readClientApiData<IssueCardsResult>(response);
+			await setPrintableCards(result.cards || []);
 			documentNotice = result.message || `${result.count} kartu peserta siap. PIN hanya tampil pada hasil terbitkan ini.`;
 			kegiatan = kegiatan.map((item) => item.id === selectedKegiatan.id ? { ...item, kartu: result.count, catatan: `Data tersimpan di database. Kartu peserta terbit: ${result.count}.` } : item);
 			await loadKegiatan();
@@ -829,45 +1117,56 @@
 	<title>Detail Kegiatan Asesmen | MTsN 2 Kolut</title>
 </svelte:head>
 
-<div class="space-y-5 pb-16">
+<div class="app-screen space-y-5 pb-16">
 	<section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-			<div class="space-y-2">
-				<p class="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">Asesmen / CBT</p>
-				<h1 class="text-2xl font-bold tracking-tight text-foreground md:text-3xl">Kegiatan Ujian</h1>
+			<div class="min-w-0 space-y-2">
+				<p class="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">Asesmen / Detail Kegiatan</p>
+				<h1 class="truncate text-2xl font-bold tracking-tight text-foreground md:text-3xl">{selectedKegiatan?.nama ?? 'Memuat kegiatan…'}</h1>
 				<p class="max-w-3xl text-sm leading-6 text-muted-foreground">
-					Kelola kegiatan ujian dari satu daftar ringkas. Tautkan Paket Soal lebih dulu, lalu lanjutkan peserta, ruang, sesi, cetak, dan pelaksanaan.
+					Workspace satu kegiatan untuk Paket Soal, peserta, ruang, sesi, cetak, dan hasil. Halaman daftar hanya menjadi launcher.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
+				<a href="/asesmen" class="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-semibold text-foreground hover:bg-muted">← Kembali ke Daftar</a>
 				<button type="button" class="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-semibold text-foreground hover:bg-muted" onclick={loadKegiatan} disabled={loading}>{loading ? 'Memuat…' : 'Muat Ulang'}</button>
-				<button type="button" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90" onclick={toggleCreateForm}>{showCreateForm ? 'Tutup Form' : 'Buat Kegiatan'}</button>
+				{#if selectedKegiatan}
+					<button type="button" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90" onclick={() => (activeDetailFeature = nextDetailActionKey(selectedKegiatan))}>Lanjut: {nextDetailActionLabel(selectedKegiatan)}</button>
+				{/if}
 			</div>
 		</div>
 	</section>
 
 	{#if listError}<p class="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive" role="alert">{listError}</p>{/if}
 
-	<div class="flex flex-wrap items-center gap-2"><a href="/asesmen" class="rounded-md border bg-background px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">← Kembali ke Daftar Asesmen</a><button type="button" class="rounded-md border bg-background px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted" onclick={loadKegiatan} disabled={loading}>{loading ? 'Memuat…' : 'Muat Ulang'}</button></div>
-
 	{#if selectedKegiatan}
 		<section class="rounded-2xl border border-primary/20 bg-card shadow-sm" aria-labelledby="detail-kegiatan-title">
 			<div class="border-b border-border bg-muted/20 px-5 py-4">
 				<div class="flex items-start justify-between gap-3">
-					<div class="min-w-0 space-y-2"><p class="text-xs font-semibold tracking-[0.18em] text-primary uppercase">Detail Kegiatan · Halaman Penuh</p><h2 id="detail-kegiatan-title" class="truncate text-xl font-bold text-foreground">{selectedKegiatan.nama}</h2><div class="flex flex-wrap items-center gap-2"><span class={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone[selectedKegiatan.status]}`}>{selectedKegiatan.status}</span><span class="rounded-full border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">{selectedKegiatan.mode}</span><span class="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">Alur vertikal, bukan drawer</span></div></div>
-					<a class="rounded-md border px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted" aria-label="Kembali ke daftar asesmen" href="/asesmen">Kembali ke Daftar</a>
+					<div class="min-w-0 space-y-2"><p class="text-xs font-semibold tracking-[0.18em] text-primary uppercase">Workspace Kegiatan</p><h2 id="detail-kegiatan-title" class="truncate text-xl font-bold text-foreground">{selectedKegiatan.nama}</h2><div class="flex flex-wrap items-center gap-2"><span class={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone[selectedKegiatan.status]}`}>{selectedKegiatan.status}</span><span class="rounded-full border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">{selectedKegiatan.mode}</span><span class="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">Halaman penuh</span><span class="rounded-full border bg-background px-2.5 py-1 text-xs font-semibold text-muted-foreground">Kesiapan {readinessScore(selectedKegiatan)}%</span></div></div>
+					<button type="button" class="rounded-md border px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted" onclick={() => (activeDetailFeature = nextDetailActionKey(selectedKegiatan))}>Lanjut: {nextDetailActionLabel(selectedKegiatan)}</button>
 				</div>
 			</div>
 			<div class="grid gap-4 px-5 pt-4 pb-5 xl:grid-cols-[20rem_minmax(0,1fr)]">
 				<aside class="space-y-4">
 					<section class="rounded-xl border bg-background p-4"><h3 class="text-sm font-semibold text-foreground">Ringkasan</h3><div class="mt-3 grid gap-2 text-sm"><div class="flex justify-between gap-3"><span class="text-muted-foreground">Tanggal</span><strong class="text-right font-semibold">{selectedKegiatan.periode}</strong></div><div class="flex justify-between gap-3"><span class="text-muted-foreground">Peserta</span><strong>{selectedKegiatan.peserta}</strong></div><div class="flex justify-between gap-3"><span class="text-muted-foreground">Ruang</span><strong>{selectedKegiatan.ruang}</strong></div><div class="flex justify-between gap-3"><span class="text-muted-foreground">Sesi</span><strong>{selectedKegiatan.sesi}</strong></div></div><p class="mt-3 rounded-lg bg-muted/50 px-3 py-2 text-xs leading-5 text-muted-foreground">{selectedKegiatan.catatan}</p></section>
 
+					<section class="rounded-xl border bg-background p-4">
+						<div class="flex items-center justify-between gap-2"><h3 class="text-sm font-semibold text-foreground">Kesiapan Asesmen</h3><span class="text-sm font-bold text-foreground">{readinessScore(selectedKegiatan)}%</span></div>
+						<div class="mt-3 h-2 overflow-hidden rounded-full bg-muted"><div class={`h-full rounded-full ${readinessTone(readinessScore(selectedKegiatan))}`} style={`width: ${readinessScore(selectedKegiatan)}%`}></div></div>
+						<div class="mt-3 space-y-2">{#each readinessChecks(selectedKegiatan) as check}<div class="flex items-center gap-2 text-xs"><span class={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-bold ${check.ready ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>{check.ready ? '✓' : '!'}</span><span class={check.ready ? 'text-foreground' : 'text-muted-foreground'}>{check.label}</span></div>{/each}</div>
+						<p class="mt-3 rounded-lg bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">Langkah berikutnya: <strong class="text-foreground">{nextDetailActionLabel(selectedKegiatan)}</strong></p>
+					</section>
+
 					<section class="rounded-xl border bg-background p-3">
 						<div class="flex items-center justify-between gap-2">
 							<h3 class="text-sm font-semibold text-foreground">Alur Kegiatan</h3>
 							<p class="text-[11px] text-muted-foreground">UI ringkas</p>
 						</div>
-						<div class="mt-3 space-y-2">{#each detailFeatures as feature, index}<button type="button" class={`flex w-full gap-3 rounded-lg border px-3 py-3 text-left text-sm transition ${activeDetailFeature === feature.key ? 'border-primary bg-primary/10 text-primary shadow-sm' : 'bg-card text-foreground hover:bg-muted'}`} aria-pressed={activeDetailFeature === feature.key} onclick={() => (activeDetailFeature = feature.key)}><span class={`mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${activeDetailFeature === feature.key ? 'border-primary bg-primary text-primary-foreground' : 'bg-background text-muted-foreground'}`}>{index + 1}</span><span class="min-w-0"><span class="block text-sm font-semibold leading-5">{feature.label}</span><span class="mt-0.5 block text-[11px] leading-4 text-muted-foreground">{feature.description}</span></span></button>{/each}</div>
+						<div class="mt-3 space-y-2">{#each detailFeatures as feature, index}
+							{@const state = stepState(feature.key, selectedKegiatan)}
+							<button type="button" class={`flex w-full gap-3 rounded-lg border px-3 py-3 text-left text-sm transition ${activeDetailFeature === feature.key ? 'border-primary bg-primary/10 text-primary shadow-sm' : 'bg-card text-foreground hover:bg-muted'}`} aria-pressed={activeDetailFeature === feature.key} onclick={() => (activeDetailFeature = feature.key)}><span class={`mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${activeDetailFeature === feature.key ? 'border-primary bg-primary text-primary-foreground' : 'bg-background text-muted-foreground'}`}>{index + 1}</span><span class="min-w-0 flex-1"><span class="flex items-center justify-between gap-2"><span class="block text-sm font-semibold leading-5">{feature.label}</span><span class={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${state.tone}`}>{state.label}</span></span><span class="mt-0.5 block text-[11px] leading-4 text-muted-foreground">{state.helper || feature.description}</span></span></button>
+						{/each}</div>
 					</section>
 				</aside>
 
@@ -878,41 +1177,52 @@
 							<div>
 								<p class="text-xs font-semibold tracking-[0.16em] text-indigo-700 uppercase">Langkah 2 · Paket Soal</p>
 								<h3 class="text-base font-bold text-foreground">Tautkan paket soal ke rombel</h3>
-								<p class="mt-1 text-xs leading-5 text-muted-foreground">Pilih paket dari Bank Soal untuk tiap rombel/mapel. Tahap ini belum menerbitkan kartu, QR, atau PIN.</p>
+								<p class="mt-1 text-xs leading-5 text-muted-foreground">Centang beberapa paket untuk tiap rombel. Ini menjaga satu ruang bisa memakai beberapa paket, tetapi mapping peserta tetap jelas per rombel/mapel.</p>
 							</div>
 							<div class="flex flex-wrap gap-2">
 								<a class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" href="/paket-soal">Buka Modul Paket</a>
 								<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void loadPackageOptions()} disabled={loadingPackages}>{loadingPackages ? 'Memuat…' : 'Refresh Paket'}</button>
-								<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={addPackageMapRow}>Tambah Baris</button>
+								<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={addPackageMapRow}>Tambah Rombel</button>
 							</div>
 						</div>
 						<div class="mt-3 grid gap-2 sm:grid-cols-3">
-							<div class="rounded-lg border bg-background px-3 py-2"><p class="text-xs text-muted-foreground">Pemetaan aktif</p><p class="text-xl font-bold text-foreground">{packageReadyCount}</p></div>
-							<div class="rounded-lg border bg-background px-3 py-2"><p class="text-xs text-muted-foreground">Mapel terhubung</p><p class="text-xl font-bold text-foreground">{packageSubjectCount}</p></div>
-							<div class="rounded-lg border bg-background px-3 py-2"><p class="text-xs text-muted-foreground">Paket tersedia</p><p class="text-xl font-bold text-foreground">{packageOptions.length}</p></div>
+								<div class="rounded-lg border bg-background px-3 py-2"><p class="text-xs text-muted-foreground">Paket dipilih</p><p class="text-xl font-bold text-foreground">{packageSelectedCount}</p></div>
+							<div class="rounded-lg border bg-background px-3 py-2"><p class="text-xs text-muted-foreground">Rombel terhubung</p><p class="text-xl font-bold text-foreground">{packageClassCount}</p></div>
+							<div class="rounded-lg border bg-background px-3 py-2"><p class="text-xs text-muted-foreground">Durasi terpanjang</p><p class="text-xl font-bold text-foreground">{packageMaxDuration}<span class="text-xs font-medium text-muted-foreground"> menit</span></p></div>
 						</div>
 						{#if packageError}<p class="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{packageError}</p>{/if}
 						{#if packageNotice}<p class="mt-3 rounded-md border border-indigo-300 bg-indigo-100 px-3 py-2 text-sm font-medium text-indigo-800" role="status">{packageNotice}</p>{/if}
 						<div class="mt-4 divide-y rounded-xl border bg-background">
 							{#if loadingPackages && packageMaps.length === 0}
 								<p class="p-4 text-sm text-muted-foreground">Memuat paket soal…</p>
-							{:else if packageMaps.length === 0}
-								<div class="p-4 text-sm text-muted-foreground"><p class="font-semibold text-foreground">Belum ada paket soal tertaut.</p><p class="mt-1 text-xs leading-5">Klik Tambah Baris, pilih rombel dan paket. Jika daftar paket kosong, buka modul Paket Soal untuk melihat dapur paket yang tersedia.</p></div>
+							{:else if packageClassGroups.length === 0}
+								<div class="p-4 text-sm text-muted-foreground"><p class="font-semibold text-foreground">Belum ada rombel/paket tertaut.</p><p class="mt-1 text-xs leading-5">Klik Tambah Rombel, lalu centang beberapa paket soal. Satu rombel boleh memiliki beberapa paket berbeda mapel; satu mapel tetap hanya satu paket.</p></div>
 							{:else}
-								{#each packageMaps as row (row.local_id)}
-									<div class="grid gap-3 p-3 text-sm lg:grid-cols-[1fr_1.4fr_8rem_1fr_5rem] lg:items-end">
-										<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Rombel</span><select class="min-w-0 w-full rounded-md border bg-card px-3 py-2 text-sm" value={row.class_id} onchange={(event) => updatePackageMapRow(row.local_id, { class_id: event.currentTarget.value })}>{#each rombelOptions as rombel}<option value={rombel.id}>{rombel.code || rombel.name} · {rombel.total_students ?? 0} siswa</option>{/each}</select></label>
-										<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Paket soal</span><select class="min-w-0 w-full rounded-md border bg-card px-3 py-2 text-sm" value={row.package_id} onchange={(event) => updatePackageMapRow(row.local_id, { package_id: event.currentTarget.value })}><option value="">Pilih paket</option>{#each packageOptions as option}<option value={option.id}>{packageOptionLabel(option)}</option>{/each}</select></label>
-										<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Sesi/slot</span><input class="min-w-0 w-full rounded-md border bg-card px-3 py-2 text-sm" value={row.slot_label || ''} oninput={(event) => updatePackageMapRow(row.local_id, { slot_label: event.currentTarget.value })} placeholder="Sesi Utama" /></label>
-										<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Catatan</span><input class="min-w-0 w-full rounded-md border bg-card px-3 py-2 text-sm" value={row.notes || ''} oninput={(event) => updatePackageMapRow(row.local_id, { notes: event.currentTarget.value })} placeholder="Opsional" /></label>
-										<button type="button" class="rounded-md border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void deletePackageMap(row)}>Hapus</button>
-										<p class="lg:col-span-5 text-xs leading-5 text-muted-foreground">Mapel: {row.subject_name || selectedPackageOption(row.package_id)?.subject_name || '-'} · Durasi: {row.duration_minutes || selectedPackageOption(row.package_id)?.duration_minutes || 0} menit. Satu rombel tidak boleh punya dua paket untuk mapel yang sama.</p>
+								{#each packageClassGroups as group (group.local_id)}
+									<div class="space-y-3 p-3 text-sm">
+										<div class="grid gap-3 lg:grid-cols-[1fr_1fr_5rem] lg:items-end">
+											<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Rombel</span><select class="min-w-0 w-full rounded-md border bg-card px-3 py-2 text-sm disabled:opacity-70" value={group.class_id} onchange={(event) => updatePackageClassGroup(group.local_id, event.currentTarget.value)} disabled={group.rows.some((row) => row.id)} title={group.rows.some((row) => row.id) ? 'Hapus mapping tersimpan lalu tambah rombel baru jika ingin pindah rombel.' : undefined}>{#each rombelOptions as rombel}<option value={rombel.id}>{rombel.code || rombel.name} · {rombel.total_students ?? 0} siswa</option>{/each}</select></label>
+											<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Sesi/slot default</span><input class="min-w-0 w-full rounded-md border bg-card px-3 py-2 text-sm" value={group.rows[0]?.slot_label || ''} oninput={(event) => group.rows.forEach((row) => updatePackageMapRow(row.local_id, { slot_label: event.currentTarget.value }))} placeholder="Sesi Utama" /></label>
+											<button type="button" class="rounded-md border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => group.rows.forEach((row) => void deletePackageMap(row))}>Hapus</button>
+										</div>
+										<div class="rounded-lg border bg-muted/20 p-3">
+											<div class="flex flex-wrap items-center justify-between gap-2"><p class="text-xs font-semibold text-foreground">Paket soal untuk {classLabel(group.class_id)}</p><p class="text-[11px] text-muted-foreground">Dipilih: {packageRowsForClass(group.class_id).length} paket</p></div>
+											<div class="mt-3 grid max-h-72 gap-2 overflow-y-auto pr-1 md:grid-cols-2">
+												{#each packageOptions as option (option.id)}
+													<label class={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-xs hover:bg-background ${packageCheckedForClass(group.class_id, option.id) ? 'border-indigo-300 bg-indigo-50 text-indigo-900' : 'bg-card text-muted-foreground'}`}>
+														<input type="checkbox" class="mt-1" checked={packageCheckedForClass(group.class_id, option.id)} onchange={(event) => void togglePackageForClass(group.class_id, option, event.currentTarget.checked)} />
+														<span class="min-w-0"><span class="block font-semibold text-foreground">{option.subject_name}</span><span class="block truncate">{option.title}</span><span class="mt-1 block text-[11px]">{option.question_count ?? 0} soal · {option.duration_minutes || 0} menit{packageOptionForSubjectDuplicate(group.class_id, option) ? ' · mapel sudah dipilih' : ''}</span></span>
+													</label>
+												{/each}
+											</div>
+										</div>
+										{#if packageRowsForClass(group.class_id).length > 0}<p class="text-xs leading-5 text-muted-foreground">Mapping otomatis: {classLabel(group.class_id)} → {packageRowsForClass(group.class_id).map((row) => `${row.subject_name || selectedPackageOption(row.package_id)?.subject_name || 'Mapel'} (${row.package_title || selectedPackageOption(row.package_id)?.title || 'Paket'})`).join(', ')}</p>{/if}
 									</div>
 								{/each}
 							{/if}
 						</div>
 						<div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-							<p class="text-xs leading-5 text-muted-foreground">Rekomendasi awal: isi paket per rombel dulu, lalu lanjutkan sesi/jadwal detail pada iterasi berikutnya sebelum Cetak Kartu.</p>
+							<p class="text-xs leading-5 text-muted-foreground">Rekomendasi: pilih rombel, centang semua paket yang dipakai, lalu lanjut ke peserta/ruang. Sistem tetap menolak dua paket untuk mapel yang sama pada rombel yang sama.</p>
 							<button type="button" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void savePackageMaps()} disabled={savingPackages || packageMaps.length === 0}>{savingPackages ? 'Menyimpan…' : 'Simpan Paket Soal'}</button>
 						</div>
 					</section>
@@ -1020,35 +1330,33 @@
 					{/if}
 
 					{#if activeDetailFeature === 'cetak'}
-					<section class="rounded-xl border border-violet-200 bg-violet-50/50 p-4">
-						<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-							<div>
-								<p class="text-xs font-semibold tracking-[0.16em] text-violet-700 uppercase">Langkah 5 · Dokumen & Cetak</p>
-								<h3 class="text-base font-bold text-foreground">Kartu peserta dan lembar pengawas</h3>
-								<p class="mt-1 text-xs leading-5 text-muted-foreground">Terbitkan QR+PIN hanya setelah peserta, ruang, dan kursi final. PIN hanya tampil pada hasil terbitkan, jadi cetak/simpan PDF segera.</p>
-							</div>
-							<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void checkParticipantCards()} disabled={checkingCards || !selectedKegiatan || !packageGateReady} title={!packageGateReady ? packageGateMessage : undefined}>{checkingCards ? 'Mengecek…' : 'Cek Kartu'}</button>
+					<section class="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">
+						<div>
+							<p class="text-xs font-semibold tracking-[0.16em] text-primary uppercase">Cetak</p>
+							<h3 class="text-base font-bold text-foreground">Dokumen CBT</h3>
+							<p class="mt-1 text-xs leading-5 text-muted-foreground">Pilih dokumen yang ingin dicetak.</p>
 						</div>
 						{#if documentError}<p class="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{documentError}</p>{/if}
-						{#if documentNotice}<p class="mt-3 rounded-md border border-violet-300 bg-violet-100 px-3 py-2 text-sm font-medium text-violet-800" role="status">{documentNotice}</p>{/if}
-						<div class="mt-4 divide-y rounded-xl border bg-background">
-							<div class="grid gap-3 p-3 text-sm sm:grid-cols-[1fr_9rem_10rem] sm:items-center">
-								<div class="min-w-0"><p class="font-semibold text-foreground">Kartu Peserta</p><p class="mt-1 text-xs leading-5 text-muted-foreground">QR login, PIN, ruang, dan nomor kursi per siswa.</p></div>
-								<span class="rounded-full border bg-card px-2.5 py-1 text-center text-[11px] font-semibold text-muted-foreground">{documentPrintSummary.participantCards.label}</span>
-								<div class="flex flex-wrap gap-2 sm:justify-end"><button type="button" class="rounded-md border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void checkParticipantCards()} disabled={checkingCards || !packageGateReady} title={!packageGateReady ? packageGateMessage : undefined}>Daftar Kartu</button><button type="button" class="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void issueParticipantCards()} disabled={issuingCards || !packageGateReady || documentPrintSummary.participantCards.state === 'blocked'} title={!packageGateReady ? packageGateMessage : undefined}>{issuingCards ? 'Menerbitkan…' : 'Terbitkan QR+PIN'}</button></div>
-								<p class="sm:col-span-3 text-xs leading-5 text-muted-foreground">{documentPrintSummary.participantCards.description}</p>
+						{#if documentNotice}<p class="mt-3 rounded-md border border-emerald-300 bg-emerald-100 px-3 py-2 text-sm font-medium text-emerald-900" role="status">{documentNotice}</p>{/if}
+						<div class="mt-4 space-y-3">
+							<div class="rounded-xl border bg-background p-3 text-sm">
+								<div class="flex items-start justify-between gap-3">
+									<div class="min-w-0"><p class="font-semibold text-foreground">Kartu Peserta</p><p class="mt-1 text-xs text-muted-foreground">{selectedKegiatan.kartu || printableCards.length} kartu</p></div>
+									<span class="rounded-full border bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">{documentPrintSummary.participantCards.label}</span>
+								</div>
+								<p class="mt-3 rounded-md bg-muted/60 px-3 py-2 text-xs leading-5 text-muted-foreground">Masalah PIN lama: kalau PIN tidak muncul, buat PIN baru lalu cetak kartu.</p>
+								<div class="mt-3 grid gap-2 sm:grid-cols-2">
+									<button type="button" class="rounded-md bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void (documentPrintSummary.participantCards.state === 'ready' ? printParticipantCards() : issueParticipantCards(false))} disabled={issuingCards || checkingCards || !packageGateReady || documentPrintSummary.participantCards.state === 'blocked'} title={!packageGateReady ? packageGateMessage : undefined}>{issuingCards || checkingCards ? 'Memproses…' : documentPrintSummary.participantCards.state === 'ready' ? 'Cetak Kartu' : 'Buat QR+PIN'}</button>
+									<button type="button" class="rounded-md border border-primary/30 bg-background px-4 py-3 text-sm font-semibold text-primary hover:bg-primary/5 disabled:opacity-60" onclick={() => void regenerateParticipantCardsAndPrint()} disabled={issuingCards || !packageGateReady || documentPrintSummary.participantCards.state === 'blocked'} title="Ganti PIN lama yang tidak bisa dibuka dari hash">PIN Baru & Cetak</button>
+								</div>
 							</div>
-							<div class="grid gap-3 p-3 text-sm sm:grid-cols-[1fr_9rem_10rem] sm:items-center">
-								<div class="min-w-0"><p class="font-semibold text-foreground">Lembar Pengawas Ruang</p><p class="mt-1 text-xs leading-5 text-muted-foreground">Daftar hadir dan kursi per ruang; tidak menampilkan PIN peserta.</p></div>
-								<span class="rounded-full border bg-card px-2.5 py-1 text-center text-[11px] font-semibold text-muted-foreground">{documentPrintSummary.supervisorSheets.label}</span>
-								<button type="button" class="rounded-md border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-60" disabled={documentPrintSummary.supervisorSheets.state === 'blocked'} onclick={() => window.print()}>Cetak Lembar</button>
-								<p class="sm:col-span-3 text-xs leading-5 text-muted-foreground">{documentPrintSummary.supervisorSheets.description}</p>
+							<div class="rounded-xl border bg-background p-3 text-sm">
+								<div class="flex items-start justify-between gap-3"><div class="min-w-0"><p class="font-semibold text-foreground">Lembar Pengawas</p><p class="mt-1 text-xs text-muted-foreground">Daftar hadir per ruang</p></div><span class="rounded-full border bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">{documentPrintSummary.supervisorSheets.label}</span></div>
+								<button type="button" class="mt-3 w-full rounded-md border bg-card px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-60" disabled={documentPrintSummary.supervisorSheets.state === 'blocked'} onclick={() => void printSupervisorSheets()}>Cetak Lembar Pengawas</button>
 							</div>
-							<div class="grid gap-3 p-3 text-sm sm:grid-cols-[1fr_9rem_10rem] sm:items-center">
-								<div class="min-w-0"><p class="font-semibold text-foreground">Checklist Arsip</p><p class="mt-1 text-xs leading-5 text-muted-foreground">Daftar kelengkapan dokumen sebelum pelaksanaan dan arsip.</p></div>
-								<span class="rounded-full border bg-card px-2.5 py-1 text-center text-[11px] font-semibold text-muted-foreground">{documentPrintSummary.archiveChecklist.label}</span>
-								<button type="button" class="rounded-md border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => window.print()}>Cetak Checklist</button>
-								<p class="sm:col-span-3 text-xs leading-5 text-muted-foreground">{documentPrintSummary.archiveChecklist.description}</p>
+							<div class="rounded-xl border bg-background p-3 text-sm">
+								<div class="flex items-start justify-between gap-3"><div class="min-w-0"><p class="font-semibold text-foreground">Checklist Arsip</p><p class="mt-1 text-xs text-muted-foreground">Kelengkapan dokumen</p></div><span class="rounded-full border bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">{documentPrintSummary.archiveChecklist.label}</span></div>
+								<button type="button" class="mt-3 w-full rounded-md border bg-card px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted" onclick={() => void printDocument('checklist')}>Cetak Checklist</button>
 							</div>
 						</div>
 					</section>
@@ -1064,3 +1372,107 @@
 		<section class="rounded-2xl border border-dashed border-border bg-card p-6 text-center shadow-sm"><p class="text-sm font-semibold text-foreground">Kegiatan tidak ditemukan atau belum bisa dimuat.</p><p class="mt-1 text-xs text-muted-foreground">Kembali ke daftar asesmen, lalu pilih kegiatan yang tersedia.</p><a href="/asesmen" class="mt-4 inline-flex rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Kembali ke Daftar</a></section>
 	{/if}
 </div>
+
+{#if selectedKegiatan && printMode}
+	<section class="print-area">
+		<header class="print-header">
+			<p>Kementerian Agama · MTsN 2 Kolaka Utara</p>
+			<h1>{printMode === 'cards' ? 'Kartu Peserta CBT' : printMode === 'supervisor' ? 'Lembar Pengawas Ruang' : 'Checklist Arsip Asesmen'}</h1>
+			<div>{selectedKegiatan.nama} · {selectedKegiatan.periode}</div>
+		</header>
+
+		{#if printMode === 'cards'}
+			<div class="card-pages">
+				{#each printableCardPages as pageCards}
+					<section class="card-page">
+						{#each pageCards as card}
+							<article class="participant-card-print">
+								<div class="card-title">KARTU PESERTA CBT</div>
+								<h2>{card.student_name || 'Nama peserta'}</h2>
+								<div class="card-row"><span>Rombel</span><strong>{card.class_code || card.class_name || '-'}</strong></div>
+								<div class="card-row"><span>Ruang/Kursi</span><strong>{card.room_code || '-'} / {card.seat_no || '-'}</strong></div>
+								<div class="card-row"><span>No. Induk</span><strong>{card.nis || card.nisn || '-'}</strong></div>
+								<div class="qr-box">
+									{#if qrImages[cardPrintKey(card)]}
+										<img src={qrImages[cardPrintKey(card)]} alt={`QR login ${card.student_name || 'peserta'}`} />
+									{:else}
+										<span>QR code tidak tersedia. Buat PIN baru untuk mencetak kartu login.</span>
+									{/if}
+								</div>
+								<div class="pin-row"><span>PIN</span><strong>{card.pin || '—'}</strong></div>
+								<p class="print-note">Gunakan QR/PIN ini hanya untuk pelaksanaan resmi. Simpan kartu dengan aman.</p>
+							</article>
+						{/each}
+					</section>
+				{/each}
+			</div>
+		{:else if printMode === 'supervisor'}
+			{#each printableRoomGroups as [roomCode, cards]}
+				<section class="room-sheet">
+					<h2>Ruang {roomCode}</h2>
+					<table>
+						<thead><tr><th>No</th><th>Nama</th><th>Rombel</th><th>Kursi</th><th>QR</th><th>Tanda Tangan</th></tr></thead>
+						<tbody>{#each cards as card, index}<tr><td>{index + 1}</td><td>{card.student_name || '-'}</td><td>{card.class_code || card.class_name || '-'}</td><td>{card.seat_no || '-'}</td><td>{#if qrImages[cardPrintKey(card)]}<img class="sheet-qr" src={qrImages[cardPrintKey(card)]} alt="QR" />{:else}<span class="qr-missing">-</span>{/if}</td><td></td></tr>{/each}</tbody>
+					</table>
+					<div class="signature-row"><span>Pengawas Ruang</span><span>Panitia</span></div>
+				</section>
+			{/each}
+		{:else}
+			<section class="archive-checklist-print">
+				<h2>Checklist Arsip</h2>
+				{#each preparationChecklist as label, index}
+					<div class="check-row"><span>{index + 1}</span><strong>{label}</strong><em>□ Ada / □ Belum</em></div>
+				{/each}
+				<p class="print-note">Checklist dicetak untuk arsip panitia. Cocokkan kembali jumlah peserta, ruang, sesi, kartu, dan lembar pengawas sebelum pelaksanaan.</p>
+			</section>
+		{/if}
+	</section>
+{/if}
+
+<style>
+	.print-area { display: none; }
+	@media print {
+		@page { size: A4 portrait; margin: 8mm; }
+		.print-area { display: none !important; }
+		:global(body) { background: white !important; color: #111827 !important; }
+		:global(body.cbt-document-print) { margin: 0 !important; }
+		:global(body.cbt-document-print *) { visibility: hidden !important; }
+		:global(body.cbt-document-print .print-area),
+		:global(body.cbt-document-print .print-area *) { visibility: visible !important; }
+		:global(body.cbt-document-print) .app-screen { display: none !important; }
+		:global(body.cbt-document-print .print-area) {
+			display: block !important;
+			position: absolute !important;
+			inset: 0 auto auto 0 !important;
+			width: 100% !important;
+			padding: 0;
+			font-family: Arial, sans-serif;
+			color: #111827;
+		}
+		.print-header { border-bottom: 1.5px solid #111827; margin-bottom: 4mm; padding-bottom: 2mm; text-align: center; }
+		.print-header p { margin: 0; font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
+		.print-header h1 { margin: 2px 0; font-size: 13px; }
+		.print-header div { font-size: 9px; }
+		.card-pages { display: block; }
+		.card-page { break-after: page; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(3, 1fr); gap: 3mm; min-height: 248mm; page-break-after: always; }
+		.card-page:last-child { break-after: auto; page-break-after: auto; }
+		.participant-card-print { break-inside: avoid; page-break-inside: avoid; border: 1px solid #111827; border-radius: 7px; box-sizing: border-box; height: 80mm; overflow: hidden; padding: 3.5mm; }
+		.participant-card-print .card-title { font-size: 7px; font-weight: 700; letter-spacing: .1em; text-align: center; }
+		.participant-card-print h2 { margin: 2mm 0; font-size: 11px; line-height: 1.2; text-align: center; }
+		.card-row, .pin-row { display: flex; justify-content: space-between; gap: 6px; border-bottom: 1px dashed #9ca3af; padding: 1.1mm 0; font-size: 7.5px; line-height: 1.15; }
+		.pin-row strong { font-size: 13px; letter-spacing: .1em; }
+		.qr-box { align-items: center; border: 1px solid #111827; display: flex; font-size: 7px; justify-content: center; margin: 2.5mm auto; min-height: 22mm; padding: 1mm; text-align: center; width: 22mm; }
+		.qr-box img { display: block; height: 20mm; width: 20mm; }
+		.print-note { color: #4b5563; font-size: 6.5px; line-height: 1.25; margin-top: 1.5mm; }
+		.room-sheet { page-break-after: always; }
+		.room-sheet h2, .archive-checklist-print h2 { font-size: 16px; margin: 12px 0 8px; }
+		table { border-collapse: collapse; width: 100%; }
+		th, td { border: 1px solid #111827; font-size: 11px; padding: 5px; text-align: left; vertical-align: middle; }
+		th:first-child, td:first-child, th:nth-child(4), td:nth-child(4) { text-align: center; width: 38px; }
+		th:nth-child(5), td:nth-child(5) { text-align: center; width: 54px; }
+		.sheet-qr { display: inline-block; height: 42px; width: 42px; }
+		.qr-missing { color: #6b7280; font-size: 10px; }
+		.signature-row { display: flex; justify-content: space-between; margin-top: 42px; padding: 0 48px; font-size: 12px; }
+		.check-row { align-items: center; border: 1px solid #d1d5db; display: grid; grid-template-columns: 32px 1fr 110px; gap: 8px; margin-bottom: 6px; padding: 8px; font-size: 12px; }
+	}
+</style>

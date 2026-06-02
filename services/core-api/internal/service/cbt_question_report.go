@@ -225,6 +225,9 @@ func bankSoalReportRange(f BankSoalReportFilters) (time.Time, time.Time, string,
 	now := time.Now().In(loc)
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 	switch f.PeriodPreset {
+	case "all", "semua":
+		start := time.Date(2000, 1, 1, 0, 0, 0, 0, loc)
+		return start, now.AddDate(1, 0, 0), "Semua periode", nil
 	case "today":
 		return startOfDay, startOfDay.AddDate(0, 0, 1), startOfDay.Format("02 Jan 2006") + " WITA", nil
 	case "this_week":

@@ -39,14 +39,14 @@ export function summarizeDocumentPrintStatus(counts: AssessmentDocumentCounts): 
 	} else if (cardCount <= 0) {
 		participantCards = {
 			state: 'action',
-			label: 'Terbitkan QR+PIN',
-			description: `${participantCount} peserta siap diterbitkan. PIN hanya tampil pada hasil terbitkan ini.`
+			label: 'Buat QR+PIN',
+			description: `${participantCount} peserta siap dibuatkan QR dan PIN.`
 		};
 	} else {
 		participantCards = {
 			state: 'ready',
 			label: 'Cetak Kartu',
-			description: `${cardCount}/${participantCount} kartu sudah diterbitkan. Cetak/simpan PDF dari hasil terbitkan atau daftar kartu.`
+			description: `${cardCount}/${participantCount} kartu sudah tersedia. Jika PIN tidak muncul, buat PIN baru lalu cetak.`
 		};
 	}
 

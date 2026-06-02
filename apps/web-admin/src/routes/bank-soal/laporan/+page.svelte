@@ -1,9 +1,27 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
+	import ChevronUpIcon from '@lucide/svelte/icons/chevron-up';
 	import { clientApiPathWithQuery, readClientApiData } from '$lib/client/api';
 
 	type ReportKey = 'input' | 'progress' | 'revision' | 'reviewer' | 'readiness' | 'honor';
+	type SortDirection = 'asc' | 'desc';
+	type WorkflowStatusFilter = 'all' | 'konsep' | 'diperiksa' | 'siap_pakai';
+	type SortKey =
+		| 'no'
+		| 'primary'
+		| 'subject_name'
+		| 'level_name'
+		| 'task'
+		| 'total'
+		| 'pg'
+		| 'essay'
+		| 'other'
+		| 'statuses'
+		| 'last_input'
+		| 'notes';
 	type StatusOption = { value: string; label: string };
+	type ReportColumn = { key: SortKey; label: string; numeric?: boolean; wideOnly?: boolean };
 	type ReportRow = {
 		no: number;
 		primary: string;
@@ -59,14 +77,13 @@
 	];
 
 	let activeReport = $state<ReportKey>('input');
-	let periodPreset = $state('this_month');
+	let periodPreset = $state('all');
 	let startDate = $state('');
 	let endDate = $state('');
 	let subjectId = $state('');
 	let targetLevel = $state('');
 	let authorUsername = $state('');
-	let workflowStatuses = $state<string[]>([]);
-	let statusDropdownOpen = $state(false);
+	let workflowStatusFilter = $state<WorkflowStatusFilter>('all');
 	let includeSystem = $state(true);
 	let loading = $state(false);
 	let exporting = $state('');
@@ -74,36 +91,69 @@
 	let compactDensity = $state<'readable' | 'dense'>('readable');
 	let error = $state('');
 	let report = $state<ReportResult | null>(null);
+	let sortKey = $state<SortKey>('no');
+	let sortDirection = $state<SortDirection>('asc');
 
 	const workflowStatusOptions: StatusOption[] = [
+		{ value: 'all', label: 'Semua status' },
 		{ value: 'konsep', label: 'Konsep' },
 		{ value: 'diperiksa', label: 'Diperiksa' },
 		{ value: 'siap_pakai', label: 'Siap Pakai' }
 	];
+	const reportColumns: ReportColumn[] = [
+		{ key: 'no', label: 'No' },
+		{ key: 'primary', label: 'Utama' },
+		{ key: 'subject_name', label: 'Mapel' },
+		{ key: 'level_name', label: 'Tingkat' },
+		{ key: 'task', label: 'Tugas', wideOnly: true },
+		{ key: 'total', label: 'Total', numeric: true },
+		{ key: 'pg', label: 'PG', numeric: true, wideOnly: true },
+		{ key: 'essay', label: 'Essay', numeric: true, wideOnly: true },
+		{ key: 'other', label: 'Lain', numeric: true, wideOnly: true },
+		{ key: 'statuses', label: 'Status' },
+		{ key: 'last_input', label: 'Terakhir', numeric: true },
+		{ key: 'notes', label: 'Keterangan', wideOnly: true }
+	];
 
-	let selectedStatusLabels = $derived(
-		workflowStatuses
-			.map((status) => workflowStatusOptions.find((option) => option.value === status)?.label ?? status)
-			.filter(Boolean)
-	);
-	let statusSummary = $derived(
-		selectedStatusLabels.length === 0
-			? 'Semua status'
-			: selectedStatusLabels.length === 1
-				? selectedStatusLabels[0]
-				: `${selectedStatusLabels.length} status dipilih`
-	);
+	let selectedStatusLabel = $derived(workflowStatusOptions.find((option) => option.value === workflowStatusFilter)?.label ?? 'Semua status');
+	let sortedRows = $derived.by(() => {
+		const rows = report?.rows ?? [];
+		return [...rows].sort((left, right) => compareRows(left, right, sortKey, sortDirection));
+	});
 
-	function toggleWorkflowStatus(value: string) {
-		if (workflowStatuses.includes(value)) {
-			workflowStatuses = workflowStatuses.filter((status) => status !== value);
+	function sortBy(key: SortKey) {
+		if (sortKey === key) {
+			sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
 			return;
 		}
-		workflowStatuses = [...workflowStatuses, value];
+		sortKey = key;
+		sortDirection = 'asc';
 	}
 
-	function clearWorkflowStatuses() {
-		workflowStatuses = [];
+	function sortLabel(key: SortKey, label: string) {
+		if (sortKey !== key) return `Urutkan kolom ${label} naik`;
+		return sortDirection === 'asc' ? `Urutkan kolom ${label} turun` : `Urutkan kolom ${label} naik`;
+	}
+
+	function sortValue(row: ReportRow, key: SortKey) {
+		if (key === 'last_input') {
+			const time = Date.parse(row.last_input ?? '');
+			return Number.isFinite(time) ? time : row.last_input ?? '';
+		}
+		const value = row[key];
+		if (typeof value === 'number') return value;
+		return (value ?? '').toString().trim().toLocaleLowerCase('id-ID');
+	}
+
+	function compareRows(left: ReportRow, right: ReportRow, key: SortKey, direction: SortDirection) {
+		const leftValue = sortValue(left, key);
+		const rightValue = sortValue(right, key);
+		let result =
+			typeof leftValue === 'number' && typeof rightValue === 'number'
+				? leftValue - rightValue
+				: leftValue.toString().localeCompare(rightValue.toString(), 'id-ID', { numeric: true, sensitivity: 'base' });
+		if (result === 0 && key !== 'no') result = left.no - right.no;
+		return direction === 'asc' ? result : -result;
 	}
 
 	const subjectShortNames: Record<string, string> = {
@@ -172,7 +222,7 @@
 		if (subjectId.trim()) p.set('subject_id', subjectId.trim());
 		if (targetLevel) p.set('target_level', targetLevel);
 		if (authorUsername.trim()) p.set('author_username', authorUsername.trim());
-		for (const status of workflowStatuses) p.append('workflow_status', status);
+		if (workflowStatusFilter !== 'all') p.set('workflow_status', workflowStatusFilter);
 		p.set('include_system', includeSystem ? 'true' : 'false');
 		if (format) p.set('format', format);
 		return p;
@@ -264,6 +314,7 @@
 	<section class="filters">
 		<label>Periode
 			<select bind:value={periodPreset}>
+				<option value="all">Semua periode</option>
 				<option value="today">Hari ini</option>
 				<option value="this_week">Minggu ini</option>
 				<option value="this_month">Bulan ini</option>
@@ -282,52 +333,14 @@
 				<option value="IX">IX</option>
 			</select>
 		</label>
-		<div class="status-filter">
-			<span class="filter-label">Status</span>
-			<button
-				type="button"
-				class="status-trigger"
-				aria-haspopup="listbox"
-				aria-expanded={statusDropdownOpen}
-				onclick={() => (statusDropdownOpen = !statusDropdownOpen)}
-			>
-				<span>{statusSummary}</span>
-				<small>{workflowStatuses.length === 0 ? 'Filter multi status' : selectedStatusLabels.join(', ')}</small>
-			</button>
-			{#if statusDropdownOpen}
-				<div class="status-menu" role="listbox" aria-label="Pilih status laporan" aria-multiselectable="true">
-					<label class="status-option status-option-all">
-						<input type="checkbox" checked={workflowStatuses.length === 0} onchange={clearWorkflowStatuses} />
-						<span>Semua status</span>
-					</label>
-					<div class="status-divider"></div>
-					{#each workflowStatusOptions as option}
-						<label class="status-option">
-							<input
-								type="checkbox"
-								checked={workflowStatuses.includes(option.value)}
-								onchange={() => toggleWorkflowStatus(option.value)}
-							/>
-							<span>{option.label}</span>
-						</label>
-					{/each}
-					<div class="status-menu-actions">
-						<button type="button" class="secondary compact" onclick={clearWorkflowStatuses}>Reset</button>
-						<button type="button" class="primary compact" onclick={() => (statusDropdownOpen = false)}>Selesai</button>
-					</div>
-				</div>
-			{/if}
-			{#if workflowStatuses.length > 0}
-				<div class="status-chips" aria-label="Status aktif">
-					{#each workflowStatuses as status}
-						<button type="button" class="status-chip" onclick={() => toggleWorkflowStatus(status)}>
-							{workflowStatusOptions.find((option) => option.value === status)?.label ?? status}
-							<span aria-hidden="true">×</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
-		</div>
+		<label>Status
+			<select bind:value={workflowStatusFilter} aria-label="Filter status workflow">
+				{#each workflowStatusOptions as option}
+					<option value={option.value}>{option.label}</option>
+				{/each}
+			</select>
+			<small>{workflowStatusFilter === 'all' ? 'Tanpa filter status' : `Hanya ${selectedStatusLabel}`}</small>
+		</label>
 		<label>Pembuat <input placeholder="username" bind:value={authorUsername} /></label>
 		<label>Subject ID <input placeholder="opsional UUID mapel" bind:value={subjectId} /></label>
 		<label class="check"><input type="checkbox" bind:checked={includeSystem} /> Tampilkan system/seed</label>
@@ -372,9 +385,32 @@
 			</div>
 			<div class="table-wrap" aria-label="Tabel laporan lengkap">
 				<table>
-					<thead><tr><th>No</th><th>Utama</th><th>Mapel</th><th>Tingkat</th><th class="wide-only">Tugas</th><th>Total</th><th class="wide-only">PG</th><th class="wide-only">Essay</th><th class="wide-only">Lain</th><th>Status</th><th>Terakhir</th><th class="wide-only">Keterangan</th></tr></thead>
+					<thead>
+						<tr>
+							{#each reportColumns as column}
+								<th
+									class:wide-only={column.wideOnly}
+									aria-sort={sortKey === column.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+								>
+									<button
+										type="button"
+										class="sort-button"
+										class:sort-button-num={column.numeric}
+										onclick={() => sortBy(column.key)}
+										aria-label={sortLabel(column.key, column.label)}
+									>
+										<span>{column.label}</span>
+										<span class="sort-icons" class:active={sortKey === column.key}>
+											<ChevronUpIcon class={sortKey !== column.key || sortDirection !== 'asc' ? 'muted-icon' : ''} />
+											<ChevronDownIcon class={sortKey !== column.key || sortDirection !== 'desc' ? 'muted-icon' : ''} />
+										</span>
+									</button>
+								</th>
+							{/each}
+						</tr>
+					</thead>
 					<tbody>
-						{#each report.rows as row}
+						{#each sortedRows as row}
 							<tr class:system={row.system_row} class:warning={row.data_warning}>
 								<td>{row.no}</td>
 								<td><b>{row.primary}</b><br><small>{row.secondary}</small></td>
@@ -388,7 +424,7 @@
 			</div>
 
 			<div class="mobile-rows" aria-label="Daftar laporan ringkas mobile">
-				{#each report.rows as row}
+				{#each sortedRows as row}
 					<article class:system={row.system_row} class:warning={row.data_warning}>
 						<div class="mobile-row-head">
 							<div><strong>{row.primary}</strong><small>{row.secondary}</small></div>
@@ -446,7 +482,54 @@
 	.table-head p { margin: 4px 0 0; color: #64748b; }
 	.table-wrap { overflow: auto; -webkit-overflow-scrolling: touch; border-radius: 14px; }
 	table { width: 100%; border-collapse: collapse; min-width: 1100px; }
-	th { background: #0f172a; color: white; text-align: left; padding: 10px; font-size: 12px; position: sticky; top: 0; }
+	th { background: #0f172a; color: white; text-align: left; padding: 0; font-size: 12px; position: sticky; top: 0; z-index: 2; }
+	.sort-button {
+		width: 100%;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		padding: 10px;
+		min-height: 40px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 6px;
+		font: inherit;
+		font-weight: 900;
+		text-align: left;
+		cursor: pointer;
+		touch-action: manipulation;
+	}
+	.sort-button-num {
+		justify-content: flex-end;
+	}
+	.sort-icons {
+		width: 13px;
+		height: 15px;
+		display: inline-grid;
+		grid-template-rows: 1fr 1fr;
+		color: #d1fae5;
+		opacity: .72;
+		flex: 0 0 auto;
+	}
+	.sort-icons.active {
+		opacity: 1;
+		color: #5eead4;
+	}
+	.sort-icons :global(svg) {
+		width: 13px;
+		height: 13px;
+		stroke-width: 3;
+	}
+	.sort-icons :global(svg:first-child) {
+		margin-bottom: -5px;
+	}
+	.sort-icons :global(svg:last-child) {
+		margin-top: -5px;
+	}
+	.sort-icons :global(.muted-icon) {
+		opacity: .28;
+	}
 	td { border-bottom: 1px solid #e5e7eb; padding: 10px; font-size: 13px; vertical-align: top; }
 	tr.system td, article.system { background: #eff6ff; }
 	tr.warning td, article.warning { background: #fff7ed; }
@@ -536,8 +619,12 @@
 		background: #f8fafc;
 		color: #475569;
 		font-size: 11.5px;
-		padding: 7px 3px;
+		padding: 0;
 		border-bottom: 1px solid #dbe3ea;
+	}
+	.compact-mode .sort-button {
+		padding: 7px 3px;
+		min-height: 30px;
 	}
 	.compact-mode td {
 		font-size: 12px;
@@ -617,8 +704,12 @@
 	}
 	.compact-mode.compact-dense th {
 		font-size: 10.5px;
-		padding: 3px 2.5px;
+		padding: 0;
 		line-height: 1.08;
+	}
+	.compact-mode.compact-dense .sort-button {
+		padding: 3px 2.5px;
+		min-height: 22px;
 	}
 	.compact-mode.compact-dense td {
 		font-size: 10.8px;
@@ -635,24 +726,6 @@
 		max-width: 118px;
 	}
 
-
-	.status-filter { position: relative; display: grid; gap: 6px; min-width: 220px; }
-	.filter-label { font-size: 12px; font-weight: 800; color: #475569; }
-	.status-trigger { border: 1px solid #cbd5e1; border-radius: 10px; padding: 8px 10px; min-height: 42px; background: white; display: grid; gap: 2px; text-align: left; cursor: pointer; min-width: 220px; }
-	.status-trigger span { font-weight: 800; color: #0f172a; }
-	.status-trigger small { color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
-	.status-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; width: min(320px, calc(100vw - 32px)); background: white; border: 1px solid #cbd5e1; border-radius: 14px; padding: 10px; box-shadow: 0 16px 36px #0f172a22; display: grid; gap: 4px; }
-	.status-option { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 10px; font-size: 13px; color: #0f172a; cursor: pointer; }
-	.status-option:hover { background: #f1f5f9; }
-	.status-option input { width: auto; min-width: 0; padding: 0; }
-	.status-option-all { font-weight: 900; }
-	.status-divider { border-top: 1px solid #e5e7eb; margin: 4px 0; }
-	.status-menu-actions { display: flex; gap: 8px; justify-content: flex-end; border-top: 1px solid #e5e7eb; padding-top: 8px; margin-top: 4px; }
-	.compact { min-height: 34px; padding: 7px 10px; font-size: 12px; }
-	.status-chips { display: flex; flex-wrap: wrap; gap: 6px; max-width: 360px; }
-	.status-chip { border: 1px solid #99f6e4; background: #ccfbf1; color: #0f766e; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 900; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-	.status-chip span { font-size: 13px; line-height: 1; }
-
 	@media (max-width: 760px) {
 		.page-shell { padding: 12px; gap: 12px; }
 		.hero { display: grid; border-radius: 18px; padding: 18px; }
@@ -666,15 +739,16 @@
 		.compact-mode .table-card { padding: 5px; border-radius: 12px; }
 		.compact-mode .table-head { padding: 2px 2px 6px; }
 		.compact-mode.compact-dense .table-head { padding: 0 1px 3px; }
-		.compact-mode th { padding-inline: 2.5px; }
+		.compact-mode th { padding: 0; }
+		.compact-mode .sort-button { padding-inline: 2.5px; }
 		.compact-mode td { padding-inline: 2.5px; }
-		.compact-mode.compact-dense th { padding: 2px 2px; }
+		.compact-mode.compact-dense th { padding: 0; }
+		.compact-mode.compact-dense .sort-button { padding: 2px 2px; }
 		.compact-mode.compact-dense td { padding: 1.5px 2px; }
 		.compact-mode .compact-banner { gap: 5px; padding-inline: 7px; }
 		.compact-mode .compact-banner span { padding-left: 5px; }
 		.filters { display: grid; grid-template-columns: 1fr; padding: 12px; }
-		.filters label, .filters button, input, select, .status-filter, .status-trigger { width: 100%; min-width: 0; }
-		.status-menu { position: static; width: 100%; box-shadow: 0 10px 24px #0f172a18; }
+		.filters label, .filters button, input, select { width: 100%; min-width: 0; }
 		.check { justify-content: flex-start; }
 		.tabs { display: flex; overflow-x: auto; padding-bottom: 4px; scroll-snap-type: x mandatory; }
 		.tabs button { min-width: 168px; scroll-snap-align: start; }
