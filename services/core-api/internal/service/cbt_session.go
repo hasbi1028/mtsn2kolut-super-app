@@ -287,14 +287,10 @@ func (s *CbtSession) ensureCbtPackageEventForSession(ctx context.Context, packag
 	if err != nil {
 		return err
 	}
-	switch {
-	case eventID.Valid && !sameUUID(pkg.EventID, eventID):
-		return fmt.Errorf("%w: paket sesi harus berasal dari event yang sama", domain.ErrBadRequest)
-	case !eventID.Valid && pkg.EventID.Valid:
+	if !eventID.Valid && pkg.EventID.Valid {
 		return fmt.Errorf("%w: paket khusus event hanya boleh dipakai pada sesi event yang sama", domain.ErrBadRequest)
-	default:
-		return nil
 	}
+	return nil
 }
 
 func (s *CbtSession) findCbtPackage(ctx context.Context, packageID pgtype.UUID) (db.ListCbtPackagesRow, error) {

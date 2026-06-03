@@ -1586,32 +1586,16 @@ func TestCbtSessionCreateRejectsUnsafePackageQuality(t *testing.T) {
 	}
 }
 
-func TestCbtSessionCreateRejectsPackageEventMismatch(t *testing.T) {
+func TestCbtSessionCreateAllowsEventSessionPackageReuse(t *testing.T) {
 	packageID := documentCycleTestUUID(235)
 	eventID := documentCycleTestUUID(236)
 	otherEventID := documentCycleTestUUID(237)
 	tests := []struct {
 		name           string
-		sessionEventID pgtype.UUID
 		packageEventID pgtype.UUID
-		wantErr        string
 	}{
-		{
-			name:           "event session cannot use global package",
-			sessionEventID: eventID,
-			wantErr:        "event yang sama",
-		},
-		{
-			name:           "event session cannot use other event package",
-			sessionEventID: eventID,
-			packageEventID: otherEventID,
-			wantErr:        "event yang sama",
-		},
-		{
-			name:           "non event session cannot use event package",
-			packageEventID: eventID,
-			wantErr:        "sesi event yang sama",
-		},
+		{name: "event session can use global package"},
+		{name: "event session can reuse other event package", packageEventID: otherEventID},
 	}
 
 	for _, tt := range tests {
@@ -1623,18 +1607,46 @@ func TestCbtSessionCreateRejectsPackageEventMismatch(t *testing.T) {
 
 			_, err := svc.Create(context.Background(), CreateCbtSessionInput{
 				PackageID: packageID,
-				EventID:   tt.sessionEventID,
+				EventID:   eventID,
 				ScopeType: "school",
 				Title:     "Sesi",
 				Status:    db.CbtSessionStatusEnumDraft,
 			})
-			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("Create() error = %v, want contains %q", err, tt.wantErr)
+			if err != nil {
+				t.Fatalf("Create() error = %v, want nil", err)
 			}
-			if store.packageQualityID.Valid {
-				t.Fatalf("Create() package quality id = %v, want blocked before quality check", store.packageQualityID)
+			if store.packageQualityID != packageID {
+				t.Fatalf("Create() package quality id = %v, want %v", store.packageQualityID, packageID)
+			}
+			if store.createArg.PackageID != packageID {
+				t.Fatalf("Create() package id = %v, want %v", store.createArg.PackageID, packageID)
+			}
+			if store.createArg.EventID != eventID {
+				t.Fatalf("Create() event id = %v, want %v", store.createArg.EventID, eventID)
 			}
 		})
+	}
+}
+
+func TestCbtSessionCreateRejectsPackageEventForNonEventSession(t *testing.T) {
+	packageID := documentCycleTestUUID(235)
+	eventID := documentCycleTestUUID(236)
+	store := &fakeCbtSessionStore{
+		packageRows: []db.ListCbtPackagesRow{{ID: packageID, EventID: eventID}},
+	}
+	svc := &CbtSession{q: store}
+
+	_, err := svc.Create(context.Background(), CreateCbtSessionInput{
+		PackageID: packageID,
+		ScopeType: "school",
+		Title:     "Sesi",
+		Status:    db.CbtSessionStatusEnumDraft,
+	})
+	if err == nil || !strings.Contains(err.Error(), "sesi event yang sama") {
+		t.Fatalf("Create() error = %v, want event-only package error", err)
+	}
+	if store.packageQualityID.Valid {
+		t.Fatalf("Create() package quality id = %v, want blocked before quality check", store.packageQualityID)
 	}
 }
 

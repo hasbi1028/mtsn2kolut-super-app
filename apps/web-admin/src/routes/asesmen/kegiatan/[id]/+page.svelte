@@ -82,6 +82,7 @@
 
 	type AssessmentPackageOption = {
 		id: string;
+		event_id?: string;
 		subject_id: string;
 		subject_code?: string;
 		subject_name: string;
@@ -250,6 +251,7 @@
 	const packageGateMessage = 'Tautkan minimal satu Paket Soal siap sebelum lanjut ke ruang, sesi, cetak kartu, atau pelaksanaan.';
 	const sessionPackageMapOptions = $derived(packageMaps.filter((item) => item.class_id && item.package_id));
 	const selectedSessionPackageMap = $derived(sessionPackageMapOptions.find((item) => item.local_id === sessionDraft.packageMapLocalId) ?? sessionPackageMapOptions[0] ?? null);
+	const selectedSessionPackageReused = $derived(Boolean(selectedSessionPackageMap && packageReusedFromAnotherKegiatan(selectedSessionPackageMap.package_id)));
 	const sessionGateMessage = 'Sesi wajib terikat ke Kegiatan, memakai Paket Soal, punya peserta, ruang/kursi lengkap, dan jadwal valid sebelum diaktifkan.';
 	const routeKegiatanId = $derived(page.params.id ?? '');
 
@@ -625,11 +627,27 @@
 	function packageOptionLabel(option: AssessmentPackageOption) {
 		const count = `${option.question_count ?? 0} soal`;
 		const duration = option.duration_minutes ? ` · ${option.duration_minutes} menit` : '';
-		return `${option.subject_name} · ${option.title} (${count}${duration})`;
+		const reuse = packageReusedFromAnotherKegiatan(option.id) ? ' · Reuse' : '';
+		return `${option.subject_name} · ${option.title} (${count}${duration}${reuse})`;
 	}
 
 	function selectedPackageOption(packageId: string) {
 		return packageOptions.find((option) => option.id === packageId) ?? null;
+	}
+
+	function packageEventId(packageId: string) {
+		return selectedPackageOption(packageId)?.event_id || '';
+	}
+
+	function packageReusedFromAnotherKegiatan(packageId: string) {
+		const eventId = packageEventId(packageId);
+		return Boolean(eventId && selectedKegiatan?.id && eventId !== selectedKegiatan.id);
+	}
+
+	function packageScopeLabel(packageId: string) {
+		const eventId = packageEventId(packageId);
+		if (!eventId) return 'Paket umum';
+		return packageReusedFromAnotherKegiatan(packageId) ? 'Reuse dari kegiatan lain' : 'Paket kegiatan ini';
 	}
 
 	function classOption(classId: string) {
@@ -1403,12 +1421,12 @@
 												{#each packageOptions as option (option.id)}
 													<label class={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-xs hover:bg-background ${packageCheckedForClass(group.class_id, option.id) ? 'border-indigo-300 bg-indigo-50 text-indigo-900' : 'bg-card text-muted-foreground'}`}>
 														<input type="checkbox" class="mt-1" checked={packageCheckedForClass(group.class_id, option.id)} onchange={(event) => void togglePackageForClass(group.class_id, option, event.currentTarget.checked)} />
-														<span class="min-w-0"><span class="block font-semibold text-foreground">{option.subject_name}</span><span class="block truncate">{option.title}</span><span class="mt-1 block text-[11px]">{option.question_count ?? 0} soal · {option.duration_minutes || 0} menit{packageOptionForSubjectDuplicate(group.class_id, option) ? ' · mapel sudah dipilih' : ''}</span></span>
+														<span class="min-w-0"><span class="block font-semibold text-foreground">{option.subject_name}</span><span class="block truncate">{option.title}</span><span class="mt-1 block text-[11px]">{option.question_count ?? 0} soal · {option.duration_minutes || 0} menit{packageOptionForSubjectDuplicate(group.class_id, option) ? ' · mapel sudah dipilih' : ''}</span><span class={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${packageReusedFromAnotherKegiatan(option.id) ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-slate-200 bg-white text-slate-600'}`}>{packageScopeLabel(option.id)}</span></span>
 													</label>
 												{/each}
 											</div>
 										</div>
-										{#if packageRowsForClass(group.class_id).length > 0}<p class="text-xs leading-5 text-muted-foreground">Mapping otomatis: {classLabel(group.class_id)} → {packageRowsForClass(group.class_id).map((row) => `${row.subject_name || selectedPackageOption(row.package_id)?.subject_name || 'Mapel'} (${row.package_title || selectedPackageOption(row.package_id)?.title || 'Paket'})`).join(', ')}</p>{/if}
+										{#if packageRowsForClass(group.class_id).length > 0}<p class="text-xs leading-5 text-muted-foreground">Mapping otomatis: {classLabel(group.class_id)} → {packageRowsForClass(group.class_id).map((row) => `${row.subject_name || selectedPackageOption(row.package_id)?.subject_name || 'Mapel'} (${row.package_title || selectedPackageOption(row.package_id)?.title || 'Paket'} · ${packageScopeLabel(row.package_id)})`).join(', ')}</p>{/if}
 									</div>
 								{/each}
 							{/if}
@@ -1493,12 +1511,15 @@
 								<span class="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">Sesi Kegiatan</span>
 							</div>
 							<div class="mt-3 grid gap-3 lg:grid-cols-[1.5fr_1fr_1fr_8rem_1fr] lg:items-end">
-								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Paket/Rombel</span><select class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.packageMapLocalId} disabled={sessionPackageMapOptions.length === 0}>{#each sessionPackageMapOptions as row}<option value={row.local_id}>{row.subject_name || selectedPackageOption(row.package_id)?.subject_name || 'Mapel'} · {row.package_title || selectedPackageOption(row.package_id)?.title || 'Paket'} · {row.class_code || classOption(row.class_id)?.code || classOption(row.class_id)?.name}</option>{/each}</select></label>
+								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Paket/Rombel</span><select class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.packageMapLocalId} disabled={sessionPackageMapOptions.length === 0}>{#each sessionPackageMapOptions as row}<option value={row.local_id}>{row.subject_name || selectedPackageOption(row.package_id)?.subject_name || 'Mapel'} · {row.package_title || selectedPackageOption(row.package_id)?.title || 'Paket'} · {row.class_code || classOption(row.class_id)?.code || classOption(row.class_id)?.name} · {packageScopeLabel(row.package_id)}</option>{/each}</select></label>
 								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Tanggal</span><input type="date" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.date} /></label>
 								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Jam mulai</span><input type="time" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.startTime} /></label>
 								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Durasi</span><input type="number" min="15" max="240" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.durationMinutes} /></label>
 								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Judul opsional</span><input class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.title} placeholder={defaultSessionTitle(selectedSessionPackageMap)} /></label>
 							</div>
+							{#if selectedSessionPackageReused}
+								<p class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900"><strong>Reuse paket:</strong> paket ini berasal dari kegiatan lain, tetapi sesi yang dibuat tetap terikat ke kegiatan ini. Pastikan mapel, durasi, dan jumlah soal sudah sesuai sebelum mengaktifkan sesi.</p>
+							{/if}
 							<div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 								<p class="text-xs leading-5 text-muted-foreground">Jika daftar kosong, kembali ke Paket Soal lalu simpan mapping paket/rombel dulu. Sesi dibuat sebagai <strong>Draft</strong>, belum otomatis aktif.</p>
 								<button type="button" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void createSession()} disabled={savingSession || !packageGateReady || sessionPackageMapOptions.length === 0}>{savingSession ? 'Menyimpan…' : 'Buat Sesi Draft'}</button>
