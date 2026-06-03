@@ -26,6 +26,20 @@ INSERT INTO cbt_exam_events (title, exam_type, scope, target_levels, academic_ye
 VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
+-- name: EnsureCbtExamEventFromAssessmentExam :exec
+INSERT INTO cbt_exam_events (id, title, exam_type, scope, target_levels, academic_year_id, status)
+SELECT
+  e.id,
+  e.title,
+  'lainnya'::cbt_exam_type,
+  'school'::text,
+  '{}'::text[],
+  NULL::uuid,
+  CASE WHEN e.status IN ('active', 'finished') THEN e.status ELSE 'draft' END
+FROM assessment_exams e
+WHERE e.id = $1
+ON CONFLICT (id) DO NOTHING;
+
 -- name: UpdateCbtExamEventStatus :one
 UPDATE cbt_exam_events
 SET status = $2, updated_at = NOW()

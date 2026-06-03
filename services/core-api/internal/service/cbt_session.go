@@ -82,6 +82,7 @@ type cbtSessionStore interface {
 	GetCbtExamSession(ctx context.Context, id pgtype.UUID) (db.GetCbtExamSessionRow, error)
 	ListCbtPackages(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtPackagesRow, error)
 	GetCbtPackageQuestionQuality(ctx context.Context, id pgtype.UUID) (db.GetCbtPackageQuestionQualityRow, error)
+	EnsureCbtExamEventFromAssessmentExam(ctx context.Context, id pgtype.UUID) error
 	CreateCbtExamSession(ctx context.Context, arg db.CreateCbtExamSessionParams) (db.CbtExamSession, error)
 	UpdateCbtExamSessionStatus(ctx context.Context, arg db.UpdateCbtExamSessionStatusParams) (db.CbtExamSession, error)
 	UpdateCbtExamSessionSchedule(ctx context.Context, arg db.UpdateCbtExamSessionScheduleParams) (db.CbtExamSession, error)
@@ -252,6 +253,11 @@ func (s *CbtSession) Create(ctx context.Context, in CreateCbtSessionInput) (db.C
 	assignmentMode := normalizeAssignmentMode(in.AssignmentMode)
 	if err := s.ensureCbtPackageReadyForSession(ctx, in.PackageID, in.EventID); err != nil {
 		return db.CbtExamSession{}, err
+	}
+	if in.EventID.Valid {
+		if err := s.q.EnsureCbtExamEventFromAssessmentExam(ctx, in.EventID); err != nil {
+			return db.CbtExamSession{}, err
+		}
 	}
 
 	return s.q.CreateCbtExamSession(ctx, db.CreateCbtExamSessionParams{
