@@ -176,7 +176,7 @@
 				})
 			});
 			await readClientApiData<AssessmentExam>(response);
-			formNotice = 'Kegiatan tersimpan. Lanjutkan dari daftar kegiatan untuk memilih paket soal dan peserta.';
+			formNotice = 'Kegiatan tersimpan. Lanjutkan dari daftar kegiatan untuk mengatur peserta, ruang, sesi, cetak, dan hasil.';
 			showCreateForm = false;
 			resetDraft();
 			await loadKegiatan();
@@ -204,7 +204,7 @@
 	}
 
 	function nextActionLabel(item: KegiatanUjian) {
-		if (item.peserta <= 0 && item.ruang <= 0) return 'Pilih paket dan susun peserta/ruang';
+		if (item.peserta <= 0 && item.ruang <= 0) return 'Hubungkan paket siap dan susun peserta/ruang';
 		if (item.sesi <= 0) return 'Lengkapi sesi ujian';
 		if (item.kartu <= 0) return 'Terbitkan QR+PIN dan kartu';
 		if (item.status === 'Berlangsung') return 'Pantau pelaksanaan';
@@ -233,7 +233,7 @@
 				<p class="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">Asesmen / CBT</p>
 				<h1 class="text-2xl font-bold tracking-tight text-foreground md:text-3xl">Daftar Kegiatan Ujian</h1>
 				<p class="max-w-3xl text-sm leading-6 text-muted-foreground">
-					Pusat awal Asesmen: buat kegiatan, lihat kesiapan, lalu masuk ke workspace detail untuk Paket Soal, peserta, ruang, sesi, cetak, dan hasil.
+					Asesmen khusus untuk kegiatan ujian: peserta, ruang, sesi, cetak, pelaksanaan, dan hasil. Bank Soal serta Paket Soal berdiri sebagai modul tersendiri; di sini hanya memilih paket yang sudah siap.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
@@ -250,7 +250,7 @@
 		<section class="rounded-2xl border border-primary/20 bg-card shadow-sm" aria-labelledby="create-kegiatan-title">
 			<div class="border-b border-border bg-muted/20 px-5 py-4">
 				<div class="flex items-start justify-between gap-3">
-					<div class="space-y-1"><p class="text-xs font-semibold tracking-[0.18em] text-primary uppercase">Langkah 1 · Kegiatan</p><h2 id="create-kegiatan-title" class="text-lg font-bold text-foreground">Buat Kegiatan Baru</h2><p class="text-xs leading-5 text-muted-foreground">Kegiatan tersimpan sebagai draft. Setelah itu lanjutkan dari workspace detail untuk memilih Paket Soal.</p></div>
+					<div class="space-y-1"><p class="text-xs font-semibold tracking-[0.18em] text-primary uppercase">Langkah 1 · Kegiatan</p><h2 id="create-kegiatan-title" class="text-lg font-bold text-foreground">Buat Kegiatan Baru</h2><p class="text-xs leading-5 text-muted-foreground">Kegiatan tersimpan sebagai draft. Setelah itu lanjutkan ke workspace kegiatan untuk peserta, ruang, sesi, cetak, dan hasil.</p></div>
 					<button type="button" class="rounded-md border px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted" aria-label="Tutup form" onclick={toggleCreateForm}>Tutup</button>
 				</div>
 			</div>
@@ -311,5 +311,5 @@
 		{/if}
 	</section>
 
-	<section class="rounded-2xl border border-dashed border-border bg-muted/20 p-4"><h2 class="text-sm font-semibold text-foreground">Catatan alur</h2><p class="mt-1 text-sm leading-6 text-muted-foreground">Bank Soal tetap menjadi tempat membuat soal. Halaman ini hanya launcher kegiatan; detail paket, peserta, ruang, sesi, cetak, dan hasil dikerjakan di workspace kegiatan.</p></section>
+	<section class="rounded-2xl border border-dashed border-border bg-muted/20 p-4"><h2 class="text-sm font-semibold text-foreground">Catatan alur</h2><p class="mt-1 text-sm leading-6 text-muted-foreground">Bank Soal dan Paket Soal adalah modul mandiri. Asesmen hanya memakai paket yang sudah siap untuk mengatur peserta, ruang, sesi, cetak, pelaksanaan, dan hasil.</p></section>
 </div>

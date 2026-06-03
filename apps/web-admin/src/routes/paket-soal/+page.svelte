@@ -629,12 +629,12 @@
 				<p class="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">Modul Mandiri</p>
 				<h1 class="text-2xl font-bold tracking-tight text-foreground md:text-3xl">Paket Soal</h1>
 				<p class="max-w-3xl text-sm leading-6 text-muted-foreground">
-					Dapur perakitan paket dari Bank Soal sebelum dipakai di Asesmen/CBT. Paket dapat dipakai ulang untuk beberapa rombel, kegiatan, simulasi, atau ujian susulan.
+					Modul mandiri untuk merakit paket dari Bank Soal. Paket dapat dipakai ulang untuk beberapa rombel, kegiatan, simulasi, atau ujian susulan.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
 				<a class="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-semibold text-foreground hover:bg-muted" href="/bank-soal">Buka Bank Soal</a>
-				<a class="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-semibold text-foreground hover:bg-muted" href="/asesmen">Pakai di Asesmen</a>
+				<a class="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-semibold text-foreground hover:bg-muted" href="/asesmen">Buka Kegiatan Asesmen</a>
 				<button type="button" class="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-semibold text-foreground hover:bg-muted" onclick={() => void loadPackages()} disabled={loading}>{loading ? 'Memuat…' : 'Refresh'}</button>
 				<button type="button" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90" onclick={() => void openBuilder()}>Buat Paket</button>
 			</div>
@@ -655,13 +655,13 @@
 
 	<section class="rounded-2xl border bg-card shadow-sm">
 		<div class="border-b border-border px-4 py-3">
-			<h2 class="text-base font-semibold text-foreground">Alur Opsi 4</h2>
-			<p class="text-xs leading-5 text-muted-foreground">Modul ini berdiri sendiri, tapi tetap menjadi jembatan antara Bank Soal dan Asesmen.</p>
+			<h2 class="text-base font-semibold text-foreground">Hubungan Antar Modul</h2>
+			<p class="text-xs leading-5 text-muted-foreground">Bank Soal, Paket Soal, dan Asesmen berdiri sebagai modul terpisah; datanya saling dipakai sesuai kebutuhan.</p>
 		</div>
 		<div class="grid gap-3 p-4 md:grid-cols-3">
 			<div class="rounded-xl border bg-background p-3 text-sm"><p class="font-semibold text-foreground">1. Bank Soal</p><p class="mt-1 text-xs leading-5 text-muted-foreground">Guru/admin membuat, mereview, dan menerbitkan soal.</p></div>
 			<div class="rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm"><p class="font-semibold text-primary">2. Paket Soal</p><p class="mt-1 text-xs leading-5 text-muted-foreground">Panitia merakit paket, validasi kesiapan, lock, clone/revisi.</p></div>
-			<div class="rounded-xl border bg-background p-3 text-sm"><p class="font-semibold text-foreground">3. Asesmen/CBT</p><p class="mt-1 text-xs leading-5 text-muted-foreground">Kegiatan ujian memilih paket siap untuk rombel/sesi.</p></div>
+			<div class="rounded-xl border bg-background p-3 text-sm"><p class="font-semibold text-foreground">3. Asesmen/CBT</p><p class="mt-1 text-xs leading-5 text-muted-foreground">Modul kegiatan ujian memakai paket siap untuk peserta, ruang, sesi, cetak, dan hasil.</p></div>
 		</div>
 	</section>
 

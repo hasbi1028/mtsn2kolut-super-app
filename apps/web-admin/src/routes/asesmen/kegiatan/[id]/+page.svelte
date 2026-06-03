@@ -248,11 +248,11 @@
 	const packageMaxDuration = $derived(packageMaps.reduce((max, item) => Math.max(max, Number(item.duration_minutes || selectedPackageOption(item.package_id)?.duration_minutes || 0)), 0));
 	const packageClassGroups = $derived(buildPackageClassGroups());
 	const packageGateReady = $derived(packageReadyCount > 0);
-	const packageGateMessage = 'Tautkan minimal satu Paket Soal siap sebelum lanjut ke ruang, sesi, cetak kartu, atau pelaksanaan.';
+	const packageGateMessage = 'Pilih minimal satu paket siap dari Modul Paket Soal sebelum lanjut ke ruang, sesi, cetak kartu, atau pelaksanaan.';
 	const sessionPackageMapOptions = $derived(packageMaps.filter((item) => item.class_id && item.package_id));
 	const selectedSessionPackageMap = $derived(sessionPackageMapOptions.find((item) => item.local_id === sessionDraft.packageMapLocalId) ?? sessionPackageMapOptions[0] ?? null);
 	const selectedSessionPackageReused = $derived(Boolean(selectedSessionPackageMap && packageReusedFromAnotherKegiatan(selectedSessionPackageMap.package_id)));
-	const sessionGateMessage = 'Sesi wajib terikat ke Kegiatan, memakai Paket Soal, punya peserta, ruang/kursi lengkap, dan jadwal valid sebelum diaktifkan.';
+	const sessionGateMessage = 'Sesi wajib terikat ke Kegiatan, memakai paket siap, punya peserta, ruang/kursi lengkap, dan jadwal valid sebelum diaktifkan.';
 	const routeKegiatanId = $derived(page.params.id ?? '');
 
 	type StepState = { label: string; tone: string; helper: string };
@@ -298,9 +298,9 @@
 
 	function stepState(key: DetailFeatureKey, item: KegiatanUjian): StepState {
 		if (key === 'paket') return packageReadyCount > 0
-			? { label: 'Selesai', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700', helper: `${packageReadyCount} pemetaan aktif` }
-			: { label: 'Berikutnya', tone: 'border-amber-200 bg-amber-50 text-amber-700', helper: 'Wajib sebelum langkah lain' };
-		if (!packageGateReady && key !== 'manual') return { label: 'Terkunci', tone: 'border-slate-200 bg-slate-50 text-slate-500', helper: 'Lengkapi Paket Soal dulu' };
+			? { label: 'Selesai', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700', helper: `${packageReadyCount} paket dipilih` }
+			: { label: 'Berikutnya', tone: 'border-amber-200 bg-amber-50 text-amber-700', helper: 'Pilih paket siap dulu' };
+		if (!packageGateReady && key !== 'manual') return { label: 'Terkunci', tone: 'border-slate-200 bg-slate-50 text-slate-500', helper: 'Pilih paket siap dulu' };
 		if (key === 'ruang') return item.peserta > 0 && item.ruang > 0
 			? { label: 'Selesai', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700', helper: `${item.peserta} peserta · ${item.ruang} ruang` }
 			: { label: nextDetailActionKey(item) === 'ruang' ? 'Berikutnya' : 'Belum lengkap', tone: 'border-amber-200 bg-amber-50 text-amber-700', helper: 'Pilih rombel dan susun kursi' };
@@ -336,7 +336,7 @@
 	] as const;
 
 	const detailFeatures: Array<{ key: DetailFeatureKey; label: string; description: string }> = [
-		{ key: 'paket', label: 'Paket Soal', description: 'Pilih paket siap dari Bank Soal.' },
+		{ key: 'paket', label: 'Paket Siap', description: 'Pilih dari Modul Paket Soal.' },
 		{ key: 'ruang', label: 'Peserta & Ruang', description: 'Pilih rombel, ruang, dan kursi.' },
 		{ key: 'sesi', label: 'Sesi', description: 'Rancang jadwal dan alur masuk ujian.' },
 		{ key: 'cetak', label: 'Cetak', description: 'Kartu peserta dan lembar pengawas.' },
@@ -1404,12 +1404,12 @@
 					<section class="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4">
 						<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 							<div>
-								<p class="text-xs font-semibold tracking-[0.16em] text-indigo-700 uppercase">Langkah 2 · Paket Soal</p>
-								<h3 class="text-base font-bold text-foreground">Tautkan paket soal ke rombel</h3>
-								<p class="mt-1 text-xs leading-5 text-muted-foreground">Centang beberapa paket untuk tiap rombel. Ini menjaga satu ruang bisa memakai beberapa paket, tetapi mapping peserta tetap jelas per rombel/mapel.</p>
+								<p class="text-xs font-semibold tracking-[0.16em] text-indigo-700 uppercase">Prasyarat · Paket Siap</p>
+								<h3 class="text-base font-bold text-foreground">Pilih paket dari Modul Paket Soal</h3>
+								<p class="mt-1 text-xs leading-5 text-muted-foreground">Bank Soal dan Paket Soal bukan bagian dari Asesmen. Di sini hanya memilih paket yang sudah siap untuk rombel/mapel kegiatan ini.</p>
 							</div>
 							<div class="flex flex-wrap gap-2">
-								<a class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" href="/paket-soal">Buka Modul Paket</a>
+								<a class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" href="/paket-soal">Buka Modul Paket Soal</a>
 								<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void loadPackageOptions()} disabled={loadingPackages}>{loadingPackages ? 'Memuat…' : 'Refresh Paket'}</button>
 								<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={addPackageMapRow}>Tambah Rombel</button>
 							</div>
@@ -1425,7 +1425,7 @@
 							{#if loadingPackages && packageMaps.length === 0}
 								<p class="p-4 text-sm text-muted-foreground">Memuat paket soal…</p>
 							{:else if packageClassGroups.length === 0}
-								<div class="p-4 text-sm text-muted-foreground"><p class="font-semibold text-foreground">Belum ada rombel/paket tertaut.</p><p class="mt-1 text-xs leading-5">Klik Tambah Rombel, lalu centang beberapa paket soal. Satu rombel boleh memiliki beberapa paket berbeda mapel; satu mapel tetap hanya satu paket.</p></div>
+								<div class="p-4 text-sm text-muted-foreground"><p class="font-semibold text-foreground">Belum ada paket dipilih.</p><p class="mt-1 text-xs leading-5">Klik Tambah Rombel, lalu pilih paket siap dari Modul Paket Soal. Satu rombel boleh memiliki beberapa mapel; satu mapel tetap satu paket.</p></div>
 							{:else}
 								{#each packageClassGroups as group (group.local_id)}
 									<div class="space-y-3 p-3 text-sm">
