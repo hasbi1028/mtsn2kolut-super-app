@@ -1194,6 +1194,25 @@
 		return sessionReadinessChecks(row).every((check) => check.ready);
 	}
 
+	function sessionBlockingChecks(row: AssessmentSessionReadiness) {
+		return sessionReadinessChecks(row).filter((check) => !check.ready);
+	}
+
+	function sessionActivationSummary(row: AssessmentSessionReadiness) {
+		const blockers = sessionBlockingChecks(row);
+		if (blockers.length === 0) return 'Siap diaktifkan.';
+		return blockers.map((check) => check.label).join(', ');
+	}
+
+	function sessionNextAction(row: AssessmentSessionReadiness) {
+		const blockers = sessionBlockingChecks(row).map((check) => check.label);
+		if (blockers.includes('Peserta masuk') || blockers.includes('Ruang tersusun') || blockers.includes('Kursi lengkap')) {
+			return 'Lengkapi Peserta & Ruang dulu, lalu kembali ke Sesi.';
+		}
+		if (blockers.includes('Jadwal valid')) return 'Periksa tanggal, jam mulai, dan durasi.';
+		return 'Review data sesi sebelum aktivasi.';
+	}
+
 	function defaultSessionTitle(row: EditablePackageMap | null) {
 		if (!row) return selectedKegiatan ? `${selectedKegiatan.nama} · Sesi` : 'Sesi Asesmen';
 		const subject = row.subject_name || selectedPackageOption(row.package_id)?.subject_name || 'Mapel';
@@ -1495,60 +1514,61 @@
 					{/if}
 
 					{#if activeDetailFeature === 'sesi'}
-					<section class="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
+					<section class="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
 						<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 							<div>
 								<p class="text-xs font-semibold tracking-[0.16em] text-blue-700 uppercase">Langkah 4 · Sesi</p>
-								<h3 class="text-base font-bold text-foreground">Jadwal sesi dan checklist aktivasi</h3>
-								<p class="mt-1 text-xs leading-5 text-muted-foreground">Tahap 1: sesi wajib terikat ke Kegiatan, memilih paket/rombel, punya jadwal, dan tombol aktif hanya terbuka jika checklist dasar siap.</p>
+								<h3 class="text-base font-bold text-foreground">Buat jadwal, lalu lanjutkan yang kurang</h3>
+								<p class="mt-1 text-xs leading-5 text-muted-foreground">Tampilan diringkas: buat sesi di kiri, cek status di kanan. Detail checklist disimpan di bagian “Rincian”.</p>
 							</div>
-							<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void loadSessions(selectedKegiatan.id)} disabled={loadingSessions}>{loadingSessions ? 'Memuat…' : 'Refresh Sesi'}</button>
-						</div>
-
-						<div class="mt-4 rounded-xl border bg-background p-3">
-							<div class="flex flex-wrap items-center justify-between gap-2">
-								<div><h4 class="text-sm font-semibold text-foreground">Buat Sesi Kegiatan</h4><p class="mt-1 text-xs leading-5 text-muted-foreground">Form sederhana: pilih mapping paket/rombel, tanggal, jam mulai, durasi. Pengawas dan token masuk tahap berikutnya.</p></div>
-								<span class="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">Sesi Kegiatan</span>
-							</div>
-							<div class="mt-3 grid gap-3 lg:grid-cols-[1.5fr_1fr_1fr_8rem_1fr] lg:items-end">
-								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Paket/Rombel</span><select class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.packageMapLocalId} disabled={sessionPackageMapOptions.length === 0}>{#each sessionPackageMapOptions as row}<option value={row.local_id}>{row.subject_name || selectedPackageOption(row.package_id)?.subject_name || 'Mapel'} · {row.package_title || selectedPackageOption(row.package_id)?.title || 'Paket'} · {row.class_code || classOption(row.class_id)?.code || classOption(row.class_id)?.name} · {packageScopeLabel(row.package_id)}</option>{/each}</select></label>
-								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Tanggal</span><input type="date" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.date} /></label>
-								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Jam mulai</span><input type="time" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.startTime} /></label>
-								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Durasi</span><input type="number" min="15" max="240" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.durationMinutes} /></label>
-								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Judul opsional</span><input class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.title} placeholder={defaultSessionTitle(selectedSessionPackageMap)} /></label>
-							</div>
-							{#if selectedSessionPackageReused}
-								<p class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900"><strong>Reuse paket:</strong> paket ini berasal dari kegiatan lain, tetapi sesi yang dibuat tetap terikat ke kegiatan ini. Pastikan mapel, durasi, dan jumlah soal sudah sesuai sebelum mengaktifkan sesi.</p>
-							{/if}
-							<div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-								<p class="text-xs leading-5 text-muted-foreground">Jika daftar kosong, kembali ke Paket Soal lalu simpan mapping paket/rombel dulu. Sesi dibuat sebagai <strong>Draft</strong>, belum otomatis aktif.</p>
-								<button type="button" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void createSession()} disabled={savingSession || !packageGateReady || sessionPackageMapOptions.length === 0}>{savingSession ? 'Menyimpan…' : 'Buat Sesi Draft'}</button>
-							</div>
+							<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void loadSessions(selectedKegiatan.id)} disabled={loadingSessions}>{loadingSessions ? 'Memuat…' : 'Refresh'}</button>
 						</div>
 
 						{#if sessionError}<p class="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{sessionError}</p>{/if}
 						{#if sessionNotice}<p class="mt-3 rounded-md border border-blue-300 bg-blue-100 px-3 py-2 text-sm font-medium text-blue-800" role="status">{sessionNotice}</p>{/if}
 
-						<div class="mt-4 space-y-3">
-							<div class="flex flex-wrap items-center justify-between gap-2"><h4 class="text-sm font-semibold text-foreground">Daftar Sesi Kegiatan</h4><p class="text-xs text-muted-foreground">{sessionRows.length} sesi · aktifkan setelah checklist siap</p></div>
-							{#if loadingSessions && sessionRows.length === 0}
-								<p class="rounded-lg border bg-background px-3 py-3 text-sm text-muted-foreground">Memuat sesi…</p>
-							{:else if sessionRows.length === 0}
-								<div class="rounded-lg border bg-background px-3 py-3 text-sm text-muted-foreground"><p class="font-semibold text-foreground">Belum ada sesi untuk kegiatan ini.</p><p class="mt-1 text-xs leading-5">Buat sesi pertama dari form di atas. Setelah tersimpan, ringkasan kegiatan akan berubah dari 0 sesi.</p></div>
-							{:else}
-								{#each sessionRows as row (row.id)}
-									{@const checks = sessionReadinessChecks(row)}
-									{@const ready = checks.every((check) => check.ready)}
-									<div class="rounded-xl border bg-background p-3 text-sm">
-										<div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-											<div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><h5 class="font-semibold text-foreground">{row.title}</h5><span class="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">Sesi Kegiatan</span><span class={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${sessionStatusTone(row.status)}`}>{sessionStatusLabel(row.status)}</span></div><p class="mt-1 text-xs leading-5 text-muted-foreground">{row.subject_name || 'Mapel'} · {row.package_title} · {row.class_code || row.class_name || 'Rombel'}<br />{formatDateTimeLabel(row.scheduled_start)} – {formatDateTimeLabel(row.scheduled_end)}</p></div>
-											<div class="flex flex-wrap gap-2"><button type="button" class="rounded-md border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-60" onclick={() => void updateSessionStatus(row, 'scheduled')} disabled={workingSessionId === row.id || row.status !== 'draft'}>{workingSessionId === row.id ? 'Proses…' : 'Tandai Terjadwal'}</button><button type="button" class="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void updateSessionStatus(row, 'active')} disabled={workingSessionId === row.id || row.status === 'active' || !ready} title={!ready ? sessionGateMessage : undefined}>{workingSessionId === row.id ? 'Proses…' : 'Aktifkan Sesi'}</button></div>
+						<div class="mt-4 grid gap-3 xl:grid-cols-[0.95fr_1.05fr]">
+							<div class="rounded-xl border bg-background p-3">
+								<div>
+									<h4 class="text-sm font-semibold text-foreground">Tambah jadwal sesi</h4>
+									<p class="mt-1 text-xs leading-5 text-muted-foreground">Isi yang wajib saja: paket/rombel, tanggal, jam, durasi.</p>
+								</div>
+								<div class="mt-3 space-y-3">
+									<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Paket/Rombel</span><select class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.packageMapLocalId} disabled={sessionPackageMapOptions.length === 0}>{#each sessionPackageMapOptions as row}<option value={row.local_id}>{row.subject_name || selectedPackageOption(row.package_id)?.subject_name || 'Mapel'} · {row.class_code || classOption(row.class_id)?.code || classOption(row.class_id)?.name} · {row.package_title || selectedPackageOption(row.package_id)?.title || 'Paket'}</option>{/each}</select></label>
+									<div class="grid gap-3 sm:grid-cols-3"><label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Tanggal</span><input type="date" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.date} /></label><label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Jam</span><input type="time" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.startTime} /></label><label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Durasi</span><input type="number" min="15" max="240" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.durationMinutes} /></label></div>
+									<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Judul opsional</span><input class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.title} placeholder={defaultSessionTitle(selectedSessionPackageMap)} /></label>
+								</div>
+								{#if selectedSessionPackageReused}
+									<p class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">Paket ini reuse dari kegiatan lain. Pastikan mapel dan durasi cocok.</p>
+								{/if}
+								<div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+									<p class="text-xs leading-5 text-muted-foreground">Sesi tersimpan sebagai Draft. Aktivasi dilakukan setelah peserta, ruang, dan kursi lengkap.</p>
+									<button type="button" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void createSession()} disabled={savingSession || !packageGateReady || sessionPackageMapOptions.length === 0}>{savingSession ? 'Menyimpan…' : 'Buat Sesi'}</button>
+								</div>
+							</div>
+
+							<div class="space-y-3">
+								<div class="flex flex-wrap items-center justify-between gap-2"><h4 class="text-sm font-semibold text-foreground">Sesi yang sudah dibuat</h4><p class="text-xs text-muted-foreground">{sessionRows.length} sesi</p></div>
+								{#if loadingSessions && sessionRows.length === 0}
+									<p class="rounded-lg border bg-background px-3 py-3 text-sm text-muted-foreground">Memuat sesi…</p>
+								{:else if sessionRows.length === 0}
+									<div class="rounded-lg border bg-background px-3 py-3 text-sm text-muted-foreground"><p class="font-semibold text-foreground">Belum ada sesi.</p><p class="mt-1 text-xs leading-5">Buat jadwal pertama dari form di sebelah kiri.</p></div>
+								{:else}
+									{#each sessionRows as row, index (row.id)}
+										{@const checks = sessionReadinessChecks(row)}
+										{@const blockers = sessionBlockingChecks(row)}
+										{@const ready = blockers.length === 0}
+										<div class="rounded-xl border bg-background p-3 text-sm">
+											<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+												<div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">{index + 1}</span><h5 class="font-semibold text-foreground">{row.title}</h5><span class={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${sessionStatusTone(row.status)}`}>{sessionStatusLabel(row.status)}</span></div><p class="mt-1 text-xs leading-5 text-muted-foreground">{row.subject_name || 'Mapel'} · {row.package_title} · {row.class_code || row.class_name || 'Rombel'}<br />{formatDateTimeLabel(row.scheduled_start)} – {formatDateTimeLabel(row.scheduled_end)}</p></div>
+												<div class="flex flex-wrap gap-2"><button type="button" class="rounded-md border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-60" onclick={() => void updateSessionStatus(row, 'scheduled')} disabled={workingSessionId === row.id || row.status !== 'draft'}>{workingSessionId === row.id ? 'Proses…' : 'Tandai Terjadwal'}</button><button type="button" class="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void updateSessionStatus(row, 'active')} disabled={workingSessionId === row.id || row.status === 'active' || !ready} title={!ready ? sessionGateMessage : undefined}>{workingSessionId === row.id ? 'Proses…' : 'Aktifkan'}</button></div>
+											</div>
+											<div class={`mt-3 rounded-lg border px-3 py-2 text-xs leading-5 ${ready ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-900'}`}><strong>{ready ? 'Siap aktif' : 'Belum bisa aktif'}</strong><span class="block">{ready ? 'Semua syarat dasar sudah lengkap.' : sessionNextAction(row)}</span>{#if !ready}<span class="block opacity-80">Kurang: {sessionActivationSummary(row)}</span>{/if}</div>
+											<details class="mt-2 rounded-lg border bg-card px-3 py-2 text-xs"><summary class="cursor-pointer font-semibold text-foreground">Rincian checklist</summary><div class="mt-2 grid gap-2 sm:grid-cols-2">{#each checks as check}<div class={`rounded-md border px-2 py-1.5 ${check.ready ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}><strong>{check.ready ? '✓' : '!'} {check.label}</strong><p class="mt-0.5 opacity-80">{check.helper}</p></div>{/each}</div></details>
 										</div>
-										<div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">{#each checks as check}<div class={`rounded-lg border px-3 py-2 text-xs ${check.ready ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}><div class="flex items-center gap-2"><span class={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-bold ${check.ready ? 'border-emerald-300 bg-white text-emerald-700' : 'border-amber-300 bg-white text-amber-700'}`}>{check.ready ? '✓' : '!'}</span><strong>{check.label}</strong></div><p class="mt-1 leading-4 opacity-80">{check.helper}</p></div>{/each}</div>
-										{#if !ready}<p class="mt-3 rounded-lg bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">Aktifkan Sesi terkunci sampai checklist dasar siap. Lengkapi peserta/ruang/kursi di langkah Peserta & Ruang.</p>{/if}
-									</div>
-								{/each}
-							{/if}
+									{/each}
+								{/if}
+							</div>
 						</div>
 					</section>
 					{/if}
