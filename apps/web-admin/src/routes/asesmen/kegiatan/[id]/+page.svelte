@@ -113,6 +113,41 @@
 	type EditablePackageMap = AssessmentPackageMap & { local_id: string; is_new?: boolean };
 	type PackageClassGroup = { class_id: string; local_id: string; rows: EditablePackageMap[] };
 
+	type AssessmentSessionStatus = 'draft' | 'scheduled' | 'active' | 'finished' | 'archived';
+	type AssessmentSessionReadiness = {
+		id: string;
+		event_id?: string;
+		package_id: string;
+		package_title: string;
+		subject_id?: string;
+		subject_name?: string;
+		subject_code?: string;
+		class_id?: string;
+		class_name?: string;
+		class_code?: string;
+		title: string;
+		scheduled_start?: string;
+		scheduled_end?: string;
+		status: AssessmentSessionStatus;
+		question_count?: number;
+		published_question_count?: number;
+		participant_count?: number;
+		assigned_participant_count?: number;
+		missing_seat_count?: number;
+		token_ready_count?: number;
+		room_count?: number;
+		total_capacity?: number;
+		rooms_without_proctor?: number;
+	};
+
+	type SessionDraft = {
+		packageMapLocalId: string;
+		date: string;
+		startTime: string;
+		durationMinutes: number;
+		title: string;
+	};
+
 	type KegiatanUjian = {
 		id: string;
 		nama: string;
@@ -189,6 +224,13 @@
 	let loadingPlacements = $state(false);
 	let loadingPackages = $state(false);
 	let savingPackages = $state(false);
+	let sessionRows = $state<AssessmentSessionReadiness[]>([]);
+	let sessionDraft = $state<SessionDraft>({ packageMapLocalId: '', date: '', startTime: '07:30', durationMinutes: 90, title: '' });
+	let loadingSessions = $state(false);
+	let savingSession = $state(false);
+	let workingSessionId = $state('');
+	let sessionError = $state('');
+	let sessionNotice = $state('');
 
 	const totalPeserta = $derived(kegiatan.reduce((total, item) => total + item.peserta, 0));
 	const totalRuang = $derived(kegiatan.reduce((total, item) => total + item.ruang, 0));
@@ -206,6 +248,9 @@
 	const packageClassGroups = $derived(buildPackageClassGroups());
 	const packageGateReady = $derived(packageReadyCount > 0);
 	const packageGateMessage = 'Tautkan minimal satu Paket Soal siap sebelum lanjut ke ruang, sesi, cetak kartu, atau pelaksanaan.';
+	const sessionPackageMapOptions = $derived(packageMaps.filter((item) => item.class_id && item.package_id));
+	const selectedSessionPackageMap = $derived(sessionPackageMapOptions.find((item) => item.local_id === sessionDraft.packageMapLocalId) ?? sessionPackageMapOptions[0] ?? null);
+	const sessionGateMessage = 'Sesi wajib terikat ke Kegiatan, memakai Paket Soal, punya peserta, ruang/kursi lengkap, dan jadwal valid sebelum diaktifkan.';
 	const routeKegiatanId = $derived(page.params.id ?? '');
 
 	type StepState = { label: string; tone: string; helper: string };
@@ -231,7 +276,7 @@
 			{ label: 'Paket soal dipilih', ready: packageReadyCount > 0 },
 			{ label: 'Peserta masuk', ready: item.peserta > 0 },
 			{ label: 'Ruang tersusun', ready: item.ruang > 0 },
-			{ label: 'Sesi dibuat', ready: item.sesi > 0 },
+			{ label: 'Jadwal sesi dibuat', ready: item.sesi > 0 },
 			{ label: 'QR+PIN/kartu terbit', ready: item.kartu > 0 }
 		];
 	}
@@ -402,6 +447,9 @@
 		documentError = '';
 		packageError = '';
 		packageNotice = '';
+		sessionError = '';
+		sessionNotice = '';
+		sessionRows = [];
 	}
 
 	function toggleCreateForm() {
@@ -420,6 +468,7 @@
 		if (rombelOptions.length === 0) void loadRombelOptions();
 		void loadPackageOptions();
 		void loadPackageMaps(id);
+		void loadSessions(id);
 	}
 
 	function closeKegiatanDetail() {
@@ -1076,6 +1125,149 @@
 		}
 	}
 
+
+	function localDateTimeToIso(date: string, time: string) {
+		if (!date || !time) return '';
+		return new Date(`${date}T${time}:00+08:00`).toISOString();
+	}
+
+	function sessionEndIso(date: string, time: string, durationMinutes: number) {
+		const startIso = localDateTimeToIso(date, time);
+		if (!startIso) return '';
+		return new Date(new Date(startIso).getTime() + Math.max(1, Number(durationMinutes || 0)) * 60_000).toISOString();
+	}
+
+	function formatDateTimeLabel(value?: string) {
+		if (!value) return 'Belum diisi';
+		const date = new Date(value);
+		if (Number.isNaN(date.getTime())) return value;
+		return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Makassar' }).format(date) + ' WITA';
+	}
+
+	function sessionStatusLabel(status: AssessmentSessionStatus) {
+		return ({ draft: 'Draft', scheduled: 'Terjadwal', active: 'Aktif', finished: 'Selesai', archived: 'Arsip' } as Record<AssessmentSessionStatus, string>)[status] ?? status;
+	}
+
+	function sessionStatusTone(status: AssessmentSessionStatus) {
+		if (status === 'active') return 'border-sky-200 bg-sky-50 text-sky-700';
+		if (status === 'scheduled') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+		if (status === 'finished') return 'border-slate-200 bg-slate-50 text-slate-700';
+		if (status === 'archived') return 'border-zinc-200 bg-zinc-50 text-zinc-600';
+		return 'border-amber-200 bg-amber-50 text-amber-700';
+	}
+
+	function sessionReadinessChecks(row: AssessmentSessionReadiness) {
+		const participantCount = Number(row.participant_count ?? 0);
+		const roomCount = Number(row.room_count ?? 0);
+		const assignedCount = Number(row.assigned_participant_count ?? 0);
+		const missingSeatCount = Number(row.missing_seat_count ?? 0);
+		const scheduleValid = Boolean(row.scheduled_start && row.scheduled_end && new Date(row.scheduled_end).getTime() > new Date(row.scheduled_start).getTime());
+		return [
+			{ label: 'Terikat ke Kegiatan', ready: Boolean(row.event_id), helper: 'Badge Kegiatan tampil, bukan sesi mandiri.' },
+			{ label: 'Paket Soal dipilih', ready: Boolean(row.package_id), helper: row.package_title || 'Pilih paket dari mapping rombel.' },
+			{ label: 'Peserta masuk', ready: participantCount > 0, helper: `${participantCount} peserta` },
+			{ label: 'Ruang tersusun', ready: roomCount > 0, helper: `${roomCount} ruang · kapasitas ${row.total_capacity ?? 0}` },
+			{ label: 'Kursi lengkap', ready: participantCount > 0 && assignedCount >= participantCount && missingSeatCount === 0, helper: `${assignedCount}/${participantCount} ditempatkan · ${missingSeatCount} tanpa kursi` },
+			{ label: 'Jadwal valid', ready: scheduleValid, helper: `${formatDateTimeLabel(row.scheduled_start)} – ${formatDateTimeLabel(row.scheduled_end)}` }
+		];
+	}
+
+	function sessionReadyToActivate(row: AssessmentSessionReadiness) {
+		return sessionReadinessChecks(row).every((check) => check.ready);
+	}
+
+	function defaultSessionTitle(row: EditablePackageMap | null) {
+		if (!row) return selectedKegiatan ? `${selectedKegiatan.nama} · Sesi` : 'Sesi Asesmen';
+		const subject = row.subject_name || selectedPackageOption(row.package_id)?.subject_name || 'Mapel';
+		const kelas = row.class_code || classOption(row.class_id)?.code || classOption(row.class_id)?.name || 'Rombel';
+		return `${subject} ${kelas}`;
+	}
+
+	async function loadSessions(kegiatanId = selectedKegiatanId) {
+		if (!kegiatanId) return;
+		loadingSessions = true;
+		sessionError = '';
+		try {
+			const response = await fetch(clientApiPath`/api/asesmen/exams/${kegiatanId}/sessions`);
+			sessionRows = await readClientApiData<AssessmentSessionReadiness[]>(response);
+		} catch (error) {
+			sessionError = error instanceof Error ? error.message : 'Daftar sesi belum dapat dibuka.';
+			sessionRows = [];
+		} finally {
+			loadingSessions = false;
+		}
+	}
+
+	async function createSession() {
+		if (!selectedKegiatan) return;
+		const row = selectedSessionPackageMap;
+		if (!row) {
+			sessionError = 'Pilih dan simpan minimal satu mapping Paket Soal/Rombel dulu.';
+			return;
+		}
+		const scheduledStart = localDateTimeToIso(sessionDraft.date, sessionDraft.startTime);
+		const scheduledEnd = sessionEndIso(sessionDraft.date, sessionDraft.startTime, sessionDraft.durationMinutes);
+		if (!scheduledStart || !scheduledEnd) {
+			sessionError = 'Tanggal dan jam mulai wajib diisi.';
+			return;
+		}
+		savingSession = true;
+		sessionError = '';
+		sessionNotice = '';
+		try {
+			const response = await fetch(clientApiPath`/api/asesmen/exams/${selectedKegiatan.id}/sessions`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					package_id: row.package_id,
+					class_id: row.class_id,
+					scope_type: 'class',
+					scope_ref: row.class_id,
+					mix_policy: 'class_grouped',
+					assignment_mode: 'balanced',
+					title: sessionDraft.title.trim() || defaultSessionTitle(row),
+					scheduled_start: scheduledStart,
+					scheduled_end: scheduledEnd,
+					status: 'draft'
+				})
+			});
+			await readClientApiData<unknown>(response);
+			sessionNotice = 'Sesi draft tersimpan dan sudah terikat ke Kegiatan. Review checklist sebelum aktif.';
+			sessionDraft = { ...sessionDraft, title: '' };
+			await loadSessions(selectedKegiatan.id);
+			await loadKegiatan();
+		} catch (error) {
+			sessionError = error instanceof Error ? error.message : 'Sesi belum dapat dibuat.';
+		} finally {
+			savingSession = false;
+		}
+	}
+
+	async function updateSessionStatus(row: AssessmentSessionReadiness, status: AssessmentSessionStatus) {
+		if (status === 'active' && !sessionReadyToActivate(row)) {
+			sessionError = sessionGateMessage;
+			return;
+		}
+		workingSessionId = row.id;
+		sessionError = '';
+		sessionNotice = '';
+		try {
+			const response = await fetch(clientApiPath`/api/asesmen/sessions/${row.id}/status`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ status })
+			});
+			await readClientApiData<unknown>(response);
+			sessionNotice = status === 'active' ? 'Sesi berhasil diaktifkan.' : 'Status sesi diperbarui.';
+			await loadSessions(selectedKegiatan?.id);
+			await loadKegiatan();
+		} catch (error) {
+			sessionError = error instanceof Error ? error.message : 'Status sesi belum dapat diperbarui.';
+		} finally {
+			workingSessionId = '';
+		}
+	}
+
 	async function issueParticipantCards(regenerate = false) {
 		if (!selectedKegiatan || issuingCards) return;
 		if (!packageGateReady) {
@@ -1286,15 +1478,56 @@
 
 					{#if activeDetailFeature === 'sesi'}
 					<section class="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
-						<div>
-							<p class="text-xs font-semibold tracking-[0.16em] text-blue-700 uppercase">Langkah 4 · Sesi</p>
-							<h3 class="text-base font-bold text-foreground">Rancangan sesi ujian</h3>
-							<p class="mt-1 text-xs leading-5 text-muted-foreground">Fokus UI/UX dulu: sesi ditampilkan sebagai checklist ringan agar operator paham urutan sebelum jadwal otomatis disambungkan.</p>
+						<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+							<div>
+								<p class="text-xs font-semibold tracking-[0.16em] text-blue-700 uppercase">Langkah 4 · Sesi</p>
+								<h3 class="text-base font-bold text-foreground">Jadwal sesi dan checklist aktivasi</h3>
+								<p class="mt-1 text-xs leading-5 text-muted-foreground">Tahap 1: sesi wajib terikat ke Kegiatan, memilih paket/rombel, punya jadwal, dan tombol aktif hanya terbuka jika checklist dasar siap.</p>
+							</div>
+							<button type="button" class="rounded-md border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted" onclick={() => void loadSessions(selectedKegiatan.id)} disabled={loadingSessions}>{loadingSessions ? 'Memuat…' : 'Refresh Sesi'}</button>
 						</div>
-						<div class="mt-4 divide-y rounded-xl border bg-background">
-							<div class="grid gap-2 p-3 text-sm sm:grid-cols-[8rem_1fr_6rem]"><strong>Jadwal</strong><span class="text-muted-foreground">Tanggal, jam mulai, dan durasi sesi per paket/ruang.</span><span class="rounded-full bg-muted px-2 py-1 text-center text-[11px] font-semibold text-muted-foreground">UI dulu</span></div>
-							<div class="grid gap-2 p-3 text-sm sm:grid-cols-[8rem_1fr_6rem]"><strong>Token</strong><span class="text-muted-foreground">Token sesi tetap dibuat terpisah sebelum hari pelaksanaan.</span><span class="rounded-full bg-muted px-2 py-1 text-center text-[11px] font-semibold text-muted-foreground">Belum aktif</span></div>
-							<div class="grid gap-2 p-3 text-sm sm:grid-cols-[8rem_1fr_6rem]"><strong>Pengawas</strong><span class="text-muted-foreground">Pengawas ruang akan ditautkan setelah ruang dan peserta final.</span><span class="rounded-full bg-muted px-2 py-1 text-center text-[11px] font-semibold text-muted-foreground">Bertahap</span></div>
+
+						<div class="mt-4 rounded-xl border bg-background p-3">
+							<div class="flex flex-wrap items-center justify-between gap-2">
+								<div><h4 class="text-sm font-semibold text-foreground">Buat Sesi Kegiatan</h4><p class="mt-1 text-xs leading-5 text-muted-foreground">Form sederhana: pilih mapping paket/rombel, tanggal, jam mulai, durasi. Pengawas dan token masuk tahap berikutnya.</p></div>
+								<span class="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">Sesi Kegiatan</span>
+							</div>
+							<div class="mt-3 grid gap-3 lg:grid-cols-[1.5fr_1fr_1fr_8rem_1fr] lg:items-end">
+								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Paket/Rombel</span><select class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.packageMapLocalId} disabled={sessionPackageMapOptions.length === 0}>{#each sessionPackageMapOptions as row}<option value={row.local_id}>{row.subject_name || selectedPackageOption(row.package_id)?.subject_name || 'Mapel'} · {row.package_title || selectedPackageOption(row.package_id)?.title || 'Paket'} · {row.class_code || classOption(row.class_id)?.code || classOption(row.class_id)?.name}</option>{/each}</select></label>
+								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Tanggal</span><input type="date" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.date} /></label>
+								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Jam mulai</span><input type="time" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.startTime} /></label>
+								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Durasi</span><input type="number" min="15" max="240" class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.durationMinutes} /></label>
+								<label class="space-y-1.5"><span class="text-xs font-medium text-muted-foreground">Judul opsional</span><input class="w-full rounded-md border bg-card px-3 py-2 text-sm" bind:value={sessionDraft.title} placeholder={defaultSessionTitle(selectedSessionPackageMap)} /></label>
+							</div>
+							<div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+								<p class="text-xs leading-5 text-muted-foreground">Jika daftar kosong, kembali ke Paket Soal lalu simpan mapping paket/rombel dulu. Sesi dibuat sebagai <strong>Draft</strong>, belum otomatis aktif.</p>
+								<button type="button" class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void createSession()} disabled={savingSession || !packageGateReady || sessionPackageMapOptions.length === 0}>{savingSession ? 'Menyimpan…' : 'Buat Sesi Draft'}</button>
+							</div>
+						</div>
+
+						{#if sessionError}<p class="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{sessionError}</p>{/if}
+						{#if sessionNotice}<p class="mt-3 rounded-md border border-blue-300 bg-blue-100 px-3 py-2 text-sm font-medium text-blue-800" role="status">{sessionNotice}</p>{/if}
+
+						<div class="mt-4 space-y-3">
+							<div class="flex flex-wrap items-center justify-between gap-2"><h4 class="text-sm font-semibold text-foreground">Daftar Sesi Kegiatan</h4><p class="text-xs text-muted-foreground">{sessionRows.length} sesi · aktifkan setelah checklist siap</p></div>
+							{#if loadingSessions && sessionRows.length === 0}
+								<p class="rounded-lg border bg-background px-3 py-3 text-sm text-muted-foreground">Memuat sesi…</p>
+							{:else if sessionRows.length === 0}
+								<div class="rounded-lg border bg-background px-3 py-3 text-sm text-muted-foreground"><p class="font-semibold text-foreground">Belum ada sesi untuk kegiatan ini.</p><p class="mt-1 text-xs leading-5">Buat sesi pertama dari form di atas. Setelah tersimpan, ringkasan kegiatan akan berubah dari 0 sesi.</p></div>
+							{:else}
+								{#each sessionRows as row (row.id)}
+									{@const checks = sessionReadinessChecks(row)}
+									{@const ready = checks.every((check) => check.ready)}
+									<div class="rounded-xl border bg-background p-3 text-sm">
+										<div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+											<div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><h5 class="font-semibold text-foreground">{row.title}</h5><span class="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">Sesi Kegiatan</span><span class={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${sessionStatusTone(row.status)}`}>{sessionStatusLabel(row.status)}</span></div><p class="mt-1 text-xs leading-5 text-muted-foreground">{row.subject_name || 'Mapel'} · {row.package_title} · {row.class_code || row.class_name || 'Rombel'}<br />{formatDateTimeLabel(row.scheduled_start)} – {formatDateTimeLabel(row.scheduled_end)}</p></div>
+											<div class="flex flex-wrap gap-2"><button type="button" class="rounded-md border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-60" onclick={() => void updateSessionStatus(row, 'scheduled')} disabled={workingSessionId === row.id || row.status !== 'draft'}>{workingSessionId === row.id ? 'Proses…' : 'Tandai Terjadwal'}</button><button type="button" class="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60" onclick={() => void updateSessionStatus(row, 'active')} disabled={workingSessionId === row.id || row.status === 'active' || !ready} title={!ready ? sessionGateMessage : undefined}>{workingSessionId === row.id ? 'Proses…' : 'Aktifkan Sesi'}</button></div>
+										</div>
+										<div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">{#each checks as check}<div class={`rounded-lg border px-3 py-2 text-xs ${check.ready ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}><div class="flex items-center gap-2"><span class={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-bold ${check.ready ? 'border-emerald-300 bg-white text-emerald-700' : 'border-amber-300 bg-white text-amber-700'}`}>{check.ready ? '✓' : '!'}</span><strong>{check.label}</strong></div><p class="mt-1 leading-4 opacity-80">{check.helper}</p></div>{/each}</div>
+										{#if !ready}<p class="mt-3 rounded-lg bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">Aktifkan Sesi terkunci sampai checklist dasar siap. Lengkapi peserta/ruang/kursi di langkah Peserta & Ruang.</p>{/if}
+									</div>
+								{/each}
+							{/if}
 						</div>
 					</section>
 					{/if}
