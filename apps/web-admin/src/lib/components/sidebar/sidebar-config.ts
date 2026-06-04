@@ -147,7 +147,8 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	{
 		group: 'Asesmen CBT',
 		items: [
-			{ href: '/asesmen', label: 'Kegiatan Ujian', icon: 'clipboard', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read'] }
+			{ href: '/asesmen', label: 'Kegiatan Ujian', icon: 'clipboard', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read'] },
+			{ href: '/asesmen/sesi', label: 'Sesi CBT', icon: 'calendar', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read'] }
 		]
 	},
 	{
