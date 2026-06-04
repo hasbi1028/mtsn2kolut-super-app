@@ -18,6 +18,9 @@ export type SesiCbtRow = {
 	incident_count: number;
 	scheduled_start?: string;
 	scheduled_end?: string;
+	monitor_token?: string;
+	monitor_url?: string;
+	proctor_monitor_url?: string;
 	status: SesiCbtStatus;
 	ready_to_activate: boolean;
 	blockers: string[];
@@ -141,6 +144,23 @@ export function sessionIsActiveWindow(row: Pick<SesiCbtRow, 'scheduled_start' | 
 	return Number.isFinite(start) && Number.isFinite(end) && start <= current && current <= end;
 }
 
+function safeMonitorUrl(value: unknown): string | undefined {
+	const raw = stringValue(value);
+	if (!raw) return undefined;
+	if (raw.startsWith('/') && !raw.startsWith('//')) return raw;
+	try {
+		const url = new URL(raw);
+		if (url.protocol === 'http:' || url.protocol === 'https:') return url.toString();
+	} catch {
+		return undefined;
+	}
+	return undefined;
+}
+
+export function sessionMonitorHref(row: Pick<SesiCbtRow, 'monitor_token' | 'monitor_url' | 'proctor_monitor_url'>): string | undefined {
+	return safeMonitorUrl(row.proctor_monitor_url) ?? safeMonitorUrl(row.monitor_url) ?? (row.monitor_token ? `/asesmen/pelaksanaan?monitor_token=${encodeURIComponent(row.monitor_token)}` : undefined);
+}
+
 export function sessionBlockers(row: Pick<SesiCbtRow, 'exam_id' | 'package_title' | 'participant_count' | 'assigned_participant_count' | 'room_count' | 'scheduled_start' | 'scheduled_end'>): string[] {
 	const blockers: string[] = [];
 	if (!row.exam_id) blockers.push('Kegiatan belum terikat');
@@ -180,6 +200,9 @@ export function normalizeSesiCbtRow(rawValue: unknown, examValue?: unknown): Ses
 		incident_count: numberValue(raw.incident_count ?? raw.insiden ?? raw.unresolved_incident_count),
 		scheduled_start: stringValue(raw.scheduled_start) ?? stringValue(raw.starts_at) ?? stringValue(raw.start_at) ?? stringValue(raw.startAt),
 		scheduled_end: stringValue(raw.scheduled_end) ?? stringValue(raw.ends_at) ?? stringValue(raw.end_at) ?? stringValue(raw.endAt),
+		monitor_token: stringValue(raw.monitor_token) ?? stringValue(raw.monitorToken),
+		monitor_url: safeMonitorUrl(raw.monitor_url ?? raw.monitorUrl),
+		proctor_monitor_url: safeMonitorUrl(raw.proctor_monitor_url ?? raw.proctorMonitorUrl),
 		status,
 		ready_to_activate: false,
 		blockers: []

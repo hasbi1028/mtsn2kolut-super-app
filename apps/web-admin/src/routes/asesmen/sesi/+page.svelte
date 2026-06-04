@@ -4,6 +4,7 @@
 		groupSesiCbtMatrix,
 		makassarDateKey,
 		normalizeSesiCbtRow,
+		sessionMonitorHref,
 		sessionStatusLabel,
 		sessionStatusTone,
 		summarizeSessionRows,
@@ -37,12 +38,8 @@
 	let loading = $state(true);
 	let error = $state('');
 	let notice = $state('');
-	let viewMode = $state<'matrix' | 'detail'>('matrix');
-	let statusFilter = $state('');
-	let dateFilter = $state('');
-	let searchFilter = $state('');
-	let includeArchived = $state(false);
 	let workingId = $state('');
+	let batchDeletingDrafts = $state(false);
 	let creating = $state(false);
 	let generatedAt = $state('');
 	let exams = $state<ExamOption[]>([]);
@@ -53,8 +50,15 @@
 	let csvText = $state('');
 	let csvFileName = $state('');
 	let editSchedule = $state<ScheduleDraft | null>(null);
+	let selectedDraftIds = $state<string[]>([]);
 
-	const queryExamId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('exam_id') ?? '' : '';
+	const initialQuery = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+	const queryExamId = initialQuery.get('exam_id') ?? '';
+	let viewMode = $state<'matrix' | 'detail'>(initialQuery.get('view') === 'detail' ? 'detail' : 'matrix');
+	let statusFilter = $state(initialQuery.get('status') ?? '');
+	let dateFilter = $state(initialQuery.get('date') ?? '');
+	let searchFilter = $state(initialQuery.get('q') ?? '');
+	let includeArchived = $state(initialQuery.get('archived') === '1' || initialQuery.get('archived') === 'true');
 	let examFilter = $state(queryExamId);
 	let draft = $state<SessionDraft>({ examId: queryExamId, packageMapKey: '', date: '', startTime: '07:30', durationMinutes: 90, title: '' });
 
@@ -74,8 +78,30 @@
 	}));
 	const summary = $derived(summarizeSessionRows(filteredRows));
 	const matrixGroups = $derived(groupSesiCbtMatrix(filteredRows));
+	const draftRows = $derived(filteredRows.filter((row) => row.status === 'draft'));
+	const selectedDraftRows = $derived(draftRows.filter((row) => selectedDraftIds.includes(row.id)));
 	const selectedPackageMap = $derived(packageMaps.find((item) => packageMapKey(item) === draft.packageMapKey) ?? packageMaps[0] ?? null);
 	const selectedPackageMaps = $derived(packageMaps.filter((item) => selectedPackageMapKeys.includes(packageMapKey(item))));
+
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		const params = new URLSearchParams();
+		if (examFilter.trim()) params.set('exam_id', examFilter.trim());
+		if (statusFilter) params.set('status', statusFilter);
+		if (dateFilter) params.set('date', dateFilter);
+		if (searchFilter.trim()) params.set('q', searchFilter.trim());
+		if (includeArchived) params.set('archived', '1');
+		if (viewMode !== 'matrix') params.set('view', viewMode);
+		const query = params.toString();
+		const next = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+		if (`${window.location.pathname}${window.location.search}` !== next) window.history.replaceState({}, '', next);
+	});
+
+	$effect(() => {
+		const allowed = new Set(draftRows.map((row) => row.id));
+		const next = selectedDraftIds.filter((id) => allowed.has(id));
+		if (next.length !== selectedDraftIds.length) selectedDraftIds = next;
+	});
 
 	function readClientPayload(payload: unknown): SessionsResponse {
 		if (payload && typeof payload === 'object' && 'data' in payload) {
@@ -318,6 +344,7 @@
 	}
 
 	async function updateStatus(row: SesiCbtRow, status: SesiCbtStatus) {
+		if (status === 'cancelled' && !window.confirm(`Batalkan/arsipkan sesi "${row.title}"? Sesi tidak akan tampil di daftar aktif.`)) return;
 		workingId = row.id;
 		error = '';
 		notice = '';
@@ -343,6 +370,7 @@
 			error = 'Hanya sesi draft yang dapat dihapus dari halaman ini.';
 			return;
 		}
+		if (!window.confirm(`Hapus draft sesi "${row.title}"? Aksi ini tidak dapat dibatalkan.`)) return;
 		workingId = row.id;
 		error = '';
 		notice = '';
@@ -359,7 +387,39 @@
 		}
 	}
 
+	async function deleteSelectedDrafts() {
+		if (selectedDraftRows.length === 0) {
+			error = 'Pilih minimal satu sesi draft untuk dihapus.';
+			return;
+		}
+		const confirmation = window.prompt(`Ketik HAPUS untuk menghapus ${selectedDraftRows.length} draft sesi terpilih.`);
+		if (confirmation !== 'HAPUS') return;
+		batchDeletingDrafts = true;
+		error = '';
+		notice = '';
+		let deleted = 0;
+		try {
+			for (const row of selectedDraftRows) {
+				workingId = row.id;
+				const response = await fetch(`/api/asesmen/sessions/${encodeURIComponent(row.id)}`, { method: 'DELETE' });
+				const payload = await response.json().catch(() => ({}));
+				if (!response.ok) throw new Error(payload.error ?? `HTTP ${response.status}`);
+				deleted += 1;
+			}
+			notice = `${deleted} draft sesi terpilih dihapus.`;
+			selectedDraftIds = [];
+			await loadSessions();
+		} catch (err) {
+			error = err instanceof Error ? `${deleted} draft terhapus, proses berhenti: ${err.message}` : 'Batch hapus draft belum dapat diproses.';
+			await loadSessions();
+		} finally {
+			workingId = '';
+			batchDeletingDrafts = false;
+		}
+	}
+
 	async function finalizeOverdue(row: SesiCbtRow) {
+		if (!window.confirm(`Finalize overdue untuk sesi "${row.title}"? Peserta yang sudah selesai akan dikunci sesuai status backend.`)) return;
 		workingId = row.id;
 		error = '';
 		notice = '';
@@ -434,10 +494,28 @@
 	function statusAction(row: SesiCbtRow): { label: string; next?: SesiCbtStatus; disabled: boolean; title?: string } {
 		if (row.status === 'active') return { label: 'Aktif', disabled: true };
 		if (row.status === 'finished') return { label: 'Selesai', disabled: true };
-		if (row.status === 'cancelled') return { label: 'Arsip/Batal', disabled: true };
+		if (row.status === 'cancelled') return { label: 'Buka Arsip', next: 'scheduled', disabled: false };
 		if (row.status === 'draft') return { label: 'Jadwalkan', next: 'scheduled', disabled: false };
 		if (!row.ready_to_activate) return { label: 'Aktifkan', next: 'active', disabled: true, title: row.blockers.join(' · ') };
 		return { label: 'Aktifkan', next: 'active', disabled: false };
+	}
+
+	function resetFilters() {
+		examFilter = '';
+		statusFilter = '';
+		dateFilter = '';
+		searchFilter = '';
+		includeArchived = false;
+		viewMode = 'matrix';
+		void loadSessions();
+	}
+
+	function toggleDraftSelection(id: string, checked: boolean) {
+		selectedDraftIds = checked ? Array.from(new Set([...selectedDraftIds, id])) : selectedDraftIds.filter((item) => item !== id);
+	}
+
+	function toggleAllDraftSelection(checked: boolean) {
+		selectedDraftIds = checked ? draftRows.map((row) => row.id) : [];
 	}
 
 	function blockerRepairLink(blocker: string, row: SesiCbtRow) {
@@ -554,7 +632,7 @@
 	</section>
 
 	<section class="rounded-xl border bg-background p-3">
-		<div class="grid gap-2 md:grid-cols-[1.4fr_10rem_10rem_10rem_auto]">
+		<div class="grid gap-2 md:grid-cols-[1.4fr_10rem_10rem_10rem_auto_auto]">
 			<input class="rounded-md border bg-card px-3 py-2 text-sm" placeholder="Cari kegiatan/mapel/rombel/ruang" bind:value={searchFilter} />
 			<input class="rounded-md border bg-card px-3 py-2 text-sm" placeholder="ID kegiatan opsional" bind:value={examFilter} />
 			<input class="rounded-md border bg-card px-3 py-2 text-sm" type="date" bind:value={dateFilter} />
@@ -567,6 +645,7 @@
 				<option value="cancelled">Arsip/Batal</option>
 			</select>
 			<label class="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm text-muted-foreground"><input type="checkbox" bind:checked={includeArchived} /> Arsip/Batal</label>
+			<button type="button" class="rounded-md border bg-card px-3 py-2 text-sm font-semibold hover:bg-muted" onclick={resetFilters}>Reset</button>
 		</div>
 		<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
 			<div class="flex rounded-lg border bg-muted/30 p-1 text-xs font-semibold">
@@ -613,12 +692,26 @@
 		</section>
 	{:else}
 		<section class="overflow-hidden rounded-xl border bg-background">
-			<div class="hidden grid-cols-[1.5fr_1.1fr_9rem_8rem_8rem] gap-3 bg-muted/40 px-4 py-2 text-[11px] font-bold tracking-wide text-muted-foreground uppercase lg:grid">
-				<span>Sesi</span><span>Kegiatan</span><span>Peserta/Ruang</span><span>Status</span><span class="text-right">Aksi</span>
+			<div class="flex flex-col gap-2 border-b bg-muted/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+				<label class="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+					<input type="checkbox" checked={draftRows.length > 0 && selectedDraftIds.length === draftRows.length} disabled={draftRows.length === 0} onchange={(event) => toggleAllDraftSelection(event.currentTarget.checked)} />
+					Pilih semua draft ({selectedDraftIds.length}/{draftRows.length})
+				</label>
+				<button type="button" class="rounded-md border border-destructive/30 px-3 py-2 text-xs font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-50" disabled={batchDeletingDrafts || selectedDraftRows.length === 0} onclick={() => void deleteSelectedDrafts()}>
+					{batchDeletingDrafts ? 'Menghapus…' : `Hapus draft terpilih${selectedDraftRows.length ? ` (${selectedDraftRows.length})` : ''}`}
+				</button>
+			</div>
+			<div class="hidden grid-cols-[2rem_1.5fr_1.1fr_9rem_8rem_8rem] gap-3 bg-muted/40 px-4 py-2 text-[11px] font-bold tracking-wide text-muted-foreground uppercase lg:grid">
+				<span></span><span>Sesi</span><span>Kegiatan</span><span>Peserta/Ruang</span><span>Status</span><span class="text-right">Aksi</span>
 			</div>
 			{#each filteredRows as row (row.id)}
 				{@const action = statusAction(row)}
-				<div class="grid gap-3 border-t px-4 py-3 text-sm lg:grid-cols-[1.5fr_1.1fr_9rem_8rem_14rem] lg:items-center">
+				{@const monitorHref = sessionMonitorHref(row)}
+				<div class="grid gap-3 border-t px-4 py-3 text-sm lg:grid-cols-[2rem_1.5fr_1.1fr_9rem_8rem_14rem] lg:items-center">
+					<label class="flex items-center gap-2 text-xs text-muted-foreground lg:justify-center">
+						<input type="checkbox" aria-label={`Pilih draft ${row.title}`} disabled={row.status !== 'draft'} checked={selectedDraftIds.includes(row.id)} onchange={(event) => toggleDraftSelection(row.id, event.currentTarget.checked)} />
+						<span class="lg:hidden">Pilih</span>
+					</label>
 					<div class="min-w-0">
 						<p class="truncate font-semibold text-foreground">{row.subject_name || row.title}</p>
 						<p class="truncate text-xs text-muted-foreground">{row.package_title || 'Paket belum terbaca'} · {row.class_code || row.class_name || 'Rombel'}</p>
@@ -627,6 +720,7 @@
 							<a class="rounded-md border px-2 py-0.5 text-[11px] font-semibold hover:bg-muted" href={`/asesmen/sesi/${encodeURIComponent(row.id)}/absen`}>Absen</a>
 							<a class="rounded-md border px-2 py-0.5 text-[11px] font-semibold hover:bg-muted" href={`/asesmen/sesi/${encodeURIComponent(row.id)}/ba`}>BA</a>
 							<a class="rounded-md border px-2 py-0.5 text-[11px] font-semibold hover:bg-muted" href={`/asesmen/sesi/${encodeURIComponent(row.id)}/kartu`}>Kartu</a>
+							{#if monitorHref}<a class="rounded-md border px-2 py-0.5 text-[11px] font-semibold hover:bg-muted" href={monitorHref}>Monitor</a>{/if}
 						</div>
 					</div>
 					<p class="text-xs leading-5 text-muted-foreground"><strong class="block text-foreground">{row.exam_title}</strong>{row.room_labels.join(', ') || 'Ruang belum terbaca'}</p>

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
 	makassarDateKey,
 	normalizeSesiCbtRow,
+	sessionIsActiveWindow,
+	sessionMonitorHref,
 	sessionStatusLabel,
 	summarizeSessionRows
 } from './sesi-cbt';
@@ -48,6 +50,33 @@ describe('sesi cbt ui model', () => {
 	it('uses Asia/Makassar date keys instead of UTC slices', () => {
 		expect('2026-05-01T17:05:00.000Z'.slice(0, 10)).toBe('2026-05-01');
 		expect(makassarDateKey('2026-05-01T17:05:00.000Z')).toBe('2026-05-02');
+	});
+
+	it('builds monitor href without exposing raw token text as the label contract', () => {
+		const rowWithUrl = normalizeSesiCbtRow({
+			id: 's1',
+			monitor_token: 'secret-token',
+			proctor_monitor_url: '/asesmen/pelaksanaan?session_id=s1'
+		});
+		const rowWithTokenOnly = normalizeSesiCbtRow({ id: 's2', monitor_token: 'token with spaces' });
+		const rowWithUnsafeUrl = normalizeSesiCbtRow({ id: 's3', monitor_url: 'javascript:alert(1)' });
+
+		expect(sessionMonitorHref(rowWithUrl)).toBe('/asesmen/pelaksanaan?session_id=s1');
+		expect(sessionMonitorHref(rowWithTokenOnly)).toBe('/asesmen/pelaksanaan?monitor_token=token%20with%20spaces');
+		expect(sessionMonitorHref(rowWithUnsafeUrl)).toBeUndefined();
+	});
+
+	it('detects active windows using absolute time while date keys stay WITA', () => {
+		const row = normalizeSesiCbtRow({
+			id: 's1',
+			status: 'scheduled',
+			scheduled_start: '2026-05-01T23:30:00.000Z',
+			scheduled_end: '2026-05-02T01:00:00.000Z'
+		});
+
+		expect(makassarDateKey(row.scheduled_start)).toBe('2026-05-02');
+		expect(sessionIsActiveWindow(row, new Date('2026-05-02T00:00:00.000Z'))).toBe(true);
+		expect(sessionIsActiveWindow(row, new Date('2026-05-02T02:00:00.000Z'))).toBe(false);
 	});
 
 	it('normalizes missing optional fields without crashing', () => {

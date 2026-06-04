@@ -1,14 +1,30 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { normalizeSesiCbtRow, sessionStatusLabel, sessionStatusTone, summarizeSessionRows, type SesiCbtRow } from '$lib/asesmen/sesi-cbt';
+	import { makassarDateKey, normalizeSesiCbtRow, sessionIsActiveWindow, sessionMonitorHref, sessionStatusLabel, sessionStatusTone, summarizeSessionRows, type SesiCbtRow } from '$lib/asesmen/sesi-cbt';
 
 	let rows = $state<SesiCbtRow[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 	let includeArchived = $state(false);
+	let quickFilter = $state<'today' | 'active' | 'all'>('today');
+	let searchFilter = $state('');
 
-	const summary = $derived(summarizeSessionRows(rows.filter((row) => includeArchived || row.status !== 'cancelled')));
-	const visibleRows = $derived(rows.filter((row) => includeArchived || row.status !== 'cancelled'));
+	const todayKey = $derived(makassarDateKey(new Date()));
+	const visibleRows = $derived(rows.filter((row) => {
+		const keyword = searchFilter.trim().toLowerCase();
+		if (!includeArchived && row.status === 'cancelled') return false;
+		if (quickFilter === 'today' && makassarDateKey(row.scheduled_start) !== todayKey) return false;
+		if (quickFilter === 'active' && row.status !== 'active' && !sessionIsActiveWindow(row)) return false;
+		if (keyword) {
+			const text = [row.exam_title, row.title, row.subject_name, row.package_title, row.class_code, row.class_name, row.room_labels.join(' ')]
+				.filter(Boolean)
+				.join(' ')
+				.toLowerCase();
+			if (!text.includes(keyword)) return false;
+		}
+		return true;
+	}));
+	const summary = $derived(summarizeSessionRows(visibleRows));
 
 	function unwrap(payload: unknown): { items?: unknown[]; error?: string } {
 		if (payload && typeof payload === 'object' && 'data' in payload) return (payload as { data: { items?: unknown[]; error?: string } }).data ?? {};
@@ -70,6 +86,14 @@
 		<a class="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-bold text-slate-100" href="/asesmen/sesi">Sesi CBT Lengkap</a>
 		<label class="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" bind:checked={includeArchived} onchange={() => void loadSessions()} /> Tampilkan batal</label>
 	</div>
+	<section class="mt-3 rounded-3xl border border-white/10 bg-white/10 p-3">
+		<div class="grid grid-cols-3 gap-2 text-xs font-bold">
+			<button type="button" class={`rounded-2xl px-3 py-2 ${quickFilter === 'today' ? 'bg-emerald-400 text-slate-950' : 'bg-white/10 text-slate-200'}`} onclick={() => (quickFilter = 'today')}>Hari ini</button>
+			<button type="button" class={`rounded-2xl px-3 py-2 ${quickFilter === 'active' ? 'bg-emerald-400 text-slate-950' : 'bg-white/10 text-slate-200'}`} onclick={() => (quickFilter = 'active')}>Berlangsung/Aktif</button>
+			<button type="button" class={`rounded-2xl px-3 py-2 ${quickFilter === 'all' ? 'bg-emerald-400 text-slate-950' : 'bg-white/10 text-slate-200'}`} onclick={() => (quickFilter = 'all')}>Semua</button>
+		</div>
+		<input class="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-3 text-sm text-slate-100 placeholder:text-slate-500" placeholder="Cari sesi, mapel, rombel, ruang" bind:value={searchFilter} />
+	</section>
 
 	{#if error}<p class="mt-3 rounded-2xl border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-100">{error}</p>{/if}
 
@@ -83,6 +107,7 @@
 			</div>
 		{:else}
 			{#each visibleRows as row (row.id)}
+				{@const monitorHref = sessionMonitorHref(row)}
 				<article class="rounded-3xl border border-white/10 bg-white/10 p-4 shadow-lg">
 					<div class="flex items-start justify-between gap-3">
 						<div class="min-w-0">
@@ -99,7 +124,9 @@
 						<div class="rounded-2xl bg-slate-950/40 p-2"><strong class="block text-base">{row.finished_count}</strong><span>Selesai</span></div>
 						<div class="rounded-2xl bg-slate-950/40 p-2"><strong class="block text-base">{row.incident_count}</strong><span>Insiden</span></div>
 					</div>
-					<a class="mt-3 block rounded-2xl bg-emerald-400 px-4 py-3 text-center text-sm font-black text-slate-950" href="/asesmen/pelaksanaan">Buka monitor pengawas</a>
+					{#if monitorHref}
+						<a class="mt-3 block rounded-2xl bg-emerald-400 px-4 py-3 text-center text-sm font-black text-slate-950" href={monitorHref}>Monitor</a>
+					{/if}
 				</article>
 			{/each}
 		{/if}
