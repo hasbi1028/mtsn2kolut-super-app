@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { normalizeSesiCbtRow, summarizeSessionRows, type SesiCbtRow } from '$lib/asesmen/sesi-cbt';
+import { makassarDateKey, normalizeSesiCbtRow, summarizeSessionRows, type SesiCbtRow } from '$lib/asesmen/sesi-cbt';
 import { ApiError, apiPath, apiPathWithQuery, handleRouteError, proxy } from '$lib/server/api';
 
 type ExamOption = {
@@ -30,8 +30,8 @@ function matchesFilters(row: SesiCbtRow, params: URLSearchParams) {
 	const subjectId = params.get('subject_id')?.trim();
 	const includeArchived = params.get('include_archived') === '1' || params.get('include_archived') === 'true';
 	if (status && row.status !== status) return false;
-	if (!includeArchived && row.status === 'archived') return false;
-	if (date && row.scheduled_start?.slice(0, 10) !== date) return false;
+	if (!includeArchived && row.status === 'cancelled') return false;
+	if (date && makassarDateKey(row.scheduled_start) !== date) return false;
 	if (subjectId && ![row.subject_name, row.title].some((value) => String(value ?? '').toLowerCase().includes(subjectId.toLowerCase()))) return false;
 	return true;
 }

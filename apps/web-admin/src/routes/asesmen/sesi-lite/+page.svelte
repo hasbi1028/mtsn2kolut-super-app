@@ -7,8 +7,8 @@
 	let error = $state('');
 	let includeArchived = $state(false);
 
-	const summary = $derived(summarizeSessionRows(rows.filter((row) => includeArchived || row.status !== 'archived')));
-	const visibleRows = $derived(rows.filter((row) => includeArchived || row.status !== 'archived'));
+	const summary = $derived(summarizeSessionRows(rows.filter((row) => includeArchived || row.status !== 'cancelled')));
+	const visibleRows = $derived(rows.filter((row) => includeArchived || row.status !== 'cancelled'));
 
 	function unwrap(payload: unknown): { items?: unknown[]; error?: string } {
 		if (payload && typeof payload === 'object' && 'data' in payload) return (payload as { data: { items?: unknown[]; error?: string } }).data ?? {};
@@ -68,7 +68,7 @@
 
 	<div class="mt-3 flex items-center justify-between gap-2">
 		<a class="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-bold text-slate-100" href="/asesmen/sesi">Sesi CBT Lengkap</a>
-		<label class="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" bind:checked={includeArchived} onchange={() => void loadSessions()} /> Tampilkan arsip</label>
+		<label class="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" bind:checked={includeArchived} onchange={() => void loadSessions()} /> Tampilkan batal</label>
 	</div>
 
 	{#if error}<p class="mt-3 rounded-2xl border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-100">{error}</p>{/if}
@@ -99,9 +99,7 @@
 						<div class="rounded-2xl bg-slate-950/40 p-2"><strong class="block text-base">{row.finished_count}</strong><span>Selesai</span></div>
 						<div class="rounded-2xl bg-slate-950/40 p-2"><strong class="block text-base">{row.incident_count}</strong><span>Insiden</span></div>
 					</div>
-					{#if row.monitor_token}
-						<a class="mt-3 block rounded-2xl bg-emerald-400 px-4 py-3 text-center text-sm font-black text-slate-950" href={`/asesmen/pelaksanaan?monitor=${encodeURIComponent(row.monitor_token)}`}>Buka monitor pengawas</a>
-					{/if}
+					<a class="mt-3 block rounded-2xl bg-emerald-400 px-4 py-3 text-center text-sm font-black text-slate-950" href="/asesmen/pelaksanaan">Buka monitor pengawas</a>
 				</article>
 			{/each}
 		{/if}

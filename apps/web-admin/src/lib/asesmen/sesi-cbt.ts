@@ -1,4 +1,4 @@
-export type SesiCbtStatus = 'draft' | 'scheduled' | 'active' | 'finished' | 'archived';
+export type SesiCbtStatus = 'draft' | 'scheduled' | 'active' | 'finished' | 'cancelled';
 
 export type SesiCbtRow = {
 	id: string;
@@ -19,7 +19,6 @@ export type SesiCbtRow = {
 	scheduled_start?: string;
 	scheduled_end?: string;
 	status: SesiCbtStatus;
-	monitor_token?: string;
 	ready_to_activate: boolean;
 	blockers: string[];
 };
@@ -29,7 +28,7 @@ export type SesiCbtSummary = {
 	active: number;
 	running: number;
 	finished: number;
-	archived: number;
+	cancelled: number;
 	incident: number;
 };
 
@@ -45,7 +44,7 @@ export type SesiCbtMatrixGroup = {
 
 type RawRecord = Record<string, unknown>;
 
-const STATUSES = new Set<SesiCbtStatus>(['draft', 'scheduled', 'active', 'finished', 'archived']);
+const STATUSES = new Set<SesiCbtStatus>(['draft', 'scheduled', 'active', 'finished', 'cancelled']);
 
 function isRecord(value: unknown): value is RawRecord {
 	return typeof value === 'object' && value !== null;
@@ -64,6 +63,7 @@ function statusValue(value: unknown): SesiCbtStatus {
 	const raw = stringValue(value)?.toLowerCase();
 	if (raw === 'ready') return 'scheduled';
 	if (raw === 'running') return 'active';
+	if (raw === 'archived') return 'cancelled';
 	if (raw && STATUSES.has(raw as SesiCbtStatus)) return raw as SesiCbtStatus;
 	return 'draft';
 }
@@ -88,7 +88,7 @@ export function sessionStatusLabel(status: SesiCbtStatus | string): string {
 	if (normalized === 'scheduled') return 'Terjadwal';
 	if (normalized === 'active') return 'Aktif';
 	if (normalized === 'finished') return 'Selesai';
-	if (normalized === 'archived') return 'Arsip';
+	if (normalized === 'cancelled') return 'Arsip/Batal';
 	return 'Draft';
 }
 
@@ -97,8 +97,39 @@ export function sessionStatusTone(status: SesiCbtStatus | string): string {
 	if (normalized === 'active') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
 	if (normalized === 'scheduled') return 'border-sky-200 bg-sky-50 text-sky-700';
 	if (normalized === 'finished') return 'border-slate-200 bg-slate-50 text-slate-700';
-	if (normalized === 'archived') return 'border-zinc-200 bg-zinc-50 text-zinc-600';
+	if (normalized === 'cancelled') return 'border-zinc-200 bg-zinc-50 text-zinc-600';
 	return 'border-amber-200 bg-amber-50 text-amber-700';
+}
+
+export function makassarDateKey(value?: string | Date): string {
+	if (!value) return '';
+	const date = value instanceof Date ? value : new Date(value);
+	if (Number.isNaN(date.getTime())) return '';
+	const parts = new Intl.DateTimeFormat('en-CA', {
+		timeZone: 'Asia/Makassar',
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit'
+	}).formatToParts(date);
+	const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+	return `${lookup.year}-${lookup.month}-${lookup.day}`;
+}
+
+export function makassarDateTimeMinuteKey(value?: string | Date): string {
+	if (!value) return '';
+	const date = value instanceof Date ? value : new Date(value);
+	if (Number.isNaN(date.getTime())) return '';
+	const parts = new Intl.DateTimeFormat('en-CA', {
+		timeZone: 'Asia/Makassar',
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit',
+		hour: '2-digit',
+		minute: '2-digit',
+		hour12: false
+	}).formatToParts(date);
+	const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+	return `${lookup.year}-${lookup.month}-${lookup.day} ${lookup.hour}:${lookup.minute}`;
 }
 
 export function sessionIsActiveWindow(row: Pick<SesiCbtRow, 'scheduled_start' | 'scheduled_end' | 'status'>, now = new Date()): boolean {
@@ -150,7 +181,6 @@ export function normalizeSesiCbtRow(rawValue: unknown, examValue?: unknown): Ses
 		scheduled_start: stringValue(raw.scheduled_start) ?? stringValue(raw.starts_at) ?? stringValue(raw.start_at) ?? stringValue(raw.startAt),
 		scheduled_end: stringValue(raw.scheduled_end) ?? stringValue(raw.ends_at) ?? stringValue(raw.end_at) ?? stringValue(raw.endAt),
 		status,
-		monitor_token: stringValue(raw.monitor_token) ?? stringValue(raw.monitorToken),
 		ready_to_activate: false,
 		blockers: []
 	};
@@ -165,10 +195,10 @@ export function summarizeSessionRows(rows: SesiCbtRow[]): SesiCbtSummary {
 		if (row.status === 'active' || row.status === 'scheduled') summary.active += 1;
 		if (sessionIsActiveWindow(row)) summary.running += 1;
 		if (row.status === 'finished') summary.finished += 1;
-		if (row.status === 'archived') summary.archived += 1;
+		if (row.status === 'cancelled') summary.cancelled += 1;
 		summary.incident += row.incident_count;
 		return summary;
-	}, { total: 0, active: 0, running: 0, finished: 0, archived: 0, incident: 0 });
+	}, { total: 0, active: 0, running: 0, finished: 0, cancelled: 0, incident: 0 });
 }
 
 function uniqueSorted(values: Array<string | undefined>): string[] {
@@ -178,7 +208,7 @@ function uniqueSorted(values: Array<string | undefined>): string[] {
 export function groupSesiCbtMatrix(rows: SesiCbtRow[]): SesiCbtMatrixGroup[] {
 	const groups = new Map<string, SesiCbtRow[]>();
 	for (const row of rows) {
-		const startKey = row.scheduled_start ? row.scheduled_start.slice(0, 16) : 'tanpa-jadwal';
+		const startKey = makassarDateTimeMinuteKey(row.scheduled_start) || 'tanpa-jadwal';
 		const key = [row.exam_id, row.subject_name ?? row.title, startKey].join('::');
 		const current = groups.get(key) ?? [];
 		current.push(row);

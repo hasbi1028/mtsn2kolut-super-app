@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	makassarDateKey,
 	normalizeSesiCbtRow,
 	sessionStatusLabel,
 	summarizeSessionRows
@@ -18,14 +19,16 @@ describe('sesi cbt ui model', () => {
 	it('labels active sessions for display', () => {
 		expect(sessionStatusLabel('active')).toBe('Aktif');
 		expect(sessionStatusLabel('running')).toBe('Aktif');
+		expect(sessionStatusLabel('archived')).toBe('Arsip/Batal');
+		expect(sessionStatusLabel('cancelled')).toBe('Arsip/Batal');
 	});
 
-	it('summarizes active, finished, archived, and incident counts', () => {
+	it('summarizes active, finished, cancelled, and incident counts', () => {
 		const rows = [
 			normalizeSesiCbtRow({ id: 's1', status: 'active', incident_count: 2 }),
 			normalizeSesiCbtRow({ id: 's2', status: 'scheduled' }),
 			normalizeSesiCbtRow({ id: 's3', status: 'finished' }),
-			normalizeSesiCbtRow({ id: 's4', status: 'archived', insiden: 1 })
+			normalizeSesiCbtRow({ id: 's4', status: 'cancelled', insiden: 1 })
 		];
 
 		expect(summarizeSessionRows(rows)).toMatchObject({
@@ -33,9 +36,18 @@ describe('sesi cbt ui model', () => {
 			active: 2,
 			running: 1,
 			finished: 1,
-			archived: 1,
+			cancelled: 1,
 			incident: 3
 		});
+	});
+
+	it('maps legacy archived status to backend-safe cancelled', () => {
+		expect(normalizeSesiCbtRow({ id: 's1', status: 'archived' }).status).toBe('cancelled');
+	});
+
+	it('uses Asia/Makassar date keys instead of UTC slices', () => {
+		expect('2026-05-01T17:05:00.000Z'.slice(0, 10)).toBe('2026-05-01');
+		expect(makassarDateKey('2026-05-01T17:05:00.000Z')).toBe('2026-05-02');
 	});
 
 	it('normalizes missing optional fields without crashing', () => {
