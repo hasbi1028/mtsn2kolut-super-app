@@ -257,6 +257,8 @@ func TestPusakaAttendanceTelegramListLogsAndBuildReport(t *testing.T) {
 			{EmployeeNama: "Andi", EmployeeNip: "1", JamMasuk: "07:00:01 WITA", JamPulang: "15:10"},
 			{EmployeeNama: "Budi", EmployeeNip: "2", JamMasuk: "08:05", JamPulang: ""},
 			{EmployeeNama: "Cici", EmployeeNip: "3", JamMasuk: "", JamPulang: ""},
+			{EmployeeNama: "Guru Dev Test CBT", EmployeeNip: "dev-1", JamMasuk: "", JamPulang: ""},
+			{EmployeeNama: "Pengawas Dev Test CBT", EmployeeNip: "dev-2", JamMasuk: "", JamPulang: ""},
 		},
 	}
 	svc := newTelegramTestService(store, "token", nil)
@@ -275,6 +277,11 @@ func TestPusakaAttendanceTelegramListLogsAndBuildReport(t *testing.T) {
 	}
 	if report.Rows[0].Status != "Lengkap" || report.Rows[1].Status != "Masuk" || report.Rows[2].Status != "Belum" || report.Rows[0].CheckIn != "07:00:01" {
 		t.Fatalf("unexpected report rows: %+v", report.Rows)
+	}
+	for _, row := range report.Rows {
+		if strings.Contains(strings.ToUpper(row.EmployeeName), "DEV") || strings.Contains(strings.ToUpper(row.EmployeeName), "TEST") || strings.Contains(strings.ToUpper(row.EmployeeName), "CBT") {
+			t.Fatalf("dev/test account leaked into attendance report: %+v", row)
+		}
 	}
 }
 

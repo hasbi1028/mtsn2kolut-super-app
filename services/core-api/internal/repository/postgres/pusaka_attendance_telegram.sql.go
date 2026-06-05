@@ -220,6 +220,11 @@ LEFT JOIN attendance_records ar
  AND ar.tanggal = $1
 WHERE e.is_active = TRUE
   AND e.employment_type IN ('pns', 'pppk')
+  -- Akun dev/test/dummy tidak boleh ikut laporan resmi Telegram/image.
+  AND upper(e.nama) NOT LIKE '%DEV%'
+  AND upper(e.nama) NOT LIKE '%TEST%'
+  AND upper(e.nama) NOT LIKE '%DUMMY%'
+  AND upper(e.nama) NOT LIKE '%CBT%'
 ORDER BY e.nama ASC
 `
 

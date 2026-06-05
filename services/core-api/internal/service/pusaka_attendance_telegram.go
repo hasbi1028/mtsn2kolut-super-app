@@ -300,7 +300,10 @@ func (s *PusakaAttendanceTelegram) buildReport(ctx context.Context, date time.Ti
 		return attendanceReport{}, err
 	}
 	report := attendanceReport{Date: date, GeneratedAt: time.Now().In(s.loc), TotalEmployees: len(rows)}
-	for i, r := range rows {
+	for _, r := range rows {
+		if excludedAttendanceReportName(r.EmployeeNama) {
+			continue
+		}
 		in := cleanTime(r.JamMasuk)
 		out := cleanTime(r.JamPulang)
 		status := "Belum"
@@ -317,9 +320,23 @@ func (s *PusakaAttendanceTelegram) buildReport(ctx context.Context, date time.Ti
 		if out != "-" {
 			report.CheckedOut++
 		}
-		report.Rows = append(report.Rows, attendanceReportRow{No: i + 1, EmployeeName: r.EmployeeNama, EmployeeNIP: r.EmployeeNip, CheckIn: in, CheckOut: out, Status: status})
+		report.Rows = append(report.Rows, attendanceReportRow{No: len(report.Rows) + 1, EmployeeName: r.EmployeeNama, EmployeeNIP: r.EmployeeNip, CheckIn: in, CheckOut: out, Status: status})
 	}
+	report.TotalEmployees = len(report.Rows)
 	return report, nil
+}
+
+func excludedAttendanceReportName(name string) bool {
+	normalized := strings.ToUpper(strings.Join(strings.Fields(name), " "))
+	if normalized == "" {
+		return false
+	}
+	for _, marker := range []string{"DEV", "TEST", "DUMMY", "CBT"} {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *PusakaAttendanceTelegram) sendTelegram(ctx context.Context, chatID, caption string, imageBytes []byte, includeImage bool) (string, error) {
