@@ -7,51 +7,30 @@ import (
 	"testing"
 )
 
-func TestNativeBankSoalRoutesUseGranularQuestionPermissions(t *testing.T) {
+func TestQuestionBankAndPackageAuthoringRoutesStayRemoved(t *testing.T) {
 	raw, err := os.ReadFile("main.go")
 	if err != nil {
 		t.Fatalf("read main.go: %v", err)
 	}
 	source := string(raw)
-	start := strings.Index(source, "// Native Bank Soal API aliases")
-	end := strings.Index(source[start:], "r.Group(func(r chi.Router)")
-	if start < 0 || end <= 0 {
-		t.Fatalf("native Bank Soal route block not found")
-	}
-	end += start
-	block := source[start:end]
-	if strings.Contains(block, "requireCbt)") || strings.Contains(block, "With(requireCbt)") {
-		t.Fatalf("native Bank Soal API block must not use requireCbt fallback guards:\n%s", block)
-	}
-	required := []string{
-		`r.With(requireBankSoalRead).Get("/api/bank-soal/questions/summary"`,
-		`r.With(requireBankSoalRead).Get("/api/bank-soal/questions"`,
-		`r.With(requireBankSoalCreate).Post("/api/bank-soal/questions"`,
-		`r.With(requireBankSoalReviewWorkflow).Patch("/api/bank-soal/questions/bulk-workflow"`,
-		`r.With(requireBankSoalImport).Post("/api/bank-soal/questions/import-legacy"`,
-		`r.With(requireBankSoalUpdate).Put("/api/bank-soal/questions/{id}"`,
-		`r.With(requireBankSoalDelete).Delete("/api/bank-soal/questions/{id}"`,
-		`r.With(requireBankSoalAssetUpload).Post("/api/bank-soal/assets"`,
-	}
-	for _, want := range required {
-		if !strings.Contains(block, want) {
-			t.Fatalf("native Bank Soal API block missing granular guard %q:\n%s", want, block)
+	for _, removed := range []string{
+		`"/api/bank-soal`,
+		`"/api/cbt/questions`,
+		`"/api/cbt/packages`,
+		`requireBankSoal`,
+		`NewCbtQuestionWithPool`,
+		`NewCbtPackage(pool)`,
+		`NewBankSoalReport`,
+		`NewBankSoalReviewerScope`,
+	} {
+		if strings.Contains(source, removed) {
+			t.Fatalf("authoring route/service wiring %q must stay removed from active API", removed)
 		}
 	}
 	assetFileGuard := `assetFileGuard := mw.ExamTokenOrJWT(jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession, examSvc.GetParticipantByToken)`
-	assetFileAlias := `r.With(assetFileGuard).Get("/api/bank-soal/assets/{id}/file"`
-	if !strings.Contains(source, assetFileGuard) || !strings.Contains(source, assetFileAlias) {
-		t.Fatalf("native Bank Soal asset file alias must use the same ExamTokenOrJWT guard as the legacy CBT file route")
-	}
-}
-
-func TestQuestionServiceUsesPoolBackedTransactionsInAPI(t *testing.T) {
-	raw, err := os.ReadFile("main.go")
-	if err != nil {
-		t.Fatalf("read main.go: %v", err)
-	}
-	if !strings.Contains(string(raw), "questionSvc := service.NewCbtQuestionWithPool(pool)") {
-		t.Fatalf("API must construct CbtQuestion with pool-backed transaction support")
+	assetFileRoute := `r.With(assetFileGuard).Get("/api/cbt/assets/{id}/file"`
+	if !strings.Contains(source, assetFileGuard) || !strings.Contains(source, assetFileRoute) {
+		t.Fatalf("CBT asset file route must keep the ExamTokenOrJWT guard")
 	}
 }
 

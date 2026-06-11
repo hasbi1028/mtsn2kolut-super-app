@@ -103,7 +103,6 @@
 
 	interface DashboardPayload {
 		academicStats: AcademicStats | null;
-		bankSoal: BankSoalDashboard | null;
 		guruStats: GuruStats | null;
 		guruTimetable: TimetableEntry[];
 		studentPortal: StudentPortalData | null;
@@ -126,15 +125,6 @@
 		watchlist: string[];
 	}
 
-	interface BankSoalDashboard {
-		canRead: boolean;
-		canCreate: boolean;
-		canReview: boolean;
-		canImport: boolean;
-		canAnalytics: boolean;
-		canSettings: boolean;
-	}
-
 	let dashboardPromise = $state<Promise<DashboardPayload> | null>(null);
 	let dashboardRefreshBusy = $state(false);
 
@@ -147,31 +137,25 @@
 	const dashboardAccess = $derived(dashboardDataAccessForUser(data.user));
 	const dashboardWidgets = $derived(visibleDashboardWidgetsForUser(data.user));
 	const hasTeacherDashboard = $derived(dashboardWidgets.some((widget) => widget.id.startsWith('teacher-')));
-	const hasBankSoalDashboard = $derived(dashboardWidgets.some((widget) => widget.id.startsWith('bank-soal-')));
 	const dashboardEyebrow = $derived.by(() => {
 		if (isGuru) return 'Ruang Kerja Guru';
 		if (isSiswa) return 'Portal Siswa';
 		if (isParent) return 'Portal Orang Tua';
 		if (isStaff) return 'Ruang Kerja Staf';
-		if (hasBankSoalDashboard) return 'Bank Soal';
 		return 'Pusat Operasi Madrasah';
 	});
 	const dashboardTitle = $derived.by(() => {
-		if (isGuru && !hasTeacherDashboard && hasBankSoalDashboard) return 'Beranda Bank Soal';
 		if (isGuru) return 'Beranda Guru';
 		if (isSiswa) return 'Beranda Siswa';
 		if (isParent) return 'Beranda Orang Tua';
 		if (isStaff) return 'Beranda Staf';
-		if (hasBankSoalDashboard && !dashboardAccess.academicStats) return 'Beranda Bank Soal';
 		return 'Beranda Utama';
 	});
 	const dashboardDescription = $derived.by(() => {
-		if (isGuru && !hasTeacherDashboard && hasBankSoalDashboard) return 'Pintasan penyusunan dan pengelolaan Bank Soal sesuai hak akses yang aktif pada akun ini.';
 		if (isGuru) return 'Ringkasan kelas, aktivitas CBT, jadwal mengajar, dan pekerjaan koreksi yang perlu diperhatikan hari ini.';
 		if (isSiswa) return 'Lihat identitas akademik, sesi ujian yang terdaftar, jadwal belajar, dan informasi wali yang terhubung.';
 		if (isParent) return 'Pantau data putra-putri yang terhubung, jadwal anak, dan informasi dasar wali dari satu tempat.';
 		if (isStaff) return 'Akses cepat ke layanan operasional sekolah, dokumen, arsip, perpustakaan, dan data akademik pendukung.';
-		if (hasBankSoalDashboard && !dashboardAccess.academicStats) return 'Pintasan penyusunan dan pengelolaan Bank Soal sesuai hak akses yang aktif pada akun ini.';
 		return 'Ringkasan akademik dan operasional MTs Negeri 2 Kolaka Utara untuk pengambilan keputusan harian.';
 	});
 	const dashboardRoleLabel = $derived(roles.length > 0 ? roles.join(' / ') : 'pengguna');
@@ -208,15 +192,14 @@
 		if (isGuru) {
 			return {
 				eyebrow: 'Beranda Guru',
-				title: 'Fokus ke jurnal, nilai, dan bank soal.',
+				title: 'Fokus ke jurnal, nilai, dan jadwal mengajar.',
 				description: 'Pintasan ini mengikuti pekerjaan harian guru agar tidak perlu mencari menu di sidebar panjang.',
 				primary: [
 					{ label: 'Jurnal Kelas', href: '/journal', description: 'Isi atau cek jurnal pembelajaran hari ini.' },
 					{ label: 'Input Nilai', href: '/grades', description: 'Kelola nilai siswa sesuai mapel dan kelas.' },
-					{ label: 'Bank Soal', href: '/bank-soal', description: 'Susun, cek, dan gunakan soal pembelajaran.' }
+					{ label: 'Jadwal Mengajar', href: '/akademik/jadwal', description: 'Lihat slot jadwal kelas dan mapel.' }
 				],
 				secondary: [
-					{ label: 'Jadwal Mengajar', href: '/akademik/jadwal', description: 'Lihat slot jadwal kelas dan mapel.' },
 					{ label: 'Rapor Siswa', href: '/grades/rapor', description: 'Cek nilai akhir dan deskripsi capaian.' }
 				],
 				watchlist: ['Jurnal kelas yang belum diisi.', 'Nilai atau esai yang belum lengkap.', 'Jadwal mengajar aktif.']
@@ -246,14 +229,13 @@
 			primary: [
 				{ label: 'Kesiapan Akademik & Rapor', href: '/akademik/kesiapan', description: 'Cek masalah wali kelas, jadwal, nilai, dan rapor.' },
 				{ label: 'Rombel', href: '/akademik/rombel', description: 'Kelola kelas, wali kelas, dan siswa per rombel.' },
-				{ label: 'Bank Soal', href: '/bank-soal', description: 'Kelola bank soal madrasah.' }
+				{ label: 'Jadwal', href: '/akademik/jadwal', description: 'Cek jadwal dan potensi bentrok.' }
 			],
 			secondary: [
-				{ label: 'Jadwal', href: '/akademik/jadwal', description: 'Cek jadwal dan potensi bentrok.' },
 				{ label: 'Rapor Siswa', href: '/grades/rapor', description: 'Kelola pengaturan dan cetak rapor.' },
 				{ label: 'Monitor PUSAKA', href: '/pusaka', description: 'Pantau integrasi kehadiran pegawai.' }
 			],
-			watchlist: ['Kesiapan akademik dan rapor yang belum lengkap.', 'Bank Soal dan data akademik yang perlu dirapikan.', 'Sinkronisasi PUSAKA dan tindak lanjut Tata Usaha.']
+			watchlist: ['Kesiapan akademik dan rapor yang belum lengkap.', 'Data akademik yang perlu dirapikan.', 'Sinkronisasi PUSAKA dan tindak lanjut Tata Usaha.']
 		};
 	});
 
@@ -288,27 +270,9 @@
 		return value.slice(0, 5);
 	}
 
-	function hasPermission(permission: string) {
-		if (isAdmin) return true;
-		return (data.user?.permissions ?? []).includes(permission);
-	}
-
-	function bankSoalDashboard(): BankSoalDashboard | null {
-		if (!dashboardAccess.bankSoal) return null;
-		return {
-			canRead: hasPermission('bank_soal.read'),
-			canCreate: hasPermission('bank_soal.create'),
-			canReview: hasPermission('bank_soal.review') || hasPermission('bank_soal.publish'),
-			canImport: hasPermission('bank_soal.import'),
-			canAnalytics: hasPermission('bank_soal.analytics'),
-			canSettings: hasPermission('bank_soal.settings')
-		};
-	}
-
 	function emptyDashboardPayload(): DashboardPayload {
 		return {
 			academicStats: null,
-			bankSoal: bankSoalDashboard(),
 			guruStats: null,
 			guruTimetable: [],
 			studentPortal: null,
@@ -566,7 +530,6 @@
 			{@const guruStats = dashboard.guruStats}
 			{@const guruTimetable = dashboard.guruTimetable}
 			{@const academicStats = dashboard.academicStats}
-			{@const bankSoal = dashboard.bankSoal}
 			{@const parentTimetableByChild = parentPortal
 				? parentPortal.children.map((child) => ({
 						child,
@@ -801,29 +764,6 @@
 					/>
 				{/if}
 			</Card.Content>
-				</Card.Root>
-			{/if}
-
-			{#if bankSoal}
-				<Card.Root class="parchment-texture page-enter overflow-hidden border-[var(--gold)]/30 shadow-sm">
-					<Card.Header>
-						<Card.Title class="font-[var(--font-display)] text-base">Bank Soal</Card.Title>
-						<Card.Description>Shortcut yang tersedia mengikuti permission Bank Soal pada akun ini.</Card.Description>
-					</Card.Header>
-					<Card.Content>
-						<div class="flex flex-wrap gap-2">
-							{#if bankSoal.canRead}
-								<Button variant="default" size="sm" href="/bank-soal">Ringkasan Bank Soal</Button>
-								<Button variant="outline" size="sm" href="/bank-soal/daftar">Daftar Soal</Button>
-								<Button variant="outline" size="sm" href="/bank-soal/mapel-kd">Mapel & KD</Button>
-							{/if}
-							{#if bankSoal.canCreate}<Button variant="outline" size="sm" href="/bank-soal/tambah">Tambah Soal</Button>{/if}
-							{#if bankSoal.canReview}<Button variant="outline" size="sm" href="/bank-soal/verifikasi">Verifikasi Soal</Button>{/if}
-							{#if bankSoal.canImport}<Button variant="outline" size="sm" href="/bank-soal/impor">Impor Soal</Button>{/if}
-							{#if bankSoal.canAnalytics}<Button variant="outline" size="sm" href="/bank-soal/analisis-butir">Analisis Butir</Button>{/if}
-							{#if bankSoal.canSettings}<Button variant="outline" size="sm" href="/bank-soal/pengaturan">Pengaturan</Button>{/if}
-						</div>
-					</Card.Content>
 				</Card.Root>
 			{/if}
 

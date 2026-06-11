@@ -74,8 +74,6 @@ func internalAnalyticsEventForRequest(r *http.Request, status int) (eventName, e
 
 	module = routeModule(path)
 	switch {
-	case strings.HasPrefix(path, "/api/bank-soal") || strings.HasPrefix(path, "/api/cbt/questions") || strings.HasPrefix(path, "/api/cbt/assets"):
-		return bankSoalAnalyticsEvent(path, r.Method)
 	case strings.HasPrefix(path, "/api/pusaka"):
 		return pusakaAnalyticsEvent(path, r.Method)
 	case strings.HasPrefix(path, "/api/users"):
@@ -87,34 +85,6 @@ func internalAnalyticsEventForRequest(r *http.Request, status int) (eventName, e
 			return "security.settings_view", "security", "settings"
 		}
 		return "security.settings_update", "security", "settings"
-	default:
-		return "", "", ""
-	}
-}
-
-func bankSoalAnalyticsEvent(path, method string) (string, string, string) {
-	if strings.Contains(path, "/export") || strings.Contains(path, "/template") {
-		return "bank_soal.export", "bank_soal", "bank_soal"
-	}
-	if strings.Contains(path, "/import-legacy") {
-		return "bank_soal.import_complete", "bank_soal", "bank_soal"
-	}
-	if strings.Contains(path, "/workflow") || strings.Contains(path, "/bulk-workflow") {
-		return "bank_soal.review_decision", "bank_soal", "bank_soal"
-	}
-	if strings.Contains(path, "/assets") && method == http.MethodPost {
-		return "bank_soal.asset_upload", "bank_soal", "bank_soal"
-	}
-	switch method {
-	case http.MethodGet:
-		if strings.Contains(path, "/summary") {
-			return "bank_soal.readiness_check", "bank_soal", "bank_soal"
-		}
-		return "bank_soal.list_view", "bank_soal", "bank_soal"
-	case http.MethodPost:
-		return "bank_soal.question_create", "bank_soal", "bank_soal"
-	case http.MethodPut, http.MethodPatch:
-		return "bank_soal.question_update", "bank_soal", "bank_soal"
 	default:
 		return "", "", ""
 	}

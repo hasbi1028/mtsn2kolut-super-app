@@ -147,7 +147,7 @@
 		const columns = clampTableDimension(tableColumns, 1, 8, 2);
 		const caption = tableCaption.trim();
 		const bodyRows = tableHasHeader ? Math.max(1, rows - 1) : rows;
-		let html = '<table class="bank-soal-table"><tbody>';
+		let html = '<table class="rich-text-table"><tbody>';
 		if (caption) {
 			html += '<tr>';
 			for (let col = 0; col < columns; col += 1) {

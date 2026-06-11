@@ -21,7 +21,6 @@ func cbtAccessAllowed(r *http.Request) bool {
 		return false
 	}
 	return mw.HasAnyRole(claims, "admin", "guru") || mw.HasAnyPermission(claims,
-		"bank_soal.read", "bank_soal.create", "bank_soal.update", "bank_soal.review", "bank_soal.publish", "bank_soal.import", "bank_soal.delete", "bank_soal.analytics", "bank_soal.settings",
 		"cbt.read", "cbt.manage", "cbt.proctor", "cbt.score", "cbt.result_read", "cbt.result_manage",
 	)
 }

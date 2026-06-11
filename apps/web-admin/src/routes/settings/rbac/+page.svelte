@@ -560,7 +560,7 @@
 						</div>
 
 						<div class="grid gap-3 md:grid-cols-[1fr_220px]">
-							<Input bind:value={permissionSearch} placeholder="Cari izin akses, contoh: bank_soal atau pengguna" />
+							<Input bind:value={permissionSearch} placeholder="Cari izin akses, contoh: akademik atau pengguna" />
 							<select bind:value={moduleFilter} class="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]">
 								<option value="all">Semua modul</option>
 								{#each moduleOptions as module (module)}
@@ -758,7 +758,7 @@
 					<div class="mt-4 grid gap-3 md:grid-cols-3">
 						<div class="space-y-1">
 							<label for="permission-module" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Module</label>
-							<Input id="permission-module" value={permissionDraft.module} oninput={(event) => updatePermissionModuleDraft(event.currentTarget.value)} placeholder="bank_soal" disabled={permissionActionLoading} />
+							<Input id="permission-module" value={permissionDraft.module} oninput={(event) => updatePermissionModuleDraft(event.currentTarget.value)} placeholder="academic" disabled={permissionActionLoading} />
 						</div>
 						<div class="space-y-1">
 							<label for="permission-action" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Action</label>

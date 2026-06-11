@@ -14,8 +14,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"smoke:cbt:roles": "node scripts/cbt-role-smoke.mjs",
-		"test:unit": "vitest run --retry=2",
-		"smoke:bank-soal:roles": "node scripts/bank-soal-role-e2e.mjs"
+		"test:unit": "vitest run --retry=2"
 	},
 	"devDependencies": {
 		"@internationalized/date": "^3.12.1",

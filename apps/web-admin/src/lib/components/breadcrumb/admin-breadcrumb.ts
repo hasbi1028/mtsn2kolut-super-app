@@ -40,16 +40,7 @@ const segmentLabelMap: Record<string, string> = {
 	soal: 'Soal'
 };
 
-const fallbackPatterns: BreadcrumbPattern[] = [
-	{
-		match: /^\/bank-soal\/soal\/[^/]+\/?$/,
-		crumbs: [
-			{ label: 'Bank Soal', section: '6' },
-			{ label: 'Daftar Soal', href: '/bank-soal', section: '6.1' },
-			{ label: 'Detail Soal', section: '6.1.1' }
-		]
-	}
-];
+const fallbackPatterns: BreadcrumbPattern[] = [];
 
 const numberedSidebarNavGroups = numberSidebarNavGroups(sidebarNavGroups);
 const numberedDashboardNavItem = {

@@ -26,10 +26,10 @@ func TestInternalAnalyticsMiddlewareRecordsModuleActivity(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/bank-soal/questions", nil)
+	req := httptest.NewRequest(http.MethodPut, "/api/rbac/roles/guru/permissions", nil)
 	req = req.WithContext(context.WithValue(req.Context(), api.ClaimsKey, jwt.MapClaims{
 		"sub":   "01000000-0000-0000-0000-000000000001",
-		"roles": []any{"guru"},
+		"roles": []any{"admin"},
 	}))
 	w := httptest.NewRecorder()
 
@@ -39,13 +39,13 @@ func TestInternalAnalyticsMiddlewareRecordsModuleActivity(t *testing.T) {
 		t.Fatalf("analytics calls = %d, want 1", len(recorder.inputs))
 	}
 	got := recorder.inputs[0]
-	if got.EventName != "bank_soal.question_create" || got.EventGroup != "bank_soal" || got.SourceSurface != "core_api" {
-		t.Fatalf("analytics input = %+v, want bank soal create event", got)
+	if got.EventName != "rbac.permission_update" || got.EventGroup != "rbac" || got.SourceSurface != "core_api" {
+		t.Fatalf("analytics input = %+v, want RBAC permission change event", got)
 	}
-	if !got.ActorUserID.Valid || got.ActorRole != "guru" || got.Result != "success" || got.StatusCodeClass != "2xx" {
+	if !got.ActorUserID.Valid || got.ActorRole != "admin" || got.Result != "success" || got.StatusCodeClass != "2xx" {
 		t.Fatalf("analytics actor/status = %+v, want safe actor and success status", got)
 	}
-	if got.Metadata["http_method"] != "POST" || got.Metadata["resource"] != "bank_soal" {
+	if got.Metadata["http_method"] != "PUT" || got.Metadata["resource"] != "rbac" {
 		t.Fatalf("metadata = %+v, want aggregate-safe route metadata", got.Metadata)
 	}
 }

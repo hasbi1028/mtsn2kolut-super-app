@@ -42,7 +42,6 @@
 		{ value: 'public', label: 'Publik' },
 		{ value: 'auth', label: 'Auth' },
 		{ value: 'dashboard', label: 'Dashboard' },
-		{ value: 'bank_soal', label: 'Bank Soal' },
 		{ value: 'pusaka', label: 'PUSAKA' },
 		{ value: 'users', label: 'Users' },
 		{ value: 'rbac', label: 'RBAC' },

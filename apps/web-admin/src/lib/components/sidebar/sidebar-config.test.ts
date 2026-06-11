@@ -27,7 +27,6 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'Akademik',
 			'Siswa & Orang Tua',
 			'Nilai & Rapor',
-			'Bank Soal',
 			'Tata Usaha',
 			'Aset & Layanan',
 			'Website',
@@ -39,7 +38,6 @@ describe('sidebar 3-level full route coverage configuration', () => {
 	});
 
 	it('supports 3-level breadcrumbs for nested sidebar leaves', () => {
-		expect(sidebarBreadcrumbLabel(byHref.get('/bank-soal/tambah')!)).toBe('Bank Soal › Tambah Soal');
 		expect(sidebarBreadcrumbLabel(byHref.get('/settings/backups')!)).toBe('Pengaturan › Sistem & Audit › Backup & Restore');
 	});
 
@@ -50,30 +48,19 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'3 Akademik',
 			'4 Siswa & Orang Tua',
 			'5 Nilai & Rapor',
-			'6 Bank Soal',
-			'7 Tata Usaha',
-			'8 Aset & Layanan',
-			'9 Website',
-			'10 Pegawai & Kehadiran',
-			'11 Pengaturan'
+			'6 Tata Usaha',
+			'7 Aset & Layanan',
+			'8 Website',
+			'9 Pegawai & Kehadiran',
+			'10 Pengaturan'
 		]);
-		expect(numberedByHref.get('/bank-soal/tambah')).toMatchObject({ section: '6.2', numberedLabel: '6.2 Tambah Soal' });
 		expect(sidebarNumberedBreadcrumbLabel(numberedByHref.get('/settings/backups')!)).toBe(
-			'11 Pengaturan › 11.3 Sistem & Audit › 11.3.3 Backup & Restore'
+			'10 Pengaturan › 10.3 Sistem & Audit › 10.3.3 Backup & Restore'
 		);
 	});
 
 	it('adds route coverage for important admin index/action pages while excluding dynamic detail routes', () => {
 		expect(hrefs).toEqual(expect.arrayContaining([
-			'/bank-soal/tambah',
-			'/bank-soal/impor',
-			'/bank-soal/laporan',
-			'/bank-soal/cetak',
-			'/bank-soal/penerbitan',
-			'/bank-soal/analisis-butir',
-			'/bank-soal/mapel-kd',
-			'/bank-soal/alat',
-			'/bank-soal/pengaturan',
 			'/governance/actions/calendar',
 			'/governance/actions/meeting-pack',
 			'/settings/maintenance'
@@ -83,23 +70,9 @@ describe('sidebar 3-level full route coverage configuration', () => {
 	});
 
 
-	it('separates Bank Soal as a standalone module outside CBT routes', () => {
-		expect(sidebarNavGroups.findIndex((group) => group.group === 'Bank Soal')).toBeGreaterThanOrEqual(0);
-		expect(sidebarNavGroups.some((group) => group.group === 'CBT')).toBe(false);
-		expect(hrefsByGroup('Bank Soal')).toEqual([
-			'/bank-soal',
-			'/bank-soal/tambah',
-			'/bank-soal/impor',
-			'/bank-soal/verifikasi',
-			'/bank-soal/laporan',
-			'/bank-soal/cetak',
-			'/bank-soal/penerbitan',
-			'/bank-soal/analisis-butir',
-			'/bank-soal/mapel-kd',
-			'/bank-soal/alat',
-			'/bank-soal/pengaturan'
-		]);
-		expect(hrefsByGroup('Bank Soal').every((href) => !href.startsWith('/cbt/'))).toBe(true);
+	it('keeps Bank Soal removed from sidebar navigation', () => {
+		expect(sidebarNavGroups.some((group) => group.group === 'Bank Soal')).toBe(false);
+		expect(hrefs.some((href) => href.startsWith('/bank-soal'))).toBe(false);
 	});
 
 	it('keeps every configured sidebar icon backed by a rendered SVG branch', () => {
@@ -114,12 +87,9 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(byHref.get('/settings/account')).toMatchObject({ permissions: ['settings.account'], allowAuthenticatedFallback: true });
 		expect(byHref.get('/settings/users')?.permissions).toEqual(['users.read']);
 		expect(byHref.get('/settings/rbac')?.permissions).toEqual(['roles.read']);
-		expect(byHref.get('/bank-soal/verifikasi')?.permissions).toEqual(['bank_soal.review', 'bank_soal.publish']);
-		expect(byHref.get('/bank-soal/laporan')?.permissions).toEqual(['bank_soal.read', 'bank_soal.analytics', 'bank_soal.review']);
-		expect(byHref.get('/bank-soal/analisis-butir')?.permissions).toEqual(['bank_soal.analytics']);
 		});
 
-		it('hides guru role-only academic, student, and bank-soal surfaces without permissions', () => {
+		it('hides guru role-only academic, student, and removed bank-soal surfaces without permissions', () => {
 		const visibleHrefs = flattenSidebarNavGroups(filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], [])).map((item) => item.href);
 		expect(visibleHrefs).toEqual(['/settings/account']);
 		expect(visibleHrefs).not.toContain('/students');
@@ -127,19 +97,6 @@ describe('sidebar 3-level full route coverage configuration', () => {
 	});
 
 
-	it('shows Bank Soal read/create surfaces for a guru with matching permissions', () => {
-		const visibleHrefs = flattenSidebarNavGroups(
-			filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], ['bank_soal.read', 'bank_soal.create'])
-		).map((item) => item.href);
-		expect(visibleHrefs).toEqual(expect.arrayContaining(['/bank-soal', '/bank-soal/tambah', '/settings/account']));
-		expect(visibleHrefs).toContain('/bank-soal/laporan');
-		expect(visibleHrefs).toContain('/bank-soal/cetak');
-		expect(visibleHrefs).toContain('/bank-soal/mapel-kd');
-		expect(visibleHrefs).not.toContain('/bank-soal/verifikasi');
-		expect(visibleHrefs).not.toContain('/bank-soal/daftar');
-		expect(visibleHrefs).not.toContain('/bank-soal/alat');
-		expect(visibleHrefs).not.toContain('/bank-soal/pengaturan');
-	});
 
 
 

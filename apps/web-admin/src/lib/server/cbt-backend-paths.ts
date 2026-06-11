@@ -2,13 +2,9 @@ import { apiPath, apiPathWithQuery } from '$lib/server/api';
 
 const BACKEND_API_ROOT = '/api';
 const CBT_SEGMENT = 'cbt';
-const BANK_SOAL_SEGMENT = 'bank-soal';
 const CBT_PREFIX = `${BACKEND_API_ROOT}/${CBT_SEGMENT}`;
-const BANK_SOAL_PREFIX = `${BACKEND_API_ROOT}/${BANK_SOAL_SEGMENT}`;
 
-// Top-level segments owned by Bank Soal in the Go backend.
-const BANK_SOAL_TOP_SEGMENTS = new Set(['questions', 'assets', 'soal-support']);
-const CBT_TOP_SEGMENTS = new Set(['events', 'packages', 'sessions', 'proctoring', 'readiness', 'approvals']);
+const CBT_TOP_SEGMENTS = new Set(['events', 'sessions', 'proctoring', 'readiness', 'approvals']);
 
 function normalizeInternalPath(path: string): string {
 	if (path.includes('?') || path.includes('#') || path.includes('\\')) {
@@ -34,13 +30,10 @@ function normalizeInternalPath(path: string): string {
 function dispatchPrefix(path: string): string {
 	const normalizedPath = normalizeInternalPath(path);
 	const firstSegment = normalizedPath.slice(1).split('/')[0] ?? '';
-	if (BANK_SOAL_TOP_SEGMENTS.has(firstSegment)) {
-		return BANK_SOAL_PREFIX;
-	}
 	if (CBT_TOP_SEGMENTS.has(firstSegment)) {
 		return CBT_PREFIX;
 	}
-	throw new Error(`unsupported cbt or bank-soal backend path segment: ${firstSegment}`);
+	throw new Error(`unsupported cbt backend path segment: ${firstSegment}`);
 }
 
 export function cbtBackendPath(path: string): string {

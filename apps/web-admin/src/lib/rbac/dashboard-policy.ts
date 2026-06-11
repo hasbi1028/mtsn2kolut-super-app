@@ -19,7 +19,6 @@ export type DashboardWidgetDefinition = {
 export type DashboardDataAccess = {
 	academicStats: boolean;
 	assessmentSessions: boolean;
-	bankSoal: boolean;
 	parentPortal: boolean;
 	studentPortal: boolean;
 	studentSummary: boolean;
@@ -33,20 +32,6 @@ export const DASHBOARD_WIDGETS = [
 		label: 'Ringkasan Akademik',
 		description: 'Statistik siswa, kelas, mapel, dan tahun ajaran.',
 		permissions: ['academic.read'],
-		adminDefault: true
-	},
-	{
-		id: 'bank-soal-overview',
-		label: 'Bank Soal',
-		description: 'Akses cepat daftar soal dan pemetaan Bank Soal.',
-		permissions: ['bank_soal.read'],
-		adminDefault: true
-	},
-	{
-		id: 'bank-soal-authoring',
-		label: 'Authoring Bank Soal',
-		description: 'Shortcut tambah soal untuk penyusun soal.',
-		permissions: ['bank_soal.create'],
 		adminDefault: true
 	},
 	{
@@ -134,12 +119,9 @@ export function dashboardDataAccessForUser(user: UIAccessSubject | undefined): D
 	const canUseParentPortal = isParent && dashboardWidgetEvaluation(DASHBOARD_WIDGETS.find((widget) => widget.id === 'parent-portal')!, user).allowed;
 	const hasStudents = isGuru && hasPermission(user, ['students.read']);
 	const hasTimetable = isGuru && hasPermission(user, ['academic.read', 'journal.read', 'journal.manage', 'journal.read_all', 'journal.manage_all']);
-	const hasBankSoal = admin || hasPermission(user, ['bank_soal.read', 'bank_soal.create', 'bank_soal.review', 'bank_soal.import', 'bank_soal.settings', 'bank_soal.analytics']);
-
 	return {
 		academicStats: admin || hasPermission(user, ['academic.read']),
 		assessmentSessions: false,
-		bankSoal: hasBankSoal,
 		parentPortal: canUseParentPortal,
 		studentPortal: canUseStudentPortal,
 		studentSummary: hasStudents,

@@ -123,22 +123,6 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		]
 	},
 	{
-		group: 'Bank Soal',
-		items: [
-			{ href: '/bank-soal', label: 'Daftar Soal', icon: 'book-open', section: '6.1', roles: ['admin', 'guru'], permissions: ['bank_soal.read'] },
-			{ href: '/bank-soal/tambah', label: 'Tambah Soal', icon: 'file-text', section: '6.2', roles: ['admin', 'guru'], permissions: ['bank_soal.create'] },
-			{ href: '/bank-soal/impor', label: 'Impor Soal', icon: 'file-text', section: '6.3', roles: ['admin', 'guru'], permissions: ['bank_soal.import', 'bank_soal.create'] },
-			{ href: '/bank-soal/verifikasi', label: 'Verifikasi Soal', icon: 'clipboard', section: '6.4', roles: ['admin'], permissions: ['bank_soal.review', 'bank_soal.publish'] },
-			{ href: '/bank-soal/laporan', label: 'Laporan', icon: 'activity', section: '6.5', roles: ['admin', 'guru'], permissions: ['bank_soal.read', 'bank_soal.analytics', 'bank_soal.review'] },
-			{ href: '/bank-soal/cetak', label: 'Cetak Soal', icon: 'printer', section: '6.6', roles: ['admin', 'guru'], permissions: ['bank_soal.read'] },
-			{ href: '/bank-soal/penerbitan', label: 'Penerbitan', icon: 'check-circle', section: '6.7', roles: ['admin'], permissions: ['bank_soal.publish'] },
-			{ href: '/bank-soal/analisis-butir', label: 'Analisis Butir', icon: 'activity', section: '6.8', roles: ['admin'], permissions: ['bank_soal.analytics'] },
-			{ href: '/bank-soal/mapel-kd', label: 'Mapel & KD', icon: 'layers', section: '6.9', roles: ['admin', 'guru'], permissions: ['bank_soal.read', 'bank_soal.create'] },
-			{ href: '/bank-soal/alat', label: 'Alat & Mutu', icon: 'server', section: '6.10', roles: ['admin'], permissions: ['bank_soal.analytics', 'bank_soal.publish', 'bank_soal.settings'] },
-			{ href: '/bank-soal/pengaturan', label: 'Pengaturan', icon: 'settings', section: '6.11', roles: ['admin'], permissions: ['bank_soal.settings'] }
-		]
-	},
-	{
 		group: 'Tata Usaha',
 		items: [
 			{ kind: 'folder', id: 'persuratan', label: 'Persuratan', icon: 'mail', children: [
@@ -239,7 +223,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 
 export const defaultPinnedByRole: Record<string, string[]> = {
 	admin: ['/akademik/kesiapan', '/akademik/rombel', '/akademik/jadwal', '/grades/rapor'],
-	guru: ['/journal', '/grades', '/grades/rapor', '/bank-soal', '/akademik/jadwal'],
+	guru: ['/journal', '/grades', '/grades/rapor', '/akademik/jadwal'],
 	staf: ['/document-cycles', '/inventory', '/library'],
 	kesiswaan: ['/students', '/akademik/rombel', '/parents', '/kesiswaan'],
 	siswa: ['/portal/siswa', '/jadwal'],

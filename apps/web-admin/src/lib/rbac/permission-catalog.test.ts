@@ -27,7 +27,7 @@ function seededPermissionCodes() {
 
 describe('RBAC permission catalog stabilization', () => {
 	it('keeps the frontend catalog in lockstep with seeded permissions', () => {
-		const seeded = seededPermissionCodes().filter((code) => !code.startsWith('asesmen.') && code !== 'student_portal.assessment_take').sort();
+		const seeded = seededPermissionCodes().filter((code) => !code.startsWith('asesmen.') && !code.startsWith('bank_soal.') && code !== 'student_portal.assessment_take').sort();
 		expect(seeded.length).toBeGreaterThan(50);
 		expect(permissionCatalogCodes()).toEqual(seeded);
 		expect(RBAC_PERMISSION_CATALOG.every((permission) => permission.code === `${permission.module}.${permission.action}`)).toBe(true);
@@ -42,7 +42,7 @@ describe('RBAC permission catalog stabilization', () => {
 	});
 
 	it('documents every seeded permission in the operator catalog', () => {
-		for (const code of seededPermissionCodes().filter((code) => !code.startsWith('asesmen.') && code !== 'student_portal.assessment_take')) {
+		for (const code of seededPermissionCodes().filter((code) => !code.startsWith('asesmen.') && !code.startsWith('bank_soal.') && code !== 'student_portal.assessment_take')) {
 			expect(docs).toContain(`\`${code}\``);
 		}
 		expect(docs).toContain('Legacy role fallback');
@@ -50,13 +50,12 @@ describe('RBAC permission catalog stabilization', () => {
 	});
 
 	it('only references seeded permissions from route guards and sidebar metadata', () => {
-		const seeded = new Set(seededPermissionCodes().filter((code) => !code.startsWith('asesmen.') && code !== 'student_portal.assessment_take'));
+		const seeded = new Set(seededPermissionCodes().filter((code) => !code.startsWith('asesmen.') && !code.startsWith('bank_soal.') && code !== 'student_portal.assessment_take'));
 		const routeSamples = [
 			['/settings/users', 'GET'],
 			['/api/rbac/roles', 'POST'],
 			['/api/rbac/permissions/reports.view/status', 'PATCH'],
 			['/api/users/user-1/reset-password', 'POST'],
-			['/api/bank-soal/questions', 'POST'],
 			['/api/academic/rombel/class-1/timetable-slots/slot-1/journal-session', 'POST'],
 			['/api/tu/archives/documents', 'POST'],
 			['/api/pusaka/settings', 'PUT'],

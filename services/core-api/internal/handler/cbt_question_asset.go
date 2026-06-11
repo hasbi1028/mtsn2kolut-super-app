@@ -1,13 +1,11 @@
 package handler
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -23,9 +21,6 @@ type CbtQuestionAsset struct {
 }
 
 type cbtQuestionAssetService interface {
-	Save(ctx context.Context, input service.UploadCbtQuestionAssetInput) (db.CbtQuestionAsset, error)
-	ListByQuestion(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAsset, error)
-	GetQuestion(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error)
 	Get(ctx context.Context, id pgtype.UUID) (db.CbtQuestionAsset, error)
 	Open(asset db.CbtQuestionAsset) (*os.File, error)
 	AccessibleByPackage(ctx context.Context, questionID, packageID pgtype.UUID) (bool, error)
@@ -33,137 +28,6 @@ type cbtQuestionAssetService interface {
 
 func NewCbtQuestionAsset(svc *service.CbtQuestionAsset) *CbtQuestionAsset {
 	return &CbtQuestionAsset{svc: svc}
-}
-
-func (h *CbtQuestionAsset) Upload(w http.ResponseWriter, r *http.Request) {
-	if !cbtAccessAllowed(r) {
-		api.Forbidden(w)
-		return
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 12<<20)
-	if err := r.ParseMultipartForm(12 << 20); err != nil {
-		api.BadRequest(w, "Berkas/formulir yang dikirim tidak valid")
-		return
-	}
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		api.BadRequest(w, "file wajib diisi")
-		return
-	}
-	defer file.Close()
-
-	questionID := pgtype.UUID{}
-	if rawID := r.FormValue("question_id"); rawID != "" {
-		parsed, err := parseUUID(rawID)
-		if err != nil {
-			api.BadRequest(w, "Soal tidak valid")
-			return
-		}
-		questionID = parsed
-	}
-	if !h.requireQuestionAssetScope(w, r, questionID, "bank_soal.create", "bank_soal.update") {
-		return
-	}
-
-	validated, err := validateUploadedFile(header.Filename, file, 10<<20, false)
-	if err != nil {
-		api.BadRequest(w, err.Error())
-		return
-	}
-
-	row, err := h.svc.Save(r.Context(), service.UploadCbtQuestionAssetInput{
-		QuestionID:   questionID,
-		OriginalName: header.Filename,
-		MimeType:     validated.MimeType,
-		FileSize:     int64(len(validated.Data)),
-		Purpose:      r.FormValue("purpose"),
-		UploadedBy:   currentUsername(r),
-		File:         bytes.NewReader(validated.Data),
-	})
-	if err != nil {
-		writeClientError(w, err, "Upload aset soal CBT tidak valid")
-		return
-	}
-
-	api.Created(w, map[string]any{
-		"id":            pgUUIDString(row.ID),
-		"question_id":   pgUUIDString(row.QuestionID),
-		"original_name": row.OriginalName,
-		"mime_type":     row.MimeType,
-		"file_size":     row.FileSize,
-		"purpose":       row.Purpose,
-		"url":           "/api/cbt/assets/" + pgUUIDString(row.ID) + "/file",
-	})
-}
-
-func (h *CbtQuestionAsset) List(w http.ResponseWriter, r *http.Request) {
-	if !cbtAccessAllowed(r) {
-		api.Forbidden(w)
-		return
-	}
-	rawID := r.URL.Query().Get("question_id")
-	if rawID == "" {
-		api.BadRequest(w, "question_id wajib diisi")
-		return
-	}
-	questionID, err := parseUUID(rawID)
-	if err != nil {
-		api.BadRequest(w, "Soal tidak valid")
-		return
-	}
-	if !h.requireQuestionAssetScope(w, r, questionID, "bank_soal.read", "bank_soal.create", "bank_soal.update", "bank_soal.review", "bank_soal.publish") {
-		return
-	}
-	rows, err := h.svc.ListByQuestion(r.Context(), questionID)
-	if err != nil {
-		api.Internal(w, err)
-		return
-	}
-	items := make([]map[string]any, 0, len(rows))
-	for _, row := range rows {
-		items = append(items, map[string]any{
-			"id":            pgUUIDString(row.ID),
-			"question_id":   pgUUIDString(row.QuestionID),
-			"original_name": row.OriginalName,
-			"mime_type":     row.MimeType,
-			"file_size":     row.FileSize,
-			"purpose":       row.Purpose,
-			"url":           "/api/cbt/assets/" + pgUUIDString(row.ID) + "/file",
-		})
-	}
-	api.OK(w, items)
-}
-
-func (h *CbtQuestionAsset) requireQuestionAssetScope(w http.ResponseWriter, r *http.Request, questionID pgtype.UUID, allowedPermissions ...string) bool {
-	if hasAnyRole(r, "admin") {
-		return true
-	}
-	if !questionID.Valid {
-		if hasAnyPermission(r, "bank_soal.create") {
-			return true
-		}
-		api.Forbidden(w)
-		return false
-	}
-	if !hasAnyRole(r, "guru") {
-		api.Forbidden(w)
-		return false
-	}
-	username := currentUsername(r)
-	if strings.TrimSpace(username) == "" {
-		api.Forbidden(w)
-		return false
-	}
-	question, err := h.svc.GetQuestion(r.Context(), questionID)
-	if err != nil {
-		api.Internal(w, err)
-		return false
-	}
-	if strings.TrimSpace(question.AuthorUsername) != username {
-		api.Forbidden(w)
-		return false
-	}
-	return true
 }
 
 func (h *CbtQuestionAsset) File(w http.ResponseWriter, r *http.Request) {
@@ -187,7 +51,8 @@ func (h *CbtQuestionAsset) File(w http.ResponseWriter, r *http.Request) {
 			api.Forbidden(w)
 			return
 		}
-	} else if !h.requireQuestionAssetScope(w, r, asset.QuestionID, "bank_soal.read", "bank_soal.create", "bank_soal.update", "bank_soal.review", "bank_soal.publish") {
+	} else if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
 		return
 	}
 	f, err := h.svc.Open(asset)

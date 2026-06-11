@@ -29,14 +29,6 @@ const ADMIN_ONLY_PREFIXES = [
 	'/api/scheduler/tick'
 ] as const;
 
-const GURU_SAFE_ASSESSMENT_SUPPORT_READ_PATHS = new Set([
-	'/api/bank-soal/soal-support/subjects'
-]);
-
-const GURU_SAFE_ASSESSMENT_SUPPORT_READ_PREFIXES = [] as const;
-
-const BANK_SOAL_PREFIXES = ['/bank-soal', '/api/bank-soal'] as const;
-
 const STAFF_OPERATION_PREFIXES = [
 	'/document-cycles',
 	'/api/document-cycles',
@@ -86,14 +78,8 @@ export function isAdminOnlyPath(pathname: string) {
 	return ADMIN_ONLY_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
 }
 
-export function isGuruSafeAssessmentSupportReadPath(pathname: string, method: string) {
-	if (!isReadMethod(method)) return false;
-	if (GURU_SAFE_ASSESSMENT_SUPPORT_READ_PATHS.has(pathname)) return true;
-	return GURU_SAFE_ASSESSMENT_SUPPORT_READ_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
-}
-
-export function isBankSoalPath(pathname: string) {
-	return BANK_SOAL_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
+export function isGuruSafeAssessmentSupportReadPath(_pathname: string, _method: string) {
+	return false;
 }
 
 export function isStaffOperationPath(pathname: string) {
@@ -171,43 +157,6 @@ function settingsPermission(pathname: string): string[] | undefined {
 	return undefined;
 }
 
-function bankSoalPermission(pathname: string, method: string): string[] | undefined {
-	if (!isBankSoalPath(pathname)) return undefined;
-	if (!pathname.startsWith('/api/')) {
-		if (matchesPathSegment(pathname, '/bank-soal/tambah')) return ['bank_soal.create'];
-		if (matchesPathSegment(pathname, '/bank-soal/verifikasi')) return ['bank_soal.review'];
-		if (matchesPathSegment(pathname, '/bank-soal/penerbitan')) return ['bank_soal.publish'];
-		if (matchesPathSegment(pathname, '/bank-soal/impor')) return ['bank_soal.import'];
-		if (matchesPathSegment(pathname, '/bank-soal/alat')) return ['bank_soal.analytics', 'bank_soal.publish', 'bank_soal.settings'];
-		if (matchesPathSegment(pathname, '/bank-soal/pengaturan')) return ['bank_soal.settings'];
-		if (matchesPathSegment(pathname, '/bank-soal/analisis-butir')) return ['bank_soal.analytics'];
-		return ['bank_soal.read'];
-	}
-	if (matchesPathSegment(pathname, '/api/bank-soal/reviewer-scopes')) return ['bank_soal.assign_reviewer', 'bank_soal.settings'];
-	if (isReadMethod(method)) return ['bank_soal.read'];
-	if (matchesPathSegment(pathname, '/api/bank-soal/questions/import-legacy')) return ['bank_soal.import'];
-	if (matchesPathSegment(pathname, '/api/bank-soal/questions/bulk-workflow')) return ['bank_soal.review', 'bank_soal.publish'];
-	if (matchesPathSegment(pathname, '/api/bank-soal/assets') && method === 'POST') return ['bank_soal.create', 'bank_soal.update'];
-	if (matchesPathSegment(pathname, '/api/bank-soal/questions') && pathname.endsWith('/duplicate') && method === 'POST') return ['bank_soal.create'];
-	if (matchesPathSegment(pathname, '/api/bank-soal/questions') && pathname.endsWith('/revision') && method === 'POST') return ['bank_soal.update'];
-	if (matchesPathSegment(pathname, '/api/bank-soal/questions') && pathname.endsWith('/workflow')) return ['bank_soal.review', 'bank_soal.publish'];
-	if (method === 'POST') return ['bank_soal.create'];
-	if (method === 'DELETE') return ['bank_soal.delete'];
-	if (method === 'PATCH' || method === 'PUT') return ['bank_soal.update'];
-	return ['bank_soal.read'];
-}
-
-function isBankSoalGuruFallbackPath(pathname: string, method: string) {
-	if (!isReadMethod(method)) return false;
-	if (pathname.startsWith('/api/')) return true;
-	return !matchesPathSegment(pathname, '/bank-soal/tambah')
-		&& !matchesPathSegment(pathname, '/bank-soal/verifikasi')
-		&& !matchesPathSegment(pathname, '/bank-soal/penerbitan')
-		&& !matchesPathSegment(pathname, '/bank-soal/impor')
-		&& !matchesPathSegment(pathname, '/bank-soal/alat')
-		&& !matchesPathSegment(pathname, '/bank-soal/pengaturan');
-}
-
 function staffOperationPermission(pathname: string, method: string): string[] | undefined {
 	if (!isStaffOperationPath(pathname)) return undefined;
 	if (matchesPathSegment(pathname, '/library') || matchesPathSegment(pathname, '/api/library')) return isReadMethod(method) ? ['library.read'] : ['library.manage'];
@@ -281,7 +230,6 @@ export function requiredPermissionsForPath(pathname: string, method: string): st
 		?? gradesPermission(pathname, method)
 		?? journalPermission(pathname, method)
 		?? employeePermission(pathname, method)
-		?? bankSoalPermission(pathname, method)
 		?? staffOperationPermission(pathname, method)
 		?? [];
 }
@@ -294,24 +242,6 @@ export function canAccessProtectedRoute(user: AuthUser | undefined, pathname: st
 
 	const requiredPermissions = requiredPermissionsForPath(pathname, method);
 	if (requiredPermissions.length > 0 && hasAnyPermission(user, requiredPermissions)) return true;
-	if (
-		isGuruSafeAssessmentSupportReadPath(pathname, method)
-		&& hasAnyPermission(user, [
-			'bank_soal.read',
-			'bank_soal.create',
-			'bank_soal.update',
-			'bank_soal.review',
-			'bank_soal.publish',
-			'bank_soal.import',
-			'bank_soal.analytics',
-			'bank_soal.update_own',
-			'bank_soal.submit',
-			'bank_soal.approve',
-			'bank_soal.read_all',
-			'bank_soal.use_in_package'
-		])
-	) return true;
-
 	if (isAdminOnlyPath(pathname) && !isGuruSafeAssessmentSupportReadPath(pathname, method)) return false;
 	if (isStudentPortalPath(pathname)) return hasAnyRole(user, ['siswa']);
 	if (isParentPortalPath(pathname)) return hasAnyRole(user, ['ortu']);

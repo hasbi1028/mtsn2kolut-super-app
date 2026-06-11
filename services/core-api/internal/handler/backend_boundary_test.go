@@ -53,21 +53,6 @@ func TestGovernanceDeleteUnitForbiddenForGuruRole(t *testing.T) {
 	}
 }
 
-func TestCbtQuestionApproveForbiddenForGuru(t *testing.T) {
-	h := NewCbtQuestion(nil)
-	req := httptest.NewRequest(http.MethodPost, "/api/cbt/questions/11111111-1111-1111-1111-111111111111/workflow", bytes.NewBufferString(`{"action":"approve","notes":"cek"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req = withRouteParam(req, "id", "11111111-1111-1111-1111-111111111111")
-	req = withClaims(req, jwt.MapClaims{"roles": []any{"guru"}, "sub": "guru-1"})
-	rec := httptest.NewRecorder()
-
-	h.WorkflowAction(rec, req)
-
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusForbidden, rec.Body.String())
-	}
-}
-
 func TestCbtSessionGetForbiddenForNonCbtRole(t *testing.T) {
 	h := NewCbtSession(nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/cbt/sessions/11111111-1111-1111-1111-111111111111", nil)
@@ -540,20 +525,6 @@ func TestJournalDeleteSessionForbiddenForGuruRole(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusForbidden, rec.Body.String())
-	}
-}
-
-func TestCbtQuestionGetRejectsInvalidID(t *testing.T) {
-	h := NewCbtQuestion(nil)
-	req := httptest.NewRequest(http.MethodGet, "/api/cbt/questions/not-a-uuid", nil)
-	req = withRouteParam(req, "id", "not-a-uuid")
-	req = withClaims(req, jwt.MapClaims{"role": "admin"})
-	rec := httptest.NewRecorder()
-
-	h.Get(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 }
 
