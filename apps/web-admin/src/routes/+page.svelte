@@ -475,7 +475,6 @@
 					<div class="flex flex-wrap gap-2">
 						<Button size="sm" class="bg-[var(--gold)] text-[var(--gold-foreground)] hover:bg-[var(--gold)]/90" href="/ujian">Buka Portal Ujian Web</Button>
 						<Button size="sm" variant="outline" href="/ujian?demo=1">Demo Lokal</Button>
-						<Button size="sm" variant="outline" href="/asesmen/aplikasi-siswa/release">Arsip APK</Button>
 					</div>
 				</div>
 				<div class="flex items-center gap-3 rounded-2xl border border-[var(--gold)]/30 bg-background/80 p-3 text-sm text-muted-foreground">

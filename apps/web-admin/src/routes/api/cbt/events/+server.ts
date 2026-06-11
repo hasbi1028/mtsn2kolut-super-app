@@ -4,19 +4,19 @@ import { apiPathWithQuery, handleRouteError, proxy, readRequestJson } from '$lib
 
 export const GET = async (event: RequestEvent) => {
 	try {
-		const data = await proxy(event).get(apiPathWithQuery('/api/asesmen/exams', event.url.searchParams));
+		const data = await proxy(event).get(apiPathWithQuery('/api/cbt/events', event.url.searchParams));
 		return json(data);
 	} catch (e) {
-		return handleRouteError(e, 'asesmen/exams GET');
+		return handleRouteError(e, 'cbt/events GET');
 	}
 };
 
 export const POST = async (event: RequestEvent) => {
 	try {
-		const body = await readRequestJson<Record<string, unknown>>(event.request, 32 << 10);
-		const data = await proxy(event).post('/api/asesmen/exams', body);
+		const body = await readRequestJson<Record<string, unknown>>(event.request);
+		const data = await proxy(event).post('/api/cbt/events', body);
 		return json(data, { status: 201 });
 	} catch (e) {
-		return handleRouteError(e, 'asesmen/exams POST');
+		return handleRouteError(e, 'cbt/events POST');
 	}
 };

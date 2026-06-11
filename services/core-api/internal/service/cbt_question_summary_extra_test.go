@@ -50,14 +50,14 @@ func TestCbtQuestionSummaryAdminReadAllAndActorHelpers(t *testing.T) {
 	svc := NewCbtQuestion(nil)
 	svc.q = store
 
-	if _, err := svc.Summary(context.Background(), CbtQuestionActor{Roles: []string{" admin "}, Permissions: []string{"asesmen.package_manage"}}); err != nil {
+	if _, err := svc.Summary(context.Background(), CbtQuestionActor{Roles: []string{" admin "}, Permissions: []string{"bank_soal.use_in_package"}}); err != nil {
 		t.Fatalf("Summary(admin) error = %v", err)
 	}
 	if !store.summaryCountsArg.IsAdmin || !store.summarySubjectArg.IsAdmin || !store.summaryCogArg.IsAdmin || !store.summaryRecentArg.IsAdmin {
 		t.Fatalf("Summary(admin) did not propagate IsAdmin to all summary queries")
 	}
 	if !store.summaryCountsArg.CanUseInPackage {
-		t.Fatalf("Summary(admin with asesmen.package_manage) CanUseInPackage = false, want true")
+		t.Fatalf("Summary(admin with bank_soal.use_in_package) CanUseInPackage = false, want true")
 	}
 
 	actor := CbtQuestionActor{Roles: []string{" guru ", "admin"}, Permissions: []string{" bank_soal.publish ", "bank_soal.read_all"}}

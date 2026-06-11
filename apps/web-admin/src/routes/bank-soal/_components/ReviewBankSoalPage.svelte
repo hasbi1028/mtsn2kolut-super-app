@@ -104,7 +104,7 @@
 	async function fetchEventContext() {
 		if (!eventId) return null;
 		try {
-			return await fetch(clientApiPath`/api/asesmen/events/${eventId}`).then((response) => readClientApiData<EventContext>(response, 'Gagal memuat konteks kegiatan'));
+			return await fetch(clientApiPath`/api/cbt/events/${eventId}`).then((response) => readClientApiData<EventContext>(response, 'Gagal memuat konteks kegiatan'));
 		} catch {
 			return null;
 		}

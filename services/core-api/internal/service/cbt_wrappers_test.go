@@ -609,8 +609,6 @@ type fakeCbtSessionStore struct {
 	packageQualityID       pgtype.UUID
 	packageQualityRow      db.GetCbtPackageQuestionQualityRow
 	packageQualityErr      error
-	ensuredAssessmentEvent pgtype.UUID
-	ensureAssessmentErr    error
 	createArg              db.CreateCbtExamSessionParams
 	updateStatusArg        db.UpdateCbtExamSessionStatusParams
 	updateScheduleArg      db.UpdateCbtExamSessionScheduleParams
@@ -803,11 +801,6 @@ func (f *fakeCbtSessionStore) GetCbtPackageQuestionQuality(ctx context.Context, 
 		return db.GetCbtPackageQuestionQualityRow{IsActive: true, TotalQuestions: 1, PublishedQuestions: 1}, nil
 	}
 	return f.packageQualityRow, nil
-}
-
-func (f *fakeCbtSessionStore) EnsureCbtExamEventFromAssessmentExam(ctx context.Context, id pgtype.UUID) error {
-	f.ensuredAssessmentEvent = id
-	return f.ensureAssessmentErr
 }
 
 func (f *fakeCbtSessionStore) CreateCbtExamSession(ctx context.Context, arg db.CreateCbtExamSessionParams) (db.CbtExamSession, error) {

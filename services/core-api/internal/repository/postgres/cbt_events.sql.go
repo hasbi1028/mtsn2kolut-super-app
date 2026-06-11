@@ -143,26 +143,6 @@ func (q *Queries) DeleteCbtExamEvent(ctx context.Context, id pgtype.UUID) (int64
 	return result.RowsAffected(), nil
 }
 
-const ensureCbtExamEventFromAssessmentExam = `-- name: EnsureCbtExamEventFromAssessmentExam :exec
-INSERT INTO cbt_exam_events (id, title, exam_type, scope, target_levels, academic_year_id, status)
-SELECT
-  e.id,
-  e.title,
-  'lainnya'::cbt_exam_type,
-  'school'::text,
-  '{}'::text[],
-  NULL::uuid,
-  CASE WHEN e.status IN ('active', 'finished') THEN e.status ELSE 'draft' END
-FROM assessment_exams e
-WHERE e.id = $1
-ON CONFLICT (id) DO NOTHING
-`
-
-func (q *Queries) EnsureCbtExamEventFromAssessmentExam(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, ensureCbtExamEventFromAssessmentExam, id)
-	return err
-}
-
 const getCbtEventFinalArchiveCompleteness = `-- name: GetCbtEventFinalArchiveCompleteness :one
 WITH sessions AS (
   SELECT id, status

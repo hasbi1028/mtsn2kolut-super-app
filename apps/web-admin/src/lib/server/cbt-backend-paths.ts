@@ -1,18 +1,18 @@
 import { apiPath, apiPathWithQuery } from '$lib/server/api';
 
 const BACKEND_API_ROOT = '/api';
-const ASESMEN_SEGMENT = 'asesmen';
+const CBT_SEGMENT = 'cbt';
 const BANK_SOAL_SEGMENT = 'bank-soal';
-const ASESMEN_PREFIX = `${BACKEND_API_ROOT}/${ASESMEN_SEGMENT}`;
+const CBT_PREFIX = `${BACKEND_API_ROOT}/${CBT_SEGMENT}`;
 const BANK_SOAL_PREFIX = `${BACKEND_API_ROOT}/${BANK_SOAL_SEGMENT}`;
 
 // Top-level segments owned by Bank Soal in the Go backend.
 const BANK_SOAL_TOP_SEGMENTS = new Set(['questions', 'assets', 'soal-support']);
-const ASESMEN_TOP_SEGMENTS = new Set(['events', 'packages', 'sessions', 'non-test-assessments', 'proctoring', 'readiness', 'approvals']);
+const CBT_TOP_SEGMENTS = new Set(['events', 'packages', 'sessions', 'proctoring', 'readiness', 'approvals']);
 
 function normalizeInternalPath(path: string): string {
 	if (path.includes('?') || path.includes('#') || path.includes('\\')) {
-		throw new Error('asesmen backend path must be a relative API path without query, hash, or backslash');
+		throw new Error('cbt backend path must be a relative API path without query, hash, or backslash');
 	}
 	const normalizedPath = path.startsWith('/') ? path : `/${path}`;
 	const lowerPath = normalizedPath.toLowerCase();
@@ -22,11 +22,11 @@ function normalizeInternalPath(path: string): string {
 		|| lowerPath.includes('%2f')
 		|| lowerPath.includes('%5c')
 	) {
-		throw new Error('asesmen backend path contains unsafe traversal or encoded separators');
+		throw new Error('cbt backend path contains unsafe traversal or encoded separators');
 	}
 	const segments = normalizedPath.slice(1).split('/');
 	if (segments.length === 0 || !segments[0] || segments.some((segment) => segment === '.' || segment === '..')) {
-		throw new Error('asesmen backend path must contain safe non-empty segments');
+		throw new Error('cbt backend path must contain safe non-empty segments');
 	}
 	return normalizedPath;
 }
@@ -37,10 +37,10 @@ function dispatchPrefix(path: string): string {
 	if (BANK_SOAL_TOP_SEGMENTS.has(firstSegment)) {
 		return BANK_SOAL_PREFIX;
 	}
-	if (ASESMEN_TOP_SEGMENTS.has(firstSegment)) {
-		return ASESMEN_PREFIX;
+	if (CBT_TOP_SEGMENTS.has(firstSegment)) {
+		return CBT_PREFIX;
 	}
-	throw new Error(`unsupported asesmen or bank-soal backend path segment: ${firstSegment}`);
+	throw new Error(`unsupported cbt or bank-soal backend path segment: ${firstSegment}`);
 }
 
 export function cbtBackendPath(path: string): string {

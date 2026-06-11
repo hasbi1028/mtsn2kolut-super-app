@@ -20,7 +20,7 @@ describe('Bank Soal composer source contract', () => {
 
 	it('does not let optional asesmen events failure blank the mapel dropdown', () => {
 		expect(source).toContain("fetch('/api/bank-soal/soal-support/subjects')");
-		expect(source).toContain("fetch('/api/asesmen/events')");
+		expect(source).toContain("fetch('/api/cbt/events')");
 		expect(source).toContain(".catch(() => [] as CbtEvent[])");
 	});
 });

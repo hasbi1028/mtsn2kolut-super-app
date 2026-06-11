@@ -195,7 +195,7 @@ describe('bank soal sync queue fallback', () => {
 			draftKey: 'draft-bad',
 			intent: 'draft',
 			method: 'POST',
-			endpoint: '/api/asesmen/packages',
+			endpoint: '/api/cbt/packages',
 			payload: {},
 		}, { ...noIdb, storage })).rejects.toThrow('Endpoint sinkronisasi Bank Soal tidak valid');
 	});

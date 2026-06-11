@@ -58,7 +58,6 @@ var maintenanceAPIPrefixes = map[string][]string{
 		"/api/cbt/assets",
 	},
 	MaintenanceModuleCBT: {
-		"/api/asesmen",
 		"/api/cbt/packages",
 		"/api/cbt/events",
 		"/api/cbt/sessions",

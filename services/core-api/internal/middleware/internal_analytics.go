@@ -76,8 +76,6 @@ func internalAnalyticsEventForRequest(r *http.Request, status int) (eventName, e
 	switch {
 	case strings.HasPrefix(path, "/api/bank-soal") || strings.HasPrefix(path, "/api/cbt/questions") || strings.HasPrefix(path, "/api/cbt/assets"):
 		return bankSoalAnalyticsEvent(path, r.Method)
-	case strings.HasPrefix(path, "/api/asesmen") || strings.HasPrefix(path, "/api/cbt/packages") || strings.HasPrefix(path, "/api/cbt/events") || strings.HasPrefix(path, "/api/cbt/sessions"):
-		return asesmenAnalyticsEvent(path, r.Method)
 	case strings.HasPrefix(path, "/api/pusaka"):
 		return pusakaAnalyticsEvent(path, r.Method)
 	case strings.HasPrefix(path, "/api/users"):
@@ -120,47 +118,6 @@ func bankSoalAnalyticsEvent(path, method string) (string, string, string) {
 	default:
 		return "", "", ""
 	}
-}
-
-func asesmenAnalyticsEvent(path, method string) (string, string, string) {
-	if strings.Contains(path, "/results") || strings.Contains(path, "/item-analysis") {
-		if method == http.MethodGet {
-			return "asesmen.result_view", "asesmen", "asesmen"
-		}
-		return "asesmen.result_export", "asesmen", "asesmen"
-	}
-	if strings.Contains(path, "/proctoring") {
-		return "asesmen.proctoring_view", "asesmen", "asesmen"
-	}
-	if strings.Contains(path, "/flag") || strings.Contains(path, "/force-submit") || strings.Contains(path, "/reset-access") || strings.Contains(path, "/seat") || strings.Contains(path, "/enroll") {
-		return "asesmen.participant_action", "asesmen", "asesmen"
-	}
-	if strings.Contains(path, "/sync-grade") {
-		return "asesmen.non_test_sync", "asesmen", "asesmen"
-	}
-	if strings.Contains(path, "/packages") {
-		if method == http.MethodPost {
-			return "asesmen.package_create", "asesmen", "asesmen"
-		}
-		if method == http.MethodPut || method == http.MethodPatch {
-			return "asesmen.package_update", "asesmen", "asesmen"
-		}
-	}
-	if strings.Contains(path, "/events") && method == http.MethodPost {
-		return "asesmen.event_create", "asesmen", "asesmen"
-	}
-	if strings.Contains(path, "/sessions") {
-		if method == http.MethodPost {
-			return "asesmen.session_create", "asesmen", "asesmen"
-		}
-		if method == http.MethodPut || method == http.MethodPatch {
-			return "asesmen.session_update", "asesmen", "asesmen"
-		}
-	}
-	if method == http.MethodGet {
-		return "asesmen.hub_view", "asesmen", "asesmen"
-	}
-	return "", "", ""
 }
 
 func pusakaAnalyticsEvent(path, method string) (string, string, string) {

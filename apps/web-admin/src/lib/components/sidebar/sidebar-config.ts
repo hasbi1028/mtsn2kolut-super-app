@@ -139,19 +139,6 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		]
 	},
 	{
-		group: 'Paket Soal',
-		items: [
-			{ href: '/paket-soal', label: 'Paket Soal', icon: 'package', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.package_manage'] }
-		]
-	},
-	{
-		group: 'Asesmen CBT',
-		items: [
-			{ href: '/asesmen', label: 'Kegiatan Ujian', icon: 'clipboard', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read'] },
-			{ href: '/asesmen/sesi', label: 'Sesi CBT', icon: 'calendar', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read'] }
-		]
-	},
-	{
 		group: 'Tata Usaha',
 		items: [
 			{ kind: 'folder', id: 'persuratan', label: 'Persuratan', icon: 'mail', children: [

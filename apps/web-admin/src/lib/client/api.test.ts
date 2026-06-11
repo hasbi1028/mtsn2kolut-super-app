@@ -10,9 +10,9 @@ import {
 
 describe('client API helpers', () => {
 	it('encodes dynamic client path segments', () => {
-		const path = clientApiPath`/api/asesmen/sessions/${'session 1/2026'}/participants/${'siswa?1'}/seat`;
+		const path = clientApiPath`/api/cbt/sessions/${'session 1/2026'}/participants/${'siswa?1'}/seat`;
 
-		expect(path).toBe('/api/asesmen/sessions/session%201%2F2026/participants/siswa%3F1/seat');
+		expect(path).toBe('/api/cbt/sessions/session%201%2F2026/participants/siswa%3F1/seat');
 	});
 
 	it('appends client query strings only when present', () => {

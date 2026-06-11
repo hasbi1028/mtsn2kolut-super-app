@@ -43,7 +43,6 @@
 		{ value: 'auth', label: 'Auth' },
 		{ value: 'dashboard', label: 'Dashboard' },
 		{ value: 'bank_soal', label: 'Bank Soal' },
-		{ value: 'asesmen', label: 'Asesmen' },
 		{ value: 'pusaka', label: 'PUSAKA' },
 		{ value: 'users', label: 'Users' },
 		{ value: 'rbac', label: 'RBAC' },

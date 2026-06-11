@@ -271,7 +271,7 @@ func bankSoalReportLocation() *time.Location {
 	return loc
 }
 func bankSoalReportCanReadAll(a CbtQuestionActor) bool {
-	return a.IsAdmin() || a.CanReadAllBankSoal() || a.HasPermission("bank_soal.analytics") || a.HasPermission("bank_soal.review") || a.HasPermission("bank_soal.approve") || a.HasPermission("bank_soal.publish") || a.HasPermission("bank_soal.settings") || a.HasPermission("asesmen.event_manage")
+	return a.IsAdmin() || a.CanReadAllBankSoal() || a.HasPermission("bank_soal.analytics") || a.HasPermission("bank_soal.review") || a.HasPermission("bank_soal.approve") || a.HasPermission("bank_soal.publish") || a.HasPermission("bank_soal.settings")
 }
 func bankSoalReportAccessNote(all bool) string {
 	if all {

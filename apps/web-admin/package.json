@@ -14,8 +14,6 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"smoke:cbt:roles": "node scripts/cbt-role-smoke.mjs",
-		"smoke:asesmen-cbt:opsi0": "node scripts/asesmen-cbt-opsi0-e2e.mjs",
-		"e2e:asesmen-cbt:pg-essay": "node scripts/asesmen-cbt-pg-essay-playwright-e2e.mjs",
 		"test:unit": "vitest run --retry=2",
 		"smoke:bank-soal:roles": "node scripts/bank-soal-role-e2e.mjs"
 	},

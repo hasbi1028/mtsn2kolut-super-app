@@ -5,7 +5,6 @@
 
 	let {
 		reviewHref,
-		membersHref,
 		canUseReviewerTools,
 		isAdminRole,
 		exportBusy,
@@ -18,7 +17,6 @@
 		onExport
 	}: {
 		reviewHref: '/bank-soal/verifikasi' | `/bank-soal/verifikasi?${string}`;
-		membersHref: `/asesmen/kegiatan/${string}/members` | '/asesmen/kegiatan';
 		canUseReviewerTools: boolean;
 		isAdminRole: boolean;
 		exportBusy: boolean;

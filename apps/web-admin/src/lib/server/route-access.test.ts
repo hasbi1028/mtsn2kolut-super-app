@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { canAccessProtectedRoute, hasAnyPermission, hasAnyRole, isAdminOnlyPath, isBankSoalPath, isKesiswaanPath, isMustChangePasswordAllowedPath, isPaketSoalPath, isPublicPath, isReadMethod, isStaffOperationPath, isStudentApiPath, isStudentPagePath, requiredPermissionsForPath } from './route-access';
+import { canAccessProtectedRoute, hasAnyPermission, hasAnyRole, isAdminOnlyPath, isBankSoalPath, isKesiswaanPath, isMustChangePasswordAllowedPath, isPublicPath, isReadMethod, isStaffOperationPath, isStudentApiPath, isStudentPagePath, requiredPermissionsForPath } from './route-access';
 
 describe('route access helpers', () => {
 	it('keeps account settings available while gating system settings', () => {
@@ -48,11 +48,9 @@ describe('route access helpers', () => {
 		expect(isAdminOnlyPath('/api/parentship')).toBe(false);
 	});
 
-	it('keeps Bank Soal and Asesmen route boundaries explicit for admin and guru access', () => {
+	it('keeps Bank Soal route boundaries explicit for admin and guru access', () => {
 		expect(isPublicPath('/bank-soal')).toBe(false);
-		expect(isPublicPath('/asesmen')).toBe(false);
 		expect(isAdminOnlyPath('/bank-soal')).toBe(false);
-		expect(isAdminOnlyPath('/asesmen')).toBe(false);
 		const finalBankSoalRoutes = [
 			'/bank-soal',
 			'/bank-soal/daftar',
@@ -73,16 +71,6 @@ describe('route access helpers', () => {
 		expect(isBankSoalPath('/bank-soal/analisis-butir')).toBe(true);
 		expect(isBankSoalPath('/api/bank-soal/summary')).toBe(true);
 		expect(isBankSoalPath('/bank-soalship')).toBe(false);
-		expect(isPaketSoalPath('/paket-soal')).toBe(true);
-		expect(isPaketSoalPath('/paket-soalship')).toBe(false);
-		expect(requiredPermissionsForPath('/paket-soal', 'GET')).toEqual(['asesmen.package_manage']);
-		expect(requiredPermissionsForPath('/api/asesmen/package-options', 'GET')).toEqual(['asesmen.read', 'asesmen.package_manage']);
-		expect(requiredPermissionsForPath('/api/asesmen/packages/pkg-1/questions', 'PUT')).toEqual(['asesmen.manage', 'asesmen.package_manage']);
-		expect(canAccessProtectedRoute({ id: 'paket', username: 'paket-manager', role: 'guru', roles: ['guru'], permissions: ['asesmen.package_manage'] }, '/paket-soal', 'GET')).toBe(true);
-		expect(canAccessProtectedRoute({ id: 'paket', username: 'paket-manager', role: 'guru', roles: ['guru'], permissions: ['asesmen.package_manage'] }, '/api/bank-soal/questions', 'GET')).toBe(true);
-		expect(canAccessProtectedRoute({ id: 'paket-read', username: 'asesmen-read', role: 'guru', roles: ['guru'], permissions: ['asesmen.read'] }, '/paket-soal', 'GET')).toBe(false);
-		expect(canAccessProtectedRoute({ id: 'paket-bank-only', username: 'bank-only', role: 'guru', roles: ['guru'], permissions: ['bank_soal.read'] }, '/paket-soal', 'GET')).toBe(false);
-		expect(canAccessProtectedRoute({ id: 'paket-plain', username: 'plain', role: 'guru', roles: ['guru'], permissions: [] }, '/paket-soal', 'GET')).toBe(false);
 	});
 
 
@@ -288,8 +276,6 @@ describe('route access helpers', () => {
 		expect(requiredPermissionsForPath('/api/users/user-1/force-password-change', 'POST')).toEqual(['users.reset_password']);
 		expect(requiredPermissionsForPath('/api/users/user-1/status', 'PATCH')).toEqual(['users.deactivate']);
 		expect(requiredPermissionsForPath('/api/users/user-1/profile-link', 'PATCH')).toEqual(['users.update']);
-		expect(requiredPermissionsForPath('/api/asesmen/exams/exam-1/cards', 'GET')).toEqual(['asesmen.cards_issue', 'asesmen.manage']);
-		expect(requiredPermissionsForPath('/api/asesmen/exams/exam-1/issue-cards', 'POST')).toEqual(['asesmen.cards_issue', 'asesmen.manage']);
 		expect(requiredPermissionsForPath('/bank-soal/tambah', 'GET')).toEqual(['bank_soal.create']);
 		expect(requiredPermissionsForPath('/bank-soal/verifikasi', 'GET')).toEqual(['bank_soal.review']);
 		expect(requiredPermissionsForPath('/bank-soal/impor', 'GET')).toEqual(['bank_soal.import']);
@@ -322,4 +308,3 @@ describe('route access helpers', () => {
 		expect(hasAnyPermission({ id: '1', username: 'rbac', role: '', roles: [], permissions: [' users.read '] }, ['users.read'])).toBe(true);
 	});
 });
-

@@ -320,7 +320,7 @@ func (a CbtQuestionActor) CanReadAllBankSoal() bool {
 }
 
 func (a CbtQuestionActor) CanUseBankSoalInPackage() bool {
-	return a.HasPermission("bank_soal.use_in_package") || a.HasPermission("asesmen.package_manage")
+	return a.HasPermission("bank_soal.use_in_package")
 }
 
 func (a CbtQuestionActor) IsAdmin() bool {

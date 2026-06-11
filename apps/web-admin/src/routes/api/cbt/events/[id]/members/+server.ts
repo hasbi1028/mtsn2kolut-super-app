@@ -5,23 +5,20 @@ import { apiPath, handleRouteError, proxy, readRequestJson, requiredRouteParam }
 export const GET = async (event: RequestEvent) => {
 	try {
 		const id = requiredRouteParam(event.params.id, 'id');
-		const data = await proxy(event).get(apiPath`/api/cbt/events/${id}/sessions`);
+		const data = await proxy(event).get(apiPath`/api/cbt/events/${id}/members`);
 		return json(data);
 	} catch (e) {
-		return handleRouteError(e, 'asesmen/exams/[id]/sessions GET');
+		return handleRouteError(e, 'cbt/events/[id]/members GET');
 	}
 };
 
 export const POST = async (event: RequestEvent) => {
 	try {
 		const id = requiredRouteParam(event.params.id, 'id');
-		const body = await readRequestJson<Record<string, unknown>>(event.request, 32 << 10);
-		const data = await proxy(event).post(apiPath`/api/cbt/sessions`, {
-			...body,
-			event_id: id
-		});
-		return json(data);
+		const body = await readRequestJson<Record<string, unknown>>(event.request);
+		const data = await proxy(event).post(apiPath`/api/cbt/events/${id}/members`, body);
+		return json(data, { status: 201 });
 	} catch (e) {
-		return handleRouteError(e, 'asesmen/exams/[id]/sessions POST');
+		return handleRouteError(e, 'cbt/events/[id]/members POST');
 	}
 };

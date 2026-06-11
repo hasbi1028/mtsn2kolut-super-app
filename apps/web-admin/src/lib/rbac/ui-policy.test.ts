@@ -34,8 +34,6 @@ describe('UI policy access evaluation', () => {
 			'/bank-soal/impor',
 			'/settings/account'
 		]);
-		expect(buildUIPolicyPreview('guru', ['asesmen.package_manage']).visibleMenuItems.map((item) => item.href)).toContain('/paket-soal');
-		expect(preview.hiddenMenuItems.map((item) => item.href)).not.toContain('/asesmen/pelaksanaan');
 		expect(preview.visibleDashboardWidgets.map((widget) => widget.id)).toEqual([
 			'bank-soal-overview',
 			'bank-soal-authoring'

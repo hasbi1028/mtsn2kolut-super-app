@@ -79,9 +79,9 @@ describe('server api helpers', () => {
 	});
 
 	it('apiPath encodes interpolated route params as path segments', () => {
-		const path = apiPath`/api/asesmen/sessions/${'session 1/2026'}/participants/${'siswa?1'}/seat`;
+		const path = apiPath`/api/cbt/sessions/${'session 1/2026'}/participants/${'siswa?1'}/seat`;
 
-		expect(path).toBe('/api/asesmen/sessions/session%201%2F2026/participants/siswa%3F1/seat');
+		expect(path).toBe('/api/cbt/sessions/session%201%2F2026/participants/siswa%3F1/seat');
 	});
 
 	it('apiPathWithQuery appends query strings only when present', () => {

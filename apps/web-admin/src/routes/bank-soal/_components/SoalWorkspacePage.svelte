@@ -1120,7 +1120,7 @@
 		const verifikasiParams = buildReviewQueueParams();
 		const approvedParams = buildApprovedQueueParams();
 		const targetsPromise = selectedEventId
-			? fetch(clientApiPath`/api/asesmen/events/${selectedEventId}/question-targets`).then((response) =>
+			? fetch(clientApiPath`/api/cbt/events/${selectedEventId}/question-targets`).then((response) =>
 				readClientApiData<QuestionTarget[]>(response, 'Gagal memuat target soal kegiatan')
 			)
 			: Promise.resolve([] as QuestionTarget[]);
@@ -1140,7 +1140,7 @@
 			fetch('/api/bank-soal/soal-support/subjects').then((response) =>
 				readClientApiData<AcademicPayload>(response, 'Gagal memuat data akademik')
 			),
-			fetch('/api/asesmen/events')
+			fetch('/api/cbt/events')
 				.then((response) => readClientApiData<EventsPayload>(response, 'Gagal memuat kegiatan ujian'))
 				.catch(() => [] as CbtEvent[]),
 			targetsPromise,
@@ -1484,7 +1484,7 @@
 		}
 		targetBusy = true;
 		try {
-			await fetch(clientApiPath`/api/asesmen/events/${selectedEventId}/question-targets`, {
+			await fetch(clientApiPath`/api/cbt/events/${selectedEventId}/question-targets`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ subject_id: filterSubject, target_questions: Number(targetQuestionsInput) || 0 })
@@ -1577,7 +1577,7 @@
 		}
 		eventMembersLoading = true;
 		try {
-			const members = await fetch(clientApiPath`/api/asesmen/events/${selectedEventId}/members`).then((response) =>
+			const members = await fetch(clientApiPath`/api/cbt/events/${selectedEventId}/members`).then((response) =>
 				readClientApiData<EventMember[]>(response, 'Gagal memuat panitia kegiatan')
 			);
 			eventMembers = Array.isArray(members) ? members : [];
@@ -1603,7 +1603,7 @@
 				subject_id: memberSubjectId || undefined,
 				role: memberRole,
 			};
-			await fetch(clientApiPath`/api/asesmen/events/${selectedEventId}/members`, {
+			await fetch(clientApiPath`/api/cbt/events/${selectedEventId}/members`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(payload),
@@ -1630,7 +1630,7 @@
 		}))) return;
 		memberBusyId = member.id;
 		try {
-			await fetch(clientApiPath`/api/asesmen/events/${selectedEventId}/members/${member.id}`, { method: 'DELETE' }).then((response) => readClientJson<unknown>(response));
+			await fetch(clientApiPath`/api/cbt/events/${selectedEventId}/members/${member.id}`, { method: 'DELETE' }).then((response) => readClientJson<unknown>(response));
 			toast.success('Penugasan kegiatan dihapus');
 			await refreshEventMembers();
 		} catch (error) {

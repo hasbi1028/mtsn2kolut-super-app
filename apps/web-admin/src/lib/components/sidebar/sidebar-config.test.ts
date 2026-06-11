@@ -28,8 +28,6 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'Siswa & Orang Tua',
 			'Nilai & Rapor',
 			'Bank Soal',
-			'Paket Soal',
-			'Asesmen CBT',
 			'Tata Usaha',
 			'Aset & Layanan',
 			'Website',
@@ -53,25 +51,20 @@ describe('sidebar 3-level full route coverage configuration', () => {
 			'4 Siswa & Orang Tua',
 			'5 Nilai & Rapor',
 			'6 Bank Soal',
-			'7 Paket Soal',
-			'8 Asesmen CBT',
-			'9 Tata Usaha',
-			'10 Aset & Layanan',
-			'11 Website',
-			'12 Pegawai & Kehadiran',
-			'13 Pengaturan'
+			'7 Tata Usaha',
+			'8 Aset & Layanan',
+			'9 Website',
+			'10 Pegawai & Kehadiran',
+			'11 Pengaturan'
 		]);
 		expect(numberedByHref.get('/bank-soal/tambah')).toMatchObject({ section: '6.2', numberedLabel: '6.2 Tambah Soal' });
-		expect(numberedByHref.get('/paket-soal')).toMatchObject({ section: '7.1', numberedLabel: '7.1 Paket Soal' });
-		expect(numberedByHref.get('/asesmen')).toMatchObject({ section: '8.1', numberedLabel: '8.1 Kegiatan Ujian' });
 		expect(sidebarNumberedBreadcrumbLabel(numberedByHref.get('/settings/backups')!)).toBe(
-			'13 Pengaturan › 13.3 Sistem & Audit › 13.3.3 Backup & Restore'
+			'11 Pengaturan › 11.3 Sistem & Audit › 11.3.3 Backup & Restore'
 		);
 	});
 
 	it('adds route coverage for important admin index/action pages while excluding dynamic detail routes', () => {
 		expect(hrefs).toEqual(expect.arrayContaining([
-			'/paket-soal',
 			'/bank-soal/tambah',
 			'/bank-soal/impor',
 			'/bank-soal/laporan',
@@ -126,22 +119,11 @@ describe('sidebar 3-level full route coverage configuration', () => {
 		expect(byHref.get('/bank-soal/analisis-butir')?.permissions).toEqual(['bank_soal.analytics']);
 		});
 
-		it('hides guru role-only academic, student, assessment, and bank-soal surfaces without permissions', () => {
+		it('hides guru role-only academic, student, and bank-soal surfaces without permissions', () => {
 		const visibleHrefs = flattenSidebarNavGroups(filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], [])).map((item) => item.href);
 		expect(visibleHrefs).toEqual(['/settings/account']);
 		expect(visibleHrefs).not.toContain('/students');
 		expect(visibleHrefs).not.toContain('/bank-soal');
-		expect(visibleHrefs).not.toContain('/asesmen/pelaksanaan');
-		expect(visibleHrefs).not.toContain('/asesmen');
-	});
-	it('exposes Kegiatan Ujian for users with asesmen.read permission', () => {
-		const visibleHrefs = flattenSidebarNavGroups(
-			filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], ['asesmen.read'])
-		).map((item) => item.href);
-
-		expect(hrefsByGroup('Asesmen CBT')).toEqual(['/asesmen']);
-		expect(byHref.get('/asesmen')).toMatchObject({ label: 'Kegiatan Ujian', permissions: ['asesmen.read'] });
-		expect(visibleHrefs).toEqual(expect.arrayContaining(['/asesmen', '/settings/account']));
 	});
 
 
