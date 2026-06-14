@@ -85,9 +85,9 @@
 		align === 'start' ? 'left-0' : 'right-0'
 	));
 	const panelClass = $derived(cn(
-		'absolute z-50 w-72 overflow-hidden rounded-lg border border-border bg-popover p-1.5 text-popover-foreground shadow-lg ring-1 ring-foreground/5',
-		positionClass,
-		menuClass
+	    'absolute z-50 w-72 overflow-hidden rounded-xl border border-surface-300/60 dark:border-surface-600/60 bg-surface-50-950 p-1.5 text-popover-foreground shadow-2xl ring-1 ring-black/10 dark:ring-white/10 backdrop-blur-md',
+	    positionClass,
+	    menuClass
 	));
 
 	$effect(() => {

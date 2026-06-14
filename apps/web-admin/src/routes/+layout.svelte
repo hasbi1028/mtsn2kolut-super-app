@@ -41,7 +41,7 @@
 <GlobalConfirmDialog />
 <RouteProgress active={!!navigating.to} />
 
-<div data-theme="cerberus" class="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+<div data-theme="cerberus" class="min-h-screen w-full max-w-full overflow-x-hidden bg-[var(--background)] text-[var(--foreground)]">
 	{#if isLogin || isMaintenancePage}
 		{@render children()}
 	{:else if isPublicSite}
@@ -49,10 +49,10 @@
 			{@render children()}
 		</PublicSiteShell>
 	{:else}
-		<div class="flex min-h-screen">
+		<div class="flex min-h-screen w-full max-w-full">
 			<Sidebar user={data.user} account={data.account} branding={branding} />
-			<div class="flex-1 min-w-0 pt-14 lg:pt-0 lg:pl-64">
-				<main class="w-full px-4 py-6 lg:px-6 lg:mx-auto lg:max-w-[1100px] page-enter">
+			<div class="flex-1 min-w-0 w-full max-w-full pt-14 lg:pt-0 lg:pl-64">
+				<main class="w-full max-w-none px-4 pb-24 pt-6 sm:px-5 lg:px-6 lg:mx-auto lg:max-w-[1100px] lg:pb-6 page-enter">
 					<MaintenanceBanner status={data.maintenanceStatus} user={data.user} />
 					{@render children()}
 				</main>
