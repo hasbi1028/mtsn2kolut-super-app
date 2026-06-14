@@ -1,18 +1,18 @@
 <script lang="ts">
-  let { children } = $props();
+	import type { Snippet } from 'svelte';
+	import { cn } from '$lib/utils';
+
+	let {
+		class: className,
+		children,
+		...restProps
+	}: {
+		class?: string;
+		children?: Snippet;
+		[key: string]: unknown;
+	} = $props();
 </script>
 
-<div class="footer">
-  {@render children?.()}
+<div class={cn('flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2', className)} {...restProps}>
+	{@render children?.()}
 </div>
-
-<style>
-  .footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 20px;
-    padding-top: 16px;
-    border-top: 1px solid var(--border);
-  }
-</style>

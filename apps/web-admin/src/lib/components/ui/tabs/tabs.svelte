@@ -1,19 +1,20 @@
 <script lang="ts">
-	import { Tabs as TabsPrimitive } from "bits-ui";
-	import { cn } from "$lib/utils.js";
+	import type { Snippet } from 'svelte';
+	import { cn } from '$lib/utils';
 
 	let {
-		ref = $bindable(null),
-		value = $bindable(""),
+		value = $bindable(''),
 		class: className,
+		children,
 		...restProps
-	}: TabsPrimitive.RootProps = $props();
+	}: {
+		value?: string;
+		class?: string;
+		children?: Snippet;
+		[key: string]: unknown;
+	} = $props();
 </script>
 
-<TabsPrimitive.Root
-	bind:ref
-	bind:value
-	data-slot="tabs"
-	class={cn("gap-2 group/tabs flex data-[orientation=horizontal]:flex-col", className)}
-	{...restProps}
-/>
+<div class={cn('tabs', className)} data-value={value} {...restProps}>
+	{@render children?.()}
+</div>

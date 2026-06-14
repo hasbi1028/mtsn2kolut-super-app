@@ -1,13 +1,18 @@
 <script lang="ts">
-  let { children } = $props();
+	import type { Snippet } from 'svelte';
+	import { cn } from '$lib/utils';
+
+	let {
+		class: className,
+		children,
+		...restProps
+	}: {
+		class?: string;
+		children?: Snippet;
+		[key: string]: unknown;
+	} = $props();
 </script>
 
-<div class="header">
-  {@render children?.()}
+<div class={cn('flex flex-col space-y-1.5 text-center sm:text-left', className)} {...restProps}>
+	{@render children?.()}
 </div>
-
-<style>
-  .header {
-    margin-bottom: 16px;
-  }
-</style>

@@ -94,7 +94,7 @@
 				aria-label={ariaLabel}
 				class={`h-8 min-w-0 text-sm ${invalid ? 'border-destructive focus-visible:ring-destructive/30' : ''}`}
 				aria-invalid={invalid}
-				oninput={(event) => handleDraftInput(event.currentTarget.value)}
+				oninput={(event: Event) => handleDraftInput((event.currentTarget as HTMLInputElement).value)}
 				onkeydown={handleKeydown}
 			/>
 			<Button type="button" size="icon" class="size-8 shrink-0" disabled={invalid} aria-label="Simpan perubahan" onclick={commit}>

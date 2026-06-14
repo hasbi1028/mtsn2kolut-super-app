@@ -1,32 +1,22 @@
 <!doctype html>
-<html lang="en" data-theme="cerberus">
+<html lang="id" data-theme="cerberus">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
 		<script>
 			(function () {
-				var storageKey = 'mtsn2kolut:web-admin:theme';
-				var preference = 'system';
+				var key = 'mtsn2kolut:theme';
+				var pref = 'system';
 				try {
-					var stored = window.localStorage.getItem(storageKey);
-					if (stored === 'light' || stored === 'dark' || stored === 'system') {
-						preference = stored;
-					}
-				} catch (error) {
-					preference = 'system';
-				}
-
-				var systemDark = false;
-				try {
-					systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-				} catch (error) {
-					systemDark = false;
-				}
-
-				var resolved = preference === 'dark' || (preference === 'system' && systemDark) ? 'dark' : 'light';
+					var s = localStorage.getItem(key);
+					if (s === 'light' || s === 'dark' || s === 'system') pref = s;
+				} catch (_) {}
+				var dark = false;
+				try { dark = matchMedia('(prefers-color-scheme: dark)').matches; } catch (_) {}
+				var resolved = pref === 'dark' || (pref === 'system' && dark) ? 'dark' : 'light';
 				document.documentElement.classList.toggle('dark', resolved === 'dark');
-				document.documentElement.dataset.theme = preference;
+				document.documentElement.dataset.theme = pref;
 				document.documentElement.dataset.resolvedTheme = resolved;
 				document.documentElement.style.colorScheme = resolved;
 			})();

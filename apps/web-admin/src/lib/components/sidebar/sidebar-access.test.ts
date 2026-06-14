@@ -15,15 +15,19 @@ const groups: SidebarNavGroup[] = [
 			{
 				kind: 'folder',
 				id: 'akun-akses',
+				href: '',
 				label: 'Akun & Akses',
 				icon: 'settings',
+				permissions: [],
 				children: [accountItem, userItem, auditItem]
 			},
 			{
 				kind: 'folder',
 				id: 'portal',
+				href: '',
 				label: 'Portal',
 				icon: 'book-open',
+				permissions: [],
 				children: [portalItem]
 			}
 		]

@@ -150,7 +150,7 @@
 				<div class="space-y-2">
 					{#each settings.send_times as sendTime, index}
 						<div class="flex gap-2">
-							<Input aria-label={`Jam kirim WITA ${index + 1}`} type="time" value={sendTime} onchange={(event) => updateSendTime(index, event.currentTarget.value)} />
+							<Input aria-label={`Jam kirim WITA ${index + 1}`} type="time" value={sendTime} onchange={(event: Event) => updateSendTime(index, (event.currentTarget as HTMLInputElement).value)} />
 							<button type="button" class="rounded-md border px-3 text-sm text-muted-foreground hover:bg-muted disabled:opacity-50" onclick={() => removeSendTime(index)} disabled={settings.send_times.length <= 1}>Hapus</button>
 						</div>
 					{/each}

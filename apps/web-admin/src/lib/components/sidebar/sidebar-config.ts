@@ -1,5 +1,6 @@
 export type SidebarNavItem = {
-	kind?: 'item';
+	kind?: 'item' | 'folder';
+	id?: string;
 	href: string;
 	label: string;
 	icon: string;
@@ -10,6 +11,7 @@ export type SidebarNavItem = {
 	roleFallbacks?: string[];
 	allowAuthenticatedFallback?: boolean;
 	pinnable?: boolean;
+	children?: SidebarNavItem[];
 };
 
 export type SidebarNavNode = SidebarNavItem;

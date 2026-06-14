@@ -383,7 +383,7 @@
 							size="sm"
 							variant={activePresetWidth === preset.width ? 'default' : 'outline'}
 							class="h-7 px-2 text-[10px]"
-							onmousedown={(event) => event.preventDefault()}
+							onmousedown={(event: MouseEvent) => event.preventDefault()}
 							onclick={() => applyImageWidth(preset.width)}
 						>
 							{preset.label}
@@ -398,7 +398,7 @@
 						step="10"
 						bind:value={manualWidth}
 						class="h-7 w-24 bg-card text-xs"
-						onkeydown={(event) => {
+						onkeydown={(event: KeyboardEvent) => {
 							if (event.key === 'Enter') {
 								event.preventDefault();
 								applyManualWidth();
@@ -411,7 +411,7 @@
 						size="sm"
 						variant="outline"
 						class="h-7 px-2 text-[10px]"
-						onmousedown={(event) => event.preventDefault()}
+						onmousedown={(event: MouseEvent) => event.preventDefault()}
 						onclick={applyManualWidth}
 					>
 						Terapkan

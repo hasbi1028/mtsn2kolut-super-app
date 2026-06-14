@@ -1,23 +1,36 @@
 <script lang="ts">
-	import { Separator as SeparatorPrimitive } from "bits-ui";
-	import { cn } from "$lib/utils.js";
+	import type { Snippet } from 'svelte';
+	import { cn } from '$lib/utils';
 
 	let {
 		ref = $bindable(null),
+		orientation = 'horizontal',
 		class: className,
-		"data-slot": dataSlot = "separator",
+		decorative = false,
 		...restProps
-	}: SeparatorPrimitive.RootProps = $props();
+	}: {
+		ref?: HTMLElement | null;
+		orientation?: 'horizontal' | 'vertical';
+		class?: string;
+		decorative?: boolean;
+		[key: string]: unknown;
+	} = $props();
 </script>
 
-<SeparatorPrimitive.Root
-	bind:ref
-	data-slot={dataSlot}
-	class={cn(
-		"bg-border shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:w-px",
-		// this is different in shadcn/ui but self-stretch breaks things for us
-		"data-[orientation=vertical]:h-full",
-		className
-	)}
-	{...restProps}
-/>
+{#if orientation === 'vertical'}
+	<div
+		role={decorative ? 'none' : 'separator'}
+		aria-orientation="vertical"
+		bind:this={ref}
+		class={cn('bg-border w-px shrink-0', className)}
+		{...restProps}
+	></div>
+{:else}
+	<div
+		role={decorative ? 'none' : 'separator'}
+		aria-orientation="horizontal"
+		bind:this={ref}
+		class={cn('bg-border h-px shrink-0', className)}
+		{...restProps}
+	></div>
+{/if}

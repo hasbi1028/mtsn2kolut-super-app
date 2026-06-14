@@ -34,7 +34,7 @@
 		return activeHref === href;
 	}
 
-	// Simple icon map — maps icon names to SVG viewBox and path data
+	// Icon map — maps icon names to SVG viewBox and path data
 	const iconMap: Record<string, { viewBox: string; path: string }> = {
 		home: { viewBox: '0 0 24 24', path: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1' },
 		clock: { viewBox: '0 0 24 24', path: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
@@ -69,40 +69,42 @@
 	}
 </script>
 
-<!-- Desktop Sidebar -->
-<aside class="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-60 lg:flex-col lg:border-r lg:border-border lg:bg-[var(--card)]">
+<!-- ═══ Desktop Sidebar ═══ -->
+<aside class="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-[var(--border)] lg:bg-[var(--card)]">
 	<!-- Brand -->
-	<div class="flex h-14 shrink-0 items-center gap-2.5 border-b border-border px-4">
-		<span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg shadow-sm" style={`background: ${branding.primary_color}`}>
+	<div class="flex h-16 shrink-0 items-center gap-3 border-b border-[var(--border)] px-4">
+		<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg" style={`background: ${branding.primary_color}`}>
 			<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Ikon ${branding.short_name}`} class="h-full w-full object-cover" />
 		</span>
 		<div class="min-w-0 flex-1">
-			<p class="truncate text-sm font-semibold text-foreground">{branding.short_name}</p>
-			<p class="truncate text-xs text-muted-foreground">{branding.tagline}</p>
+			<p class="truncate text-sm font-bold text-[var(--foreground)]">{branding.short_name}</p>
+			<p class="truncate text-xs text-[var(--muted-foreground)]">{branding.tagline}</p>
 		</div>
 	</div>
 
 	<!-- Navigation -->
-	<nav class="flex-1 overflow-y-auto px-3 py-3 space-y-4" style="font-size: 15px;">
+	<nav class="flex-1 overflow-y-auto px-3 py-4" style="font-size: 15px;">
 		{#each nav as section (section.group)}
 			{#if section.items.length > 0}
-				<div>
-					<p class="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{section.group}</p>
+				<div class="mb-4">
+					<p class="mb-1.5 px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--muted-foreground)]">{section.group}</p>
 					<div class="space-y-0.5">
-						{#each section.items as item ('href' in item ? item.href : item.id)}
+						{#each section.items as item (item.href)}
 							{#if 'href' in item}
 								{@const icon = getIconPath(item.icon)}
+								{@const active = isActive(item.href)}
 								<a
 									href={resolve(item.href as '/')}
-									class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[15px] no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-									class:bg-[oklch(0.92_0.04_145)]={isActive(item.href)}
-									class:text-green-700={isActive(item.href)}
-									class:hover:bg-gray-100={!isActive(item.href)}
-									class:text-gray-700={!isActive(item.href)}
+									class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+									style="font-size: 15px; font-weight: {active ? '600' : '500'};"
+									class:bg-[oklch(0.92_0.04_145)]={active}
+									class:text-[oklch(0.3_0.14_145)]={active}
+									class:hover:bg-[var(--muted)]={!active}
+									class:text-[var(--foreground)]={!active}
 									onclick={(e) => { e.preventDefault(); navTo(item.href); }}
 								>
 									{#if icon}
-										<svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox={icon.viewBox}>
+										<svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width={active ? 2 : 1.5} viewBox={icon.viewBox}>
 											<path stroke-linecap="round" stroke-linejoin="round" d={icon.path} />
 										</svg>
 									{/if}
@@ -118,7 +120,7 @@
 
 	<!-- User Section -->
 	{#if user}
-		<div class="shrink-0 border-t border-border p-3">
+		<div class="shrink-0 border-t border-[var(--border)] p-3">
 			<AccountMenu
 				{user}
 				{account}
@@ -133,38 +135,38 @@
 	{/if}
 
 	<!-- Attribution -->
-	<div class="shrink-0 border-t border-border px-3 py-2 text-[10px] leading-4 text-muted-foreground/80">
+	<div class="shrink-0 border-t border-[var(--border)] px-4 py-2.5 text-[10px] leading-4 text-[var(--muted-foreground)]">
 		<p class="truncate font-medium">{appAttribution.productName}</p>
 		<p class="truncate">{appAttribution.shortLabel}</p>
 	</div>
 </aside>
 
-<!-- Mobile Header -->
-<header class="fixed inset-x-0 top-0 z-20 flex h-14 w-full items-center gap-3 border-b border-border bg-[var(--card)] px-4 lg:hidden">
-	<span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg shadow-sm" style={`background: ${branding.primary_color}`}>
+<!-- ═══ Mobile Header ═══ -->
+<header class="fixed inset-x-0 top-0 z-20 flex h-14 w-full items-center gap-3 border-b border-[var(--border)] bg-[var(--card)] px-4 lg:hidden">
+	<span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg" style={`background: ${branding.primary_color}`}>
 		<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Ikon ${branding.short_name}`} class="h-full w-full object-cover" />
 	</span>
-	<span class="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{branding.short_name}</span>
+	<span class="min-w-0 flex-1 truncate text-sm font-bold text-[var(--foreground)]">{branding.short_name}</span>
 	{#if user}
 		<AccountMenu
 			{user}
 			{account}
 			menuId="mobile-topbar-account-menu"
-			buttonClass="border-transparent bg-transparent shadow-none hover:bg-gray-100"
+			buttonClass="border-transparent bg-transparent shadow-none hover:bg-[var(--muted)]"
 		/>
 	{/if}
 </header>
 
-<!-- Mobile Bottom Navigation -->
-<nav class="fixed inset-x-0 bottom-0 z-30 flex h-14 items-stretch border-t border-border bg-[var(--card)] lg:hidden">
+<!-- ═══ Mobile Bottom Navigation ═══ -->
+<nav class="fixed inset-x-0 bottom-0 z-30 flex h-14 items-stretch border-t border-[var(--border)] bg-[var(--card)] lg:hidden">
 	{#each mobileNavItems as item (item.href)}
 		{@const icon = getIconPath(item.icon)}
 		{@const active = isActive(item.href)}
 		<a
 			href={resolve(item.href as '/')}
 			class="flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium no-underline transition-colors"
-			class:text-green-700={active}
-			class:text-gray-400={!active}
+			class:text-[oklch(0.3_0.14_145)]={active}
+			class:text-[var(--muted-foreground)]={!active}
 			onclick={(e) => { e.preventDefault(); navTo(item.href); }}
 		>
 			{#if icon}

@@ -41,20 +41,22 @@
 <GlobalConfirmDialog />
 <RouteProgress active={!!navigating.to} />
 
-{#if isLogin || isMaintenancePage}
-	{@render children()}
-{:else if isPublicSite}
-	<PublicSiteShell user={data.user} branding={branding}>
+<div data-theme="cerberus" class="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+	{#if isLogin || isMaintenancePage}
 		{@render children()}
-	</PublicSiteShell>
-{:else}
-	<div class="flex min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-		<Sidebar user={data.user} account={data.account} branding={branding} />
-		<div class="flex-1 min-w-0 pt-14 lg:pt-0 lg:pl-[240px]">
-			<main class="w-full px-4 py-6 lg:px-6 lg:mx-auto lg:max-w-[1100px]">
-				<MaintenanceBanner status={data.maintenanceStatus} user={data.user} />
-				{@render children()}
-			</main>
+	{:else if isPublicSite}
+		<PublicSiteShell user={data.user} branding={branding}>
+			{@render children()}
+		</PublicSiteShell>
+	{:else}
+		<div class="flex min-h-screen">
+			<Sidebar user={data.user} account={data.account} branding={branding} />
+			<div class="flex-1 min-w-0 pt-14 lg:pt-0 lg:pl-64">
+				<main class="w-full px-4 py-6 lg:px-6 lg:mx-auto lg:max-w-[1100px] page-enter">
+					<MaintenanceBanner status={data.maintenanceStatus} user={data.user} />
+					{@render children()}
+				</main>
+			</div>
 		</div>
-	</div>
-{/if}
+	{/if}
+</div>

@@ -1,16 +1,18 @@
 <script lang="ts">
-  let { children } = $props();
+	import type { Snippet } from 'svelte';
+	import { cn } from '$lib/utils';
+
+	let {
+		class: className,
+		children,
+		...restProps
+	}: {
+		class?: string;
+		children?: Snippet;
+		[key: string]: unknown;
+	} = $props();
 </script>
 
-<h3 class="title">
-  {@render children?.()}
+<h3 class={cn('text-lg font-semibold leading-none tracking-tight text-on-surface', className)} {...restProps}>
+	{@render children?.()}
 </h3>
-
-<style>
-  .title {
-    font-size: 1.05rem;
-    font-weight: 600;
-    color: var(--foreground);
-    margin: 0 0 4px;
-  }
-</style>

@@ -8,6 +8,9 @@
 		variant?: ButtonVariant;
 		size?: ButtonSize;
 		children?: import('svelte').Snippet;
+		onclick?: (event: MouseEvent) => void;
+		type?: 'button' | 'submit' | 'reset';
+		title?: string;
 	};
 
 	let {

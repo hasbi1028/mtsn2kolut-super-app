@@ -737,7 +737,7 @@
             bind:value={runConfirmInput}
             placeholder="Ketik SURE"
             class="font-mono uppercase"
-            onkeydown={(e) => { if (e.key === 'Enter' && canConfirmRun) submitRunConfirm(); }}
+            onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter' && canConfirmRun) submitRunConfirm(); }}
           />
         </div>
       </div>

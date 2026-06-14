@@ -478,7 +478,7 @@
 						<div class="mt-4 grid gap-3 md:grid-cols-2">
 							<div class="space-y-1">
 								<label for="role-code" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Kode Peran</label>
-								<Input id="role-code" value={roleDraft.code} oninput={(event) => updateRoleCodeDraft(event.currentTarget.value)} placeholder="operator_asesmen" disabled={roleFormMode === 'edit' || roleActionLoading} />
+								<Input id="role-code" value={roleDraft.code} oninput={(event: Event) => updateRoleCodeDraft((event.currentTarget as HTMLInputElement).value)} placeholder="operator_asesmen" disabled={roleFormMode === 'edit' || roleActionLoading} />
 							</div>
 							<div class="space-y-1">
 								<label for="role-name" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nama Peran</label>
@@ -758,11 +758,11 @@
 					<div class="mt-4 grid gap-3 md:grid-cols-3">
 						<div class="space-y-1">
 							<label for="permission-module" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Module</label>
-							<Input id="permission-module" value={permissionDraft.module} oninput={(event) => updatePermissionModuleDraft(event.currentTarget.value)} placeholder="academic" disabled={permissionActionLoading} />
+							<Input id="permission-module" value={permissionDraft.module} oninput={(event: Event) => updatePermissionModuleDraft((event.currentTarget as HTMLInputElement).value)} placeholder="academic" disabled={permissionActionLoading} />
 						</div>
 						<div class="space-y-1">
 							<label for="permission-action" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Action</label>
-							<Input id="permission-action" value={permissionDraft.action} oninput={(event) => updatePermissionActionDraft(event.currentTarget.value)} placeholder="publish" disabled={permissionActionLoading} />
+							<Input id="permission-action" value={permissionDraft.action} oninput={(event: Event) => updatePermissionActionDraft((event.currentTarget as HTMLInputElement).value)} placeholder="publish" disabled={permissionActionLoading} />
 						</div>
 						<div class="space-y-1">
 							<label for="permission-description" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Deskripsi</label>

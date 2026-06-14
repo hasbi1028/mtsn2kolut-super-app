@@ -1,15 +1,18 @@
 <script lang="ts">
-  let { children } = $props();
+	import type { Snippet } from 'svelte';
+	import { cn } from '$lib/utils';
+
+	let {
+		class: className,
+		children,
+		...restProps
+	}: {
+		class?: string;
+		children?: Snippet;
+		[key: string]: unknown;
+	} = $props();
 </script>
 
-<p class="desc">
-  {@render children?.()}
+<p class={cn('text-sm text-on-surface/60', className)} {...restProps}>
+	{@render children?.()}
 </p>
-
-<style>
-  .desc {
-    font-size: 0.85rem;
-    color: var(--muted-foreground);
-    margin: 0;
-  }
-</style>
