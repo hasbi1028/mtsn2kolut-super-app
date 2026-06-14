@@ -69,25 +69,28 @@
 	}
 </script>
 
-<!-- ═══ Desktop Sidebar ═══ -->
-<aside class="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-[var(--border)] lg:bg-[var(--card)]">
+<!-- ═══ Desktop Sidebar (Skeleton: dark surface, green active state) ═══ -->
+<aside
+	class="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col border-r"
+	style="background-color: var(--color-surface-50); border-color: var(--color-surface-200);"
+>
 	<!-- Brand -->
-	<div class="flex h-16 shrink-0 items-center gap-3 border-b border-[var(--border)] px-4">
-		<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg" style={`background: ${branding.primary_color}`}>
+	<div class="flex h-16 shrink-0 items-center gap-3 border-b px-4" style="border-color: var(--color-surface-200);">
+		<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-base" style="background: oklch(0.32 0.13 145);">
 			<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Ikon ${branding.short_name}`} class="h-full w-full object-cover" />
 		</span>
 		<div class="min-w-0 flex-1">
-			<p class="truncate text-sm font-bold text-[var(--foreground)]">{branding.short_name}</p>
-			<p class="truncate text-xs text-[var(--muted-foreground)]">{branding.tagline}</p>
+			<p class="truncate text-sm font-bold" style="color: var(--color-surface-950);">{branding.short_name}</p>
+			<p class="truncate text-xs" style="color: var(--color-surface-600);">{branding.tagline}</p>
 		</div>
 	</div>
 
 	<!-- Navigation -->
-	<nav class="flex-1 overflow-y-auto px-3 py-4" style="font-size: 15px;">
+	<nav class="flex-1 overflow-y-auto px-3 py-4 space-y-5">
 		{#each nav as section (section.group)}
 			{#if section.items.length > 0}
-				<div class="mb-4">
-					<p class="mb-1.5 px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--muted-foreground)]">{section.group}</p>
+				<div>
+					<p class="mb-2 px-3 text-[11px] font-bold uppercase tracking-[0.2em]" style="color: var(--color-primary-700);">{section.group}</p>
 					<div class="space-y-0.5">
 						{#each section.items as item (item.href)}
 							{#if 'href' in item}
@@ -95,20 +98,20 @@
 								{@const active = isActive(item.href)}
 								<a
 									href={resolve(item.href as '/')}
-									class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-									style="font-size: 15px; font-weight: {active ? '600' : '500'};"
-									class:bg-[oklch(0.92_0.04_145)]={active}
-									class:text-[oklch(0.3_0.14_145)]={active}
-									class:hover:bg-[var(--muted)]={!active}
-									class:text-[var(--foreground)]={!active}
+									class="flex w-full items-center gap-3 rounded-base px-3 py-2.5 no-underline transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+									style={active
+										? 'background-color: var(--color-primary-500); color: var(--color-primary-contrast-light); font-weight: 600;'
+										: 'color: var(--color-surface-700); font-weight: 500;'}
+									onmouseenter={(e) => { if (!active) e.currentTarget.style.backgroundColor = 'var(--color-surface-100)'; }}
+									onmouseleave={(e) => { if (!active) e.currentTarget.style.backgroundColor = 'transparent'; }}
 									onclick={(e) => { e.preventDefault(); navTo(item.href); }}
 								>
 									{#if icon}
-										<svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width={active ? 2 : 1.5} viewBox={icon.viewBox}>
+										<svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width={active ? 2.2 : 1.6} viewBox={icon.viewBox}>
 											<path stroke-linecap="round" stroke-linejoin="round" d={icon.path} />
 										</svg>
 									{/if}
-									<span class="truncate">{item.label}</span>
+									<span class="truncate text-sm">{item.label}</span>
 								</a>
 							{/if}
 						{/each}
@@ -120,7 +123,7 @@
 
 	<!-- User Section -->
 	{#if user}
-		<div class="shrink-0 border-t border-[var(--border)] p-3">
+		<div class="shrink-0 border-t p-3" style="border-color: var(--color-surface-200);">
 			<AccountMenu
 				{user}
 				{account}
@@ -135,46 +138,53 @@
 	{/if}
 
 	<!-- Attribution -->
-	<div class="shrink-0 border-t border-[var(--border)] px-4 py-2.5 text-[10px] leading-4 text-[var(--muted-foreground)]">
+	<div class="shrink-0 border-t px-4 py-2.5 text-[10px] leading-4" style="border-color: var(--color-surface-200); color: var(--color-surface-500);">
 		<p class="truncate font-medium">{appAttribution.productName}</p>
 		<p class="truncate">{appAttribution.shortLabel}</p>
 	</div>
 </aside>
 
-<!-- ═══ Mobile Header ═══ -->
-<header class="fixed inset-x-0 top-0 z-20 flex h-14 w-full items-center gap-3 border-b border-[var(--border)] bg-[var(--card)] px-4 lg:hidden">
-	<span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg" style={`background: ${branding.primary_color}`}>
+<!-- ═══ Mobile Header (Skeleton top bar) ═══ -->
+<header
+	class="fixed inset-x-0 top-0 z-20 flex h-14 w-full items-center gap-3 border-b px-4 lg:hidden"
+	style="background-color: var(--color-primary-700); color: var(--color-primary-contrast-light); border-color: var(--color-primary-800);"
+>
+	<span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-base" style="background: white;">
 		<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Ikon ${branding.short_name}`} class="h-full w-full object-cover" />
 	</span>
-	<span class="min-w-0 flex-1 truncate text-sm font-bold text-[var(--foreground)]">{branding.short_name}</span>
+	<span class="min-w-0 flex-1 truncate text-sm font-bold">{branding.short_name}</span>
 	{#if user}
 		<AccountMenu
 			{user}
 			{account}
 			menuId="mobile-topbar-account-menu"
-			buttonClass="border-transparent bg-transparent shadow-none hover:bg-[var(--muted)]"
+			buttonClass="border-transparent"
 		/>
 	{/if}
 </header>
 
-<!-- ═══ Mobile Bottom Navigation ═══ -->
-<nav class="fixed inset-x-0 bottom-0 z-30 flex h-14 items-stretch border-t border-[var(--border)] bg-[var(--card)] lg:hidden">
+<!-- ═══ Mobile Bottom Navigation (Skeleton: green active) ═══ -->
+<nav
+	class="fixed inset-x-0 bottom-0 z-30 flex h-16 items-stretch border-t lg:hidden"
+	style="background-color: var(--color-surface-50); border-color: var(--color-surface-200);"
+>
 	{#each mobileNavItems as item (item.href)}
 		{@const icon = getIconPath(item.icon)}
 		{@const active = isActive(item.href)}
 		<a
 			href={resolve(item.href as '/')}
-			class="flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium no-underline transition-colors"
-			class:text-[oklch(0.3_0.14_145)]={active}
-			class:text-[var(--muted-foreground)]={!active}
+			class="flex flex-1 flex-col items-center justify-center gap-0.5 no-underline transition"
+			style={active
+				? 'color: var(--color-primary-600); font-weight: 700;'
+				: 'color: var(--color-surface-600); font-weight: 500;'}
 			onclick={(e) => { e.preventDefault(); navTo(item.href); }}
 		>
 			{#if icon}
-				<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width={active ? 2.5 : 1.5} viewBox={icon.viewBox}>
+				<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width={active ? 2.5 : 1.6} viewBox={icon.viewBox}>
 					<path stroke-linecap="round" stroke-linejoin="round" d={icon.path} />
 				</svg>
 			{/if}
-			<span>{item.label}</span>
+			<span class="text-[10px]">{item.label}</span>
 		</a>
 	{/each}
 </nav>
