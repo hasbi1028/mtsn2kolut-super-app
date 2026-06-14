@@ -22,6 +22,18 @@
 
 	let mobileMenuOpen = $state(false);
 
+	$effect(() => {
+		if (typeof document === 'undefined') return;
+		if (mobileMenuOpen) {
+			document.body.style.overflow = 'hidden';
+			return () => {
+				document.body.style.overflow = '';
+			};
+		}
+		document.body.style.overflow = '';
+		return undefined;
+	});
+
 	const userRoles = $derived(user?.roles || (user?.role ? [user.role] : []));
 	const userPermissions = $derived(user?.permissions || []);
 	const numberedGroups = numberSidebarNavGroups(sidebarNavGroups);
@@ -48,7 +60,9 @@
 		shield: { viewBox: '0 0 24 24', path: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
 		image: { viewBox: '0 0 24 24', path: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' },
 		database: { viewBox: '0 0 24 24', path: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4' },
-		'file-text': { viewBox: '0 0 24 24', path: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' }
+		'file-text': { viewBox: '0 0 24 24', path: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+		menu: { viewBox: '0 0 24 24', path: 'M4 6h16M4 12h16M4 18h16' },
+		'x-circle': { viewBox: '0 0 24 24', path: 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z' }
 	};
 
 	// Mobile bottom nav items — simplified for teacher use
@@ -63,9 +77,20 @@
 		return iconMap[iconName] ?? null;
 	}
 
+	const menuIcon = $derived(getIconPath('menu'));
+	const closeIcon = $derived(getIconPath('x-circle'));
+
 	function navTo(href: string) {
 		mobileMenuOpen = false;
 		goto(resolve(href as '/'));
+	}
+
+	function openMobileMenu() {
+		mobileMenuOpen = true;
+	}
+
+	function closeMobileMenu() {
+		mobileMenuOpen = false;
 	}
 </script>
 
@@ -121,22 +146,6 @@
 		{/each}
 	</nav>
 
-	<!-- User Section -->
-	{#if user}
-		<div class="shrink-0 border-t p-3" style="border-color: var(--color-surface-200);">
-			<AccountMenu
-				{user}
-				{account}
-				showName={true}
-				menuSide="top"
-				align="start"
-				menuId="desktop-sidebar-account-menu"
-				class="w-full"
-				buttonClass="w-full justify-start"
-			/>
-		</div>
-	{/if}
-
 	<!-- Attribution -->
 	<div class="shrink-0 border-t px-4 py-2.5 text-[10px] leading-4" style="border-color: var(--color-surface-200); color: var(--color-surface-500);">
 		<p class="truncate font-medium">{appAttribution.productName}</p>
@@ -146,9 +155,23 @@
 
 <!-- ═══ Mobile Header (Skeleton top bar) ═══ -->
 <header
-	class="fixed inset-x-0 top-0 z-20 flex h-14 w-full items-center gap-3 border-b px-4 lg:hidden"
+	class="fixed inset-x-0 top-0 z-20 flex h-14 w-full items-center gap-2 border-b px-3 lg:hidden"
 	style="background-color: var(--color-primary-700); color: var(--color-primary-contrast-light); border-color: var(--color-primary-800);"
 >
+	<button
+		type="button"
+		class="flex h-9 w-9 shrink-0 items-center justify-center rounded-base border border-transparent transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+		aria-label={mobileMenuOpen ? 'Tutup menu navigasi' : 'Buka menu navigasi'}
+		aria-expanded={mobileMenuOpen}
+		aria-controls="mobile-drawer"
+		onclick={openMobileMenu}
+	>
+		{#if menuIcon}
+			<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox={menuIcon.viewBox} aria-hidden="true">
+				<path stroke-linecap="round" stroke-linejoin="round" d={menuIcon.path} />
+			</svg>
+		{/if}
+	</button>
 	<span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-base" style="background: white;">
 		<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Ikon ${branding.short_name}`} class="h-full w-full object-cover" />
 	</span>
@@ -191,3 +214,104 @@
 
 <!-- Mobile content spacer -->
 <div class="h-14 lg:hidden"></div>
+
+<!-- ═══ Mobile Drawer (slide-in from left) ═══ -->
+{#if mobileMenuOpen}
+	<!-- Backdrop -->
+	<button
+		type="button"
+		class="fixed inset-0 z-40 cursor-default bg-black/50 backdrop-blur-sm transition-opacity lg:hidden"
+		aria-label="Tutup menu navigasi"
+		onclick={closeMobileMenu}
+	></button>
+
+	<!-- Drawer panel -->
+	<aside
+		id="mobile-drawer"
+		class="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r shadow-2xl lg:hidden"
+		style="background-color: var(--color-surface-50); border-color: var(--color-surface-200);"
+		aria-label="Menu navigasi"
+	>
+		<!-- Drawer header -->
+		<div class="flex h-14 shrink-0 items-center gap-3 border-b px-4" style="border-color: var(--color-surface-200);">
+			<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-base" style="background: oklch(0.32 0.13 145);">
+				<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Ikon ${branding.short_name}`} class="h-full w-full object-cover" />
+			</span>
+			<div class="min-w-0 flex-1">
+				<p class="truncate text-sm font-bold" style="color: var(--color-surface-950);">{branding.short_name}</p>
+				<p class="truncate text-xs" style="color: var(--color-surface-600);">{branding.tagline}</p>
+			</div>
+			<button
+				type="button"
+				class="flex h-9 w-9 shrink-0 items-center justify-center rounded-base border border-transparent transition hover:bg-surface-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+				style="color: var(--color-surface-700);"
+				aria-label="Tutup menu navigasi"
+				onclick={closeMobileMenu}
+			>
+				{#if closeIcon}
+					<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox={closeIcon.viewBox} aria-hidden="true">
+						<path stroke-linecap="round" stroke-linejoin="round" d={closeIcon.path} />
+					</svg>
+				{/if}
+			</button>
+		</div>
+
+		<!-- Drawer nav (same items as desktop) -->
+		<nav class="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+			{#each nav as section (section.group)}
+				{#if section.items.length > 0}
+					<div>
+						<p class="mb-2 px-3 text-[11px] font-bold uppercase tracking-[0.2em]" style="color: var(--color-primary-700);">{section.group}</p>
+						<div class="space-y-0.5">
+							{#each section.items as item (item.href)}
+								{#if 'href' in item}
+									{@const icon = getIconPath(item.icon)}
+									{@const active = isActive(item.href)}
+									<a
+										href={resolve(item.href as '/')}
+										class="flex w-full items-center gap-3 rounded-base px-3 py-2.5 no-underline transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+										style={active
+											? 'background-color: var(--color-primary-500); color: var(--color-primary-contrast-light); font-weight: 600;'
+											: 'color: var(--color-surface-700); font-weight: 500;'}
+										onmouseenter={(e) => { if (!active) e.currentTarget.style.backgroundColor = 'var(--color-surface-100)'; }}
+										onmouseleave={(e) => { if (!active) e.currentTarget.style.backgroundColor = 'transparent'; }}
+										onclick={(e) => { e.preventDefault(); navTo(item.href); }}
+									>
+										{#if icon}
+											<svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width={active ? 2.2 : 1.6} viewBox={icon.viewBox}>
+												<path stroke-linecap="round" stroke-linejoin="round" d={icon.path} />
+											</svg>
+										{/if}
+										<span class="truncate text-sm">{item.label}</span>
+									</a>
+								{/if}
+							{/each}
+						</div>
+					</div>
+				{/if}
+			{/each}
+		</nav>
+
+		<!-- Drawer user section -->
+		{#if user}
+			<div class="shrink-0 border-t p-3" style="border-color: var(--color-surface-200);">
+				<AccountMenu
+					{user}
+					{account}
+					showName={true}
+					menuSide="top"
+					align="start"
+					menuId="mobile-drawer-account-menu"
+					class="w-full"
+					buttonClass="w-full justify-start"
+				/>
+			</div>
+		{/if}
+
+		<!-- Drawer attribution -->
+		<div class="shrink-0 border-t px-4 py-2.5 text-[10px] leading-4" style="border-color: var(--color-surface-200); color: var(--color-surface-500);">
+			<p class="truncate font-medium">{appAttribution.productName}</p>
+			<p class="truncate">{appAttribution.shortLabel}</p>
+		</div>
+	</aside>
+{/if}
