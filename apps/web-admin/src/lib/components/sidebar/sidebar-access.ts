@@ -1,6 +1,5 @@
-import type { SidebarFolderItem, SidebarNavGroup, SidebarNavItem, SidebarNavNode } from './sidebar-config';
+import type { SidebarNavGroup, SidebarNavItem } from './sidebar-config';
 import { evaluateSidebarItemAccess } from '$lib/rbac/ui-policy';
-import { isSidebarFolder } from './sidebar-tree';
 
 function normalize(values: readonly string[] | undefined) {
 	return (values ?? []).map((value) => value.trim()).filter(Boolean);
@@ -28,41 +27,12 @@ export function itemAllowedByAccess(
 	return evaluateSidebarItemAccess(item, userRoles ?? [], userPermissions ?? []).allowed;
 }
 
-function folderAccessAllowed(
-	folder: SidebarFolderItem,
-	userRoles: readonly string[] | undefined,
-	userPermissions: readonly string[] | undefined
-) {
-	if (!folder.permissions?.length && !folder.roleFallbacks?.length && !folder.allowAuthenticatedFallback) return true;
-	return evaluateSidebarItemAccess(
-		{
-			href: `#${folder.id}`,
-			label: folder.label,
-			icon: folder.icon,
-			permissions: folder.permissions ?? [],
-			roleFallbacks: folder.roleFallbacks,
-			allowAuthenticatedFallback: folder.allowAuthenticatedFallback,
-			pinnable: false
-		},
-		userRoles ?? [],
-		userPermissions ?? []
-	).allowed;
-}
-
 function filterNodeByAccess(
-	node: SidebarNavNode,
+	node: SidebarNavItem,
 	userRoles: readonly string[] | undefined,
 	userPermissions: readonly string[] | undefined
-): SidebarNavNode | null {
-	if (!isSidebarFolder(node)) {
-		return itemAllowedByAccess(node, userRoles, userPermissions) ? node : null;
-	}
-	if (!folderAccessAllowed(node, userRoles, userPermissions)) return null;
-	const children = node.children
-		.map((child) => filterNodeByAccess(child, userRoles, userPermissions))
-		.filter((child): child is SidebarNavNode => !!child);
-	if (children.length === 0) return null;
-	return { ...node, children };
+): SidebarNavItem | null {
+	return itemAllowedByAccess(node, userRoles, userPermissions) ? node : null;
 }
 
 export function filterSidebarNavGroupsByAccess(
@@ -75,7 +45,7 @@ export function filterSidebarNavGroupsByAccess(
 			...group,
 			items: group.items
 				.map((item) => filterNodeByAccess(item, userRoles, userPermissions))
-				.filter((item): item is SidebarNavNode => !!item)
+				.filter((item): item is SidebarNavItem => !!item)
 		}))
 		.filter((group) => group.items.length > 0);
 }

@@ -33,9 +33,6 @@ export const maintenanceModules = [
 	{ code: 'global', label: 'Global' },
 	{ code: 'auth', label: 'Login & sesi' },
 	{ code: 'dashboard', label: 'Dashboard' },
-	{ code: 'akademik', label: 'Akademik' },
-	{ code: 'students', label: 'Siswa & orang tua' },
-	{ code: 'cbt', label: 'Asesmen / CBT' },
 	{ code: 'pusaka', label: 'PUSAKA' },
 	{ code: 'backup_restore', label: 'Backup & restore' },
 	{ code: 'settings', label: 'Pengaturan' }
@@ -45,8 +42,6 @@ const routePrefixesByModule: Record<string, string[]> = {
 	global: ['/'],
 	auth: ['/login', '/settings/account', '/api/auth'],
 	dashboard: ['/', '/notifications', '/api/notifications', '/api/internal-analytics'],
-	akademik: ['/akademik', '/academic', '/journal', '/grades', '/jadwal', '/api/academic', '/api/journal', '/api/grades'],
-	students: ['/students', '/parents', '/kesiswaan', '/portal', '/api/students', '/api/parents', '/api/kesiswaan', '/api/portal'],
 	pusaka: ['/pusaka', '/api/pusaka'],
 	backup_restore: ['/settings/backups', '/api/system/backups'],
 	settings: ['/settings', '/api/settings', '/api/users', '/api/rbac', '/api/school-profile', '/api/branding', '/api/system/maintenance']

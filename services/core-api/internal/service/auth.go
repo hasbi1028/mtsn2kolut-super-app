@@ -1240,3 +1240,12 @@ func deriveDeviceLabel(userAgent string) string {
 
 	return browserLabel + " di " + osLabel
 }
+
+// randomHex generates a cryptographically secure random hex string.
+func randomHex(n int) (string, error) {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}

@@ -1,43 +1,43 @@
 @import "tailwindcss";
+@import '@skeletonlabs/skeleton';
+@import '@skeletonlabs/skeleton-svelte';
+@import '@skeletonlabs/skeleton/themes/cerberus';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: "Source Sans 3", "Noto Sans", "Atkinson Hyperlegible", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Amiri", "Scheherazade New", "Traditional Arabic", serif;
-  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  --font-sans: "Source Sans 3", "Noto Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Source Sans 3", "Noto Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
   --radius: 0.5rem;
   --radius-md: 0.5rem;
   --radius-sm: 0.375rem;
   --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
 
-  /* Institutional color palette — Islamic school, calm green, educational, trustworthy */
-  --color-background: oklch(0.98 0.004 145);
-  --color-foreground: oklch(0.18 0.02 145);
+  /* Clean institutional palette — hijau madrasah, kontras tinggi */
+  --color-background: oklch(0.97 0.006 145);
+  --color-foreground: oklch(0.15 0.02 145);
   --color-card: oklch(1 0 0);
-  --color-card-foreground: oklch(0.18 0.02 145);
+  --color-card-foreground: oklch(0.15 0.02 145);
   --color-popover: oklch(1 0 0);
-  --color-popover-foreground: oklch(0.18 0.02 145);
-  --color-primary: oklch(0.38 0.13 145);
+  --color-popover-foreground: oklch(0.15 0.02 145);
+  --color-primary: oklch(0.35 0.14 145);
   --color-primary-foreground: oklch(0.98 0 0);
-  --color-secondary: oklch(0.94 0.015 145);
-  --color-secondary-foreground: oklch(0.28 0.06 145);
-  --color-muted: oklch(0.95 0.008 145);
-  --color-muted-foreground: oklch(0.5 0.02 145);
-  --color-accent: oklch(0.92 0.04 145);
-  --color-accent-foreground: oklch(0.22 0.07 145);
+  --color-secondary: oklch(0.95 0.01 145);
+  --color-secondary-foreground: oklch(0.25 0.06 145);
+  --color-muted: oklch(0.96 0.006 145);
+  --color-muted-foreground: oklch(0.45 0.02 145);
+  --color-accent: oklch(0.92 0.03 145);
+  --color-accent-foreground: oklch(0.2 0.06 145);
   --color-destructive: oklch(0.55 0.22 27);
   --color-destructive-foreground: oklch(0.98 0 0);
-  --color-border: oklch(0.88 0.012 145);
-  --color-input: oklch(0.88 0.012 145);
-  --color-ring: oklch(0.38 0.13 145);
+  --color-border: oklch(0.9 0.01 145);
+  --color-input: oklch(0.9 0.01 145);
+  --color-ring: oklch(0.35 0.14 145);
 
-  /* Status colors */
-  --color-success: oklch(0.45 0.14 145);
+  /* Status */
+  --color-success: oklch(0.42 0.14 145);
   --color-warning: oklch(0.65 0.15 65);
-  --color-gold: oklch(0.7 0.12 85);
-  --color-gold-foreground: oklch(0.12 0.02 85);
 }
 
 /* shadcn semantic variables */
@@ -63,35 +63,31 @@
   --ring: var(--color-ring);
   --success: var(--color-success);
   --warning: var(--color-warning);
-  --gold: var(--color-gold);
-  --gold-foreground: var(--color-gold-foreground);
   --radius: 0.5rem;
 }
 
 .dark {
-  --color-background: oklch(0.16 0.02 145);
-  --color-foreground: oklch(0.94 0.015 145);
-  --color-card: oklch(0.2 0.018 145);
-  --color-card-foreground: oklch(0.94 0.015 145);
-  --color-popover: oklch(0.19 0.018 145);
-  --color-popover-foreground: oklch(0.94 0.015 145);
-  --color-primary: oklch(0.68 0.14 145);
+  --color-background: oklch(0.16 0.015 145);
+  --color-foreground: oklch(0.93 0.01 145);
+  --color-card: oklch(0.2 0.015 145);
+  --color-card-foreground: oklch(0.93 0.01 145);
+  --color-popover: oklch(0.19 0.015 145);
+  --color-popover-foreground: oklch(0.93 0.01 145);
+  --color-primary: oklch(0.7 0.14 145);
   --color-primary-foreground: oklch(0.12 0.02 145);
-  --color-secondary: oklch(0.27 0.03 145);
-  --color-secondary-foreground: oklch(0.9 0.018 145);
-  --color-muted: oklch(0.25 0.02 145);
-  --color-muted-foreground: oklch(0.73 0.018 145);
-  --color-accent: oklch(0.3 0.06 145);
-  --color-accent-foreground: oklch(0.92 0.02 145);
+  --color-secondary: oklch(0.26 0.025 145);
+  --color-secondary-foreground: oklch(0.88 0.015 145);
+  --color-muted: oklch(0.24 0.018 145);
+  --color-muted-foreground: oklch(0.68 0.015 145);
+  --color-accent: oklch(0.28 0.04 145);
+  --color-accent-foreground: oklch(0.9 0.015 145);
   --color-destructive: oklch(0.72 0.18 27);
   --color-destructive-foreground: oklch(0.14 0.02 27);
-  --color-border: oklch(0.33 0.025 145);
-  --color-input: oklch(0.33 0.025 145);
-  --color-ring: oklch(0.68 0.14 145);
+  --color-border: oklch(0.3 0.02 145);
+  --color-input: oklch(0.3 0.02 145);
+  --color-ring: oklch(0.7 0.14 145);
   --color-success: oklch(0.7 0.14 145);
   --color-warning: oklch(0.78 0.15 75);
-  --color-gold: oklch(0.8 0.12 85);
-  --color-gold-foreground: oklch(0.1 0.02 85);
 }
 
 html {
@@ -105,298 +101,40 @@ html.dark {
 
 body {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, oklch(0.93 0.035 145 / 0.55), transparent 34rem),
-    radial-gradient(circle at bottom right, oklch(0.92 0.035 85 / 0.34), transparent 32rem),
-    var(--background);
+  background: var(--background);
   color: var(--foreground);
+  font-size: 16px;
+  line-height: 1.6;
 }
 
-.dark body {
-  background:
-    radial-gradient(circle at top left, oklch(0.28 0.075 145 / 0.55), transparent 34rem),
-    radial-gradient(circle at bottom right, oklch(0.29 0.06 85 / 0.26), transparent 32rem),
-    linear-gradient(135deg, oklch(0.13 0.018 145), oklch(0.16 0.025 150) 55%, var(--background));
-}
-
-@keyframes route-progress {
-  0% {
-    transform: translateX(-100%);
-    width: 24%;
-  }
-  55% {
-    transform: translateX(120%);
-    width: 44%;
-  }
-  100% {
-    transform: translateX(360%);
-    width: 22%;
-  }
-}
-
+/* Page transition — simple fade, no fancy animation */
 @keyframes page-enter {
-  0% {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  0% { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 .page-enter {
-  animation: page-enter 0.3s ease-out;
+  animation: page-enter 0.2s ease-out;
 }
 
-.page-enter-stagger-4 {
-  animation: page-enter 0.3s ease-out 0.2s both;
-}
-
-.page-enter-stagger-1 {
-  animation: page-enter 0.3s ease-out 0.05s both;
-}
-
-.page-enter-stagger-2 {
-  animation: page-enter 0.3s ease-out 0.1s both;
-}
-
-.page-enter-stagger-3 {
-  animation: page-enter 0.3s ease-out 0.15s both;
-}
-
-.page-enter-stagger-5 {
-  animation: page-enter 0.3s ease-out 0.25s both;
-}
-
-.page-enter-stagger-6 {
-  animation: page-enter 0.3s ease-out 0.3s both;
-}
-
-.exam-sacred-bg {
-  background:
-    radial-gradient(circle at top left, oklch(0.34 0.1 145 / 0.95), transparent 34rem),
-    radial-gradient(circle at bottom right, oklch(0.55 0.11 85 / 0.48), transparent 32rem),
-    linear-gradient(135deg, oklch(0.13 0.025 145), oklch(0.21 0.05 145) 58%, oklch(0.15 0.035 160));
-}
-
-.exam-light-scope {
-  color-scheme: light;
-  --color-background: oklch(0.98 0.004 145);
-  --color-foreground: oklch(0.18 0.02 145);
-  --color-card: oklch(1 0 0);
-  --color-card-foreground: oklch(0.18 0.02 145);
-  --color-popover: oklch(1 0 0);
-  --color-popover-foreground: oklch(0.18 0.02 145);
-  --color-primary: oklch(0.38 0.13 145);
-  --color-primary-foreground: oklch(0.98 0 0);
-  --color-secondary: oklch(0.94 0.015 145);
-  --color-secondary-foreground: oklch(0.28 0.06 145);
-  --color-muted: oklch(0.95 0.008 145);
-  --color-muted-foreground: oklch(0.5 0.02 145);
-  --color-accent: oklch(0.92 0.04 145);
-  --color-accent-foreground: oklch(0.22 0.07 145);
-  --color-destructive: oklch(0.55 0.22 27);
-  --color-destructive-foreground: oklch(0.98 0 0);
-  --color-border: oklch(0.88 0.012 145);
-  --color-input: oklch(0.88 0.012 145);
-  --color-ring: oklch(0.38 0.13 145);
-  --color-success: oklch(0.45 0.14 145);
-  --color-warning: oklch(0.65 0.15 65);
-  --color-gold: oklch(0.7 0.12 85);
-  --color-gold-foreground: oklch(0.12 0.02 85);
-}
-
-
-html:has(.exam-light-scope),
-body:has(.exam-light-scope) {
-  background: #f7fbf5 !important;
-  color-scheme: light !important;
-}
-
-body:has(.exam-light-scope) .bg-background {
-  background-color: #f7fbf5 !important;
-}
-
-body:has(.exam-light-scope) .text-foreground {
-  color: #0f172a !important;
-}
-
-body:has(.exam-light-scope) .text-muted-foreground {
-  color: #475569 !important;
-}
-
-
-body:has(.exam-light-scope) .bg-card {
-  background-color: #ffffff !important;
-}
-
-body:has(.exam-light-scope) .text-card-foreground {
-  color: #0f172a !important;
-}
-
-body:has(.exam-light-scope) .border-border {
-  border-color: #dbe7d7 !important;
-}
-
-body:has(.exam-light-scope) .bg-muted,
-body:has(.exam-light-scope) .bg-muted\/30,
-body:has(.exam-light-scope) .bg-muted\/40 {
-  background-color: #eef6ec !important;
-}
-
-body:has(.exam-light-scope) input,
-body:has(.exam-light-scope) textarea,
-body:has(.exam-light-scope) select {
-  color-scheme: light;
-}
-
-.exam-light-bg {
-  background:
-    radial-gradient(circle at top left, oklch(0.93 0.035 145 / 0.72), transparent 34rem),
-    radial-gradient(circle at bottom right, oklch(0.94 0.04 85 / 0.44), transparent 32rem),
-    linear-gradient(135deg, oklch(0.985 0.006 145), oklch(0.96 0.014 145) 58%, oklch(0.99 0.006 85));
-}
-
-.parchment-texture {
-  position: relative;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at top left, oklch(0.94 0.032 145 / 0.68), transparent 28rem),
-    linear-gradient(135deg, oklch(1 0 0) 0%, oklch(0.99 0.005 85) 25%, oklch(0.98 0.004 145) 50%, oklch(0.99 0.005 85) 75%, oklch(1 0 0) 100%);
-  background-size: auto, 400% 400%;
-  border: 1px solid color-mix(in oklab, var(--gold) 34%, var(--border));
-  box-shadow: 0 12px 30px rgb(15 23 42 / 0.06);
-}
-
-.parchment-texture > * {
-  position: relative;
-  z-index: 1;
-}
-
-.parchment-texture::before {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background-image:
-    linear-gradient(90deg, oklch(0.55 0.04 85 / 0.04) 1px, transparent 1px),
-    linear-gradient(0deg, oklch(0.55 0.04 85 / 0.035) 1px, transparent 1px);
-  background-size: 26px 26px;
-  mask-image: linear-gradient(to bottom, black, transparent 78%);
-}
-
-.dark .parchment-texture {
-  background:
-    radial-gradient(circle at top left, oklch(0.34 0.07 145 / 0.38), transparent 28rem),
-    radial-gradient(circle at bottom right, oklch(0.34 0.06 85 / 0.22), transparent 24rem),
-    linear-gradient(135deg, oklch(0.205 0.022 145), oklch(0.18 0.018 150) 52%, oklch(0.16 0.015 145));
-  border-color: color-mix(in oklab, var(--gold) 30%, var(--border));
-  box-shadow: 0 18px 44px rgb(0 0 0 / 0.26), inset 0 1px 0 rgb(255 255 255 / 0.05);
-}
-
-.dark .parchment-texture::before {
-  background-image:
-    linear-gradient(90deg, rgb(255 255 255 / 0.035) 1px, transparent 1px),
-    linear-gradient(0deg, rgb(255 255 255 / 0.028) 1px, transparent 1px);
-  opacity: 0.9;
-}
-
-.arch-header {
-  position: relative;
-  background:
-    radial-gradient(circle at top right, oklch(0.7 0.12 85 / 0.28), transparent 16rem),
-    linear-gradient(135deg, var(--primary), oklch(0.27 0.09 145));
-  color: var(--primary-foreground);
-  padding: 1.5rem 0;
-}
-
-.arch-header::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 12px;
-  background-image: url("data:image/svg+xml,%3Csvg width='120' height='12' viewBox='0 0 120 12' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0,0 L120,0 L120,6 Q114,8 120,10 L120,12 L0,12 L0,10 Q6,8 0,6 Z' fill='%23ffffff' fill-opacity='0.1'/%3E%3C/svg%3E");
-  background-repeat: repeat-x;
-  background-size: auto 100%;
-}
-
-.dashboard-hero {
-  position: relative;
-  color-scheme: dark;
-  background:
-    radial-gradient(circle at top right, oklch(0.75 0.13 85 / 0.34), transparent 16rem),
-    radial-gradient(circle at -10% 20%, oklch(0.58 0.16 145 / 0.45), transparent 18rem),
-    linear-gradient(135deg, oklch(0.31 0.13 145), oklch(0.22 0.09 150) 56%, oklch(0.18 0.06 145));
-}
-
-.dark .dashboard-hero {
-  background:
-    radial-gradient(circle at top right, oklch(0.78 0.13 85 / 0.26), transparent 17rem),
-    radial-gradient(circle at -10% 20%, oklch(0.5 0.14 145 / 0.36), transparent 18rem),
-    linear-gradient(135deg, oklch(0.245 0.095 145), oklch(0.18 0.064 150) 58%, oklch(0.145 0.035 145));
-}
-
-.dashboard-hero::before {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(90deg, rgb(255 255 255 / 0.055) 1px, transparent 1px),
-    linear-gradient(0deg, rgb(255 255 255 / 0.045) 1px, transparent 1px);
-  background-size: 28px 28px;
-  mask-image: linear-gradient(to bottom right, black, transparent 82%);
-}
-
-.dashboard-hero::after {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22), inset 0 -1px 0 rgb(0 0 0 / 0.18);
-}
-
-/* Global admin surface standardization — keeps light/dark mode stable across cards, menus, and controls. */
+/* Card styling — clean, no shadows on light */
 [data-slot="card"] {
-  border-color: color-mix(in oklab, var(--border) 88%, transparent);
-  box-shadow: 0 12px 30px rgb(15 23 42 / 0.055);
+  border-color: var(--border);
+  box-shadow: none;
 }
 
 .dark [data-slot="card"] {
-  border-color: color-mix(in oklab, var(--border) 72%, transparent);
-  box-shadow: 0 16px 40px rgb(0 0 0 / 0.24), inset 0 1px 0 rgb(255 255 255 / 0.04);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
 }
 
-.dark .bg-background\/80,
-.dark .bg-background\/70,
-.dark .bg-card\/50 {
-  background-color: color-mix(in oklab, var(--card) 82%, transparent) !important;
-}
-
-.dark .text-muted-foreground {
-  color: color-mix(in oklab, var(--foreground) 76%, transparent) !important;
-}
-
-.dark .text-primary {
-  color: oklch(0.78 0.135 145) !important;
-}
-
-.dark .border-border {
-  border-color: color-mix(in oklab, var(--border) 80%, transparent) !important;
-}
-
+/* Button sizing — besar untuk sentuhan HP */
 .dark [data-slot="button"] {
   color-scheme: dark;
 }
 
 .dark [data-slot="button"]:where(.border-border, .bg-background) {
-  background-color: color-mix(in oklab, var(--card) 86%, transparent);
-  border-color: color-mix(in oklab, var(--border) 86%, transparent);
+  background-color: var(--card);
+  border-color: var(--border);
   color: var(--foreground);
 }
 
@@ -404,89 +142,19 @@ body:has(.exam-light-scope) select {
 .dark textarea,
 .dark select {
   color-scheme: dark;
-  background-color: color-mix(in oklab, var(--card) 90%, black 10%);
+  background-color: var(--card);
   border-color: var(--input);
   color: var(--foreground);
 }
 
 .dark input::placeholder,
 .dark textarea::placeholder {
-  color: color-mix(in oklab, var(--foreground) 55%, transparent);
+  color: var(--muted-foreground);
 }
 
-/* Exam/public operational pages must stay light and high-contrast even when the browser/html shell is dark. */
-.exam-light-scope {
-  color-scheme: light;
-  background:
-    radial-gradient(circle at top left, oklch(0.95 0.025 145 / 0.7), transparent 28rem),
-    linear-gradient(180deg, #f7fbf5, #eef6ec) !important;
-  color: #0f172a !important;
-}
-
-.dark .exam-light-scope .parchment-texture,
-.exam-light-scope .parchment-texture {
-  color-scheme: light;
-  background:
-    radial-gradient(circle at top left, rgb(222 247 224 / 0.72), transparent 24rem),
-    linear-gradient(135deg, #ffffff 0%, #f7fbf5 58%, #fffdf2 100%) !important;
-  border-color: rgb(177 151 74 / 0.38) !important;
-  color: #0f172a !important;
-  box-shadow: 0 14px 34px rgb(15 23 42 / 0.12) !important;
-}
-
-.dark .exam-light-scope .parchment-texture::before,
-.exam-light-scope .parchment-texture::before {
-  opacity: 0.55;
-  background-image:
-    linear-gradient(90deg, rgb(15 80 45 / 0.06) 1px, transparent 1px),
-    linear-gradient(0deg, rgb(15 80 45 / 0.045) 1px, transparent 1px) !important;
-}
-
-.exam-light-scope :is(h1, h2, h3, label, p, span, li) {
-  text-shadow: none;
-}
-
-.exam-light-scope .text-primary,
-.dark .exam-light-scope .text-primary {
-  color: #166534 !important;
-}
-
-.exam-light-scope .text-slate-950,
-.dark .exam-light-scope .text-slate-950 {
-  color: #0f172a !important;
-}
-
-.exam-light-scope .text-slate-700,
-.dark .exam-light-scope .text-slate-700 {
-  color: #334155 !important;
-}
-
-.exam-light-scope .text-slate-600,
-.dark .exam-light-scope .text-slate-600 {
-  color: #475569 !important;
-}
-
-.exam-light-scope input,
-.exam-light-scope textarea,
-.exam-light-scope select,
-.dark .exam-light-scope input,
-.dark .exam-light-scope textarea,
-.dark .exam-light-scope select {
-  color-scheme: light;
-  background: #ffffff !important;
-  border-color: rgb(22 101 52 / 0.28) !important;
-  color: #0f172a !important;
-  box-shadow: inset 0 1px 0 rgb(15 23 42 / 0.03);
-}
-
-.exam-light-scope input::placeholder,
-.exam-light-scope textarea::placeholder,
-.dark .exam-light-scope input::placeholder,
-.dark .exam-light-scope textarea::placeholder {
-  color: #64748b !important;
-}
-
-.exam-light-scope button:not(.arch-header button),
-.dark .exam-light-scope button:not(.arch-header button) {
-  color-scheme: light;
+/* Bottom nav for mobile */
+@media (max-width: 768px) {
+  body {
+    padding-bottom: 4rem;
+  }
 }

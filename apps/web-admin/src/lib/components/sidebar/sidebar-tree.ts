@@ -1,12 +1,8 @@
-import type { SidebarFlatItem, SidebarNavGroup, SidebarNavItem, SidebarNavNode } from './sidebar-config';
+import type { SidebarFlatItem, SidebarNavGroup, SidebarNavItem } from './sidebar-config';
 import { matchesSidebarPath } from './sidebar-active';
 
-export function isSidebarFolder(node: SidebarNavNode): node is Extract<SidebarNavNode, { kind: 'folder' }> {
-	return node.kind === 'folder';
-}
-
-export function isSidebarLeaf(node: SidebarNavNode): node is SidebarNavItem {
-	return !isSidebarFolder(node);
+export function isSidebarLeaf(node: SidebarNavItem): node is SidebarNavItem {
+	return true;
 }
 
 function withNumber(label: string, section?: string) {
@@ -14,20 +10,14 @@ function withNumber(label: string, section?: string) {
 }
 
 function flattenNodes(
-	nodes: readonly SidebarNavNode[],
+	nodes: readonly SidebarNavItem[],
 	group: string,
 	ancestors: string[] = [],
 	groupSection?: string,
 	ancestorSections: string[] = []
 ): SidebarFlatItem[] {
-	return nodes.flatMap((node) => {
-		if (isSidebarFolder(node)) {
-			return flattenNodes(node.children, group, [...ancestors, node.label], groupSection, [
-				...ancestorSections,
-				node.section ?? ''
-			]);
-		}
-		return [{
+	return nodes.map((node) => {
+		return {
 			...node,
 			group,
 			groupSection,
@@ -36,7 +26,7 @@ function flattenNodes(
 			breadcrumb: [group, ...ancestors, node.label],
 			section: node.section,
 			numberedLabel: withNumber(node.label, node.section)
-		}];
+		};
 	});
 }
 
@@ -65,18 +55,10 @@ export function sidebarNumberedBreadcrumbLabel(
 	return labels.filter(Boolean).join(' › ');
 }
 
-function numberNodes(nodes: readonly SidebarNavNode[], parentSection: string): SidebarNavNode[] {
+function numberNodes(nodes: readonly SidebarNavItem[], parentSection: string): SidebarNavItem[] {
 	return nodes.map((node, index) => {
 		const section = node.section ?? `${parentSection}.${index + 1}`;
 		const numberedLabel = withNumber(node.label, section);
-		if (isSidebarFolder(node)) {
-			return {
-				...node,
-				section,
-				numberedLabel,
-				children: numberNodes(node.children, section)
-			};
-		}
 		return { ...node, section, numberedLabel };
 	});
 }

@@ -1,558 +1,147 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { afterNavigate, goto } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import AccountMenu from '$lib/components/AccountMenu.svelte';
-	import SidebarCommandPalette from '$lib/components/sidebar/SidebarCommandPalette.svelte';
-	import SidebarIcon from '$lib/components/sidebar/SidebarIcon.svelte';
-	import SidebarNavSection from '$lib/components/sidebar/SidebarNavSection.svelte';
-	import SidebarQuickAccess from '$lib/components/sidebar/SidebarQuickAccess.svelte';
-	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
-	import { fetchSidebarAttention } from '$lib/components/sidebar/sidebar-attention';
 	import { filterSidebarNavGroupsByAccess } from '$lib/components/sidebar/sidebar-access';
 	import { findActiveSidebarHref } from '$lib/components/sidebar/sidebar-active';
-	import {
-		flattenSidebarNavGroups,
-		numberSidebarNavGroups,
-		numberedLabel,
-		sidebarNumberedBreadcrumbLabel
-	} from '$lib/components/sidebar/sidebar-tree';
-	import { readClientJson } from '$lib/client/api';
-	import type { AccountIdentity } from '$lib/client/account';
+	import { flattenSidebarNavGroups, numberSidebarNavGroups } from '$lib/components/sidebar/sidebar-tree';
 	import { appAttribution, defaultBranding, versionedAsset, type BrandingSettings } from '$lib/branding';
-	import {
-		dashboardNavItem,
-		defaultPinnedByRole,
-		sidebarNavGroups,
-		type SidebarFlatItem,
-		type SidebarNavItem
-	} from '$lib/components/sidebar/sidebar-config';
+	import { sidebarNavGroups, type SidebarNavItem } from '$lib/components/sidebar/sidebar-config';
+	import type { AccountIdentity } from '$lib/client/account';
 
 	let {
 		user,
 		account = null,
-		branding = defaultBranding,
-		desktopExpanded = $bindable(true),
-		desktopWidth = $bindable(240)
+		branding = defaultBranding
 	}: {
 		user?: { id: string; username: string; role: string; roles?: string[]; permissions?: string[]; employee_id?: string };
 		account?: AccountIdentity | null;
 		branding?: BrandingSettings;
-		desktopExpanded?: boolean;
-		desktopWidth?: number;
 	} = $props();
-	let open = $state(false);
-	let commandOpen = $state(false);
-	let resizeHandle = $state<HTMLButtonElement | null>(null);
-	let isResizing = $state(false);
-	let inventoryAttention = $state(0);
-	let libraryAttention = $state(0);
-	let pusakaAttention = $state(0);
-	let profileChangeAttention = $state(0);
-	let attentionRefreshInFlight: Promise<void> | null = null;
-	let lastAttentionLoadedAt = 0;
-	let remotePrefsLoaded = false;
-	let sidebarPrefsSyncInFlight: Promise<void> | null = null;
-	let lastSyncedSidebarPrefs = '';
-	let sidebarPrefsLocalVersion = 0;
 
-	type SidebarPreferencesPayload = {
-		data?: unknown;
-		pinned_items?: unknown;
-		recent_items?: unknown;
-	};
+	let mobileMenuOpen = $state(false);
 
 	const userRoles = $derived(user?.roles || (user?.role ? [user.role] : []));
 	const userPermissions = $derived(user?.permissions || []);
-	const numberedSidebarNavGroups = numberSidebarNavGroups(sidebarNavGroups);
-	const numberedDashboardNavItem = { ...dashboardNavItem, section: '0', numberedLabel: '0 Dashboard' };
-	const nav = $derived(filterSidebarNavGroupsByAccess(numberedSidebarNavGroups, userRoles, userPermissions));
+	const numberedGroups = numberSidebarNavGroups(sidebarNavGroups);
+	const nav = $derived(filterSidebarNavGroupsByAccess(numberedGroups, userRoles, userPermissions));
 
-	const PINNED_STORAGE_KEY_PREFIX = 'sidebar:pinned-items';
-	const RECENT_STORAGE_KEY_PREFIX = 'sidebar:recent-items';
-	const RECENT_LIMIT = 6;
-	const ATTENTION_REFRESH_INTERVAL_MS = 60_000;
-	const SIDEBAR_MIN_WIDTH = 220;
-	const SIDEBAR_MAX_WIDTH = 360;
-	const SIDEBAR_RESIZE_STEP = 16;
-	let openGroups = $state<string[]>([]);
-	let pinnedItems = $state<string[]>([]);
-	let recentItems = $state<string[]>([]);
-	let pinnedLoaded = $state(false);
-
-	const visibleNavItems = $derived([
-		{ ...numberedDashboardNavItem, group: 'Akses Cepat', groupSection: '0', ancestors: [], ancestorSections: [], breadcrumb: ['Akses Cepat', dashboardNavItem.label] },
-		...flattenSidebarNavGroups(nav)
-	]);
-
+	const visibleNavItems = $derived(flattenSidebarNavGroups(nav));
 	const activeHref = $derived(findActiveSidebarHref(page.url.pathname, visibleNavItems));
-
-	const activeItem = $derived(visibleNavItems.find((item) => item.href === activeHref) ?? null);
-
-	const activeGroup = $derived(activeItem?.group ?? 'Utama');
-
-	const visibleNavHrefSet = $derived(new Set(visibleNavItems.map((item) => item.href)));
-	const pinnableNavHrefSet = $derived(
-		new Set(
-			visibleNavItems
-				.filter((item) => item.href !== '/' && item.pinnable !== false)
-				.map((item) => item.href)
-		)
-	);
-	const pinnedStorageKeyValue = $derived(`${PINNED_STORAGE_KEY_PREFIX}:${storageScope()}`);
-	const recentStorageKeyValue = $derived(`${RECENT_STORAGE_KEY_PREFIX}:${storageScope()}`);
-	const normalizedPinnedItems = $derived(normalizePinnedHrefs(pinnedItems));
-	const normalizedRecentItems = $derived(normalizeRecentHrefs(recentItems));
-	const sidebarPrefsSignatureValue = $derived(JSON.stringify({
-		pinned_items: normalizedPinnedItems,
-		recent_items: normalizedRecentItems
-	}));
-
-	const quickAccess = $derived.by(() => {
-		const orderedHrefs = Array.from(new Set(['/', ...pinnedItems.filter((href) => href !== '/')]));
-		return orderedHrefs
-			.map((href) => visibleNavItems.find((item) => item.href === href))
-			.filter((item): item is (typeof visibleNavItems)[number] => !!item);
-	});
-
-	const commandItems = $derived.by(() => {
-		const flattened = visibleNavItems.map((item) => ({
-			...item,
-			pinned: item.href === '/' || pinnedItems.includes(item.href),
-		}));
-		return flattened.filter(
-			(item, index) => flattened.findIndex((candidate) => candidate.href === item.href) === index
-		);
-	});
 
 	function isActive(href: string) {
 		return activeHref === href;
 	}
 
-	function clampDesktopWidth(value: number) {
-		return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(value)));
+	// Simple icon map — maps icon names to SVG viewBox and path data
+	const iconMap: Record<string, { viewBox: string; path: string }> = {
+		home: { viewBox: '0 0 24 24', path: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1' },
+		clock: { viewBox: '0 0 24 24', path: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+		users: { viewBox: '0 0 24 24', path: 'M12 4.354a4 4 0 110 7.292 4 4 0 010-7.292zM15 21H9a2 2 0 01-2-2V12a2 2 0 012-2h6a2 2 0 012 2v7a2 2 0 01-2 2z' },
+		calendar: { viewBox: '0 0 24 24', path: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
+		'bar-chart': { viewBox: '0 0 24 24', path: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+		send: { viewBox: '0 0 24 24', path: 'M12 19l9 2-9-18-9 18 9-2zm0 0v-8' },
+		'refresh-cw': { viewBox: '0 0 24 24', path: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' },
+		user: { viewBox: '0 0 24 24', path: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+		building: { viewBox: '0 0 24 24', path: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
+		shield: { viewBox: '0 0 24 24', path: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+		image: { viewBox: '0 0 24 24', path: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' },
+		database: { viewBox: '0 0 24 24', path: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4' },
+		'file-text': { viewBox: '0 0 24 24', path: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' }
+	};
+
+	// Mobile bottom nav items — simplified for teacher use
+	const mobileNavItems = [
+		{ label: 'Beranda', icon: 'home', href: '/' },
+		{ label: 'Kehadiran', icon: 'clock', href: '/pusaka' },
+		{ label: 'Pegawai', icon: 'users', href: '/employees' },
+		{ label: 'Pengaturan', icon: 'user', href: '/settings/account' }
+	];
+
+	function getIconPath(iconName: string): { viewBox: string; path: string } | null {
+		return iconMap[iconName] ?? null;
 	}
 
-	function setDesktopWidth(value: number) {
-		desktopWidth = clampDesktopWidth(value);
+	function navTo(href: string) {
+		mobileMenuOpen = false;
+		goto(resolve(href as '/'));
 	}
-
-	function startSidebarResize(event: PointerEvent) {
-		if (!desktopExpanded) return;
-		isResizing = true;
-		resizeHandle?.setPointerCapture(event.pointerId);
-		setDesktopWidth(event.clientX);
-		event.preventDefault();
-	}
-
-	function resizeSidebar(event: PointerEvent) {
-		if (!isResizing || !desktopExpanded) return;
-		setDesktopWidth(event.clientX);
-	}
-
-	function stopSidebarResize(event: PointerEvent) {
-		if (!isResizing) return;
-		isResizing = false;
-		if (resizeHandle?.hasPointerCapture(event.pointerId)) {
-			resizeHandle.releasePointerCapture(event.pointerId);
-		}
-	}
-
-	function handleSidebarResizeKeydown(event: KeyboardEvent) {
-		if (!desktopExpanded) return;
-		if (event.key === 'ArrowLeft') {
-			setDesktopWidth(desktopWidth - SIDEBAR_RESIZE_STEP);
-			event.preventDefault();
-		}
-		if (event.key === 'ArrowRight') {
-			setDesktopWidth(desktopWidth + SIDEBAR_RESIZE_STEP);
-			event.preventDefault();
-		}
-		if (event.key === 'Home') {
-			setDesktopWidth(SIDEBAR_MIN_WIDTH);
-			event.preventDefault();
-		}
-		if (event.key === 'End') {
-			setDesktopWidth(SIDEBAR_MAX_WIDTH);
-			event.preventDefault();
-		}
-	}
-
-	function isGroupOpen(group: string) {
-		return group === 'Utama' || group === activeGroup || openGroups.includes(group);
-	}
-
-	function toggleGroup(group: string) {
-		if (group === 'Utama' || group === activeGroup) {
-			return;
-		}
-		if (isGroupOpen(group)) {
-			openGroups = openGroups.filter((value) => value !== group);
-			return;
-		}
-		openGroups = [...openGroups, group];
-	}
-
-	function isPinned(href: string) {
-		return pinnedItems.includes(href);
-	}
-
-	function togglePin(href: string) {
-		if (href === '/') {
-			return;
-		}
-		if (isPinned(href)) {
-			pinnedItems = pinnedItems.filter((value) => value !== href);
-			markSidebarPrefsChanged();
-			return;
-		}
-		pinnedItems = [...pinnedItems, href];
-		markSidebarPrefsChanged();
-	}
-
-	function pinButtonLabel(item: SidebarNavItem) {
-		return isPinned(item.href) ? `Lepas ${item.label} dari akses cepat` : `Pin ${item.label} ke akses cepat`;
-	}
-
-	function canMovePinned(href: string, direction: -1 | 1) {
-		const index = pinnedItems.indexOf(href);
-		if (index === -1) return false;
-		const nextIndex = index + direction;
-		return nextIndex >= 0 && nextIndex < pinnedItems.length;
-	}
-
-	function movePinned(href: string, direction: -1 | 1) {
-		const index = pinnedItems.indexOf(href);
-		if (index === -1) return;
-		const nextIndex = index + direction;
-		if (nextIndex < 0 || nextIndex >= pinnedItems.length) return;
-		const next = [...pinnedItems];
-		const [value] = next.splice(index, 1);
-		next.splice(nextIndex, 0, value);
-		pinnedItems = next;
-		markSidebarPrefsChanged();
-	}
-
-	function railTooltip(item: SidebarNavItem | SidebarFlatItem, group: string) {
-		if ('ancestors' in item) return sidebarNumberedBreadcrumbLabel(item);
-		return `${group} · ${numberedLabel(item.label, item.section)}`;
-	}
-
-	function storageScope() {
-		return user?.id?.trim() || 'anon';
-	}
-
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function dedupeHrefs(values: string[]) {
-		return Array.from(new Set(values));
-	}
-
-	function normalizePinnedHrefs(values: unknown) {
-		if (!Array.isArray(values)) return [];
-		return dedupeHrefs(
-			values.filter(
-				(value): value is string =>
-					typeof value === 'string' && value !== '/' && pinnableNavHrefSet.has(value)
-			)
-		);
-	}
-
-	function normalizeRecentHrefs(values: unknown) {
-		if (!Array.isArray(values)) return [];
-		return dedupeHrefs(
-			values.filter(
-				(value): value is string => typeof value === 'string' && visibleNavHrefSet.has(value)
-			)
-		).slice(0, RECENT_LIMIT);
-	}
-
-	function defaultPinnedItemsForUser() {
-		for (const role of userRoles) {
-			const defaults = normalizePinnedHrefs(defaultPinnedByRole[role] ?? []);
-			if (defaults.length > 0) {
-				return defaults;
-			}
-		}
-		return [];
-	}
-
-	function navBadge(href: string) {
-		if (href === '/inventory/items') return inventoryAttention;
-		if (href === '/library/loans') return libraryAttention;
-		if (href === '/pusaka/antrian') return pusakaAttention;
-		if (href === '/settings/user-change-requests') return profileChangeAttention;
-		return 0;
-	}
-
-	function groupBadge(group: string) {
-		if (group === 'Aset & Layanan') return inventoryAttention + libraryAttention;
-		if (group === 'Pegawai & Kehadiran') return pusakaAttention;
-		if (group === 'Pengaturan') return profileChangeAttention;
-		return 0;
-	}
-
-	async function loadSidebarAttention() {
-		const attention = await fetchSidebarAttention(fetch, userRoles, userPermissions);
-		inventoryAttention = attention.inventory;
-		libraryAttention = attention.library;
-		pusakaAttention = attention.pusaka;
-		profileChangeAttention = attention.profileChanges;
-	}
-
-	async function refreshSidebarAttention(force = false) {
-		if (attentionRefreshInFlight) {
-			return attentionRefreshInFlight;
-		}
-		if (!force && Date.now() - lastAttentionLoadedAt < ATTENTION_REFRESH_INTERVAL_MS) {
-			return;
-		}
-		attentionRefreshInFlight = (async () => {
-			await loadSidebarAttention();
-			lastAttentionLoadedAt = Date.now();
-		})().finally(() => {
-			attentionRefreshInFlight = null;
-		});
-		return attentionRefreshInFlight;
-	}
-
-	function openCommandPalette() {
-		commandOpen = true;
-	}
-
-	function rememberRecent(href: string) {
-		recentItems = [href, ...recentItems.filter((value) => value !== href)].slice(0, RECENT_LIMIT);
-		markSidebarPrefsChanged();
-	}
-
-	async function runCommand(href: string) {
-		commandOpen = false;
-		open = false;
-		rememberRecent(href);
-		await goto(resolve(href as '/'));
-	}
-
-	function loadPinnedItems() {
-		if (typeof window === 'undefined') return;
-		const raw = window.localStorage.getItem(pinnedStorageKeyValue);
-		let nextPinnedItems: string[] = [];
-		if (raw) {
-			try {
-				const parsed = JSON.parse(raw);
-				nextPinnedItems = normalizePinnedHrefs(parsed);
-			} catch {
-				nextPinnedItems = [];
-			}
-		}
-
-		if (nextPinnedItems.length === 0) {
-			nextPinnedItems = defaultPinnedItemsForUser();
-		}
-
-		pinnedItems = nextPinnedItems;
-		pinnedLoaded = true;
-		persistSidebarCache();
-	}
-
-	function loadRecentItems() {
-		if (typeof window === 'undefined') return;
-		const raw = window.localStorage.getItem(recentStorageKeyValue);
-		if (!raw) {
-			recentItems = [];
-			return;
-		}
-		try {
-			const parsed = JSON.parse(raw);
-			recentItems = normalizeRecentHrefs(parsed);
-			persistSidebarCache();
-		} catch {
-			recentItems = [];
-			persistSidebarCache();
-		}
-	}
-
-	function persistSidebarCache() {
-		if (!pinnedLoaded || typeof window === 'undefined') return;
-		window.localStorage.setItem(pinnedStorageKeyValue, JSON.stringify(normalizePinnedHrefs(pinnedItems)));
-		window.localStorage.setItem(recentStorageKeyValue, JSON.stringify(normalizeRecentHrefs(recentItems)));
-	}
-
-	function markSidebarPrefsChanged() {
-		sidebarPrefsLocalVersion += 1;
-		persistSidebarCache();
-		void queueRemoteSidebarPreferences();
-	}
-
-	function sidebarPrefsSource(payload: SidebarPreferencesPayload | null): Record<string, unknown> {
-		if (!payload || typeof payload !== 'object') return {};
-		if (isRecord(payload.data)) return payload.data;
-		return payload as Record<string, unknown>;
-	}
-
-	async function loadRemoteSidebarPreferences() {
-		if (typeof window === 'undefined') return;
-		const versionAtStart = sidebarPrefsLocalVersion;
-		try {
-			const res = await fetch('/api/auth/preferences/sidebar');
-			const payload = await readClientJson<SidebarPreferencesPayload | null>(res);
-			const source = sidebarPrefsSource(payload);
-			const remotePinned = normalizePinnedHrefs(source.pinned_items ?? []);
-			const remoteRecent = normalizeRecentHrefs(source.recent_items ?? []);
-
-			if (versionAtStart === sidebarPrefsLocalVersion) {
-				if (remotePinned.length > 0) {
-					pinnedItems = remotePinned;
-				} else if (pinnedItems.length === 0) {
-					pinnedItems = defaultPinnedItemsForUser();
-				}
-				recentItems = remoteRecent;
-				persistSidebarCache();
-				lastSyncedSidebarPrefs = JSON.stringify({
-					pinned_items: remotePinned,
-					recent_items: remoteRecent
-				});
-			}
-		} catch {
-			// Keep local cache as fallback for sidebar personalization.
-		} finally {
-			remotePrefsLoaded = true;
-			if (versionAtStart !== sidebarPrefsLocalVersion) {
-				void queueRemoteSidebarPreferences();
-			}
-		}
-	}
-
-	async function queueRemoteSidebarPreferences() {
-		if (typeof window === 'undefined' || !remotePrefsLoaded) return;
-		const signature = sidebarPrefsSignatureValue;
-		if (signature === lastSyncedSidebarPrefs) return;
-		if (sidebarPrefsSyncInFlight) return sidebarPrefsSyncInFlight;
-
-		const versionAtStart = sidebarPrefsLocalVersion;
-		let shouldResyncAfterFlight = false;
-		sidebarPrefsSyncInFlight = fetch('/api/auth/preferences/sidebar', {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-			body: signature
-		})
-			.then(async (res) => {
-				if (!res.ok) {
-					return;
-				}
-				const payload = await readClientJson<SidebarPreferencesPayload | null>(res);
-				const source = sidebarPrefsSource(payload);
-				if (versionAtStart === sidebarPrefsLocalVersion) {
-					const syncedPinned = normalizePinnedHrefs(source.pinned_items ?? pinnedItems);
-					const syncedRecent = normalizeRecentHrefs(source.recent_items ?? recentItems);
-					lastSyncedSidebarPrefs = JSON.stringify({
-						pinned_items: syncedPinned,
-						recent_items: syncedRecent
-					});
-				} else {
-					shouldResyncAfterFlight = true;
-				}
-			})
-			.catch(() => {
-				// Keep local cache; the next sidebar change or visibility refresh will retry.
-			})
-			.finally(() => {
-				sidebarPrefsSyncInFlight = null;
-				if (shouldResyncAfterFlight && sidebarPrefsSignatureValue !== lastSyncedSidebarPrefs) {
-					void queueRemoteSidebarPreferences();
-				}
-			});
-		return sidebarPrefsSyncInFlight;
-	}
-
-	onMount(() => {
-		loadPinnedItems();
-		loadRecentItems();
-		void loadRemoteSidebarPreferences();
-		void refreshSidebarAttention(true);
-		const handleKeydown = (event: KeyboardEvent) => {
-			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-				event.preventDefault();
-				openCommandPalette();
-				return;
-			}
-			if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey) {
-				const target = event.target;
-				if (
-					target instanceof HTMLInputElement ||
-					target instanceof HTMLTextAreaElement ||
-					target instanceof HTMLSelectElement ||
-					(target instanceof HTMLElement && target.isContentEditable)
-				) {
-					return;
-				}
-				event.preventDefault();
-				openCommandPalette();
-			}
-		};
-		const handleVisibilityChange = () => {
-			if (document.visibilityState === 'visible') {
-				void refreshSidebarAttention();
-			}
-		};
-		const handleWindowFocus = () => {
-			void refreshSidebarAttention();
-		};
-		window.addEventListener('keydown', handleKeydown);
-		window.addEventListener('focus', handleWindowFocus);
-		document.addEventListener('visibilitychange', handleVisibilityChange);
-		const interval = window.setInterval(() => {
-			void refreshSidebarAttention();
-		}, ATTENTION_REFRESH_INTERVAL_MS);
-		return () => {
-			window.removeEventListener('keydown', handleKeydown);
-			window.removeEventListener('focus', handleWindowFocus);
-			document.removeEventListener('visibilitychange', handleVisibilityChange);
-			window.clearInterval(interval);
-		};
-	});
-
-	afterNavigate(() => {
-		if (typeof window !== 'undefined') {
-			void refreshSidebarAttention();
-		}
-	});
-
 </script>
 
-<!-- Mobile overlay -->
-{#if open}
-	<div
-		class="fixed inset-0 z-20 bg-black/40 lg:hidden"
-		role="button"
-		tabindex="-1"
-		aria-label="Tutup menu"
-		onclick={() => (open = false)}
-		onkeydown={(e) => e.key === 'Escape' && (open = false)}
-	></div>
-{/if}
+<!-- Desktop Sidebar -->
+<aside class="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-60 lg:flex-col lg:border-r lg:border-border lg:bg-[var(--card)]">
+	<!-- Brand -->
+	<div class="flex h-14 shrink-0 items-center gap-2.5 border-b border-border px-4">
+		<span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg shadow-sm" style={`background: ${branding.primary_color}`}>
+			<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Ikon ${branding.short_name}`} class="h-full w-full object-cover" />
+		</span>
+		<div class="min-w-0 flex-1">
+			<p class="truncate text-sm font-semibold text-foreground">{branding.short_name}</p>
+			<p class="truncate text-xs text-muted-foreground">{branding.tagline}</p>
+		</div>
+	</div>
 
-<!-- Mobile topbar -->
-<header class="fixed inset-x-0 top-0 z-20 flex h-14 w-full items-center gap-3 border-b border-border bg-card px-4 text-card-foreground lg:hidden">
-	<button
-		class="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-		onclick={() => (open = !open)}
-		aria-label="Toggle menu"
-	>
-		<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-		</svg>
-	</button>
-	<button
-		type="button"
-		class="inline-flex h-8 items-center rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-		onclick={openCommandPalette}
-	>
-		Cari menu
-	</button>
-	<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl shadow-sm ring-1 ring-emerald-300/20" style={`background: ${branding.primary_color}`}>
+	<!-- Navigation -->
+	<nav class="flex-1 overflow-y-auto px-3 py-3 space-y-4" style="font-size: 15px;">
+		{#each nav as section (section.group)}
+			{#if section.items.length > 0}
+				<div>
+					<p class="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{section.group}</p>
+					<div class="space-y-0.5">
+						{#each section.items as item ('href' in item ? item.href : item.id)}
+							{#if 'href' in item}
+								{@const icon = getIconPath(item.icon)}
+								<a
+									href={resolve(item.href as '/')}
+									class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[15px] no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+									class:bg-[oklch(0.92_0.04_145)]={isActive(item.href)}
+									class:text-green-700={isActive(item.href)}
+									class:hover:bg-gray-100={!isActive(item.href)}
+									class:text-gray-700={!isActive(item.href)}
+									onclick={(e) => { e.preventDefault(); navTo(item.href); }}
+								>
+									{#if icon}
+										<svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox={icon.viewBox}>
+											<path stroke-linecap="round" stroke-linejoin="round" d={icon.path} />
+										</svg>
+									{/if}
+									<span class="truncate">{item.label}</span>
+								</a>
+							{/if}
+						{/each}
+					</div>
+				</div>
+			{/if}
+		{/each}
+	</nav>
+
+	<!-- User Section -->
+	{#if user}
+		<div class="shrink-0 border-t border-border p-3">
+			<AccountMenu
+				{user}
+				{account}
+				showName={true}
+				menuSide="top"
+				align="start"
+				menuId="desktop-sidebar-account-menu"
+				class="w-full"
+				buttonClass="w-full justify-start"
+			/>
+		</div>
+	{/if}
+
+	<!-- Attribution -->
+	<div class="shrink-0 border-t border-border px-3 py-2 text-[10px] leading-4 text-muted-foreground/80">
+		<p class="truncate font-medium">{appAttribution.productName}</p>
+		<p class="truncate">{appAttribution.shortLabel}</p>
+	</div>
+</aside>
+
+<!-- Mobile Header -->
+<header class="fixed inset-x-0 top-0 z-20 flex h-14 w-full items-center gap-3 border-b border-border bg-[var(--card)] px-4 lg:hidden">
+	<span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg shadow-sm" style={`background: ${branding.primary_color}`}>
 		<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Ikon ${branding.short_name}`} class="h-full w-full object-cover" />
 	</span>
 	<span class="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{branding.short_name}</span>
@@ -561,136 +150,32 @@
 			{user}
 			{account}
 			menuId="mobile-topbar-account-menu"
-			buttonClass="border-transparent bg-transparent shadow-none hover:bg-muted"
+			buttonClass="border-transparent bg-transparent shadow-none hover:bg-gray-100"
 		/>
 	{/if}
 </header>
 
-<!-- Sidebar -->
-<aside
-	class={`fixed inset-y-0 left-0 z-30 flex flex-col border-r border-border bg-card text-card-foreground
-	       transition-[transform,width] duration-200
-	       ${open ? 'translate-x-0' : '-translate-x-full'}
-	       ${desktopExpanded ? 'lg:w-[var(--sidebar-width)]' : 'lg:w-[5.5rem]'}
-	       ${isResizing ? 'lg:transition-none' : ''}
-	       lg:translate-x-0`}
->
-	<!-- Brand -->
-	<div class={`flex h-14 shrink-0 items-center border-b border-border ${desktopExpanded ? 'gap-2.5 px-4' : 'justify-center px-3'}`}>
-		<span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg shadow-sm ring-1 ring-emerald-300/20" style={`background: ${branding.primary_color}`}>
-			<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Ikon ${branding.short_name}`} class="h-full w-full object-cover" />
-		</span>
-		<div class={`min-w-0 ${desktopExpanded ? 'block' : 'block lg:hidden'}`}>
-			<p class="truncate text-sm font-semibold text-foreground">{branding.short_name}</p>
-			<p class="truncate text-xs text-muted-foreground">{branding.tagline}</p>
-		</div>
-		<button
-			class={`ml-auto hidden rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground lg:inline-flex ${desktopExpanded ? '' : 'ml-0'}`}
-			onclick={() => (desktopExpanded = !desktopExpanded)}
-			aria-label={desktopExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
+<!-- Mobile Bottom Navigation -->
+<nav class="fixed inset-x-0 bottom-0 z-30 flex h-14 items-stretch border-t border-border bg-[var(--card)] lg:hidden">
+	{#each mobileNavItems as item (item.href)}
+		{@const icon = getIconPath(item.icon)}
+		{@const active = isActive(item.href)}
+		<a
+			href={resolve(item.href as '/')}
+			class="flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium no-underline transition-colors"
+			class:text-green-700={active}
+			class:text-gray-400={!active}
+			onclick={(e) => { e.preventDefault(); navTo(item.href); }}
 		>
-			<svg class={`h-4 w-4 transition-transform ${desktopExpanded ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-			</svg>
-		</button>
-	</div>
+			{#if icon}
+				<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width={active ? 2.5 : 1.5} viewBox={icon.viewBox}>
+					<path stroke-linecap="round" stroke-linejoin="round" d={icon.path} />
+				</svg>
+			{/if}
+			<span>{item.label}</span>
+		</a>
+	{/each}
+</nav>
 
-	<!-- Nav -->
-	<nav class={`flex-1 overflow-y-auto py-3 ${desktopExpanded ? 'px-3' : 'px-2'} space-y-4`}>
-		<div class={desktopExpanded ? 'block' : 'block lg:hidden'}>
-			<button
-				type="button"
-				class="flex w-full items-center justify-between rounded-xl border border-border bg-muted/40 px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-				onclick={openCommandPalette}
-				aria-label="Buka pencarian menu"
-			>
-				<span>Cari menu atau modul…</span>
-				<span class="rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">Ctrl K</span>
-			</button>
-		</div>
-		<SidebarQuickAccess
-			items={quickAccess}
-			{desktopExpanded}
-			{isActive}
-			{rememberRecent}
-			{togglePin}
-			{isPinned}
-			{pinButtonLabel}
-			{canMovePinned}
-			{movePinned}
-			{railTooltip}
-			closeMobile={() => (open = false)}
-		/>
-
-		{#each nav as section (section.group)}
-			<SidebarNavSection
-				{section}
-				{desktopExpanded}
-				{isGroupOpen}
-				{toggleGroup}
-				{groupBadge}
-				{navBadge}
-				{isActive}
-				{rememberRecent}
-				{togglePin}
-				{isPinned}
-				{pinButtonLabel}
-				{railTooltip}
-				closeMobile={() => (open = false)}
-			/>
-		{/each}
-	</nav>
-
-	<!-- Footer -->
-	<div class="shrink-0 space-y-2 border-t border-border p-3">
-		<ThemeToggle expanded={desktopExpanded} variant="outline" size="sm" class={desktopExpanded ? 'w-full justify-start' : 'w-full lg:justify-center'} />
-		{#if user}
-			<AccountMenu
-				{user}
-				{account}
-				showName={desktopExpanded}
-				menuSide="top"
-				align="start"
-				menuId="desktop-sidebar-account-menu"
-				class="w-full"
-				buttonClass={desktopExpanded ? 'w-full justify-start' : 'w-full justify-center'}
-			/>
-		{/if}
-		{#if desktopExpanded}
-			<div class="rounded-xl border border-border/70 bg-muted/30 px-3 py-2 text-[10px] leading-4 text-muted-foreground/80" aria-label={`Atribusi aplikasi ${appAttribution.productName} ${appAttribution.shortLabel}`}>
-				<p class="truncate font-medium text-muted-foreground">{appAttribution.productName}</p>
-				<p class="truncate">{appAttribution.shortLabel}</p>
-			</div>
-		{/if}
-	</div>
-
-	{#if desktopExpanded}
-		<button
-			type="button"
-			bind:this={resizeHandle}
-			role="slider"
-			aria-label="Lebar sidebar"
-			aria-valuemin={SIDEBAR_MIN_WIDTH}
-			aria-valuemax={SIDEBAR_MAX_WIDTH}
-			aria-valuenow={clampDesktopWidth(desktopWidth)}
-			aria-valuetext={`${clampDesktopWidth(desktopWidth)} piksel`}
-			class={`group absolute inset-y-0 right-0 hidden w-3 cursor-col-resize touch-none items-center justify-center border-0 bg-transparent p-0 outline-none lg:flex ${isResizing ? 'select-none' : ''}`}
-			onpointerdown={startSidebarResize}
-			onpointermove={resizeSidebar}
-			onpointerup={stopSidebarResize}
-			onpointercancel={stopSidebarResize}
-			onkeydown={handleSidebarResizeKeydown}
-		>
-			<span class="h-16 w-1 rounded-full bg-border opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 group-active:opacity-100"></span>
-		</button>
-	{/if}
-</aside>
-
-<SidebarCommandPalette
-	bind:open={commandOpen}
-	items={commandItems}
-	recentHrefs={recentItems}
-	runCommand={runCommand}
-	clearRecent={() => (recentItems = [])}
-	{isActive}
-/>
+<!-- Mobile content spacer -->
+<div class="h-14 lg:hidden"></div>

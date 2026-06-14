@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -180,20 +179,4 @@ func (h *PusakaJob) SyncAttendance(w http.ResponseWriter, r *http.Request) {
 		"skipped":  skipped,
 		"message":  "Attendance sync jobs created",
 	})
-}
-
-func pageSize(s string, def int) int {
-	n, err := strconv.Atoi(s)
-	if err != nil || n < 1 || n > 200 {
-		return def
-	}
-	return n
-}
-
-func pageNum(s string, def int) int {
-	n, err := strconv.Atoi(s)
-	if err != nil || n < 1 {
-		return def
-	}
-	return n
 }

@@ -43,16 +43,6 @@ type employeeAccountGenerationService interface {
 	Generate(ctx context.Context, actorID pgtype.UUID) (service.EmployeeAccountGenerationResult, error)
 }
 
-type studentAccountGenerationService interface {
-	Preview(ctx context.Context) (service.StudentAccountGenerationResult, error)
-	Generate(ctx context.Context, actorID pgtype.UUID) (service.StudentAccountGenerationResult, error)
-}
-
-type parentAccountGenerationService interface {
-	Preview(ctx context.Context) (service.ParentAccountGenerationResult, error)
-	Generate(ctx context.Context, actorID pgtype.UUID) (service.ParentAccountGenerationResult, error)
-}
-
 type userProfileCandidatesService interface {
 	List(ctx context.Context, filter service.UserProfileCandidateFilter) (service.UserProfileCandidatesResult, error)
 }
@@ -65,8 +55,6 @@ type User struct {
 	q                 userStore
 	lifecycle         userLifecycleService
 	generator         employeeAccountGenerationService
-	studentGenerator  studentAccountGenerationService
-	parentGenerator   parentAccountGenerationService
 	profileCandidates userProfileCandidatesService
 	tx                userTxStarter
 }
@@ -76,8 +64,6 @@ func NewUser(q *db.Queries) *User {
 		q:                 q,
 		lifecycle:         service.NewUserLifecycle(q),
 		generator:         service.NewEmployeeAccountGenerator(q),
-		studentGenerator:  service.NewStudentAccountGenerator(q),
-		parentGenerator:   service.NewParentAccountGenerator(q),
 		profileCandidates: service.NewUserProfileCandidateService(q),
 	}
 }
@@ -87,8 +73,6 @@ func NewUserWithPool(pool *pgxpool.Pool) *User {
 		q:                 db.New(pool),
 		lifecycle:         service.NewUserLifecycleWithPool(pool),
 		generator:         service.NewEmployeeAccountGeneratorWithPool(pool),
-		studentGenerator:  service.NewStudentAccountGeneratorWithPool(pool),
-		parentGenerator:   service.NewParentAccountGeneratorWithPool(pool),
 		profileCandidates: service.NewUserProfileCandidateService(db.New(pool)),
 		tx:                pool,
 	}
@@ -118,64 +102,6 @@ func (h *User) GenerateEmployeeAccounts(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	result, err := h.generator.Generate(r.Context(), actorID)
-	if err != nil {
-		api.Internal(w, err)
-		return
-	}
-	api.OK(w, result)
-}
-
-func (h *User) PreviewStudentAccounts(w http.ResponseWriter, r *http.Request) {
-	if !userPermissionAccessAllowed(w, r, "student_accounts.manage") {
-		return
-	}
-	result, err := h.studentGenerator.Preview(r.Context())
-	if err != nil {
-		api.Internal(w, err)
-		return
-	}
-	api.OK(w, result)
-}
-
-func (h *User) GenerateStudentAccounts(w http.ResponseWriter, r *http.Request) {
-	if !userPermissionAccessAllowed(w, r, "student_accounts.manage") {
-		return
-	}
-	actorID, err := currentActorUUID(r)
-	if err != nil {
-		api.Unauthorized(w)
-		return
-	}
-	result, err := h.studentGenerator.Generate(r.Context(), actorID)
-	if err != nil {
-		api.Internal(w, err)
-		return
-	}
-	api.OK(w, result)
-}
-
-func (h *User) PreviewParentAccounts(w http.ResponseWriter, r *http.Request) {
-	if !userPermissionAccessAllowed(w, r, "parent_accounts.manage") {
-		return
-	}
-	result, err := h.parentGenerator.Preview(r.Context())
-	if err != nil {
-		api.Internal(w, err)
-		return
-	}
-	api.OK(w, result)
-}
-
-func (h *User) GenerateParentAccounts(w http.ResponseWriter, r *http.Request) {
-	if !userPermissionAccessAllowed(w, r, "parent_accounts.manage") {
-		return
-	}
-	actorID, err := currentActorUUID(r)
-	if err != nil {
-		api.Unauthorized(w)
-		return
-	}
-	result, err := h.parentGenerator.Generate(r.Context(), actorID)
 	if err != nil {
 		api.Internal(w, err)
 		return
