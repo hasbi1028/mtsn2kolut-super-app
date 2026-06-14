@@ -85,7 +85,7 @@
 		align === 'start' ? 'left-0' : 'right-0'
 	));
 	const panelClass = $derived(cn(
-	    'absolute z-50 w-72 overflow-hidden rounded-xl border border-surface-300/60 dark:border-surface-600/60 bg-surface-50-950 p-1.5 text-popover-foreground shadow-2xl ring-1 ring-black/10 dark:ring-white/10 backdrop-blur-md',
+	    'absolute z-50 w-72 overflow-hidden rounded-xl border border-surface-300 dark:border-surface-600 bg-surface-50-950 p-1.5 text-surface-950-50 shadow-2xl ring-1 ring-black/10 dark:ring-white/10 backdrop-blur-md',
 	    positionClass,
 	    menuClass
 	));
@@ -218,13 +218,13 @@
 					{/if}
 				</span>
 				<div class="min-w-0">
-					<p class="truncate text-sm font-semibold text-popover-foreground">{displayName}</p>
-					<p class="truncate text-xs text-muted-foreground">@{username}</p>
+					<p class="truncate text-sm font-semibold text-surface-950-50">{displayName}</p>
+					<p class="truncate text-xs text-surface-600-400">@{username}</p>
 				</div>
 			</div>
 
 			<div class="px-2 pb-2" role="group" aria-label="Peran aktif">
-				<div class="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+				<div class="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-surface-600-400">
 					<ShieldCheckIcon class="size-3.5" />
 					<span>Peran aktif</span>
 				</div>
@@ -244,13 +244,13 @@
 			<a
 				href="/settings/account"
 				role="menuitem"
-				class="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-popover-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none"
+				class="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-surface-950-50 transition-colors hover:bg-primary-100 hover:text-primary-900 focus-visible:bg-primary-100 focus-visible:text-primary-900 focus-visible:outline-none"
 				onclick={() => closeMenu()}
 			>
 				<SettingsIcon class="size-4" />
 				<span class="min-w-0">
 					<span class="block font-medium">Profil Saya</span>
-					<span class="block text-xs text-muted-foreground">Pengaturan Akun</span>
+					<span class="block text-xs text-surface-600-400">Pengaturan Akun</span>
 				</span>
 			</a>
 
@@ -260,7 +260,7 @@
 						expanded={true}
 						variant="ghost"
 						size="sm"
-						class="w-full justify-start px-2 text-popover-foreground hover:bg-accent hover:text-accent-foreground"
+						class="w-full justify-start px-2 text-surface-950-50 hover:bg-primary-100 hover:text-primary-900"
 					/>
 				</div>
 			{/if}
