@@ -426,27 +426,30 @@
 			</Table.Root>
 			</div>
 
-			<div class="grid gap-3 p-4 lg:hidden">
-				{#each currentRecentJobs as j (j.id)}
-					<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
-						<div class="flex items-start justify-between gap-3">
-							<div class="min-w-0">
-								<p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">{fmtDt(j.created_at)}</p>
-								<p class="mt-1 text-sm font-semibold text-foreground">{j.nama || j.employee_nama || '—'}</p>
-								<p class="mt-1 text-xs text-muted-foreground">{j.claimed_by || 'Belum diambil petugas sistem'}</p>
-							</div>
-							<Badge variant={statusVariant(j.status)}>{statusLabel(j.status)}</Badge>
-						</div>
-						<div class="mt-3 flex items-center gap-2">
-							<Badge variant="outline">{runTypeLabel(j.run_type)}</Badge>
-						</div>
+			<div class="lg:hidden">
+				{#if currentRecentJobs.length === 0}
+					<div class="p-4">
+						<EmptyStatePanel
+							title="Belum ada pekerjaan"
+							description="Jalankan rekap atau jalankan jadwal otomatis untuk mulai membentuk antrean kerja PUSAKA di halaman ini."
+						/>
 					</div>
 				{:else}
-					<EmptyStatePanel
-						title="Belum ada pekerjaan"
-						description="Jalankan rekap atau jalankan jadwal otomatis untuk mulai membentuk antrean kerja PUSAKA di halaman ini."
-					/>
-				{/each}
+					<ul class="divide-y divide-border border-b border-border">
+						{#each currentRecentJobs as j (j.id)}
+							<li class="flex items-start gap-3 px-4 py-2.5">
+								<div class="min-w-0 grow">
+									<p class="truncate text-sm font-medium text-foreground">{j.nama || j.employee_nama || '—'}</p>
+									<p class="truncate text-[11px] text-muted-foreground">{fmtDt(j.created_at)} · {j.claimed_by || 'Belum diambil'}</p>
+								</div>
+								<div class="flex shrink-0 flex-col items-end gap-1">
+									<Badge variant={statusVariant(j.status)}>{statusLabel(j.status)}</Badge>
+									<Badge variant="outline" class="text-[10px]">{runTypeLabel(j.run_type)}</Badge>
+								</div>
+							</li>
+						{/each}
+					</ul>
+				{/if}
 			</div>
 		</Card.Content>
 	</Card.Root>

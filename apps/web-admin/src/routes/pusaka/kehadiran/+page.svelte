@@ -440,42 +440,42 @@
 					</Table.Root>
 					</div>
 
-					<div class="grid gap-3 p-4 lg:hidden">
-						{#each currentRecords as r, i (r.id)}
-						{@const s = attendanceStatus(r)}
-						<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
-							<div class="flex items-start justify-between gap-3">
-								<div class="min-w-0">
-									<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">#{i + 1} • {r.tanggal}</p>
-									<p class="mt-1 text-base font-semibold text-foreground">{r.employee_nama}</p>
-									<p class="mt-1 break-all font-mono text-xs text-muted-foreground">{r.employee_nip}</p>
-								</div>
-								<div class="shrink-0">
-									{#if s === 'lengkap'}
-										<Badge variant="default" class="bg-primary">Lengkap</Badge>
-									{:else if s === 'masuk'}
-										<Badge variant="outline" class="text-warning border-warning/30">Masuk</Badge>
-									{:else}
-										<Badge variant="secondary">Belum</Badge>
-									{/if}
-								</div>
+					<div class="lg:hidden">
+						{#if currentRecords.length === 0}
+							<div class="mx-4 my-4 rounded-2xl border border-dashed border-border bg-muted/50 px-4 py-10 text-center text-sm text-muted-foreground">
+								Tidak ada data kehadiran untuk rentang tanggal ini.
 							</div>
-							<div class="mt-4 grid grid-cols-2 gap-3">
-								<div class="rounded-xl border border-border bg-muted/50 px-3 py-2">
-									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Masuk</p>
-									<p class="mt-1 text-sm font-medium text-foreground">{stripWita(r.jam_masuk)}</p>
-								</div>
-								<div class="rounded-xl border border-border bg-muted/50 px-3 py-2">
-									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Pulang</p>
-									<p class="mt-1 text-sm font-medium text-foreground">{stripWita(r.jam_pulang)}</p>
-								</div>
+						{:else}
+							<ul class="divide-y divide-border border-b border-border">
+								{#each currentRecords as r, i (r.id)}
+									{@const s = attendanceStatus(r)}
+									<li class="flex items-center gap-3 px-4 py-2.5">
+										<span class="w-7 shrink-0 text-xs font-medium tabular-nums text-muted-foreground">#{i + 1}</span>
+										<div class="min-w-0 grow">
+											<p class="truncate text-sm font-medium text-foreground">{r.employee_nama}</p>
+											<p class="truncate font-mono text-[11px] text-muted-foreground">{r.employee_nip} · {r.tanggal}</p>
+										</div>
+										<div class="flex shrink-0 items-center gap-2 text-[11px] tabular-nums text-muted-foreground">
+											<span class="hidden min-[360px]:inline">{stripWita(r.jam_masuk)}</span>
+											<span aria-hidden="true" class="hidden min-[360px]:inline">→</span>
+											<span>{stripWita(r.jam_pulang)}</span>
+										</div>
+										<span class="shrink-0">
+											{#if s === 'lengkap'}
+												<span class="inline-flex h-2 w-2 rounded-full bg-primary" title="Lengkap" aria-label="Lengkap"></span>
+											{:else if s === 'masuk'}
+												<span class="inline-flex h-2 w-2 rounded-full bg-warning" title="Masuk" aria-label="Masuk"></span>
+											{:else}
+												<span class="inline-flex h-2 w-2 rounded-full bg-muted-foreground/40" title="Belum" aria-label="Belum"></span>
+											{/if}
+										</span>
+									</li>
+								{/each}
+							</ul>
+							<div class="border-t border-border bg-muted/50 px-4 py-2 text-right text-[11px] text-muted-foreground">
+								{currentRecords.length} rekaman · {startDate}{endDate && endDate !== startDate ? ' s/d ' + endDate : ''}
 							</div>
-						</div>
-					{:else}
-						<div class="rounded-2xl border border-dashed border-border bg-muted/50 px-4 py-10 text-center text-sm text-muted-foreground">
-							Tidak ada data kehadiran untuk rentang tanggal ini.
-						</div>
-					{/each}
+						{/if}
 					</div>
 					{/snippet}
 				</AsyncContent>
