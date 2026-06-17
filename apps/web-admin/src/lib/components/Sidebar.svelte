@@ -1,47 +1,38 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import AccountMenu from '$lib/components/AccountMenu.svelte';
-	import { filterSidebarNavGroupsByAccess } from '$lib/components/sidebar/sidebar-access';
-	import { findActiveSidebarHref } from '$lib/components/sidebar/sidebar-active';
-	import { flattenSidebarNavGroups, numberSidebarNavGroups } from '$lib/components/sidebar/sidebar-tree';
-	import { appAttribution, defaultBranding, versionedAsset, type BrandingSettings } from '$lib/branding';
-	import { sidebarNavGroups, type SidebarNavItem } from '$lib/components/sidebar/sidebar-config';
-	import type { AccountIdentity } from '$lib/client/account';
+	import { resolve } from '$app/paths';
+	import { sidebarNavGroups } from '$lib/components/sidebar/sidebar-config';
+	import { versionedAsset, type BrandingSettings } from '$lib/branding';
 
 	let {
 		user,
-		account = null,
-		branding = defaultBranding
+		branding = {} as BrandingSettings,
+		isMobileMenuOpen = $bindable(false)
 	}: {
-		user?: { id: string; username: string; role: string; roles?: string[]; permissions?: string[]; employee_id?: string };
-		account?: AccountIdentity | null;
+		user?: { id: string; username?: string; role?: string; roles?: string[]; permissions?: string[] };
 		branding?: BrandingSettings;
+		isMobileMenuOpen: boolean;
 	} = $props();
-
-	let mobileMenuOpen = $state(false);
-
-	$effect(() => {
-		if (typeof document === 'undefined') return;
-		if (mobileMenuOpen) {
-			document.body.style.overflow = 'hidden';
-			return () => { document.body.style.overflow = ''; };
-		}
-		document.body.style.overflow = '';
-		return undefined;
-	});
 
 	const userRoles = $derived(user?.roles || (user?.role ? [user.role] : []));
 	const userPermissions = $derived(user?.permissions || []);
-	const numberedGroups = numberSidebarNavGroups(sidebarNavGroups);
-	const nav = $derived(filterSidebarNavGroupsByAccess(numberedGroups, userRoles, userPermissions));
-	const visibleNavItems = $derived(flattenSidebarNavGroups(nav));
-	const activeHref = $derived(findActiveSidebarHref(page.url.pathname, visibleNavItems));
 
-	function isActive(href: string) { return activeHref === href; }
+	const filteredMenus = $derived.by(() => {
+		return sidebarNavGroups
+			.map((group) => {
+				const items = group.items.filter((item) => {
+					if (userRoles.includes('admin')) return true;
+					if (item.permissions && item.permissions.some((p: string) => userPermissions.includes(p))) return true;
+					if (item.roles && item.roles.some((r: string) => userRoles.includes(r))) return true;
+					if (item.allowAuthenticatedFallback && user) return true;
+					return false;
+				});
+				return { ...group, items };
+			})
+			.filter((group) => group.items.length > 0);
+	});
 
-	// Icon map
+	// Icon map (same as original, kept for compatibility)
 	const iconMap: Record<string, { viewBox: string; path: string }> = {
 		home: { viewBox: '0 0 24 24', path: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1' },
 		clock: { viewBox: '0 0 24 24', path: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
@@ -60,224 +51,120 @@
 		'x-circle': { viewBox: '0 0 24 24', path: 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z' }
 	};
 
-	function getIconPath(iconName: string) { return iconMap[iconName] ?? null; }
-	const menuIcon = $derived(getIconPath('menu'));
-	const closeIcon = $derived(getIconPath('x-circle'));
-
-	function navTo(href: string) { mobileMenuOpen = false; goto(resolve(href as '/')); }
-	function openMobileMenu() { mobileMenuOpen = true; }
-	function closeMobileMenu() { mobileMenuOpen = false; }
+	const getIconPath = (iconName: string) => iconMap[iconName] ?? null;
 </script>
 
-<!-- ═══ Desktop Sidebar ═══ -->
+<!-- ═══ CBT-style Sidebar ═══ -->
 <aside
-	class="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col border-r bg-white text-surface-900 border-surface-200"
+	id="admin-mobile-sidebar"
+	class={[
+		'admin-sidebar fixed top-0 bottom-0 left-0 z-[120] flex w-[min(22.5rem,calc(100vw-48px))] flex-col border-r border-border bg-card p-3 shadow-2xl transition-transform duration-300 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:self-start lg:overflow-hidden lg:p-5 lg:shadow-none',
+		isMobileMenuOpen
+			? 'pointer-events-auto translate-x-0'
+			: 'pointer-events-none -translate-x-full',
+		'lg:pointer-events-auto lg:translate-x-0'
+	]}
+	aria-hidden={!isMobileMenuOpen}
 >
 	<!-- Brand -->
-	<div class="flex h-16 shrink-0 items-center gap-3 border-b border-surface-200 px-4">
-		<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl" style="background: oklch(0.32 0.13 145);">
-			<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Ikon ${branding.short_name}`} class="h-full w-full object-cover" />
-		</span>
-		<div class="min-w-0 flex-1">
-			<p class="truncate text-sm font-black tracking-tight">{branding.short_name}</p>
-			<p class="truncate text-[10px] font-bold tracking-widest text-primary-600 uppercase">{branding.tagline}</p>
+	<div class="brand mb-3 flex shrink-0 items-center gap-2 px-1 pt-[max(0.75rem,env(safe-area-inset-top))] lg:mb-5 lg:px-2 lg:pt-0">
+		<div class="flex min-w-0 flex-1 items-center gap-2">
+			{#if branding?.mark_url}
+				<div class="brand-logo flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border border-border bg-background/80 shadow-sm shadow-primary/10">
+					<img src={versionedAsset(branding.mark_url, branding.version)} alt="Logo" class="h-full w-full object-contain p-1.5" />
+				</div>
+			{:else}
+				<div class="brand-logo flex h-10 w-10 items-center justify-center rounded-xl bg-primary font-black text-primary-foreground italic shadow-sm shadow-primary/20">
+					SA
+				</div>
+			{/if}
+			<div class="min-w-0">
+				<div class="brand-text truncate leading-none font-black tracking-tight text-foreground uppercase">
+					Command Center
+				</div>
+				<div class="mt-0.5 text-[9px] font-black tracking-[0.1em] text-primary uppercase">
+					{branding?.short_name || 'MTsN 2 Kolut'}
+				</div>
+			</div>
 		</div>
+		<button
+			type="button"
+			class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground lg:hidden"
+			onclick={() => (isMobileMenuOpen = false)}
+			aria-label="Tutup menu"
+		>
+			<svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+			</svg>
+		</button>
 	</div>
 
 	<!-- Navigation -->
-	<nav class="flex-1 overflow-y-auto px-3 py-4 space-y-4 custom-scrollbar">
-		{#each nav as section (section.group)}
-			{#if section.items.length > 0}
-				<div>
-					<p class="mb-1.5 px-3 text-[10px] font-black tracking-widest text-surface-400 uppercase">
-						{section.group}
-					</p>
-					<div class="space-y-0.5">
-						{#each section.items as item (item.href)}
-							{#if 'href' in item}
-								{@const icon = getIconPath(item.icon)}
-								{@const active = isActive(item.href)}
-								<a
-									href={resolve(item.href as '/')}
-									class="group flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 {active
-										? 'bg-primary-500 text-white shadow-sm shadow-primary-500/20'
-										: 'text-surface-600 hover:bg-surface-100:bg-surface-800 hover:text-surface-900:text-surface-50'}"
-									onclick={(e) => { e.preventDefault(); navTo(item.href); }}
-								>
-									{#if icon}
-										<svg class="h-4 w-4 shrink-0 {active ? 'text-white' : 'text-surface-400 group-hover:text-primary-500'}" fill="none" stroke="currentColor" stroke-width={active ? 2.2 : 1.6} viewBox={icon.viewBox}>
-											<path stroke-linecap="round" stroke-linejoin="round" d={icon.path} />
-										</svg>
-									{/if}
-									<span class="truncate">{item.label}</span>
-								</a>
-							{/if}
-						{/each}
-					</div>
+	<nav class="admin-nav custom-scrollbar min-h-0 flex-1 overflow-y-auto pr-1 lg:pr-2">
+		{#if filteredMenus.length > 0}
+			{#each filteredMenus as group (group.group)}
+				<div class="group-label mt-5 mb-2 pl-3 text-[10px] font-black tracking-widest text-muted-foreground uppercase opacity-60 first:mt-0">
+					{group.group}
 				</div>
-			{/if}
-		{/each}
+				<div class="space-y-1">
+					{#each group.items as item}
+						{@const href = resolve(item.href as '/')}
+						{@const isActive = page.url.pathname === href || (item.href !== '/' && page.url.pathname.startsWith(item.href) && item.href.length > 1)}
+						{@const icon = getIconPath(item.icon)}
+
+						<a
+							href={href}
+							class="admin-nav-item group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition-all lg:px-4 {isActive
+								? 'bg-primary text-primary-foreground shadow-sm shadow-primary/15'
+								: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+							onclick={() => (isMobileMenuOpen = false)}
+						>
+							<span class="icon flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-base leading-none {isActive ? 'bg-white/15 text-primary-foreground' : 'bg-muted/60 text-muted-foreground group-hover:text-primary'}">
+								{#if icon}
+									<svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width={isActive ? 2.2 : 1.6} viewBox={icon.viewBox}>
+										<path stroke-linecap="round" stroke-linejoin="round" d={icon.path} />
+									</svg>
+								{/if}
+							</span>
+							<span class="label truncate">{item.label}</span>
+						</a>
+					{/each}
+				</div>
+			{/each}
+		{:else}
+			<div class="p-4 text-xs text-muted-foreground italic opacity-50">
+				Menyiapkan menu akses...
+			</div>
+		{/if}
 	</nav>
 
-	<!-- User section -->
-	{#if user}
-		<div class="shrink-0 border-t border-surface-200 p-3">
-			<AccountMenu
-				{user}
-				{account}
-				showName={true}
-				menuSide="top"
-				align="start"
-				menuId="desktop-sidebar-account-menu"
-				class="w-full"
-				buttonClass="w-full justify-start"
-			/>
+	<!-- Footer -->
+	<div class="sidebar-footer mt-3 shrink-0 border-t border-border pt-3">
+		<div class="mb-2 rounded-xl border border-border bg-muted/35 p-2.5">
+			<div class="flex items-center gap-2">
+				<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+					<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+					</svg>
+				</div>
+				<div class="min-w-0">
+					<p class="text-[9px] font-bold tracking-wide text-muted-foreground">Masuk sebagai</p>
+					<p class="truncate text-[11px] font-black text-foreground">{user?.username || 'Anonymous'}</p>
+				</div>
+			</div>
 		</div>
-	{/if}
-
-	<!-- Attribution -->
-	<div class="shrink-0 border-t border-surface-200 px-4 py-2.5">
-		<p class="text-[10px] font-bold tracking-wide text-surface-500 truncate">{appAttribution.productName}</p>
-		<p class="text-[9px] font-medium text-surface-400 truncate">{appAttribution.shortLabel}</p>
+		<a
+			href="/logout"
+			class="logout-btn flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/20 bg-destructive/5 py-2 text-[11px] font-bold text-destructive transition-all hover:bg-destructive hover:text-white"
+		>
+			<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+			</svg>
+			Keluar
+		</a>
+		<div class="mt-2 rounded-xl border border-primary/10 bg-primary/5 px-2.5 py-1.5">
+			<p class="text-[9px] font-black tracking-wide text-foreground">Super App {branding?.short_name || 'MTsN 2 Kolut'}</p>
+			<p class="mt-0.5 text-[9px] font-medium leading-snug text-muted-foreground">v2 · by Hasbi Awal</p>
+		</div>
 	</div>
 </aside>
-
-<!-- ═══ Mobile Header ═══ -->
-<header
-	class="fixed inset-x-0 top-0 z-20 flex h-14 w-full items-center gap-2 border-b px-3 lg:hidden"
-	style="background-color: oklch(0.32 0.13 145); color: white; border-color: oklch(0.28 0.12 145);"
->
-	<button
-		type="button"
-		class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-		aria-label={mobileMenuOpen ? 'Tutup menu' : 'Buka menu'}
-		aria-expanded={mobileMenuOpen}
-		aria-controls="mobile-drawer"
-		onclick={openMobileMenu}
-	>
-		{#if menuIcon}
-			<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox={menuIcon.viewBox}>
-				<path stroke-linecap="round" stroke-linejoin="round" d={menuIcon.path} />
-			</svg>
-		{/if}
-	</button>
-	<span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg" style="background: white;">
-		<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Ikon ${branding.short_name}`} class="h-full w-full object-cover" />
-	</span>
-	<span class="min-w-0 flex-1 truncate text-sm font-black tracking-tight">{branding.short_name}</span>
-	{#if user}
-		<AccountMenu
-			{user}
-			{account}
-			menuId="mobile-topbar-account-menu"
-			buttonClass="border-transparent"
-		/>
-	{/if}
-</header>
-
-<!-- Mobile content spacer -->
-<div class="h-14 lg:hidden"></div>
-
-<!-- ═══ Mobile Drawer ═══ -->
-{#if mobileMenuOpen}
-	<!-- Backdrop -->
-	<button
-		type="button"
-		class="fixed inset-0 z-40 cursor-default bg-black/50 backdrop-blur-sm transition-opacity lg:hidden"
-		aria-label="Tutup menu"
-		onclick={closeMobileMenu}
-	></button>
-
-	<!-- Drawer panel -->
-	<aside
-		id="mobile-drawer"
-		class="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-surface-200 bg-white text-surface-900 shadow-2xl lg:hidden"
-		aria-label="Menu navigasi"
-	>
-		<!-- Drawer header -->
-		<div class="flex h-14 shrink-0 items-center gap-3 border-b border-surface-200 px-4">
-			<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl" style="background: oklch(0.32 0.13 145);">
-				<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Ikon ${branding.short_name}`} class="h-full w-full object-cover" />
-			</span>
-			<div class="min-w-0 flex-1">
-				<p class="truncate text-sm font-black tracking-tight">{branding.short_name}</p>
-				<p class="truncate text-[10px] font-bold tracking-widest text-primary-600 uppercase">{branding.tagline}</p>
-			</div>
-			<button
-				type="button"
-				class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-surface-200 text-surface-500 transition hover:bg-surface-100:bg-surface-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
-				aria-label="Tutup menu"
-				onclick={closeMobileMenu}
-			>
-				{#if closeIcon}
-					<svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox={closeIcon.viewBox}>
-						<path stroke-linecap="round" stroke-linejoin="round" d={closeIcon.path} />
-					</svg>
-				{/if}
-			</button>
-		</div>
-
-		<!-- Drawer nav -->
-		<nav class="flex-1 overflow-y-auto px-3 py-4 space-y-4 custom-scrollbar">
-			{#each nav as section (section.group)}
-				{#if section.items.length > 0}
-					<div>
-						<p class="mb-1.5 px-3 text-[10px] font-black tracking-widest text-surface-400 uppercase">
-							{section.group}
-						</p>
-						<div class="space-y-0.5">
-							{#each section.items as item (item.href)}
-								{#if 'href' in item}
-									{@const icon = getIconPath(item.icon)}
-									{@const active = isActive(item.href)}
-									<a
-										href={resolve(item.href as '/')}
-										class="group flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 {active
-											? 'bg-primary-500 text-white shadow-sm shadow-primary-500/20'
-											: 'text-surface-600 hover:bg-surface-100:bg-surface-800 hover:text-surface-900:text-surface-50'}"
-										onclick={(e) => { e.preventDefault(); navTo(item.href); }}
-									>
-										{#if icon}
-											<svg class="h-4 w-4 shrink-0 {active ? 'text-white' : 'text-surface-400 group-hover:text-primary-500'}" fill="none" stroke="currentColor" stroke-width={active ? 2.2 : 1.6} viewBox={icon.viewBox}>
-												<path stroke-linecap="round" stroke-linejoin="round" d={icon.path} />
-											</svg>
-										{/if}
-										<span class="truncate">{item.label}</span>
-									</a>
-								{/if}
-							{/each}
-						</div>
-					</div>
-				{/if}
-			{/each}
-		</nav>
-
-		<!-- Drawer user section -->
-		{#if user}
-			<div class="shrink-0 border-t border-surface-200 p-3">
-				<AccountMenu
-					{user}
-					{account}
-					showName={true}
-					menuSide="top"
-					align="start"
-					menuId="mobile-drawer-account-menu"
-					class="w-full"
-					buttonClass="w-full justify-start"
-				/>
-			</div>
-		{/if}
-
-		<!-- Drawer attribution -->
-		<div class="shrink-0 border-t border-surface-200 px-4 py-2.5">
-			<p class="text-[10px] font-bold tracking-wide text-surface-500 truncate">{appAttribution.productName}</p>
-			<p class="text-[9px] font-medium text-surface-400 truncate">{appAttribution.shortLabel}</p>
-		</div>
-	</aside>
-{/if}
-
-<style>
-	.custom-scrollbar::-webkit-scrollbar { width: 4px; }
-	.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-	.custom-scrollbar::-webkit-scrollbar-thumb { background-color: var(--border); border-radius: 9999px; }
-</style>

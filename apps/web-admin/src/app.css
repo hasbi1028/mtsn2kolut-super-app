@@ -1,119 +1,121 @@
-/* ═══════════════════════════════════════════════
-   MTsN 2 Kolut — Skeleton UI v4 + Madrasah Green
-   Custom theme override: hijack cerberus variables
-   ke hijau Kemenag (oklch hue 145)
-   ═══════════════════════════════════════════════ */
+@import 'tailwindcss';
+@plugin 'tailwindcss-animate';
 
-@import "tailwindcss";
-@import "@skeletonlabs/skeleton";
-@import "@skeletonlabs/skeleton-svelte";
-@import "@skeletonlabs/skeleton/themes/cerberus";
+@custom-variant dark (&:is(.dark *));
 
-@custom-variant dark (&:where(.dark, .dark *));
-
-/* ── Skeleton @theme tokens ─────────────────── */
 @theme {
-  --font-sans: "Source Sans 3", "Noto Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Source Sans 3", "Noto Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
-  --radius: 0.5rem;
-  --radius-md: 0.5rem;
-  --radius-sm: 0.375rem;
-  --radius-lg: 0.75rem;
+	--font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+	
+	/* Brand Colors: Hijau Kemenag MTsN 2 Kolut (same as CBT) */
+	--color-primary-50: oklch(0.96 0.02 145);
+	--color-primary-100: oklch(0.92 0.04 145);
+	--color-primary-200: oklch(0.85 0.08 145);
+	--color-primary-300: oklch(0.75 0.12 145);
+	--color-primary-400: oklch(0.65 0.16 145);
+	--color-primary-500: oklch(0.55 0.20 145);
+	--color-primary-600: oklch(0.48 0.17 145); /* Primary App Color */
+	--color-primary-700: oklch(0.40 0.14 145);
+	--color-primary-800: oklch(0.32 0.13 145);
+	--color-primary-900: oklch(0.28 0.12 145);
+	--color-primary-950: oklch(0.20 0.09 145);
+
+	/* Theme variables mapped to shadcn-like standard but CBT style */
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-destructive: var(--destructive);
+	--color-destructive-foreground: var(--destructive-foreground);
+	--color-border: var(--border);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+	--radius-lg: var(--radius);
+	--radius-md: calc(var(--radius) - 2px);
+	--radius-sm: calc(var(--radius) - 4px);
 }
 
-/* ── Custom Madrasah Green (override cerberus biru) ──── */
-[data-theme='cerberus'] {
-	/* Hijack primary (cerberus default = biru hue 258) → hijau hue 145 */
-	--color-primary-50:  oklch(0.96 0.025 145);
-	--color-primary-100: oklch(0.92 0.05 145);
-	--color-primary-200: oklch(0.85 0.09 145);
-	--color-primary-300: oklch(0.74 0.13 145);
-	--color-primary-400: oklch(0.6 0.16 145);
-	--color-primary-500: oklch(0.48 0.17 145);   /* main brand green */
-	--color-primary-600: oklch(0.4 0.15 145);
-	--color-primary-700: oklch(0.33 0.12 145);
-	--color-primary-800: oklch(0.26 0.09 145);
-	--color-primary-900: oklch(0.2 0.06 145);
-	--color-primary-950: oklch(0.14 0.04 145);
+@layer base {
+	:root {
+		/* Light Mode (CBT Style default) */
+		--background: oklch(0.98 0 0); /* bg-slate-50 equivalent */
+		--foreground: oklch(0.145 0 0);
+		--card: oklch(1 0 0);
+		--card-foreground: oklch(0.145 0 0);
+		--popover: oklch(1 0 0);
+		--popover-foreground: oklch(0.145 0 0);
+		
+		/* Kemenag Green */
+		--primary: oklch(0.48 0.17 145);
+		--primary-foreground: oklch(0.985 0 0);
+		
+		--secondary: oklch(0.97 0 0);
+		--secondary-foreground: oklch(0.205 0 0);
+		--muted: oklch(0.97 0 0);
+		--muted-foreground: oklch(0.556 0 0);
+		--accent: oklch(0.97 0 0);
+		--accent-foreground: oklch(0.205 0 0);
+		
+		--destructive: oklch(0.577 0.245 27.325);
+		--destructive-foreground: oklch(0.98 0 0);
+		
+		--border: oklch(0.92 0 0);
+		--input: oklch(0.92 0 0);
+		--ring: oklch(0.48 0.17 145);
+		--radius: 0.5rem;
+	}
 
-	--color-secondary-50:  oklch(0.96 0.02 200);
-	--color-secondary-500: oklch(0.5 0.1 200);
-
-	--color-error-500: oklch(0.55 0.22 27);
-	--color-warning-500: oklch(0.7 0.15 75);
-	--color-success-500: oklch(0.5 0.15 145);
-
-	--body-background-color: var(--color-surface-50);
-	--body-background-color-dark: var(--color-surface-950);
+	.dark {
+		--background: oklch(0.145 0 0);
+		--foreground: oklch(0.985 0 0);
+		--card: oklch(0.145 0 0);
+		--card-foreground: oklch(0.985 0 0);
+		--popover: oklch(0.145 0 0);
+		--popover-foreground: oklch(0.985 0 0);
+		--primary: oklch(0.48 0.17 145);
+		--primary-foreground: oklch(0.985 0 0);
+		--secondary: oklch(0.269 0 0);
+		--secondary-foreground: oklch(0.985 0 0);
+		--muted: oklch(0.269 0 0);
+		--muted-foreground: oklch(0.708 0 0);
+		--accent: oklch(0.269 0 0);
+		--accent-foreground: oklch(0.985 0 0);
+		--destructive: oklch(0.396 0.141 25.723);
+		--destructive-foreground: oklch(0.637 0.237 25.331);
+		--border: oklch(0.269 0 0);
+		--input: oklch(0.269 0 0);
+		--ring: oklch(0.48 0.17 145);
+	}
 }
 
-/* ── Legacy shadcn aliases (backward compat) ─────── */
-:root {
-  --background: var(--color-surface-50);
-  --foreground: var(--color-surface-950);
-  --card: var(--color-surface-50);
-  --card-foreground: var(--color-surface-950);
-  --primary: var(--color-primary-500);
-  --primary-foreground: var(--color-primary-contrast-light, white);
-  --secondary: var(--color-secondary-500);
-  --secondary-foreground: var(--color-secondary-contrast-light, white);
-  --muted: var(--color-surface-200);
-  --muted-foreground: var(--color-surface-600);
-  --accent: var(--color-primary-100);
-  --accent-foreground: var(--color-primary-900);
-  --destructive: var(--color-error-500);
-  --destructive-foreground: var(--color-error-contrast-light, white);
-  --border: var(--color-surface-300);
-  --input: var(--color-surface-300);
-  --ring: var(--color-primary-500);
-  --success: var(--color-success-500);
-  --warning: var(--color-warning-500);
-  --radius: 0.5rem;
+@layer base {
+	* {
+		@apply border-border;
+	}
+	body {
+		@apply bg-background text-foreground;
+	}
 }
 
-.dark {
-  --background: var(--color-surface-950);
-  --foreground: var(--color-surface-50);
-  --card: var(--color-surface-900);
-  --card-foreground: var(--color-surface-50);
-  --primary: var(--color-primary-400);
-  --primary-foreground: var(--color-primary-950);
-  --muted: var(--color-surface-800);
-  --muted-foreground: var(--color-surface-400);
-  --border: var(--color-surface-700);
-  --input: var(--color-surface-700);
+/* CBT Specific Utility Classes */
+@layer utilities {
+	.custom-scrollbar::-webkit-scrollbar {
+		width: 4px;
+	}
+	.custom-scrollbar::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	.custom-scrollbar::-webkit-scrollbar-thumb {
+		background-color: var(--border);
+		border-radius: 9999px;
+	}
 }
-
-/* ── Base ───────────────────────────────────── */
-html { color-scheme: light; }
-html.dark { color-scheme: dark; }
-
-body {
-  min-height: 100vh;
-  background: var(--body-background-color);
-  color: var(--color-surface-950);
-  font-size: 16px;
-  line-height: 1.6;
-}
-.dark body { color: var(--color-surface-50); }
-
-.dark input, .dark textarea, .dark select {
-  color-scheme: dark;
-  background-color: var(--color-surface-900);
-  border-color: var(--color-surface-700);
-  color: var(--color-surface-50);
-}
-.dark input::placeholder, .dark textarea::placeholder {
-  color: var(--color-surface-500);
-}
-
-/* ── Page enter animation ───────────────────── */
-@keyframes page-enter {
-  from { opacity: 0; transform: translateY(2px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.page-enter { animation: page-enter 0.2s ease-out; }
-
-/* ── Light card override (shadcn compatibility) ─ */
-.card { background-color: var(--card); color: var(--card-foreground); }
