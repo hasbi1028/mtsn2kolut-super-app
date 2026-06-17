@@ -26,9 +26,7 @@
 		if (typeof document === 'undefined') return;
 		if (mobileMenuOpen) {
 			document.body.style.overflow = 'hidden';
-			return () => {
-				document.body.style.overflow = '';
-			};
+			return () => { document.body.style.overflow = ''; };
 		}
 		document.body.style.overflow = '';
 		return undefined;
@@ -38,15 +36,12 @@
 	const userPermissions = $derived(user?.permissions || []);
 	const numberedGroups = numberSidebarNavGroups(sidebarNavGroups);
 	const nav = $derived(filterSidebarNavGroupsByAccess(numberedGroups, userRoles, userPermissions));
-
 	const visibleNavItems = $derived(flattenSidebarNavGroups(nav));
 	const activeHref = $derived(findActiveSidebarHref(page.url.pathname, visibleNavItems));
 
-	function isActive(href: string) {
-		return activeHref === href;
-	}
+	function isActive(href: string) { return activeHref === href; }
 
-	// Icon map — maps icon names to SVG viewBox and path data
+	// Icon map
 	const iconMap: Record<string, { viewBox: string; path: string }> = {
 		home: { viewBox: '0 0 24 24', path: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1' },
 		clock: { viewBox: '0 0 24 24', path: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
@@ -65,57 +60,38 @@
 		'x-circle': { viewBox: '0 0 24 24', path: 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z' }
 	};
 
-	// Mobile bottom nav items — simplified for teacher use
-	const mobileNavItems = [
-		{ label: 'Beranda', icon: 'home', href: '/' },
-		{ label: 'Kehadiran', icon: 'clock', href: '/pusaka' },
-		{ label: 'Pegawai', icon: 'users', href: '/employees' },
-		{ label: 'Pengaturan', icon: 'user', href: '/settings/account' }
-	];
-
-	function getIconPath(iconName: string): { viewBox: string; path: string } | null {
-		return iconMap[iconName] ?? null;
-	}
-
+	function getIconPath(iconName: string) { return iconMap[iconName] ?? null; }
 	const menuIcon = $derived(getIconPath('menu'));
 	const closeIcon = $derived(getIconPath('x-circle'));
 
-	function navTo(href: string) {
-		mobileMenuOpen = false;
-		goto(resolve(href as '/'));
-	}
-
-	function openMobileMenu() {
-		mobileMenuOpen = true;
-	}
-
-	function closeMobileMenu() {
-		mobileMenuOpen = false;
-	}
+	function navTo(href: string) { mobileMenuOpen = false; goto(resolve(href as '/')); }
+	function openMobileMenu() { mobileMenuOpen = true; }
+	function closeMobileMenu() { mobileMenuOpen = false; }
 </script>
 
-<!-- ═══ Desktop Sidebar (Skeleton: dark surface, green active state) ═══ -->
+<!-- ═══ Desktop Sidebar ═══ -->
 <aside
-	class="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col border-r"
-	style="background-color: var(--color-surface-50); border-color: var(--color-surface-200);"
+	class="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col border-r bg-white text-surface-900 border-surface-200"
 >
 	<!-- Brand -->
-	<div class="flex h-16 shrink-0 items-center gap-3 border-b px-4" style="border-color: var(--color-surface-200);">
-		<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-base" style="background: oklch(0.32 0.13 145);">
+	<div class="flex h-16 shrink-0 items-center gap-3 border-b border-surface-200 px-4">
+		<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl" style="background: oklch(0.32 0.13 145);">
 			<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Ikon ${branding.short_name}`} class="h-full w-full object-cover" />
 		</span>
 		<div class="min-w-0 flex-1">
-			<p class="truncate text-sm font-bold" style="color: var(--color-surface-950);">{branding.short_name}</p>
-			<p class="truncate text-xs" style="color: var(--color-surface-600);">{branding.tagline}</p>
+			<p class="truncate text-sm font-black tracking-tight">{branding.short_name}</p>
+			<p class="truncate text-[10px] font-bold tracking-widest text-primary-600 uppercase">{branding.tagline}</p>
 		</div>
 	</div>
 
 	<!-- Navigation -->
-	<nav class="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+	<nav class="flex-1 overflow-y-auto px-3 py-4 space-y-4 custom-scrollbar">
 		{#each nav as section (section.group)}
 			{#if section.items.length > 0}
 				<div>
-					<p class="mb-2 px-3 text-[11px] font-bold uppercase tracking-[0.2em]" style="color: var(--color-primary-700);">{section.group}</p>
+					<p class="mb-1.5 px-3 text-[10px] font-black tracking-widest text-surface-400 uppercase">
+						{section.group}
+					</p>
 					<div class="space-y-0.5">
 						{#each section.items as item (item.href)}
 							{#if 'href' in item}
@@ -123,20 +99,17 @@
 								{@const active = isActive(item.href)}
 								<a
 									href={resolve(item.href as '/')}
-									class="flex w-full items-center gap-3 rounded-base px-3 py-2.5 no-underline transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
-									style={active
-										? 'background-color: var(--color-primary-500); color: var(--color-primary-contrast-light); font-weight: 600;'
-										: 'color: var(--color-surface-700); font-weight: 500;'}
-									onmouseenter={(e) => { if (!active) e.currentTarget.style.backgroundColor = 'var(--color-surface-100)'; }}
-									onmouseleave={(e) => { if (!active) e.currentTarget.style.backgroundColor = 'transparent'; }}
+									class="group flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 {active
+										? 'bg-primary-500 text-white shadow-sm shadow-primary-500/20'
+										: 'text-surface-600 hover:bg-surface-100:bg-surface-800 hover:text-surface-900:text-surface-50'}"
 									onclick={(e) => { e.preventDefault(); navTo(item.href); }}
 								>
 									{#if icon}
-										<svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width={active ? 2.2 : 1.6} viewBox={icon.viewBox}>
+										<svg class="h-4 w-4 shrink-0 {active ? 'text-white' : 'text-surface-400 group-hover:text-primary-500'}" fill="none" stroke="currentColor" stroke-width={active ? 2.2 : 1.6} viewBox={icon.viewBox}>
 											<path stroke-linecap="round" stroke-linejoin="round" d={icon.path} />
 										</svg>
 									{/if}
-									<span class="truncate text-sm">{item.label}</span>
+									<span class="truncate">{item.label}</span>
 								</a>
 							{/if}
 						{/each}
@@ -146,36 +119,52 @@
 		{/each}
 	</nav>
 
+	<!-- User section -->
+	{#if user}
+		<div class="shrink-0 border-t border-surface-200 p-3">
+			<AccountMenu
+				{user}
+				{account}
+				showName={true}
+				menuSide="top"
+				align="start"
+				menuId="desktop-sidebar-account-menu"
+				class="w-full"
+				buttonClass="w-full justify-start"
+			/>
+		</div>
+	{/if}
+
 	<!-- Attribution -->
-	<div class="shrink-0 border-t px-4 py-2.5 text-[10px] leading-4" style="border-color: var(--color-surface-200); color: var(--color-surface-500);">
-		<p class="truncate font-medium">{appAttribution.productName}</p>
-		<p class="truncate">{appAttribution.shortLabel}</p>
+	<div class="shrink-0 border-t border-surface-200 px-4 py-2.5">
+		<p class="text-[10px] font-bold tracking-wide text-surface-500 truncate">{appAttribution.productName}</p>
+		<p class="text-[9px] font-medium text-surface-400 truncate">{appAttribution.shortLabel}</p>
 	</div>
 </aside>
 
-<!-- ═══ Mobile Header (Skeleton top bar) ═══ -->
+<!-- ═══ Mobile Header ═══ -->
 <header
 	class="fixed inset-x-0 top-0 z-20 flex h-14 w-full items-center gap-2 border-b px-3 lg:hidden"
-	style="background-color: var(--color-primary-700); color: var(--color-primary-contrast-light); border-color: var(--color-primary-800);"
+	style="background-color: oklch(0.32 0.13 145); color: white; border-color: oklch(0.28 0.12 145);"
 >
 	<button
 		type="button"
-		class="flex h-9 w-9 shrink-0 items-center justify-center rounded-base border border-transparent transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-		aria-label={mobileMenuOpen ? 'Tutup menu navigasi' : 'Buka menu navigasi'}
+		class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+		aria-label={mobileMenuOpen ? 'Tutup menu' : 'Buka menu'}
 		aria-expanded={mobileMenuOpen}
 		aria-controls="mobile-drawer"
 		onclick={openMobileMenu}
 	>
 		{#if menuIcon}
-			<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox={menuIcon.viewBox} aria-hidden="true">
+			<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox={menuIcon.viewBox}>
 				<path stroke-linecap="round" stroke-linejoin="round" d={menuIcon.path} />
 			</svg>
 		{/if}
 	</button>
-	<span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-base" style="background: white;">
+	<span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg" style="background: white;">
 		<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Ikon ${branding.short_name}`} class="h-full w-full object-cover" />
 	</span>
-	<span class="min-w-0 flex-1 truncate text-sm font-bold">{branding.short_name}</span>
+	<span class="min-w-0 flex-1 truncate text-sm font-black tracking-tight">{branding.short_name}</span>
 	{#if user}
 		<AccountMenu
 			{user}
@@ -186,82 +175,56 @@
 	{/if}
 </header>
 
-<!-- ═══ Mobile Bottom Navigation (Skeleton: green active) ═══ -->
-<nav
-	class="fixed inset-x-0 bottom-0 z-30 flex h-16 items-stretch border-t lg:hidden"
-	style="background-color: var(--color-surface-50); border-color: var(--color-surface-200);"
->
-	{#each mobileNavItems as item (item.href)}
-		{@const icon = getIconPath(item.icon)}
-		{@const active = isActive(item.href)}
-		<a
-			href={resolve(item.href as '/')}
-			class="flex flex-1 flex-col items-center justify-center gap-0.5 no-underline transition"
-			style={active
-				? 'color: var(--color-primary-600); font-weight: 700;'
-				: 'color: var(--color-surface-600); font-weight: 500;'}
-			onclick={(e) => { e.preventDefault(); navTo(item.href); }}
-		>
-			{#if icon}
-				<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width={active ? 2.5 : 1.6} viewBox={icon.viewBox}>
-					<path stroke-linecap="round" stroke-linejoin="round" d={icon.path} />
-				</svg>
-			{/if}
-			<span class="text-[10px]">{item.label}</span>
-		</a>
-	{/each}
-</nav>
-
 <!-- Mobile content spacer -->
 <div class="h-14 lg:hidden"></div>
 
-<!-- ═══ Mobile Drawer (slide-in from left) ═══ -->
+<!-- ═══ Mobile Drawer ═══ -->
 {#if mobileMenuOpen}
 	<!-- Backdrop -->
 	<button
 		type="button"
 		class="fixed inset-0 z-40 cursor-default bg-black/50 backdrop-blur-sm transition-opacity lg:hidden"
-		aria-label="Tutup menu navigasi"
+		aria-label="Tutup menu"
 		onclick={closeMobileMenu}
 	></button>
 
 	<!-- Drawer panel -->
 	<aside
 		id="mobile-drawer"
-		class="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r shadow-2xl lg:hidden"
-		style="background-color: var(--color-surface-50); border-color: var(--color-surface-200);"
+		class="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-surface-200 bg-white text-surface-900 shadow-2xl lg:hidden"
 		aria-label="Menu navigasi"
 	>
 		<!-- Drawer header -->
-		<div class="flex h-14 shrink-0 items-center gap-3 border-b px-4" style="border-color: var(--color-surface-200);">
-			<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-base" style="background: oklch(0.32 0.13 145);">
+		<div class="flex h-14 shrink-0 items-center gap-3 border-b border-surface-200 px-4">
+			<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl" style="background: oklch(0.32 0.13 145);">
 				<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Ikon ${branding.short_name}`} class="h-full w-full object-cover" />
 			</span>
 			<div class="min-w-0 flex-1">
-				<p class="truncate text-sm font-bold" style="color: var(--color-surface-950);">{branding.short_name}</p>
-				<p class="truncate text-xs" style="color: var(--color-surface-600);">{branding.tagline}</p>
+				<p class="truncate text-sm font-black tracking-tight">{branding.short_name}</p>
+				<p class="truncate text-[10px] font-bold tracking-widest text-primary-600 uppercase">{branding.tagline}</p>
 			</div>
 			<button
 				type="button"
-				class="flex h-9 w-9 shrink-0 items-center justify-center rounded-base border border-transparent transition hover:bg-surface-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
-				style="color: var(--color-surface-700);"
-				aria-label="Tutup menu navigasi"
+				class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-surface-200 text-surface-500 transition hover:bg-surface-100:bg-surface-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+				aria-label="Tutup menu"
 				onclick={closeMobileMenu}
 			>
 				{#if closeIcon}
-					<svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox={closeIcon.viewBox} aria-hidden="true">
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox={closeIcon.viewBox}>
 						<path stroke-linecap="round" stroke-linejoin="round" d={closeIcon.path} />
 					</svg>
 				{/if}
 			</button>
 		</div>
 
-		<!-- Drawer nav (same items as desktop) -->
-		<nav class="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+		<!-- Drawer nav -->
+		<nav class="flex-1 overflow-y-auto px-3 py-4 space-y-4 custom-scrollbar">
 			{#each nav as section (section.group)}
 				{#if section.items.length > 0}
 					<div>
-						<p class="mb-2 px-3 text-[11px] font-bold uppercase tracking-[0.2em]" style="color: var(--color-primary-700);">{section.group}</p>
+						<p class="mb-1.5 px-3 text-[10px] font-black tracking-widest text-surface-400 uppercase">
+							{section.group}
+						</p>
 						<div class="space-y-0.5">
 							{#each section.items as item (item.href)}
 								{#if 'href' in item}
@@ -269,20 +232,17 @@
 									{@const active = isActive(item.href)}
 									<a
 										href={resolve(item.href as '/')}
-										class="flex w-full items-center gap-3 rounded-base px-3 py-2.5 no-underline transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
-										style={active
-											? 'background-color: var(--color-primary-500); color: var(--color-primary-contrast-light); font-weight: 600;'
-											: 'color: var(--color-surface-700); font-weight: 500;'}
-										onmouseenter={(e) => { if (!active) e.currentTarget.style.backgroundColor = 'var(--color-surface-100)'; }}
-										onmouseleave={(e) => { if (!active) e.currentTarget.style.backgroundColor = 'transparent'; }}
+										class="group flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 {active
+											? 'bg-primary-500 text-white shadow-sm shadow-primary-500/20'
+											: 'text-surface-600 hover:bg-surface-100:bg-surface-800 hover:text-surface-900:text-surface-50'}"
 										onclick={(e) => { e.preventDefault(); navTo(item.href); }}
 									>
 										{#if icon}
-											<svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width={active ? 2.2 : 1.6} viewBox={icon.viewBox}>
+											<svg class="h-4 w-4 shrink-0 {active ? 'text-white' : 'text-surface-400 group-hover:text-primary-500'}" fill="none" stroke="currentColor" stroke-width={active ? 2.2 : 1.6} viewBox={icon.viewBox}>
 												<path stroke-linecap="round" stroke-linejoin="round" d={icon.path} />
 											</svg>
 										{/if}
-										<span class="truncate text-sm">{item.label}</span>
+										<span class="truncate">{item.label}</span>
 									</a>
 								{/if}
 							{/each}
@@ -294,7 +254,7 @@
 
 		<!-- Drawer user section -->
 		{#if user}
-			<div class="shrink-0 border-t p-3" style="border-color: var(--color-surface-200);">
+			<div class="shrink-0 border-t border-surface-200 p-3">
 				<AccountMenu
 					{user}
 					{account}
@@ -309,9 +269,15 @@
 		{/if}
 
 		<!-- Drawer attribution -->
-		<div class="shrink-0 border-t px-4 py-2.5 text-[10px] leading-4" style="border-color: var(--color-surface-200); color: var(--color-surface-500);">
-			<p class="truncate font-medium">{appAttribution.productName}</p>
-			<p class="truncate">{appAttribution.shortLabel}</p>
+		<div class="shrink-0 border-t border-surface-200 px-4 py-2.5">
+			<p class="text-[10px] font-bold tracking-wide text-surface-500 truncate">{appAttribution.productName}</p>
+			<p class="text-[9px] font-medium text-surface-400 truncate">{appAttribution.shortLabel}</p>
 		</div>
 	</aside>
 {/if}
+
+<style>
+	.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+	.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+	.custom-scrollbar::-webkit-scrollbar-thumb { background-color: var(--border); border-radius: 9999px; }
+</style>
