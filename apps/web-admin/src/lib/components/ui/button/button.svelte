@@ -28,7 +28,7 @@
 		destructive: 'preset-filled-error-500 text-on-error hover:opacity-90',
 		outline: 'preset-tonal text-on-surface hover:opacity-80',
 		secondary: 'preset-tonal-secondary text-on-surface hover:opacity-80',
-		ghost: 'hover:bg-surface-200-700 text-on-surface',
+		ghost: 'hover:bg-muted text-on-surface',
 		link: 'text-primary underline-offset-4 hover:underline'
 	};
 

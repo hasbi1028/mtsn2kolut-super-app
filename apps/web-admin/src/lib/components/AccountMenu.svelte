@@ -76,7 +76,7 @@
 	const chevronClass = $derived(showName === 'responsive' ? 'hidden size-3.5 text-muted-foreground sm:block' : showName ? 'size-3.5 text-muted-foreground' : 'hidden');
 	const triggerSizeClass = $derived(showName === false ? 'size-9 justify-center p-0' : 'h-9 min-w-0 px-1.5 pr-2');
 	const triggerClass = $derived(cn(
-		'inline-flex max-w-full items-center gap-2 rounded-lg border border-border/70 bg-background/70 text-left text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none aria-expanded:bg-muted aria-expanded:text-foreground',
+		'inline-flex max-w-full items-center gap-2 rounded-lg border border-border bg-muted text-left text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none aria-expanded:bg-muted aria-expanded:text-foreground',
 		triggerSizeClass,
 		buttonClass
 	));
@@ -85,7 +85,7 @@
 		align === 'start' ? 'left-0' : 'right-0'
 	));
 	const panelClass = $derived(cn(
-	    'absolute z-50 w-72 overflow-hidden rounded-xl border border-surface-300 dark:border-surface-600 bg-surface-50-950 p-1.5 text-surface-950-50 shadow-2xl ring-1 ring-black/10 dark:ring-white/10 backdrop-blur-md',
+	    'absolute z-50 w-72 overflow-hidden rounded-xl border border-border bg-card p-1.5 text-foreground shadow-2xl ring-1 ring-black/10 backdrop-blur-md',
 	    positionClass,
 	    menuClass
 	));
@@ -218,13 +218,13 @@
 					{/if}
 				</span>
 				<div class="min-w-0">
-					<p class="truncate text-sm font-semibold text-surface-950-50">{displayName}</p>
-					<p class="truncate text-xs text-surface-600-400">@{username}</p>
+					<p class="truncate text-sm font-semibold text-foreground">{displayName}</p>
+					<p class="truncate text-xs text-muted-foreground">@{username}</p>
 				</div>
 			</div>
 
 			<div class="px-2 pb-2" role="group" aria-label="Peran aktif">
-				<div class="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-surface-600-400">
+				<div class="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
 					<ShieldCheckIcon class="size-3.5" />
 					<span>Peran aktif</span>
 				</div>
@@ -244,13 +244,13 @@
 			<a
 				href="/settings/account"
 				role="menuitem"
-				class="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-surface-950-50 transition-colors hover:bg-primary-100 hover:text-primary-900 focus-visible:bg-primary-100 focus-visible:text-primary-900 focus-visible:outline-none"
+				class="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-foreground transition-colors hover:bg-primary-100 hover:text-primary-900 focus-visible:bg-primary-100 focus-visible:text-primary-900 focus-visible:outline-none"
 				onclick={() => closeMenu()}
 			>
 				<SettingsIcon class="size-4" />
 				<span class="min-w-0">
 					<span class="block font-medium">Profil Saya</span>
-					<span class="block text-xs text-surface-600-400">Pengaturan Akun</span>
+					<span class="block text-xs text-muted-foreground">Pengaturan Akun</span>
 				</span>
 			</a>
 
@@ -260,7 +260,7 @@
 						expanded={true}
 						variant="ghost"
 						size="sm"
-						class="w-full justify-start px-2 text-surface-950-50 hover:bg-primary-100 hover:text-primary-900"
+						class="w-full justify-start px-2 text-foreground hover:bg-primary-100 hover:text-primary-900"
 					/>
 				</div>
 			{/if}

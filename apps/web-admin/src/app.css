@@ -42,6 +42,19 @@
 	--radius-lg: var(--radius);
 	--radius-md: calc(var(--radius) - 2px);
 	--radius-sm: calc(var(--radius) - 4px);
+
+	/* Surface color aliases — so existing pages using bg-surface-*, text-surface-* still work */
+	--color-surface-50: oklch(0.985 0 0);
+	--color-surface-100: oklch(0.97 0 0);
+	--color-surface-200: oklch(0.92 0 0);
+	--color-surface-300: oklch(0.87 0 0);
+	--color-surface-400: oklch(0.556 0 0);
+	--color-surface-500: oklch(0.556 0 0);
+	--color-surface-600: oklch(0.372 0 0);
+	--color-surface-700: oklch(0.372 0 0);
+	--color-surface-800: oklch(0.269 0 0);
+	--color-surface-900: oklch(0.145 0 0);
+	--color-surface-950: oklch(0.1 0 0);
 }
 
 @layer base {

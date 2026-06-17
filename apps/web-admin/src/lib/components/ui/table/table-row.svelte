@@ -10,6 +10,6 @@
 	}: HTMLAttributes<HTMLTableRowElement> & { children?: Snippet } = $props();
 </script>
 
-<tr class={cn('border-b transition-colors hover:bg-surface-100-800/50 data-[state=selected]:bg-surface-200-700', className)} {...restProps}>
+<tr class={cn('border-b transition-colors hover:bg-muted data-[state=selected]:bg-muted', className)} {...restProps}>
 	{@render children?.()}
 </tr>
