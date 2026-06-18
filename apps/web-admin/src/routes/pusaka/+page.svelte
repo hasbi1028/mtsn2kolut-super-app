@@ -13,7 +13,6 @@
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
-	import { confirmChallenge } from '$lib/confirm-dialog';
 	import { readClientApiData } from '$lib/client/api';
 	import { trackInternalAnalyticsEvent } from '$lib/analytics/internal-analytics';
 
@@ -188,13 +187,6 @@
 	}
 
 	async function runRekap() {
-		if (!(await confirmChallenge({
-			title: 'Mulai Rekap Massal PUSAKA',
-			message: 'Rekap massal akan membuat pekerjaan untuk seluruh akun PUSAKA yang aktif. Gunakan hanya saat operator siap memantau antrian.',
-			challenge: 'REKAP',
-			confirmLabel: 'Mulai Rekap',
-			tone: 'warning'
-		}))) return;
 		busy = { ...busy, rekap: true };
 		try {
 			const res  = await fetch('/api/pusaka/jobs/run-all', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ run_type: 'morning' }) });
@@ -214,6 +206,7 @@
 			showToast(overviewErrorMessage(error), 'err');
 		} finally {
 			busy = { ...busy, rekap: false };
+			confirmKey = '';
 			await refreshOverview(true);
 		}
 	}
@@ -284,13 +277,19 @@
 				</svg>
 				Jalankan Jadwal Otomatis
 			</LoadingButton>
-			<LoadingButton size="sm" onclick={() => void runRekap()} loading={busy.rekap} loadingLabel="Memproses..." label="">
-				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-				</svg>
-				Mulai Rekap
-			</LoadingButton>
+			{#if confirmKey === 'rekap'}
+				<span class="self-center text-xs text-warning">Mulai rekap massal PUSAKA untuk seluruh akun aktif?</span>
+				<LoadingButton size="sm" onclick={() => void runRekap()} loading={busy.rekap} loadingLabel="Memproses..." label="Ya" />
+				<Button size="sm" variant="ghost" onclick={() => (confirmKey = '')}>Tidak</Button>
+			{:else}
+				<LoadingButton size="sm" onclick={() => (confirmKey = 'rekap')} loading={busy.rekap} loadingLabel="Memproses..." label="">
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+					</svg>
+					Mulai Rekap
+				</LoadingButton>
+			{/if}
 			{#if confirmKey === 'cancel_all'}
 				<span class="self-center text-xs text-warning">Batalkan semua antrian?</span>
 				<LoadingButton size="sm" variant="destructive" onclick={() => void cancelAll()} loading={busy.cancel_all} loadingLabel="Membatalkan..." label="Ya" />
