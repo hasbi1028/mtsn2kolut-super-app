@@ -10,6 +10,6 @@
 	}: HTMLAttributes<HTMLDivElement> & { children?: Snippet } = $props();
 </script>
 
-<div class={cn('card bg-card p-4', className)} {...restProps}>
+<div class={cn('card bg-base-100 border border-base-300 shadow-sm', className)} {...restProps}>
 	{@render children?.()}
 </div>

@@ -113,13 +113,13 @@
 	const currentAvatarInitials = $derived(accountInitials(account));
 	const selectedAvatarLabel = $derived(avatarFile ? `${avatarFile.name} (${formatAvatarFileSize(avatarFile.size)})` : '');
 
-	const infoPanelClass = 'rounded-lg border border-border bg-card/70 p-4';
-	const compactPanelClass = 'rounded-lg border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground';
-	const emptyPanelClass = 'rounded-lg border border-dashed border-border bg-muted/20 px-4 py-4 text-sm text-muted-foreground';
-	const labelClass = 'text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground';
-	const valueClass = 'mt-2 text-sm font-semibold text-foreground';
-	const noteClass = 'mt-2 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground';
-	const chevronClass = 'mx-2 text-muted-foreground/50';
+	const infoPanelClass = 'rounded-lg border border-base-300 bg-base-100/70 p-4';
+	const compactPanelClass = 'rounded-lg border border-base-300 bg-base-200/20 px-4 py-3 text-sm text-base-content/70';
+	const emptyPanelClass = 'rounded-lg border border-dashed border-base-300 bg-base-200/20 px-4 py-4 text-sm text-base-content/70';
+	const labelClass = 'text-xs font-medium uppercase tracking-[0.16em] text-base-content/70';
+	const valueClass = 'mt-2 text-sm font-semibold text-base-content';
+	const noteClass = 'mt-2 rounded-md bg-base-200/50 px-3 py-2 text-xs text-base-content/70';
+	const chevronClass = 'mx-2 text-base-content/70/50';
 
 	function applyOverview(overview: AccountOverview) {
 		account = overview.account;
@@ -582,8 +582,8 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 		<div>
-			<h1 class="text-2xl font-semibold text-foreground">Akun Saya</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Identitas login, password, sesi perangkat, dan preferensi pribadi.</p>
+			<h1 class="text-2xl font-semibold text-base-content">Akun Saya</h1>
+			<p class="mt-1 text-sm text-base-content/70">Identitas login, password, sesi perangkat, dan preferensi pribadi.</p>
 		</div>
 		<Button variant="outline" onclick={() => void refreshOverview(true)} disabled={refreshLoading}>
 			<RefreshCcwIcon class={`size-4 ${refreshLoading ? 'animate-spin' : ''}`} />
@@ -647,7 +647,7 @@
 							<div class={infoPanelClass}>
 								<p class={labelClass}>Profil tertaut</p>
 								<p class={valueClass}>{linkedProfileLabel(account)}</p>
-								<p class="mt-1 text-xs text-muted-foreground">{profileTypeLabel(account.profile_type)}</p>
+								<p class="mt-1 text-xs text-base-content/70">{profileTypeLabel(account.profile_type)}</p>
 							</div>
 						</div>
 					</Card.Content>
@@ -730,7 +730,7 @@
 								<div class={infoPanelClass}>
 									<p class={labelClass}>Profil tertaut</p>
 									<p class={valueClass}>{linkedProfileLabel(account)}</p>
-									<p class="mt-1 text-xs text-muted-foreground">{profileTypeLabel(account.profile_type)}</p>
+									<p class="mt-1 text-xs text-base-content/70">{profileTypeLabel(account.profile_type)}</p>
 								</div>
 								<div class={infoPanelClass}>
 									<p class={labelClass}>Login terakhir</p>
@@ -758,7 +758,7 @@
 										<label for="account-change-field" class="mb-1.5 block text-sm font-medium">Field Resmi</label>
 										<select
 											id="account-change-field"
-											class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+											class="h-10 w-full rounded-md border border-base-300 bg-base-200 px-3 text-sm text-base-content"
 											bind:value={changeRequestForm.field_key}
 										>
 											{#each officialChangeFields as field (field.field_key)}
@@ -798,7 +798,7 @@
 
 							<div class="space-y-3">
 								<div class="flex items-center justify-between gap-3">
-									<p class="text-sm font-semibold text-foreground">Riwayat Permintaan</p>
+									<p class="text-sm font-semibold text-base-content">Riwayat Permintaan</p>
 									<Badge variant="outline">{changeRequests.length} permintaan</Badge>
 								</div>
 								{#if changeRequests.length === 0}
@@ -810,19 +810,19 @@
 												<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 													<div class="min-w-0 flex-1">
 														<div class="flex flex-wrap items-center gap-2">
-															<p class="text-sm font-semibold text-foreground">{officialFieldLabel(request.field_key)}</p>
+															<p class="text-sm font-semibold text-base-content">{officialFieldLabel(request.field_key)}</p>
 															<Badge variant={changeRequestBadgeVariant(request.status)}>{changeRequestStatusLabel(request.status)}</Badge>
 														</div>
-														<p class="mt-2 text-sm text-muted-foreground">
+														<p class="mt-2 text-sm text-base-content/70">
 															<span class="font-medium">Saat ini:</span> {request.current_value || '—'}
 															<span class={chevronClass}>→</span>
 															<span class="font-medium">Usulan:</span> {request.requested_value || '—'}
 														</p>
-														<p class="mt-1 text-xs text-muted-foreground">{request.reason}</p>
+														<p class="mt-1 text-xs text-base-content/70">{request.reason}</p>
 														{#if request.review_note}
 															<p class={noteClass}>Catatan review: {request.review_note}</p>
 														{/if}
-														<p class="mt-2 text-[11px] text-muted-foreground">Diajukan: {formatAccountDateTime(request.created_at)}</p>
+														<p class="mt-2 text-[11px] text-base-content/70">Diajukan: {formatAccountDateTime(request.created_at)}</p>
 													</div>
 													{#if changeRequestCanCancel(request)}
 														<LoadingButton
@@ -849,7 +849,7 @@
 							<div class="flex items-start justify-between gap-3">
 								<div>
 									<Card.Title class="flex items-center gap-2 text-base">
-										<HistoryIcon class="size-4 text-muted-foreground" />
+										<HistoryIcon class="size-4 text-base-content/70" />
 										Riwayat Perubahan Profil
 									</Card.Title>
 									<Card.Description>Aktivitas kontak, foto profil, dan permintaan perubahan data resmi.</Card.Description>
@@ -867,18 +867,18 @@
 											<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 												<div class="min-w-0">
 													<div class="flex flex-wrap items-center gap-2">
-														<p class="text-sm font-semibold text-foreground">{profileHistoryActionLabel(item.action)}</p>
+														<p class="text-sm font-semibold text-base-content">{profileHistoryActionLabel(item.action)}</p>
 														<Badge variant={profileHistoryBadgeVariant(item.status)}>{profileHistoryStatusLabel(item.status)}</Badge>
 													</div>
-													<p class="mt-1 text-sm text-muted-foreground">{profileHistoryFieldLabel(item.field_key)}</p>
+													<p class="mt-1 text-sm text-base-content/70">{profileHistoryFieldLabel(item.field_key)}</p>
 													{#if item.reviewer_username}
-														<p class="mt-1 text-xs text-muted-foreground">Reviewer: {item.reviewer_username}</p>
+														<p class="mt-1 text-xs text-base-content/70">Reviewer: {item.reviewer_username}</p>
 													{/if}
 													{#if item.review_note}
 														<p class={noteClass}>Catatan review: {item.review_note}</p>
 													{/if}
 												</div>
-												<p class="shrink-0 text-xs text-muted-foreground">{formatAccountDateTime(item.created_at)}</p>
+												<p class="shrink-0 text-xs text-base-content/70">{formatAccountDateTime(item.created_at)}</p>
 											</div>
 										</div>
 									{/each}
@@ -898,7 +898,7 @@
 									{#if contactFieldEditable(account.contact, 'phone')}
 										<div>
 											<label for="account-contact-phone" class="mb-1.5 flex items-center gap-1.5 text-sm font-medium">
-												<PhoneIcon class="size-4 text-muted-foreground" />
+												<PhoneIcon class="size-4 text-base-content/70" />
 												Nomor HP/WA
 											</label>
 											<Input id="account-contact-phone" bind:value={contactForm.phone} autocomplete="tel" maxlength={40} placeholder="08xxxxxxxxxx" />
@@ -907,7 +907,7 @@
 									{#if contactFieldEditable(account.contact, 'email')}
 										<div>
 											<label for="account-contact-email" class="mb-1.5 flex items-center gap-1.5 text-sm font-medium">
-												<MailIcon class="size-4 text-muted-foreground" />
+												<MailIcon class="size-4 text-base-content/70" />
 												Email
 											</label>
 											<Input id="account-contact-email" type="email" bind:value={contactForm.email} autocomplete="email" maxlength={254} placeholder="nama@example.id" />
@@ -916,7 +916,7 @@
 									{#if contactFieldEditable(account.contact, 'address')}
 										<div class="md:col-span-2">
 											<label for="account-contact-address" class="mb-1.5 flex items-center gap-1.5 text-sm font-medium">
-												<MapPinIcon class="size-4 text-muted-foreground" />
+												<MapPinIcon class="size-4 text-base-content/70" />
 												Alamat Kontak
 											</label>
 											<Textarea id="account-contact-address" bind:value={contactForm.address} rows={3} maxlength={500} />
@@ -969,7 +969,7 @@
 						</Card.Header>
 						<Card.Content>
 							{#if sessions.length === 0}
-								<p class="text-sm text-muted-foreground">Belum ada sesi aktif tercatat.</p>
+								<p class="text-sm text-base-content/70">Belum ada sesi aktif tercatat.</p>
 							{:else}
 								<div class="space-y-3">
 									{#each sessions as session (session.id)}
@@ -977,12 +977,12 @@
 											<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 												<div class="min-w-0 flex-1 space-y-2">
 													<div class="flex flex-wrap items-center gap-2">
-														<p class="text-sm font-semibold text-foreground">{sessionTitle(session)}</p>
+														<p class="text-sm font-semibold text-base-content">{sessionTitle(session)}</p>
 														{#if isCurrentSession(session, currentSessionId)}
 															<Badge variant="secondary">Perangkat Ini</Badge>
 														{/if}
 													</div>
-													<div class="grid grid-cols-1 gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+													<div class="grid grid-cols-1 gap-2 text-xs text-base-content/70 sm:grid-cols-2">
 														<p>Terakhir aktif: {formatAccountDateTime(session.last_used_at)}</p>
 														<p>Berlaku sampai: {formatAccountDateTime(session.expires_at)}</p>
 														{#if session.ip_address}
@@ -993,10 +993,10 @@
 														{/if}
 													</div>
 													{#if session.user_agent}
-														<p class="line-clamp-2 text-[11px] text-muted-foreground">{session.user_agent}</p>
+														<p class="line-clamp-2 text-[11px] text-base-content/70">{session.user_agent}</p>
 													{/if}
 													<div class="pt-2">
-														<label for={`account-session-label-${session.id}`} class="mb-1 block text-xs font-medium text-muted-foreground">Nama perangkat</label>
+														<label for={`account-session-label-${session.id}`} class="mb-1 block text-xs font-medium text-base-content/70">Nama perangkat</label>
 														<div class="flex flex-col gap-2 sm:flex-row">
 															<Input
 																id={`account-session-label-${session.id}`}
@@ -1045,15 +1045,15 @@
 						<Card.Content class="space-y-4">
 							<div class="flex items-center gap-4">
 								{#if currentAvatarUrl}
-									<img src={currentAvatarUrl} alt={`Foto profil ${accountDisplayName(account)}`} class="size-20 rounded-lg border border-border object-cover" />
+									<img src={currentAvatarUrl} alt={`Foto profil ${accountDisplayName(account)}`} class="size-20 rounded-lg border border-base-300 object-cover" />
 								{:else}
 									<div class="flex size-20 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-xl font-semibold text-primary">
 										{currentAvatarInitials}
 									</div>
 								{/if}
 								<div class="min-w-0">
-									<p class="truncate text-sm font-semibold text-foreground">{accountDisplayName(account)}</p>
-									<p class="mt-1 text-xs text-muted-foreground">{currentAvatarUrl ? 'Foto profil aktif' : 'Belum ada foto profil'}</p>
+									<p class="truncate text-sm font-semibold text-base-content">{accountDisplayName(account)}</p>
+									<p class="mt-1 text-xs text-base-content/70">{currentAvatarUrl ? 'Foto profil aktif' : 'Belum ada foto profil'}</p>
 								</div>
 							</div>
 
@@ -1067,7 +1067,7 @@
 									onchange={handleAvatarFileChange}
 								/>
 								{#if selectedAvatarLabel}
-									<p class="mt-1 text-xs text-muted-foreground">{selectedAvatarLabel}</p>
+									<p class="mt-1 text-xs text-base-content/70">{selectedAvatarLabel}</p>
 								{/if}
 							</div>
 
@@ -1093,7 +1093,7 @@
 									Hapus Foto
 								</LoadingButton>
 							</div>
-							<p class="text-xs text-muted-foreground">Foto tersimpan di storage lokal backend dan hanya mengubah profil yang tertaut ke akun ini.</p>
+							<p class="text-xs text-base-content/70">Foto tersimpan di storage lokal backend dan hanya mengubah profil yang tertaut ke akun ini.</p>
 						</Card.Content>
 					</Card.Root>
 
@@ -1105,22 +1105,22 @@
 						<Card.Content class="space-y-3">
 							<div class={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ${compactPanelClass}`}>
 								<div>
-									<span class="text-sm font-medium text-foreground">Tema aplikasi</span>
-									<p class="mt-1 text-xs text-muted-foreground">Ikuti sistem, terang, atau gelap.</p>
+									<span class="text-sm font-medium text-base-content">Tema aplikasi</span>
+									<p class="mt-1 text-xs text-base-content/70">Ikuti sistem, terang, atau gelap.</p>
 								</div>
 								<ThemeToggle />
 							</div>
 							<div class={`flex items-center justify-between ${compactPanelClass}`}>
-								<span class="text-sm text-muted-foreground">Akses cepat</span>
-								<span class="text-sm font-semibold text-foreground">{preferences ? `${pinnedCount} item` : 'Belum tersedia'}</span>
+								<span class="text-sm text-base-content/70">Akses cepat</span>
+								<span class="text-sm font-semibold text-base-content">{preferences ? `${pinnedCount} item` : 'Belum tersedia'}</span>
 							</div>
 							<div class={`flex items-center justify-between ${compactPanelClass}`}>
-								<span class="text-sm text-muted-foreground">Riwayat navigasi</span>
-								<span class="text-sm font-semibold text-foreground">{preferences ? `${recentCount} item` : 'Belum tersedia'}</span>
+								<span class="text-sm text-base-content/70">Riwayat navigasi</span>
+								<span class="text-sm font-semibold text-base-content">{preferences ? `${recentCount} item` : 'Belum tersedia'}</span>
 							</div>
 							<div class={`flex items-center justify-between ${compactPanelClass}`}>
-								<span class="text-sm text-muted-foreground">Preferensi lain</span>
-								<span class="text-sm font-semibold text-muted-foreground">Belum tersedia</span>
+								<span class="text-sm text-base-content/70">Preferensi lain</span>
+								<span class="text-sm font-semibold text-base-content/70">Belum tersedia</span>
 							</div>
 						</Card.Content>
 					</Card.Root>

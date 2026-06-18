@@ -16,7 +16,7 @@
 
 <textarea
 	bind:this={ref}
-	class={cn('textarea min-h-16 w-full', className)}
+	class={cn('textarea textarea-bordered w-full', className)}
 	bind:value
 	{...restProps}
 ></textarea>

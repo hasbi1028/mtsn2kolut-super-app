@@ -15,12 +15,12 @@
 	{richColors}
 	{closeButton}
 	toastOptions={{
-		classes: {
-			toast: 'border border-primary/20 bg-card text-foreground shadow-lg',
-			title: 'text-foreground',
-			description: 'text-muted-foreground',
-			actionButton: 'bg-primary text-primary-foreground',
-			cancelButton: 'bg-muted text-foreground'
-		}
-	}}
+			classes: {
+				toast: 'border border-base-300 bg-base-100 text-base-content shadow-lg',
+				title: 'text-base-content',
+				description: 'text-base-content/70',
+				actionButton: 'btn btn-primary btn-sm',
+				cancelButton: 'btn btn-soft btn-sm'
+			}
+		}}
 />

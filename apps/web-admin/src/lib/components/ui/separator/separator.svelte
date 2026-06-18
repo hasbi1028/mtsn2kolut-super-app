@@ -22,7 +22,7 @@
 		role={decorative ? 'none' : 'separator'}
 		aria-orientation="vertical"
 		bind:this={ref}
-		class={cn('bg-border w-px shrink-0', className)}
+		class={cn('bg-base-300 w-px shrink-0', className)}
 		{...restProps}
 	></div>
 {:else}
@@ -30,7 +30,7 @@
 		role={decorative ? 'none' : 'separator'}
 		aria-orientation="horizontal"
 		bind:this={ref}
-		class={cn('bg-border h-px shrink-0', className)}
+		class={cn('bg-base-300 h-px shrink-0', className)}
 		{...restProps}
 	></div>
 {/if}

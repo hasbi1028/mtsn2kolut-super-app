@@ -230,15 +230,15 @@
 
 <div class="space-y-6">
 
-	<div class="flex items-center gap-2 text-sm text-muted-foreground">
-		<a href={resolve('/pusaka')} class="hover:text-foreground">PUSAKA</a>
+	<div class="flex items-center gap-2 text-sm text-base-content/70">
+		<a href={resolve('/pusaka')} class="hover:text-base-content">PUSAKA</a>
 		<span>/</span>
-		<span class="text-foreground font-medium">Data Kehadiran</span>
+		<span class="text-base-content font-medium">Data Kehadiran</span>
 	</div>
 
 	<div>
-		<h1 class="text-2xl font-semibold text-foreground">Data Kehadiran Pegawai</h1>
-		<p class="text-sm text-muted-foreground mt-1">Rekap kehadiran harian dari sistem PUSAKA Kemenag</p>
+		<h1 class="text-2xl font-semibold text-base-content">Data Kehadiran Pegawai</h1>
+		<p class="text-sm text-base-content/70 mt-1">Rekap kehadiran harian dari sistem PUSAKA Kemenag</p>
 	</div>
 
 	<div class="grid gap-4 md:grid-cols-3">
@@ -246,10 +246,10 @@
 			<Card.Content class="flex items-start justify-between gap-4 p-5">
 				<div class="space-y-1">
 					<p class="badge badge-sm badge-primary uppercase tracking-widest mb-1">Rekap Harian</p>
-					<p class="text-2xl font-semibold text-foreground">{total ?? records.length}</p>
-					<p class="text-sm text-muted-foreground">Rekaman kehadiran pada rentang tanggal terpilih</p>
+					<p class="text-2xl font-semibold text-base-content">{total ?? records.length}</p>
+					<p class="text-sm text-base-content/70">Rekaman kehadiran pada rentang tanggal terpilih</p>
 				</div>
-				<div class="card bg-card/80 border border-primary/20 px-4 py-3 text-right shadow-sm">
+				<div class="card bg-base-100/80 border border-primary/20 px-4 py-3 text-right shadow-sm">
 					<p class="badge badge-xs badge-ghost uppercase tracking-wider mb-1">Status dominan</p>
 					<p class="mt-1 text-base font-semibold text-primary">
 						{records.some((r) => attendanceStatus(r) === 'lengkap') ? 'Lengkap tersedia' : 'Mayoritas check-in'}
@@ -258,17 +258,17 @@
 			</Card.Content>
 		</Card.Root>
 
-		<Card.Root class="border-border bg-card">
+		<Card.Root class="border-base-300 bg-base-100">
 			<Card.Content class="space-y-2 p-5">
 				<p class="badge badge-sm badge-outline uppercase tracking-wider">Periode</p>
-				<p class="text-base font-semibold text-foreground">{startDate || '—'}</p>
-				<p class="text-sm text-muted-foreground">sampai {endDate || startDate || '—'}</p>
+				<p class="text-base font-semibold text-base-content">{startDate || '—'}</p>
+				<p class="text-sm text-base-content/70">sampai {endDate || startDate || '—'}</p>
 			</Card.Content>
 		</Card.Root>
 	</div>
 
-	<Card.Root class="overflow-hidden border-border shadow-sm">
-		<Card.Header class="border-b border-border bg-gradient-to-r from-card to-primary/10">
+	<Card.Root class="overflow-hidden border-base-300 shadow-sm">
+		<Card.Header class="border-b border-base-300 bg-gradient-to-r from-card to-primary/10">
 			<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 				<div class="grow">
 					<Card.Title>Rekap Kehadiran</Card.Title>
@@ -284,25 +284,25 @@
 				</div>
 				<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_auto_auto_auto] xl:items-end">
 					<div class="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-						<input type="date" bind:value={startDate} class="input input-bordered h-10 min-w-0 bg-card" />
-						<span class="text-center text-sm text-muted-foreground">s/d</span>
-						<input type="date" bind:value={endDate} class="input input-bordered h-10 min-w-0 bg-card" />
+						<input type="date" bind:value={startDate} class="input input-bordered h-10 min-w-0 bg-base-100" />
+						<span class="text-center text-sm text-base-content/70">s/d</span>
+						<input type="date" bind:value={endDate} class="input input-bordered h-10 min-w-0 bg-base-100" />
 					</div>
 					<button class="btn btn-primary btn-sm h-10 w-full sm:w-auto" onclick={() => void load()}>
 						{#if refreshing}<span class="loading loading-spinner loading-xs"></span>{/if}
 						Terapkan
 					</button>
-					<button class="btn btn-outline btn-sm h-10 w-full sm:w-auto bg-card" onclick={exportCSV} disabled={records.length === 0}>
+					<button class="btn btn-outline btn-sm h-10 w-full sm:w-auto bg-base-100" onclick={exportCSV} disabled={records.length === 0}>
 						↓ CSV
 					</button>
-					<button class="btn btn-outline btn-sm h-10 w-full sm:w-auto bg-card" onclick={() => void sendTelegramReport()} disabled={sendingTelegram}>
+					<button class="btn btn-outline btn-sm h-10 w-full sm:w-auto bg-base-100" onclick={() => void sendTelegramReport()} disabled={sendingTelegram}>
 						{#if sendingTelegram}<span class="loading loading-spinner loading-xs"></span>{/if}
 						Telegram
 					</button>
 					<a href={resolve('/pusaka/telegram-laporan')} class="btn btn-ghost btn-sm h-10 w-full sm:w-auto">Atur Jadwal</a>
-					<div class="col-span-2 flex h-10 overflow-hidden rounded-btn border border-border bg-card sm:col-span-1">
+					<div class="col-span-2 flex h-10 overflow-hidden rounded-btn border border-base-300 bg-base-100 sm:col-span-1">
 						<button
-							class="flex flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors {viewMode === 'normal' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/50'}"
+							class="flex flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors {viewMode === 'normal' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-200/50'}"
 							onclick={() => viewMode = 'normal'}
 						>
 							<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
@@ -310,14 +310,14 @@
 						</button>
 						<div class="w-px bg-border"></div>
 						<button
-							class="flex flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors {viewMode === 'compact' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/50'}"
+							class="flex flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors {viewMode === 'compact' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-200/50'}"
 							onclick={() => viewMode = 'compact'}
 						>
 							<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 8h18M3 13h18M3 18h18"/></svg>
 							Ringkas
 						</button>
 					</div>
-					<a href={resolve('/pusaka/antrian')} class="btn btn-outline btn-sm h-10 w-full sm:w-auto bg-card">Antrian →</a>
+					<a href={resolve('/pusaka/antrian')} class="btn btn-outline btn-sm h-10 w-full sm:w-auto bg-base-100">Antrian →</a>
 				</div>
 			</div>
 		</Card.Header>
@@ -350,12 +350,12 @@
 							{#each displayRecords as r, i (r.id)}
 								{@const s = attendanceStatus(r)}
 								<tr class="{isSample ? 'opacity-75' : ''}">
-									<td class="text-muted-foreground">{i + 1}</td>
-									<td class="whitespace-nowrap text-muted-foreground">{r.tanggal}</td>
-									<td class="font-medium text-foreground">{r.employee_nama}</td>
-									<td class="hidden sm:table-cell font-mono text-muted-foreground">{r.employee_nip}</td>
-									<td class="text-center text-foreground">{stripWita(r.jam_masuk)}</td>
-									<td class="text-center text-foreground">{stripWita(r.jam_pulang)}</td>
+									<td class="text-base-content/70">{i + 1}</td>
+									<td class="whitespace-nowrap text-base-content/70">{r.tanggal}</td>
+									<td class="font-medium text-base-content">{r.employee_nama}</td>
+									<td class="hidden sm:table-cell font-mono text-base-content/70">{r.employee_nip}</td>
+									<td class="text-center text-base-content">{stripWita(r.jam_masuk)}</td>
+									<td class="text-center text-base-content">{stripWita(r.jam_pulang)}</td>
 									<td class="text-center">
 										{#if s === 'lengkap'}
 											<span class="badge badge-sm badge-success">Lengkap</span>
@@ -369,7 +369,7 @@
 							{/each}
 						</tbody>
 					</table>
-					<div class="border-t border-border bg-muted/50 px-3 py-1.5 text-right text-[10px] text-muted-foreground">
+					<div class="border-t border-base-300 bg-base-200/50 px-3 py-1.5 text-right text-[10px] text-base-content/70">
 						{#if isSample}
 							Contoh data (10 sampel)
 						{:else}
@@ -419,10 +419,10 @@
 							{#each currentRecords as r, i (r.id)}
 							{@const s = attendanceStatus(r)}
 							<tr>
-								<td class="text-muted-foreground">{i + 1}</td>
+								<td class="text-base-content/70">{i + 1}</td>
 								<td class="whitespace-nowrap">{r.tanggal}</td>
 								<td class="font-medium">{r.employee_nama}</td>
-								<td class="hidden sm:table-cell text-muted-foreground font-mono text-xs">{r.employee_nip}</td>
+								<td class="hidden sm:table-cell text-base-content/70 font-mono text-xs">{r.employee_nip}</td>
 								<td class="text-center">{stripWita(r.jam_masuk)}</td>
 								<td class="text-center">{stripWita(r.jam_pulang)}</td>
 								<td class="text-center">
@@ -437,7 +437,7 @@
 							</tr>
 							{:else}
 							<tr>
-								<td colspan={7} class="py-12 text-center text-muted-foreground">
+								<td colspan={7} class="py-12 text-center text-base-content/70">
 									Tidak ada data kehadiran untuk rentang tanggal ini.
 								</td>
 							</tr>
@@ -448,20 +448,20 @@
 
 					<div class="lg:hidden">
 						{#if currentRecords.length === 0}
-							<div class="mx-4 my-4 rounded-2xl border border-dashed border-border bg-muted/50 px-4 py-10 text-center text-sm text-muted-foreground">
+							<div class="mx-4 my-4 rounded-2xl border border-dashed border-base-300 bg-base-200/50 px-4 py-10 text-center text-sm text-base-content/70">
 								Tidak ada data kehadiran untuk rentang tanggal ini.
 							</div>
 						{:else}
-							<ul class="divide-y divide-border border-b border-border">
+							<ul class="divide-y divide-border border-b border-base-300">
 								{#each currentRecords as r, i (r.id)}
 									{@const s = attendanceStatus(r)}
 									<li class="flex items-center gap-3 px-4 py-2.5">
-										<span class="w-7 shrink-0 text-xs font-medium tabular-nums text-muted-foreground">#{i + 1}</span>
+										<span class="w-7 shrink-0 text-xs font-medium tabular-nums text-base-content/70">#{i + 1}</span>
 										<div class="min-w-0 grow">
-											<p class="truncate text-sm font-medium text-foreground">{r.employee_nama}</p>
-											<p class="truncate font-mono text-[11px] text-muted-foreground">{r.employee_nip} · {r.tanggal}</p>
+											<p class="truncate text-sm font-medium text-base-content">{r.employee_nama}</p>
+											<p class="truncate font-mono text-[11px] text-base-content/70">{r.employee_nip} · {r.tanggal}</p>
 										</div>
-										<div class="flex shrink-0 items-center gap-2 text-[11px] tabular-nums text-muted-foreground">
+										<div class="flex shrink-0 items-center gap-2 text-[11px] tabular-nums text-base-content/70">
 											<span class="hidden min-[360px]:inline">{stripWita(r.jam_masuk)}</span>
 											<span aria-hidden="true" class="hidden min-[360px]:inline">→</span>
 											<span>{stripWita(r.jam_pulang)}</span>
@@ -472,13 +472,13 @@
 											{:else if s === 'masuk'}
 												<span class="inline-flex h-2 w-2 rounded-full bg-warning" title="Masuk" aria-label="Masuk"></span>
 											{:else}
-												<span class="inline-flex h-2 w-2 rounded-full bg-muted-foreground/40" title="Belum" aria-label="Belum"></span>
+												<span class="inline-flex h-2 w-2 rounded-full bg-base-200-foreground/40" title="Belum" aria-label="Belum"></span>
 											{/if}
 										</span>
 									</li>
 								{/each}
 							</ul>
-							<div class="border-t border-border bg-muted/50 px-4 py-2 text-right text-[11px] text-muted-foreground">
+							<div class="border-t border-base-300 bg-base-200/50 px-4 py-2 text-right text-[11px] text-base-content/70">
 								{currentRecords.length} rekaman · {startDate}{endDate && endDate !== startDate ? ' s/d ' + endDate : ''}
 							</div>
 						{/if}

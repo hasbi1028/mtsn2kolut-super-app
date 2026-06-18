@@ -36,7 +36,7 @@
 	-->
 	<div
 		class={cn(
-			'fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/60 px-4 py-8 backdrop-blur-sm',
+			'modal modal-bottom sm:modal-middle',
 			className
 		)}
 		onclick={handleBackdropClick}

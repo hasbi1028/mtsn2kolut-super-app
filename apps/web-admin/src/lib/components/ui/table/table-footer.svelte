@@ -10,6 +10,6 @@
 	}: HTMLAttributes<HTMLTableSectionElement> & { children?: Snippet } = $props();
 </script>
 
-<tfoot class={cn('border-t bg-muted font-medium [&>tr]:last:border-b-0', className)} {...restProps}>
+<tfoot class={cn('border-t bg-base-200 font-medium [&>tr]:last:border-b-0', className)} {...restProps}>
 	{@render children?.()}
 </tfoot>

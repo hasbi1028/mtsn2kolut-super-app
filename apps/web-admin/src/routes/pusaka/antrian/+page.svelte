@@ -156,25 +156,25 @@
 
 <div class="space-y-6">
 
-	<div class="flex items-center gap-2 text-sm text-muted-foreground">
-		<a href={resolve('/pusaka')} class="hover:text-foreground">PUSAKA</a>
+	<div class="flex items-center gap-2 text-sm text-base-content/70">
+		<a href={resolve('/pusaka')} class="hover:text-base-content">PUSAKA</a>
 		<span>/</span>
-		<span class="text-foreground font-medium">Antrian Job</span>
+		<span class="text-base-content font-medium">Antrian Job</span>
 	</div>
 
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<h1 class="text-2xl font-semibold text-foreground">Antrian Job PUSAKA</h1>
-			<p class="text-sm text-muted-foreground mt-1">Auto-refresh setiap 10 detik</p>
+			<h1 class="text-2xl font-semibold text-base-content">Antrian Job PUSAKA</h1>
+			<p class="text-sm text-base-content/70 mt-1">Auto-refresh setiap 10 detik</p>
 		</div>
 		<LoadingButton variant="outline" size="sm" onclick={() => void refreshJobs(true)} loading={refreshing} loadingLabel="Memuat..." label="↺ Refresh" />
 	</div>
 
 	<!-- Filters -->
-	<Card.Root class="border-border shadow-sm">
+	<Card.Root class="border-base-300 shadow-sm">
 		<Card.Content class="pt-4 pb-3">
 			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[auto_1fr_1fr_auto] xl:items-end">
-				<div class="text-sm text-muted-foreground">Filter</div>
+				<div class="text-sm text-base-content/70">Filter</div>
 				<select
 					bind:value={filterStatus}
 					onchange={load}
@@ -195,13 +195,13 @@
 				</select>
 				<div class="flex items-center justify-between gap-3 sm:col-span-2 xl:col-span-1 xl:justify-end">
 					<LoadingButton variant="outline" size="sm" onclick={() => void refreshJobs(true)} loading={refreshing} loadingLabel="Memuat..." label="↺ Refresh" class="h-10 sm:w-auto" />
-					<span class="text-sm text-muted-foreground">{jobs.length} job</span>
+					<span class="text-sm text-base-content/70">{jobs.length} job</span>
 				</div>
 			</div>
 		</Card.Content>
 	</Card.Root>
 
-	<Card.Root class="overflow-hidden border-border shadow-sm">
+	<Card.Root class="overflow-hidden border-base-300 shadow-sm">
 		<Card.Content class="p-0">
 			<AsyncContent promise={jobsPromise} onerror={handleJobRenderError}>
 				{#snippet pending()}
@@ -217,7 +217,7 @@
 					<div class="p-4">
 						<div class="rounded-2xl border border-destructive/20 bg-destructive/5 p-4">
 							<p class="text-sm font-semibold text-destructive">Antrian job belum bisa dimuat</p>
-							<p class="mt-1 text-sm text-muted-foreground">{jobErrorMessage(error)}</p>
+							<p class="mt-1 text-sm text-base-content/70">{jobErrorMessage(error)}</p>
 							<LoadingButton
 								variant="outline"
 								size="sm"
@@ -257,13 +257,13 @@
 											<Badge variant={statusVariant(job.status)}>{statusLabel(job.status)}</Badge>
 										</Table.Cell>
 										<Table.Cell class="text-center text-sm">{job.attempts}/{job.max_attempts}</Table.Cell>
-										<Table.Cell class="hidden sm:table-cell text-muted-foreground text-xs">{fmtDt(job.created_at)}</Table.Cell>
-										<Table.Cell class="hidden md:table-cell text-muted-foreground text-xs">{fmtDt(job.not_before ?? '')}</Table.Cell>
-										<Table.Cell class="hidden lg:table-cell text-muted-foreground text-xs">{fmtDt(job.updated_at)}</Table.Cell>
+										<Table.Cell class="hidden sm:table-cell text-base-content/70 text-xs">{fmtDt(job.created_at)}</Table.Cell>
+										<Table.Cell class="hidden md:table-cell text-base-content/70 text-xs">{fmtDt(job.not_before ?? '')}</Table.Cell>
+										<Table.Cell class="hidden lg:table-cell text-base-content/70 text-xs">{fmtDt(job.updated_at)}</Table.Cell>
 									</Table.Row>
 								{:else}
 									<Table.Row>
-										<Table.Cell colspan={7} class="py-12 text-center text-muted-foreground">
+										<Table.Cell colspan={7} class="py-12 text-center text-base-content/70">
 											Tidak ada job ditemukan.
 										</Table.Cell>
 									</Table.Row>
@@ -274,23 +274,23 @@
 
 					<div class="grid gap-3 p-4 lg:hidden">
 						{#each currentJobs as job (job.id)}
-							<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+							<div class="rounded-2xl border border-base-300 bg-base-100 p-4 shadow-sm">
 								<div class="flex items-start justify-between gap-3">
 									<div class="min-w-0">
-										<p class="text-sm font-semibold text-foreground">{job.nama || job.nip || '—'}</p>
-										<p class="mt-1 text-xs text-muted-foreground">{fmtDt(job.created_at)}</p>
+										<p class="text-sm font-semibold text-base-content">{job.nama || job.nip || '—'}</p>
+										<p class="mt-1 text-xs text-base-content/70">{fmtDt(job.created_at)}</p>
 									</div>
 									<Badge variant={statusVariant(job.status)}>{statusLabel(job.status)}</Badge>
 								</div>
 								<div class="mt-3 flex items-center gap-2">
 									<Badge variant="outline">{runTypeLabel(job.run_type)}</Badge>
-									<span class="text-xs text-muted-foreground">Percobaan {job.attempts}/{job.max_attempts}</span>
+									<span class="text-xs text-base-content/70">Percobaan {job.attempts}/{job.max_attempts}</span>
 								</div>
-								<p class="mt-3 text-xs text-muted-foreground">Mulai setelah {fmtDt(job.not_before ?? '')}</p>
-								<p class="mt-1 text-xs text-muted-foreground">Diperbarui {fmtDt(job.updated_at)}</p>
+								<p class="mt-3 text-xs text-base-content/70">Mulai setelah {fmtDt(job.not_before ?? '')}</p>
+								<p class="mt-1 text-xs text-base-content/70">Diperbarui {fmtDt(job.updated_at)}</p>
 							</div>
 						{:else}
-							<div class="rounded-2xl border border-dashed border-border bg-muted/50 px-4 py-10 text-center text-sm text-muted-foreground">
+							<div class="rounded-2xl border border-dashed border-base-300 bg-base-200/50 px-4 py-10 text-center text-sm text-base-content/70">
 								Tidak ada job ditemukan.
 							</div>
 						{/each}

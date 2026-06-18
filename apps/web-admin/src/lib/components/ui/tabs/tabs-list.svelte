@@ -13,6 +13,6 @@
 	} = $props();
 </script>
 
-<div class={cn('border-b border-border flex', className)} role="tablist" {...restProps}>
+<div class={cn('tabs tabs-box', className)} role="tablist" {...restProps}>
 	{@render children?.()}
 </div>

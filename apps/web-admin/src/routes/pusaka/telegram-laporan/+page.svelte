@@ -126,14 +126,14 @@
 <svelte:head><title>Laporan Telegram PUSAKA — MTsN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
-	<div class="flex items-center gap-2 text-sm text-muted-foreground">
-		<a href={resolve('/pusaka')} class="hover:text-foreground">PUSAKA</a><span>/</span>
-		<span class="text-foreground font-medium">Laporan Telegram</span>
+	<div class="flex items-center gap-2 text-sm text-base-content/70">
+		<a href={resolve('/pusaka')} class="hover:text-base-content">PUSAKA</a><span>/</span>
+		<span class="text-base-content font-medium">Laporan Telegram</span>
 	</div>
 	<div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
 		<div>
-			<h1 class="text-2xl font-semibold text-foreground">Laporan Telegram Daftar Hadir Ringkas</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Admin dapat mengatur jam kirim otomatis WITA dan melakukan test kirim manual.</p>
+			<h1 class="text-2xl font-semibold text-base-content">Laporan Telegram Daftar Hadir Ringkas</h1>
+			<p class="mt-1 text-sm text-base-content/70">Admin dapat mengatur jam kirim otomatis WITA dan melakukan test kirim manual.</p>
 		</div>
 		<LoadingButton variant="outline" href={resolve('/pusaka/kehadiran')} label="← Daftar Hadir" />
 	</div>
@@ -151,11 +151,11 @@
 					{#each settings.send_times as sendTime, index}
 						<div class="flex gap-2">
 							<Input aria-label={`Jam kirim WITA ${index + 1}`} type="time" value={sendTime} onchange={(event: Event) => updateSendTime(index, (event.currentTarget as HTMLInputElement).value)} />
-							<button type="button" class="rounded-md border px-3 text-sm text-muted-foreground hover:bg-muted disabled:opacity-50" onclick={() => removeSendTime(index)} disabled={settings.send_times.length <= 1}>Hapus</button>
+							<button type="button" class="rounded-md border px-3 text-sm text-base-content/70 hover:bg-base-200 disabled:opacity-50" onclick={() => removeSendTime(index)} disabled={settings.send_times.length <= 1}>Hapus</button>
 						</div>
 					{/each}
 				</div>
-				<p class="text-xs text-muted-foreground">Bisa lebih dari satu jadwal per hari, contoh pagi dan sore. Sistem mencegah pengiriman dobel pada jadwal yang sama.</p>
+				<p class="text-xs text-base-content/70">Bisa lebih dari satu jadwal per hari, contoh pagi dan sore. Sistem mencegah pengiriman dobel pada jadwal yang sama.</p>
 			</div>
 			<div class="space-y-2 md:col-span-2">
 				<div class="text-sm font-medium">Hari kirim otomatis</div>
@@ -172,7 +172,7 @@
 						</label>
 					{/each}
 				</div>
-				<p class="text-xs text-muted-foreground">Default aktif Senin–Sabtu; Minggu tidak dikirim otomatis kecuali dicentang manual.</p>
+				<p class="text-xs text-base-content/70">Default aktif Senin–Sabtu; Minggu tidak dikirim otomatis kecuali dicentang manual.</p>
 			</div>
 			<div><label for="telegram-timezone" class="text-sm font-medium">Zona waktu</label><Input id="telegram-timezone" value={settings.timezone} disabled /></div>
 			<div><label for="telegram-chat-id" class="text-sm font-medium">Target Chat ID Telegram</label><Input id="telegram-chat-id" bind:value={settings.target_chat_id} placeholder="1450267717 atau ID grup/channel" /></div>
@@ -193,12 +193,12 @@
 		<Card.Header><Card.Title>Riwayat Pengiriman</Card.Title><Card.Description>Target chat ditampilkan masking untuk menjaga privasi.</Card.Description></Card.Header>
 		<Card.Content class="overflow-x-auto">
 			<table class="w-full text-sm">
-				<thead><tr class="border-b text-left text-muted-foreground"><th class="py-2">Tanggal</th><th>Mode</th><th>Jadwal</th><th>Status</th><th>Target</th><th>Waktu</th><th>Error</th></tr></thead>
+				<thead><tr class="border-b text-left text-base-content/70"><th class="py-2">Tanggal</th><th>Mode</th><th>Jadwal</th><th>Status</th><th>Target</th><th>Waktu</th><th>Error</th></tr></thead>
 				<tbody>
 					{#each logs as row (row.id)}
 						<tr class="border-b"><td class="py-2">{row.report_date}</td><td>{row.send_mode}</td><td>{row.schedule_time || '-'}</td><td>{row.status}</td><td>{row.target_chat_id_masked}</td><td>{row.sent_at}</td><td class="text-destructive">{row.error_message ?? ''}</td></tr>
 					{:else}
-						<tr><td colspan="7" class="py-6 text-center text-muted-foreground">Belum ada riwayat pengiriman.</td></tr>
+						<tr><td colspan="7" class="py-6 text-center text-base-content/70">Belum ada riwayat pengiriman.</td></tr>
 					{/each}
 				</tbody>
 			</table>

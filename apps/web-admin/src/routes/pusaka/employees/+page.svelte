@@ -136,13 +136,13 @@
 
 <div class="space-y-6">
   <div>
-    <h1 class="text-2xl font-semibold text-foreground">Pegawai PUSAKA</h1>
-    <p class="mt-1 text-sm text-muted-foreground">Area khusus pegawai PNS dan PPPK yang mengikuti integrasi PUSAKA Kemenag.</p>
+    <h1 class="text-2xl font-semibold text-base-content">Pegawai PUSAKA</h1>
+    <p class="mt-1 text-sm text-base-content/70">Area khusus pegawai PNS dan PPPK yang mengikuti integrasi PUSAKA Kemenag.</p>
   </div>
 
   <AsyncContent promise={employeesPromise} onerror={handleEmployeeRenderError}>
     {#snippet pending()}
-      <div class="rounded-2xl border border-border bg-card p-5">
+      <div class="rounded-2xl border border-base-300 bg-base-100 p-5">
         <div class="mb-5 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
           <Skeleton class="h-10 w-full" />
           <Skeleton class="h-10 w-full" />

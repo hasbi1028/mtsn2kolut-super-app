@@ -67,7 +67,7 @@
 		if (action === 'POST') return 'bg-primary/15 text-primary border-primary/20';
 		if (action === 'PUT' || action === 'PATCH') return 'bg-accent text-accent-foreground border-accent';
 		if (action === 'DELETE') return 'bg-destructive/15 text-destructive border-destructive/30';
-		return 'bg-muted text-foreground border-border';
+		return 'bg-base-200 text-base-content border-base-300';
 	}
 
 	function fmtDt(iso: string) {
@@ -213,7 +213,7 @@
 	<div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
 		<div>
 			<h1 class="text-2xl font-bold text-primary">Riwayat Aktivitas</h1>
-			<p class="text-sm text-muted-foreground mt-1">
+			<p class="text-sm text-base-content/70 mt-1">
 				Riwayat semua perubahan data oleh pengguna sistem
 			</p>
 		</div>
@@ -228,7 +228,7 @@
 		</div>
 	</div>
 
-	<Card.Root class="overflow-hidden border-border shadow-sm">
+	<Card.Root class="overflow-hidden border-base-300 shadow-sm">
 		<Card.Content class="p-0">
 			<AsyncContent promise={logsPromise} onerror={handleLogsRenderError}>
 				{#snippet pending()}
@@ -254,7 +254,7 @@
 				{#snippet children(value)}
 					{@const currentLogs = filterAuditLogs(value as AuditLog[])}
 					{#if currentLogs.length === 0}
-						<div class="p-8 text-center text-muted-foreground text-sm">Belum ada riwayat aktivitas.</div>
+						<div class="p-8 text-center text-base-content/70 text-sm">Belum ada riwayat aktivitas.</div>
 					{:else}
 					<div class="hidden overflow-x-auto lg:block">
 					<Table.Root>
@@ -271,18 +271,18 @@
 						<Table.Body>
 							{#each currentLogs as log (log.id)}
 								<Table.Row class="hover:bg-success/10">
-									<Table.Cell class="text-xs text-muted-foreground whitespace-nowrap">{fmtDt(log.created_at)}</Table.Cell>
+									<Table.Cell class="text-xs text-base-content/70 whitespace-nowrap">{fmtDt(log.created_at)}</Table.Cell>
 									<Table.Cell>
 										<div class="font-medium text-sm">{actorLabel(log)}</div>
 										{#if log.username}
-											<div class="mt-1 text-xs text-muted-foreground">@{log.username}</div>
+											<div class="mt-1 text-xs text-base-content/70">@{log.username}</div>
 										{/if}
 									</Table.Cell>
 									<Table.Cell>
 										<Badge variant="outline" class="text-xs font-mono {methodColor(log.action)}">{log.action}</Badge>
 									</Table.Cell>
 									<Table.Cell class="text-sm">{log.entity_type}</Table.Cell>
-									<Table.Cell class="max-w-[300px] truncate text-xs text-muted-foreground" title={auditTechnicalTitle(log) || auditTargetLabel(log)}>
+									<Table.Cell class="max-w-[300px] truncate text-xs text-base-content/70" title={auditTechnicalTitle(log) || auditTargetLabel(log)}>
 										{auditTargetLabel(log)}
 									</Table.Cell>
 									<Table.Cell class="text-center text-xs font-mono">
@@ -296,22 +296,22 @@
 
 					<div class="grid gap-3 p-4 lg:hidden">
 						{#each currentLogs as log (log.id)}
-							<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+							<div class="rounded-2xl border border-base-300 bg-base-100 p-4 shadow-sm">
 								<div class="flex items-start justify-between gap-3">
 									<div class="min-w-0">
-										<p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">{fmtDt(log.created_at)}</p>
-										<p class="mt-1 text-sm font-semibold text-foreground">{actorLabel(log)}</p>
+										<p class="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/70">{fmtDt(log.created_at)}</p>
+										<p class="mt-1 text-sm font-semibold text-base-content">{actorLabel(log)}</p>
 										{#if log.username}
-											<p class="mt-1 text-xs text-muted-foreground">@{log.username}</p>
+											<p class="mt-1 text-xs text-base-content/70">@{log.username}</p>
 										{/if}
-										<p class="mt-1 text-sm text-muted-foreground">{log.entity_type}</p>
+										<p class="mt-1 text-sm text-base-content/70">{log.entity_type}</p>
 									</div>
 									<Badge variant="outline" class="text-xs font-mono {methodColor(log.action)}">{log.action}</Badge>
 								</div>
-								<p class="mt-3 rounded-xl bg-muted/50 px-3 py-2 text-xs font-mono text-muted-foreground break-all">
+								<p class="mt-3 rounded-xl bg-base-200/50 px-3 py-2 text-xs font-mono text-base-content/70 break-all">
 									{auditTargetLabel(log)}
 								</p>
-								<p class="mt-3 text-xs text-muted-foreground">Status {metaStatus(log.metadata) ?? '—'}</p>
+								<p class="mt-3 text-xs text-base-content/70">Status {metaStatus(log.metadata) ?? '—'}</p>
 							</div>
 						{/each}
 					</div>
@@ -322,7 +322,7 @@
 	</Card.Root>
 
 	<div class="space-y-2">
-		<p class="text-sm text-muted-foreground" aria-live="polite">
+		<p class="text-sm text-base-content/70" aria-live="polite">
 			Menampilkan {filteredLogs.length} aktivitas pada halaman {page}
 		</p>
 		<TablePagination

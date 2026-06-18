@@ -10,8 +10,8 @@
 
 <svelte:head><title>Masuk — MTs Negeri 2 Kolaka Utara</title></svelte:head>
 
-<div class="min-h-screen bg-background flex items-center justify-center px-4 py-6 sm:px-8">
-	<div class="grid w-full max-w-4xl overflow-hidden rounded-xl border border-border bg-card shadow-xl lg:grid-cols-[1fr_1fr]">
+<div class="min-h-screen bg-base-200 flex items-center justify-center px-4 py-6 sm:px-8">
+	<div class="grid w-full max-w-4xl overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-xl lg:grid-cols-[1fr_1fr]">
 
 		<!-- ═══ Left: Brand Panel (Hijau Kemenag solid) ═══ -->
 		<section class="relative hidden p-10 lg:flex lg:flex-col lg:justify-between"
@@ -56,32 +56,32 @@
 		</section>
 
 		<!-- ═══ Right: Login Form ═══ -->
-		<section class="flex items-center justify-center p-6 sm:p-8 lg:p-10 bg-card">
+		<section class="flex items-center justify-center p-6 sm:p-8 lg:p-10 bg-base-100">
 			<div class="w-full max-w-sm">
 
 				<!-- Mobile brand header -->
 				<div class="mb-6 flex items-center gap-3 lg:hidden">
-					<img src="/brand/logo-kemenag-icon-64.png" alt="Logo Kemenag" class="h-10 w-10 rounded-lg border border-border" />
+					<img src="/brand/logo-kemenag-icon-64.png" alt="Logo Kemenag" class="h-10 w-10 rounded-lg border border-base-300" />
 					<div>
-						<p class="text-sm font-bold text-foreground">MTs Negeri 2 Kolaka Utara</p>
-						<p class="text-xs text-muted-foreground">Sistem Administrasi Sekolah</p>
+						<p class="text-sm font-bold text-base-content">MTs Negeri 2 Kolaka Utara</p>
+						<p class="text-xs text-base-content/70">Sistem Administrasi Sekolah</p>
 					</div>
 				</div>
 
 				<!-- Heading -->
 				<div class="mb-5">
 					<p class="text-xs font-bold uppercase tracking-[0.25em] text-primary">Login Internal</p>
-					<h2 class="mt-2 text-2xl font-bold text-foreground">Masuk ke akun kerja</h2>
-					<p class="mt-1.5 text-sm text-muted-foreground">
+					<h2 class="mt-2 text-2xl font-bold text-base-content">Masuk ke akun kerja</h2>
+					<p class="mt-1.5 text-sm text-base-content/70">
 						Gunakan akun resmi yang diterbitkan sekolah. Hubungi admin jika akses bermasalah.
 					</p>
 				</div>
 
 				<!-- Form Card -->
-				<div class="rounded-xl border border-border bg-card p-5 shadow-sm">
+				<div class="rounded-xl border border-base-300 bg-base-100 p-5 shadow-sm">
 					<header class="mb-4">
-						<h3 class="text-base font-bold text-foreground">Autentikasi pengguna</h3>
-						<p class="text-xs text-muted-foreground">Akses disesuaikan dengan peran akun.</p>
+						<h3 class="text-base font-bold text-base-content">Autentikasi pengguna</h3>
+						<p class="text-xs text-base-content/70">Akses disesuaikan dengan peran akun.</p>
 					</header>
 
 					<form method="POST" class="space-y-4">
@@ -93,7 +93,7 @@
 
 						<!-- Username -->
 						<label class="block">
-							<span class="text-sm font-semibold text-foreground">Username</span>
+							<span class="text-sm font-semibold text-base-content">Username</span>
 							<input
 								id="username"
 								name="username"
@@ -101,14 +101,14 @@
 								autocomplete="username"
 								placeholder="nama_pengguna"
 								aria-describedby={form?.error ? 'login-error' : undefined}
-								class="mt-1.5 flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-primary"
+								class="mt-1.5 flex h-11 w-full rounded-lg border border-base-300 bg-base-200 px-3 py-2 text-base text-base-content placeholder:text-base-content/70 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
 								required
 							/>
 						</label>
 
 						<!-- Password -->
 						<label class="block">
-							<span class="text-sm font-semibold text-foreground">Password</span>
+							<span class="text-sm font-semibold text-base-content">Password</span>
 							<div class="mt-1.5 flex">
 								<input
 									id="password"
@@ -117,13 +117,13 @@
 									autocomplete="current-password"
 									placeholder="••••••••"
 									aria-describedby={form?.error ? 'login-error' : undefined}
-									class="flex h-11 w-full rounded-l-lg border border-input bg-background px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-primary"
+									class="flex h-11 w-full rounded-l-lg border border-base-300 bg-base-200 px-3 py-2 text-base text-base-content placeholder:text-base-content/70 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
 									required
 								/>
 								<button
 									type="button"
 									onclick={() => (passwordShown = !passwordShown)}
-									class="flex h-11 items-center justify-center rounded-r-lg border border-l-0 border-input bg-background px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition"
+									class="flex h-11 items-center justify-center rounded-r-lg border border-l-0 border-base-300 bg-base-200 px-3 text-sm font-medium text-base-content/70 hover:bg-base-200 hover:text-base-content transition"
 									aria-label={passwordShown ? 'Sembunyikan password' : 'Lihat password'}
 									aria-pressed={passwordShown}
 								>
@@ -136,7 +136,7 @@
 						<button
 							type="submit"
 							disabled={pending}
-							class="flex w-full h-11 items-center justify-center rounded-lg bg-primary text-primary-foreground text-base font-bold shadow-sm transition hover:bg-primary/90 disabled:opacity-60"
+							class="flex w-full h-11 items-center justify-center rounded-lg bg-primary text-primary-content text-base font-bold shadow-sm transition hover:bg-primary/90 disabled:opacity-60"
 						>
 							{pending ? '⏳ Memproses…' : 'Masuk'}
 						</button>
@@ -148,7 +148,7 @@
 					Jangan gunakan perangkat bersama tanpa logout. Aktivitas login/logout/refresh dicatat untuk audit.
 				</div>
 
-				<p class="mt-4 text-center text-[11px] text-muted-foreground" aria-label={appAttribution.loginLabel}>
+				<p class="mt-4 text-center text-[11px] text-base-content/70" aria-label={appAttribution.loginLabel}>
 					{appAttribution.loginLabel}
 				</p>
 			</div>

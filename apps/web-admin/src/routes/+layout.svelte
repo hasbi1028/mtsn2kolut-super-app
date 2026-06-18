@@ -52,23 +52,23 @@
 <RouteProgress active={!!navigating.to} />
 
 {#if isLogin || isMaintenancePage}
-	<div class="min-h-screen bg-background text-foreground">
+	<div class="min-h-screen bg-base-200 text-base-content">
 		{@render children()}
 	</div>
 {:else if isPublicSite}
-	<div class="min-h-screen bg-background text-foreground">
+	<div class="min-h-screen bg-base-200 text-base-content">
 		<PublicSiteShell user={data.user} branding={branding}>
 			{@render children()}
 		</PublicSiteShell>
 	</div>
 {:else}
 	<!-- ══ CBT-style Layout ══ -->
-	<div class="admin-layout-ui flex min-h-screen bg-background text-foreground">
+	<div class="admin-layout-ui flex min-h-screen bg-base-200 text-base-content">
 
 		<!-- MOBILE HEADER -->
-		<header class="mobile-header fixed top-0 right-0 left-0 z-[110] flex h-14 items-center justify-between border-b border-border bg-card px-4 shadow-sm lg:hidden">
+		<header class="mobile-header fixed top-0 right-0 left-0 z-[110] flex h-14 items-center justify-between border-b border-base-300 bg-base-100 px-4 shadow-sm lg:hidden">
 			<button
-				class="rounded-md p-2 text-foreground hover:bg-muted"
+				class="rounded-md p-2 text-base-content hover:bg-base-200"
 				onclick={() => (isMobileMenuOpen = !isMobileMenuOpen)}
 				aria-label="Menu"
 				aria-expanded={isMobileMenuOpen}
@@ -81,15 +81,15 @@
 					{/if}
 				</svg>
 			</button>
-			<div class="brand-mobile flex min-w-0 flex-1 items-center justify-center gap-2 font-black tracking-tighter text-foreground uppercase italic">
+			<div class="brand-mobile flex min-w-0 flex-1 items-center justify-center gap-2 font-black tracking-tighter text-base-content uppercase italic">
 				<img
 					src={versionedAsset(branding.mark_url, branding.version)}
 					alt="Logo"
-					class="h-8 w-8 rounded-lg border border-border bg-background/80 object-contain p-1 shadow-sm"
+					class="h-8 w-8 rounded-lg border border-base-300 bg-base-200/80 object-contain p-1 shadow-sm"
 				/>
 				<span class="truncate">{branding.short_name}</span>
 			</div>
-			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow-sm">
+			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-content shadow-sm">
 				{user?.username?.substring(0, 2).toUpperCase() || '??'}
 			</div>
 		</header>
@@ -103,7 +103,7 @@
 
 		{#if isMobileMenuOpen}
 			<div
-				class="sidebar-overlay fixed inset-0 z-[115] bg-background/80 backdrop-blur-sm lg:hidden"
+				class="sidebar-overlay fixed inset-0 z-[115] bg-base-200/80 backdrop-blur-sm lg:hidden"
 				transition:fade={{ duration: 200 }}
 				onclick={() => (isMobileMenuOpen = false)}
 				role="presentation"
@@ -113,18 +113,18 @@
 		<!-- MAIN CONTENT -->
 		<main class="admin-main flex min-h-screen min-w-0 flex-1 flex-col">
 			<!-- Desktop Top Header -->
-			<header class="admin-header z-10 hidden h-16 shrink-0 items-center justify-between border-b border-border bg-card px-8 lg:flex">
-				<h1 class="page-title text-xl font-black tracking-tight text-foreground">
+			<header class="admin-header z-10 hidden h-16 shrink-0 items-center justify-between border-b border-base-300 bg-base-100 px-8 lg:flex">
+				<h1 class="page-title text-xl font-black tracking-tight text-base-content">
 					Super App Command Center
 				</h1>
 				<div class="header-tools flex items-center gap-4">
-					<div class="text-sm font-semibold text-muted-foreground">
+					<div class="text-sm font-semibold text-base-content/70">
 						{new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Makassar' })}
 					</div>
 				</div>
 			</header>
 
-			<div class="admin-content bg-background pt-14 lg:flex-1 lg:pt-0">
+			<div class="admin-content bg-base-200 pt-14 lg:flex-1 lg:pt-0">
 				<MaintenanceBanner status={data.maintenanceStatus} user={data.user} />
 				<div class="content-wrapper mx-auto w-full max-w-[1280px] px-4 py-5 sm:px-5 md:px-8 lg:px-10 lg:py-10">
 					{@render children()}

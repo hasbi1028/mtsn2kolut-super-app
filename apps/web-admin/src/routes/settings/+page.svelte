@@ -352,8 +352,8 @@
 <div class="space-y-6">
 
   <div>
-    <h1 class="text-2xl font-semibold text-foreground">Pengaturan</h1>
-    <p class="text-sm text-muted-foreground mt-1">
+    <h1 class="text-2xl font-semibold text-base-content">Pengaturan</h1>
+    <p class="text-sm text-base-content/70 mt-1">
       {#if isAdmin}
         Konfigurasi worker, jadwal absensi, dan keamanan akun.
       {:else}
@@ -385,7 +385,7 @@
           </Card.Header>
           <Card.Content class="space-y-3">
             {#each Array.from({ length: 3 }) as _, index (`settings-session-skeleton-${index}`)}
-              <div class="rounded-lg border border-border px-4 py-3">
+              <div class="rounded-lg border border-base-300 px-4 py-3">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div class="space-y-2">
                     <Skeleton class="h-5 w-36" />
@@ -474,15 +474,15 @@
     </Card.Header>
     <Card.Content>
       {#if sessions.length === 0}
-        <p class="text-sm text-muted-foreground">Belum ada sesi aktif tercatat.</p>
+        <p class="text-sm text-base-content/70">Belum ada sesi aktif tercatat.</p>
       {:else}
         <div class="space-y-3">
           {#each sessions as session (session.id)}
-            <div class="rounded-lg border border-border px-4 py-3">
+            <div class="rounded-lg border border-base-300 px-4 py-3">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div class="space-y-1">
                   <div class="flex items-center gap-2">
-                    <p class="text-sm font-medium text-foreground">
+                    <p class="text-sm font-medium text-base-content">
                       {session.device_label || `Sesi ${session.id.slice(0, 8)}`}
                     </p>
                     {#if session.id === currentSessionId}
@@ -492,23 +492,23 @@
                     {/if}
                   </div>
                   {#if session.ip_address}
-                    <p class="text-xs text-muted-foreground">
+                    <p class="text-xs text-base-content/70">
                       IP: {session.ip_address}
                     </p>
                   {/if}
-                  <p class="text-xs text-muted-foreground">
+                  <p class="text-xs text-base-content/70">
                     Terakhir aktif: {formatDate(session.last_used_at)}
                   </p>
-                  <p class="text-xs text-muted-foreground">
+                  <p class="text-xs text-base-content/70">
                     Berlaku sampai: {formatDate(session.expires_at)}
                   </p>
                   {#if session.user_agent}
-                    <p class="line-clamp-2 text-[11px] text-muted-foreground">
+                    <p class="line-clamp-2 text-[11px] text-base-content/70">
                       {session.user_agent}
                     </p>
                   {/if}
                   <div class="pt-2">
-                    <label for={`session-label-${session.id}`} class="mb-1 block text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                    <label for={`session-label-${session.id}`} class="mb-1 block text-[11px] font-medium uppercase tracking-[0.16em] text-base-content/70">
                       Nama perangkat
                     </label>
                     <div class="flex flex-col gap-2 sm:flex-row">

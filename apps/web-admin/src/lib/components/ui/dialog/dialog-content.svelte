@@ -31,7 +31,7 @@
 	role="document"
 	onclick={stop}
 	class={cn(
-				'relative z-[101] w-full max-w-lg rounded-lg border border-border bg-card p-6 shadow-2xl my-8 max-h-[85vh] overflow-y-auto',
+				'modal-box',
 		className
 	)}
 	{...restProps}

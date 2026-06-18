@@ -20,7 +20,7 @@
 
 {#if type === 'file'}
 	<input
-		class={cn('input', className)}
+		class={cn('input input-bordered', className)}
 		type="file"
 		bind:this={ref}
 		bind:files
@@ -28,7 +28,7 @@
 	/>
 {:else}
 	<input
-		class={cn('input', className)}
+		class={cn('input input-bordered', className)}
 		{type}
 		bind:this={ref}
 		bind:value

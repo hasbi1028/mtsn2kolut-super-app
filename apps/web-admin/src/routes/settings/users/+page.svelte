@@ -689,19 +689,19 @@
 
 <div class="space-y-6 p-6">
 	<!-- Breadcrumb -->
-	<div class="flex items-center gap-2 text-sm text-muted-foreground">
-		<a href={resolve('/')} class="hover:text-foreground">Beranda</a>
+	<div class="flex items-center gap-2 text-sm text-base-content/70">
+		<a href={resolve('/')} class="hover:text-base-content">Beranda</a>
 		<span>/</span>
-		<a href={resolve('/settings')} class="hover:text-foreground">Pengaturan</a>
+		<a href={resolve('/settings')} class="hover:text-base-content">Pengaturan</a>
 		<span>/</span>
-		<span class="text-foreground font-medium">Manajemen Pengguna</span>
+		<span class="text-base-content font-medium">Manajemen Pengguna</span>
 	</div>
 
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
 			<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Pusat Akun & Hak Akses</p>
-			<h1 class="mt-2 text-2xl font-semibold text-foreground">Manajemen Pengguna</h1>
-			<p class="mt-1 max-w-3xl text-sm text-muted-foreground">Kelola akun pegawai, siswa, orang tua, admin, generate akun massal, dan role/permission dari workflow yang lebih aman untuk operasional madrasah.</p>
+			<h1 class="mt-2 text-2xl font-semibold text-base-content">Manajemen Pengguna</h1>
+			<p class="mt-1 max-w-3xl text-sm text-base-content/70">Kelola akun pegawai, siswa, orang tua, admin, generate akun massal, dan role/permission dari workflow yang lebih aman untuk operasional madrasah.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button variant="outline" href="/settings/user-change-requests">Permintaan Data</Button>
@@ -718,24 +718,24 @@
 		{#snippet pending()}
 			<div class="grid gap-3 md:grid-cols-4">
 				{#each ['Total Akun', 'Akun Bermasalah', 'Siswa', 'Orang Tua'] as label}
-					<div class="rounded-2xl border bg-muted/30 p-4"><p class="text-xs text-muted-foreground">{label}</p><p class="mt-2 text-2xl font-semibold">…</p></div>
+					<div class="rounded-2xl border bg-base-200/30 p-4"><p class="text-xs text-base-content/70">{label}</p><p class="mt-2 text-2xl font-semibold">…</p></div>
 				{/each}
 			</div>
 		{/snippet}
 
 		{#snippet children()}
 			<div class="grid gap-3 md:grid-cols-6">
-				<div class="rounded-2xl border border-primary/20 bg-primary/10 p-4"><p class="text-xs font-semibold uppercase text-primary">Total</p><p class="mt-2 text-2xl font-semibold">{users.length}</p><p class="text-xs text-muted-foreground">akun terdaftar</p></div>
-				<div class="rounded-2xl border bg-card p-4"><p class="text-xs font-semibold uppercase text-muted-foreground">Pegawai</p><p class="mt-2 text-2xl font-semibold">{employeeUsers.length}</p><p class="text-xs text-muted-foreground">guru/staf/kesiswaan</p></div>
-				<div class="rounded-2xl border bg-card p-4"><p class="text-xs font-semibold uppercase text-muted-foreground">Siswa</p><p class="mt-2 text-2xl font-semibold">{studentUsers.length}</p><p class="text-xs text-muted-foreground">portal siswa</p></div>
-				<div class="rounded-2xl border bg-card p-4"><p class="text-xs font-semibold uppercase text-muted-foreground">Orang Tua</p><p class="mt-2 text-2xl font-semibold">{parentUsers.length}</p><p class="text-xs text-muted-foreground">portal wali</p></div>
-				<div class="rounded-2xl border border-warning/40 bg-warning/10 p-4"><p class="text-xs font-semibold uppercase text-warning">Perlu Cek</p><p class="mt-2 text-2xl font-semibold">{problemUsers.length}</p><p class="text-xs text-muted-foreground">akun nonaktif/aneh</p></div>
-				<div class="rounded-2xl border border-destructive/30 bg-destructive/10 p-4"><p class="text-xs font-semibold uppercase text-destructive">Admin</p><p class="mt-2 text-2xl font-semibold">{adminUsers.length}</p><p class="text-xs text-muted-foreground">akses sensitif</p></div>
+				<div class="rounded-2xl border border-primary/20 bg-primary/10 p-4"><p class="text-xs font-semibold uppercase text-primary">Total</p><p class="mt-2 text-2xl font-semibold">{users.length}</p><p class="text-xs text-base-content/70">akun terdaftar</p></div>
+				<div class="rounded-2xl border bg-base-100 p-4"><p class="text-xs font-semibold uppercase text-base-content/70">Pegawai</p><p class="mt-2 text-2xl font-semibold">{employeeUsers.length}</p><p class="text-xs text-base-content/70">guru/staf/kesiswaan</p></div>
+				<div class="rounded-2xl border bg-base-100 p-4"><p class="text-xs font-semibold uppercase text-base-content/70">Siswa</p><p class="mt-2 text-2xl font-semibold">{studentUsers.length}</p><p class="text-xs text-base-content/70">portal siswa</p></div>
+				<div class="rounded-2xl border bg-base-100 p-4"><p class="text-xs font-semibold uppercase text-base-content/70">Orang Tua</p><p class="mt-2 text-2xl font-semibold">{parentUsers.length}</p><p class="text-xs text-base-content/70">portal wali</p></div>
+				<div class="rounded-2xl border border-warning/40 bg-warning/10 p-4"><p class="text-xs font-semibold uppercase text-warning">Perlu Cek</p><p class="mt-2 text-2xl font-semibold">{problemUsers.length}</p><p class="text-xs text-base-content/70">akun nonaktif/aneh</p></div>
+				<div class="rounded-2xl border border-destructive/30 bg-destructive/10 p-4"><p class="text-xs font-semibold uppercase text-destructive">Admin</p><p class="mt-2 text-2xl font-semibold">{adminUsers.length}</p><p class="text-xs text-base-content/70">akses sensitif</p></div>
 			</div>
 		{/snippet}
 	</AsyncContent>
 
-	<div role="tablist" class="tabs tabs-box bg-card overflow-x-auto flex-nowrap">
+	<div role="tablist" class="tabs tabs-box bg-base-100 overflow-x-auto flex-nowrap">
 		{#each [
 			{ id: 'ringkasan', label: 'Ringkasan' },
 			{ id: 'pegawai', label: 'Akun Pegawai' },
@@ -752,7 +752,7 @@
 	{#if createPanelOpen}
 		<Card.Root class="border-primary/30 shadow-sm">
 			<Card.Header class="flex flex-row items-start justify-between gap-3">
-				<div><Card.Title>Tambah Akun Workflow</Card.Title><p class="mt-1 text-sm text-muted-foreground">Step {createStep}/4 — pilih jenis akun, profil resmi, role, lalu credential.</p></div>
+				<div><Card.Title>Tambah Akun Workflow</Card.Title><p class="mt-1 text-sm text-base-content/70">Step {createStep}/4 — pilih jenis akun, profil resmi, role, lalu credential.</p></div>
 				<Button variant="outline" onclick={() => (createPanelOpen = false)}>Tutup</Button>
 			</Card.Header>
 			<Card.Content class="space-y-5">
@@ -763,25 +763,25 @@
 						{ id: 'parent', title: 'Orang Tua', desc: 'Akun wali/orang tua' },
 						{ id: 'admin', title: 'Admin', desc: 'Akun internal sensitif' }
 					] as item}
-						<button class={`rounded-2xl border p-4 text-left ${accountType === item.id ? 'border-primary bg-primary/10' : 'border-border bg-card hover:bg-muted/40'}`} onclick={() => setAccountType(item.id as AccountType)}>
-							<p class="font-semibold">{item.title}</p><p class="text-xs text-muted-foreground">{item.desc}</p>
+						<button class={`rounded-2xl border p-4 text-left ${accountType === item.id ? 'border-primary bg-primary/10' : 'border-base-300 bg-base-100 hover:bg-base-200/40'}`} onclick={() => setAccountType(item.id as AccountType)}>
+							<p class="font-semibold">{item.title}</p><p class="text-xs text-base-content/70">{item.desc}</p>
 						</button>
 					{/each}
 				</div>
 
 				<div class="grid gap-5 lg:grid-cols-[1fr_1.1fr]">
-					<div class="space-y-4 rounded-2xl border bg-muted/20 p-4">
+					<div class="space-y-4 rounded-2xl border bg-base-200/20 p-4">
 						<p class="font-semibold">Profil Resmi</p>
 						{#if candidateMode === 'none'}
-							<p class="text-sm text-muted-foreground">Akun admin murni boleh tanpa profil, tetapi sebaiknya tetap memakai nama tampil yang jelas.</p>
+							<p class="text-sm text-base-content/70">Akun admin murni boleh tanpa profil, tetapi sebaiknya tetap memakai nama tampil yang jelas.</p>
 						{:else}
 						{#if candidateRequiresClass}
-							<p class="text-xs text-muted-foreground">
+							<p class="text-xs text-base-content/70">
 								{candidateMode === 'student'
 									? 'Siswa per kelas — Pilih kelas terlebih dahulu untuk menarik siswa'
 									: 'Ortu per kelas anak — Pilih kelas anak untuk menarik orang tua/wali terkait'}
 							</p>
-							<select class="w-full rounded-md border bg-background px-3 py-2 text-sm" bind:value={candidateClassId} onchange={() => { clearProfileSelection(); profileCandidates = []; }}>
+							<select class="w-full rounded-md border bg-base-200 px-3 py-2 text-sm" bind:value={candidateClassId} onchange={() => { clearProfileSelection(); profileCandidates = []; }}>
 									<option value="">Pilih rombel</option>
 									{#each rombels.filter((item) => item.is_active !== false) as kelas}
 										<option value={kelas.id}>{kelas.name || kelas.code} {kelas.total_students ? `(${kelas.total_students} siswa)` : ''}</option>
@@ -789,13 +789,13 @@
 								</select>
 							{/if}
 							<div class="flex gap-2"><Input bind:value={candidateSearch} placeholder="Cari nama/NIP/NISN/orang tua" /><Button variant="outline" onclick={() => void loadProfileCandidates()} disabled={!candidateCanLoad || profileCandidatesBusy}>{profileCandidatesBusy ? 'Memuat…' : 'Tarik Data'}</Button></div>
-							<label class="flex items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" bind:checked={includeLinkedCandidates} /> Tampilkan yang sudah tertaut</label>
+							<label class="flex items-center gap-2 text-xs text-base-content/70"><input type="checkbox" bind:checked={includeLinkedCandidates} /> Tampilkan yang sudah tertaut</label>
 							{#if profileCandidatesError}<p class="text-xs text-destructive">{profileCandidatesError}</p>{/if}
 							<div class="max-h-72 space-y-2 overflow-auto">
 								{#each profileCandidates as candidate}
-									<button class={`w-full rounded-xl border p-3 text-left text-sm ${selectedCandidateId === candidate.id ? 'border-primary bg-primary/10' : 'bg-card hover:bg-muted/50'}`} onclick={() => selectProfileCandidate(candidate)}>
+									<button class={`w-full rounded-xl border p-3 text-left text-sm ${selectedCandidateId === candidate.id ? 'border-primary bg-primary/10' : 'bg-base-100 hover:bg-base-200/50'}`} onclick={() => selectProfileCandidate(candidate)}>
 										<div class="flex items-center justify-between gap-2"><span class="font-medium">{candidateLabel(candidate)}</span><Badge variant={candidate.is_linked ? 'outline' : 'secondary'}>{candidate.is_linked ? 'Sudah punya akun' : 'Belum punya akun'}</Badge></div>
-										<p class="mt-1 text-xs text-muted-foreground">{candidateDescription(candidate)}</p>
+										<p class="mt-1 text-xs text-base-content/70">{candidateDescription(candidate)}</p>
 									</button>
 								{:else}
 									<EmptyStatePanel compact title="Belum ada kandidat" description="Pilih scope lalu klik Tarik Data." />
@@ -803,15 +803,15 @@
 							</div>
 						{/if}
 					</div>
-					<div class="space-y-4 rounded-2xl border bg-card p-4">
-						<div><label for="create-username" class="mb-1 block text-xs text-muted-foreground">Username</label><Input id="create-username" bind:value={fUsername} placeholder="username unik" /></div>
-						<div><label for="create-display-name" class="mb-1 block text-xs text-muted-foreground">Nama Tampil</label><Input id="create-display-name" bind:value={fDisplayName} placeholder="nama tampil" /></div>
-						<div><label for="create-password" class="mb-1 block text-xs text-muted-foreground">Password Awal</label><PasswordInput id="create-password" bind:value={fPassword} placeholder="minimal 8 karakter" /></div>
+					<div class="space-y-4 rounded-2xl border bg-base-100 p-4">
+						<div><label for="create-username" class="mb-1 block text-xs text-base-content/70">Username</label><Input id="create-username" bind:value={fUsername} placeholder="username unik" /></div>
+						<div><label for="create-display-name" class="mb-1 block text-xs text-base-content/70">Nama Tampil</label><Input id="create-display-name" bind:value={fDisplayName} placeholder="nama tampil" /></div>
+						<div><label for="create-password" class="mb-1 block text-xs text-base-content/70">Password Awal</label><PasswordInput id="create-password" bind:value={fPassword} placeholder="minimal 8 karakter" /></div>
 						<div>
-							<p class="mb-2 text-xs text-muted-foreground">Role Akses</p>
+							<p class="mb-2 text-xs text-base-content/70">Role Akses</p>
 							<div class="flex flex-wrap gap-2">
 								{#each availableRoles as role}
-									<button class={`rounded-full border px-3 py-1 text-xs ${fRoles.includes(role.value) ? 'border-success bg-success text-background' : 'bg-card text-muted-foreground'}`} onclick={() => toggleDraftRole(role.value)}>{role.label}</button>
+									<button class={`rounded-full border px-3 py-1 text-xs ${fRoles.includes(role.value) ? 'border-success bg-success text-background' : 'bg-base-100 text-base-content/70'}`} onclick={() => toggleDraftRole(role.value)}>{role.label}</button>
 								{/each}
 							</div>
 							{#if fRoles.includes('admin')}<p class="mt-2 text-xs text-destructive">Role admin adalah akses sensitif. Gunakan terbatas.</p>{/if}
@@ -828,28 +828,28 @@
 		<Card.Root>
 			<Card.Header>
 				<div class="flex flex-wrap items-start justify-between gap-3">
-					<div><Card.Title>Generate Akun Massal</Card.Title><p class="mt-1 text-sm text-muted-foreground">Preview dulu, cek status, lalu generate dan download CSV credential hasil generate.</p></div>
+					<div><Card.Title>Generate Akun Massal</Card.Title><p class="mt-1 text-sm text-base-content/70">Preview dulu, cek status, lalu generate dan download CSV credential hasil generate.</p></div>
 					<div class="flex flex-wrap gap-2"><Button variant="outline" onclick={() => void previewGeneration()} disabled={generationBusy !== null}>Preview</Button><Button onclick={() => void runGeneration()} disabled={generationBusy !== null || !currentGeneration || currentGeneration.ready === 0}>Generate Akun</Button><Button variant="outline" onclick={downloadGenerationCSV} disabled={!currentGeneration}>Download CSV</Button></div>
 				</div>
 			</Card.Header>
 			<Card.Content class="space-y-4">
 				<div class="flex flex-wrap gap-2">
 					{#each [{ id: 'employee', label: 'Pegawai' }, { id: 'student', label: 'Siswa' }, { id: 'parent', label: 'Orang Tua' }] as item}
-						<button class={`rounded-xl border px-3 py-2 text-sm ${generationAudience === item.id ? 'border-primary bg-primary/10 text-primary' : 'bg-card text-muted-foreground'}`} onclick={() => { generationAudience = item.id as GenerationAudience; generationPage = 1; }}>{item.label}</button>
+						<button class={`rounded-xl border px-3 py-2 text-sm ${generationAudience === item.id ? 'border-primary bg-primary/10 text-primary' : 'bg-base-100 text-base-content/70'}`} onclick={() => { generationAudience = item.id as GenerationAudience; generationPage = 1; }}>{item.label}</button>
 					{/each}
 				</div>
 				<div class="grid gap-3 md:grid-cols-5">
 					{#each ['total', 'ready', 'created', 'skipped', 'failed'] as key}
-						<div class="rounded-xl border bg-card p-3"><p class="text-[11px] uppercase text-muted-foreground">{key}</p><p class="text-xl font-semibold">{currentGeneration?.[key as 'total' | 'ready' | 'created' | 'skipped' | 'failed'] ?? 0}</p></div>
+						<div class="rounded-xl border bg-base-100 p-3"><p class="text-[11px] uppercase text-base-content/70">{key}</p><p class="text-xl font-semibold">{currentGeneration?.[key as 'total' | 'ready' | 'created' | 'skipped' | 'failed'] ?? 0}</p></div>
 					{/each}
 				</div>
 				<Input value={generationSearch} oninput={handleGenerationSearchInput} placeholder="Cari hasil preview/generate" />
 				<div class="max-h-[520px] overflow-auto rounded-2xl border">
 					<Table.Root>
-						<Table.Header><Table.Row class="bg-muted/50"><Table.Head>Nama</Table.Head><Table.Head>Username</Table.Head><Table.Head>Password Awal</Table.Head><Table.Head>Status</Table.Head><Table.Head>Keterangan</Table.Head></Table.Row></Table.Header>
+						<Table.Header><Table.Row class="bg-base-200/50"><Table.Head>Nama</Table.Head><Table.Head>Username</Table.Head><Table.Head>Password Awal</Table.Head><Table.Head>Status</Table.Head><Table.Head>Keterangan</Table.Head></Table.Row></Table.Header>
 						<Table.Body>
 							{#each paginatedGenerationRows as row}
-								<Table.Row><Table.Cell class="font-medium">{String(row.nama ?? '')}</Table.Cell><Table.Cell class="font-mono text-xs">{String(row.username ?? row.generated_username ?? '—')}</Table.Cell><Table.Cell class="font-mono text-xs">{String(row.password ?? row.temporary_password ?? 'ditampilkan setelah generate')}</Table.Cell><Table.Cell><Badge variant={row.status === 'ready' || row.status === 'created' ? 'secondary' : row.status === 'failed' ? 'destructive' : 'outline'}>{String(row.status ?? '—')}</Badge></Table.Cell><Table.Cell class="text-xs text-muted-foreground">{String(row.message ?? row.reason ?? '')}</Table.Cell></Table.Row>
+								<Table.Row><Table.Cell class="font-medium">{String(row.nama ?? '')}</Table.Cell><Table.Cell class="font-mono text-xs">{String(row.username ?? row.generated_username ?? '—')}</Table.Cell><Table.Cell class="font-mono text-xs">{String(row.password ?? row.temporary_password ?? 'ditampilkan setelah generate')}</Table.Cell><Table.Cell><Badge variant={row.status === 'ready' || row.status === 'created' ? 'secondary' : row.status === 'failed' ? 'destructive' : 'outline'}>{String(row.status ?? '—')}</Badge></Table.Cell><Table.Cell class="text-xs text-base-content/70">{String(row.message ?? row.reason ?? '')}</Table.Cell></Table.Row>
 							{:else}
 								<Table.Row><Table.Cell colspan={5}><EmptyStatePanel compact title="Belum ada preview" description="Klik Preview untuk memuat kandidat akun." /></Table.Cell></Table.Row>
 							{/each}
@@ -868,15 +868,15 @@
 		</Card.Root>
 	{:else if activeTab === 'audit'}
 		<div class="grid gap-4 md:grid-cols-3">
-			<Card.Root><Card.Header><Card.Title>Permintaan Data Resmi</Card.Title></Card.Header><Card.Content><p class="text-sm text-muted-foreground">Review perubahan data akun/profil dari pengguna portal.</p><Button class="mt-4" href="/settings/user-change-requests">Buka Permintaan</Button></Card.Content></Card.Root>
-			<Card.Root><Card.Header><Card.Title>Audit Logs</Card.Title></Card.Header><Card.Content><p class="text-sm text-muted-foreground">Pantau aktivitas perubahan akses, reset password, dan tindakan admin.</p><Button class="mt-4" variant="outline" href="/settings/audit-logs">Buka Audit</Button></Card.Content></Card.Root>
-			<Card.Root><Card.Header><Card.Title>Role & Permission</Card.Title></Card.Header><Card.Content><p class="text-sm text-muted-foreground">Kelola role template dan permission matrix terpisah dari lifecycle akun.</p><Button class="mt-4" variant="outline" href="/settings/rbac">Buka RBAC</Button></Card.Content></Card.Root>
+			<Card.Root><Card.Header><Card.Title>Permintaan Data Resmi</Card.Title></Card.Header><Card.Content><p class="text-sm text-base-content/70">Review perubahan data akun/profil dari pengguna portal.</p><Button class="mt-4" href="/settings/user-change-requests">Buka Permintaan</Button></Card.Content></Card.Root>
+			<Card.Root><Card.Header><Card.Title>Audit Logs</Card.Title></Card.Header><Card.Content><p class="text-sm text-base-content/70">Pantau aktivitas perubahan akses, reset password, dan tindakan admin.</p><Button class="mt-4" variant="outline" href="/settings/audit-logs">Buka Audit</Button></Card.Content></Card.Root>
+			<Card.Root><Card.Header><Card.Title>Role & Permission</Card.Title></Card.Header><Card.Content><p class="text-sm text-base-content/70">Kelola role template dan permission matrix terpisah dari lifecycle akun.</p><Button class="mt-4" variant="outline" href="/settings/rbac">Buka RBAC</Button></Card.Content></Card.Root>
 		</div>
 	{:else}
 		<Card.Root>
 			<Card.Header class="space-y-4">
 				<div class="flex flex-wrap items-start justify-between gap-3">
-					<div><Card.Title>{activeTab === 'pegawai' ? 'Workflow Akun Pegawai' : activeTab === 'siswa' ? 'Workflow Akun Siswa' : activeTab === 'ortu' ? 'Workflow Akun Orang Tua' : activeTab === 'admin' ? 'Admin & Hak Akses Sensitif' : 'Daftar Semua Akun'}</Card.Title><p class="mt-1 text-sm text-muted-foreground">Klik baris untuk melihat panel detail. Gunakan filter untuk menemukan akun bermasalah.</p></div>
+					<div><Card.Title>{activeTab === 'pegawai' ? 'Workflow Akun Pegawai' : activeTab === 'siswa' ? 'Workflow Akun Siswa' : activeTab === 'ortu' ? 'Workflow Akun Orang Tua' : activeTab === 'admin' ? 'Admin & Hak Akses Sensitif' : 'Daftar Semua Akun'}</Card.Title><p class="mt-1 text-sm text-base-content/70">Klik baris untuk melihat panel detail. Gunakan filter untuk menemukan akun bermasalah.</p></div>
 					<div class="flex flex-wrap gap-2"><Button variant="outline" onclick={() => void refreshOverview()}>Muat Ulang</Button><Button onclick={() => openCreate(activeTab === 'siswa' ? 'student' : activeTab === 'ortu' ? 'parent' : activeTab === 'admin' ? 'admin' : 'employee')}>Tambah Sesuai Tab</Button></div>
 				</div>
 				<div class="grid gap-3 md:grid-cols-[1fr_180px_210px]">
@@ -891,16 +891,16 @@
 			<Card.Content class="p-0">
 				<div class="overflow-x-auto">
 					<Table.Root>
-						<Table.Header><Table.Row class="bg-muted/50"><Table.Head class="w-10"><input type="checkbox" checked={allVisibleSelected} onchange={toggleSelectVisible} /></Table.Head><Table.Head>Pengguna</Table.Head><Table.Head>Jenis Profil</Table.Head><Table.Head>Role</Table.Head><Table.Head>Health</Table.Head><Table.Head>Last Login</Table.Head><Table.Head>Aksi</Table.Head></Table.Row></Table.Header>
+						<Table.Header><Table.Row class="bg-base-200/50"><Table.Head class="w-10"><input type="checkbox" checked={allVisibleSelected} onchange={toggleSelectVisible} /></Table.Head><Table.Head>Pengguna</Table.Head><Table.Head>Jenis Profil</Table.Head><Table.Head>Role</Table.Head><Table.Head>Health</Table.Head><Table.Head>Last Login</Table.Head><Table.Head>Aksi</Table.Head></Table.Row></Table.Header>
 						<Table.Body>
 							{#each paginatedUsers as user}
 								<Table.Row class={selectedUser?.id === user.id ? 'bg-primary/5' : ''}>
 									<Table.Cell><input type="checkbox" checked={selectedUserIds.includes(user.id)} onchange={() => toggleUserSelection(user)} /></Table.Cell>
-									<Table.Cell><button class="text-left" onclick={() => (selectedUser = user)}><div class="font-medium">{userDisplayLabel(user)}</div><div class="text-xs text-muted-foreground">{usernameLabel(user)}</div></button></Table.Cell>
-									<Table.Cell><Badge variant="outline">{profileType(user)}</Badge><div class="mt-1 text-xs text-muted-foreground">{user.profile_nama || '—'}</div></Table.Cell>
+									<Table.Cell><button class="text-left" onclick={() => (selectedUser = user)}><div class="font-medium">{userDisplayLabel(user)}</div><div class="text-xs text-base-content/70">{usernameLabel(user)}</div></button></Table.Cell>
+									<Table.Cell><Badge variant="outline">{profileType(user)}</Badge><div class="mt-1 text-xs text-base-content/70">{user.profile_nama || '—'}</div></Table.Cell>
 									<Table.Cell><div class="flex max-w-md flex-wrap gap-1">{#each user.roles ?? [] as role}<Badge variant={role === 'admin' ? 'destructive' : 'secondary'}>{roleLabel(role)}</Badge>{/each}</div></Table.Cell>
 									<Table.Cell><div class="flex max-w-sm flex-wrap gap-1">{#each accountHealth(user) as item}<Badge variant={item === 'Akses sensitif' || item === 'Nonaktif' ? 'destructive' : 'outline'}>{item}</Badge>{:else}<Badge variant="secondary">Sehat</Badge>{/each}</div></Table.Cell>
-									<Table.Cell class="text-xs text-muted-foreground">{formatDateTime(user.last_login_at)}</Table.Cell>
+									<Table.Cell class="text-xs text-base-content/70">{formatDateTime(user.last_login_at)}</Table.Cell>
 									<Table.Cell><Button variant="outline" size="sm" onclick={() => (selectedUser = user)}>Detail</Button></Table.Cell>
 								</Table.Row>
 							{:else}
@@ -910,7 +910,7 @@
 					</Table.Root>
 				</div>
 			</Card.Content>
-			<div class="border-t border-border p-3">
+			<div class="border-t border-base-300 p-3">
 				<TablePagination
 					page={safeUsersPage}
 					limit={usersPageSize}
@@ -927,17 +927,17 @@
 		{@const detailUser = selectedUser as User}
 		<Card.Root class="border-primary/30">
 			<Card.Header class="flex flex-row items-start justify-between gap-3">
-				<div><Card.Title>Detail Akun: {userDisplayLabel(detailUser)}</Card.Title><p class="mt-1 text-sm text-muted-foreground">{usernameLabel(detailUser)} · {profileType(detailUser)} · dibuat {new Date(detailUser.created_at).toLocaleDateString('id-ID')}</p></div>
+				<div><Card.Title>Detail Akun: {userDisplayLabel(detailUser)}</Card.Title><p class="mt-1 text-sm text-base-content/70">{usernameLabel(detailUser)} · {profileType(detailUser)} · dibuat {new Date(detailUser.created_at).toLocaleDateString('id-ID')}</p></div>
 				<Button variant="outline" onclick={() => (selectedUser = null)}>Tutup Detail</Button>
 			</Card.Header>
 			<Card.Content class="grid gap-5 lg:grid-cols-[1fr_1fr]">
 				<div class="space-y-4">
-					<div class="rounded-2xl border bg-muted/20 p-4"><p class="text-sm font-semibold">Status Akun</p><div class="mt-3 flex flex-wrap gap-2">{#each accountHealth(detailUser) as item}<Badge variant={item === 'Akses sensitif' || item === 'Nonaktif' ? 'destructive' : 'outline'}>{item}</Badge>{:else}<Badge variant="secondary">Tidak ada masalah utama</Badge>{/each}</div></div>
-					<div class="rounded-2xl border bg-card p-4"><p class="text-sm font-semibold">Profil Terhubung</p><p class="mt-2 text-sm text-muted-foreground">{detailUser.profile_nama || 'Belum ditautkan'} — {profileType(detailUser)}</p><Button class="mt-3" variant="outline" size="sm" disabled={actionBusy === `profile:${detailUser.id}`} onclick={() => void updateProfileForUser(detailUser)}>Ubah Tautan Profil</Button></div>
+					<div class="rounded-2xl border bg-base-200/20 p-4"><p class="text-sm font-semibold">Status Akun</p><div class="mt-3 flex flex-wrap gap-2">{#each accountHealth(detailUser) as item}<Badge variant={item === 'Akses sensitif' || item === 'Nonaktif' ? 'destructive' : 'outline'}>{item}</Badge>{:else}<Badge variant="secondary">Tidak ada masalah utama</Badge>{/each}</div></div>
+					<div class="rounded-2xl border bg-base-100 p-4"><p class="text-sm font-semibold">Profil Terhubung</p><p class="mt-2 text-sm text-base-content/70">{detailUser.profile_nama || 'Belum ditautkan'} — {profileType(detailUser)}</p><Button class="mt-3" variant="outline" size="sm" disabled={actionBusy === `profile:${detailUser.id}`} onclick={() => void updateProfileForUser(detailUser)}>Ubah Tautan Profil</Button></div>
 				</div>
 				<div class="space-y-4">
-					<div class="rounded-2xl border bg-card p-4"><p class="text-sm font-semibold">Role Akses</p><div class="mt-3 flex flex-wrap gap-2">{#each availableRoles as role}<button class={`rounded-full border px-3 py-1 text-xs ${detailUser.roles?.includes(role.value) ? 'border-success bg-success text-background' : 'bg-card text-muted-foreground'}`} disabled={actionBusy === `roles:${detailUser.id}`} onclick={() => void toggleExistingUserRole(detailUser, role.value)}>{role.label}</button>{/each}</div></div>
-					<div class="rounded-2xl border bg-card p-4"><p class="text-sm font-semibold">Keamanan & Lifecycle</p><div class="mt-3 flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={actionBusy === `password:${detailUser.id}`} onclick={() => void resetPasswordForUser(detailUser)}>Reset Password</Button><Button variant="outline" size="sm" disabled={actionBusy === `force-password:${detailUser.id}`} onclick={() => void forcePasswordChangeForUser(detailUser)}>Wajib Ganti PW</Button><Button variant="outline" size="sm" disabled={actionBusy === `status:${detailUser.id}`} onclick={() => void toggleUserStatus(detailUser)}>{detailUser.is_active ? 'Nonaktifkan' : 'Aktifkan'}</Button><Button variant="ghost" size="sm" class="text-destructive hover:bg-destructive/10 hover:text-destructive" onclick={() => void deleteUser(detailUser)}>Hapus</Button></div></div>
+					<div class="rounded-2xl border bg-base-100 p-4"><p class="text-sm font-semibold">Role Akses</p><div class="mt-3 flex flex-wrap gap-2">{#each availableRoles as role}<button class={`rounded-full border px-3 py-1 text-xs ${detailUser.roles?.includes(role.value) ? 'border-success bg-success text-background' : 'bg-base-100 text-base-content/70'}`} disabled={actionBusy === `roles:${detailUser.id}`} onclick={() => void toggleExistingUserRole(detailUser, role.value)}>{role.label}</button>{/each}</div></div>
+					<div class="rounded-2xl border bg-base-100 p-4"><p class="text-sm font-semibold">Keamanan & Lifecycle</p><div class="mt-3 flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={actionBusy === `password:${detailUser.id}`} onclick={() => void resetPasswordForUser(detailUser)}>Reset Password</Button><Button variant="outline" size="sm" disabled={actionBusy === `force-password:${detailUser.id}`} onclick={() => void forcePasswordChangeForUser(detailUser)}>Wajib Ganti PW</Button><Button variant="outline" size="sm" disabled={actionBusy === `status:${detailUser.id}`} onclick={() => void toggleUserStatus(detailUser)}>{detailUser.is_active ? 'Nonaktifkan' : 'Aktifkan'}</Button><Button variant="ghost" size="sm" class="text-destructive hover:bg-destructive/10 hover:text-destructive" onclick={() => void deleteUser(detailUser)}>Hapus</Button></div></div>
 				</div>
 			</Card.Content>
 		</Card.Root>

@@ -16,7 +16,7 @@
 </script>
 
 <button
-	class={cn('px-4 py-2 text-sm font-medium transition-colors hover:text-on-surface', className)}
+	class={cn('tab', className)}
 	role="tab"
 	{...restProps}
 >

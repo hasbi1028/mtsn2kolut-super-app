@@ -66,18 +66,18 @@
 	<!-- Logged out: minimal login prompt -->
 	<div class="flex min-h-[60vh] items-center justify-center p-4">
 		<div class="w-full max-w-sm text-center space-y-5">
-			<div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground text-xl font-black shadow-lg shadow-primary/25">
+			<div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-content text-xl font-black shadow-lg shadow-primary/25">
 				M
 			</div>
-			<h1 class="text-xl font-black tracking-tight text-foreground">
+			<h1 class="text-xl font-black tracking-tight text-base-content">
 				MTs Negeri 2 Kolaka Utara
 			</h1>
-			<p class="text-sm font-medium text-muted-foreground">
+			<p class="text-sm font-medium text-base-content/70">
 				Sistem Manajemen Madrasah
 			</p>
 			<a
 				href={resolve('/login')}
-				class="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground transition-all hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/25"
+				class="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-content transition-all hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/25"
 			>
 				Masuk ke Sistem
 			</a>
@@ -89,15 +89,15 @@
 
 		<!-- Page Title (matches CBT admin header) -->
 		<div>
-			<h1 class="text-2xl font-black tracking-tight text-foreground">Dashboard</h1>
-			<p class="text-sm text-muted-foreground mt-1">
-				Selamat datang, <span class="font-semibold text-foreground">{data.user?.username || 'Pengguna'}</span>
+			<h1 class="text-2xl font-black tracking-tight text-base-content">Dashboard</h1>
+			<p class="text-sm text-base-content/70 mt-1">
+				Selamat datang, <span class="font-semibold text-base-content">{data.user?.username || 'Pengguna'}</span>
 			</p>
 		</div>
 
 		<!-- Stat Cards (daisyui card + badge, compact & informative) -->
 		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-			<div class="card bg-card border border-border shadow-sm">
+			<div class="card bg-base-100 border border-base-300 shadow-sm">
 				<div class="card-body p-4 gap-1">
 					<div class="flex items-center gap-2">
 						<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -108,10 +108,10 @@
 						<div class="badge badge-sm badge-outline">{isAdmin ? 'Admin' : 'User'}</div>
 					</div>
 					<p class="card-title text-lg font-black mt-1">{data.user?.username || 'Pengguna'}</p>
-					<p class="text-xs text-muted-foreground">{isAdmin ? 'Administrator' : 'Pengguna'}</p>
+					<p class="text-xs text-base-content/70">{isAdmin ? 'Administrator' : 'Pengguna'}</p>
 				</div>
 			</div>
-			<div class="card bg-card border border-border shadow-sm">
+			<div class="card bg-base-100 border border-base-300 shadow-sm">
 				<div class="card-body p-4 gap-1">
 					<div class="flex items-center gap-2">
 						<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
@@ -122,10 +122,10 @@
 						<div class="badge badge-sm badge-success">Aktif</div>
 					</div>
 					<p class="card-title text-lg font-black mt-1">{hariIni()}</p>
-					<p class="text-xs text-muted-foreground">{jamSekarang()} WITA</p>
+					<p class="text-xs text-base-content/70">{jamSekarang()} WITA</p>
 				</div>
 			</div>
-			<div class="card bg-card border border-border shadow-sm">
+			<div class="card bg-base-100 border border-base-300 shadow-sm">
 				<div class="card-body p-4 gap-1">
 					<div class="flex items-center gap-2">
 						<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
@@ -136,10 +136,10 @@
 						<div class="badge badge-sm badge-info">Instansi</div>
 					</div>
 					<p class="card-title text-lg font-black mt-1 truncate">MTsN 2 Kolut</p>
-					<p class="text-xs text-muted-foreground">MTs Negeri 2 Kolaka Utara</p>
+					<p class="text-xs text-base-content/70">MTs Negeri 2 Kolaka Utara</p>
 				</div>
 			</div>
-			<div class="card bg-card border border-border shadow-sm">
+			<div class="card bg-base-100 border border-base-300 shadow-sm">
 				<div class="card-body p-4 gap-1">
 					<div class="flex items-center gap-2">
 						<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
@@ -150,23 +150,23 @@
 						<div class="badge badge-sm badge-warning">Sistem</div>
 					</div>
 					<p class="card-title text-lg font-black mt-1">SMM v2.0</p>
-					<p class="text-xs text-muted-foreground">Sistem Manajemen Madrasah</p>
+					<p class="text-xs text-base-content/70">Sistem Manajemen Madrasah</p>
 				</div>
 			</div>
 		</div>
 
 		<!-- Quick Access / Modul Grid (daisyui card style) -->
-		<div class="card bg-card border border-border shadow-sm">
+		<div class="card bg-base-100 border border-base-300 shadow-sm">
 			<div class="card-body p-0">
-				<h2 class="card-title px-5 py-4 border-b border-border bg-muted/30 text-sm m-0 rounded-t-box">Modul Aplikasi</h2>
+				<h2 class="card-title px-5 py-4 border-b border-base-300 bg-base-200/30 text-sm m-0 rounded-t-box">Modul Aplikasi</h2>
 				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
 					{#each actions as action, i (action.href)}
 						{@const icon = iconMap[action.icon]}
 						<a
 							href={resolve(action.href as '/')}
-							class="group flex items-center gap-4 p-5 text-foreground transition-all hover:bg-muted/50 border-r border-b border-border"
+							class="group flex items-center gap-4 p-5 text-base-content transition-all hover:bg-base-200/50 border-r border-b border-base-300"
 						>
-							<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground group-hover:text-primary transition-colors">
+							<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-base-200/60 text-base-content/70 group-hover:text-primary transition-colors">
 								{#if icon}
 									<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox={icon.viewBox}>
 										<path stroke-linecap="round" stroke-linejoin="round" d={icon.path} />
@@ -174,10 +174,10 @@
 								{/if}
 							</div>
 							<div class="min-w-0 flex-1">
-								<div class="text-sm font-semibold text-foreground">{action.label}</div>
-								<div class="text-xs text-muted-foreground mt-0.5">{action.desc}</div>
+								<div class="text-sm font-semibold text-base-content">{action.label}</div>
+								<div class="text-xs text-base-content/70 mt-0.5">{action.desc}</div>
 							</div>
-							<svg class="h-4 w-4 shrink-0 text-muted-foreground/40 group-hover:text-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<svg class="h-4 w-4 shrink-0 text-base-content/70/40 group-hover:text-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
 							</svg>
 						</a>
@@ -187,7 +187,7 @@
 		</div>
 
 		<!-- Info Bar (daisyui card) -->
-		<div class="card bg-card border border-border shadow-sm">
+		<div class="card bg-base-100 border border-base-300 shadow-sm">
 			<div class="card-body px-5 py-3 flex-row items-center gap-3">
 				<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
 					<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -195,8 +195,8 @@
 					</svg>
 				</div>
 				<div class="min-w-0 flex-1">
-					<p class="text-xs font-bold text-foreground">Sistem Manajemen Madrasah</p>
-					<p class="text-[11px] font-medium text-muted-foreground">MTsN 2 Kolaka Utara &middot; WITA &middot; by Hasbi Awal</p>
+					<p class="text-xs font-bold text-base-content">Sistem Manajemen Madrasah</p>
+					<p class="text-[11px] font-medium text-base-content/70">MTsN 2 Kolaka Utara &middot; WITA &middot; by Hasbi Awal</p>
 				</div>
 			</div>
 		</div>

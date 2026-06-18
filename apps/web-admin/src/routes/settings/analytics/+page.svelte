@@ -218,9 +218,9 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 		<div>
-			<p class="text-sm font-medium uppercase tracking-wide text-muted-foreground">Sistem</p>
-			<h1 class="text-2xl font-semibold text-foreground">Ringkasan Penggunaan Internal</h1>
-			<p class="mt-2 max-w-3xl text-sm text-muted-foreground">
+			<p class="text-sm font-medium uppercase tracking-wide text-base-content/70">Sistem</p>
+			<h1 class="text-2xl font-semibold text-base-content">Ringkasan Penggunaan Internal</h1>
+			<p class="mt-2 max-w-3xl text-sm text-base-content/70">
 				Ringkasan agregat pemakaian modul untuk evaluasi layanan sekolah. Data mentah dan detail sensitif tidak ditampilkan di halaman ini.
 			</p>
 		</div>
@@ -232,10 +232,10 @@
 		</div>
 	</div>
 
-	<div class="grid gap-3 rounded-lg border border-border bg-card p-4 md:grid-cols-5">
+	<div class="grid gap-3 rounded-lg border border-base-300 bg-base-100 p-4 md:grid-cols-5">
 		<div>
-			<label for="analytics-days" class="mb-1 block text-xs font-medium text-muted-foreground">Periode</label>
-			<select id="analytics-days" bind:value={days} onchange={reloadWithFilter} class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+			<label for="analytics-days" class="mb-1 block text-xs font-medium text-base-content/70">Periode</label>
+			<select id="analytics-days" bind:value={days} onchange={reloadWithFilter} class="h-9 w-full rounded-md border border-base-300 bg-base-200 px-2 text-sm">
 				<option value={7}>7 hari</option>
 				<option value={14}>14 hari</option>
 				<option value={30}>30 hari</option>
@@ -244,32 +244,32 @@
 			</select>
 		</div>
 		<div>
-			<label for="analytics-group" class="mb-1 block text-xs font-medium text-muted-foreground">Group</label>
-			<select id="analytics-group" bind:value={selectedGroup} onchange={reloadWithFilter} class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+			<label for="analytics-group" class="mb-1 block text-xs font-medium text-base-content/70">Group</label>
+			<select id="analytics-group" bind:value={selectedGroup} onchange={reloadWithFilter} class="h-9 w-full rounded-md border border-base-300 bg-base-200 px-2 text-sm">
 				{#each groupOptions as option (option.value)}
 					<option value={option.value}>{option.label}</option>
 				{/each}
 			</select>
 		</div>
 		<div>
-			<label for="analytics-source" class="mb-1 block text-xs font-medium text-muted-foreground">Source</label>
-			<select id="analytics-source" bind:value={selectedSource} onchange={reloadWithFilter} class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+			<label for="analytics-source" class="mb-1 block text-xs font-medium text-base-content/70">Source</label>
+			<select id="analytics-source" bind:value={selectedSource} onchange={reloadWithFilter} class="h-9 w-full rounded-md border border-base-300 bg-base-200 px-2 text-sm">
 				{#each sourceOptions as option (option.value)}
 					<option value={option.value}>{option.label}</option>
 				{/each}
 			</select>
 		</div>
 		<div>
-			<label for="analytics-role" class="mb-1 block text-xs font-medium text-muted-foreground">Peran</label>
-			<select id="analytics-role" bind:value={selectedRole} onchange={reloadWithFilter} class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+			<label for="analytics-role" class="mb-1 block text-xs font-medium text-base-content/70">Peran</label>
+			<select id="analytics-role" bind:value={selectedRole} onchange={reloadWithFilter} class="h-9 w-full rounded-md border border-base-300 bg-base-200 px-2 text-sm">
 				{#each roleOptions as option (option.value)}
 					<option value={option.value}>{option.label}</option>
 				{/each}
 			</select>
 		</div>
 		<div>
-			<label for="analytics-result" class="mb-1 block text-xs font-medium text-muted-foreground">Hasil</label>
-			<select id="analytics-result" bind:value={selectedResult} onchange={reloadWithFilter} class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+			<label for="analytics-result" class="mb-1 block text-xs font-medium text-base-content/70">Hasil</label>
+			<select id="analytics-result" bind:value={selectedResult} onchange={reloadWithFilter} class="h-9 w-full rounded-md border border-base-300 bg-base-200 px-2 text-sm">
 				{#each resultOptions as option (option.value)}
 					<option value={option.value}>{option.label}</option>
 				{/each}
@@ -319,7 +319,7 @@
 						</Card.Header>
 						<Card.Content>
 							<p class="text-3xl font-semibold text-primary">{formatNumber(summary.total_count)}</p>
-							<p class="mt-1 text-xs text-muted-foreground">{summary.days} hari terakhir</p>
+							<p class="mt-1 text-xs text-base-content/70">{summary.days} hari terakhir</p>
 						</Card.Content>
 					</Card.Root>
 					<Card.Root>
@@ -328,7 +328,7 @@
 						</Card.Header>
 						<Card.Content>
 							<p class="text-3xl font-semibold text-primary">{summary.groups[0] ? groupLabel(summary.groups[0].event_group) : '—'}</p>
-							<p class="mt-1 text-xs text-muted-foreground">{summary.groups[0] ? `${formatNumber(summary.groups[0].count)} event` : 'Belum ada agregat'}</p>
+							<p class="mt-1 text-xs text-base-content/70">{summary.groups[0] ? `${formatNumber(summary.groups[0].count)} event` : 'Belum ada agregat'}</p>
 						</Card.Content>
 					</Card.Root>
 					<Card.Root>
@@ -337,16 +337,16 @@
 						</Card.Header>
 						<Card.Content>
 							<p class="text-2xl font-semibold text-primary">{groupLabel(selectedGroup)}</p>
-							<p class="mt-1 text-xs text-muted-foreground">{sourceLabel(selectedSource)} · {resultLabel(selectedResult)}</p>
+							<p class="mt-1 text-xs text-base-content/70">{sourceLabel(selectedSource)} · {resultLabel(selectedResult)}</p>
 						</Card.Content>
 					</Card.Root>
 				</div>
 
 				{#if !hasInternalAnalyticsData(overview)}
-					<Card.Root class="border-dashed bg-muted/30">
+					<Card.Root class="border-dashed bg-base-200/30">
 						<Card.Content class="space-y-2 pt-6">
-							<p class="text-sm font-medium text-foreground">Belum ada ringkasan penggunaan internal.</p>
-							<p class="text-sm text-muted-foreground">
+							<p class="text-sm font-medium text-base-content">Belum ada ringkasan penggunaan internal.</p>
+							<p class="text-sm text-base-content/70">
 								Halaman siap digunakan, tetapi periode atau filter ini belum memiliki data agregat yang dapat ditampilkan.
 							</p>
 						</Card.Content>
@@ -362,13 +362,13 @@
 						<Card.Content class="space-y-3">
 							{#if summary.groups.length > 0}
 								{#each summary.groups as item (item.event_group)}
-									<div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-										<span class="text-sm font-medium text-foreground">{groupLabel(item.event_group)}</span>
+									<div class="flex items-center justify-between gap-3 rounded-md border border-base-300 px-3 py-2">
+										<span class="text-sm font-medium text-base-content">{groupLabel(item.event_group)}</span>
 										<Badge variant="outline">{formatNumber(item.count)}</Badge>
 									</div>
 								{/each}
 							{:else}
-								<p class="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Belum ada agregat untuk periode ini.</p>
+								<p class="rounded-md border border-dashed border-base-300 p-4 text-sm text-base-content/70">Belum ada agregat untuk periode ini.</p>
 							{/if}
 						</Card.Content>
 					</Card.Root>
@@ -381,16 +381,16 @@
 						<Card.Content class="space-y-3">
 							{#if summary.top_events.length > 0}
 								{#each summary.top_events as item (item.event_name)}
-									<div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+									<div class="flex items-center justify-between gap-3 rounded-md border border-base-300 px-3 py-2">
 										<div>
-											<p class="text-sm font-medium text-foreground">{item.event_name}</p>
-											<p class="text-xs text-muted-foreground">{groupLabel(item.event_group)}</p>
+											<p class="text-sm font-medium text-base-content">{item.event_name}</p>
+											<p class="text-xs text-base-content/70">{groupLabel(item.event_group)}</p>
 										</div>
 										<Badge variant="outline">{formatNumber(item.count)}</Badge>
 									</div>
 								{/each}
 							{:else}
-								<p class="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Belum ada aktivitas teratas untuk periode ini.</p>
+								<p class="rounded-md border border-dashed border-base-300 p-4 text-sm text-base-content/70">Belum ada aktivitas teratas untuk periode ini.</p>
 							{/if}
 						</Card.Content>
 					</Card.Root>
@@ -398,23 +398,23 @@
 			{:else if activeTab === 'visitors'}
 				{@const topPublic = topEvent(overview.publicDaily.items)}
 				<div class="grid gap-4 md:grid-cols-3">
-					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Aktivitas Pengunjung</p><p class="mt-2 text-3xl font-semibold text-primary">{formatNumber(totalCount(overview.publicDaily.items))}</p></Card.Content></Card.Root>
-					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Aktivitas Teratas</p><p class="mt-2 text-xl font-semibold text-primary">{topPublic ? topPublic[0] : '—'}</p></Card.Content></Card.Root>
-					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Source</p><p class="mt-2 text-xl font-semibold text-primary">Public website</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-base-content/70">Aktivitas Pengunjung</p><p class="mt-2 text-3xl font-semibold text-primary">{formatNumber(totalCount(overview.publicDaily.items))}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-base-content/70">Aktivitas Teratas</p><p class="mt-2 text-xl font-semibold text-primary">{topPublic ? topPublic[0] : '—'}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-base-content/70">Source</p><p class="mt-2 text-xl font-semibold text-primary">Public website</p></Card.Content></Card.Root>
 				</div>
 			{:else if activeTab === 'modules'}
 				{@const topAdmin = topEvent(overview.adminDaily.items)}
 				<div class="grid gap-4 md:grid-cols-3">
-					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Aktivitas Web Admin</p><p class="mt-2 text-3xl font-semibold text-primary">{formatNumber(totalCount(overview.adminDaily.items))}</p></Card.Content></Card.Root>
-					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Aktivitas Teratas</p><p class="mt-2 text-xl font-semibold text-primary">{topAdmin ? topAdmin[0] : '—'}</p></Card.Content></Card.Root>
-					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Filter Peran</p><p class="mt-2 text-xl font-semibold text-primary">{selectedRole || 'Semua'}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-base-content/70">Aktivitas Web Admin</p><p class="mt-2 text-3xl font-semibold text-primary">{formatNumber(totalCount(overview.adminDaily.items))}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-base-content/70">Aktivitas Teratas</p><p class="mt-2 text-xl font-semibold text-primary">{topAdmin ? topAdmin[0] : '—'}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-base-content/70">Filter Peran</p><p class="mt-2 text-xl font-semibold text-primary">{selectedRole || 'Semua'}</p></Card.Content></Card.Root>
 				</div>
 			{:else if activeTab === 'security'}
 				{@const topSecurity = topEvent(overview.securityDaily.items)}
 				<div class="grid gap-4 md:grid-cols-3">
-					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Sinyal Security</p><p class="mt-2 text-3xl font-semibold text-primary">{formatNumber(totalCount(overview.securityDaily.items))}</p></Card.Content></Card.Root>
-					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Sinyal Teratas</p><p class="mt-2 text-xl font-semibold text-primary">{topSecurity ? topSecurity[0] : '—'}</p></Card.Content></Card.Root>
-					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Hasil</p><p class="mt-2 text-xl font-semibold text-primary">{resultLabel(selectedResult)}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-base-content/70">Sinyal Security</p><p class="mt-2 text-3xl font-semibold text-primary">{formatNumber(totalCount(overview.securityDaily.items))}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-base-content/70">Sinyal Teratas</p><p class="mt-2 text-xl font-semibold text-primary">{topSecurity ? topSecurity[0] : '—'}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-base-content/70">Hasil</p><p class="mt-2 text-xl font-semibold text-primary">{resultLabel(selectedResult)}</p></Card.Content></Card.Root>
 				</div>
 			{:else}
 				<Card.Root>
@@ -448,18 +448,18 @@
 					{@const activeItems = activeTab === 'visitors' ? overview.publicDaily.items : activeTab === 'modules' ? overview.adminDaily.items : activeTab === 'security' ? overview.securityDaily.items : daily.items}
 					{#if activeItems.length > 0}
 						{#each activeItems as item (`${item.aggregate_date}-${item.event_name}-${item.source_surface}-${item.role}-${item.result}`)}
-							<div class="grid gap-2 rounded-md border border-border px-3 py-3 md:grid-cols-[1fr,1.2fr,0.7fr,0.5fr] md:items-center">
+							<div class="grid gap-2 rounded-md border border-base-300 px-3 py-3 md:grid-cols-[1fr,1.2fr,0.7fr,0.5fr] md:items-center">
 								<div>
-									<p class="text-sm font-medium text-foreground">{formatDate(item.aggregate_date)}</p>
-									<p class="text-xs text-muted-foreground">{groupLabel(item.event_group)}</p>
+									<p class="text-sm font-medium text-base-content">{formatDate(item.aggregate_date)}</p>
+									<p class="text-xs text-base-content/70">{groupLabel(item.event_group)}</p>
 								</div>
-								<div class="text-sm text-foreground">{item.event_name}</div>
-								<div class="text-xs text-muted-foreground">{item.source_surface}{item.role ? ` · ${item.role}` : ''}{item.result ? ` · ${item.result}` : ''}</div>
+								<div class="text-sm text-base-content">{item.event_name}</div>
+								<div class="text-xs text-base-content/70">{item.source_surface}{item.role ? ` · ${item.role}` : ''}{item.result ? ` · ${item.result}` : ''}</div>
 								<div class="text-right text-sm font-semibold text-primary">{formatNumber(item.count)}</div>
 							</div>
 						{/each}
 					{:else}
-						<p class="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Belum ada tren harian untuk filter ini.</p>
+						<p class="rounded-md border border-dashed border-base-300 p-4 text-sm text-base-content/70">Belum ada tren harian untuk filter ini.</p>
 					{/if}
 				</Card.Content>
 			</Card.Root>

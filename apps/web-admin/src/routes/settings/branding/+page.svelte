@@ -140,8 +140,8 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 		<div>
-			<h1 class="text-lg font-semibold text-foreground">Branding Aplikasi</h1>
-			<p class="text-sm text-muted-foreground">Atur logo, favicon, ikon PWA, nama singkat, dan warna tema aplikasi.</p>
+			<h1 class="text-lg font-semibold text-base-content">Branding Aplikasi</h1>
+			<p class="text-sm text-base-content/70">Atur logo, favicon, ikon PWA, nama singkat, dan warna tema aplikasi.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button href="/settings" variant="outline" size="sm"><ArrowLeftIcon class="mr-2 size-4" />Pengaturan</Button>
@@ -176,9 +176,9 @@
 							<Card.Root>
 								<Card.Header class="pb-2"><Card.Title class="text-sm">{asset.title}</Card.Title><Card.Description>{asset.hint}</Card.Description></Card.Header>
 								<Card.Content class="space-y-3">
-									<div class="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+									<div class="flex items-center gap-3 rounded-lg border bg-base-200/30 p-3">
 										<img src={versionedAsset(String(branding[asset.field]), branding.version)} alt={asset.title} class="size-14 rounded-md border bg-white object-contain p-1" />
-										<div class="min-w-0 text-xs text-muted-foreground"><p>{asset.min}</p><p class="truncate">{branding[asset.field]}</p></div>
+										<div class="min-w-0 text-xs text-base-content/70"><p>{asset.min}</p><p class="truncate">{branding[asset.field]}</p></div>
 									</div>
 									<div class="flex flex-wrap gap-2">
 										<input id={`asset-${asset.purpose}`} type="file" accept="image/png,image/jpeg" class="hidden" onchange={(event) => void uploadAsset(asset.purpose, event.currentTarget)} />
@@ -196,31 +196,31 @@
 						<Card.Header><Card.Title class="text-base">Pratinjau</Card.Title><Card.Description>Simulasi sidebar, browser tab, dan ikon PWA.</Card.Description></Card.Header>
 						<Card.Content class="space-y-4">
 							<div class="rounded-xl border p-4">
-								<div class="flex items-center gap-3"><img src={versionedAsset(branding.mark_url, branding.version)} alt="Mark" class="size-10 rounded-lg bg-white object-contain p-1" /><div><p class="font-semibold">{branding.short_name}</p><p class="text-xs text-muted-foreground">{branding.tagline}</p></div></div>
+								<div class="flex items-center gap-3"><img src={versionedAsset(branding.mark_url, branding.version)} alt="Mark" class="size-10 rounded-lg bg-white object-contain p-1" /><div><p class="font-semibold">{branding.short_name}</p><p class="text-xs text-base-content/70">{branding.tagline}</p></div></div>
 							</div>
 							<div class="rounded-xl border p-4">
-								<p class="mb-2 text-xs font-medium text-muted-foreground">Tab Browser</p>
-								<div class="flex items-center gap-2 rounded-full bg-muted px-3 py-2 text-sm"><img src={versionedAsset(branding.favicon_url, branding.version)} alt="Favicon" class="size-4" />{branding.short_name}</div>
+								<p class="mb-2 text-xs font-medium text-base-content/70">Tab Browser</p>
+								<div class="flex items-center gap-2 rounded-full bg-base-200 px-3 py-2 text-sm"><img src={versionedAsset(branding.favicon_url, branding.version)} alt="Favicon" class="size-4" />{branding.short_name}</div>
 							</div>
-							<div class="rounded-xl border p-4 text-sm text-muted-foreground">Manifest PWA otomatis memakai nama singkat, warna theme, dan ikon 192/512 dengan cache-busting version <code>{branding.version}</code>.</div>
+							<div class="rounded-xl border p-4 text-sm text-base-content/70">Manifest PWA otomatis memakai nama singkat, warna theme, dan ikon 192/512 dengan cache-busting version <code>{branding.version}</code>.</div>
 						</Card.Content>
 					</Card.Root>
 
-					<Card.Root class="h-fit border-border/80 bg-muted/20">
+					<Card.Root class="h-fit border-base-300/80 bg-base-200/20">
 						<Card.Header>
 							<Card.Title class="text-base">Tentang Aplikasi</Card.Title>
 							<Card.Description>Atribusi internal yang tampil halus tanpa mengubah identitas resmi madrasah.</Card.Description>
 						</Card.Header>
 						<Card.Content class="space-y-3 text-sm">
-							<div class="rounded-xl border bg-background/70 p-4">
-								<p class="font-semibold text-foreground">{appAttribution.productName}</p>
-								<p class="mt-1 text-xs leading-5 text-muted-foreground">{appAttribution.description}</p>
+							<div class="rounded-xl border bg-base-200/70 p-4">
+								<p class="font-semibold text-base-content">{appAttribution.productName}</p>
+								<p class="mt-1 text-xs leading-5 text-base-content/70">{appAttribution.description}</p>
 							</div>
-							<div class="flex items-center justify-between gap-3 rounded-xl border bg-background/70 px-4 py-3">
-								<span class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Pengembang</span>
-								<span class="text-sm font-semibold text-foreground">{appAttribution.developerName}</span>
+							<div class="flex items-center justify-between gap-3 rounded-xl border bg-base-200/70 px-4 py-3">
+								<span class="text-xs font-medium uppercase tracking-[0.18em] text-base-content/70">Pengembang</span>
+								<span class="text-sm font-semibold text-base-content">{appAttribution.developerName}</span>
 							</div>
-							<p class="text-xs leading-5 text-muted-foreground">{appAttribution.formalDeveloperLabel}. Teks atribusi hanya ditampilkan pada area UI non-dokumen resmi.</p>
+							<p class="text-xs leading-5 text-base-content/70">{appAttribution.formalDeveloperLabel}. Teks atribusi hanya ditampilkan pada area UI non-dokumen resmi.</p>
 						</Card.Content>
 					</Card.Root>
 				</div>

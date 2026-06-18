@@ -191,16 +191,16 @@
 </svelte:head>
 
 <div class="space-y-6">
-	<section class="rounded-2xl border bg-card p-5 shadow-sm">
+	<section class="rounded-2xl border bg-base-100 p-5 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 			<div>
-				<p class="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Pengaturan Sistem</p>
+				<p class="text-sm font-semibold uppercase tracking-wide text-base-content/70">Pengaturan Sistem</p>
 				<h1 class="text-2xl font-bold tracking-tight">Maintenance Center</h1>
-				<p class="mt-2 max-w-3xl text-sm text-muted-foreground">
+				<p class="mt-2 max-w-3xl text-sm text-base-content/70">
 					Kendalikan maintenance global, module-level, read-only mode, health checklist, dan audit log tanpa membuka akses rahasia server.
 				</p>
 			</div>
-			<button class="rounded-lg border px-4 py-2 text-sm font-semibold hover:bg-muted" onclick={reloadAll} disabled={loading}>Muat ulang</button>
+			<button class="rounded-lg border px-4 py-2 text-sm font-semibold hover:bg-base-200" onclick={reloadAll} disabled={loading}>Muat ulang</button>
 		</div>
 	</section>
 
@@ -212,36 +212,36 @@
 	{/if}
 
 	<section class="grid gap-4 md:grid-cols-4">
-		<div class="rounded-2xl border bg-card p-4 shadow-sm">
-			<p class="text-xs uppercase text-muted-foreground">Status</p>
+		<div class="rounded-2xl border bg-base-100 p-4 shadow-sm">
+			<p class="text-xs uppercase text-base-content/70">Status</p>
 			<p class={`mt-2 text-xl font-bold ${activeWindow ? 'text-red-600' : 'text-emerald-600'}`}>{activeWindow ? 'Aktif' : 'Normal'}</p>
 		</div>
-		<div class="rounded-2xl border bg-card p-4 shadow-sm">
-			<p class="text-xs uppercase text-muted-foreground">Jadwal</p>
+		<div class="rounded-2xl border bg-base-100 p-4 shadow-sm">
+			<p class="text-xs uppercase text-base-content/70">Jadwal</p>
 			<p class="mt-2 text-xl font-bold">{scheduledWindows.length}</p>
 		</div>
-		<div class="rounded-2xl border bg-card p-4 shadow-sm">
-			<p class="text-xs uppercase text-muted-foreground">DB</p>
+		<div class="rounded-2xl border bg-base-100 p-4 shadow-sm">
+			<p class="text-xs uppercase text-base-content/70">DB</p>
 			<p class={`mt-2 text-xl font-bold ${health?.database?.connected ? 'text-emerald-600' : 'text-red-600'}`}>{health?.database?.connected ? 'Connected' : 'Unknown'}</p>
 		</div>
-		<div class="rounded-2xl border bg-card p-4 shadow-sm">
-			<p class="text-xs uppercase text-muted-foreground">CBT aktif</p>
+		<div class="rounded-2xl border bg-base-100 p-4 shadow-sm">
+			<p class="text-xs uppercase text-base-content/70">CBT aktif</p>
 			<p class="mt-2 text-xl font-bold">{health?.cbt?.active_session_count ?? 0}</p>
 		</div>
 	</section>
 
 	<section class="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-		<form class="space-y-4 rounded-2xl border bg-card p-5 shadow-sm" onsubmit={(event) => { event.preventDefault(); void createWindow(); }}>
+		<form class="space-y-4 rounded-2xl border bg-base-100 p-5 shadow-sm" onsubmit={(event) => { event.preventDefault(); void createWindow(); }}>
 			<div>
 				<h2 class="text-lg font-semibold">Buat Maintenance Window</h2>
-				<p class="text-sm text-muted-foreground">Untuk emergency lock, centang “aktifkan langsung”. Untuk maintenance terjadwal, isi waktu mulai dan selesai.</p>
+				<p class="text-sm text-base-content/70">Untuk emergency lock, centang “aktifkan langsung”. Untuk maintenance terjadwal, isi waktu mulai dan selesai.</p>
 			</div>
 			<div class="grid gap-4 md:grid-cols-2">
 				<label class="space-y-1 text-sm font-medium">Judul
-					<input class="w-full rounded-lg border bg-background px-3 py-2" bind:value={form.title} required />
+					<input class="w-full rounded-lg border bg-base-200 px-3 py-2" bind:value={form.title} required />
 				</label>
 				<label class="space-y-1 text-sm font-medium">Severity
-					<select class="w-full rounded-lg border bg-background px-3 py-2" bind:value={form.severity}>
+					<select class="w-full rounded-lg border bg-base-200 px-3 py-2" bind:value={form.severity}>
 						<option value="info">Info</option>
 						<option value="warning">Warning</option>
 						<option value="critical">Critical</option>
@@ -249,21 +249,21 @@
 				</label>
 			</div>
 			<label class="space-y-1 text-sm font-medium">Pesan user
-				<textarea class="min-h-24 w-full rounded-lg border bg-background px-3 py-2" bind:value={form.message} required></textarea>
+				<textarea class="min-h-24 w-full rounded-lg border bg-base-200 px-3 py-2" bind:value={form.message} required></textarea>
 			</label>
 			<div class="grid gap-4 md:grid-cols-3">
 				<label class="space-y-1 text-sm font-medium">Mode
-					<select class="w-full rounded-lg border bg-background px-3 py-2" bind:value={form.mode}>
+					<select class="w-full rounded-lg border bg-base-200 px-3 py-2" bind:value={form.mode}>
 						<option value="global">Global</option>
 						<option value="module">Per Modul</option>
 						<option value="read_only">Read-only</option>
 					</select>
 				</label>
 				<label class="space-y-1 text-sm font-medium">Mulai
-					<input type="datetime-local" class="w-full rounded-lg border bg-background px-3 py-2" bind:value={form.starts_at} />
+					<input type="datetime-local" class="w-full rounded-lg border bg-base-200 px-3 py-2" bind:value={form.starts_at} />
 				</label>
 				<label class="space-y-1 text-sm font-medium">Selesai
-					<input type="datetime-local" class="w-full rounded-lg border bg-background px-3 py-2" bind:value={form.ends_at} />
+					<input type="datetime-local" class="w-full rounded-lg border bg-base-200 px-3 py-2" bind:value={form.ends_at} />
 				</label>
 			</div>
 			<div class="rounded-xl border p-4">
@@ -288,16 +288,16 @@
 				</label>
 			</div>
 			<label class="space-y-1 text-sm font-medium">Role bypass
-				<input class="w-full rounded-lg border bg-background px-3 py-2" bind:value={form.bypass_roles} placeholder="admin, superadmin" />
+				<input class="w-full rounded-lg border bg-base-200 px-3 py-2" bind:value={form.bypass_roles} placeholder="admin, superadmin" />
 			</label>
 			<label class="space-y-1 text-sm font-medium">Alasan / catatan audit
-				<input class="w-full rounded-lg border bg-background px-3 py-2" bind:value={form.reason} placeholder="Contoh: deploy modul CBT malam ini" />
+				<input class="w-full rounded-lg border bg-base-200 px-3 py-2" bind:value={form.reason} placeholder="Contoh: deploy modul CBT malam ini" />
 			</label>
-			<button class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60" disabled={saving || loading}>Simpan Maintenance</button>
+			<button class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-content disabled:opacity-60" disabled={saving || loading}>Simpan Maintenance</button>
 		</form>
 
 		<div class="space-y-6">
-			<section class="rounded-2xl border bg-card p-5 shadow-sm">
+			<section class="rounded-2xl border bg-base-100 p-5 shadow-sm">
 				<h2 class="text-lg font-semibold">Pre-maintenance Checklist</h2>
 				<div class="mt-4 space-y-3">
 					{#each health?.checklist ?? [] as item}
@@ -306,14 +306,14 @@
 								<p class="font-medium">{item.label}</p>
 								<span class={`rounded-full px-2 py-0.5 text-xs font-semibold ${item.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{item.ok ? 'OK' : item.severity}</span>
 							</div>
-							<p class="mt-1 text-sm text-muted-foreground">{item.message}</p>
+							<p class="mt-1 text-sm text-base-content/70">{item.message}</p>
 						</div>
 					{:else}
-						<p class="text-sm text-muted-foreground">Checklist belum tersedia.</p>
+						<p class="text-sm text-base-content/70">Checklist belum tersedia.</p>
 					{/each}
 				</div>
 			</section>
-			<section class="rounded-2xl border bg-card p-5 shadow-sm">
+			<section class="rounded-2xl border bg-base-100 p-5 shadow-sm">
 				<h2 class="text-lg font-semibold">Health Summary</h2>
 				<dl class="mt-4 space-y-2 text-sm">
 					<div class="flex justify-between gap-4"><dt>Core API</dt><dd class="font-semibold">{health?.core_api?.status ?? '-'}</dd></div>
@@ -325,11 +325,11 @@
 		</div>
 	</section>
 
-	<section class="rounded-2xl border bg-card p-5 shadow-sm">
+	<section class="rounded-2xl border bg-base-100 p-5 shadow-sm">
 		<h2 class="text-lg font-semibold">Maintenance Windows</h2>
 		<div class="mt-4 overflow-x-auto">
 			<table class="w-full min-w-[880px] text-left text-sm">
-				<thead class="text-xs uppercase text-muted-foreground">
+				<thead class="text-xs uppercase text-base-content/70">
 					<tr><th class="py-2">Judul</th><th>Mode</th><th>Modul</th><th>Mulai</th><th>Selesai</th><th>Status</th><th>Aksi</th></tr>
 				</thead>
 				<tbody class="divide-y">
@@ -345,31 +345,31 @@
 								{#if item.is_active}
 									<button class="rounded-lg border border-red-200 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50" onclick={() => void deactivateWindow(item.id)} disabled={saving}>Nonaktifkan</button>
 								{:else}
-									<button class="rounded-lg border px-3 py-1 text-xs font-semibold hover:bg-muted" onclick={() => void activateWindow(item.id)} disabled={saving}>Aktifkan</button>
+									<button class="rounded-lg border px-3 py-1 text-xs font-semibold hover:bg-base-200" onclick={() => void activateWindow(item.id)} disabled={saving}>Aktifkan</button>
 								{/if}
 							</td>
 						</tr>
 					{:else}
-						<tr><td colspan="7" class="py-6 text-center text-muted-foreground">Belum ada maintenance window.</td></tr>
+						<tr><td colspan="7" class="py-6 text-center text-base-content/70">Belum ada maintenance window.</td></tr>
 					{/each}
 				</tbody>
 			</table>
 		</div>
 	</section>
 
-	<section class="rounded-2xl border bg-card p-5 shadow-sm">
+	<section class="rounded-2xl border bg-base-100 p-5 shadow-sm">
 		<h2 class="text-lg font-semibold">Audit Log</h2>
 		<div class="mt-4 space-y-3">
 			{#each auditLogs as log}
 				<div class="rounded-xl border p-3 text-sm">
 					<div class="flex flex-wrap items-center justify-between gap-2">
 						<p class="font-semibold capitalize">{log.action}</p>
-						<p class="text-muted-foreground">{formatDate(log.created_at)}</p>
+						<p class="text-base-content/70">{formatDate(log.created_at)}</p>
 					</div>
-					<p class="mt-1 text-muted-foreground">{log.reason || 'Tanpa alasan'}</p>
+					<p class="mt-1 text-base-content/70">{log.reason || 'Tanpa alasan'}</p>
 				</div>
 			{:else}
-				<p class="text-sm text-muted-foreground">Audit log belum tersedia.</p>
+				<p class="text-sm text-base-content/70">Audit log belum tersedia.</p>
 			{/each}
 		</div>
 	</section>

@@ -265,17 +265,17 @@
 <div class="space-y-6">
 
 	<!-- Breadcrumb -->
-	<div class="flex items-center gap-2 text-sm text-muted-foreground">
-		<a href={resolve('/')} class="hover:text-foreground">Beranda</a>
+	<div class="flex items-center gap-2 text-sm text-base-content/70">
+		<a href={resolve('/')} class="hover:text-base-content">Beranda</a>
 		<span>/</span>
-		<span class="text-foreground font-medium">PUSAKA</span>
+		<span class="text-base-content font-medium">PUSAKA</span>
 	</div>
 
 	<!-- Header -->
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<h1 class="text-2xl font-semibold text-foreground">Kontrol PUSAKA Kemenag</h1>
-			<p class="text-sm text-muted-foreground mt-1">Pantau dan kelola penarikan data kehadiran dari PUSAKA Kemenag</p>
+			<h1 class="text-2xl font-semibold text-base-content">Kontrol PUSAKA Kemenag</h1>
+			<p class="text-sm text-base-content/70 mt-1">Pantau dan kelola penarikan data kehadiran dari PUSAKA Kemenag</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<LoadingButton variant="outline" size="sm" onclick={() => void triggerSched()} loading={busy.sched} loadingLabel="Memproses..." label="">
@@ -313,10 +313,10 @@
 
 	<AsyncContent promise={overviewPromise} onerror={handleOverviewRenderError}>
 		{#snippet pending()}
-			<div class="space-y-4 rounded-2xl border border-border bg-card p-5">
+			<div class="space-y-4 rounded-2xl border border-base-300 bg-base-100 p-5">
 				<div class="grid gap-4 sm:grid-cols-3">
 					{#each Array.from({ length: 3 }) as _, index (`pusaka-worker-skeleton-${index}`)}
-						<div class="space-y-3 rounded-xl border border-border p-4">
+						<div class="space-y-3 rounded-xl border border-base-300 p-4">
 							<Skeleton class="h-4 w-28" />
 							<Skeleton class="h-8 w-20" />
 						</div>
@@ -367,7 +367,7 @@
 					{currentWorkerStatus?.active_workers?.reduce((s, w) => s + w.active_consumers, 0) ?? '—'}
 				</span>
 				{#if currentWorkerStatus}
-					<span class="text-sm text-muted-foreground ml-1">
+					<span class="text-sm text-base-content/70 ml-1">
 						/ {currentWorkerStatus.active_workers?.reduce((s, w) => s + w.target_concurrency, 0)} kapasitas
 					</span>
 				{/if}
@@ -392,7 +392,7 @@
 							<span class="badge badge-sm badge-outline">Idle</span>
 						{/if}
 					</div>
-					<p class="text-xs text-muted-foreground mt-1">
+					<p class="text-xs text-base-content/70 mt-1">
 						<span class="badge badge-xs badge-success">{q.success} sukses</span>
 						<span class="badge badge-xs badge-error">{q.failed} gagal</span>
 					</p>
@@ -407,7 +407,7 @@
 	<QueueMonitor stats={currentQueueStats} />
 
 	<!-- Recent jobs -->
-	<Card.Root class="overflow-hidden border-border shadow-sm">
+	<Card.Root class="overflow-hidden border-base-300 shadow-sm">
 		<Card.Header class="pb-3">
 			<div class="flex items-center justify-between">
 				<Card.Title class="text-base">Pekerjaan Terbaru</Card.Title>
@@ -429,11 +429,11 @@
 				<Table.Body>
 					{#each currentRecentJobs as j (j.id)}
 						<Table.Row>
-							<Table.Cell class="text-xs text-muted-foreground whitespace-nowrap">{fmtDt(j.created_at)}</Table.Cell>
+							<Table.Cell class="text-xs text-base-content/70 whitespace-nowrap">{fmtDt(j.created_at)}</Table.Cell>
 							<Table.Cell class="font-medium">{j.nama || j.employee_nama || '—'}</Table.Cell>
 							<Table.Cell><Badge variant="outline">{runTypeLabel(j.run_type)}</Badge></Table.Cell>
 							<Table.Cell><Badge variant={statusVariant(j.status)}>{statusLabel(j.status)}</Badge></Table.Cell>
-							<Table.Cell class="hidden sm:table-cell text-xs text-muted-foreground">{j.claimed_by || '—'}</Table.Cell>
+							<Table.Cell class="hidden sm:table-cell text-xs text-base-content/70">{j.claimed_by || '—'}</Table.Cell>
 						</Table.Row>
 					{:else}
 						<Table.Row>
@@ -459,12 +459,12 @@
 						/>
 					</div>
 				{:else}
-					<ul class="divide-y divide-border border-b border-border">
+					<ul class="divide-y divide-border border-b border-base-300">
 						{#each currentRecentJobs as j (j.id)}
 							<li class="flex items-start gap-3 px-4 py-2.5">
 								<div class="min-w-0 grow">
-									<p class="truncate text-sm font-medium text-foreground">{j.nama || j.employee_nama || '—'}</p>
-									<p class="truncate text-[11px] text-muted-foreground">{fmtDt(j.created_at)} · {j.claimed_by || 'Belum diambil'}</p>
+									<p class="truncate text-sm font-medium text-base-content">{j.nama || j.employee_nama || '—'}</p>
+									<p class="truncate text-[11px] text-base-content/70">{fmtDt(j.created_at)} · {j.claimed_by || 'Belum diambil'}</p>
 								</div>
 								<div class="flex shrink-0 flex-col items-end gap-1">
 									<Badge variant={statusVariant(j.status)}>{statusLabel(j.status)}</Badge>
@@ -482,15 +482,15 @@
 	<div class="grid gap-3 sm:grid-cols-2">
 		<Button variant="outline" href={resolve('/pusaka/employees')} class="h-auto py-4 flex-col items-start text-left gap-1">
 			<span class="font-semibold">Pegawai PUSAKA</span>
-			<span class="text-xs text-muted-foreground font-normal">Atur akun, jadwal, dan pekerjaan untuk pegawai yang memenuhi syarat</span>
+			<span class="text-xs text-base-content/70 font-normal">Atur akun, jadwal, dan pekerjaan untuk pegawai yang memenuhi syarat</span>
 		</Button>
 		<Button variant="outline" href={resolve('/pusaka/kehadiran')} class="h-auto py-4 flex-col items-start text-left gap-1">
 			<span class="font-semibold">Data Kehadiran</span>
-			<span class="text-xs text-muted-foreground font-normal">Rekap harian dari PUSAKA Kemenag</span>
+			<span class="text-xs text-base-content/70 font-normal">Rekap harian dari PUSAKA Kemenag</span>
 		</Button>
 		<Button variant="outline" href={resolve('/pusaka/summary')} class="h-auto py-4 flex-col items-start text-left gap-1">
 			<span class="font-semibold">Ringkasan Kehadiran</span>
-			<span class="text-xs text-muted-foreground font-normal">Akumulasi per periode / bulan</span>
+			<span class="text-xs text-base-content/70 font-normal">Akumulasi per periode / bulan</span>
 		</Button>
 	</div>
 		{/snippet}
