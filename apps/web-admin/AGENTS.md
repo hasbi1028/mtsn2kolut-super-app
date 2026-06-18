@@ -34,6 +34,18 @@ This app is the SvelteKit admin frontend for MTs Negeri 2 Kolaka Utara.
 - Use clear hierarchy, strong legibility, and practical workflows for admin and guru users.
 - Avoid noisy novelty and avoid generic AI-looking templates.
 
+## Design System (Kemenag Green Theme)
+
+- **Typography**: Plus Jakarta Sans (Google Fonts). Weights: 400, 600, 700, 800, 900.
+- **Primary color**: `#16a34a` (Kemenag green). Hover: `#15803d`.
+- **Background**: `#f8fafc` / `white`. Surface: `#f1f5f9`.
+- **Text**: `#0f172a` (primary), `#64748b` (secondary), `#94a3b8` (muted).
+- **Cards**: Border radius `18px`, border `1.5px solid #f1f5f9`.
+- **Buttons**: Border radius `14px`, uppercase text, `font-weight: 900`.
+- **Inputs**: Border radius `14px`, green focus ring `rgba(22,163,74,0.1)`.
+- **Badges/Kickers**: `0.65rem`, `font-weight: 900`, `uppercase`, `letter-spacing: 0.18em`.
+- See skill `kemenag-superapp-theme` for full design tokens and patterns.
+
 ## UX Direction
 
 - Prioritize speed of data entry and clarity of status.
