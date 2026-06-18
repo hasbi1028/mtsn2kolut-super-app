@@ -173,8 +173,7 @@
 	<!-- Filters -->
 	<Card.Root class="border-base-300 shadow-sm">
 		<Card.Content class="pt-4 pb-3">
-			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[auto_1fr_1fr_auto] xl:items-end">
-				<div class="text-sm text-base-content/70">Filter</div>
+			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_auto] xl:items-end">
 				<select
 					bind:value={filterStatus}
 					onchange={load}
@@ -193,9 +192,8 @@
 						<option value={o.value}>{o.label}</option>
 					{/each}
 				</select>
-				<div class="flex items-center justify-between gap-3 sm:col-span-2 xl:col-span-1 xl:justify-end">
-					<LoadingButton variant="outline" size="sm" onclick={() => void refreshJobs(true)} loading={refreshing} loadingLabel="Memuat..." label="↺ Refresh" class="h-10 sm:w-auto" />
-					<span class="text-sm text-base-content/70">{jobs.length} job</span>
+				<div class="flex items-center gap-3 sm:col-span-2 xl:col-span-1 xl:justify-end">
+					<span class="text-sm font-semibold text-base-content">{jobs.length} job</span>
 				</div>
 			</div>
 		</Card.Content>

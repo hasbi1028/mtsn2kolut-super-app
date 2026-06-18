@@ -185,18 +185,18 @@
 
 <svelte:window onclick={handlePublicClick} onfocusin={handlePublicFocusIn} onsubmit={handlePublicSubmit} onchange={handlePublicChange} />
 
-<div class="min-h-screen bg-[linear-gradient(180deg,#f7faf7_0%,#f9fafb_22%,#ffffff_100%)]" style={`--brand-primary: ${branding.primary_color}; --brand-primary-soft: color-mix(in srgb, ${branding.primary_color} 12%, white)`}>
+<div class="min-h-screen" style={`--brand-primary: ${branding.primary_color}; --brand-primary-soft: color-mix(in srgb, ${branding.primary_color} 12%, white)`}>
 	<header class="sticky top-0 z-30 border-b border-emerald-100/80 bg-white/90 backdrop-blur">
 		<div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-				<a href={resolve('/')} class="flex items-center gap-3">
-						<span class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-emerald-100">
-							<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Logo ${branding.short_name}`} class="h-full w-full object-contain" />
-						</span>
-					<div>
-						<p class="text-sm font-semibold text-slate-900 sm:text-base">{branding.app_name}</p>
-						<p class="text-xs text-emerald-700">{branding.tagline}</p>
-					</div>
-				</a>
+			<a href={resolve('/')} class="flex items-center gap-3">
+				<span class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-emerald-100">
+					<img src={versionedAsset(branding.mark_url, branding.version)} alt={`Logo ${branding.short_name}`} class="h-full w-full object-contain" />
+				</span>
+				<div>
+					<p class="text-sm font-extrabold text-slate-900 tracking-tight sm:text-base">{branding.app_name}</p>
+					<p class="text-[10px] font-extrabold uppercase tracking-widest text-emerald-600">{branding.tagline}</p>
+				</div>
+			</a>
 
 				<nav class="hidden items-center gap-1 lg:flex">
 					{#each navItems as item (item.href)}
@@ -278,21 +278,21 @@
 		<div class="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6 sm:py-10">
 			<div class="grid gap-8 sm:grid-cols-[1.2fr,0.8fr]">
 				<div>
-					<p class="text-base font-semibold text-slate-900">{branding.app_name}</p>
-					<p class="mt-2 max-w-2xl text-sm leading-7 text-slate-600">
+					<p class="text-base font-extrabold tracking-tight text-slate-900">{branding.app_name}</p>
+					<p class="mt-2 max-w-2xl text-sm leading-7 text-slate-500 font-medium">
 						Sistem informasi madrasah untuk pengelolaan pegawai, kehadiran, dan pengaturan sistem.
 					</p>
 				</div>
 				<div class="space-y-3">
-					<p class="text-sm font-semibold text-slate-900">Menu</p>
-					<div class="grid gap-2 text-sm text-slate-600">
-						<a href={resolve('/')} class="hover:text-emerald-800">Dashboard</a>
-						<a href={resolve('/login')} class="hover:text-emerald-800">Masuk</a>
+					<p class="text-xs font-extrabold uppercase tracking-widest text-slate-400">Menu</p>
+					<div class="grid gap-2 text-sm text-slate-600 font-medium">
+						<a href={resolve('/')} class="hover:text-emerald-700 transition-colors">Dashboard</a>
+						<a href={resolve('/login')} class="hover:text-emerald-700 transition-colors">Masuk</a>
 					</div>
 				</div>
 			</div>
 
-			<div class="border-t border-slate-200 pt-4 text-xs text-slate-500">
+			<div class="border-t border-slate-100 pt-4 text-xs text-slate-400 font-medium">
 				Informasi pada website ini dikelola oleh MTs Negeri 2 Kolaka Utara.
 			</div>
 		</div>

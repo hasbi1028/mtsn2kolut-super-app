@@ -34,6 +34,13 @@
 		return { start: fmt(start), end: fmt(end) };
 	}
 
+	function todayWita() {
+		return new Intl.DateTimeFormat('en-CA', {
+			timeZone: 'Asia/Makassar',
+			year: 'numeric', month: '2-digit', day: '2-digit',
+		}).format(new Date());
+	}
+
 	function rangeKey() {
 		return `${startDate}:${endDate}`;
 	}
@@ -148,11 +155,22 @@
 			<h1 class="text-2xl font-semibold text-base-content">Ringkasan Kehadiran</h1>
 			<p class="text-sm text-base-content/70 mt-1">Akumulasi kehadiran pegawai dari PUSAKA Kemenag dalam periode tertentu</p>
 		</div>
-		<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_auto_auto] xl:items-end">
+		<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_auto_auto_auto] xl:items-end">
 			<div class="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
 				<Input type="date" bind:value={startDate} class="h-10 min-w-0 bg-base-100" />
 				<span class="text-center text-sm text-base-content/70">s/d</span>
 				<Input type="date" bind:value={endDate} class="h-10 min-w-0 bg-base-100" />
+			</div>
+			<div class="flex items-center gap-1.5">
+				<button class="btn btn-ghost btn-xs h-7 px-2 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(1); startDate = d.toISOString().slice(0,10); const e = new Date(t); e.setMonth(e.getMonth()+1,0); endDate = e.toISOString().slice(0,10); void load(); }}>
+					Bulan Ini
+				</button>
+				<button class="btn btn-ghost btn-xs h-7 px-2 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(d.getDate() - 29); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
+					30 Hari
+				</button>
+				<button class="btn btn-ghost btn-xs h-7 px-2 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); const d = new Date(t); d.setMonth(d.getMonth()-2, 1); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
+					3 Bulan
+				</button>
 			</div>
 			<LoadingButton class="h-10 w-full sm:w-auto" onclick={() => void load()} loading={refreshing} loadingLabel="Memuat..." label="Tampilkan" />
 			<LoadingButton class="h-10 w-full sm:w-auto" variant="outline" onclick={exportCSV} disabled={summary.length === 0} label="↓ CSV" />

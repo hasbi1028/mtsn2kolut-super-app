@@ -43,6 +43,9 @@
 	<link rel="apple-touch-icon" href={versionedAsset(branding.apple_touch_icon_url, branding.version)} />
 	<link rel="manifest" href={versionedAsset('/manifest.webmanifest', branding.version)} />
 	<meta name="theme-color" content={branding.theme_color} />
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+	<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,600;0,700;0,800&display=swap" rel="stylesheet" />
 </svelte:head>
 
 <svelte:body class:overflow-hidden={isMobileMenuOpen} />
@@ -114,9 +117,9 @@
 		<main class="admin-main flex min-h-screen min-w-0 flex-1 flex-col">
 			<!-- Desktop Top Header -->
 			<header class="admin-header z-10 hidden h-16 shrink-0 items-center justify-between border-b border-base-300 bg-base-100 px-8 lg:flex">
-				<h1 class="page-title text-xl font-black tracking-tight text-base-content">
+				<h2 class="page-title text-xl font-black tracking-tight text-base-content">
 					Super App Command Center
-				</h1>
+				</h2>
 				<div class="header-tools flex items-center gap-4">
 					<div class="text-sm font-semibold text-base-content/70">
 						{new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Makassar' })}
@@ -126,7 +129,7 @@
 
 			<div class="admin-content bg-base-200 pt-14 lg:flex-1 lg:pt-0">
 				<MaintenanceBanner status={data.maintenanceStatus} user={data.user} />
-				<div class="content-wrapper mx-auto w-full max-w-[1280px] px-4 py-5 sm:px-5 md:px-8 lg:px-10 lg:py-10">
+				<div class="content-wrapper mx-auto w-full max-w-[1360px] px-4 py-5 sm:px-6 md:px-8 lg:px-10 lg:py-10">
 					{#if navigating.to}
 						<div class="space-y-6">
 							<div class="skeleton h-8 w-56"></div>

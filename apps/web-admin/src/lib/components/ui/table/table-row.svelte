@@ -10,6 +10,6 @@
 	}: HTMLAttributes<HTMLTableRowElement> & { children?: Snippet } = $props();
 </script>
 
-<tr class={cn('hover', className)} {...restProps}>
+<tr class={cn('even:bg-base-200/50 hover:bg-base-200/80', className)} {...restProps}>
 	{@render children?.()}
 </tr>

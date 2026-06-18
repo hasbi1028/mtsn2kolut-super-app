@@ -536,10 +536,10 @@
   function scheduleButtonLabel(emp: Employee): string {
     const ci = emp.has_checkin_schedule;
     const co = emp.has_checkout_schedule;
-    if (ci && co) return '📅 Jadwal ✓';
-    if (ci)       return '📅 Masuk ✓';
-    if (co)       return '📅 Pulang ✓';
-    return '📅 Jadwal';
+    if (ci && co) return 'Jadwal ✓';
+    if (ci)       return 'Masuk ✓';
+    if (co)       return 'Pulang ✓';
+    return 'Jadwal';
   }
 
   const dayLabels = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
@@ -560,7 +560,7 @@
         </div>
         <div>
           <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Status Integrasi</p>
-          <select bind:value={filterMode} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+          <select bind:value={filterMode} class="select select-bordered w-full h-10">
             <option value="all">Semua</option>
             <option value="configured">Akun aktif</option>
             <option value="needs_setup">Belum setup</option>
@@ -568,7 +568,7 @@
           </select>
         </div>
         <div class="flex items-end">
-          <Badge variant="secondary" class="h-10 px-3">{filteredEmployees.length} pegawai</Badge>
+          <Badge variant="secondary" class="h-10 px-4 flex items-center text-sm">{filteredEmployees.length} pegawai</Badge>
         </div>
       </div>
     </div>
@@ -601,13 +601,15 @@
           <Table.Row class={e.active_status === 'running' ? 'bg-warning/10' : ''}>
             <Table.Cell>
               <div class="font-medium">{e.nama}</div>
-              <div class="text-xs text-primary font-mono">{e.pegawai_uid}</div>
-              <div class="text-xs text-muted-foreground">NIP {e.nip || '—'}</div>
-              <div class="mt-1">
+              <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs mt-0.5">
+                <span class="text-primary font-mono">{e.pegawai_uid}</span>
+                <span class="text-muted-foreground">· NIP {e.nip || '—'}</span>
+              </div>
+              <div class="mt-1.5">
                 {#if e.is_active}
-                  <Badge variant="outline" class="text-[11px] border-primary/20 text-primary">Pegawai aktif</Badge>
+                  <Badge variant="outline" class="text-[10px] leading-none py-0.5 px-1.5 border-primary/20 text-primary">Aktif</Badge>
                 {:else}
-                  <Badge variant="secondary" class="text-[11px]">Nonaktif / rotasi</Badge>
+                  <Badge variant="secondary" class="text-[10px] leading-none py-0.5 px-1.5">Nonaktif</Badge>
                 {/if}
               </div>
             </Table.Cell>
@@ -646,26 +648,9 @@
                     loadingLabel="Memproses..."
                     disabled={(accountTogglingId !== null && accountTogglingId !== e.id) || accountDeletingId !== null}
                   >
-                    {e.pusaka_is_enabled === false ? 'Aktifkan Akun' : 'Nonaktifkan Akun'}
-                  </LoadingButton>
-                  <LoadingButton
-                    size="sm"
-                    variant="ghost"
-                    class="text-destructive hover:text-destructive"
-                    onclick={() => deletePusakaAccount(e)}
-                    loading={accountDeletingId === e.id}
-                    loadingLabel="Menghapus..."
-                    disabled={(accountDeletingId !== null && accountDeletingId !== e.id) || accountTogglingId !== null}
-                  >
-                    Hapus Akun
+                    {e.pusaka_is_enabled === false ? 'Aktifkan' : 'Nonaktifkan'}
                   </LoadingButton>
                 {/if}
-                <Button size="sm" variant="outline" onclick={() => openAuditDialog(e)}>
-                  Riwayat
-                </Button>
-                <LoadingButton size="sm" variant="ghost" onclick={() => testPusakaCredentials(e)} loading={testingId === e.id} loadingLabel="Testing..." disabled={(testingId !== null && testingId !== e.id) || !isPusakaConfigured(e)}>
-                  Test
-                </LoadingButton>
                 <LoadingButton size="sm" variant="outline" onclick={() => openRunConfirm(e, 'morning')} loading={busyId === e.id} loadingLabel="Memproses..." disabled={busyId === e.id}>
                   Rekap
                 </LoadingButton>
@@ -673,23 +658,68 @@
                   onclick={() => openRunConfirm(e, 'checkin')}
                   disabled={busyId === e.id}
                   class="border-warning/30 text-warning hover:bg-warning/10">
-                  ☀ Masuk
+                  <svg class="h-3.5 w-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Masuk
                 </Button>
                 <Button size="sm" variant="outline"
                   onclick={() => openRunConfirm(e, 'checkout')}
                   disabled={busyId === e.id}
                   class="border-warning/30 text-warning hover:bg-warning/10">
-                  🌙 Pulang
+                  <svg class="h-3.5 w-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Pulang
                 </Button>
                 <Button size="sm" variant="outline"
                   onclick={() => openScheduleDialog(e)}
                   class={scheduleButtonClass(e)}>
+                  <svg class="h-3.5 w-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
                   {scheduleButtonLabel(e)}
                 </Button>
-                <LoadingButton size="sm" variant="ghost" onclick={() => doStop(e.id)} loading={busyId === e.id} loadingLabel="Memproses..." disabled={busyId === e.id || !e.active_status}
-                  class="text-warning hover:text-warning">
-                  ■ Stop
-                </LoadingButton>
+                <!-- Dropdown untuk aksi sekunder -->
+                <div class="relative dropdown">
+                  <button
+                    class="inline-flex items-center justify-center rounded-md px-2.5 py-1.5 text-xs font-medium border border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    onclick={(ev) => {
+                      const btn = ev.currentTarget;
+                      const menu = btn.nextElementSibling as HTMLElement;
+                      if (menu) menu.classList.toggle('hidden');
+                    }}
+                    aria-label="Aksi lainnya"
+                  >
+                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                      <circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none" />
+                      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+                      <circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none" />
+                    </svg>
+                  </button>
+                  <div class="hidden absolute right-0 z-50 mt-1 min-w-[160px] rounded-lg border border-border bg-card p-1 shadow-xl" onclick={(ev) => ev.stopPropagation()}>
+                    <Button size="sm" variant="ghost" class="w-full justify-start gap-2 rounded-md px-3 py-1.5 text-xs font-medium" onclick={(event: MouseEvent) => { openAuditDialog(e); (event.currentTarget as HTMLElement).closest('.dropdown')?.querySelector('[class*="hidden"]')?.classList.add('hidden'); }}>
+                      <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      Riwayat
+                    </Button>
+                    <Button size="sm" variant="ghost" class="w-full justify-start gap-2 rounded-md px-3 py-1.5 text-xs font-medium" onclick={(event: MouseEvent) => { testPusakaCredentials(e); (event.currentTarget as HTMLElement).closest('.dropdown')?.querySelector('[class*="hidden"]')?.classList.add('hidden'); }} disabled={!isPusakaConfigured(e)}>
+                      <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                      Test
+                    </Button>
+                    {#if isPusakaConfigured(e)}
+                      <hr class="my-1 border-border" />
+                      <Button size="sm" variant="ghost" class="w-full justify-start gap-2 rounded-md px-3 py-1.5 text-xs font-medium text-destructive hover:text-destructive" onclick={(event: MouseEvent) => { deletePusakaAccount(e); (event.currentTarget as HTMLElement).closest('.dropdown')?.querySelector('[class*="hidden"]')?.classList.add('hidden'); }}>
+                        <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        Hapus Akun
+                      </Button>
+                    {/if}
+                    <hr class="my-1 border-border" />
+                    <LoadingButton size="sm" variant="ghost" class="w-full justify-start gap-2 rounded-md px-3 py-1.5 text-xs font-medium text-warning hover:text-warning" onclick={() => doStop(e.id)} loading={busyId === e.id} loadingLabel="Memproses..." disabled={busyId === e.id || !e.active_status}>
+                      <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+                      Stop
+                    </LoadingButton>
+                  </div>
+                </div>
               </div>
             </Table.Cell>
           </Table.Row>

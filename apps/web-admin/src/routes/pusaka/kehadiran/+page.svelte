@@ -64,7 +64,7 @@
 	}
 
 	function stripWita(val: string | null) {
-		if (!val) return '—';
+		if (!val) return 'Belum';
 		return val.replace(/\s*WITA$/i, '').trim();
 	}
 
@@ -294,6 +294,18 @@
 						<input type="date" bind:value={startDate} class="input input-bordered h-10 min-w-0 bg-base-100" />
 						<span class="text-center text-sm text-base-content/70">s/d</span>
 						<input type="date" bind:value={endDate} class="input input-bordered h-10 min-w-0 bg-base-100" />
+					</div>
+					<!-- Quick date shortcuts -->
+					<div class="flex items-center gap-1.5">
+						<button class="btn btn-ghost btn-xs h-7 px-2 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); startDate = t; endDate = t; void load(); }}>
+							Hari Ini
+						</button>
+						<button class="btn btn-ghost btn-xs h-7 px-2 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(d.getDate() - 6); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
+							7 Hari
+						</button>
+						<button class="btn btn-ghost btn-xs h-7 px-2 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(1); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
+							Bulan Ini
+						</button>
 					</div>
 					<button class="btn btn-primary btn-sm h-10 w-full sm:w-auto" onclick={() => void load()}>
 						{#if refreshing}<span class="loading loading-spinner loading-xs"></span>{/if}
