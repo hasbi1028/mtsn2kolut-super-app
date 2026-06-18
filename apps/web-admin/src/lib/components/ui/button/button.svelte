@@ -24,11 +24,11 @@
 	} = $props();
 
 	const variantClasses: Record<Variant, string> = {
-		default: 'preset-filled-primary-500 text-on-primary hover:opacity-90',
-		destructive: 'preset-filled-error-500 text-on-error hover:opacity-90',
-		outline: 'preset-tonal text-on-surface hover:opacity-80',
-		secondary: 'preset-tonal-secondary text-on-surface hover:opacity-80',
-		ghost: 'hover:bg-muted text-on-surface',
+		default: 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90',
+		destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
+		outline: 'border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground',
+		secondary: 'bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80',
+		ghost: 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
 		link: 'text-primary underline-offset-4 hover:underline'
 	};
 
@@ -44,7 +44,7 @@
 {#if href}
 	<a
 		{href}
-		class={cn('btn inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2', variantClasses[variant], sizeClasses[size], className, disabled && 'pointer-events-none opacity-50')}
+		class={cn('inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50', variantClasses[variant], sizeClasses[size], className)}
 		aria-disabled={disabled || undefined}
 		tabindex={disabled ? -1 : undefined}
 		{...restProps}
@@ -53,7 +53,7 @@
 	</a>
 {:else}
 	<button
-		class={cn('btn inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2', variantClasses[variant], sizeClasses[size], className)}
+		class={cn('inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50', variantClasses[variant], sizeClasses[size], className)}
 		{disabled}
 		{...restProps}
 	>

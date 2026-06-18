@@ -245,12 +245,12 @@
 		<Card.Root class="border-primary/20 bg-gradient-to-br from-card via-card to-primary/10 md:col-span-2">
 			<Card.Content class="flex items-start justify-between gap-4 p-5">
 				<div class="space-y-1">
-					<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Rekap Harian</p>
+					<p class="badge badge-sm badge-primary uppercase tracking-widest mb-1">Rekap Harian</p>
 					<p class="text-2xl font-semibold text-foreground">{total ?? records.length}</p>
 					<p class="text-sm text-muted-foreground">Rekaman kehadiran pada rentang tanggal terpilih</p>
 				</div>
-				<div class="rounded-2xl border border-primary/20 bg-card/80 px-4 py-3 text-right shadow-sm">
-					<p class="text-xs uppercase tracking-[0.18em] text-muted-foreground">Status dominan</p>
+				<div class="card bg-card/80 border border-primary/20 px-4 py-3 text-right shadow-sm">
+					<p class="badge badge-xs badge-ghost uppercase tracking-wider mb-1">Status dominan</p>
 					<p class="mt-1 text-base font-semibold text-primary">
 						{records.some((r) => attendanceStatus(r) === 'lengkap') ? 'Lengkap tersedia' : 'Mayoritas check-in'}
 					</p>
@@ -260,7 +260,7 @@
 
 		<Card.Root class="border-border bg-card">
 			<Card.Content class="space-y-2 p-5">
-				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Periode</p>
+				<p class="badge badge-sm badge-outline uppercase tracking-wider">Periode</p>
 				<p class="text-base font-semibold text-foreground">{startDate || '—'}</p>
 				<p class="text-sm text-muted-foreground">sampai {endDate || startDate || '—'}</p>
 			</Card.Content>
@@ -282,36 +282,42 @@
 						{/if}
 					</Card.Description>
 				</div>
-				<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_auto_auto] xl:items-end">
+				<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_auto_auto_auto] xl:items-end">
 					<div class="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-						<Input type="date" bind:value={startDate} class="h-10 min-w-0 bg-card" />
+						<input type="date" bind:value={startDate} class="input input-bordered h-10 min-w-0 bg-card" />
 						<span class="text-center text-sm text-muted-foreground">s/d</span>
-						<Input type="date" bind:value={endDate} class="h-10 min-w-0 bg-card" />
+						<input type="date" bind:value={endDate} class="input input-bordered h-10 min-w-0 bg-card" />
 					</div>
-					<LoadingButton class="h-10 w-full sm:w-auto" size="sm" onclick={() => void load()} loading={refreshing} loadingLabel="Memuat..." label="Terapkan" />
-					<div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-						<LoadingButton variant="outline" class="h-10 w-full bg-card sm:w-auto" size="sm" onclick={exportCSV} disabled={records.length === 0} label="↓ CSV" />
-						<LoadingButton variant="outline" class="h-10 w-full bg-card sm:w-auto" size="sm" onclick={() => void sendTelegramReport()} loading={sendingTelegram} loadingLabel="Mengirim..." label="Telegram" />
-						<LoadingButton variant="ghost" class="h-10 w-full sm:w-auto" size="sm" href={resolve('/pusaka/telegram-laporan')} label="Atur Jadwal" />
-						<div class="col-span-2 flex h-10 overflow-hidden rounded-md border border-border bg-card sm:col-span-1">
-							<button
-								class="flex flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors {viewMode === 'normal' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/50'}"
-								onclick={() => viewMode = 'normal'}
-							>
-								<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-								Normal
-							</button>
-							<div class="w-px bg-border"></div>
-							<button
-								class="flex flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors {viewMode === 'compact' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/50'}"
-								onclick={() => viewMode = 'compact'}
-							>
-								<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 8h18M3 13h18M3 18h18"/></svg>
-								Ringkas
-							</button>
-						</div>
-						<LoadingButton variant="outline" class="h-10 w-full bg-card sm:w-auto" size="sm" href={resolve('/pusaka/antrian')} label="Antrian →" />
+					<button class="btn btn-primary btn-sm h-10 w-full sm:w-auto" onclick={() => void load()}>
+						{#if refreshing}<span class="loading loading-spinner loading-xs"></span>{/if}
+						Terapkan
+					</button>
+					<button class="btn btn-outline btn-sm h-10 w-full sm:w-auto bg-card" onclick={exportCSV} disabled={records.length === 0}>
+						↓ CSV
+					</button>
+					<button class="btn btn-outline btn-sm h-10 w-full sm:w-auto bg-card" onclick={() => void sendTelegramReport()} disabled={sendingTelegram}>
+						{#if sendingTelegram}<span class="loading loading-spinner loading-xs"></span>{/if}
+						Telegram
+					</button>
+					<a href={resolve('/pusaka/telegram-laporan')} class="btn btn-ghost btn-sm h-10 w-full sm:w-auto">Atur Jadwal</a>
+					<div class="col-span-2 flex h-10 overflow-hidden rounded-btn border border-border bg-card sm:col-span-1">
+						<button
+							class="flex flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors {viewMode === 'normal' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/50'}"
+							onclick={() => viewMode = 'normal'}
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+							Normal
+						</button>
+						<div class="w-px bg-border"></div>
+						<button
+							class="flex flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors {viewMode === 'compact' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/50'}"
+							onclick={() => viewMode = 'compact'}
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 8h18M3 13h18M3 18h18"/></svg>
+							Ringkas
+						</button>
 					</div>
+					<a href={resolve('/pusaka/antrian')} class="btn btn-outline btn-sm h-10 w-full sm:w-auto bg-card">Antrian →</a>
 				</div>
 			</div>
 		</Card.Header>
@@ -328,35 +334,35 @@
 				</div>
 				{/if}
 				<div class="overflow-x-auto">
-					<table class="w-full border-collapse text-[9px] leading-tight">
+					<table class="table table-zebra table-xs text-[10px]">
 						<thead>
-							<tr class="border-b border-border bg-muted/50">
-								<th class="w-4 py-1 pl-0.5 pr-0 text-left font-semibold text-muted-foreground">#</th>
-								<th class="whitespace-nowrap px-0 py-1 text-left font-semibold text-muted-foreground">Tanggal</th>
-								<th class="px-0 py-1 text-left font-semibold text-muted-foreground">Nama Pegawai</th>
-								<th class="hidden px-0 py-1 text-left font-semibold text-muted-foreground sm:table-cell">NIP</th>
-								<th class="px-0 py-1 text-center font-semibold text-muted-foreground">Masuk</th>
-								<th class="px-0 py-1 text-center font-semibold text-muted-foreground">Pulang</th>
-								<th class="py-1 pl-0 pr-0.5 text-center font-semibold text-muted-foreground">Status</th>
+							<tr>
+								<th class="w-4">#</th>
+								<th>Tanggal</th>
+								<th>Nama Pegawai</th>
+								<th class="hidden sm:table-cell">NIP</th>
+								<th class="text-center">Masuk</th>
+								<th class="text-center">Pulang</th>
+								<th class="text-center">Status</th>
 							</tr>
 						</thead>
 						<tbody>
 							{#each displayRecords as r, i (r.id)}
 								{@const s = attendanceStatus(r)}
-								<tr class="border-b border-border {i % 2 === 1 ? 'bg-muted/50' : 'bg-card'} hover:bg-primary/10 {isSample ? 'opacity-75' : ''}">
-									<td class="py-0.5 pl-0.5 pr-0 text-muted-foreground">{i + 1}</td>
-									<td class="whitespace-nowrap px-0 py-0.5 text-muted-foreground">{r.tanggal}</td>
-									<td class="px-0 py-0.5 font-medium text-foreground">{r.employee_nama}</td>
-									<td class="hidden px-0 py-0.5 font-mono text-muted-foreground sm:table-cell">{r.employee_nip}</td>
-									<td class="px-0 py-0.5 text-center text-foreground">{stripWita(r.jam_masuk)}</td>
-									<td class="px-0 py-0.5 text-center text-foreground">{stripWita(r.jam_pulang)}</td>
-									<td class="py-0.5 pl-0 pr-0.5 text-center">
+								<tr class="{isSample ? 'opacity-75' : ''}">
+									<td class="text-muted-foreground">{i + 1}</td>
+									<td class="whitespace-nowrap text-muted-foreground">{r.tanggal}</td>
+									<td class="font-medium text-foreground">{r.employee_nama}</td>
+									<td class="hidden sm:table-cell font-mono text-muted-foreground">{r.employee_nip}</td>
+									<td class="text-center text-foreground">{stripWita(r.jam_masuk)}</td>
+									<td class="text-center text-foreground">{stripWita(r.jam_pulang)}</td>
+									<td class="text-center">
 										{#if s === 'lengkap'}
-											<span class="inline-block rounded-sm px-0 py-0 text-[7px] font-semibold bg-primary/15 text-primary">Lengkap</span>
+											<span class="badge badge-sm badge-success">Lengkap</span>
 										{:else if s === 'masuk'}
-											<span class="inline-block rounded-sm px-0 py-0 text-[7px] font-semibold bg-warning/15 text-warning">Masuk</span>
+											<span class="badge badge-sm badge-warning">Masuk</span>
 										{:else}
-											<span class="inline-block rounded-sm px-0 py-0 text-[7px] font-semibold bg-muted text-muted-foreground">Belum</span>
+											<span class="badge badge-sm badge-ghost">Belum</span>
 										{/if}
 									</td>
 								</tr>
@@ -397,47 +403,47 @@
 					{#snippet children(value)}
 						{@const currentRecords = (value as AttendanceOverview).records}
 					<div class="hidden overflow-x-auto lg:block">
-					<Table.Root>
-						<Table.Header>
-							<Table.Row>
-								<Table.Head class="w-10">#</Table.Head>
-								<Table.Head>Tanggal</Table.Head>
-								<Table.Head>Nama Pegawai</Table.Head>
-								<Table.Head class="hidden sm:table-cell">NIP</Table.Head>
-								<Table.Head class="text-center">Masuk</Table.Head>
-								<Table.Head class="text-center">Pulang</Table.Head>
-								<Table.Head class="text-center">Status</Table.Head>
-							</Table.Row>
-						</Table.Header>
-						<Table.Body>
+					<table class="table table-zebra table-xs">
+						<thead>
+							<tr>
+								<th class="w-10">#</th>
+								<th>Tanggal</th>
+								<th>Nama Pegawai</th>
+								<th class="hidden sm:table-cell">NIP</th>
+								<th class="text-center">Masuk</th>
+								<th class="text-center">Pulang</th>
+								<th class="text-center">Status</th>
+							</tr>
+						</thead>
+						<tbody>
 							{#each currentRecords as r, i (r.id)}
 							{@const s = attendanceStatus(r)}
-							<Table.Row>
-								<Table.Cell class="text-muted-foreground">{i + 1}</Table.Cell>
-								<Table.Cell class="text-sm whitespace-nowrap">{r.tanggal}</Table.Cell>
-								<Table.Cell class="font-medium">{r.employee_nama}</Table.Cell>
-								<Table.Cell class="hidden sm:table-cell text-muted-foreground font-mono text-xs">{r.employee_nip}</Table.Cell>
-								<Table.Cell class="text-center text-sm">{stripWita(r.jam_masuk)}</Table.Cell>
-								<Table.Cell class="text-center text-sm">{stripWita(r.jam_pulang)}</Table.Cell>
-								<Table.Cell class="text-center">
+							<tr>
+								<td class="text-muted-foreground">{i + 1}</td>
+								<td class="whitespace-nowrap">{r.tanggal}</td>
+								<td class="font-medium">{r.employee_nama}</td>
+								<td class="hidden sm:table-cell text-muted-foreground font-mono text-xs">{r.employee_nip}</td>
+								<td class="text-center">{stripWita(r.jam_masuk)}</td>
+								<td class="text-center">{stripWita(r.jam_pulang)}</td>
+								<td class="text-center">
 									{#if s === 'lengkap'}
-										<Badge variant="default" class="bg-primary">Lengkap</Badge>
+										<span class="badge badge-sm badge-success">Lengkap</span>
 									{:else if s === 'masuk'}
-										<Badge variant="outline" class="text-warning border-warning/30">Masuk</Badge>
+										<span class="badge badge-sm badge-warning">Masuk</span>
 									{:else}
-										<Badge variant="secondary">Belum</Badge>
+										<span class="badge badge-sm badge-ghost">Belum</span>
 									{/if}
-								</Table.Cell>
-							</Table.Row>
-						{:else}
-							<Table.Row>
-								<Table.Cell colspan={7} class="py-12 text-center text-muted-foreground">
+								</td>
+							</tr>
+							{:else}
+							<tr>
+								<td colspan={7} class="py-12 text-center text-muted-foreground">
 									Tidak ada data kehadiran untuk rentang tanggal ini.
-								</Table.Cell>
-							</Table.Row>
-						{/each}
-						</Table.Body>
-					</Table.Root>
+								</td>
+							</tr>
+							{/each}
+						</tbody>
+					</table>
 					</div>
 
 					<div class="lg:hidden">

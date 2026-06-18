@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from '$lib/components/ui/sonner';
@@ -194,10 +195,10 @@
 	}
 
 	function statusBadgeClass(value: string | undefined) {
-		if (value === 'ok') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-		if (value === 'warning') return 'border-amber-200 bg-amber-50 text-amber-700';
-		if (value === 'error') return 'border-red-200 bg-red-50 text-red-700';
-		return 'border-slate-200 bg-slate-50 text-slate-600';
+		if (value === 'ok') return 'badge badge-success';
+		if (value === 'warning') return 'badge badge-warning';
+		if (value === 'error') return 'badge badge-error';
+		return 'badge badge-outline';
 	}
 
 	function kindLabel(kind: string) {
@@ -243,29 +244,41 @@
 </svelte:head>
 
 <div class="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 md:p-6">
-	<section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-		<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-			<div class="space-y-2">
-				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Pengaturan Sistem</p>
-				<h1 class="text-2xl font-bold text-slate-950 md:text-3xl">Backup & Restore</h1>
-				<p class="max-w-3xl text-sm text-slate-600">
-					Pantau backup PostgreSQL harian, cek kesehatan timer, dan unduh file backup resmi. Sprint ini bersifat read-only: belum ada restore production langsung dari aplikasi.
-				</p>
-			</div>
-			<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-				<input
-					class="rounded-xl border border-slate-300 px-3 py-2 text-sm"
-					placeholder="Alasan backup manual (opsional)"
-					maxlength="200"
-					bind:value={manualBackupReason}
-					disabled={!canCreate || manualBackupRunning}
-				/>
-				<Button onclick={runManualBackup} disabled={!canCreate || manualBackupRunning}>
-					{manualBackupRunning ? 'Membuat Backup...' : 'Buat Backup Sekarang'}
-				</Button>
-				<Button variant="outline" onclick={() => loadBackups(true)} disabled={refreshing || manualBackupRunning}>
-					{refreshing ? 'Memuat...' : 'Refresh Status'}
-				</Button>
+	<!-- Breadcrumb -->
+	<div class="flex items-center gap-2 text-sm text-muted-foreground">
+		<a href={resolve('/')} class="hover:text-foreground">Beranda</a>
+		<span>/</span>
+		<a href={resolve('/settings')} class="hover:text-foreground">Pengaturan</a>
+		<span>/</span>
+		<span class="text-foreground font-medium">Backup & Restore</span>
+	</div>
+
+	<!-- Header -->
+	<section class="card bg-card border border-border shadow-sm">
+		<div class="card-body">
+			<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+				<div class="space-y-2">
+					<p class="badge badge-sm badge-outline uppercase tracking-wider">Pengaturan Sistem</p>
+					<h1 class="text-2xl font-bold text-foreground md:text-3xl">Backup & Restore</h1>
+					<p class="max-w-3xl text-sm text-muted-foreground">
+						Pantau backup PostgreSQL harian, cek kesehatan timer, dan unduh file backup resmi. Sprint ini bersifat read-only: belum ada restore production langsung dari aplikasi.
+					</p>
+				</div>
+				<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+					<input
+						class="input input-bordered input-sm h-10"
+						placeholder="Alasan backup manual (opsional)"
+						maxlength="200"
+						bind:value={manualBackupReason}
+						disabled={!canCreate || manualBackupRunning}
+					/>
+					<button class="btn btn-primary" onclick={runManualBackup} disabled={!canCreate || manualBackupRunning}>
+						{manualBackupRunning ? 'Membuat Backup...' : 'Buat Backup Sekarang'}
+					</button>
+					<button class="btn btn-outline" onclick={() => loadBackups(true)} disabled={refreshing || manualBackupRunning}>
+						{refreshing ? 'Memuat...' : 'Refresh Status'}
+					</button>
+				</div>
 			</div>
 		</div>
 	</section>
@@ -273,231 +286,249 @@
 	{#if loading}
 		<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 			{#each Array(4) as _}
-				<div class="h-32 animate-pulse rounded-3xl border border-slate-200 bg-slate-100"></div>
+				<div class="card bg-card border border-border animate-pulse h-32"></div>
 			{/each}
 		</div>
 	{:else if errorMessage}
-		<div class="rounded-3xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-			<p class="font-semibold">Backup Center belum dapat dimuat</p>
-			<p class="mt-1">{errorMessage}</p>
-			<Button class="mt-4" variant="outline" onclick={() => loadBackups(true)}>Coba Lagi</Button>
+		<div class="alert alert-error shadow-sm">
+			<div>
+				<p class="font-semibold">Backup Center belum dapat dimuat</p>
+				<p class="mt-1">{errorMessage}</p>
+				<button class="btn btn-outline btn-sm mt-2" onclick={() => loadBackups(true)}>Coba Lagi</button>
+			</div>
 		</div>
 	{:else if status}
+		<!-- Status Cards -->
 		<section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-			<div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-				<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Status Backup</p>
-				<div class={`mt-3 inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${statusBadgeClass(status.health)}`}>
-					{statusLabel(status.health)}
+			<div class="card bg-card border border-border shadow-sm">
+				<div class="card-body">
+					<p class="card-title text-sm">Status Backup</p>
+					<span class={statusBadgeClass(status.health)}>{statusLabel(status.health)}</span>
+					<p class="text-xs text-muted-foreground mt-2">Timer: {status.timer_active ? 'aktif' : 'tidak aktif'} · {status.timer_enabled ? 'enabled' : 'belum enabled'}</p>
 				</div>
-				<p class="mt-3 text-xs text-slate-500">Timer: {status.timer_active ? 'aktif' : 'tidak aktif'} · {status.timer_enabled ? 'enabled' : 'belum enabled'}</p>
 			</div>
 
-			<div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-				<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Backup Terakhir</p>
-				<p class="mt-3 truncate text-lg font-bold text-slate-950">{status.latest_backup?.name ?? 'Belum ada backup'}</p>
-				<p class="mt-1 text-sm text-slate-600">{formatDate(status.latest_backup?.created_at)}</p>
-				<p class="mt-1 text-xs text-slate-500">{formatBytes(status.latest_backup?.size_bytes)}</p>
+			<div class="card bg-card border border-border shadow-sm">
+				<div class="card-body">
+					<p class="card-title text-sm">Backup Terakhir</p>
+					<p class="truncate text-lg font-bold text-foreground">{status.latest_backup?.name ?? 'Belum ada backup'}</p>
+					<p class="text-sm text-muted-foreground">{formatDate(status.latest_backup?.created_at)}</p>
+					<p class="text-xs text-muted-foreground">{formatBytes(status.latest_backup?.size_bytes)}</p>
+				</div>
 			</div>
 
-			<div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-				<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Jadwal Berikutnya</p>
-				<p class="mt-3 text-lg font-bold text-slate-950">{formatDate(status.next_run_at)}</p>
-				<p class="mt-1 text-xs text-slate-500">{status.schedule} · {status.timezone}</p>
+			<div class="card bg-card border border-border shadow-sm">
+				<div class="card-body">
+					<p class="card-title text-sm">Jadwal Berikutnya</p>
+					<p class="text-lg font-bold text-foreground">{formatDate(status.next_run_at)}</p>
+					<p class="text-xs text-muted-foreground">{status.schedule} · {status.timezone}</p>
+				</div>
 			</div>
 
-			<div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-				<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Retensi & Ukuran</p>
-				<p class="mt-3 text-lg font-bold text-slate-950">{status.retention_days} hari</p>
-				<p class="mt-1 text-sm text-slate-600">{status.backup_count} file · {formatBytes(status.backup_dir_size_bytes)}</p>
+			<div class="card bg-card border border-border shadow-sm">
+				<div class="card-body">
+					<p class="card-title text-sm">Retensi & Ukuran</p>
+					<p class="text-lg font-bold text-foreground">{status.retention_days} hari</p>
+					<p class="text-sm text-muted-foreground">{status.backup_count} file · {formatBytes(status.backup_dir_size_bytes)}</p>
+				</div>
 			</div>
 		</section>
 
 		{#if status.warnings.length > 0}
-			<section class="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
-				<p class="font-semibold">Perlu perhatian</p>
-				<ul class="mt-2 list-disc space-y-1 pl-5">
-					{#each status.warnings as warning}
-						<li>{warning}</li>
-					{/each}
-				</ul>
+			<section class="alert alert-warning shadow-sm">
+				<div>
+					<p class="font-semibold">Perlu perhatian</p>
+					<ul class="mt-2 list-disc space-y-1 pl-5">
+						{#each status.warnings as warning}
+							<li>{warning}</li>
+						{/each}
+					</ul>
+				</div>
 			</section>
 		{/if}
 
-		<section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-			<div class="flex flex-col gap-2 border-b border-slate-200 p-5 md:flex-row md:items-center md:justify-between">
-				<div>
-					<h2 class="text-lg font-semibold text-slate-950">Daftar Backup</h2>
-					<p class="text-sm text-slate-600">Hanya file <code>.dump</code> dari direktori backup resmi yang ditampilkan.</p>
+		<!-- Backup Table -->
+		<section class="card bg-card border border-border shadow-sm">
+			<div class="card-body p-0">
+				<div class="flex flex-col gap-2 border-b border-border p-5 md:flex-row md:items-center md:justify-between">
+					<div>
+						<h2 class="card-title">Daftar Backup</h2>
+						<p class="text-sm text-muted-foreground">Hanya file <code>.dump</code> dari direktori backup resmi yang ditampilkan.</p>
+					</div>
+					{#if status.latest_backup && canDownload}
+						<a class="btn btn-outline btn-sm" href={downloadHref(status.latest_backup.id)}>
+							Download Latest
+						</a>
+					{/if}
 				</div>
-				{#if status.latest_backup && canDownload}
-					<a class="inline-flex rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" href={downloadHref(status.latest_backup.id)}>
-						Download Latest
-					</a>
+
+				{#if backups.length === 0}
+					<div class="alert alert-info m-4 shadow-sm"><span>Belum ada file backup PostgreSQL yang tersedia.</span></div>
+				{:else}
+					<div class="overflow-x-auto">
+						<table class="table table-zebra w-full min-w-[980px]">
+							<thead>
+								<tr>
+									<th>File</th>
+									<th>Tanggal</th>
+									<th>Jenis</th>
+									<th>Ukuran</th>
+									<th>Checksum</th>
+									<th class="text-right">Aksi</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-border">
+								{#each backups as backup}
+									<tr class="align-top hover:bg-muted/50">
+										<td>
+											<div class="font-medium text-foreground">{backup.name}</div>
+											{#if backup.is_latest}
+												<span class="badge badge-xs badge-success mt-1">latest</span>
+											{/if}
+										</td>
+										<td class="text-muted-foreground">{formatDate(backup.created_at)}</td>
+										<td class="text-muted-foreground">{kindLabel(backup.kind)}</td>
+										<td class="text-muted-foreground">{formatBytes(backup.size_bytes)}</td>
+										<td class="text-muted-foreground">
+											{#if backup.sha256_available}
+												<span class="font-mono text-xs">{backup.sha256?.slice(0, 12)}…</span>
+											{:else}
+												<span class="text-muted-foreground/60">Belum ada</span>
+											{/if}
+										</td>
+										<td class="text-right">
+											{#if canRestorePlan || (canDownload && backup.downloadable)}
+												<div class="dropdown dropdown-end">
+													<button class="btn btn-sm btn-outline">
+														Aksi
+														<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+															<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+														</svg>
+													</button>
+													<ul class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow-sm border border-border">
+														{#if canRestorePlan}
+															<li><button class="btn btn-ghost btn-sm justify-start" onclick={() => validateRestore(backup)} disabled={restoreBusyID === backup.id}>{restoreBusyID === backup.id ? 'Memeriksa...' : 'Validasi'}</button></li>
+															<li><button class="btn btn-ghost btn-sm justify-start" onclick={() => generateRestoreCommand(backup)} disabled={restoreBusyID === backup.id}>{restoreBusyID === backup.id ? 'Memeriksa...' : 'SOP Restore'}</button></li>
+														{/if}
+														{#if canDownload && backup.downloadable}
+															<li><a class="btn btn-ghost btn-sm justify-start" href={downloadHref(backup.id)}>Download</a></li>
+														{:else}
+															<li><span class="text-xs text-muted-foreground px-3 py-2 block">Butuh izin download</span></li>
+														{/if}
+													</ul>
+												</div>
+											{:else}
+												<span class="text-xs text-muted-foreground">Tidak ada aksi</span>
+											{/if}
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
 				{/if}
 			</div>
-
-			{#if backups.length === 0}
-				<div class="p-8 text-center text-sm text-slate-500">Belum ada file backup PostgreSQL yang tersedia.</div>
-			{:else}
-				<div class="overflow-x-auto">
-					<table class="w-full min-w-[980px] text-left text-sm">
-						<thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-							<tr>
-								<th class="px-5 py-3">File</th>
-								<th class="px-5 py-3">Tanggal</th>
-								<th class="px-5 py-3">Jenis</th>
-								<th class="px-5 py-3">Ukuran</th>
-								<th class="px-5 py-3">Checksum</th>
-								<th class="px-5 py-3 text-right">Aksi</th>
-							</tr>
-						</thead>
-						<tbody class="divide-y divide-slate-100">
-							{#each backups as backup}
-								<tr class="align-top hover:bg-slate-50/80">
-									<td class="px-5 py-4">
-										<div class="font-medium text-slate-950">{backup.name}</div>
-										{#if backup.is_latest}
-											<span class="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">latest</span>
-										{/if}
-									</td>
-									<td class="px-5 py-4 text-slate-600">{formatDate(backup.created_at)}</td>
-									<td class="px-5 py-4 text-slate-600">{kindLabel(backup.kind)}</td>
-									<td class="px-5 py-4 text-slate-600">{formatBytes(backup.size_bytes)}</td>
-									<td class="px-5 py-4 text-slate-600">
-										{#if backup.sha256_available}
-											<span class="font-mono text-xs">{backup.sha256?.slice(0, 12)}…</span>
-										{:else}
-											<span class="text-slate-400">Belum ada</span>
-										{/if}
-									</td>
-					<td class="px-5 py-4 text-right">
-						<div class="flex flex-wrap justify-end gap-2">
-							{#if canRestorePlan}
-								<Button
-									variant="outline"
-									size="sm"
-									onclick={() => validateRestore(backup)}
-									disabled={restoreBusyID === backup.id}
-								>
-									{restoreBusyID === backup.id ? 'Memeriksa...' : 'Validasi'}
-								</Button>
-								<Button
-									variant="outline"
-									size="sm"
-									onclick={() => generateRestoreCommand(backup)}
-									disabled={restoreBusyID === backup.id}
-								>
-									SOP Restore
-								</Button>
-							{/if}
-							{#if canDownload && backup.downloadable}
-								<a class="inline-flex rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white" href={downloadHref(backup.id)}>
-									Download
-								</a>
-							{:else}
-								<span class="text-xs text-slate-400">Butuh izin download</span>
-							{/if}
-						</div>
-					</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			{/if}
 		</section>
 	{/if}
 
 	{#if restoreValidation || restoreCommand}
 		<section class="grid gap-4 lg:grid-cols-2">
 			{#if restoreValidation}
-				<div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-					<div class="flex items-start justify-between gap-3">
-						<div>
-							<h2 class="text-lg font-semibold text-slate-950">Hasil Validasi Restore</h2>
-							<p class="text-sm text-slate-600">{restoreValidation.backup_id} · {formatDate(restoreValidation.checked_at)}</p>
+				<div class="card bg-card border border-border shadow-sm">
+					<div class="card-body">
+						<div class="flex items-start justify-between gap-3">
+							<div>
+								<h2 class="card-title">Hasil Validasi Restore</h2>
+								<p class="text-sm text-muted-foreground">{restoreValidation.backup_id} · {formatDate(restoreValidation.checked_at)}</p>
+							</div>
+							<span class={restoreValidation.valid ? 'badge badge-success' : 'badge badge-error'}>{restoreValidation.valid ? 'Valid' : 'Perlu cek manual'}</span>
 						</div>
-						<span class={`rounded-full px-3 py-1 text-xs font-semibold ${restoreValidation.valid ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{restoreValidation.valid ? 'Valid' : 'Perlu cek manual'}</span>
+						<p class="mt-3 text-sm text-muted-foreground">Object terbaca: <strong>{restoreValidation.object_count}</strong></p>
+						{#if restoreValidation.preview.length > 0}
+							<pre class="mt-3 max-h-56 overflow-auto rounded-2xl bg-base-300 p-4 text-xs text-base-content">{restoreValidation.preview.join('\n')}</pre>
+						{/if}
+						{#if restoreValidation.warnings.length > 0}
+							<ul class="mt-3 list-disc space-y-1 pl-5 text-sm text-warning">
+								{#each restoreValidation.warnings as warning}<li>{warning}</li>{/each}
+							</ul>
+						{/if}
 					</div>
-					<p class="mt-3 text-sm text-slate-600">Object terbaca: <strong>{restoreValidation.object_count}</strong></p>
-					{#if restoreValidation.preview.length > 0}
-						<pre class="mt-3 max-h-56 overflow-auto rounded-2xl bg-slate-950 p-4 text-xs text-slate-100">{restoreValidation.preview.join('\n')}</pre>
-					{/if}
-					{#if restoreValidation.warnings.length > 0}
-						<ul class="mt-3 list-disc space-y-1 pl-5 text-sm text-amber-700">
-							{#each restoreValidation.warnings as warning}<li>{warning}</li>{/each}
-						</ul>
-					{/if}
 				</div>
 			{/if}
 
 			{#if restoreCommand}
-				<div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-					<h2 class="text-lg font-semibold text-slate-950">SOP Restore Manual</h2>
-					<p class="mt-1 text-sm text-slate-600">{restoreCommand.backup_id} · {restoreCommand.safety_level}</p>
-					<ul class="mt-3 list-decimal space-y-1 pl-5 text-sm text-slate-700">
-						{#each restoreCommand.preflight_steps as step}<li>{step}</li>{/each}
-					</ul>
-					<pre class="mt-3 max-h-72 overflow-auto rounded-2xl bg-slate-950 p-4 text-xs text-slate-100">{restoreCommand.commands.join('\n')}</pre>
-					<p class="mt-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{restoreCommand.rollback_note}</p>
+				<div class="card bg-card border border-border shadow-sm">
+					<div class="card-body">
+						<h2 class="card-title">SOP Restore Manual</h2>
+						<p class="mt-1 text-sm text-muted-foreground">{restoreCommand.backup_id} · {restoreCommand.safety_level}</p>
+						<ul class="mt-3 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+							{#each restoreCommand.preflight_steps as step}<li>{step}</li>{/each}
+						</ul>
+						<pre class="mt-3 max-h-72 overflow-auto rounded-2xl bg-base-300 p-4 text-xs text-base-content">{restoreCommand.commands.join('\n')}</pre>
+						<div class="mt-3 alert alert-error">{restoreCommand.rollback_note}</div>
+					</div>
 				</div>
 			{/if}
 		</section>
 	{/if}
 
 	<section class="grid gap-4 lg:grid-cols-2">
-		<div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-			<h2 class="text-lg font-semibold text-slate-950">Restore Production</h2>
-			<p class="mt-2 text-sm text-slate-600">
-				Restore database production bersifat destruktif, sehingga tombol restore langsung belum dibuka pada Sprint Backup 1. Tahap berikutnya akan menambahkan validasi restore dan generate SOP/command manual yang aman.
-			</p>
-			<div class="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-				Tidak ada aksi restore production dari halaman ini. Tombol backup manual hanya membuat file dump baru, bukan mengubah database.
+		<div class="card bg-card border border-border shadow-sm">
+			<div class="card-body">
+				<h2 class="card-title">Restore Production</h2>
+				<p class="mt-2 text-sm text-muted-foreground">
+					Restore database production bersifat destruktif, sehingga tombol restore langsung belum dibuka pada Sprint Backup 1. Tahap berikutnya akan menambahkan validasi restore dan generate SOP/command manual yang aman.
+				</p>
+				<div class="mt-4 alert alert-error">
+					Tidak ada aksi restore production dari halaman ini. Tombol backup manual hanya membuat file dump baru, bukan mengubah database.
+				</div>
 			</div>
 		</div>
-		<div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-start justify-between gap-3">
-				<div>
-					<h2 class="text-lg font-semibold text-slate-950">Backup Offsite</h2>
-					<p class="mt-1 text-sm text-slate-600">Monitoring lokasi backup kedua: Google Drive, S3-compatible storage, NAS, rsync server, atau mount eksternal.</p>
+		<div class="card bg-card border border-border shadow-sm">
+			<div class="card-body">
+				<div class="flex items-start justify-between gap-3">
+					<div>
+						<h2 class="card-title">Backup Offsite</h2>
+						<p class="mt-1 text-sm text-muted-foreground">Monitoring lokasi backup kedua: Google Drive, S3-compatible storage, NAS, rsync server, atau mount eksternal.</p>
+					</div>
+					{#if offsite}
+						<span class={statusBadgeClass(offsite.health)}>{statusLabel(offsite.health)}</span>
+					{/if}
 				</div>
 				{#if offsite}
-					<span class={`rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClass(offsite.health)}`}>{statusLabel(offsite.health)}</span>
+					<div class="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+						<div class="rounded-2xl bg-muted/30 p-3">
+							<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</p>
+							<p class="mt-1 font-semibold text-foreground">{offsite.configured ? 'Terkonfigurasi' : 'Belum dikonfigurasi'}</p>
+							<p class="mt-1 text-xs text-muted-foreground">{offsite.provider || 'Provider belum diatur'} · {offsite.source}</p>
+						</div>
+						<div class="rounded-2xl bg-muted/30 p-3">
+							<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sync Terakhir</p>
+							<p class="mt-1 font-semibold text-foreground">{formatDate(offsite.last_sync_at)}</p>
+							<p class="mt-1 text-xs text-muted-foreground">{offsite.last_sync_success === true ? 'berhasil' : offsite.last_sync_success === false ? 'gagal' : 'belum ada status'}</p>
+						</div>
+						<div class="rounded-2xl bg-muted/30 p-3">
+							<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Remote Backup</p>
+							<p class="mt-1 font-semibold text-foreground">{offsite.remote_backup_count} file</p>
+							<p class="mt-1 text-xs text-muted-foreground">{formatBytes(offsite.remote_size_bytes)}</p>
+						</div>
+						<div class="rounded-2xl bg-muted/30 p-3">
+							<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Target</p>
+							<p class="mt-1 truncate font-semibold text-foreground">{offsite.target_label || 'Belum ada label target'}</p>
+							<p class="mt-1 text-xs text-muted-foreground">Cloud secret tidak disimpan di aplikasi</p>
+						</div>
+					</div>
+					{#if offsite.warnings.length > 0}
+						<div class="mt-4 alert alert-warning">
+							<ul class="list-disc space-y-1 pl-5">
+								{#each offsite.warnings as warning}<li>{warning}</li>{/each}
+							</ul>
+						</div>
+					{/if}
+				{:else}
+					<div class="mt-4 alert alert-warning">Status offsite belum dimuat.</div>
 				{/if}
 			</div>
-			{#if offsite}
-				<div class="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-					<div class="rounded-2xl bg-slate-50 p-3">
-						<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Status</p>
-						<p class="mt-1 font-semibold text-slate-900">{offsite.configured ? 'Terkonfigurasi' : 'Belum dikonfigurasi'}</p>
-						<p class="mt-1 text-xs text-slate-500">{offsite.provider || 'Provider belum diatur'} · {offsite.source}</p>
-					</div>
-					<div class="rounded-2xl bg-slate-50 p-3">
-						<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Sync Terakhir</p>
-						<p class="mt-1 font-semibold text-slate-900">{formatDate(offsite.last_sync_at)}</p>
-						<p class="mt-1 text-xs text-slate-500">{offsite.last_sync_success === true ? 'berhasil' : offsite.last_sync_success === false ? 'gagal' : 'belum ada status'}</p>
-					</div>
-					<div class="rounded-2xl bg-slate-50 p-3">
-						<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Remote Backup</p>
-						<p class="mt-1 font-semibold text-slate-900">{offsite.remote_backup_count} file</p>
-						<p class="mt-1 text-xs text-slate-500">{formatBytes(offsite.remote_size_bytes)}</p>
-					</div>
-					<div class="rounded-2xl bg-slate-50 p-3">
-						<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Target</p>
-						<p class="mt-1 truncate font-semibold text-slate-900">{offsite.target_label || 'Belum ada label target'}</p>
-						<p class="mt-1 text-xs text-slate-500">Cloud secret tidak disimpan di aplikasi</p>
-					</div>
-				</div>
-				{#if offsite.warnings.length > 0}
-					<div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-						<ul class="list-disc space-y-1 pl-5">
-							{#each offsite.warnings as warning}<li>{warning}</li>{/each}
-						</ul>
-					</div>
-				{/if}
-			{:else}
-				<div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Status offsite belum dimuat.</div>
-			{/if}
 		</div>
 	</section>
 </div>

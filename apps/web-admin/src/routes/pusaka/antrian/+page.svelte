@@ -178,7 +178,7 @@
 				<select
 					bind:value={filterStatus}
 					onchange={load}
-					class="h-10 rounded-md border border-input bg-background px-3 text-sm"
+					class="select select-bordered h-10"
 				>
 					{#each statusOptions as o (o.value)}
 						<option value={o.value}>{o.label}</option>
@@ -187,7 +187,7 @@
 				<select
 					bind:value={filterType}
 					onchange={load}
-					class="h-10 rounded-md border border-input bg-background px-3 text-sm"
+					class="select select-bordered h-10"
 				>
 					{#each typeOptions as o (o.value)}
 						<option value={o.value}>{o.label}</option>

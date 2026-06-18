@@ -1,25 +1,127 @@
 @import 'tailwindcss';
 @plugin 'tailwindcss-animate';
+@import "daisyui/daisyui.css" layer(daisyui);
 
-@custom-variant dark (&:is(.dark *));
+/* ── Custom Kemenag Green Theme for DaisyUI ── */
+@layer daisyui {
+	[data-theme='kemenag'] {
+		color-scheme: light;
 
+		/* Base — Clean light tones */
+		--color-base-100: oklch(100% 0 0);
+		--color-base-200: oklch(97.5% 0 0);
+		--color-base-300: oklch(92% 0 0);
+		--color-base-content: oklch(14.5% 0 0);
+
+		/* Kemenag Green Primary */
+		--color-primary: oklch(48% 0.17 145);
+		--color-primary-content: oklch(98% 0 0);
+
+		/* Secondary - lighter green */
+		--color-secondary: oklch(55% 0.20 145);
+		--color-secondary-content: oklch(98% 0 0);
+
+		/* Accent - warm tone for highlights */
+		--color-accent: oklch(70% 0.10 145);
+		--color-accent-content: oklch(20% 0 0);
+
+		/* Neutrals */
+		--color-neutral: oklch(32% 0.13 145);
+		--color-neutral-content: oklch(98% 0 0);
+
+		/* Semantic colors */
+		--color-info: oklch(60% 0.15 220);
+		--color-info-content: oklch(98% 0 0);
+		--color-success: oklch(55% 0.18 145);
+		--color-success-content: oklch(98% 0 0);
+		--color-warning: oklch(75% 0.18 80);
+		--color-warning-content: oklch(20% 0 0);
+		--color-error: oklch(58% 0.22 27);
+		--color-error-content: oklch(98% 0 0);
+
+		/* DaisyUI tokens */
+		--radius-selector: 0.5rem;
+		--radius-field: 0.5rem;
+		--radius-box: 0.75rem;
+		--size-selector: 0.25rem;
+		--size-field: 0.25rem;
+		--border: 1px;
+		--depth: 1;
+		--noise: 0;
+	}
+
+	/* Dark variant — mapped from the same palette */
+	[data-theme='kemenag-dark'] {
+		color-scheme: dark;
+
+		--color-base-100: oklch(14.5% 0 0);
+		--color-base-200: oklch(20% 0 0);
+		--color-base-300: oklch(26.9% 0 0);
+		--color-base-content: oklch(98% 0 0);
+
+		--color-primary: oklch(50% 0.20 145);
+		--color-primary-content: oklch(98% 0 0);
+		--color-secondary: oklch(55% 0.20 145);
+		--color-secondary-content: oklch(98% 0 0);
+		--color-accent: oklch(60% 0.12 145);
+		--color-accent-content: oklch(98% 0 0);
+
+		--color-neutral: oklch(40% 0.14 145);
+		--color-neutral-content: oklch(98% 0 0);
+
+		--color-info: oklch(65% 0.15 220);
+		--color-info-content: oklch(0% 0 0);
+		--color-success: oklch(60% 0.18 145);
+		--color-success-content: oklch(0% 0 0);
+		--color-warning: oklch(80% 0.18 80);
+		--color-warning-content: oklch(0% 0 0);
+		--color-error: oklch(60% 0.22 27);
+		--color-error-content: oklch(0% 0 0);
+	}
+}
+
+/* ── Map Old shadcn-style CSS vars to DaisyUI theme vars ── */
+:root, [data-theme='kemenag'] {
+	--background: var(--color-base-200);
+	--foreground: var(--color-base-content);
+	--card: var(--color-base-100);
+	--card-foreground: var(--color-base-content);
+	--popover: var(--color-base-100);
+	--popover-foreground: var(--color-base-content);
+	--primary: var(--color-primary);
+	--primary-foreground: var(--color-primary-content);
+	--secondary: var(--color-base-200);
+	--secondary-foreground: var(--color-base-content);
+	--muted: var(--color-base-200);
+	--muted-foreground: color-mix(in oklab, var(--color-base-content) 60%, transparent);
+	--accent: var(--color-base-200);
+	--accent-foreground: var(--color-base-content);
+	--destructive: var(--color-error);
+	--destructive-foreground: var(--color-error-content);
+	--border: var(--color-base-300);
+	--input: var(--color-base-300);
+	--ring: var(--color-primary);
+	--radius: 0.5rem;
+}
+
+/* ── Tailwind Theme ── */
 @theme {
 	--font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
-	
-	/* Brand Colors: Hijau Kemenag MTsN 2 Kolut (same as CBT) */
-	--color-primary-50: oklch(0.96 0.02 145);
-	--color-primary-100: oklch(0.92 0.04 145);
-	--color-primary-200: oklch(0.85 0.08 145);
-	--color-primary-300: oklch(0.75 0.12 145);
-	--color-primary-400: oklch(0.65 0.16 145);
-	--color-primary-500: oklch(0.55 0.20 145);
-	--color-primary-600: oklch(0.48 0.17 145); /* Primary App Color */
-	--color-primary-700: oklch(0.40 0.14 145);
-	--color-primary-800: oklch(0.32 0.13 145);
-	--color-primary-900: oklch(0.28 0.12 145);
-	--color-primary-950: oklch(0.20 0.09 145);
 
-	/* Theme variables mapped to shadcn-like standard but CBT style */
+	/* Old alias for backward compat */
+	--color-surface-50: var(--color-base-100);
+	--color-surface-100: var(--color-base-200);
+	--color-surface-200: var(--color-base-300);
+	--color-surface-300: oklch(87% 0 0);
+	--color-surface-400: color-mix(in oklab, var(--color-base-content) 56%, transparent);
+	--color-surface-500: color-mix(in oklab, var(--color-base-content) 56%, transparent);
+	--color-surface-600: color-mix(in oklab, var(--color-base-content) 38%, transparent);
+	--color-surface-700: color-mix(in oklab, var(--color-base-content) 38%, transparent);
+	--color-surface-800: var(--color-base-300);
+	--color-surface-900: var(--color-base-content);
+	--color-surface-950: color-mix(in oklab, var(--color-base-content) 80%, transparent);
+
+	/* Shadcn-style aliases */
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
 	--color-card: var(--card);
@@ -39,77 +141,13 @@
 	--color-border: var(--border);
 	--color-input: var(--input);
 	--color-ring: var(--ring);
+
 	--radius-lg: var(--radius);
 	--radius-md: calc(var(--radius) - 2px);
 	--radius-sm: calc(var(--radius) - 4px);
-
-	/* Surface color aliases — so existing pages using bg-surface-*, text-surface-* still work */
-	--color-surface-50: oklch(0.985 0 0);
-	--color-surface-100: oklch(0.97 0 0);
-	--color-surface-200: oklch(0.92 0 0);
-	--color-surface-300: oklch(0.87 0 0);
-	--color-surface-400: oklch(0.556 0 0);
-	--color-surface-500: oklch(0.556 0 0);
-	--color-surface-600: oklch(0.372 0 0);
-	--color-surface-700: oklch(0.372 0 0);
-	--color-surface-800: oklch(0.269 0 0);
-	--color-surface-900: oklch(0.145 0 0);
-	--color-surface-950: oklch(0.1 0 0);
 }
 
-@layer base {
-	:root {
-		/* Light Mode (CBT Style default) */
-		--background: oklch(0.98 0 0); /* bg-slate-50 equivalent */
-		--foreground: oklch(0.145 0 0);
-		--card: oklch(1 0 0);
-		--card-foreground: oklch(0.145 0 0);
-		--popover: oklch(1 0 0);
-		--popover-foreground: oklch(0.145 0 0);
-		
-		/* Kemenag Green */
-		--primary: oklch(0.48 0.17 145);
-		--primary-foreground: oklch(0.985 0 0);
-		
-		--secondary: oklch(0.97 0 0);
-		--secondary-foreground: oklch(0.205 0 0);
-		--muted: oklch(0.97 0 0);
-		--muted-foreground: oklch(0.556 0 0);
-		--accent: oklch(0.97 0 0);
-		--accent-foreground: oklch(0.205 0 0);
-		
-		--destructive: oklch(0.577 0.245 27.325);
-		--destructive-foreground: oklch(0.98 0 0);
-		
-		--border: oklch(0.92 0 0);
-		--input: oklch(0.92 0 0);
-		--ring: oklch(0.48 0.17 145);
-		--radius: 0.5rem;
-	}
-
-	.dark {
-		--background: oklch(0.145 0 0);
-		--foreground: oklch(0.985 0 0);
-		--card: oklch(0.145 0 0);
-		--card-foreground: oklch(0.985 0 0);
-		--popover: oklch(0.145 0 0);
-		--popover-foreground: oklch(0.985 0 0);
-		--primary: oklch(0.48 0.17 145);
-		--primary-foreground: oklch(0.985 0 0);
-		--secondary: oklch(0.269 0 0);
-		--secondary-foreground: oklch(0.985 0 0);
-		--muted: oklch(0.269 0 0);
-		--muted-foreground: oklch(0.708 0 0);
-		--accent: oklch(0.269 0 0);
-		--accent-foreground: oklch(0.985 0 0);
-		--destructive: oklch(0.396 0.141 25.723);
-		--destructive-foreground: oklch(0.637 0.237 25.331);
-		--border: oklch(0.269 0 0);
-		--input: oklch(0.269 0 0);
-		--ring: oklch(0.48 0.17 145);
-	}
-}
-
+/* ── Base layer styles ── */
 @layer base {
 	* {
 		@apply border-border;
@@ -119,7 +157,7 @@
 	}
 }
 
-/* CBT Specific Utility Classes */
+/* ── Utilities ── */
 @layer utilities {
 	.custom-scrollbar::-webkit-scrollbar {
 		width: 4px;

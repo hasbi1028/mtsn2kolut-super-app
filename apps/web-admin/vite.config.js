@@ -7,9 +7,6 @@ export default defineConfig({
 	server: {
 		allowedHosts: ['dev.mtsn2kolut.sch.id']
 	},
-	resolve: {
-		conditions: ['browser']
-	},
 	ssr: {
 		noExternal: ['lucide-svelte', 'bits-ui', 'tailwind-variants', 'svelte-sonner', 'katex', '@tiptap/core', '@tiptap/pm', '@tiptap/starter-kit'],
 	},

@@ -95,96 +95,100 @@
 			</p>
 		</div>
 
-		<!-- Stat Cards (CBT style: compact, bordered, white cards) -->
+		<!-- Stat Cards (daisyui card + badge, compact & informative) -->
 		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-			<div class="rounded-xl border border-border bg-card p-5 shadow-sm">
-				<div class="flex items-center gap-3">
-					<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-						</svg>
+			<div class="card bg-card border border-border shadow-sm">
+				<div class="card-body p-4 gap-1">
+					<div class="flex items-center gap-2">
+						<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+							</svg>
+						</div>
+						<div class="badge badge-sm badge-outline">{isAdmin ? 'Admin' : 'User'}</div>
 					</div>
-					<div>
-						<div class="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">Role</div>
-						<div class="text-lg font-black text-foreground">{isAdmin ? 'Administrator' : 'Pengguna'}</div>
-					</div>
+					<p class="card-title text-lg font-black mt-1">{data.user?.username || 'Pengguna'}</p>
+					<p class="text-xs text-muted-foreground">{isAdmin ? 'Administrator' : 'Pengguna'}</p>
 				</div>
 			</div>
-			<div class="rounded-xl border border-border bg-card p-5 shadow-sm">
-				<div class="flex items-center gap-3">
-					<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-						</svg>
+			<div class="card bg-card border border-border shadow-sm">
+				<div class="card-body p-4 gap-1">
+					<div class="flex items-center gap-2">
+						<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+							</svg>
+						</div>
+						<div class="badge badge-sm badge-success">Aktif</div>
 					</div>
-					<div>
-						<div class="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">Status</div>
-						<div class="text-lg font-black text-emerald-600">Aktif</div>
-					</div>
+					<p class="card-title text-lg font-black mt-1">{hariIni()}</p>
+					<p class="text-xs text-muted-foreground">{jamSekarang()} WITA</p>
 				</div>
 			</div>
-			<div class="rounded-xl border border-border bg-card p-5 shadow-sm">
-				<div class="flex items-center gap-3">
-					<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
-						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-						</svg>
+			<div class="card bg-card border border-border shadow-sm">
+				<div class="card-body p-4 gap-1">
+					<div class="flex items-center gap-2">
+						<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
+							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+							</svg>
+						</div>
+						<div class="badge badge-sm badge-info">Instansi</div>
 					</div>
-					<div>
-						<div class="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">Instansi</div>
-						<div class="text-lg font-black text-foreground truncate">MTsN 2 Kolut</div>
-					</div>
+					<p class="card-title text-lg font-black mt-1 truncate">MTsN 2 Kolut</p>
+					<p class="text-xs text-muted-foreground">MTs Negeri 2 Kolaka Utara</p>
 				</div>
 			</div>
-			<div class="rounded-xl border border-border bg-card p-5 shadow-sm">
-				<div class="flex items-center gap-3">
-					<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
-						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-						</svg>
+			<div class="card bg-card border border-border shadow-sm">
+				<div class="card-body p-4 gap-1">
+					<div class="flex items-center gap-2">
+						<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+							</svg>
+						</div>
+						<div class="badge badge-sm badge-warning">Sistem</div>
 					</div>
-					<div>
-						<div class="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">{hariIni()}</div>
-						<div class="text-lg font-black text-foreground">{jamSekarang()} WITA</div>
-					</div>
+					<p class="card-title text-lg font-black mt-1">SMM v2.0</p>
+					<p class="text-xs text-muted-foreground">Sistem Manajemen Madrasah</p>
 				</div>
 			</div>
 		</div>
 
-		<!-- Quick Access / Modul Grid (CBT card-table style) -->
-		<div class="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-			<div class="px-5 py-4 border-b border-border bg-muted/30">
-				<h2 class="text-sm font-bold text-foreground">Modul Aplikasi</h2>
-			</div>
-			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-				{#each actions as action, i (action.href)}
-					{@const icon = iconMap[action.icon]}
-					<a
-						href={resolve(action.href as '/')}
-						class="group flex items-center gap-4 p-5 text-foreground transition-all hover:bg-muted/50 border-r border-b border-border"
-					>
-						<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground group-hover:text-primary transition-colors">
-							{#if icon}
-								<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox={icon.viewBox}>
-									<path stroke-linecap="round" stroke-linejoin="round" d={icon.path} />
-								</svg>
-							{/if}
-						</div>
-						<div class="min-w-0 flex-1">
-							<div class="text-sm font-semibold text-foreground">{action.label}</div>
-							<div class="text-xs text-muted-foreground mt-0.5">{action.desc}</div>
-						</div>
-						<svg class="h-4 w-4 shrink-0 text-muted-foreground/40 group-hover:text-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-						</svg>
-					</a>
-				{/each}
+		<!-- Quick Access / Modul Grid (daisyui card style) -->
+		<div class="card bg-card border border-border shadow-sm">
+			<div class="card-body p-0">
+				<h2 class="card-title px-5 py-4 border-b border-border bg-muted/30 text-sm m-0 rounded-t-box">Modul Aplikasi</h2>
+				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+					{#each actions as action, i (action.href)}
+						{@const icon = iconMap[action.icon]}
+						<a
+							href={resolve(action.href as '/')}
+							class="group flex items-center gap-4 p-5 text-foreground transition-all hover:bg-muted/50 border-r border-b border-border"
+						>
+							<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground group-hover:text-primary transition-colors">
+								{#if icon}
+									<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox={icon.viewBox}>
+										<path stroke-linecap="round" stroke-linejoin="round" d={icon.path} />
+									</svg>
+								{/if}
+							</div>
+							<div class="min-w-0 flex-1">
+								<div class="text-sm font-semibold text-foreground">{action.label}</div>
+								<div class="text-xs text-muted-foreground mt-0.5">{action.desc}</div>
+							</div>
+							<svg class="h-4 w-4 shrink-0 text-muted-foreground/40 group-hover:text-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+							</svg>
+						</a>
+					{/each}
+				</div>
 			</div>
 		</div>
 
-		<!-- Info Bar (CBT footer-style) -->
-		<div class="rounded-xl border border-border bg-card px-5 py-3 shadow-sm">
-			<div class="flex items-center gap-3">
+		<!-- Info Bar (daisyui card) -->
+		<div class="card bg-card border border-border shadow-sm">
+			<div class="card-body px-5 py-3 flex-row items-center gap-3">
 				<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
 					<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

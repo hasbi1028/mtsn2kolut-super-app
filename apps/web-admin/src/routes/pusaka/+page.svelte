@@ -264,6 +264,13 @@
 
 <div class="space-y-6">
 
+	<!-- Breadcrumb -->
+	<div class="flex items-center gap-2 text-sm text-muted-foreground">
+		<a href={resolve('/')} class="hover:text-foreground">Beranda</a>
+		<span>/</span>
+		<span class="text-foreground font-medium">PUSAKA</span>
+	</div>
+
 	<!-- Header -->
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
@@ -271,8 +278,19 @@
 			<p class="text-sm text-muted-foreground mt-1">Pantau dan kelola penarikan data kehadiran dari PUSAKA Kemenag</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
-			<LoadingButton variant="outline" size="sm" onclick={() => void triggerSched()} loading={busy.sched} loadingLabel="Memproses..." label="⚡ Jalankan Jadwal Otomatis" />
-			<LoadingButton size="sm" onclick={() => void runRekap()} loading={busy.rekap} loadingLabel="Memproses..." label="▶ Mulai Rekap" />
+			<LoadingButton variant="outline" size="sm" onclick={() => void triggerSched()} loading={busy.sched} loadingLabel="Memproses..." label="">
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+				</svg>
+				Jalankan Jadwal Otomatis
+			</LoadingButton>
+			<LoadingButton size="sm" onclick={() => void runRekap()} loading={busy.rekap} loadingLabel="Memproses..." label="">
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+				</svg>
+				Mulai Rekap
+			</LoadingButton>
 			{#if confirmKey === 'cancel_all'}
 				<span class="self-center text-xs text-warning">Batalkan semua antrian?</span>
 				<LoadingButton size="sm" variant="destructive" onclick={() => void cancelAll()} loading={busy.cancel_all} loadingLabel="Membatalkan..." label="Ya" />
@@ -280,7 +298,10 @@
 			{:else}
 				<LoadingButton size="sm" variant="outline" onclick={() => (confirmKey = 'cancel_all')} loading={busy.cancel_all} loadingLabel="Memproses..." disabled={busy.cancel_all}
 					class="text-destructive border-destructive/40 hover:bg-destructive/10">
-					✕ Batalkan Semua
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+					</svg>
+					Batalkan Semua
 				</LoadingButton>
 			{/if}
 		</div>
@@ -362,16 +383,19 @@
 					{@const q = currentWorkerStatus.queue}
 					<div class="flex flex-wrap gap-2">
 						{#if q.running > 0}
-							<Badge variant="default">{q.running} berjalan</Badge>
+							<span class="badge badge-sm badge-info">{q.running} berjalan</span>
 						{/if}
 						{#if q.queued > 0}
-							<Badge variant="outline">{q.queued} antre</Badge>
+							<span class="badge badge-sm badge-ghost">{q.queued} antre</span>
 						{/if}
 						{#if q.running === 0 && q.queued === 0}
-							<Badge variant="secondary">Idle</Badge>
+							<span class="badge badge-sm badge-outline">Idle</span>
 						{/if}
 					</div>
-					<p class="text-xs text-muted-foreground mt-1">{q.success} sukses · {q.failed} gagal</p>
+					<p class="text-xs text-muted-foreground mt-1">
+						<span class="badge badge-xs badge-success">{q.success} sukses</span>
+						<span class="badge badge-xs badge-error">{q.failed} gagal</span>
+					</p>
 				{:else}
 					<span class="text-2xl font-bold">—</span>
 				{/if}

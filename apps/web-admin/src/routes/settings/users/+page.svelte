@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
@@ -687,6 +688,15 @@
 <svelte:head><title>Pusat Akun & Hak Akses — MTsN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6 p-6">
+	<!-- Breadcrumb -->
+	<div class="flex items-center gap-2 text-sm text-muted-foreground">
+		<a href={resolve('/')} class="hover:text-foreground">Beranda</a>
+		<span>/</span>
+		<a href={resolve('/settings')} class="hover:text-foreground">Pengaturan</a>
+		<span>/</span>
+		<span class="text-foreground font-medium">Manajemen Pengguna</span>
+	</div>
+
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
 			<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Pusat Akun & Hak Akses</p>
@@ -725,7 +735,7 @@
 		{/snippet}
 	</AsyncContent>
 
-	<div class="flex flex-wrap gap-2 rounded-2xl border bg-card p-2">
+	<div role="tablist" class="tabs tabs-box bg-card overflow-x-auto flex-nowrap">
 		{#each [
 			{ id: 'ringkasan', label: 'Ringkasan' },
 			{ id: 'pegawai', label: 'Akun Pegawai' },
@@ -735,7 +745,7 @@
 			{ id: 'generate', label: 'Generate Akun' },
 			{ id: 'audit', label: 'Audit & Permintaan' }
 		] as tab}
-			<button class={`rounded-xl px-3 py-2 text-sm font-medium transition ${activeTab === tab.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`} onclick={() => setTab(tab.id as AccountTab)}>{tab.label}</button>
+			<button role="tab" class="tab {activeTab === tab.id ? 'tab-active font-semibold' : ''}" onclick={() => setTab(tab.id as AccountTab)}>{tab.label}</button>
 		{/each}
 	</div>
 
@@ -870,9 +880,9 @@
 					<div class="flex flex-wrap gap-2"><Button variant="outline" onclick={() => void refreshOverview()}>Muat Ulang</Button><Button onclick={() => openCreate(activeTab === 'siswa' ? 'student' : activeTab === 'ortu' ? 'parent' : activeTab === 'admin' ? 'admin' : 'employee')}>Tambah Sesuai Tab</Button></div>
 				</div>
 				<div class="grid gap-3 md:grid-cols-[1fr_180px_210px]">
-					<Input value={searchQuery} oninput={handleUserSearchInput} placeholder="Cari nama, username, profil, role…" />
-					<select class="rounded-md border bg-background px-3 py-2 text-sm" value={roleFilter} onchange={setRoleFilter}><option value="all">Semua role</option>{#each availableRoles as role}<option value={role.value}>{role.label}</option>{/each}</select>
-					<select class="rounded-md border bg-background px-3 py-2 text-sm" value={statusFilter} onchange={setStatusFilter}><option value="all">Semua status</option><option value="active">Aktif</option><option value="inactive">Nonaktif</option><option value="unlinked">Belum tertaut profil</option><option value="never-login">Belum pernah login</option><option value="multi-role">Multi-peran</option></select>
+					<input type="text" value={searchQuery} oninput={handleUserSearchInput} placeholder="Cari nama, username, profil, role…" class="input input-bordered w-full" />
+					<select class="select select-bordered w-full" value={roleFilter} onchange={setRoleFilter}><option value="all">Semua role</option>{#each availableRoles as role}<option value={role.value}>{role.label}</option>{/each}</select>
+					<select class="select select-bordered w-full" value={statusFilter} onchange={setStatusFilter}><option value="all">Semua status</option><option value="active">Aktif</option><option value="inactive">Nonaktif</option><option value="unlinked">Belum tertaut profil</option><option value="never-login">Belum pernah login</option><option value="multi-role">Multi-peran</option></select>
 				</div>
 				{#if selectedUserIds.length > 0}
 					<div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-primary/10 p-3"><p class="text-sm font-medium">{selectedUserIds.length} akun dipilih</p><div class="flex flex-wrap gap-2"><Button variant="outline" size="sm" onclick={() => (selectedUserIds = [])}>Bersihkan</Button><Button variant="outline" size="sm" onclick={() => (activeTab = 'generate')}>Ke Generate Akun</Button></div></div>
@@ -894,7 +904,7 @@
 									<Table.Cell><Button variant="outline" size="sm" onclick={() => (selectedUser = user)}>Detail</Button></Table.Cell>
 								</Table.Row>
 							{:else}
-								<Table.Row><Table.Cell colspan={7}><EmptyStatePanel compact title="Tidak ada pengguna" description="Ubah filter atau tambah akun baru." /></Table.Cell></Table.Row>
+								<Table.Row><Table.Cell colspan={7}><div class="alert alert-info m-4 shadow-sm"><span>Tidak ada pengguna ditemukan. Ubah filter atau tambah akun baru.</span></div></Table.Cell></Table.Row>
 							{/each}
 						</Table.Body>
 					</Table.Root>
