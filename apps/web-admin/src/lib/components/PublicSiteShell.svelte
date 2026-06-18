@@ -246,25 +246,66 @@
 
 			{#if mobileOpen}
 				<div class="border-t border-emerald-100 bg-white lg:hidden">
-					<nav id={mobileMenuId} aria-label="Navigasi website mobile" class="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-3 sm:px-6">
-						<div class="mb-1 rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2">
-							<p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Menu Website</p>
-							<p class="mt-1 text-xs text-emerald-900">Akses dashboard dan login.</p>
-						</div>
-						{#each navItems as item (item.href)}
-							<a
-								href={resolve(item.href)}
-								aria-current={isActive(item.href) ? 'page' : undefined}
+					<nav id={mobileMenuId} aria-label="Navigasi website mobile" class="mx-auto max-w-6xl px-4 py-4 sm:px-6">
+						<!-- Menu Header -->
+						<div class="mb-3 flex items-center justify-between">
+							<div>
+								<p class="text-[10px] font-extrabold uppercase tracking-widest text-emerald-600">Navigasi</p>
+								<p class="mt-0.5 text-xs font-semibold text-slate-500">Akses dashboard dan login.</p>
+							</div>
+							<button
+								type="button"
+								class="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:bg-slate-50"
 								onclick={() => (mobileOpen = false)}
-								class={`rounded-xl px-3 py-2 text-sm font-medium ${
-									isActive(item.href)
-										? 'bg-emerald-50 text-emerald-800'
-										: 'text-slate-700 hover:bg-slate-100'
-								}`}
+								aria-label="Tutup menu"
 							>
-								{item.label}
-							</a>
-						{/each}
+								<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+								</svg>
+							</button>
+						</div>
+
+						<!-- Nav Items -->
+						<div class="space-y-1.5">
+							{#each navItems as item (item.href)}
+								<a
+									href={resolve(item.href)}
+									aria-current={isActive(item.href) ? 'page' : undefined}
+									onclick={() => (mobileOpen = false)}
+									class={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all ${
+										isActive(item.href)
+											? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
+											: 'text-slate-600 hover:bg-slate-50'
+									}`}
+								>
+									{#if item.href === '/'}
+										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl {isActive(item.href) ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}">
+											<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1" />
+											</svg>
+										</div>
+									{:else}
+										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl {isActive(item.href) ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}">
+											<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+											</svg>
+										</div>
+									{/if}
+									<span>{item.label}</span>
+									<svg class="ml-auto h-4 w-4 {isActive(item.href) ? 'text-emerald-400' : 'text-slate-300'}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+									</svg>
+								</a>
+							{/each}
+						</div>
+
+						<!-- Mobile CTA -->
+						<a href={resolve('/login')} class="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-extrabold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-700">
+							Masuk ke Sistem
+							<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+							</svg>
+						</a>
 					</nav>
 				</div>
 			{/if}
