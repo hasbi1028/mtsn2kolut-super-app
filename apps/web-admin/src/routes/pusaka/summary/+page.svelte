@@ -168,6 +168,8 @@
 					<Skeleton class="h-14 w-full" />
 					<Skeleton class="h-14 w-full" />
 					<Skeleton class="h-14 w-full" />
+					<Skeleton class="h-14 w-full" />
+					<Skeleton class="h-14 w-full" />
 				</div>
 				{/snippet}
 

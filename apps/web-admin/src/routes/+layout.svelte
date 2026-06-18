@@ -127,7 +127,27 @@
 			<div class="admin-content bg-base-200 pt-14 lg:flex-1 lg:pt-0">
 				<MaintenanceBanner status={data.maintenanceStatus} user={data.user} />
 				<div class="content-wrapper mx-auto w-full max-w-[1280px] px-4 py-5 sm:px-5 md:px-8 lg:px-10 lg:py-10">
-					{@render children()}
+					{#if navigating.to}
+						<div class="space-y-6">
+							<div class="skeleton h-8 w-56"></div>
+							<div class="grid grid-cols-4 gap-4">
+								<div class="skeleton h-24 rounded-xl"></div>
+								<div class="skeleton h-24 rounded-xl"></div>
+								<div class="skeleton h-24 rounded-xl"></div>
+								<div class="skeleton h-24 rounded-xl"></div>
+							</div>
+							<div class="space-y-3">
+								<div class="skeleton h-8 w-48"></div>
+								<div class="skeleton h-14 w-full"></div>
+								<div class="skeleton h-14 w-full"></div>
+								<div class="skeleton h-14 w-full"></div>
+								<div class="skeleton h-14 w-full"></div>
+								<div class="skeleton h-14 w-full"></div>
+							</div>
+						</div>
+					{:else}
+						{@render children()}
+					{/if}
 				</div>
 			</div>
 		</main>

@@ -241,6 +241,7 @@
 		<p class="text-sm text-base-content/70 mt-1">Rekap kehadiran harian dari sistem PUSAKA Kemenag</p>
 	</div>
 
+	{#if total !== null}
 	<div class="grid gap-4 md:grid-cols-3">
 		<Card.Root class="border-primary/20 bg-gradient-to-br from-card via-card to-primary/10 md:col-span-2">
 			<Card.Content class="flex items-start justify-between gap-4 p-5">
@@ -266,6 +267,12 @@
 			</Card.Content>
 		</Card.Root>
 	</div>
+	{:else}
+	<div class="grid gap-4 md:grid-cols-3">
+		<div class="skeleton h-28 w-full rounded-xl md:col-span-2"></div>
+		<div class="skeleton h-28 w-full rounded-xl"></div>
+	</div>
+	{/if}
 
 	<Card.Root class="overflow-hidden border-base-300 shadow-sm">
 		<Card.Header class="border-b border-base-300 bg-gradient-to-r from-card to-primary/10">
@@ -273,8 +280,8 @@
 				<div class="grow">
 					<Card.Title>Rekap Kehadiran</Card.Title>
 					<Card.Description>
-						{#if refreshing}
-							Memuat data...
+						{#if refreshing || total === null}
+							<div class="skeleton h-4 w-32"></div>
 						{:else if total !== null}
 							{total} rekaman ditemukan
 						{:else}

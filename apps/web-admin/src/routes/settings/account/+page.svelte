@@ -973,15 +973,15 @@
 							{:else}
 								<div class="space-y-3">
 									{#each sessions as session (session.id)}
-										<div class={infoPanelClass}>
-											<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-												<div class="min-w-0 flex-1 space-y-2">
-													<div class="flex flex-wrap items-center gap-2">
-														<p class="text-sm font-semibold text-base-content">{sessionTitle(session)}</p>
-														{#if isCurrentSession(session, currentSessionId)}
-															<Badge variant="secondary">Perangkat Ini</Badge>
-														{/if}
-													</div>
+										<details class="collapse collapse-arrow bg-base-100 border border-base-300 rounded-box">
+											<summary class="collapse-title text-sm font-semibold flex items-center gap-2 min-h-0 py-3">
+												{sessionTitle(session)}
+												{#if isCurrentSession(session, currentSessionId)}
+													<Badge variant="secondary">Perangkat Ini</Badge>
+												{/if}
+											</summary>
+											<div class="collapse-content">
+												<div class="space-y-3 pt-1">
 													<div class="grid grid-cols-1 gap-2 text-xs text-base-content/70 sm:grid-cols-2">
 														<p>Terakhir aktif: {formatAccountDateTime(session.last_used_at)}</p>
 														<p>Berlaku sampai: {formatAccountDateTime(session.expires_at)}</p>
@@ -995,7 +995,7 @@
 													{#if session.user_agent}
 														<p class="line-clamp-2 text-[11px] text-base-content/70">{session.user_agent}</p>
 													{/if}
-													<div class="pt-2">
+													<div>
 														<label for={`account-session-label-${session.id}`} class="mb-1 block text-xs font-medium text-base-content/70">Nama perangkat</label>
 														<div class="flex flex-col gap-2 sm:flex-row">
 															<Input
@@ -1016,19 +1016,19 @@
 															</LoadingButton>
 														</div>
 													</div>
+													<LoadingButton
+														variant="outline"
+														size="sm"
+														onclick={() => void revokeSession(session.id)}
+														loading={revokeSessionLoading === session.id}
+														loadingLabel="Memproses..."
+													>
+														<Trash2Icon class="size-3.5" />
+														Akhiri Sesi
+													</LoadingButton>
 												</div>
-												<LoadingButton
-													variant="outline"
-													size="sm"
-													onclick={() => void revokeSession(session.id)}
-													loading={revokeSessionLoading === session.id}
-													loadingLabel="Memproses..."
-												>
-													<Trash2Icon class="size-3.5" />
-													Akhiri Sesi
-												</LoadingButton>
 											</div>
-										</div>
+										</details>
 									{/each}
 								</div>
 							{/if}

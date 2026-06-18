@@ -289,6 +289,28 @@
 				<div class="card bg-base-100 border border-base-300 animate-pulse h-32"></div>
 			{/each}
 		</div>
+		<div class="card bg-base-100 border border-base-300 shadow-sm mt-4">
+			<div class="card-body p-0">
+				<div class="border-b border-base-300 p-5">
+					<div class="skeleton h-5 w-36"></div>
+					<div class="skeleton h-4 w-56 mt-2"></div>
+				</div>
+				<div class="overflow-x-auto p-4">
+					<div class="space-y-4">
+						{#each Array(5) as _}
+							<div class="flex gap-6 px-2">
+								<div class="skeleton h-4 w-48"></div>
+								<div class="skeleton h-4 w-32"></div>
+								<div class="skeleton h-4 w-20"></div>
+								<div class="skeleton h-4 w-24"></div>
+								<div class="skeleton h-4 w-16"></div>
+								<div class="skeleton h-4 w-20 ml-auto"></div>
+							</div>
+						{/each}
+					</div>
+				</div>
+			</div>
+		</div>
 	{:else if errorMessage}
 		<div class="alert alert-error shadow-sm">
 			<div>
