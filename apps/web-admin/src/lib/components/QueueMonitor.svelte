@@ -1,5 +1,4 @@
 <script lang="ts">
-  import * as Card from '$lib/components/ui/card';
   import { Badge } from '$lib/components/ui/badge';
 
   interface QueueStats {
@@ -12,48 +11,29 @@
   }
 
   let { stats }: { stats: QueueStats } = $props();
+
+  const items = $derived([
+    { label: 'Antre', value: stats.queued, tone: '' },
+    { label: 'Jalan', value: stats.running, tone: stats.running > 0 ? 'text-primary font-bold' : '' },
+    { label: 'Sukses', value: stats.success, tone: stats.success > 0 ? 'text-success' : '' },
+    { label: 'Gagal', value: stats.failed, tone: stats.failed > 0 ? 'text-error' : '' },
+  ]);
 </script>
 
-<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-  <Card.Root>
-    <Card.Content class="pt-4 pb-3">
-      <p class="text-xs text-muted-foreground">Antre</p>
-      <p class="text-2xl font-bold mt-1">{stats.queued}</p>
-    </Card.Content>
-  </Card.Root>
-  <Card.Root class={stats.running > 0 ? 'border-success/20' : ''}>
-    <Card.Content class="pt-4 pb-3">
-      <p class="text-xs text-muted-foreground">Berjalan</p>
-      <div class="flex items-center gap-2 mt-1">
-        <p class="text-2xl font-bold">{stats.running}</p>
-        {#if stats.running > 0}
-          <Badge class="text-xs">Aktif</Badge>
-        {/if}
-      </div>
-    </Card.Content>
-  </Card.Root>
-  <Card.Root>
-    <Card.Content class="pt-4 pb-3">
-      <p class="text-xs text-muted-foreground">Sukses</p>
-      <p class="text-2xl font-bold text-success mt-1">{stats.success}</p>
-    </Card.Content>
-  </Card.Root>
-  <Card.Root class={stats.failed > 0 ? 'border-destructive/30' : ''}>
-    <Card.Content class="pt-4 pb-3">
-      <p class="text-xs text-muted-foreground">Gagal</p>
-      <p class="text-2xl font-bold {stats.failed > 0 ? 'text-destructive' : ''} mt-1">{stats.failed}</p>
-    </Card.Content>
-  </Card.Root>
-  <Card.Root>
-    <Card.Content class="pt-4 pb-3">
-      <p class="text-xs text-muted-foreground">Retry</p>
-      <p class="text-2xl font-bold mt-1">{stats.retry_due}</p>
-    </Card.Content>
-  </Card.Root>
-  <Card.Root>
-    <Card.Content class="pt-4 pb-3">
-      <p class="text-xs text-muted-foreground">Total</p>
-      <p class="text-2xl font-bold mt-1">{stats.total}</p>
-    </Card.Content>
-  </Card.Root>
+<!-- Compact horizontal stat bar -->
+<div class="flex items-center gap-1 overflow-x-auto rounded-xl border border-base-300 bg-base-100 px-3 py-2.5 text-center">
+  {#each items as item (item.label)}
+    <div class="flex min-w-[60px] flex-1 flex-col items-center gap-0.5 px-1">
+      <span class="text-lg font-black leading-none {item.tone}">{item.value}</span>
+      <span class="text-[9px] font-semibold tracking-wide text-base-content/60 uppercase">{item.label}</span>
+    </div>
+    {#if item.label !== 'Gagal'}
+      <div class="h-6 w-px bg-base-300/60"></div>
+    {/if}
+  {/each}
+  {#if stats.total > 0}
+    <div class="ml-1 shrink-0">
+      <Badge class="badge-xs bg-base-200 text-[9px] font-bold text-base-content/70">{stats.total} total</Badge>
+    </div>
+  {/if}
 </div>

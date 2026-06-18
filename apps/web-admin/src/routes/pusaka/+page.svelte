@@ -39,7 +39,6 @@
 		status: string;
 		claimed_by?: string;
 	}
-
 	interface PusakaOverview {
 		queueStats: QueueStats;
 		workerStatus: WorkerStatus | null;
@@ -153,7 +152,7 @@
 	function overviewErrorMessage(error: unknown) {
 		if (error instanceof Error && error.message.trim()) return error.message;
 		if (typeof error === 'string' && error.trim()) return error;
-		return 'Gagal memuat status petugas sistem, ringkasan antrian, atau pekerjaan terbaru. Periksa layanan sistem PUSAKA, lalu coba lagi.';
+		return 'Gagal memuat status PUSAKA. Coba lagi.';
 	}
 
 	function handleOverviewRenderError(error: unknown, reset: () => void) {
@@ -193,14 +192,14 @@
 			const data = await readClientApiData<PusakaActionResponse>(res, 'Gagal menjalankan rekap massal');
 			operationState = {
 				tone: 'warning',
-				title: 'Rekap Massal Diantrekan',
-				message: `Sistem menambahkan ${data.inserted ?? 0} pekerjaan baru. Pantau hasilnya di antrian dan worker status sebelum mengulangi operasi ini.`,
+				title: 'Rekap Diantrekan',
+				message: `${data.inserted ?? 0} pekerjaan baru ditambahkan.`,
 			};
-			showToast(`Rekap di-queue: ${data.inserted ?? 0} pekerjaan baru`, 'ok');
+			showToast(`Rekap di-queue: ${data.inserted ?? 0} pekerjaan`, 'ok');
 		} catch (error) {
 			operationState = {
 				tone: 'error',
-				title: 'Rekap Massal Gagal',
+				title: 'Rekap Gagal',
 				message: overviewErrorMessage(error),
 			};
 			showToast(overviewErrorMessage(error), 'err');
@@ -255,52 +254,43 @@
 
 <svelte:head><title>PUSAKA Kemenag — MTSN 2 Kolut</title></svelte:head>
 
-<div class="space-y-6">
+<div class="space-y-4">
 
-	<!-- Breadcrumb -->
-	<div class="flex items-center gap-2 text-sm text-base-content/70">
-		<a href={resolve('/')} class="hover:text-base-content">Beranda</a>
-		<span>/</span>
-		<span class="text-base-content font-medium">PUSAKA</span>
-	</div>
-
-	<!-- Header -->
-	<div class="flex flex-wrap items-start justify-between gap-4">
-		<div>
-			<h1 class="text-2xl font-semibold text-base-content">Kontrol PUSAKA Kemenag</h1>
-			<p class="text-sm text-base-content/70 mt-1">Pantau dan kelola penarikan data kehadiran dari PUSAKA Kemenag</p>
+	<!-- Header: compact -->
+	<div class="space-y-3">
+		<h1 class="text-lg font-black tracking-tight text-base-content lg:text-2xl">Kontrol PUSAKA</h1>
+		<div class="flex items-center gap-2 text-xs text-base-content/70">
+			<a href={resolve('/')} class="hover:text-base-content hidden lg:inline">Beranda</a>
+			<span class="hidden lg:inline">/</span>
+			<span class="hidden lg:inline font-medium text-base-content">PUSAKA</span>
+			<span class="hidden lg:inline">—</span>
+			<span class="font-medium text-base-content">Pantau data kehadiran PUSAKA Kemenag</span>
 		</div>
-		<div class="flex flex-wrap gap-2">
-			<LoadingButton variant="outline" size="sm" onclick={() => void triggerSched()} loading={busy.sched} loadingLabel="Memproses..." label="">
-				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-				</svg>
-				Jalankan Jadwal Otomatis
+
+		<!-- Action buttons: horizontal scroll on mobile -->
+		<div class="flex items-center gap-2 overflow-x-auto pb-1">
+			<LoadingButton variant="outline" size="sm" onclick={() => void triggerSched()} loading={busy.sched} loadingLabel="Memproses..." label="" class="shrink-0">
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+				Jalankan Jadwal
 			</LoadingButton>
 			{#if confirmKey === 'rekap'}
-				<span class="self-center text-xs text-warning">Mulai rekap massal PUSAKA untuk seluruh akun aktif?</span>
-				<LoadingButton size="sm" onclick={() => void runRekap()} loading={busy.rekap} loadingLabel="Memproses..." label="Ya" />
-				<Button size="sm" variant="ghost" onclick={() => (confirmKey = '')}>Tidak</Button>
+				<span class="shrink-0 text-xs text-warning">Mulai rekap?</span>
+				<LoadingButton size="sm" onclick={() => void runRekap()} loading={busy.rekap} loadingLabel="..." label="Ya" class="shrink-0" />
+				<Button size="sm" variant="ghost" onclick={() => (confirmKey = '')} class="shrink-0">✕</Button>
 			{:else}
-				<LoadingButton size="sm" onclick={() => (confirmKey = 'rekap')} loading={busy.rekap} loadingLabel="Memproses..." label="">
-					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-					</svg>
+				<LoadingButton size="sm" onclick={() => (confirmKey = 'rekap')} loading={busy.rekap} loadingLabel="..." label="" class="shrink-0">
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
 					Mulai Rekap
 				</LoadingButton>
 			{/if}
 			{#if confirmKey === 'cancel_all'}
-				<span class="self-center text-xs text-warning">Batalkan semua antrian?</span>
-				<LoadingButton size="sm" variant="destructive" onclick={() => void cancelAll()} loading={busy.cancel_all} loadingLabel="Membatalkan..." label="Ya" />
-				<Button size="sm" variant="ghost" onclick={() => (confirmKey = '')}>Tidak</Button>
+				<span class="shrink-0 text-xs text-warning">Batalkan?</span>
+				<LoadingButton size="sm" variant="destructive" onclick={() => void cancelAll()} loading={busy.cancel_all} loadingLabel="..." label="Ya" class="shrink-0" />
+				<Button size="sm" variant="ghost" onclick={() => (confirmKey = '')} class="shrink-0">✕</Button>
 			{:else}
-				<LoadingButton size="sm" variant="outline" onclick={() => (confirmKey = 'cancel_all')} loading={busy.cancel_all} loadingLabel="Memproses..." disabled={busy.cancel_all}
-					class="text-destructive border-destructive/40 hover:bg-destructive/10">
-					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-					</svg>
-					Batalkan Semua
+				<LoadingButton size="sm" variant="outline" onclick={() => (confirmKey = 'cancel_all')} loading={busy.cancel_all} loadingLabel="..." disabled={busy.cancel_all} class="shrink-0 text-destructive border-destructive/40 hover:bg-destructive/10">
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+					Batalkan
 				</LoadingButton>
 			{/if}
 		</div>
@@ -312,26 +302,15 @@
 
 	<AsyncContent promise={overviewPromise} onerror={handleOverviewRenderError}>
 		{#snippet pending()}
-			<div class="space-y-4 rounded-2xl border border-base-300 bg-base-100 p-5">
-				<div class="grid gap-4 sm:grid-cols-3">
-					{#each Array.from({ length: 3 }) as _, index (`pusaka-worker-skeleton-${index}`)}
-						<div class="space-y-3 rounded-xl border border-base-300 p-4">
-							<Skeleton class="h-4 w-28" />
-							<Skeleton class="h-8 w-20" />
-						</div>
-					{/each}
-				</div>
-				<Skeleton class="h-28 w-full" />
-				<div class="space-y-3">
-					<Skeleton class="h-10 w-40" />
-					{#each Array.from({ length: 5 }) as _, index (`pusaka-job-skeleton-${index}`)}
-						<Skeleton class="h-11 w-full" />
-					{/each}
+			<div class="space-y-3 rounded-xl border border-base-300 bg-base-100 p-4">
+				<div class="flex gap-2">{#each Array(4) as _, i}<Skeleton class="h-12 flex-1 rounded-lg" />{/each}</div>
+				<div class="space-y-2">
+					{#each Array(5) as _, i}<Skeleton class="h-10 w-full" />{/each}
 				</div>
 			</div>
 		{/snippet}
 		{#snippet failed(error, reset)}
-			<RecoveryPanel title="PUSAKA Belum Merespons Penuh" message={overviewErrorMessage(error)} onRetry={() => retryOverview(reset)} />
+			<RecoveryPanel title="PUSAKA Error" message={overviewErrorMessage(error)} onRetry={() => retryOverview(reset)} />
 		{/snippet}
 		{#snippet children(value)}
 			{@const overview = value as PusakaOverview}
@@ -339,160 +318,149 @@
 			{@const currentWorkerStatus = overview.workerStatus}
 			{@const currentRecentJobs = overview.recentJobs}
 
-	<!-- Worker status -->
-	<div class="grid gap-4 sm:grid-cols-3">
-		<Card.Root>
-			<Card.Header class="pb-2">
-				<Card.Description>Petugas Sistem Aktif</Card.Description>
+		<!-- Worker status: compact inline -->
+		<div class="flex items-center gap-3 rounded-xl border border-base-300 bg-base-100 px-3 py-2.5 text-xs">
+			{#if currentWorkerStatus}
+				<Badge variant={currentWorkerStatus.total > 0 ? 'default' : 'destructive'}>
+					{currentWorkerStatus.total > 0 ? 'Online' : 'Offline'}
+				</Badge>
+				<span class="text-base-content/70">
+					Petugas: <span class="font-bold text-base-content">{currentWorkerStatus.total}</span>
+					{#if currentWorkerStatus.active_workers?.length}
+						<span class="ml-2">Proses: <span class="font-bold text-base-content">{currentWorkerStatus.active_workers.reduce((s, w) => s + w.active_consumers, 0)}</span>/{currentWorkerStatus.active_workers.reduce((s, w) => s + w.target_concurrency, 0)}</span>
+					{/if}
+				</span>
+			{:else}
+				<Badge variant="destructive">Offline</Badge>
+				<span class="text-base-content/70">Petugas tidak aktif</span>
+			{/if}
+		</div>
+
+		<!-- Queue monitor compact -->
+		<QueueMonitor stats={currentQueueStats} />
+
+		<!-- Recent jobs -->
+		<Card.Root class="overflow-hidden border-base-300 shadow-sm">
+			<Card.Header class="px-4 py-3">
+				<div class="flex items-center justify-between">
+					<Card.Title class="text-sm font-bold">Pekerjaan Terbaru</Card.Title>
+					<Button variant="ghost" size="sm" href={resolve('/pusaka/antrian')} class="text-xs h-7 px-2">Semua →</Button>
+				</div>
 			</Card.Header>
-			<Card.Content class="pt-0">
-				<div class="flex items-center gap-2">
-					<span class="text-2xl font-bold">{currentWorkerStatus?.total ?? '—'}</span>
-					{#if currentWorkerStatus}
-						<Badge variant={currentWorkerStatus.total > 0 ? 'default' : 'destructive'}>
-							{currentWorkerStatus.total > 0 ? 'Online' : 'Offline'}
-						</Badge>
+			<Card.Content class="p-0">
+				<!-- Desktop table -->
+				<div class="hidden overflow-x-auto lg:block">
+					<Table.Root>
+						<Table.Header>
+							<Table.Row>
+								<Table.Head>Waktu</Table.Head>
+								<Table.Head>Nama</Table.Head>
+								<Table.Head>Tipe</Table.Head>
+								<Table.Head>Status</Table.Head>
+							</Table.Row>
+						</Table.Header>
+						<Table.Body>
+							{#each currentRecentJobs.slice(0, 5) as j (j.id)}
+								<Table.Row>
+									<Table.Cell class="text-xs text-base-content/70 whitespace-nowrap">{fmtDt(j.created_at)}</Table.Cell>
+									<Table.Cell class="font-medium">{j.nama || j.employee_nama || '—'}</Table.Cell>
+									<Table.Cell><Badge variant="outline">{runTypeLabel(j.run_type)}</Badge></Table.Cell>
+									<Table.Cell><Badge variant={statusVariant(j.status)}>{statusLabel(j.status)}</Badge></Table.Cell>
+								</Table.Row>
+							{:else}
+								<Table.Row><Table.Cell colspan={4} class="p-4"><EmptyStatePanel compact title="Belum ada pekerjaan" description="Jalankan rekap untuk mulai." /></Table.Cell></Table.Row>
+							{/each}
+						</Table.Body>
+					</Table.Root>
+				</div>
+				<!-- Mobile list -->
+				<div class="lg:hidden">
+					{#if currentRecentJobs.length === 0}
+						<div class="p-4"><EmptyStatePanel compact title="Belum ada pekerjaan" description="Jalankan rekap untuk mulai." /></div>
+					{:else}
+						<ul class="divide-y divide-border">
+							{#each currentRecentJobs.slice(0, 5) as j (j.id)}
+								<li class="flex items-center gap-3 px-4 py-2.5">
+									<div class="min-w-0 flex-1">
+										<p class="truncate text-sm font-semibold text-base-content">{j.nama || j.employee_nama || '—'}</p>
+										<p class="truncate text-[10px] text-base-content/60">{fmtDt(j.created_at)}</p>
+									</div>
+									<div class="flex shrink-0 flex-col items-end gap-0.5">
+										<Badge variant={statusVariant(j.status)} class="text-[10px]">{statusLabel(j.status)}</Badge>
+										<span class="text-[9px] text-base-content/50">{runTypeLabel(j.run_type)}</span>
+									</div>
+								</li>
+							{/each}
+						</ul>
 					{/if}
 				</div>
 			</Card.Content>
 		</Card.Root>
 
-		<Card.Root>
-			<Card.Header class="pb-2">
-				<Card.Description>Proses Aktif</Card.Description>
-			</Card.Header>
-			<Card.Content class="pt-0">
-				<span class="text-2xl font-bold">
-					{currentWorkerStatus?.active_workers?.reduce((s, w) => s + w.active_consumers, 0) ?? '—'}
-				</span>
-				{#if currentWorkerStatus}
-					<span class="text-sm text-base-content/70 ml-1">
-						/ {currentWorkerStatus.active_workers?.reduce((s, w) => s + w.target_concurrency, 0)} kapasitas
-					</span>
-				{/if}
-			</Card.Content>
-		</Card.Root>
-
-		<Card.Root>
-			<Card.Header class="pb-2">
-			<Card.Description>Antrian Job</Card.Description>
-			</Card.Header>
-			<Card.Content class="pt-0">
-				{#if currentWorkerStatus?.queue}
-					{@const q = currentWorkerStatus.queue}
-					<div class="flex flex-wrap gap-2">
-						{#if q.running > 0}
-							<span class="badge badge-sm badge-info">{q.running} berjalan</span>
-						{/if}
-						{#if q.queued > 0}
-							<span class="badge badge-sm badge-ghost">{q.queued} antre</span>
-						{/if}
-						{#if q.running === 0 && q.queued === 0}
-							<span class="badge badge-sm badge-outline">Idle</span>
-						{/if}
-					</div>
-					<p class="text-xs text-base-content/70 mt-1">
-						<span class="badge badge-xs badge-success">{q.success} sukses</span>
-						<span class="badge badge-xs badge-error">{q.failed} gagal</span>
-					</p>
-				{:else}
-					<span class="text-2xl font-bold">—</span>
-				{/if}
-			</Card.Content>
-		</Card.Root>
-	</div>
-
-	<!-- Queue monitor -->
-	<QueueMonitor stats={currentQueueStats} />
-
-	<!-- Recent jobs -->
-	<Card.Root class="overflow-hidden border-base-300 shadow-sm">
-		<Card.Header class="pb-3">
-			<div class="flex items-center justify-between">
-				<Card.Title class="text-base">Pekerjaan Terbaru</Card.Title>
-			<Button variant="ghost" size="sm" href={resolve('/pusaka/antrian')}>Lihat semua →</Button>
-			</div>
-		</Card.Header>
-		<Card.Content class="p-0">
-			<div class="hidden overflow-x-auto lg:block">
-			<Table.Root>
-				<Table.Header>
-					<Table.Row>
-						<Table.Head>Waktu</Table.Head>
-						<Table.Head>Nama</Table.Head>
-						<Table.Head>Tipe</Table.Head>
-						<Table.Head>Status</Table.Head>
-						<Table.Head class="hidden sm:table-cell">Petugas Sistem</Table.Head>
-					</Table.Row>
-				</Table.Header>
-				<Table.Body>
-					{#each currentRecentJobs as j (j.id)}
-						<Table.Row>
-							<Table.Cell class="text-xs text-base-content/70 whitespace-nowrap">{fmtDt(j.created_at)}</Table.Cell>
-							<Table.Cell class="font-medium">{j.nama || j.employee_nama || '—'}</Table.Cell>
-							<Table.Cell><Badge variant="outline">{runTypeLabel(j.run_type)}</Badge></Table.Cell>
-							<Table.Cell><Badge variant={statusVariant(j.status)}>{statusLabel(j.status)}</Badge></Table.Cell>
-							<Table.Cell class="hidden sm:table-cell text-xs text-base-content/70">{j.claimed_by || '—'}</Table.Cell>
-						</Table.Row>
-					{:else}
-						<Table.Row>
-							<Table.Cell colspan={5} class="p-4">
-								<EmptyStatePanel
-									compact
-									title="Belum ada pekerjaan"
-									description="Jalankan rekap atau jalankan jadwal otomatis untuk mulai membentuk antrean kerja PUSAKA di halaman ini."
-								/>
-							</Table.Cell>
-						</Table.Row>
-					{/each}
-				</Table.Body>
-			</Table.Root>
-			</div>
-
-			<div class="lg:hidden">
-				{#if currentRecentJobs.length === 0}
-					<div class="p-4">
-						<EmptyStatePanel
-							title="Belum ada pekerjaan"
-							description="Jalankan rekap atau jalankan jadwal otomatis untuk mulai membentuk antrean kerja PUSAKA di halaman ini."
-						/>
-					</div>
-				{:else}
-					<ul class="divide-y divide-border border-b border-base-300">
-						{#each currentRecentJobs as j (j.id)}
-							<li class="flex items-start gap-3 px-4 py-2.5">
-								<div class="min-w-0 grow">
-									<p class="truncate text-sm font-medium text-base-content">{j.nama || j.employee_nama || '—'}</p>
-									<p class="truncate text-[11px] text-base-content/70">{fmtDt(j.created_at)} · {j.claimed_by || 'Belum diambil'}</p>
-								</div>
-								<div class="flex shrink-0 flex-col items-end gap-1">
-									<Badge variant={statusVariant(j.status)}>{statusLabel(j.status)}</Badge>
-									<Badge variant="outline" class="text-[10px]">{runTypeLabel(j.run_type)}</Badge>
-								</div>
-							</li>
-						{/each}
-					</ul>
-				{/if}
-			</div>
-		</Card.Content>
-	</Card.Root>
-
-	<!-- Quick navigation -->
-	<div class="grid gap-3 sm:grid-cols-2">
-		<Button variant="outline" href={resolve('/pusaka/employees')} class="h-auto py-4 flex-col items-start text-left gap-1">
-			<span class="font-semibold">Pegawai PUSAKA</span>
-			<span class="text-xs text-base-content/70 font-normal">Atur akun, jadwal, dan pekerjaan untuk pegawai yang memenuhi syarat</span>
-		</Button>
-		<Button variant="outline" href={resolve('/pusaka/kehadiran')} class="h-auto py-4 flex-col items-start text-left gap-1">
-			<span class="font-semibold">Data Kehadiran</span>
-			<span class="text-xs text-base-content/70 font-normal">Rekap harian dari PUSAKA Kemenag</span>
-		</Button>
-		<Button variant="outline" href={resolve('/pusaka/summary')} class="h-auto py-4 flex-col items-start text-left gap-1">
-			<span class="font-semibold">Ringkasan Kehadiran</span>
-			<span class="text-xs text-base-content/70 font-normal">Akumulasi per periode / bulan</span>
-		</Button>
-	</div>
+		<!-- Quick nav: compact 2x2 grid -->
+		<div class="grid grid-cols-2 gap-2">
+			<a href={resolve('/pusaka/employees')} class="group flex items-center gap-2 rounded-xl border border-base-300 bg-base-100 px-3 py-3 transition-all hover:bg-primary/5 hover:border-primary/30">
+				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 7.292 4 4 0 010-7.292zM15 21H9a2 2 0 01-2-2V12a2 2 0 012-2h6a2 2 0 012 2v7a2 2 0 01-2 2z" /></svg>
+				</div>
+				<div class="min-w-0">
+					<p class="truncate text-xs font-bold text-base-content">Pegawai</p>
+					<p class="truncate text-[10px] text-base-content/60">Akun & jadwal</p>
+				</div>
+			</a>
+			<a href={resolve('/pusaka/kehadiran')} class="group flex items-center gap-2 rounded-xl border border-base-300 bg-base-100 px-3 py-3 transition-all hover:bg-emerald-500/5 hover:border-emerald-500/30">
+				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600">
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+				</div>
+				<div class="min-w-0">
+					<p class="truncate text-xs font-bold text-base-content">Kehadiran</p>
+					<p class="truncate text-[10px] text-base-content/60">Data harian</p>
+				</div>
+			</a>
+			<a href={resolve('/pusaka/summary')} class="group flex items-center gap-2 rounded-xl border border-base-300 bg-base-100 px-3 py-3 transition-all hover:bg-amber-500/5 hover:border-amber-500/30">
+				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600">
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+				</div>
+				<div class="min-w-0">
+					<p class="truncate text-xs font-bold text-base-content">Ringkasan</p>
+					<p class="truncate text-[10px] text-base-content/60">Rekap periode</p>
+				</div>
+			</a>
+			<a href={resolve('/pusaka/antrian')} class="group flex items-center gap-2 rounded-xl border border-base-300 bg-base-100 px-3 py-3 transition-all hover:bg-sky-500/5 hover:border-sky-500/30">
+				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600">
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+				</div>
+				<div class="min-w-0">
+					<p class="truncate text-xs font-bold text-base-content">Antrian</p>
+					<p class="truncate text-[10px] text-base-content/60">Semua pekerjaan</p>
+				</div>
+			</a>
+		</div>
 		{/snippet}
 	</AsyncContent>
 
+</div>
+
+<!-- FAB Rekap: mobile only -->
+<div class="fixed bottom-20 right-4 z-50 lg:hidden">
+	{#if confirmKey === 'rekap'}
+		<div class="flex items-center gap-2 rounded-2xl border border-warning/30 bg-warning/10 px-3 py-2 shadow-lg backdrop-blur">
+			<span class="text-xs font-bold text-warning">Mulai rekap?</span>
+			<LoadingButton size="sm" onclick={() => void runRekap()} loading={busy.rekap} loadingLabel="..." label="Ya" class="shrink-0" />
+			<Button size="sm" variant="ghost" onclick={() => (confirmKey = '')} class="shrink-0 h-7 w-7 p-0">✕</Button>
+		</div>
+	{:else}
+		<button
+			type="button"
+			onclick={() => (confirmKey = 'rekap')}
+			disabled={busy.rekap}
+			class="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-content shadow-lg shadow-primary/30 transition-all hover:bg-primary/90 hover:shadow-xl active:scale-95 disabled:opacity-50"
+		>
+			{#if busy.rekap}
+				<span class="loading loading-spinner loading-sm"></span>
+			{:else}
+				<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+			{/if}
+		</button>
+	{/if}
 </div>
