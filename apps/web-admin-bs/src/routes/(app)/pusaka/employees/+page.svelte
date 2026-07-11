@@ -3,10 +3,15 @@
 
   interface Employee {
     id: string;
-    nama?: string; employee_nama?: string;
-    nip?: string; employee_nip?: string;
-    jabatan?: string; golongan?: string;
-    status?: string; unit?: string;
+    nama?: string;
+    nip?: string;
+    unit_kerja?: string;
+    employment_type?: string;
+    is_active?: boolean;
+    has_pusaka_account?: boolean;
+    pusaka_is_enabled?: boolean;
+    pusaka_username?: string;
+    pegawai_uid?: string;
     [key: string]: any;
   }
 
@@ -23,7 +28,7 @@
       const res = await fetch('/api/pusaka/employees');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      employees = data.employees || data.data || data || [];
+      employees = data.employees || data.data || data.items || [];
     } catch (e: any) {
       error = 'Gagal memuat data pegawai';
     } finally { loading = false; }
@@ -87,23 +92,49 @@
                   <th>#</th>
                   <th>Nama</th>
                   <th>NIP</th>
-                  <th>Jabatan</th>
-                  <th>Golongan</th>
+                  <th>Unit Kerja</th>
                   <th>Status</th>
+                  <th>Pusaka</th>
+                  <th>Jadwal</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {#each filtered as emp, i}
                   <tr>
                     <td class="text-muted">{i + 1}</td>
-                    <td class="fw-semibold">{emp.nama || emp.employee_nama || '—'}</td>
-                    <td class="text-muted" style="font-family:monospace;font-size:0.75rem;">{emp.nip || emp.employee_nip || '—'}</td>
-                    <td>{emp.jabatan || '—'}</td>
-                    <td>{emp.golongan || '—'}</td>
+                    <td class="fw-semibold">{emp.nama || '—'}</td>
+                    <td class="text-muted" style="font-family:monospace;font-size:0.75rem;">{emp.nip || '—'}</td>
+                    <td>{emp.unit_kerja || '—'}</td>
                     <td>
-                      {#if emp.status}
-                        <span class="badge {emp.status === 'aktif' ? 'bg-success' : 'bg-secondary'}">{emp.status}</span>
-                      {:else}—{/if}
+                      <span class="badge {emp.is_active ? 'bg-success' : 'bg-secondary'}">
+                        {emp.is_active ? 'Aktif' : 'Non-aktif'}
+                      </span>
+                      <small class="text-muted ms-1">{emp.employment_type?.toUpperCase() || ''}</small>
+                    </td>
+                    <td>
+                      {#if emp.has_pusaka_account}
+                        <span class="badge {emp.pusaka_is_enabled ? 'bg-success' : 'bg-warning text-dark'}" title={emp.pusaka_username || ''}>
+                          {emp.pusaka_is_enabled ? 'Aktif' : 'Disabled'}
+                        </span>
+                      {:else}
+                        <span class="badge bg-light text-dark">Belum</span>
+                      {/if}
+                    </td>
+                    <td>
+                      {#if emp.has_checkin_schedule || emp.has_checkout_schedule}
+                        <span class="badge bg-info-subtle text-dark">
+                          <i class="bi bi-clock me-1"></i>
+                          {emp.has_checkin_schedule ? 'In' : ''}{emp.has_checkin_schedule && emp.has_checkout_schedule ? '+' : ''}{emp.has_checkout_schedule ? 'Out' : ''}
+                        </span>
+                      {:else}
+                        <span class="text-muted">—</span>
+                      {/if}
+                    </td>
+                    <td>
+                      <a class="btn btn-outline-primary btn-sm py-0 px-2" href="/pusaka/employees/{emp.id}/schedules" title="Atur jadwal auto absensi" aria-label="Atur jadwal">
+                        <i class="bi bi-clock-history"></i>
+                      </a>
                     </td>
                   </tr>
                 {/each}

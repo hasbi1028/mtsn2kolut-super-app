@@ -1,8 +1,30 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
+
   let { activeRoute = '' } = $props();
 
   type NavItem = { label: string; icon: string; route: string };
   type NavSection = { title: string; items: NavItem[] };
+
+  function closeOffcanvas() {
+    if (!browser) return;
+    const el = document.getElementById('sidebarOffcanvas');
+    if (!el) return;
+    // Use Bootstrap 5 Offcanvas API if available, otherwise manually remove show class
+    const w = window as any;
+    if (w.bootstrap?.Offcanvas) {
+      w.bootstrap.Offcanvas.getInstance(el)?.hide();
+    } else {
+      el.classList.remove('show');
+      el.setAttribute('aria-hidden', 'true');
+      el.style.visibility = 'hidden';
+      const backdrop = document.querySelector('.offcanvas-backdrop');
+      if (backdrop) backdrop.remove();
+      document.body.classList.remove('offcanvas-open');
+      document.body.style.overflow = '';
+    }
+  }
 
   const sections: NavSection[] = [
     {
@@ -114,7 +136,7 @@
           href={item.route}
           class="nav-link d-flex align-items-center gap-2"
           class:active={activeRoute === item.route}
-          data-bs-dismiss="offcanvas"
+          onclick={closeOffcanvas}
         >
           <i class="bi {item.icon}"></i>
           <span>{item.label}</span>

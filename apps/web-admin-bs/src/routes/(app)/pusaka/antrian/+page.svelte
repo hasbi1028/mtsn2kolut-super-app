@@ -1,10 +1,17 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
 
   interface QueueJob {
-    id: string; created_at: string;
-    nama?: string; run_type: string; status: string;
-    claimed_by?: string; employee_nama?: string;
+    id: string;
+    created_at: string;
+    run_type: string;
+    status: string;
+    error_message?: string;
+    nama?: string;
+    nip?: string;
+    claimed_by?: string;
+    attempts?: number;
+    max_attempts?: number;
   }
 
   let jobs = $state<QueueJob[]>([]);
@@ -12,11 +19,62 @@
   let loading = $state(true);
   let error = $state('');
   let busy = $state<Record<string, boolean>>({});
+  let pollingActive = $state(false);
+  let lastRefreshTs = $state<number | null>(null);
 
-  onMount(loadData);
+  // Format time without using toLocaleTimeString (SSR-safe)
+  const lastRefreshText = $derived(lastRefreshTs ? formatTime(new Date(lastRefreshTs)) : '');
 
-  async function loadData() {
-    loading = true; error = '';
+  function formatTime(d: Date) {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} WITA`;
+  }
+
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
+  const POLL_INTERVAL = 30000; // 30 detik
+
+  onMount(() => {
+    loadData();
+    startPolling();
+  });
+
+  onDestroy(() => {
+    stopPolling();
+  });
+
+  function startPolling() {
+    if (typeof document === 'undefined') return;
+    if (pollTimer) return;
+    document.addEventListener('visibilitychange', handleVisibility);
+    pollTimer = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadData({ silent: true });
+      }
+    }, POLL_INTERVAL);
+    pollingActive = true;
+  }
+
+  function stopPolling() {
+    if (typeof document === 'undefined') return;
+    document.removeEventListener('visibilitychange', handleVisibility);
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+    pollingActive = false;
+  }
+
+  function handleVisibility() {
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      loadData({ silent: true });
+    }
+  }
+
+  async function loadData(opts: { silent?: boolean } = {}) {
+    if (!opts.silent) {
+      loading = true;
+    }
+    error = '';
     try {
       const [jobsRes, statsRes] = await Promise.all([
         fetch('/api/pusaka/jobs'),
@@ -27,9 +85,12 @@
         jobs = jd.items || jd.data || [];
       }
       if (statsRes.ok) stats = await statsRes.json();
+      lastRefreshTs = Date.now();
     } catch (e: any) {
       error = 'Gagal memuat antrian';
-    } finally { loading = false; }
+    } finally {
+      loading = false;
+    }
   }
 
   async function cancelJob(id: string) {
@@ -66,9 +127,21 @@
 <div class="container-fluid px-0">
   <div class="d-flex align-items-center justify-content-between mb-1">
     <h4 class="fw-black mb-0">Antrian Sinkronisasi</h4>
-    <button class="btn btn-outline-success btn-sm" onclick={loadData}>
-      <i class="bi bi-arrow-repeat me-1"></i>Refresh
-    </button>
+    <div class="d-flex align-items-center gap-2">
+      {#if pollingActive}
+        <span class="badge bg-success-subtle text-success small" title="Auto-refresh setiap {POLL_INTERVAL / 1000} detik">
+          <i class="bi bi-arrow-clockwise"></i> Auto: {POLL_INTERVAL / 1000}s
+        </span>
+        {#if lastRefreshText}
+          <span class="text-muted" style="font-size:0.75rem;" title="Update terakhir">
+            {lastRefreshText}
+          </span>
+        {/if}
+      {/if}
+      <button class="btn btn-outline-success btn-sm" onclick={() => loadData()} disabled={loading}>
+        <i class="bi {loading ? 'bi-arrow-repeat spin' : 'bi-arrow-repeat'} me-1"></i>Refresh
+      </button>
+    </div>
   </div>
   <p class="text-secondary mb-3" style="font-size:0.85rem;">Daftar job sinkronisasi PUSAKA</p>
 
@@ -107,11 +180,9 @@
               <thead class="table-light">
                 <tr>
                   <th>#</th>
-                  <th>Nama</th>
-                  <th>Pegawai</th>
+                  <th>Pegawai (NIP)</th>
                   <th>Tipe</th>
                   <th>Status</th>
-                  <th>Worker</th>
                   <th>Waktu</th>
                   <th></th>
                 </tr>
@@ -120,15 +191,25 @@
                 {#each jobs as job, i}
                   <tr>
                     <td class="text-muted">{i + 1}</td>
-                    <td class="fw-semibold">{job.nama || '—'}</td>
-                    <td>{job.employee_nama || '—'}</td>
+                    <td>
+                      {#if job.nama}
+                        <span class="fw-semibold">{job.nama}</span>
+                        {#if job.nip}
+                          <small class="text-muted d-block">{job.nip}</small>
+                        {/if}
+                      {:else}
+                        —
+                      {/if}
+                      {#if (job.status === 'failed' || job.status === 'queued') && job.attempts != null}
+                        <small class="text-muted d-block">Percobaan {job.attempts}/{job.max_attempts || 3}</small>
+                      {/if}
+                    </td>
                     <td><span class="badge bg-light text-dark">{job.run_type}</span></td>
                     <td><span class="badge {statusBadge(job.status)}">{job.status}</span></td>
-                    <td class="text-muted" style="font-size:0.7rem;">{job.claimed_by ? job.claimed_by.slice(0, 10) + '...' : '—'}</td>
                     <td class="text-muted">{formatDate(job.created_at)}</td>
                     <td>
                       {#if job.status === 'queued' || job.status === 'running'}
-                        <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick={() => cancelJob(job.id)} disabled={busy[job.id]}>
+                        <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick={() => cancelJob(job.id)} disabled={busy[job.id]} aria-label="Batalkan job">
                           <i class="bi bi-x-circle"></i>
                         </button>
                       {/if}

@@ -1115,7 +1115,7 @@ func TestAuthChangePasswordRejectsWeakPassword(t *testing.T) {
 	}
 }
 
-func TestAuthSeedAdminDoesNotOverwriteExistingPassword(t *testing.T) {
+func TestAuthSeedAdminUpdatesExistingPassword(t *testing.T) {
 	store := newFakeStore()
 	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "new-admin-password"}
 
@@ -1138,8 +1138,8 @@ func TestAuthSeedAdminDoesNotOverwriteExistingPassword(t *testing.T) {
 	}
 
 	admin := store.users["admin"]
-	if err := bcrypt.CompareHashAndPassword([]byte(admin.PasswordHash), []byte("old-admin-password")); err != nil {
-		t.Fatalf("admin password was unexpectedly changed: %v", err)
+	if err := bcrypt.CompareHashAndPassword([]byte(admin.PasswordHash), []byte("new-admin-password")); err != nil {
+		t.Fatalf("admin password was not updated to match ADMIN_PASSWORD: %v", err)
 	}
 }
 

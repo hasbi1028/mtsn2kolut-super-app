@@ -13,12 +13,36 @@
     tanpa_keterangan: number;
   }
 
+  interface AttendanceAlert {
+    employee_nama: string;
+    masalah: string;
+    periode: string;
+    tingkat: 'rendah' | 'sedang' | 'tinggi';
+  }
+
   let employees = $state<EmployeeSummary[]>([]);
   let summary = $state<SummaryItem | null>(null);
   let bulan = $state(String(new Date().getMonth() + 1).padStart(2, '0'));
   let tahun = $state(String(new Date().getFullYear()));
   let loading = $state(true);
   let error = $state('');
+
+  const alerts = $derived<AttendanceAlert[]>(
+    employees
+      .filter((emp) => (emp.missing_checkout || 0) + (emp.missing_checkin || 0) > 0)
+      .map((emp) => {
+        const totalMasalah = (emp.missing_checkout || 0) + (emp.missing_checkin || 0);
+        const masalah: string[] = [];
+        if (emp.missing_checkin > 0) masalah.push(`${emp.missing_checkin} tanpa jam masuk`);
+        if (emp.missing_checkout > 0) masalah.push(`${emp.missing_checkout} tanpa jam pulang`);
+        return {
+          employee_nama: emp.employee_nama,
+          masalah: masalah.join(', '),
+          periode: `${bulan}/${tahun}`,
+          tingkat: totalMasalah >= 5 ? 'tinggi' : totalMasalah >= 2 ? 'sedang' : 'rendah'
+        };
+      })
+  );
 
   const bulanList = [
     { value: '01', label: 'Januari' }, { value: '02', label: 'Februari' },

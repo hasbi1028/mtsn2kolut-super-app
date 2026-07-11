@@ -1,11 +1,22 @@
 <script lang="ts">
   import { onMount } from 'svelte';
 
-  let laporanList = $state<any[]>([]);
+  interface LogRow {
+    id: string;
+    report_date: string;
+    target_chat_id_masked: string;
+    send_mode: string;
+    schedule_time?: string;
+    status: string;
+    telegram_message_id?: string;
+    error_message?: string;
+    sent_at: string;
+  }
+
+  let laporanList = $state<LogRow[]>([]);
   let loading = $state(true);
   let error = $state('');
   let sending = $state(false);
-  let message = $state('');
   let statusMsg = $state('');
 
   onMount(loadLogs);
@@ -29,13 +40,13 @@
       const res = await fetch('/api/pusaka/attendance-telegram/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: message || undefined })
+        body: JSON.stringify({})
       });
       const data = await res.json();
       statusMsg = res.ok
         ? 'Laporan berhasil dikirim!'
         : (data.error || 'Gagal mengirim laporan');
-      if (res.ok) { message = ''; loadLogs(); }
+      if (res.ok) { loadLogs(); }
     } catch {
       statusMsg = 'Gagal terhubung ke server';
     } finally { sending = false; }
@@ -57,10 +68,6 @@
   <div class="card border shadow-sm mb-4">
     <div class="card-header bg-white fw-bold small py-2">Kirim Laporan Baru</div>
     <div class="card-body">
-      <div class="mb-3">
-        <label class="form-label small fw-semibold">Pesan (opsional)</label>
-        <textarea class="form-control" rows="2" bind:value={message} placeholder="Tambah catatan laporan..."></textarea>
-      </div>
       <button class="btn btn-primary btn-sm" onclick={sendLaporan} disabled={sending}>
         {#if sending}
           <span class="spinner-border spinner-border-sm me-1"></span>
@@ -104,8 +111,8 @@
             <thead class="table-light">
               <tr>
                 <th>#</th>
+                <th>Tanggal</th>
                 <th>Waktu</th>
-                <th>Pesan</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -113,8 +120,8 @@
               {#each laporanList as log, i}
                 <tr>
                   <td class="text-muted">{i + 1}</td>
-                  <td>{formatDate(log.created_at || log.tanggal)}</td>
-                  <td>{log.message || log.pesan || '—'}</td>
+                  <td>{log.report_date || '—'}</td>
+                  <td>{formatDate(log.sent_at)}</td>
                   <td>
                     <span class="badge {log.status === 'success' || log.status === 'terkirim' ? 'bg-success' : log.status === 'failed' || log.status === 'gagal' ? 'bg-danger' : 'bg-secondary'}">
                       {log.status || '—'}
