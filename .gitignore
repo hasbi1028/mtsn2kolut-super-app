@@ -4,6 +4,9 @@ bun.lock
 
 # Build output
 apps/web-admin/build/
+apps/web-admin-bs/build/
+apps/web-admin-bs/.svelte-kit/
+apps/web-admin-bs/test-results/
 apps/cbt-portal/build/
 apps/cbt-portal/.svelte-kit/
 services/pusaka-worker/dist/

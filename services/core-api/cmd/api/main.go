@@ -118,6 +118,7 @@ func main() {
 
 	r := chi.NewRouter()
 	r.Use(mw.RequestID)
+	r.Use(mw.CORS("http://localhost:7300", "http://127.0.0.1:7300"))
 	r.Use(mw.RequestLog)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.SetHeader("Content-Type", "application/json"))

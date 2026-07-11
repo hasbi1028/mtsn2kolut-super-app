@@ -806,6 +806,14 @@ func (s *Auth) SeedAdmin(ctx context.Context) error {
 		})
 	}
 
+	// Update password to match current ADMIN_PASSWORD env
+	if err := s.q.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
+		ID:           existing.ID,
+		PasswordHash: string(hash),
+	}); err != nil {
+		return err
+	}
+
 	// Ensure admin has admin role
 	if err := s.q.AddUserRole(ctx, db.AddUserRoleParams{
 		UserID: existing.ID,

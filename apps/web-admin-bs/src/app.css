@@ -1,0 +1,190 @@
+/* ── Kemenag Green Theme Overrides ── */
+[data-bs-theme="light"] {
+  --bs-primary: #16a34a;
+  --bs-primary-rgb: 22, 163, 74;
+  --bs-success: #16a34a;
+  --bs-success-rgb: 22, 163, 74;
+  --bs-link-color: #16a34a;
+  --bs-link-hover-color: #15803d;
+}
+
+.btn-primary {
+  --bs-btn-bg: #16a34a;
+  --bs-btn-border-color: #16a34a;
+  --bs-btn-hover-bg: #15803d;
+  --bs-btn-hover-border-color: #15803d;
+  --bs-btn-active-bg: #15803d;
+  --bs-btn-active-border-color: #15803d;
+}
+
+.btn-outline-primary {
+  --bs-btn-color: #16a34a;
+  --bs-btn-border-color: #16a34a;
+  --bs-btn-hover-bg: #16a34a;
+  --bs-btn-hover-border-color: #16a34a;
+  --bs-btn-active-bg: #16a34a;
+  --bs-btn-active-border-color: #16a34a;
+}
+
+.text-primary { color: #16a34a !important; }
+.bg-primary { background-color: #16a34a !important; }
+.border-primary { border-color: #16a34a !important; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 240px;
+  min-height: 100vh;
+  position: sticky;
+  top: 0;
+  max-height: 100vh;
+}
+
+.sidebar .nav-link,
+.mobile-sidebar .nav-link {
+  color: #334155;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.5rem;
+  margin-bottom: 3px;
+  min-height: 42px;
+}
+
+.sidebar .nav-link:hover,
+.mobile-sidebar .nav-link:hover {
+  background-color: #f1f5f9;
+}
+
+.sidebar .nav-link.active,
+.mobile-sidebar .nav-link.active {
+  background-color: #16a34a;
+  color: white;
+}
+
+.sidebar .nav-section,
+.mobile-sidebar .nav-section {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 1rem 0.75rem 0.25rem;
+}
+
+.mobile-sidebar {
+  --bs-offcanvas-width: min(84vw, 320px);
+}
+
+/* ── Header ── */
+.page-header {
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  height: 64px;
+  position: sticky;
+  top: 0;
+  z-index: 1020;
+}
+
+/* ── Cards ── */
+.card {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+}
+
+.stat-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+}
+
+.stat-card .stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Login ── */
+.login-card {
+  max-width: 400px;
+  width: 100%;
+  min-width: 0;
+  border: none;
+  border-radius: 1rem;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+}
+
+.login-submit-btn,
+.mobile-menu-btn {
+  min-height: 44px;
+}
+
+/* ── Misc ── */
+body {
+  background-color: #f8fafc;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow-x: hidden;
+}
+
+.content-area {
+  flex: 1;
+  min-height: 100vh;
+  min-width: 0;
+}
+
+.app-main {
+  min-width: 0;
+}
+
+.app-title {
+  max-width: 58vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.min-w-0 {
+  min-width: 0;
+}
+
+img, svg, canvas, video {
+  max-width: 100%;
+}
+
+.table-responsive,
+.card,
+.stat-card,
+.alert {
+  min-width: 0;
+}
+
+@media (max-width: 575.98px) {
+  .page-header {
+    height: 60px;
+  }
+
+  .app-main {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  .stat-card {
+    padding: 1rem;
+  }
+
+  .login-shell {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .login-card {
+    border-radius: 0.875rem;
+  }
+
+  .user-menu-btn {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+}
