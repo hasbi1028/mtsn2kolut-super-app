@@ -9,7 +9,6 @@
   import LoadingButton from '$lib/components/LoadingButton.svelte';
   import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
   import SuccessPanel from '$lib/components/SuccessPanel.svelte';
-  import { confirmAction } from '$lib/confirm-dialog';
   import { readClientJson } from '$lib/client/api';
   import { displayName } from '$lib/utils/display-name';
 
@@ -31,7 +30,7 @@
 
   let { employees, onreload }: {
     employees: Employee[];
-    onreload: () => void | Promise<void>;
+    onreload?: () => void | Promise<void>;
   } = $props();
 
   let confirmId = $state<string | null>(null);
@@ -278,10 +277,13 @@
               {#if confirmId === e.id}
                 <div class="flex flex-wrap items-center justify-end gap-2">
                   <span class="text-xs text-warning">Hapus pegawai ini?</span>
-                  <LoadingButton size="sm" variant="destructive" onclick={() => doDelete(e.id)} loading={busyId === e.id} loadingLabel="Menghapus..." disabled={busyId === e.id}>
-                    Ya, Hapus
-                  </LoadingButton>
-                  <Button size="sm" variant="ghost" onclick={() => (confirmId = null)}>Batal</Button>
+                  <form method="POST" action="?/hapus" class="inline">
+                    <input type="hidden" name="id" value={e.id} />
+                    <button type="submit" class="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-destructive-foreground bg-destructive hover:bg-destructive/90">
+                      Ya, Hapus
+                    </button>
+                  </form>
+                  <button class="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium hover:bg-accent" onclick={() => (confirmId = null)}>Batal</button>
                 </div>
               {:else}
                 <div class="flex flex-wrap items-center justify-end gap-2">
@@ -293,12 +295,19 @@
                   <Button size="sm" variant="outline" onclick={() => openEditDialog(e)}>
                     Edit
                   </Button>
-                  <LoadingButton size="sm" variant="outline" onclick={() => toggleEmployeeStatus(e)} loading={busyId === e.id} loadingLabel="Memproses..." disabled={busyId === e.id}>
-                    {e.is_active ? 'Nonaktifkan' : 'Aktifkan'}
-                  </LoadingButton>
-                  <Button size="sm" variant="ghost" class="text-destructive hover:text-destructive" onclick={() => (confirmId = e.id)}>
-                    Hapus
-                  </Button>
+                  <form method="POST" action="?/nonaktifkan" class="inline">
+                    <input type="hidden" name="id" value={e.id} />
+                    <input type="hidden" name="is_active" value={String(e.is_active)} />
+                    <button type="submit" class="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground">
+                      {e.is_active ? 'Nonaktifkan' : 'Aktifkan'}
+                    </button>
+                  </form>
+                  <form method="POST" action="?/hapus" class="inline">
+                    <input type="hidden" name="id" value={e.id} />
+                    <button type="submit" class="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/10">
+                      Hapus
+                    </button>
+                  </form>
                 </div>
               {/if}
             </Table.Cell>

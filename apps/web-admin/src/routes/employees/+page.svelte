@@ -1,12 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import EmployeeForm from '$lib/components/EmployeeForm.svelte';
   import GeneralEmployeeList from '$lib/components/GeneralEmployeeList.svelte';
-  import AsyncContent from '$lib/components/AsyncContent.svelte';
-  import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
-  import { Skeleton } from '$lib/components/ui/skeleton';
-  import { toast } from '$lib/components/ui/sonner';
-  import { readClientApiData } from '$lib/client/api';
+
+  let { data, form } = $props();
 
   type Employee = {
     id: string;
@@ -23,82 +19,8 @@
     pusaka_is_enabled: boolean;
     is_active: boolean;
   };
-  type EmployeesPayload = {
-    items?: Employee[];
-    data?: {
-      items?: Employee[];
-    };
-    error?: string;
-    message?: string;
-  };
 
-  let employees = $state<Employee[]>([]);
-  let employeesPromise = $state<Promise<Employee[]> | null>(null);
-  let employeesRequestId = 0;
-
-  function employeeRows(payload: EmployeesPayload | Employee[]) {
-    if (Array.isArray(payload)) return payload;
-    return payload.items ?? payload.data?.items ?? [];
-  }
-
-  async function fetchEmployees() {
-    const res = await fetch('/api/employees');
-    const payload = await readClientApiData<EmployeesPayload | Employee[]>(res, 'Gagal memuat data pegawai');
-    return employeeRows(payload);
-  }
-
-  function load() {
-    const requestId = ++employeesRequestId;
-    employees = [];
-    employeesPromise = fetchEmployees()
-      .then((rows) => {
-        if (requestId === employeesRequestId) {
-          employees = rows;
-          return rows;
-        }
-        return employees;
-      })
-      .catch((error: unknown) => {
-        if (requestId === employeesRequestId) throw error;
-        return employees;
-      });
-  }
-
-  async function refreshEmployees() {
-    if (!employeesPromise) {
-      load();
-      return;
-    }
-    try {
-      const requestId = ++employeesRequestId;
-      const rows = await fetchEmployees();
-      if (requestId === employeesRequestId) {
-        employees = rows;
-        employeesPromise = Promise.resolve(rows);
-      }
-    } catch (error) {
-      employeesPromise = Promise.resolve(employees);
-      toast.error(employeeErrorMessage(error));
-    }
-  }
-
-  function retryEmployees(reset?: () => void) {
-    reset?.();
-    load();
-  }
-
-  function employeeErrorMessage(error: unknown) {
-    if (error instanceof Error && error.message.trim()) return error.message;
-    return 'Gagal memuat data pegawai. Coba lagi untuk mengambil master pegawai terbaru.';
-  }
-
-  function handleEmployeeRenderError(error: unknown) {
-    console.error('Employees render failed', error);
-  }
-
-  onMount(() => {
-    void load();
-  });
+  let employees = $derived(data.employees as Employee[]);
 </script>
 
 <svelte:head><title>Pegawai — MTSN 2 Kolut</title></svelte:head>
@@ -109,55 +31,37 @@
     <p class="mt-1 text-sm text-base-content/70">Data seluruh pegawai sekolah. Integrasi akun, jadwal, dan job PUSAKA dikelola terpisah dari area ini.</p>
   </div>
 
-  <AsyncContent promise={employeesPromise} onerror={handleEmployeeRenderError}>
-    {#snippet pending()}
-      <div class="grid gap-3 md:grid-cols-3">
-        {#each Array.from({ length: 3 }) as _, index (`employee-stat-skeleton-${index}`)}
-          <div class="rounded-2xl border border-base-300 bg-base-100 px-4 py-4">
-            <Skeleton class="h-3 w-28" />
-            <Skeleton class="mt-3 h-8 w-16" />
-            <Skeleton class="mt-2 h-4 w-44" />
-          </div>
-        {/each}
-      </div>
-      <div class="rounded-2xl border border-base-300 bg-base-100 p-5">
-        <Skeleton class="h-6 w-40" />
-        <Skeleton class="mt-4 h-24 w-full" />
-      </div>
-    {/snippet}
+  {#if form?.tambahSuccess}
+    <div class="rounded-2xl border border-success/20 bg-success/10 px-5 py-4 text-sm text-success-foreground">
+      {form.tambahSuccess}
+    </div>
+  {/if}
+  {#if form?.tambahError}
+    <div class="rounded-2xl border border-destructive/20 bg-destructive/10 px-5 py-4 text-sm text-destructive-foreground">
+      {form.tambahError}
+    </div>
+  {/if}
 
-    {#snippet failed(error, reset)}
-      <RecoveryPanel
-        title="Data Pegawai Belum Tersaji"
-        message={employeeErrorMessage(error)}
-        onRetry={() => retryEmployees(reset)}
-      />
-    {/snippet}
+  <div class="grid gap-3 md:grid-cols-3">
+    <div class="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-4">
+      <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Total Pegawai</p>
+      <p class="mt-2 text-2xl font-semibold text-base-content">{employees.length}</p>
+      <p class="text-sm text-base-content/70">seluruh profil pegawai yang tercatat</p>
+    </div>
+    <div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
+      <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Pegawai Aktif</p>
+      <p class="mt-2 text-2xl font-semibold text-base-content">{employees.filter((item) => item.is_active).length}</p>
+      <p class="text-sm text-base-content/70">siap dipakai untuk akun, akademik, dan operasional</p>
+    </div>
+    <div class="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-4">
+      <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-warning">Eligible PUSAKA</p>
+      <p class="mt-2 text-2xl font-semibold text-base-content">
+        {employees.filter((item) => item.employment_type === 'pns' || item.employment_type === 'pppk').length}
+      </p>
+      <p class="text-sm text-base-content/70">subset yang dapat dikelola di area PUSAKA</p>
+    </div>
+  </div>
 
-    {#snippet children(value)}
-      {@const currentEmployees = value as Employee[]}
-      <div class="grid gap-3 md:grid-cols-3">
-        <div class="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-4">
-          <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Total Pegawai</p>
-          <p class="mt-2 text-2xl font-semibold text-base-content">{currentEmployees.length}</p>
-          <p class="text-sm text-base-content/70">seluruh profil pegawai yang tercatat</p>
-        </div>
-        <div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
-          <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Pegawai Aktif</p>
-          <p class="mt-2 text-2xl font-semibold text-base-content">{currentEmployees.filter((item) => item.is_active).length}</p>
-          <p class="text-sm text-base-content/70">siap dipakai untuk akun, akademik, dan operasional</p>
-        </div>
-        <div class="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-4">
-          <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-warning">Eligible PUSAKA</p>
-          <p class="mt-2 text-2xl font-semibold text-base-content">
-            {currentEmployees.filter((item) => item.employment_type === 'pns' || item.employment_type === 'pppk').length}
-          </p>
-          <p class="text-sm text-base-content/70">subset yang dapat dikelola di area PUSAKA</p>
-        </div>
-      </div>
-
-      <EmployeeForm onadd={refreshEmployees} />
-      <GeneralEmployeeList employees={currentEmployees} onreload={refreshEmployees} />
-    {/snippet}
-  </AsyncContent>
+  <EmployeeForm />
+  <GeneralEmployeeList {employees} />
 </div>
