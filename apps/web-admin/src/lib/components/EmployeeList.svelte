@@ -152,12 +152,17 @@
     runConfirmInput = '';
   }
 
-  function submitRunConfirm() {
+  async function submitRunConfirm() {
     if (!runConfirm || runConfirmInput.trim() !== 'SURE') return;
-    onrun(runConfirm.emp.id, runConfirm.runType);
-    success = `Job ${runTypeLabel[runConfirm.runType]} untuk ${runConfirm.emp.nama} berhasil diantrekan. Pantau statusnya di kolom operasi atau riwayat job terbaru.`;
-    runConfirm = null;
-    runConfirmInput = '';
+    try {
+      await onrun(runConfirm.emp.id, runConfirm.runType);
+      success = `Job ${runTypeLabel[runConfirm.runType]} untuk ${runConfirm.emp.nama} berhasil diantrekan. Pantau statusnya di kolom operasi atau riwayat job terbaru.`;
+    } catch {
+      // Error already handled by onrun (toast, etc.)
+    } finally {
+      runConfirm = null;
+      runConfirmInput = '';
+    }
   }
 
   function closeRunConfirm() {

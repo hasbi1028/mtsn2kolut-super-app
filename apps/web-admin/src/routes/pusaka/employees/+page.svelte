@@ -113,7 +113,7 @@
       await readClientApiData<unknown>(res, 'Gagal mengantrekan pekerjaan PUSAKA.');
     } catch (error) {
       toast.error(employeeErrorMessage(error));
-      return;
+      throw error;
     }
     const labels: Record<string, string> = { morning: 'rekap', afternoon: 'rekap', checkin: 'absensi masuk', checkout: 'absensi pulang' };
     toast.success(`Job ${labels[run_type] ?? run_type} berhasil di-queue.`);
