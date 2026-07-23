@@ -556,11 +556,11 @@
       <div class="grid gap-3 md:grid-cols-[1.2fr_0.8fr_auto]">
         <div>
           <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Cari Pegawai</p>
-          <Input placeholder="Cari nama / ID / NIP..." bind:value={search} class="w-full" />
+          <Input placeholder="Cari nama / ID / NIP..." bind:value={search} class="w-full border border-input bg-background" />
         </div>
         <div>
           <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Status Integrasi</p>
-          <select bind:value={filterMode} class="select select-bordered w-full h-10">
+          <select bind:value={filterMode} class="select select-bordered w-full h-10 border border-input bg-background">
             <option value="all">Semua</option>
             <option value="configured">Akun aktif</option>
             <option value="needs_setup">Belum setup</option>
