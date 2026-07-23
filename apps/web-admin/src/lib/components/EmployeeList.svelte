@@ -578,12 +578,7 @@
   <!-- Filter Bar -->
   <div class="flex flex-col gap-1.5">
     <div class="grid gap-2 md:grid-cols-[1fr_auto]">
-      <div class="relative">
-        <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <Input placeholder="Cari nama / ID / NIP..." bind:value={search} class="w-full border border-input bg-background pl-9 pr-3 h-10" oninput={() => { page = 1; }} />
-      </div>
+      <Input placeholder="🔍 Cari nama / ID / NIP..." bind:value={search} class="w-full border border-input bg-background px-3 h-10" oninput={() => { page = 1; }} />
       <div class="flex items-center gap-2">
         <span class="text-xs text-muted-foreground font-medium whitespace-nowrap shrink-0 hidden sm:inline">Status:</span>
         <select bind:value={filterMode} class="select select-bordered w-full sm:w-44 h-10 border border-input bg-background px-3 text-sm" onchange={() => { page = 1; }}>
