@@ -53,8 +53,9 @@
 	let loadedRangeKey = $state('');
 	let attendanceRequestId = 0;
 	let page = $state(1);
-	const PER_PAGE = 15;
-	let pagedRecords = $derived(records.slice((page - 1) * PER_PAGE, page * PER_PAGE));
+	let perPage = $state(15);
+	let pagedRecords = $derived(records.slice((page - 1) * perPage, page * perPage));
+	function handleLoadAll() { if (perPage >= records.length) perPage = 15; else perPage = records.length; }
 
 	function todayWita() {
 		return new Intl.DateTimeFormat('en-CA', {
@@ -138,6 +139,7 @@
 	async function load() {
 		if (!startDate) return;
 		page = 1;
+		perPage = 15;
 		if (!recordsPromise) {
 			loadInitial();
 			return;
@@ -401,7 +403,7 @@
 					</div>
 				</div>
 				<div class="px-3 py-2 border-t border-base-300">
-					<Pagination bind:page total={records.length || SAMPLE_RECORDS.length} perPage={PER_PAGE} />
+					<Pagination bind:page total={records.length || SAMPLE_RECORDS.length} perPage={perPage} onloadall={handleLoadAll} />
 				</div>
 			{:else}
 				<!-- Tampilan Normal: pakai AsyncContent seperti semula -->
@@ -470,7 +472,7 @@
 					</table>
 					</div>
 					<div class="hidden lg:block border-t border-base-300 px-3 py-2">
-						<Pagination bind:page total={records.length} perPage={PER_PAGE} />
+						<Pagination bind:page total={records.length} perPage={perPage} onloadall={handleLoadAll} />
 					</div>
 
 					<div class="lg:hidden">

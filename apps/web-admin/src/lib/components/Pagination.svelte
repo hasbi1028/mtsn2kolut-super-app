@@ -4,14 +4,17 @@
     total = 0,
     perPage = 12,
     onpagechange,
+    onloadall,
   }: {
     page?: number;
     total: number;
     perPage?: number;
     onpagechange?: (p: number) => void;
+    onloadall?: () => void;
   } = $props();
 
   const totalPages = $derived(Math.max(1, Math.ceil(total / perPage)));
+  const isAllShown = $derived(perPage >= total);
 
   function go(p: number) {
     if (p < 1 || p > totalPages || p === page) return;
@@ -43,51 +46,76 @@
 {#if total > 0}
   <div class="flex flex-col sm:flex-row items-center justify-between gap-2">
     <span class="text-xs text-muted-foreground">
-      Menampilkan {start}&ndash;{end} dari {total}
+      {#if isAllShown}
+        Menampilkan semua {total} rekaman
+      {:else}
+        {perPage} dari {total} rekaman &middot; halaman {page} dari {totalPages}
+      {/if}
     </span>
 
     <div class="flex items-center gap-1">
-      <!-- Prev -->
-      <button
-        onclick={() => go(page - 1)}
-        disabled={page <= 1}
-        class="inline-flex items-center justify-center rounded-lg border border-input bg-background px-2.5 h-8 text-xs font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:pointer-events-none"
-        aria-label="Halaman sebelumnya"
-      >
-        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
-        </svg>
-      </button>
+      {#if !isAllShown}
+        <!-- Prev -->
+        <button
+          onclick={() => go(page - 1)}
+          disabled={page <= 1}
+          class="inline-flex items-center justify-center rounded-lg border border-input bg-background px-2.5 h-8 text-xs font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:pointer-events-none"
+          aria-label="Halaman sebelumnya"
+        >
+          <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
 
-      <!-- Pages -->
-      {#each pages as p (p === '...' ? `ellipsis-${pages.indexOf(p)}` : p)}
-        {#if p === '...'}
-          <span class="inline-flex items-center justify-center w-7 h-8 text-xs text-muted-foreground">&hellip;</span>
-        {:else}
+        <!-- Pages -->
+        {#each pages as p (p === '...' ? `ellipsis-${pages.indexOf(p)}` : p)}
+          {#if p === '...'}
+            <span class="inline-flex items-center justify-center w-7 h-8 text-xs text-muted-foreground">&hellip;</span>
+          {:else}
+            <button
+              onclick={() => go(p)}
+              class="inline-flex items-center justify-center rounded-lg min-w-[32px] h-8 px-2 text-xs font-medium transition-colors {p === page
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'border border-input bg-background text-foreground hover:bg-accent'}"
+              aria-label={'Halaman ' + p}
+              aria-current={p === page ? 'page' : undefined}
+            >
+              {p}
+            </button>
+          {/if}
+        {/each}
+
+        <!-- Next -->
+        <button
+          onclick={() => go(page + 1)}
+          disabled={page >= totalPages}
+          class="inline-flex items-center justify-center rounded-lg border border-input bg-background px-2.5 h-8 text-xs font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:pointer-events-none"
+          aria-label="Halaman berikutnya"
+        >
+          <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+
+        <!-- Load all -->
+        {#if onloadall}
+          <span class="mx-1.5 text-[10px] text-border" aria-hidden="true">|</span>
           <button
-            onclick={() => go(p)}
-            class="inline-flex items-center justify-center rounded-lg min-w-[32px] h-8 px-2 text-xs font-medium transition-colors {p === page
-              ? 'bg-primary text-primary-foreground shadow-sm'
-              : 'border border-input bg-background text-foreground hover:bg-accent'}"
-            aria-label={'Halaman ' + p}
-            aria-current={p === page ? 'page' : undefined}
+            onclick={() => onloadall()}
+            class="inline-flex items-center justify-center rounded-lg h-8 px-2.5 text-[10px] font-semibold text-primary hover:bg-primary/5 border border-dashed border-primary/30 transition-colors"
           >
-            {p}
+            Muat semua {total}
           </button>
         {/if}
-      {/each}
-
-      <!-- Next -->
-      <button
-        onclick={() => go(page + 1)}
-        disabled={page >= totalPages}
-        class="inline-flex items-center justify-center rounded-lg border border-input bg-background px-2.5 h-8 text-xs font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:pointer-events-none"
-        aria-label="Halaman berikutnya"
-      >
-        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
+      {:else if onloadall}
+        <!-- Back to paginated mode -->
+        <button
+          onclick={() => onloadall()}
+          class="inline-flex items-center justify-center rounded-lg h-8 px-2.5 text-xs font-medium border border-input bg-background text-foreground hover:bg-accent transition-colors"
+        >
+          Kembali ke halaman
+        </button>
+      {/if}
     </div>
   </div>
 {/if}

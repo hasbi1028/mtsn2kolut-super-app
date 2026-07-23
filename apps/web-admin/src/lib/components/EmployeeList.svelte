@@ -88,7 +88,7 @@
   let filterMode = $state<'all' | 'configured' | 'needs_setup' | 'disabled'>('all');
   let search = $state('');
   let page = $state(1);
-  const PER_PAGE = 12;
+  let perPage = $state(12);
   let success = $state('');
   let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
   let showAuditDialog = $state(false);
@@ -130,11 +130,12 @@
     );
   });
 
-  const pagedEmployees = $derived(filteredEmployees.slice((page - 1) * PER_PAGE, page * PER_PAGE));
+  const pagedEmployees = $derived(filteredEmployees.slice((page - 1) * perPage, page * perPage));
   const totalFiltered = $derived(filteredEmployees.length);
 
-  function handleSearch(val: string) { search = val; page = 1; }
-  function handleFilter(val: 'all' | 'configured' | 'needs_setup' | 'disabled') { filterMode = val; page = 1; }
+  function handleSearch(val: string) { search = val; page = 1; perPage = 12; }
+  function handleFilter(val: 'all' | 'configured' | 'needs_setup' | 'disabled') { filterMode = val; page = 1; perPage = 12; }
+  function handleLoadAll() { if (perPage >= totalFiltered) perPage = 12; else perPage = totalFiltered; }
 
   const runTypeLabel: Record<RunType, string> = {
     morning: 'Rekap', afternoon: 'Rekap', checkin: 'Masuk', checkout: 'Pulang',
@@ -743,7 +744,7 @@
       {/each}
     </div>
 
-    <Pagination bind:page total={totalFiltered} perPage={PER_PAGE} />
+    <Pagination bind:page total={totalFiltered} perPage={perPage} onloadall={handleLoadAll} />
   {:else}
     <div class="rounded-xl border border-dashed border-base-300 bg-base-100/50 px-6 py-12 text-center">
       <EmptyStatePanel
