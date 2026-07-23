@@ -30,13 +30,10 @@
 <svelte:window onkeydown={handleKeydown} />
 
 {#if open}
-	<!--
-		Backdrop: solid + solid black, high z-index agar selalu di atas sidebar/header/sticky
-		toolbar. Pakai flex centering untuk child (Dialog.Content). Klik di backdrop tutup.
-	-->
+	<!-- Backdrop + modal with explicit Tailwind classes (no DaisyUI dependency) -->
 	<div
 		class={cn(
-			'modal modal-bottom sm:modal-middle',
+			'fixed inset-0 z-[999] flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4',
 			className
 		)}
 		onclick={handleBackdropClick}
@@ -44,6 +41,8 @@
 		aria-modal="true"
 		{...restProps}
 	>
-		{@render children?.()}
+		<div class="w-full sm:max-w-lg bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90dvh] overflow-y-auto">
+			{@render children?.()}
+		</div>
 	</div>
 {/if}
