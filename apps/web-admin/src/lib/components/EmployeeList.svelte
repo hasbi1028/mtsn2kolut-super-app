@@ -636,87 +636,99 @@
             </Table.Cell>
             <Table.Cell class="text-right">
               <div class="flex items-center justify-end gap-1.5 flex-wrap">
-                <Button size="sm" variant="outline" onclick={() => openPusakaDialog(e)}>
-                  {isPusakaConfigured(e) ? 'Edit' : 'Setup'} Pusaka
-                </Button>
                 {#if isPusakaConfigured(e)}
-                  <LoadingButton
-                    size="sm"
-                    variant="outline"
-                    onclick={() => togglePusakaAccount(e, e.pusaka_is_enabled === false)}
-                    loading={accountTogglingId === e.id}
-                    loadingLabel="Memproses..."
-                    disabled={(accountTogglingId !== null && accountTogglingId !== e.id) || accountDeletingId !== null}
-                  >
-                    {e.pusaka_is_enabled === false ? 'Aktifkan' : 'Nonaktifkan'}
-                  </LoadingButton>
+                  <Button size="sm" onclick={() => openScheduleDialog(e)} class={scheduleButtonClass(e)}>
+                    <svg class="h-3.5 w-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    {scheduleButtonLabel(e)}
+                  </Button>
                 {/if}
-                <LoadingButton size="sm" variant="outline" onclick={() => openRunConfirm(e, 'morning')} loading={busyId === e.id} loadingLabel="Memproses..." disabled={busyId === e.id}>
-                  Rekap
-                </LoadingButton>
-                <Button size="sm" variant="outline"
-                  onclick={() => openRunConfirm(e, 'checkin')}
-                  disabled={busyId === e.id}
-                  class="border-warning/30 text-warning hover:bg-warning/10">
-                  <svg class="h-3.5 w-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Masuk
-                </Button>
-                <Button size="sm" variant="outline"
-                  onclick={() => openRunConfirm(e, 'checkout')}
-                  disabled={busyId === e.id}
-                  class="border-warning/30 text-warning hover:bg-warning/10">
-                  <svg class="h-3.5 w-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  Pulang
-                </Button>
-                <Button size="sm" variant="outline"
-                  onclick={() => openScheduleDialog(e)}
-                  class={scheduleButtonClass(e)}>
-                  <svg class="h-3.5 w-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  {scheduleButtonLabel(e)}
-                </Button>
-                <!-- Dropdown untuk aksi sekunder -->
+                <!-- Dropdown: primary + secondary actions -->
                 <div class="relative dropdown">
                   <button
-                    class="inline-flex items-center justify-center rounded-md px-2.5 py-1.5 text-xs font-medium border border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    class="inline-flex items-center justify-center rounded-md h-9 px-3 text-sm font-medium border border-input bg-background text-foreground hover:bg-accent transition-colors"
                     onclick={(ev) => {
                       const btn = ev.currentTarget;
                       const menu = btn.nextElementSibling as HTMLElement;
                       if (menu) menu.classList.toggle('hidden');
                     }}
-                    aria-label="Aksi lainnya"
+                    aria-label="Aksi"
                   >
-                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                      <circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none" />
-                      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
-                      <circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none" />
+                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                    </svg>
+                    Aksi
+                    <svg class="h-3 w-3 ml-1 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
-                  <div class="hidden absolute right-0 z-50 mt-1 min-w-[160px] rounded-lg border border-border bg-card p-1 shadow-xl" onclick={(ev) => ev.stopPropagation()}>
-                    <Button size="sm" variant="ghost" class="w-full justify-start gap-2 rounded-md px-3 py-1.5 text-xs font-medium" onclick={(event: MouseEvent) => { openAuditDialog(e); (event.currentTarget as HTMLElement).closest('.dropdown')?.querySelector('[class*="hidden"]')?.classList.add('hidden'); }}>
-                      <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      Riwayat
+                  <div class="hidden absolute right-0 z-50 mt-1 min-w-[180px] rounded-lg border border-border bg-card p-1 shadow-xl" onclick={(ev) => ev.stopPropagation()}>
+                    <Button size="sm" variant="ghost" class="w-full justify-start gap-2 rounded-md px-3 py-1.5 text-xs font-medium" onclick={() => openPusakaDialog(e)}>
+                      <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      {isPusakaConfigured(e) ? 'Edit Akun' : 'Setup Akun'} Pusaka
                     </Button>
-                    <Button size="sm" variant="ghost" class="w-full justify-start gap-2 rounded-md px-3 py-1.5 text-xs font-medium" onclick={(event: MouseEvent) => { testPusakaCredentials(e); (event.currentTarget as HTMLElement).closest('.dropdown')?.querySelector('[class*="hidden"]')?.classList.add('hidden'); }} disabled={!isPusakaConfigured(e)}>
-                      <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                      Test
+                    {#if isPusakaConfigured(e)}
+                      <LoadingButton size="sm" variant="ghost" class="w-full justify-start gap-2 rounded-md px-3 py-1.5 text-xs font-medium"
+                        onclick={() => togglePusakaAccount(e, e.pusaka_is_enabled === false)}
+                        loading={accountTogglingId === e.id}
+                        loadingLabel="Memproses..."
+                        disabled={(accountTogglingId !== null && accountTogglingId !== e.id) || accountDeletingId !== null}
+                      >
+                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                        {e.pusaka_is_enabled === false ? 'Aktifkan Akun' : 'Nonaktifkan Akun'}
+                      </LoadingButton>
+                    {/if}
+                    <hr class="my-1 border-border" />
+                    <Button size="sm" variant="ghost" class="w-full justify-start gap-2 rounded-md px-3 py-1.5 text-xs font-medium" onclick={() => openRunConfirm(e, 'morning')} disabled={busyId === e.id}>
+                      <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Rekap Kehadiran
+                    </Button>
+                    <Button size="sm" variant="ghost" class="w-full justify-start gap-2 rounded-md px-3 py-1.5 text-xs font-medium" onclick={() => openRunConfirm(e, 'checkin')} disabled={busyId === e.id}>
+                      <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Absen Masuk
+                    </Button>
+                    <Button size="sm" variant="ghost" class="w-full justify-start gap-2 rounded-md px-3 py-1.5 text-xs font-medium" onclick={() => openRunConfirm(e, 'checkout')} disabled={busyId === e.id}>
+                      <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                      Absen Pulang
+                    </Button>
+                    <hr class="my-1 border-border" />
+                    <Button size="sm" variant="ghost" class="w-full justify-start gap-2 rounded-md px-3 py-1.5 text-xs font-medium" onclick={() => openAuditDialog(e)}>
+                      <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Riwayat Audit
+                    </Button>
+                    <Button size="sm" variant="ghost" class="w-full justify-start gap-2 rounded-md px-3 py-1.5 text-xs font-medium" onclick={() => testPusakaCredentials(e)} disabled={!isPusakaConfigured(e)}>
+                      <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                      </svg>
+                      Test Koneksi
                     </Button>
                     {#if isPusakaConfigured(e)}
                       <hr class="my-1 border-border" />
-                      <Button size="sm" variant="ghost" class="w-full justify-start gap-2 rounded-md px-3 py-1.5 text-xs font-medium text-destructive hover:text-destructive" onclick={(event: MouseEvent) => { deletePusakaAccount(e); (event.currentTarget as HTMLElement).closest('.dropdown')?.querySelector('[class*="hidden"]')?.classList.add('hidden'); }}>
-                        <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      <Button size="sm" variant="ghost" class="w-full justify-start gap-2 rounded-md px-3 py-1.5 text-xs font-medium text-destructive hover:text-destructive" onclick={() => deletePusakaAccount(e)}>
+                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
                         Hapus Akun
                       </Button>
                     {/if}
                     <hr class="my-1 border-border" />
                     <LoadingButton size="sm" variant="ghost" class="w-full justify-start gap-2 rounded-md px-3 py-1.5 text-xs font-medium text-warning hover:text-warning" onclick={() => doStop(e.id)} loading={busyId === e.id} loadingLabel="Memproses..." disabled={busyId === e.id || !e.active_status}>
-                      <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
-                      Stop
+                      <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+                      Stop Job
                     </LoadingButton>
                   </div>
                 </div>
