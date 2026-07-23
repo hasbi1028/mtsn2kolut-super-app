@@ -130,12 +130,11 @@
     );
   });
 
-  const pagedEmployees = $derived(filteredEmployees.slice((page - 1) * perPage, page * perPage));
+  const pagedEmployees = $derived(perPage === 0 ? filteredEmployees : filteredEmployees.slice((page - 1) * perPage, page * perPage));
   const totalFiltered = $derived(filteredEmployees.length);
 
   function handleSearch(val: string) { search = val; page = 1; perPage = 12; }
   function handleFilter(val: 'all' | 'configured' | 'needs_setup' | 'disabled') { filterMode = val; page = 1; perPage = 12; }
-  function handleLoadAll() { if (perPage >= totalFiltered) perPage = 12; else perPage = totalFiltered; }
 
   const runTypeLabel: Record<RunType, string> = {
     morning: 'Rekap', afternoon: 'Rekap', checkin: 'Masuk', checkout: 'Pulang',
@@ -744,7 +743,7 @@
       {/each}
     </div>
 
-    <Pagination bind:page total={totalFiltered} perPage={perPage} onloadall={handleLoadAll} />
+    <Pagination bind:page total={totalFiltered} bind:perPage />
   {:else}
     <div class="rounded-xl border border-dashed border-base-300 bg-base-100/50 px-6 py-12 text-center">
       <EmptyStatePanel

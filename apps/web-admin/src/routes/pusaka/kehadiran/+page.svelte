@@ -54,8 +54,7 @@
 	let attendanceRequestId = 0;
 	let page = $state(1);
 	let perPage = $state(15);
-	let pagedRecords = $derived(records.slice((page - 1) * perPage, page * perPage));
-	function handleLoadAll() { if (perPage >= records.length) perPage = 15; else perPage = records.length; }
+	let pagedRecords = $derived(perPage === 0 ? records : records.slice((page - 1) * perPage, page * perPage));
 
 	function todayWita() {
 		return new Intl.DateTimeFormat('en-CA', {
@@ -403,7 +402,7 @@
 					</div>
 				</div>
 				<div class="px-3 py-2 border-t border-base-300">
-					<Pagination bind:page total={records.length || SAMPLE_RECORDS.length} perPage={perPage} onloadall={handleLoadAll} />
+					<Pagination bind:page total={records.length || SAMPLE_RECORDS.length} bind:perPage />
 				</div>
 			{:else}
 				<!-- Tampilan Normal: pakai AsyncContent seperti semula -->
@@ -472,7 +471,7 @@
 					</table>
 					</div>
 					<div class="hidden lg:block border-t border-base-300 px-3 py-2">
-						<Pagination bind:page total={records.length} perPage={perPage} onloadall={handleLoadAll} />
+						<Pagination bind:page total={records.length} bind:perPage />
 					</div>
 
 					<div class="lg:hidden">
