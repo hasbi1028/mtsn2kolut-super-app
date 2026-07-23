@@ -109,7 +109,8 @@
 				<div class="space-y-1">
 					{#each group.items as item}
 						{@const href = resolve(item.href as '/')}
-						{@const isActive = page.url.pathname === href || (item.href !== '/' && page.url.pathname.startsWith(item.href) && item.href.length > 1)}
+						{@const pathParts = href.split('/').filter(Boolean)}
+						{@const isActive = page.url.pathname === href || (pathParts.length >= 2 && page.url.pathname.startsWith(href + '/'))}
 						{@const icon = getIconPath(item.icon)}
 
 						<a
