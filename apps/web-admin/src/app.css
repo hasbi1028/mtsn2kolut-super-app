@@ -1,6 +1,6 @@
+@import "daisyui/daisyui.css" layer(daisyui);
 @import 'tailwindcss';
 @plugin 'tailwindcss-animate';
-@import "daisyui/daisyui.css" layer(daisyui);
 
 /* ── Custom Kemenag Green Theme for DaisyUI ── */
 @layer daisyui {
