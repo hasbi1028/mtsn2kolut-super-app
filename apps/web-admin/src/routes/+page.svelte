@@ -722,7 +722,7 @@
 		font-weight: 900;
 		text-transform: uppercase;
 		letter-spacing: 0.16em;
-		color: #94a3b8;
+		color: #64748b;
 		margin-bottom: 0.25rem;
 	}
 

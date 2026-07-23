@@ -227,9 +227,9 @@
         <Table.Row>
           <Table.Head>Pegawai</Table.Head>
           <Table.Head class="hidden md:table-cell">Unit Kerja</Table.Head>
-          <Table.Head>Identitas</Table.Head>
+          <Table.Head class="hidden md:table-cell">Identitas</Table.Head>
           <Table.Head>Status Kepegawaian</Table.Head>
-          <Table.Head>PUSAKA</Table.Head>
+          <Table.Head class="hidden md:table-cell">PUSAKA</Table.Head>
           <Table.Head class="text-right">Aksi</Table.Head>
         </Table.Row>
       </Table.Header>
@@ -251,14 +251,14 @@
               </div>
             </Table.Cell>
             <Table.Cell class="hidden md:table-cell text-sm text-muted-foreground">{e.unit_kerja || '—'}</Table.Cell>
-            <Table.Cell class="text-sm text-muted-foreground">
+            <Table.Cell class="hidden md:table-cell text-sm text-muted-foreground">
               <div>{e.tempat_lahir || '—'}, {formatBirthDate(e.tanggal_lahir)}</div>
               <div class="text-xs">{genderLabel(e.jenis_kelamin)}</div>
             </Table.Cell>
             <Table.Cell>
               <Badge variant="outline">{employmentLabel(e.employment_type)}</Badge>
             </Table.Cell>
-            <Table.Cell>
+            <Table.Cell class="hidden md:table-cell">
               {#if e.pusaka_eligible}
                 {#if e.has_pusaka_account}
                   {#if e.pusaka_is_enabled}
@@ -275,36 +275,36 @@
             </Table.Cell>
             <Table.Cell class="text-right">
               {#if confirmId === e.id}
-                <div class="flex flex-wrap items-center justify-end gap-2">
+                <div class="flex flex-wrap items-center justify-end gap-1 md:gap-2">
                   <span class="text-xs text-warning">Hapus pegawai ini?</span>
                   <form method="POST" action="?/hapus" class="inline">
                     <input type="hidden" name="id" value={e.id} />
-                    <button type="submit" class="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-destructive-foreground bg-destructive hover:bg-destructive/90">
+                    <button type="submit" class="inline-flex items-center justify-center rounded-md px-2 md:px-3 py-1 md:py-1.5 text-xs md:text-sm font-medium text-destructive-foreground bg-destructive hover:bg-destructive/90">
                       Ya, Hapus
                     </button>
                   </form>
-                  <button class="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium hover:bg-accent" onclick={() => (confirmId = null)}>Batal</button>
+                  <button class="inline-flex items-center justify-center rounded-md px-2 md:px-3 py-1 md:py-1.5 text-xs md:text-sm font-medium hover:bg-accent" onclick={() => (confirmId = null)}>Batal</button>
                 </div>
               {:else}
-                <div class="flex flex-wrap items-center justify-end gap-2">
+                <div class="flex flex-wrap items-center justify-end gap-1 md:gap-2">
                   {#if e.pusaka_eligible}
                     <a href={resolve('/pusaka/employees')}>
-                      <Button size="sm" variant="outline">Kelola PUSAKA</Button>
+                      <Button size="sm" variant="outline" class="text-xs md:text-sm px-2 md:px-3">Kelola PUSAKA</Button>
                     </a>
                   {/if}
-                  <Button size="sm" variant="outline" onclick={() => openEditDialog(e)}>
+                  <Button size="sm" variant="outline" onclick={() => openEditDialog(e)} class="text-xs md:text-sm px-2 md:px-3">
                     Edit
                   </Button>
                   <form method="POST" action="?/nonaktifkan" class="inline">
                     <input type="hidden" name="id" value={e.id} />
                     <input type="hidden" name="is_active" value={String(e.is_active)} />
-                    <button type="submit" class="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground">
+                    <button type="submit" class="inline-flex items-center justify-center rounded-md px-2 md:px-3 py-1 md:py-1.5 text-xs md:text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground">
                       {e.is_active ? 'Nonaktifkan' : 'Aktifkan'}
                     </button>
                   </form>
                   <form method="POST" action="?/hapus" class="inline">
                     <input type="hidden" name="id" value={e.id} />
-                    <button type="submit" class="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/10">
+                    <button type="submit" class="inline-flex items-center justify-center rounded-md px-2 md:px-3 py-1 md:py-1.5 text-xs md:text-sm font-medium text-destructive hover:bg-destructive/10">
                       Hapus
                     </button>
                   </form>
