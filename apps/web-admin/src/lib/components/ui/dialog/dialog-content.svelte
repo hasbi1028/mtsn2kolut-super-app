@@ -21,17 +21,14 @@
 
 <!--
 	Content:
-	- max-h-[85vh] + overflow-y-auto → kalau isi panjang (mis. jadwal 7 hari),
-	  scroll di dalam card, body tetap stabil.
-	- my-8 → jarak atas/bawah minimum, tengah viewport.
-	- shadow-2xl → pop jelas di atas backdrop.
+	- p-5 → padding konsisten di semua ukuran
 	- relative → anchor untuk nested popover/tooltip bila ada.
 -->
 <div
 	role="document"
 	onclick={stop}
 	class={cn(
-				'modal-box',
+		'p-5',
 		className
 	)}
 	{...restProps}
