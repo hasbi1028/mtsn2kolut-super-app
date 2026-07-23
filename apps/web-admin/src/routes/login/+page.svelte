@@ -563,7 +563,7 @@
 		right: 1rem;
 		top: 50%;
 		transform: translateY(-50%);
-		padding: 0.25rem 0.5rem;
+		padding: 0.5rem 0.75rem;
 		border: 0;
 		background: none;
 		font-size: 0.65rem;
@@ -574,6 +574,11 @@
 		cursor: pointer;
 		transition: color 0.15s;
 		font-family: inherit;
+		min-height: 44px;
+		min-width: 44px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.toggle-password:hover {

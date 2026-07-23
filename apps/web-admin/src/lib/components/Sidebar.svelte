@@ -89,7 +89,7 @@
 		</div>
 		<button
 			type="button"
-			class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground lg:hidden"
+			class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground lg:h-8 lg:w-8 lg:hidden"
 			onclick={() => (isMobileMenuOpen = false)}
 			aria-label="Tutup menu"
 		>
@@ -114,7 +114,7 @@
 
 						<a
 							href={href}
-							class="admin-nav-item group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition-all lg:px-4 {isActive
+							class="admin-nav-item group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all lg:px-4 lg:py-2 {isActive
 								? 'bg-primary text-primary-foreground shadow-sm shadow-primary/15'
 								: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
 							onclick={() => (isMobileMenuOpen = false)}
@@ -155,7 +155,7 @@
 		</div>
 		<a
 			href="/logout"
-			class="logout-btn flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/20 bg-destructive/5 py-2 text-[11px] font-bold text-destructive transition-all hover:bg-destructive hover:text-white"
+			class="logout-btn flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/20 bg-destructive/5 py-2.5 text-[11px] font-bold text-destructive transition-all hover:bg-destructive hover:text-white lg:py-2"
 		>
 			<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
