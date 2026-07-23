@@ -14,6 +14,7 @@
   import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
   import SuccessPanel from '$lib/components/SuccessPanel.svelte';
   import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
+  import Pagination from '$lib/components/Pagination.svelte';
   import { confirmAction, confirmChallenge } from '$lib/confirm-dialog';
   import { readClientApiData, readClientJson } from '$lib/client/api';
 
@@ -86,6 +87,8 @@
   let accountDeletingId = $state<string | null>(null);
   let filterMode = $state<'all' | 'configured' | 'needs_setup' | 'disabled'>('all');
   let search = $state('');
+  let page = $state(1);
+  const PER_PAGE = 12;
   let success = $state('');
   let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
   let showAuditDialog = $state(false);
@@ -110,7 +113,7 @@
     checkinEnabled: true, checkoutEnabled: true, randomWindow: 0,
   });
   let dayConfigs = $state<DayConfig[]>(Array.from({ length: 7 }, makeDayConfig));
-  let filteredEmployees = $derived.by(() => {
+  const filteredEmployees = $derived.by(() => {
     const normalizedSearch = search.trim().toLowerCase();
     const scoped = filterMode === 'configured'
       ? employees.filter((employee) => !!employee.pusaka_username && employee.pusaka_is_enabled !== false)
@@ -126,6 +129,12 @@
       employee.nip.toLowerCase().includes(normalizedSearch)
     );
   });
+
+  const pagedEmployees = $derived(filteredEmployees.slice((page - 1) * PER_PAGE, page * PER_PAGE));
+  const totalFiltered = $derived(filteredEmployees.length);
+
+  function handleSearch(val: string) { search = val; page = 1; }
+  function handleFilter(val: 'all' | 'configured' | 'needs_setup' | 'disabled') { filterMode = val; page = 1; }
 
   const runTypeLabel: Record<RunType, string> = {
     morning: 'Rekap', afternoon: 'Rekap', checkin: 'Masuk', checkout: 'Pulang',
@@ -570,11 +579,11 @@
   <div class="grid gap-3 md:grid-cols-[1.2fr_0.8fr_auto]">
     <div>
       <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Cari Pegawai</p>
-      <Input placeholder="Cari nama / ID / NIP..." bind:value={search} class="w-full border border-input bg-background px-3 h-10" />
+      <Input placeholder="Cari nama / ID / NIP..." bind:value={search} class="w-full border border-input bg-background px-3 h-10" oninput={() => { page = 1; }} />
     </div>
     <div>
       <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Status Integrasi</p>
-      <select bind:value={filterMode} class="select select-bordered w-full h-10 border border-input bg-background px-3">
+      <select bind:value={filterMode} class="select select-bordered w-full h-10 border border-input bg-background px-3" onchange={() => { page = 1; }}>
         <option value="all">Semua</option>
         <option value="configured">Akun aktif</option>
         <option value="needs_setup">Belum setup</option>
@@ -601,7 +610,7 @@
   <!-- Card Grid -->
   {#if filteredEmployees.length > 0}
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-      {#each filteredEmployees as e (e.id)}
+      {#each pagedEmployees as e (e.id)}
         {@const si = statusInfo(e)}
         <div class="rounded-xl border border-base-300 bg-base-100 p-3 flex flex-col gap-2.5 transition-shadow hover:shadow-sm">
           <!-- Header: Name + Badges -->
@@ -730,6 +739,8 @@
         </div>
       {/each}
     </div>
+
+    <Pagination bind:page total={totalFiltered} perPage={PER_PAGE} />
   {:else}
     <div class="rounded-xl border border-dashed border-base-300 bg-base-100/50 px-6 py-12 text-center">
       <EmptyStatePanel
