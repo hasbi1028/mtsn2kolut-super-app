@@ -306,13 +306,13 @@
 
 				<!-- Quick date shortcuts -->
 				<div class="flex flex-wrap items-center gap-1.5">
-					<button class="btn btn-ghost btn-sm h-8 px-2.5 text-[11px] font-semibold text-primary hover:bg-primary/10 rounded-lg" onclick={() => { const t = todayWita(); startDate = t; endDate = t; void load(); }}>
+					<button class="inline-flex items-center justify-center rounded-lg h-8 px-3 text-[11px] font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors" onclick={() => { const t = todayWita(); startDate = t; endDate = t; void load(); }}>
 						Hari Ini
 					</button>
-					<button class="btn btn-ghost btn-sm h-8 px-2.5 text-[11px] font-semibold text-primary hover:bg-primary/10 rounded-lg" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(d.getDate() - 6); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
+					<button class="inline-flex items-center justify-center rounded-lg h-8 px-3 text-[11px] font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(d.getDate() - 6); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
 						7 Hari
 					</button>
-					<button class="btn btn-ghost btn-sm h-8 px-2.5 text-[11px] font-semibold text-primary hover:bg-primary/10 rounded-lg" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(1); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
+					<button class="inline-flex items-center justify-center rounded-lg h-8 px-3 text-[11px] font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(1); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
 						Bulan Ini
 					</button>
 				</div>
@@ -320,17 +320,17 @@
 				<!-- Divider + Action buttons -->
 				<hr class="border-border -mx-4" />
 				<div class="flex flex-wrap items-center gap-1.5">
-					<button class="btn btn-outline btn-sm h-8 px-2.5 bg-base-100 text-xs" onclick={exportCSV} disabled={records.length === 0}>
-						<svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+					<button class="inline-flex items-center justify-center rounded-lg h-8 px-3 text-xs font-medium border border-input bg-background text-foreground hover:bg-accent transition-colors disabled:opacity-40" onclick={exportCSV} disabled={records.length === 0}>
+						<svg class="h-3.5 w-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
 						CSV
 					</button>
-					<button class="btn btn-outline btn-sm h-8 px-2.5 bg-base-100 text-xs" onclick={() => void sendTelegramReport()} disabled={sendingTelegram}>
+					<button class="inline-flex items-center justify-center rounded-lg h-8 px-3 text-xs font-medium border border-input bg-background text-foreground hover:bg-accent transition-colors disabled:opacity-40" onclick={() => void sendTelegramReport()} disabled={sendingTelegram}>
 						{#if sendingTelegram}<span class="loading loading-spinner loading-xs"></span>{/if}
-						<svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+						<svg class="h-3.5 w-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
 						Telegram
 					</button>
-					<a href={resolve('/pusaka/telegram-laporan')} class="btn btn-ghost btn-sm h-8 px-2.5 text-xs">Atur Jadwal</a>
-					<a href={resolve('/pusaka/antrian')} class="btn btn-ghost btn-sm h-8 px-2.5 text-xs">Antrian</a>
+					<a href={resolve('/pusaka/telegram-laporan')} class="inline-flex items-center justify-center rounded-lg h-8 px-3 text-xs font-medium border border-input bg-background text-foreground hover:bg-accent transition-colors">Atur Jadwal</a>
+					<a href={resolve('/pusaka/antrian')} class="inline-flex items-center justify-center rounded-lg h-8 px-3 text-xs font-medium border border-input bg-background text-foreground hover:bg-accent transition-colors">Antrian</a>
 					<span class="mx-1 text-xs text-border" aria-hidden="true">|</span>
 					<div class="flex h-8 overflow-hidden rounded-lg border border-base-300 bg-base-100">
 						<button
