@@ -30,10 +30,10 @@
 <svelte:window onkeydown={handleKeydown} />
 
 {#if open}
-	<!-- Backdrop + modal with explicit Tailwind classes (no DaisyUI dependency) -->
+	<!-- Backdrop + modal with explicit Tailwind classes -->
 	<div
 		class={cn(
-			'fixed inset-0 z-[999] flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4',
+			'fixed inset-0 z-[999] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-6',
 			className
 		)}
 		onclick={handleBackdropClick}
@@ -41,7 +41,7 @@
 		aria-modal="true"
 		{...restProps}
 	>
-		<div class="w-full sm:max-w-lg bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90dvh] overflow-y-auto">
+		<div class="w-full sm:max-w-lg bg-base-100 border border-base-300 rounded-t-2xl sm:rounded-xl shadow-2xl max-h-[90dvh] overflow-y-auto">
 			{@render children?.()}
 		</div>
 	</div>
