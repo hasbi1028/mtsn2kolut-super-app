@@ -121,27 +121,49 @@
 	--color-surface-900: var(--color-base-content);
 	--color-surface-950: color-mix(in oklab, var(--color-base-content) 80%, transparent);
 
-	/* Shadcn-style aliases */
+	/* ═══ SEMANTIC COLORS ═══
+	 *
+	 * IMPORTANT: We use explicit values for --color-primary and
+	 * --color-primary-foreground to break the circular var() reference.
+	 * 
+	 * The chain was:
+	 *   @theme { --color-primary: var(--primary); }
+	 *   :root    { --primary: var(--color-primary); } ← CIRCULAR!
+	 *
+	 * These values match DaisyUI [data-theme='kemenag'] so there's no drift.
+	 */
+	--color-primary: oklch(48% 0.17 145);          /* Kemenag green = #16a34a */
+	--color-primary-foreground: oklch(98% 0 0);    /* white */
+	--color-primary-content: oklch(98% 0 0);       /* alias */
+
+	/* Shadcn-style aliases — these reference unlayered CSS vars (safe) */
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
 	--color-card: var(--card);
 	--color-card-foreground: var(--card-foreground);
 	--color-popover: var(--popover);
 	--color-popover-foreground: var(--popover-foreground);
-	--color-primary: var(--primary);
-	--color-primary-foreground: var(--primary-foreground);
-	--color-secondary: var(--secondary);
-	--color-secondary-foreground: var(--secondary-foreground);
+
+	/* Secondary: slightly green-tinted for subtle differentiation from bg */
+	--color-secondary: oklch(96% 0.03 145);
+	--color-secondary-foreground: oklch(30% 0.05 145);
 	--color-muted: var(--muted);
 	--color-muted-foreground: var(--muted-foreground);
-	--color-accent: var(--accent);
-	--color-accent-foreground: var(--accent-foreground);
-	--color-destructive: var(--destructive);
-	--color-destructive-foreground: var(--destructive-foreground);
+
+	/* Accent: light green for highlights */
+	--color-accent: oklch(93% 0.08 145);
+	--color-accent-foreground: oklch(25% 0.08 145);
+
+	/* Destructive: red */
+	--color-destructive: oklch(58% 0.22 27);
+	--color-destructive-foreground: oklch(98% 0 0);
+
+	/* Borders & inputs */
 	--color-border: var(--border);
 	--color-input: var(--input);
-	--color-ring: var(--ring);
+	--color-ring: var(--primary);
 
+	/* Radius */
 	--radius-lg: var(--radius);
 	--radius-md: calc(var(--radius) - 2px);
 	--radius-sm: calc(var(--radius) - 4px);
