@@ -10,6 +10,7 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import Pagination from '$lib/components/Pagination.svelte';
 	import { readClientJson } from '$lib/client/api';
 
 	interface AttendanceRecord {
@@ -51,6 +52,9 @@
 	let sendingTelegram = $state(false);
 	let loadedRangeKey = $state('');
 	let attendanceRequestId = 0;
+	let page = $state(1);
+	const PER_PAGE = 15;
+	let pagedRecords = $derived(records.slice((page - 1) * PER_PAGE, page * PER_PAGE));
 
 	function todayWita() {
 		return new Intl.DateTimeFormat('en-CA', {
@@ -133,6 +137,7 @@
 
 	async function load() {
 		if (!startDate) return;
+		page = 1;
 		if (!recordsPromise) {
 			loadInitial();
 			return;
@@ -237,45 +242,40 @@
 	</div>
 
 	<div>
-		<h1 class="text-2xl font-semibold text-base-content">Data Kehadiran Pegawai</h1>
+		<h1 class="text-2xl font-black text-base-content">Data Kehadiran Pegawai</h1>
 		<p class="text-sm text-base-content/70 mt-1">Rekap kehadiran harian dari sistem PUSAKA Kemenag</p>
 	</div>
 
 	{#if total !== null}
-	<div class="grid gap-4 md:grid-cols-3">
-		<Card.Root class="border-primary/20 bg-gradient-to-br from-card via-card to-primary/10 md:col-span-2">
-			<Card.Content class="flex items-start justify-between gap-4 p-5">
-				<div class="space-y-1">
-					<p class="badge badge-sm badge-primary uppercase tracking-widest mb-1">Rekap Harian</p>
-					<p class="text-2xl font-semibold text-base-content">{total ?? records.length}</p>
-					<p class="text-sm text-base-content/70">Rekaman kehadiran pada rentang tanggal terpilih</p>
-				</div>
-				<div class="card bg-base-100/80 border border-primary/20 px-4 py-3 text-right shadow-sm">
-					<p class="badge badge-xs badge-ghost uppercase tracking-wider mb-1">Status dominan</p>
-					<p class="mt-1 text-base font-semibold text-primary">
-						{records.some((r) => attendanceStatus(r) === 'lengkap') ? 'Lengkap tersedia' : 'Mayoritas check-in'}
-					</p>
-				</div>
-			</Card.Content>
-		</Card.Root>
-
-		<Card.Root class="border-base-300 bg-base-100">
-			<Card.Content class="space-y-2 p-5">
-				<p class="badge badge-sm badge-outline uppercase tracking-wider">Periode</p>
-				<p class="text-base font-semibold text-base-content">{startDate || '—'}</p>
-				<p class="text-sm text-base-content/70">sampai {endDate || startDate || '—'}</p>
-			</Card.Content>
-		</Card.Root>
+	<div class="grid gap-3 md:grid-cols-3">
+		<div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3 flex flex-col gap-1">
+			<p class="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Rekap Harian</p>
+			<p class="text-2xl font-black text-foreground">{total ?? records.length}</p>
+			<p class="text-xs text-muted-foreground">Rekaman kehadiran pada rentang tanggal terpilih</p>
+		</div>
+		<div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3 flex flex-col gap-1">
+			<p class="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Status Dominan</p>
+			<p class="text-base font-black text-primary">
+				{records.some((r) => attendanceStatus(r) === 'lengkap') ? 'Lengkap tersedia' : 'Mayoritas check-in'}
+			</p>
+			<p class="text-xs text-muted-foreground">Mayoritas pegawai lengkap masuk & pulang</p>
+		</div>
+		<div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3 flex flex-col gap-1">
+			<p class="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Periode</p>
+			<p class="text-sm font-bold text-foreground">{startDate || '—'}</p>
+			<p class="text-xs text-muted-foreground">sampai {endDate || startDate || '—'}</p>
+		</div>
 	</div>
 	{:else}
-	<div class="grid gap-4 md:grid-cols-3">
-		<div class="skeleton h-28 w-full rounded-xl md:col-span-2"></div>
-		<div class="skeleton h-28 w-full rounded-xl"></div>
+	<div class="grid gap-3 md:grid-cols-3">
+		<div class="skeleton h-24 w-full rounded-xl"></div>
+		<div class="skeleton h-24 w-full rounded-xl"></div>
+		<div class="skeleton h-24 w-full rounded-xl"></div>
 	</div>
 	{/if}
 
 	<Card.Root class="overflow-hidden border-base-300 shadow-sm">
-		<Card.Header class="border-b border-base-300 bg-gradient-to-r from-card to-primary/10">
+		<Card.Header class="border-b border-base-300">
 			<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 				<div class="grow">
 					<Card.Title>Rekap Kehadiran</Card.Title>
@@ -289,54 +289,53 @@
 						{/if}
 					</Card.Description>
 				</div>
-				<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_auto_auto_auto] xl:items-end">
-					<div class="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-						<input type="date" bind:value={startDate} class="input input-bordered h-10 min-w-0 bg-base-100" />
-						<span class="text-center text-sm text-base-content/70">s/d</span>
-						<input type="date" bind:value={endDate} class="input input-bordered h-10 min-w-0 bg-base-100" />
-					</div>
-					<!-- Quick date shortcuts -->
+				<div class="flex flex-wrap items-center gap-2">
 					<div class="flex items-center gap-1.5">
-						<button class="btn btn-ghost btn-xs h-7 px-2 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); startDate = t; endDate = t; void load(); }}>
+						<input type="date" bind:value={startDate} class="input input-bordered h-9 min-w-0 border border-input bg-background px-2 text-xs" />
+						<span class="text-xs text-base-content/70">s/d</span>
+						<input type="date" bind:value={endDate} class="input input-bordered h-9 min-w-0 border border-input bg-background px-2 text-xs" />
+					</div>
+					<div class="flex items-center gap-1">
+						<button class="btn btn-ghost btn-sm h-9 px-2.5 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); startDate = t; endDate = t; void load(); }}>
 							Hari Ini
 						</button>
-						<button class="btn btn-ghost btn-xs h-7 px-2 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(d.getDate() - 6); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
+						<button class="btn btn-ghost btn-sm h-9 px-2.5 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(d.getDate() - 6); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
 							7 Hari
 						</button>
-						<button class="btn btn-ghost btn-xs h-7 px-2 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(1); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
+						<button class="btn btn-ghost btn-sm h-9 px-2.5 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(1); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
 							Bulan Ini
 						</button>
 					</div>
-					<button class="btn btn-primary btn-sm h-10 w-full sm:w-auto" onclick={() => void load()}>
+					<button class="btn btn-primary btn-sm h-9 px-3" onclick={() => void load()}>
 						{#if refreshing}<span class="loading loading-spinner loading-xs"></span>{/if}
 						Terapkan
 					</button>
-					<button class="btn btn-outline btn-sm h-10 w-full sm:w-auto bg-base-100" onclick={exportCSV} disabled={records.length === 0}>
+					<button class="btn btn-outline btn-sm h-9 px-3 bg-base-100" onclick={exportCSV} disabled={records.length === 0}>
 						↓ CSV
 					</button>
-					<button class="btn btn-outline btn-sm h-10 w-full sm:w-auto bg-base-100" onclick={() => void sendTelegramReport()} disabled={sendingTelegram}>
+					<button class="btn btn-outline btn-sm h-9 px-3 bg-base-100" onclick={() => void sendTelegramReport()} disabled={sendingTelegram}>
 						{#if sendingTelegram}<span class="loading loading-spinner loading-xs"></span>{/if}
 						Telegram
 					</button>
-					<a href={resolve('/pusaka/telegram-laporan')} class="btn btn-ghost btn-sm h-10 w-full sm:w-auto">Atur Jadwal</a>
-					<div class="col-span-2 flex h-10 overflow-hidden rounded-btn border border-base-300 bg-base-100 sm:col-span-1">
+					<a href={resolve('/pusaka/telegram-laporan')} class="btn btn-ghost btn-sm h-9 px-3">Atur Jadwal</a>
+					<div class="flex h-9 overflow-hidden rounded-lg border border-base-300 bg-base-100">
 						<button
-							class="flex flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors {viewMode === 'normal' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-200/50'}"
+							class="flex flex-1 items-center justify-center gap-1.5 px-2.5 text-[11px] font-medium transition-colors {viewMode === 'normal' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-200/50'}"
 							onclick={() => viewMode = 'normal'}
 						>
-							<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
 							Normal
 						</button>
 						<div class="w-px bg-border"></div>
 						<button
-							class="flex flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors {viewMode === 'compact' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-200/50'}"
+							class="flex flex-1 items-center justify-center gap-1.5 px-2.5 text-[11px] font-medium transition-colors {viewMode === 'compact' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-200/50'}"
 							onclick={() => viewMode = 'compact'}
 						>
-							<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 8h18M3 13h18M3 18h18"/></svg>
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 8h18M3 13h18M3 18h18"/></svg>
 							Ringkas
 						</button>
 					</div>
-					<a href={resolve('/pusaka/antrian')} class="btn btn-outline btn-sm h-10 w-full sm:w-auto bg-base-100">Antrian →</a>
+					<a href={resolve('/pusaka/antrian')} class="btn btn-outline btn-sm h-9 px-3 bg-base-100">Antrian →</a>
 				</div>
 			</div>
 		</Card.Header>
@@ -344,7 +343,7 @@
 		<Card.Content class="p-0">
 			{#if viewMode === 'compact'}
 				<!-- Tampilan Ringkas: langsung pakai state records, tidak perlu tunggu promise -->
-				{@const displayRecords = records.length > 0 ? records : SAMPLE_RECORDS}
+				{@const displayRecords = pagedRecords.length > 0 ? pagedRecords : SAMPLE_RECORDS.slice((page - 1) * PER_PAGE, page * PER_PAGE)}
 				{@const isSample = records.length === 0}
 				{#if isSample}
 				<div class="flex items-center gap-1.5 border-b border-warning/30 bg-warning/10 px-3 py-1.5 text-[11px] text-warning">
@@ -356,7 +355,6 @@
 					<table class="table table-zebra table-xs text-[10px]">
 						<thead>
 							<tr>
-								<th class="w-4">#</th>
 								<th>Tanggal</th>
 								<th>Nama Pegawai</th>
 								<th class="hidden sm:table-cell">NIP</th>
@@ -369,32 +367,34 @@
 							{#each displayRecords as r, i (r.id)}
 								{@const s = attendanceStatus(r)}
 								<tr class="{isSample ? 'opacity-75' : ''}">
-									<td class="text-base-content/70">{i + 1}</td>
-									<td class="whitespace-nowrap text-base-content/70">{r.tanggal}</td>
+									<td class="whitespace-nowrap text-base-content/70 text-[9px]">{r.tanggal}</td>
 									<td class="font-medium text-base-content">{r.employee_nama}</td>
-									<td class="hidden sm:table-cell font-mono text-base-content/70">{r.employee_nip}</td>
-									<td class="text-center text-base-content">{stripWita(r.jam_masuk)}</td>
-									<td class="text-center text-base-content">{stripWita(r.jam_pulang)}</td>
+									<td class="hidden sm:table-cell font-mono text-base-content/70 text-[9px]">{r.employee_nip}</td>
+									<td class="text-center text-base-content text-[9px]">{stripWita(r.jam_masuk)}</td>
+									<td class="text-center text-base-content text-[9px]">{stripWita(r.jam_pulang)}</td>
 									<td class="text-center">
 										{#if s === 'lengkap'}
-											<span class="badge badge-sm badge-success">Lengkap</span>
+											<span class="badge badge-xs badge-success">Lengkap</span>
 										{:else if s === 'masuk'}
-											<span class="badge badge-sm badge-warning">Masuk</span>
+											<span class="badge badge-xs badge-warning">Masuk</span>
 										{:else}
-											<span class="badge badge-sm badge-ghost">Belum</span>
+											<span class="badge badge-xs badge-ghost">Belum</span>
 										{/if}
 									</td>
 								</tr>
 							{/each}
 						</tbody>
 					</table>
-					<div class="border-t border-base-300 bg-base-200/50 px-3 py-1.5 text-right text-[10px] text-base-content/70">
+					<div class="border-t border-base-300 bg-base-200/50 px-3 py-1 text-right text-[9px] text-base-content/70">
 						{#if isSample}
 							Contoh data (10 sampel)
 						{:else}
 							{displayRecords.length} rekaman · {startDate}{endDate && endDate !== startDate ? ' s/d ' + endDate : ''}
 						{/if}
 					</div>
+				</div>
+				<div class="px-3 py-2 border-t border-base-300">
+					<Pagination bind:page total={records.length || SAMPLE_RECORDS.length} perPage={PER_PAGE} />
 				</div>
 			{:else}
 				<!-- Tampilan Normal: pakai AsyncContent seperti semula -->
@@ -420,12 +420,11 @@
 					{/snippet}
 
 					{#snippet children(value)}
-						{@const currentRecords = (value as AttendanceOverview).records}
+						{@const currentRecords = pagedRecords}
 					<div class="hidden overflow-x-auto lg:block">
 					<table class="table table-zebra table-xs">
 						<thead>
 							<tr>
-								<th class="w-10">#</th>
 								<th>Tanggal</th>
 								<th>Nama Pegawai</th>
 								<th class="hidden sm:table-cell">NIP</th>
@@ -438,8 +437,7 @@
 							{#each currentRecords as r, i (r.id)}
 							{@const s = attendanceStatus(r)}
 							<tr>
-								<td class="text-base-content/70">{i + 1}</td>
-								<td class="whitespace-nowrap">{r.tanggal}</td>
+								<td class="whitespace-nowrap text-base-content/70">{r.tanggal}</td>
 								<td class="font-medium">{r.employee_nama}</td>
 								<td class="hidden sm:table-cell text-base-content/70 font-mono text-xs">{r.employee_nip}</td>
 								<td class="text-center">{stripWita(r.jam_masuk)}</td>
@@ -456,13 +454,16 @@
 							</tr>
 							{:else}
 							<tr>
-								<td colspan={7} class="py-12 text-center text-base-content/70">
+								<td colspan={6} class="py-12 text-center text-base-content/70">
 									Tidak ada data kehadiran untuk rentang tanggal ini.
 								</td>
 							</tr>
 							{/each}
 						</tbody>
 					</table>
+					</div>
+					<div class="hidden lg:block border-t border-base-300 px-3 py-2">
+						<Pagination bind:page total={records.length} perPage={PER_PAGE} />
 					</div>
 
 					<div class="lg:hidden">
