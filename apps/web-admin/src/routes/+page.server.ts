@@ -29,9 +29,9 @@ let publicHomeCachePromise: Promise<PublicHomePayload> | null = null;
 
 async function loadPublicHome(fetcher: typeof fetch): Promise<PublicHomePayload> {
 	const [posts, featuredPosts, announcements, profil, ppdbInfo] = await Promise.all([
-		apiPublicGetWithFetch<WebsiteContent[]>(fetcher, '/api/public/site/posts?limit=3'),
+		apiPublicGetWithFetch<WebsiteContent[]>(fetcher, '/api/public/site/posts?limit=3').catch(() => []),
 		apiPublicGetWithFetch<WebsiteContent[]>(fetcher, '/api/public/site/posts/featured?limit=2').catch(() => []),
-		apiPublicGetWithFetch<WebsiteContent[]>(fetcher, '/api/public/site/announcements?limit=4'),
+		apiPublicGetWithFetch<WebsiteContent[]>(fetcher, '/api/public/site/announcements?limit=4').catch(() => []),
 		apiPublicGetWithFetch<WebsiteContent>(fetcher, '/api/public/site/pages/profil').catch(() => null),
 		apiPublicGetWithFetch<WebsiteContent>(fetcher, '/api/public/site/pages/ppdb-info').catch(() => null),
 	]);
