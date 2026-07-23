@@ -136,8 +136,8 @@
 
 <div class="space-y-6">
   <div>
-    <h1 class="text-2xl font-semibold text-base-content">Pegawai PUSAKA</h1>
-    <p class="mt-1 text-sm text-base-content/70">Area khusus pegawai PNS dan PPPK yang mengikuti integrasi PUSAKA Kemenag.</p>
+    <h1 class="text-2xl font-black text-base-content">Pegawai PUSAKA</h1>
+    <p class="mt-1.5 text-sm text-base-content/70">Area khusus pegawai PNS dan PPPK yang mengikuti integrasi PUSAKA Kemenag.</p>
   </div>
 
   <AsyncContent promise={employeesPromise} onerror={handleEmployeeRenderError}>
