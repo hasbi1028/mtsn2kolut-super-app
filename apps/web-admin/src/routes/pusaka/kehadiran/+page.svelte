@@ -275,67 +275,74 @@
 	{/if}
 
 	<Card.Root class="overflow-hidden border-base-300 shadow-sm">
-		<Card.Header class="border-b border-base-300">
-			<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-				<div class="grow">
-					<Card.Title>Rekap Kehadiran</Card.Title>
-					<Card.Description>
+		<Card.Header class="border-b border-base-300 py-3">
+			<div class="flex flex-col gap-3">
+				<!-- Title + Count inline -->
+				<div class="flex items-center justify-between gap-2">
+					<Card.Title class="text-base">Rekap Kehadiran</Card.Title>
+					<Card.Description class="!mt-0">
 						{#if refreshing || total === null}
-							<div class="skeleton h-4 w-32"></div>
+							<div class="skeleton h-4 w-20"></div>
 						{:else if total !== null}
-							{total} rekaman ditemukan
+							<span class="text-xs font-semibold text-muted-foreground">{total} rekaman</span>
 						{:else}
 							—
 						{/if}
 					</Card.Description>
 				</div>
+
+				<!-- Date Range + Terapkan (inline) -->
 				<div class="flex flex-wrap items-center gap-2">
 					<div class="flex items-center gap-1.5">
 						<input type="date" bind:value={startDate} class="input input-bordered h-9 min-w-0 border border-input bg-background px-2 text-xs" />
-						<span class="text-xs text-base-content/70">s/d</span>
+						<span class="text-xs text-muted-foreground font-medium" aria-hidden="true">⟶</span>
 						<input type="date" bind:value={endDate} class="input input-bordered h-9 min-w-0 border border-input bg-background px-2 text-xs" />
-					</div>
-					<div class="flex items-center gap-1">
-						<button class="btn btn-ghost btn-sm h-9 px-2.5 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); startDate = t; endDate = t; void load(); }}>
-							Hari Ini
-						</button>
-						<button class="btn btn-ghost btn-sm h-9 px-2.5 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(d.getDate() - 6); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
-							7 Hari
-						</button>
-						<button class="btn btn-ghost btn-sm h-9 px-2.5 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(1); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
-							Bulan Ini
-						</button>
 					</div>
 					<button class="btn btn-primary btn-sm h-9 px-3" onclick={() => void load()}>
 						{#if refreshing}<span class="loading loading-spinner loading-xs"></span>{/if}
 						Terapkan
 					</button>
-					<button class="btn btn-outline btn-sm h-9 px-3 bg-base-100" onclick={exportCSV} disabled={records.length === 0}>
-						↓ CSV
+				</div>
+
+				<!-- Quick date shortcuts -->
+				<div class="flex flex-wrap items-center gap-1.5">
+					<button class="btn btn-ghost btn-sm h-8 px-2.5 text-[11px] font-semibold text-primary hover:bg-primary/10 rounded-lg" onclick={() => { const t = todayWita(); startDate = t; endDate = t; void load(); }}>
+						Hari Ini
 					</button>
-					<button class="btn btn-outline btn-sm h-9 px-3 bg-base-100" onclick={() => void sendTelegramReport()} disabled={sendingTelegram}>
+					<button class="btn btn-ghost btn-sm h-8 px-2.5 text-[11px] font-semibold text-primary hover:bg-primary/10 rounded-lg" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(d.getDate() - 6); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
+						7 Hari
+					</button>
+					<button class="btn btn-ghost btn-sm h-8 px-2.5 text-[11px] font-semibold text-primary hover:bg-primary/10 rounded-lg" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(1); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
+						Bulan Ini
+					</button>
+				</div>
+
+				<!-- Divider + Action buttons -->
+				<hr class="border-border -mx-4" />
+				<div class="flex flex-wrap items-center gap-1.5">
+					<button class="btn btn-outline btn-sm h-8 px-2.5 bg-base-100 text-xs" onclick={exportCSV} disabled={records.length === 0}>
+						<svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+						CSV
+					</button>
+					<button class="btn btn-outline btn-sm h-8 px-2.5 bg-base-100 text-xs" onclick={() => void sendTelegramReport()} disabled={sendingTelegram}>
 						{#if sendingTelegram}<span class="loading loading-spinner loading-xs"></span>{/if}
+						<svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
 						Telegram
 					</button>
-					<a href={resolve('/pusaka/telegram-laporan')} class="btn btn-ghost btn-sm h-9 px-3">Atur Jadwal</a>
-					<div class="flex h-9 overflow-hidden rounded-lg border border-base-300 bg-base-100">
+					<a href={resolve('/pusaka/telegram-laporan')} class="btn btn-ghost btn-sm h-8 px-2.5 text-xs">Atur Jadwal</a>
+					<a href={resolve('/pusaka/antrian')} class="btn btn-ghost btn-sm h-8 px-2.5 text-xs">Antrian</a>
+					<span class="mx-1 text-xs text-border" aria-hidden="true">|</span>
+					<div class="flex h-8 overflow-hidden rounded-lg border border-base-300 bg-base-100">
 						<button
-							class="flex flex-1 items-center justify-center gap-1.5 px-2.5 text-[11px] font-medium transition-colors {viewMode === 'normal' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-200/50'}"
+							class="flex items-center justify-center gap-1 px-2.5 text-[11px] font-medium transition-colors {viewMode === 'normal' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-200/50'}"
 							onclick={() => viewMode = 'normal'}
-						>
-							<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-							Normal
-						</button>
+						>Normal</button>
 						<div class="w-px bg-border"></div>
 						<button
-							class="flex flex-1 items-center justify-center gap-1.5 px-2.5 text-[11px] font-medium transition-colors {viewMode === 'compact' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-200/50'}"
+							class="flex items-center justify-center gap-1 px-2.5 text-[11px] font-medium transition-colors {viewMode === 'compact' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-200/50'}"
 							onclick={() => viewMode = 'compact'}
-						>
-							<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 8h18M3 13h18M3 18h18"/></svg>
-							Ringkas
-						</button>
+						>Ringkas</button>
 					</div>
-					<a href={resolve('/pusaka/antrian')} class="btn btn-outline btn-sm h-9 px-3 bg-base-100">Antrian →</a>
 				</div>
 			</div>
 		</Card.Header>
