@@ -116,6 +116,9 @@ func main() {
 	timetableSvc := service.NewTimetableService(q)
 	timetableH := handler.NewTimetableHandler(timetableSvc)
 
+	journalSvc := service.NewClassJournalService(q)
+	journalH := handler.NewClassJournal(journalSvc)
+
 	jwtSecret := mustEnv("JWT_SECRET")
 	workerKey := mustEnv("WORKER_API_KEY")
 	internalAPIKey := getEnv("INTERNAL_API_KEY", "")
@@ -285,6 +288,17 @@ func main() {
 			r.Post("/api/academic/timetable/slots", timetableH.CreateSlot)
 			r.Put("/api/academic/timetable/slots/{id}", timetableH.UpdateSlot)
 			r.Delete("/api/academic/timetable/slots/{id}", timetableH.DeleteSlot)
+		})
+
+		// Class Journal — jurnal belajar harian
+		r.Group(func(r chi.Router) {
+			r.Use(mw.RequireAnyPermissionOrRole([]string{"journal.read", "journal.manage"}, "admin"))
+			r.Get("/api/class-journal", journalH.Overview)
+			r.Post("/api/class-journal/sessions", journalH.CreateSession)
+			r.Get("/api/class-journal/sessions/{id}/attendances", journalH.ListAttendances)
+			r.Put("/api/class-journal/sessions/{id}/attendances", journalH.BulkUpsertAttendances)
+			r.Get("/api/class-journal/summary", journalH.AttendanceSummary)
+			r.Post("/api/academic/rombel/{id}/timetable-slots/{slotID}/journal-session", journalH.OpenSessionFromTimetableSlot)
 		})
 
 		// Jobs / Attendance / Schedules / Settings — admin-only; Users/RBAC pilot use dynamic permissions.
