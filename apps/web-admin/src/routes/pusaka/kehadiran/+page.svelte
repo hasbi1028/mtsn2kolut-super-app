@@ -10,7 +10,6 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
-	import Pagination from '$lib/components/Pagination.svelte';
 	import { readClientJson } from '$lib/client/api';
 
 	interface AttendanceRecord {
@@ -49,9 +48,6 @@
 	let sendingTelegram = $state(false);
 	let loadedRangeKey = $state('');
 	let attendanceRequestId = 0;
-	let page = $state(1);
-	let perPage = $state(15);
-	let pagedRecords = $derived(perPage === 0 ? records : records.slice((page - 1) * perPage, page * perPage));
 
 	function todayWita() {
 		return new Intl.DateTimeFormat('en-CA', {
@@ -134,8 +130,6 @@
 
 	async function load() {
 		if (!startDate) return;
-		page = 1;
-		perPage = 15;
 		if (!recordsPromise) {
 			loadInitial();
 			return;
@@ -357,7 +351,6 @@
 					{/snippet}
 
 					{#snippet children(value)}
-						{@const currentRecords = pagedRecords}
 					<div class="hidden overflow-x-auto lg:block">
 					<table class="table table-zebra table-xs">
 						<thead>
@@ -371,7 +364,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each currentRecords as r, i (r.id)}
+							{#each records as r, i (r.id)}
 							{@const s = attendanceStatus(r)}
 							<tr>
 								<td class="whitespace-nowrap text-base-content/70">{r.tanggal}</td>
@@ -399,18 +392,15 @@
 						</tbody>
 					</table>
 					</div>
-					<div class="hidden lg:block border-t border-base-300 px-3 py-2">
-						<Pagination bind:page total={records.length} bind:perPage />
-					</div>
 
 					<div class="lg:hidden">
-						{#if currentRecords.length === 0}
+						{#if records.length === 0}
 							<div class="mx-4 my-4 rounded-2xl border border-dashed border-base-300 bg-base-200/50 px-4 py-10 text-center text-sm text-base-content/70">
 								Tidak ada data kehadiran untuk rentang tanggal ini.
 							</div>
 						{:else}
 							<ul class="divide-y divide-border border-b border-base-300">
-								{#each currentRecords as r, i (r.id)}
+								{#each records as r, i (r.id)}
 									{@const s = attendanceStatus(r)}
 									<li class="flex items-center gap-3 px-4 py-2.5">
 										<span class="w-7 shrink-0 text-xs font-medium tabular-nums text-base-content/70">#{i + 1}</span>
@@ -436,7 +426,7 @@
 								{/each}
 							</ul>
 							<div class="border-t border-base-300 bg-base-200/50 px-4 py-2 text-right text-[11px] text-base-content/70">
-								{currentRecords.length} rekaman · {startDate}{endDate && endDate !== startDate ? ' s/d ' + endDate : ''}
+								{records.length} rekaman · {startDate}{endDate && endDate !== startDate ? ' s/d ' + endDate : ''}
 							</div>
 						{/if}
 					</div>
