@@ -27,8 +27,6 @@
 		total: number;
 	};
 
-	type ViewMode = 'normal' | 'compact';
-
 	const SAMPLE_RECORDS: AttendanceRecord[] = [
 		{ id: 's1', employee_nama: 'Ahmad Fauzi, S.Pd.',       employee_nip: '197501012005011001', tanggal: '2026-05-05', jam_masuk: '07:12:04 WITA', jam_pulang: '14:05:22 WITA' },
 		{ id: 's2', employee_nama: 'Siti Rahayu, S.Pd.I.',     employee_nip: '198003152006042002', tanggal: '2026-05-05', jam_masuk: '07:18:31 WITA', jam_pulang: '14:02:47 WITA' },
@@ -46,7 +44,6 @@
 	let total     = $state<number | null>(null);
 	let startDate = $state('');
 	let endDate   = $state('');
-	let viewMode  = $state<ViewMode>('normal');
 	let recordsPromise = $state<Promise<AttendanceOverview> | null>(null);
 	let refreshing = $state(false);
 	let sendingTelegram = $state(false);
@@ -332,81 +329,13 @@
 					</button>
 					<a href={resolve('/pusaka/telegram-laporan')} class="inline-flex items-center justify-center rounded-lg h-8 px-3 text-xs font-medium border border-input bg-background text-foreground hover:bg-accent transition-colors">Atur Jadwal</a>
 					<a href={resolve('/pusaka/antrian')} class="inline-flex items-center justify-center rounded-lg h-8 px-3 text-xs font-medium border border-input bg-background text-foreground hover:bg-accent transition-colors">Antrian</a>
-					<span class="mx-1 text-xs text-border" aria-hidden="true">|</span>
-					<div class="flex h-8 overflow-hidden rounded-lg border border-base-300 bg-base-100">
-						<button
-							class="flex items-center justify-center gap-1 px-2.5 text-[11px] font-medium transition-colors {viewMode === 'normal' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-200/50'}"
-							onclick={() => viewMode = 'normal'}
-						>Normal</button>
-						<div class="w-px bg-border"></div>
-						<button
-							class="flex items-center justify-center gap-1 px-2.5 text-[11px] font-medium transition-colors {viewMode === 'compact' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-200/50'}"
-							onclick={() => viewMode = 'compact'}
-						>Ringkas</button>
-					</div>
 				</div>
 			</div>
 		</Card.Header>
 
 		<Card.Content class="p-0">
-			{#if viewMode === 'compact'}
-				<!-- Tampilan Ringkas: langsung pakai state records, tidak perlu tunggu promise -->
-				{@const displayRecords = pagedRecords.length > 0 ? pagedRecords : SAMPLE_RECORDS.slice((page - 1) * PER_PAGE, page * PER_PAGE)}
-				{@const isSample = records.length === 0}
-				{#if isSample}
-				<div class="flex items-center gap-1.5 border-b border-warning/30 bg-warning/10 px-3 py-1.5 text-[11px] text-warning">
-					<span class="font-semibold">Contoh tampilan</span>
-					<span class="text-warning">— data di bawah adalah sampel. Terapkan filter tanggal untuk memuat data nyata.</span>
-				</div>
-				{/if}
-				<div class="overflow-x-auto">
-					<table class="table table-zebra table-xs text-[10px]">
-						<thead>
-							<tr>
-								<th>Tanggal</th>
-								<th>Nama Pegawai</th>
-								<th class="hidden sm:table-cell">NIP</th>
-								<th class="text-center">Masuk</th>
-								<th class="text-center">Pulang</th>
-								<th class="text-center">Status</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each displayRecords as r, i (r.id)}
-								{@const s = attendanceStatus(r)}
-								<tr class="{isSample ? 'opacity-75' : ''}">
-									<td class="whitespace-nowrap text-base-content/70 text-[9px]">{r.tanggal}</td>
-									<td class="font-medium text-base-content">{r.employee_nama}</td>
-									<td class="hidden sm:table-cell font-mono text-base-content/70 text-[9px]">{r.employee_nip}</td>
-									<td class="text-center text-base-content text-[9px]">{stripWita(r.jam_masuk)}</td>
-									<td class="text-center text-base-content text-[9px]">{stripWita(r.jam_pulang)}</td>
-									<td class="text-center">
-										{#if s === 'lengkap'}
-											<span class="badge badge-xs badge-success">Lengkap</span>
-										{:else if s === 'masuk'}
-											<span class="badge badge-xs badge-warning">Masuk</span>
-										{:else}
-											<span class="badge badge-xs badge-ghost">Belum</span>
-										{/if}
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-					<div class="border-t border-base-300 bg-base-200/50 px-3 py-1 text-right text-[9px] text-base-content/70">
-						{#if isSample}
-							Contoh data (10 sampel)
-						{:else}
-							{displayRecords.length} rekaman · {startDate}{endDate && endDate !== startDate ? ' s/d ' + endDate : ''}
-						{/if}
-					</div>
-				</div>
-				<div class="px-3 py-2 border-t border-base-300">
-					<Pagination bind:page total={records.length || SAMPLE_RECORDS.length} bind:perPage />
-				</div>
-			{:else}
-				<!-- Tampilan Normal: pakai AsyncContent seperti semula -->
-				<AsyncContent promise={recordsPromise} onerror={handleAttendanceRenderError}>
+			<!-- Tampilan Normal: pakai AsyncContent seperti semula -->
+			<AsyncContent promise={recordsPromise} onerror={handleAttendanceRenderError}>
 					{#snippet pending()}
 					<div class="space-y-3 p-4">
 						<Skeleton class="h-12 w-full" />
@@ -513,7 +442,6 @@
 					</div>
 					{/snippet}
 				</AsyncContent>
-			{/if}
 		</Card.Content>
 	</Card.Root>
 
