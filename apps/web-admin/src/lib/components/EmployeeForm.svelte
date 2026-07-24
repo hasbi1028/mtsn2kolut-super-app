@@ -51,7 +51,7 @@
         </div>
         <div>
           <label for="f-jenis-kelamin" class="mb-1 block text-xs font-medium text-muted-foreground">Jenis Kelamin</label>
-          <select id="f-jenis-kelamin" name="jenis_kelamin" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+          <select id="f-jenis-kelamin" name="jenis_kelamin" class="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground">
             <option value="">Belum diisi</option>
             <option value="L">Laki-laki</option>
             <option value="P">Perempuan</option>
@@ -59,7 +59,7 @@
         </div>
         <div>
           <label for="f-employment-type" class="mb-1 block text-xs font-medium text-muted-foreground">Status Kepegawaian <span class="text-destructive">*</span></label>
-          <select id="f-employment-type" name="employment_type" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          <select id="f-employment-type" name="employment_type" class="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground"
             onchange={(e) => { pusakaEligible = (e.target as HTMLSelectElement).value === 'pns' || (e.target as HTMLSelectElement).value === 'pppk'; }}>
             <option value="">Pilih status</option>
             <option value="pns">PNS</option>

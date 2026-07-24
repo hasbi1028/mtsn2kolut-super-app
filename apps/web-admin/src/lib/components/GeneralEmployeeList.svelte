@@ -191,8 +191,8 @@
       </div>
       <div class="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
         <div>
-          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Filter Unit Kerja</p>
-          <select bind:value={filterUnitKerja} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+          <p class="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Filter Unit Kerja</p>
+          <select bind:value={filterUnitKerja} class="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground">
             <option value="">Semua unit</option>
             {#each unitKerjaOptions as unit (unit)}
               <option value={unit}>{unit}</option>
@@ -200,8 +200,8 @@
           </select>
         </div>
         <div>
-          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Status Kepegawaian</p>
-          <select bind:value={filterEmploymentType} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+          <p class="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Status Kepegawaian</p>
+          <select bind:value={filterEmploymentType} class="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground">
             <option value="">Semua status</option>
             <option value="pns">PNS</option>
             <option value="pppk">PPPK</option>
@@ -276,7 +276,7 @@
             <Table.Cell class="text-right">
               {#if confirmId === e.id}
                 <div class="flex flex-wrap items-center justify-end gap-1 md:gap-2">
-                  <span class="text-xs text-warning">Hapus pegawai ini?</span>
+                  <span class="text-xs text-amber-600">Hapus pegawai ini?</span>
                   <form method="POST" action="?/hapus" class="inline">
                     <input type="hidden" name="id" value={e.id} />
                     <button type="submit" class="inline-flex items-center justify-center rounded-md px-2 md:px-3 py-1 md:py-1.5 text-xs md:text-sm font-medium text-destructive-foreground bg-destructive hover:bg-destructive/90">
@@ -365,7 +365,7 @@
         </div>
         <div>
           <label for="edit-jenis-kelamin" class="mb-1 block text-xs font-medium text-muted-foreground">Jenis Kelamin</label>
-          <select id="edit-jenis-kelamin" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.jenis_kelamin}>
+          <select id="edit-jenis-kelamin" class="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground" bind:value={editForm.jenis_kelamin}>
             <option value="">Belum diisi</option>
             <option value="L">Laki-laki</option>
             <option value="P">Perempuan</option>
@@ -373,7 +373,7 @@
         </div>
         <div>
           <label for="edit-type" class="mb-1 block text-xs font-medium text-muted-foreground">Status Kepegawaian</label>
-          <select id="edit-type" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.employment_type}>
+          <select id="edit-type" class="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground" bind:value={editForm.employment_type}>
             <option value="pns">PNS</option>
             <option value="pppk">PPPK</option>
             <option value="honorer">Honorer</option>
