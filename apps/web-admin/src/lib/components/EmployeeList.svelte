@@ -803,8 +803,7 @@
         <Button variant="outline" onclick={closeRunConfirm}>Batal</Button>
         <Button
           onclick={submitRunConfirm}
-          disabled={!canConfirmRun}
-          class={canConfirmRun ? 'bg-warning hover:bg-warning text-background border-transparent' : ''}>
+          disabled={!canConfirmRun}>
           Jalankan {runTypeLabel[runConfirm.runType]}
         </Button>
       </Dialog.Footer>
