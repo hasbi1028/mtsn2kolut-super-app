@@ -15,18 +15,18 @@
   </Card.Header>
   <Card.Content>
     {#if form?.tambahSuccess}
-      <div class="mb-3 rounded-xl border border-success/20 bg-success/10 px-5 py-4 text-sm text-success-foreground">
+      <div class="mb-3 rounded-xl border border-success/20 bg-success/10 px-5 py-4 text-sm text-foreground">
         {form.tambahSuccess}
       </div>
     {/if}
     {#if form?.tambahError}
-      <div class="mb-3 rounded-xl border border-destructive/20 bg-destructive/10 px-5 py-4 text-sm text-destructive-foreground">
+      <div class="mb-3 rounded-xl border border-destructive/20 bg-destructive/10 px-5 py-4 text-sm text-foreground">
         {form.tambahError}
       </div>
     {/if}
 
     <form method="POST" action="?/tambah">
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div>
           <label for="f-nip" class="mb-1 block text-xs font-medium text-muted-foreground">NIP</label>
           <Input id="f-nip" name="nip" placeholder="Opsional untuk honorer" />
@@ -51,7 +51,7 @@
         </div>
         <div>
           <label for="f-jenis-kelamin" class="mb-1 block text-xs font-medium text-muted-foreground">Jenis Kelamin</label>
-          <select id="f-jenis-kelamin" name="jenis_kelamin" class="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground">
+          <select id="f-jenis-kelamin" name="jenis_kelamin" class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground">
             <option value="">Belum diisi</option>
             <option value="L">Laki-laki</option>
             <option value="P">Perempuan</option>
@@ -59,7 +59,7 @@
         </div>
         <div>
           <label for="f-employment-type" class="mb-1 block text-xs font-medium text-muted-foreground">Status Kepegawaian <span class="text-destructive">*</span></label>
-          <select id="f-employment-type" name="employment_type" class="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground"
+          <select id="f-employment-type" name="employment_type" class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground"
             onchange={(e) => { pusakaEligible = (e.target as HTMLSelectElement).value === 'pns' || (e.target as HTMLSelectElement).value === 'pppk'; }}>
             <option value="">Pilih status</option>
             <option value="pns">PNS</option>
@@ -70,14 +70,14 @@
         </div>
       </div>
 
-      <div class="mt-4 rounded-xl border border-primary/20 bg-primary/10 p-4">
+      <div class="mt-5 rounded-lg border border-border bg-card px-4 py-3">
         <div class="space-y-1">
           <p class="text-sm font-semibold text-foreground">Integrasi PUSAKA</p>
           <p class="text-xs text-muted-foreground">Opsional saat tambah pegawai. Bisa diisi sekarang atau dilengkapi nanti dari halaman PUSAKA.</p>
         </div>
 
         {#if pusakaEligible}
-          <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label for="f-user" class="mb-1 block text-xs font-medium text-muted-foreground">Username PUSAKA</label>
               <Input id="f-user" name="pusaka_username" placeholder="Isi jika akun PUSAKA sudah tersedia" />
@@ -88,14 +88,14 @@
             </div>
           </div>
         {:else}
-          <div class="mt-4 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          <div class="mt-3 text-sm text-muted-foreground">
             Pegawai dengan status ini tidak otomatis eligible untuk integrasi PUSAKA. Simpan sebagai pegawai umum saja.
           </div>
         {/if}
       </div>
 
-      <div class="mt-4 flex justify-end">
-        <button type="submit" class="inline-flex min-w-36 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+      <div class="mt-5 flex justify-end">
+        <button type="submit" class="inline-flex h-10 min-w-36 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-bold text-primary-foreground hover:bg-primary/90 transition-colors">
           Simpan Pegawai
         </button>
       </div>

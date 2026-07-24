@@ -192,7 +192,7 @@
       <div class="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
         <div>
           <p class="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Filter Unit Kerja</p>
-          <select bind:value={filterUnitKerja} class="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground">
+          <select bind:value={filterUnitKerja} class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground">
             <option value="">Semua unit</option>
             {#each unitKerjaOptions as unit (unit)}
               <option value={unit}>{unit}</option>
@@ -201,7 +201,7 @@
         </div>
         <div>
           <p class="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Status Kepegawaian</p>
-          <select bind:value={filterEmploymentType} class="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground">
+          <select bind:value={filterEmploymentType} class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground">
             <option value="">Semua status</option>
             <option value="pns">PNS</option>
             <option value="pppk">PPPK</option>
@@ -275,36 +275,36 @@
             </Table.Cell>
             <Table.Cell class="text-right">
               {#if confirmId === e.id}
-                <div class="flex flex-wrap items-center justify-end gap-1 md:gap-2">
-                  <span class="text-xs text-amber-600">Hapus pegawai ini?</span>
+                <div class="flex flex-wrap items-center justify-end gap-2">
+                  <span class="text-xs text-amber-600 font-medium">Hapus pegawai ini?</span>
                   <form method="POST" action="?/hapus" class="inline">
                     <input type="hidden" name="id" value={e.id} />
-                    <button type="submit" class="inline-flex items-center justify-center rounded-md px-2 md:px-3 py-1 md:py-1.5 text-xs md:text-sm font-medium text-destructive-foreground bg-destructive hover:bg-destructive/90">
+                    <button type="submit" class="inline-flex items-center justify-center rounded-md h-8 px-3 text-xs font-medium text-destructive-foreground bg-destructive hover:bg-destructive/90 transition-colors">
                       Ya, Hapus
                     </button>
                   </form>
-                  <button class="inline-flex items-center justify-center rounded-md px-2 md:px-3 py-1 md:py-1.5 text-xs md:text-sm font-medium hover:bg-accent" onclick={() => (confirmId = null)}>Batal</button>
+                  <button class="inline-flex items-center justify-center rounded-md h-8 px-3 text-xs font-medium border border-input bg-background text-foreground hover:bg-accent transition-colors" onclick={() => (confirmId = null)}>Batal</button>
                 </div>
               {:else}
-                <div class="flex flex-wrap items-center justify-end gap-1 md:gap-2">
+                <div class="flex flex-wrap items-center justify-end gap-1.5">
                   {#if e.pusaka_eligible}
                     <a href={resolve('/pusaka/employees')}>
-                      <Button size="sm" variant="outline" class="text-xs md:text-sm px-2 md:px-3">Kelola PUSAKA</Button>
+                      <Button size="sm" variant="outline" class="text-xs">Kelola PUSAKA</Button>
                     </a>
                   {/if}
-                  <Button size="sm" variant="outline" onclick={() => openEditDialog(e)} class="text-xs md:text-sm px-2 md:px-3">
+                  <Button size="sm" variant="outline" onclick={() => openEditDialog(e)} class="text-xs">
                     Edit
                   </Button>
                   <form method="POST" action="?/nonaktifkan" class="inline">
                     <input type="hidden" name="id" value={e.id} />
                     <input type="hidden" name="is_active" value={String(e.is_active)} />
-                    <button type="submit" class="inline-flex items-center justify-center rounded-md px-2 md:px-3 py-1 md:py-1.5 text-xs md:text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground">
+                    <button type="submit" class="inline-flex items-center justify-center rounded-md h-8 px-3 text-xs font-medium border border-input bg-background text-foreground hover:bg-accent transition-colors">
                       {e.is_active ? 'Nonaktifkan' : 'Aktifkan'}
                     </button>
                   </form>
                   <form method="POST" action="?/hapus" class="inline">
                     <input type="hidden" name="id" value={e.id} />
-                    <button type="submit" class="inline-flex items-center justify-center rounded-md px-2 md:px-3 py-1 md:py-1.5 text-xs md:text-sm font-medium text-destructive hover:bg-destructive/10">
+                    <button type="submit" class="inline-flex items-center justify-center rounded-md h-8 px-3 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors">
                       Hapus
                     </button>
                   </form>
@@ -365,7 +365,7 @@
         </div>
         <div>
           <label for="edit-jenis-kelamin" class="mb-1 block text-xs font-medium text-muted-foreground">Jenis Kelamin</label>
-          <select id="edit-jenis-kelamin" class="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground" bind:value={editForm.jenis_kelamin}>
+          <select id="edit-jenis-kelamin" class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground" bind:value={editForm.jenis_kelamin}>
             <option value="">Belum diisi</option>
             <option value="L">Laki-laki</option>
             <option value="P">Perempuan</option>
@@ -373,7 +373,7 @@
         </div>
         <div>
           <label for="edit-type" class="mb-1 block text-xs font-medium text-muted-foreground">Status Kepegawaian</label>
-          <select id="edit-type" class="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground" bind:value={editForm.employment_type}>
+          <select id="edit-type" class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground" bind:value={editForm.employment_type}>
             <option value="pns">PNS</option>
             <option value="pppk">PPPK</option>
             <option value="honorer">Honorer</option>
