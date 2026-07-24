@@ -72,7 +72,8 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		items: [
 			{ href: '/academic/semesters', label: 'Semester', icon: 'calendar', roles: ['admin'], permissions: ['academic.read'] },
 			{ href: '/academic/rombels', label: 'Rombel', icon: 'users', roles: ['admin'], permissions: ['academic.read'] },
-			{ href: '/academic/curriculum', label: 'Kurikulum', icon: 'book', roles: ['admin'], permissions: ['academic.read'] }
+			{ href: '/academic/curriculum', label: 'Kurikulum', icon: 'book', roles: ['admin'], permissions: ['academic.read'] },
+			{ href: '/academic/subject-assignments', label: 'Assign Guru', icon: 'users', roles: ['admin'], permissions: ['academic.read'] }
 		]
 	},
 	{

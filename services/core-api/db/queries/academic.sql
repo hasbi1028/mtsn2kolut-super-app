@@ -1232,3 +1232,9 @@ JOIN curriculum_profiles cp ON cp.id = cca.curriculum_profile_id
 WHERE cca.is_active = TRUE
   AND (sqlc.narg(class_id)::uuid IS NULL OR cca.class_id = sqlc.narg(class_id)::uuid)
 ORDER BY sc.level ASC, sc.name ASC;
+
+-- name: ScanAllActiveClasses :many
+SELECT id, code, name, level
+FROM school_classes
+WHERE is_active = TRUE
+ORDER BY level ASC, name ASC;

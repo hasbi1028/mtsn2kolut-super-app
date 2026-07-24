@@ -2908,6 +2908,45 @@ func (q *Queries) PromoteYearRolloverStudent(ctx context.Context, arg PromoteYea
 	return result.RowsAffected(), nil
 }
 
+const scanAllActiveClasses = `-- name: ScanAllActiveClasses :many
+SELECT id, code, name, level
+FROM school_classes
+WHERE is_active = TRUE
+ORDER BY level ASC, name ASC
+`
+
+type ScanAllActiveClassesRow struct {
+	ID    pgtype.UUID `json:"id"`
+	Code  string      `json:"code"`
+	Name  string      `json:"name"`
+	Level string      `json:"level"`
+}
+
+func (q *Queries) ScanAllActiveClasses(ctx context.Context) ([]ScanAllActiveClassesRow, error) {
+	rows, err := q.db.Query(ctx, scanAllActiveClasses)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ScanAllActiveClassesRow{}
+	for rows.Next() {
+		var i ScanAllActiveClassesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.Level,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const sumClassAdditionalWeeklyHoursExceptAssignment = `-- name: SumClassAdditionalWeeklyHoursExceptAssignment :one
 SELECT COALESCE(SUM(ov.additional_weekly_hours), 0)::numeric(6,2)
 FROM class_subject_allocation_overrides ov

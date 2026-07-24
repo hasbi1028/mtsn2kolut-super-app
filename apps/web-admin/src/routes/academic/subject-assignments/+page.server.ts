@@ -1,0 +1,28 @@
+import type { PageServerLoad } from './$types.js';
+import { env } from '$env/dynamic/private';
+
+const API_BASE = (env.API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
+
+export const load: PageServerLoad = async ({ fetch, locals }) => {
+	const accessToken = locals.accessToken as string | undefined;
+	const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+	if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+
+	const res = await fetch(`${API_BASE}/api/academic/subject-assignments`, { headers });
+
+	let classes: any[] = [];
+	let subjects: any[] = [];
+	let teachers: any[] = [];
+	let cells: any[] = [];
+
+	if (res.ok) {
+		const payload = await res.json();
+		const d = payload.data ?? {};
+		classes = d.classes ?? [];
+		subjects = d.subjects ?? [];
+		teachers = d.teachers ?? [];
+		cells = d.cells ?? [];
+	}
+
+	return { classes, subjects, teachers, cells };
+};

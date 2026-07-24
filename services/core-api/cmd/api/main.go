@@ -107,6 +107,8 @@ func main() {
 	profileChangeRequestH := handler.NewProfileChangeRequest(profileChangeRequestSvc)
 	academicH := handler.NewAcademicHandler(academicSvc)
 	curriculumH := handler.NewCurriculumHandler(curriculumSvc, academicSvc)
+	assignSvc := service.NewSubjectAssignmentService(q)
+	assignH := handler.NewSubjectAssignmentHandler(assignSvc)
 
 	jwtSecret := mustEnv("JWT_SECRET")
 	workerKey := mustEnv("WORKER_API_KEY")
@@ -257,6 +259,11 @@ func main() {
 			r.Post("/api/academic/curriculum/assignments", curriculumH.CreateAssignment)
 			r.Delete("/api/academic/curriculum/assignments/{id}", curriculumH.DeleteAssignment)
 		})
+
+		// Subject Assignments — Assign Guru ke Mapel per Rombel
+		r.Get("/api/academic/subject-assignments", assignH.GetMatrix)
+		r.Post("/api/academic/subject-assignments", assignH.UpsertCell)
+		r.Delete("/api/academic/subject-assignments/{id}", assignH.DeleteCell)
 
 		// Jobs / Attendance / Schedules / Settings — admin-only; Users/RBAC pilot use dynamic permissions.
 		r.Group(func(r chi.Router) {
