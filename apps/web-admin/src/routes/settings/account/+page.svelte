@@ -1131,7 +1131,7 @@
 							<Card.Title class="text-base">Keluar dari Semua Perangkat</Card.Title>
 							<Card.Description>Gunakan saat akun perlu dikunci ulang dari seluruh perangkat.</Card.Description>
 						</Card.Header>
-						<Card.Content>
+						<Card.Content class="space-y-3">
 							<LoadingButton variant="destructive" onclick={() => void logoutAllSessions()} loading={logoutAllLoading} loadingLabel="Memproses...">
 								<LogOutIcon class="size-4" />
 								Keluar Semua Sesi
