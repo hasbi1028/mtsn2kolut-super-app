@@ -17,6 +17,7 @@
   import Pagination from '$lib/components/Pagination.svelte';
   import { confirmAction, confirmChallenge } from '$lib/confirm-dialog';
   import { readClientApiData, readClientJson } from '$lib/client/api';
+  import { onMount } from 'svelte';
 
   interface Employee {
     id: string;
@@ -89,6 +90,7 @@
   let search = $state('');
   let page = $state(1);
   let perPage = $state(12);
+  let openMenuId = $state<string | null>(null);
   let success = $state('');
   let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
   let showAuditDialog = $state(false);
@@ -135,6 +137,13 @@
 
   function handleSearch(val: string) { search = val; page = 1; perPage = 12; }
   function handleFilter(val: 'all' | 'configured' | 'needs_setup' | 'disabled') { filterMode = val; page = 1; perPage = 12; }
+
+  // Click outside → close any open dropdown menu
+  onMount(() => {
+    function handleDocumentClick() { openMenuId = null; }
+    document.addEventListener('click', handleDocumentClick);
+    return () => document.removeEventListener('click', handleDocumentClick);
+  });
 
   const runTypeLabel: Record<RunType, string> = {
     morning: 'Rekap', afternoon: 'Rekap', checkin: 'Masuk', checkout: 'Pulang',
@@ -671,14 +680,10 @@
             </button>
 
             <!-- More dropdown -->
-            <div class="relative dropdown ml-auto">
+            <div class="relative ml-auto">
               <button
                 class="inline-flex items-center justify-center rounded-lg border border-input bg-background px-2 h-8 text-xs font-medium text-muted-foreground hover:bg-accent transition-colors"
-                onclick={(ev) => {
-                  const btn = ev.currentTarget;
-                  const menu = btn.nextElementSibling as HTMLElement;
-                  if (menu) menu.classList.toggle('hidden');
-                }}
+                onclick={(ev) => { ev.stopPropagation(); openMenuId = openMenuId === e.id ? null : e.id; }}
                 aria-label="Aksi lainnya"
               >
                 <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -687,7 +692,8 @@
                   <circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none" />
                 </svg>
               </button>
-              <div class="hidden absolute right-0 z-50 mt-1 min-w-[180px] rounded-lg border border-border bg-card p-1 shadow-xl" onclick={(ev) => ev.stopPropagation()}>
+              {#if openMenuId === e.id}
+                <div class="absolute right-0 z-50 mt-1 min-w-[180px] rounded-lg border border-border bg-card p-1 shadow-xl" onclick={(ev) => ev.stopPropagation()}>
                 <Button size="sm" variant="ghost" class="w-full justify-start gap-2 rounded-md px-3 py-1.5 text-xs font-medium" onclick={() => openPusakaDialog(e)}>
                   <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -742,6 +748,7 @@
                   Stop Job
                 </LoadingButton>
               </div>
+              {/if}
             </div>
           </div>
         </div>
