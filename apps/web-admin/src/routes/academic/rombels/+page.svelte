@@ -47,7 +47,7 @@
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          academic_year_id: activeSemester?.id ?? '',
+          academic_year_id: activeSemester?.academic_year_id ?? '',
           code: tambahForm.code,
           name: tambahForm.name,
           level: tambahForm.level,

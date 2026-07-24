@@ -16,7 +16,7 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 		fetch(`${url.origin}/api/academic/rombels`),
 	]);
 
-	let activeSemester: { id: string; label: string } | null = null;
+	let activeSemester: { id: string; label: string; academic_year_id: string } | null = null;
 	if (semRes.ok) {
 		const sem = await semRes.json();
 		activeSemester = sem.data ?? null;
