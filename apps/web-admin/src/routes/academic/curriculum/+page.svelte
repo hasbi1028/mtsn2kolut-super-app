@@ -36,6 +36,12 @@
   let addForm = $state({ subject_name: '', lv: 'VII', grp: 'wajib', intra: '2', koku: '0' });
   let addLoading = $state(false);
 
+  // - Edit alokasi
+  let showEditAlloc = $state(false);
+  let editAllocId = $state('');
+  let editAllocForm = $state({ grp: 'wajib', intra: '2', koku: '0' });
+  let editAllocLoading = $state(false);
+
   function loadAllocs() {
     if (!selected) return;
     loading = true;
@@ -107,6 +113,33 @@
     if (r.ok || r.status === 204) { toast.success('Dihapus'); await loadAllocs(); } else toast.error('Gagal');
   }
 
+  function openEditAlloc(a: Allocation) {
+    editAllocId = a.id;
+    editAllocForm = { grp: a.subject_group, intra: String(a.intra_weekly_hours), koku: String(a.koku_weekly_hours) };
+    showEditAlloc = true;
+  }
+
+  async function submitEditAlloc() {
+    if (!editAllocId) return;
+    editAllocLoading = true;
+    try {
+      const r = await fetch(`/api/academic/curriculum/allocations/${editAllocId}`, {
+        method: 'PUT', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          subject_id: '00000000-0000-0000-0000-000000000000', level: level,
+          subject_group: editAllocForm.grp,
+          intra_weekly_hours: parseFloat(editAllocForm.intra) || 0,
+          koku_weekly_hours: parseFloat(editAllocForm.koku) || 0,
+          total_weekly_hours: (parseFloat(editAllocForm.intra) || 0) + (parseFloat(editAllocForm.koku) || 0),
+          notes: '',
+        }),
+      });
+      if (r.ok) { toast.success('Alokasi diupdate'); showEditAlloc = false; await loadAllocs(); }
+      else { const e = await r.json().catch(() => ({})); toast.error(e?.error || 'Gagal'); }
+    } catch { toast.error('Gagal'); }
+    finally { editAllocLoading = false; }
+  }
+
   async function assign(cid: string) {
     if (!selected) return;
     const r = await fetch('/api/academic/curriculum/assignments', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ class_id: cid, curriculum_profile_id: selected.id }) });
@@ -168,7 +201,7 @@
                 {:else if allocations.length === 0}<p class="text-sm text-muted-foreground py-6 text-center">Belum ada mapel untuk {level}.</p>
                 {:else}
                   <div class="overflow-x-auto -mx-5"><div class="inline-block min-w-full align-middle"><table class="w-full text-sm"><thead><tr class="bg-muted/30 text-muted-foreground text-xs uppercase"><th class="px-3 py-2 text-left">Mapel</th><th class="px-3 py-2 text-center hidden sm:table-cell">Kelompok</th><th class="px-3 py-2 text-center">Intra</th><th class="px-3 py-2 text-center hidden sm:table-cell">Koku</th><th class="px-3 py-2 text-center">Total</th><th class="px-3 py-2 text-right">Aksi</th></tr></thead><tbody class="divide-y divide-border">
-                    {#each allocations as a (a.id)}<tr class="hover:bg-muted/20"><td class="px-3 py-2 font-medium text-xs md:text-sm">{a.subject_name}</td><td class="px-3 py-2 text-center text-muted-foreground text-xs hidden sm:table-cell">{a.subject_group}</td><td class="px-3 py-2 text-center text-xs">{a.intra_weekly_hours}</td><td class="px-3 py-2 text-center text-xs hidden sm:table-cell">{a.koku_weekly_hours}</td><td class="px-3 py-2 text-center font-semibold text-xs">{a.total_weekly_hours}</td><td class="px-3 py-2 text-right whitespace-nowrap"><button class="text-xs text-destructive hover:underline" onclick={() => delAlloc(a.id)}>Hapus</button></td></tr>{/each}
+                    {#each allocations as a (a.id)}<tr class="hover:bg-muted/20"><td class="px-3 py-2 font-medium text-xs md:text-sm">{a.subject_name}</td><td class="px-3 py-2 text-center text-muted-foreground text-xs hidden sm:table-cell">{a.subject_group}</td><td class="px-3 py-2 text-center text-xs">{a.intra_weekly_hours}</td><td class="px-3 py-2 text-center text-xs hidden sm:table-cell">{a.koku_weekly_hours}</td><td class="px-3 py-2 text-center font-semibold text-xs">{a.total_weekly_hours}</td><td class="px-3 py-2 text-right whitespace-nowrap"><button class="text-xs text-primary hover:underline mr-2" onclick={() => openEditAlloc(a)}>Edit</button><button class="text-xs text-destructive hover:underline" onclick={() => delAlloc(a.id)}>Hapus</button></td></tr>{/each}
                   </tbody></table></div></div>
                 {/if}
               {:else}
@@ -222,7 +255,7 @@
                 </div>
                 {#if loading}<p class="text-sm text-muted-foreground py-4 text-center">Memuat...</p>
                 {:else if allocations.length === 0}<p class="text-sm text-muted-foreground py-6 text-center">Belum ada mapel {level}.</p>
-                {:else}<div class="overflow-x-auto -mx-4"><div class="inline-block min-w-full align-middle"><table class="w-full text-sm"><thead><tr class="bg-muted/30 text-muted-foreground text-xs uppercase"><th class="px-3 py-2 text-left">Mapel</th><th class="px-3 py-2 text-center">Jam</th><th class="px-3 py-2 text-right">Aksi</th></tr></thead><tbody class="divide-y divide-border">{#each allocations as a (a.id)}<tr class="hover:bg-muted/20"><td class="px-3 py-2 font-medium text-xs">{a.subject_name}</td><td class="px-3 py-2 text-center text-xs">{a.total_weekly_hours}</td><td class="px-3 py-2 text-right"><button class="text-xs text-destructive hover:underline" onclick={() => delAlloc(a.id)}>Hapus</button></td></tr>{/each}</tbody></table></div></div>{/if}
+                {:else}<div class="overflow-x-auto -mx-4"><div class="inline-block min-w-full align-middle"><table class="w-full text-sm"><thead><tr class="bg-muted/30 text-muted-foreground text-xs uppercase"><th class="px-3 py-2 text-left">Mapel</th><th class="px-3 py-2 text-center">Jam</th><th class="px-3 py-2 text-right">Aksi</th></tr></thead><tbody class="divide-y divide-border">{#each allocations as a (a.id)}<tr class="hover:bg-muted/20"><td class="px-3 py-2 font-medium text-xs">{a.subject_name}</td><td class="px-3 py-2 text-center text-xs">{a.total_weekly_hours}</td><td class="px-3 py-2 text-right whitespace-nowrap"><button class="text-xs text-primary hover:underline mr-2" onclick={() => openEditAlloc(a)}>Edit</button><button class="text-xs text-destructive hover:underline" onclick={() => delAlloc(a.id)}>Hapus</button></td></tr>{/each}</tbody></table></div></div>{/if}
               {:else}
                 <div class="overflow-x-auto -mx-4"><div class="inline-block min-w-full align-middle"><table class="w-full text-sm"><thead><tr class="bg-muted/30 text-muted-foreground text-xs uppercase"><th class="px-3 py-2 text-left">Rombel</th><th class="px-3 py-2 text-center">Status</th><th class="px-3 py-2 text-right">Aksi</th></tr></thead><tbody class="divide-y divide-border">{#each rombels as r (r.id)}<tr class="hover:bg-muted/20"><td class="px-3 py-2 font-medium text-xs">{r.name}</td><td class="px-3 py-2 text-center">{#if assignments.find(a => a.class_id === r.id)}<Badge variant="default" class="text-[9px] bg-primary/10 text-primary">{(assignments.find(a => a.class_id === r.id))?.curriculum_code}</Badge>{:else}<span class="text-muted-foreground italic text-xs">—</span>{/if}</td><td class="px-3 py-2 text-right">{#if assignments.find(a => a.class_id === r.id)}<button class="text-xs text-destructive hover:underline" onclick={() => unassign(assignments.find(a => a.class_id === r.id)!.id)}>Lepas</button>{:else}<button class="text-xs text-primary hover:underline" onclick={() => assign(r.id)}>Assign</button>{/if}</td></tr>{/each}</tbody></table></div></div>
               {/if}
@@ -252,5 +285,12 @@
   <Dialog.Content><div class="space-y-4"><h2 class="text-base font-semibold">Tambah Mapel</h2><p class="text-sm text-muted-foreground">{selected?.code} — {addForm.lv}</p>
     <div class="grid gap-3 sm:grid-cols-2"><div class="space-y-1 sm:col-span-2"><label class="text-xs font-medium text-muted-foreground">Nama Mapel</label><Input bind:value={addForm.subject_name} placeholder="Matematika" /></div><div class="space-y-1"><label class="text-xs font-medium text-muted-foreground">Tingkat</label><select bind:value={addForm.lv} class="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"><option value="VII">VII</option><option value="VIII">VIII</option><option value="IX">IX</option></select></div><div class="space-y-1"><label class="text-xs font-medium text-muted-foreground">Kelompok</label><select bind:value={addForm.grp} class="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"><option value="wajib">wajib</option><option value="pilihan">pilihan</option><option value="muatan_lokal">muatan_lokal</option><option value="kokurikuler">kokurikuler</option></select></div><div class="space-y-1"><label class="text-xs font-medium text-muted-foreground">Jam</label><Input type="number" bind:value={addForm.intra} min="0" step="0.5" /></div></div>
     <div class="flex justify-end gap-2"><Button variant="outline" onclick={() => (showAddAlloc = false)}>Batal</Button><LoadingButton onclick={() => submitAddAlloc()} loading={addLoading}>Simpan</LoadingButton></div>
+  </div></Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={showEditAlloc}>
+  <Dialog.Content><div class="space-y-4"><h2 class="text-base font-semibold">Edit Alokasi</h2><p class="text-sm text-muted-foreground">{selected?.code} — {level}</p>
+    <div class="grid gap-3 sm:grid-cols-2"><div class="space-y-1"><label class="text-xs font-medium text-muted-foreground">Kelompok</label><select bind:value={editAllocForm.grp} class="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"><option value="wajib">wajib</option><option value="pilihan">pilihan</option><option value="muatan_lokal">muatan_lokal</option><option value="kokurikuler">kokurikuler</option></select></div><div class="space-y-1"><label class="text-xs font-medium text-muted-foreground">Jam Intra</label><Input type="number" bind:value={editAllocForm.intra} min="0" step="0.5" /></div><div class="space-y-1"><label class="text-xs font-medium text-muted-foreground">Jam Koku</label><Input type="number" bind:value={editAllocForm.koku} min="0" step="0.5" /></div></div>
+    <div class="flex justify-end gap-2"><Button variant="outline" onclick={() => (showEditAlloc = false)}>Batal</Button><LoadingButton onclick={() => void submitEditAlloc()} loading={editAllocLoading}>Simpan</LoadingButton></div>
   </div></Dialog.Content>
 </Dialog.Root>
