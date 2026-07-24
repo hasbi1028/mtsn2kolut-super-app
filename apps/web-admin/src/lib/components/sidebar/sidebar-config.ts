@@ -77,6 +77,12 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		]
 	},
 	{
+		group: 'Kesiswaan',
+		items: [
+			{ href: '/kesiswaan/murid', label: 'Data Murid', icon: 'users', roles: ['admin'], permissions: ['kesiswaan.read'] }
+		]
+	},
+	{
 		group: 'Pengaturan',
 		items: [
 			{ href: '/settings/account', label: 'Akun Saya', icon: 'user', permissions: ['settings.account'], allowAuthenticatedFallback: true },

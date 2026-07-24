@@ -110,6 +110,9 @@ func main() {
 	assignSvc := service.NewSubjectAssignmentService(q)
 	assignH := handler.NewSubjectAssignmentHandler(assignSvc)
 
+	kesiswaanSvc := service.NewKesiswaanService(q)
+	kesiswaanH := handler.NewKesiswaanHandler(kesiswaanSvc)
+
 	jwtSecret := mustEnv("JWT_SECRET")
 	workerKey := mustEnv("WORKER_API_KEY")
 	internalAPIKey := getEnv("INTERNAL_API_KEY", "")
@@ -264,6 +267,13 @@ func main() {
 		r.Get("/api/academic/subject-assignments", assignH.GetMatrix)
 		r.Post("/api/academic/subject-assignments", assignH.UpsertCell)
 		r.Delete("/api/academic/subject-assignments/{id}", assignH.DeleteCell)
+
+		// Kesiswaan — data murid
+		r.Group(func(r chi.Router) {
+			r.Use(mw.RequireAnyPermissionOrRole([]string{"kesiswaan.read", "kesiswaan.manage"}, "admin"))
+			r.Get("/api/kesiswaan/murid", kesiswaanH.ListMurid)
+			r.Put("/api/kesiswaan/murid/{id}/profile", kesiswaanH.UpdateMuridProfile)
+		})
 
 		// Jobs / Attendance / Schedules / Settings — admin-only; Users/RBAC pilot use dynamic permissions.
 		r.Group(func(r chi.Router) {
