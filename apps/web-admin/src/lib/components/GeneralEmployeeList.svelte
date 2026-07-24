@@ -337,42 +337,42 @@
         <p class="mt-1 text-sm text-muted-foreground">Perbarui data umum pegawai tanpa masuk ke area operasional PUSAKA.</p>
       </div>
 
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label for="edit-pegawai-uid" class="mb-1 block text-xs font-medium text-muted-foreground">ID internal pegawai</label>
-          <input id="edit-pegawai-uid" class="w-full rounded-md border border-input bg-muted px-3 py-2 font-mono text-sm text-muted-foreground" value={editingEmployee?.pegawai_uid ?? ''} readonly />
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div class="space-y-1.5">
+          <label for="edit-pegawai-uid" class="block text-xs font-medium text-muted-foreground">ID internal pegawai</label>
+          <input id="edit-pegawai-uid" class="flex h-10 w-full rounded-lg border border-input bg-muted px-3 text-sm text-muted-foreground" value={editingEmployee?.pegawai_uid ?? ''} readonly />
         </div>
-        <div>
-          <label for="edit-nip" class="mb-1 block text-xs font-medium text-muted-foreground">NIP</label>
-          <input id="edit-nip" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="Opsional untuk honorer" bind:value={editForm.nip} />
+        <div class="space-y-1.5">
+          <label for="edit-nip" class="block text-xs font-medium text-muted-foreground">NIP</label>
+          <input id="edit-nip" class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground" placeholder="Opsional untuk honorer" bind:value={editForm.nip} />
         </div>
-        <div>
-          <label for="edit-nama" class="mb-1 block text-xs font-medium text-muted-foreground">Nama</label>
-          <input id="edit-nama" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.nama} />
+        <div class="space-y-1.5">
+          <label for="edit-nama" class="block text-xs font-medium text-muted-foreground">Nama</label>
+          <input id="edit-nama" class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground" bind:value={editForm.nama} />
         </div>
-        <div>
-          <label for="edit-unit" class="mb-1 block text-xs font-medium text-muted-foreground">Unit Kerja</label>
-          <input id="edit-unit" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.unit_kerja} />
+        <div class="space-y-1.5">
+          <label for="edit-unit" class="block text-xs font-medium text-muted-foreground">Unit Kerja</label>
+          <input id="edit-unit" class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground" bind:value={editForm.unit_kerja} />
         </div>
-        <div>
-          <label for="edit-tempat-lahir" class="mb-1 block text-xs font-medium text-muted-foreground">Tempat Lahir</label>
-          <input id="edit-tempat-lahir" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.tempat_lahir} />
+        <div class="space-y-1.5">
+          <label for="edit-tempat-lahir" class="block text-xs font-medium text-muted-foreground">Tempat Lahir</label>
+          <input id="edit-tempat-lahir" class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground" bind:value={editForm.tempat_lahir} />
         </div>
-        <div>
-          <label for="edit-tanggal-lahir" class="mb-1 block text-xs font-medium text-muted-foreground">Tanggal Lahir</label>
-          <input id="edit-tanggal-lahir" type="date" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.tanggal_lahir} />
-          <p class="mt-1 text-[11px] text-muted-foreground">Nomor internal pegawai baru memakai tahun lahir saat dibuat.</p>
+        <div class="space-y-1.5">
+          <label for="edit-tanggal-lahir" class="block text-xs font-medium text-muted-foreground">Tanggal Lahir</label>
+          <input id="edit-tanggal-lahir" type="date" class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground" bind:value={editForm.tanggal_lahir} />
+          <p class="text-[11px] text-muted-foreground">Nomor internal pegawai baru memakai tahun lahir saat dibuat.</p>
         </div>
-        <div>
-          <label for="edit-jenis-kelamin" class="mb-1 block text-xs font-medium text-muted-foreground">Jenis Kelamin</label>
+        <div class="space-y-1.5">
+          <label for="edit-jenis-kelamin" class="block text-xs font-medium text-muted-foreground">Jenis Kelamin</label>
           <select id="edit-jenis-kelamin" class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground" bind:value={editForm.jenis_kelamin}>
             <option value="">Belum diisi</option>
             <option value="L">Laki-laki</option>
             <option value="P">Perempuan</option>
           </select>
         </div>
-        <div>
-          <label for="edit-type" class="mb-1 block text-xs font-medium text-muted-foreground">Status Kepegawaian</label>
+        <div class="space-y-1.5">
+          <label for="edit-type" class="block text-xs font-medium text-muted-foreground">Status Kepegawaian</label>
           <select id="edit-type" class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground" bind:value={editForm.employment_type}>
             <option value="pns">PNS</option>
             <option value="pppk">PPPK</option>

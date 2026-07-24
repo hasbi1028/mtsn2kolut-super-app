@@ -15,50 +15,50 @@
   </Card.Header>
   <Card.Content>
     {#if form?.tambahSuccess}
-      <div class="mb-3 rounded-xl border border-success/20 bg-success/10 px-5 py-4 text-sm text-foreground">
+      <div class="mb-4 rounded-lg border border-success/20 bg-success/10 px-4 py-3 text-sm text-foreground">
         {form.tambahSuccess}
       </div>
     {/if}
     {#if form?.tambahError}
-      <div class="mb-3 rounded-xl border border-destructive/20 bg-destructive/10 px-5 py-4 text-sm text-foreground">
+      <div class="mb-4 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-foreground">
         {form.tambahError}
       </div>
     {/if}
 
     <form method="POST" action="?/tambah">
-      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div>
-          <label for="f-nip" class="mb-1 block text-xs font-medium text-muted-foreground">NIP</label>
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="space-y-1.5">
+          <label for="f-nip" class="block text-xs font-medium text-muted-foreground">NIP</label>
           <Input id="f-nip" name="nip" placeholder="Opsional untuk honorer" />
         </div>
-        <div>
-          <label for="f-nama" class="mb-1 block text-xs font-medium text-muted-foreground">Nama <span class="text-destructive">*</span></label>
+        <div class="space-y-1.5">
+          <label for="f-nama" class="block text-xs font-medium text-muted-foreground">Nama <span class="text-destructive">*</span></label>
           <Input id="f-nama" name="nama" placeholder="Masukkan nama lengkap pegawai" required />
         </div>
-        <div>
-          <label for="f-unit" class="mb-1 block text-xs font-medium text-muted-foreground">Unit Kerja</label>
+        <div class="space-y-1.5">
+          <label for="f-unit" class="block text-xs font-medium text-muted-foreground">Unit Kerja</label>
           <Input id="f-unit" name="unit_kerja" placeholder="Contoh: Tata Usaha atau Kurikulum" />
         </div>
 
-        <div>
-          <label for="f-tempat-lahir" class="mb-1 block text-xs font-medium text-muted-foreground">Tempat Lahir</label>
+        <div class="space-y-1.5">
+          <label for="f-tempat-lahir" class="block text-xs font-medium text-muted-foreground">Tempat Lahir</label>
           <Input id="f-tempat-lahir" name="tempat_lahir" placeholder="Contoh: Olo-oloho" />
         </div>
-        <div>
-          <label for="f-tanggal-lahir" class="mb-1 block text-xs font-medium text-muted-foreground">Tanggal Lahir</label>
+        <div class="space-y-1.5">
+          <label for="f-tanggal-lahir" class="block text-xs font-medium text-muted-foreground">Tanggal Lahir</label>
           <Input id="f-tanggal-lahir" name="tanggal_lahir" type="date" />
-          <p class="mt-1 text-[11px] text-muted-foreground">Dipakai untuk membuat nomor internal pegawai otomatis.</p>
+          <p class="text-[11px] text-muted-foreground">Dipakai untuk membuat nomor internal pegawai otomatis.</p>
         </div>
-        <div>
-          <label for="f-jenis-kelamin" class="mb-1 block text-xs font-medium text-muted-foreground">Jenis Kelamin</label>
+        <div class="space-y-1.5">
+          <label for="f-jenis-kelamin" class="block text-xs font-medium text-muted-foreground">Jenis Kelamin</label>
           <select id="f-jenis-kelamin" name="jenis_kelamin" class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground">
             <option value="">Belum diisi</option>
             <option value="L">Laki-laki</option>
             <option value="P">Perempuan</option>
           </select>
         </div>
-        <div>
-          <label for="f-employment-type" class="mb-1 block text-xs font-medium text-muted-foreground">Status Kepegawaian <span class="text-destructive">*</span></label>
+        <div class="space-y-1.5">
+          <label for="f-employment-type" class="block text-xs font-medium text-muted-foreground">Status Kepegawaian <span class="text-destructive">*</span></label>
           <select id="f-employment-type" name="employment_type" class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground"
             onchange={(e) => { pusakaEligible = (e.target as HTMLSelectElement).value === 'pns' || (e.target as HTMLSelectElement).value === 'pppk'; }}>
             <option value="">Pilih status</option>
@@ -70,27 +70,27 @@
         </div>
       </div>
 
-      <div class="mt-5 rounded-lg border border-border bg-card px-4 py-3">
+      <div class="mt-5 rounded-lg border border-border bg-card p-4">
         <div class="space-y-1">
           <p class="text-sm font-semibold text-foreground">Integrasi PUSAKA</p>
           <p class="text-xs text-muted-foreground">Opsional saat tambah pegawai. Bisa diisi sekarang atau dilengkapi nanti dari halaman PUSAKA.</p>
         </div>
 
         {#if pusakaEligible}
-          <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label for="f-user" class="mb-1 block text-xs font-medium text-muted-foreground">Username PUSAKA</label>
+          <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="space-y-1.5">
+              <label for="f-user" class="block text-xs font-medium text-muted-foreground">Username PUSAKA</label>
               <Input id="f-user" name="pusaka_username" placeholder="Isi jika akun PUSAKA sudah tersedia" />
             </div>
-            <div>
-              <label for="f-pass" class="mb-1 block text-xs font-medium text-muted-foreground">Password PUSAKA</label>
+            <div class="space-y-1.5">
+              <label for="f-pass" class="block text-xs font-medium text-muted-foreground">Password PUSAKA</label>
               <PasswordInput id="f-pass" name="pusaka_password" placeholder="Isi bersama username PUSAKA" />
             </div>
           </div>
         {:else}
-          <div class="mt-3 text-sm text-muted-foreground">
+          <p class="mt-3 text-sm text-muted-foreground">
             Pegawai dengan status ini tidak otomatis eligible untuk integrasi PUSAKA. Simpan sebagai pegawai umum saja.
-          </div>
+          </p>
         {/if}
       </div>
 
