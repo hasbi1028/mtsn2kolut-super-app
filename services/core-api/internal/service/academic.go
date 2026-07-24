@@ -193,3 +193,81 @@ func (s *SemesterService) Create(ctx context.Context, params SemesterCreateParam
 func (s *SemesterService) Delete(ctx context.Context, id string) error {
 	return s.q.DeleteSemester(ctx, pgUUID(id))
 }
+
+// ─── SchoolClass (Rombel) ────────────────────────────────────────
+
+type SchoolClass struct {
+	ID               string `json:"id"`
+	Code             string `json:"code"`
+	Name             string `json:"name"`
+	Level            string `json:"level"`
+	IsActive         bool   `json:"is_active"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
+	AcademicYearID   string `json:"academic_year_id"`
+	AcademicYearName string `json:"academic_year_name"`
+}
+
+type SchoolClassCreateParams struct {
+	AcademicYearID string
+	Code           string
+	Name           string
+	Level          string
+	IsActive       bool
+}
+
+func rowToSchoolClass(row db.ListSchoolClassesRow) SchoolClass {
+	return SchoolClass{
+		ID:               pgUUIDString(row.ID),
+		Code:             row.Code,
+		Name:             row.Name,
+		Level:            row.Level,
+		IsActive:         row.IsActive,
+		CreatedAt:        row.CreatedAt.Time.Format(time.RFC3339),
+		UpdatedAt:        row.UpdatedAt.Time.Format(time.RFC3339),
+		AcademicYearID:   pgUUIDString(row.AcademicYearID),
+		AcademicYearName: row.AcademicYearName,
+	}
+}
+
+func (s *SemesterService) ListSchoolClasses(ctx context.Context) ([]SchoolClass, error) {
+	rows, err := s.q.ListSchoolClasses(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list school classes: %w", err)
+	}
+	result := make([]SchoolClass, len(rows))
+	for i, row := range rows {
+		result[i] = rowToSchoolClass(row)
+	}
+	return result, nil
+}
+
+func (s *SemesterService) CreateSchoolClass(ctx context.Context, params SchoolClassCreateParams) (*SchoolClass, error) {
+	arg := db.CreateSchoolClassParams{
+		AcademicYearID: pgUUID(params.AcademicYearID),
+		Code:           params.Code,
+		Name:           params.Name,
+		Level:          params.Level,
+		IsActive:       params.IsActive,
+	}
+	_, err := s.q.CreateSchoolClass(ctx, arg)
+	if err != nil {
+		return nil, fmt.Errorf("create school class: %w", err)
+	}
+	// Read back via list
+	rows, err := s.q.ListSchoolClasses(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list after create: %w", err)
+	}
+	for _, row := range rows {
+		if row.AcademicYearID == arg.AcademicYearID && row.Code == arg.Code {
+			result := rowToSchoolClass(row)
+			return &result, nil
+		}
+	}
+	return nil, fmt.Errorf("school class created but not found")
+}
+
+func (s *SemesterService) DeleteSchoolClass(ctx context.Context, id string) error {
+	return s.q.DeleteSchoolClass(ctx, pgUUID(id))
+}

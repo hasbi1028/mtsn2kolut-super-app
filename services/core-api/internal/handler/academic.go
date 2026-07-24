@@ -107,3 +107,60 @@ func (h *AcademicHandler) DeleteSemester(w http.ResponseWriter, r *http.Request)
 	}
 	api.NoContent(w)
 }
+
+// ─── SchoolClass (Rombel) ────────────────────────────────────────
+
+// GET /api/academic/rombels
+func (h *AcademicHandler) ListSchoolClasses(w http.ResponseWriter, r *http.Request) {
+	classes, err := h.semesterSvc.ListSchoolClasses(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, classes)
+}
+
+// POST /api/academic/rombels
+func (h *AcademicHandler) CreateSchoolClass(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		AcademicYearID string `json:"academic_year_id"`
+		Code           string `json:"code"`
+		Name           string `json:"name"`
+		Level          string `json:"level"`
+		IsActive       bool   `json:"is_active"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "format data tidak valid")
+		return
+	}
+	if body.Code == "" || body.Name == "" || body.Level == "" {
+		api.BadRequest(w, "code, name, dan level wajib diisi")
+		return
+	}
+	class, err := h.semesterSvc.CreateSchoolClass(r.Context(), service.SchoolClassCreateParams{
+		AcademicYearID: body.AcademicYearID,
+		Code:           body.Code,
+		Name:           body.Name,
+		Level:          body.Level,
+		IsActive:       body.IsActive,
+	})
+	if err != nil {
+		writeDomainOrInternal(w, err, "gagal membuat rombel")
+		return
+	}
+	api.Created(w, class)
+}
+
+// DELETE /api/academic/rombels/{id}
+func (h *AcademicHandler) DeleteSchoolClass(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		api.BadRequest(w, "id rombel wajib diisi")
+		return
+	}
+	if err := h.semesterSvc.DeleteSchoolClass(r.Context(), id); err != nil {
+		writeDomainOrInternal(w, err, "gagal menghapus rombel")
+		return
+	}
+	api.NoContent(w)
+}

@@ -238,6 +238,9 @@ func main() {
 			r.Post("/api/academic/semesters", academicH.CreateSemester)
 			r.Post("/api/academic/semesters/{id}/activate", academicH.ActivateSemester)
 			r.Delete("/api/academic/semesters/{id}", academicH.DeleteSemester)
+			r.Get("/api/academic/rombels", academicH.ListSchoolClasses)
+			r.Post("/api/academic/rombels", academicH.CreateSchoolClass)
+			r.Delete("/api/academic/rombels/{id}", academicH.DeleteSchoolClass)
 		})
 
 		// Jobs / Attendance / Schedules / Settings — admin-only; Users/RBAC pilot use dynamic permissions.
