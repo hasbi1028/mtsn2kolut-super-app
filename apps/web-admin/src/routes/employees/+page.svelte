@@ -42,23 +42,23 @@
     </div>
   {/if}
 
-  <div class="grid gap-3 md:grid-cols-3">
-    <div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3 flex flex-col gap-1">
-      <p class="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Pegawai</p>
-      <p class="text-2xl font-black text-foreground">{employees.length}</p>
-      <p class="text-xs text-muted-foreground">seluruh profil pegawai yang tercatat</p>
+  <div class="grid gap-4 md:grid-cols-3">
+    <div class="rounded-xl border border-base-300 bg-base-100 px-5 py-4 flex flex-col gap-1.5">
+      <p class="my-0 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Pegawai</p>
+      <p class="my-0 text-2xl font-black text-foreground">{employees.length}</p>
+      <p class="my-0 text-xs text-muted-foreground">seluruh profil pegawai yang tercatat</p>
     </div>
-    <div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3 flex flex-col gap-1">
-      <p class="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Pegawai Aktif</p>
-      <p class="text-2xl font-black text-foreground">{employees.filter((item) => item.is_active).length}</p>
-      <p class="text-xs text-muted-foreground">siap dipakai untuk akun, akademik, dan operasional</p>
+    <div class="rounded-xl border border-base-300 bg-base-100 px-5 py-4 flex flex-col gap-1.5">
+      <p class="my-0 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Pegawai Aktif</p>
+      <p class="my-0 text-2xl font-black text-foreground">{employees.filter((item) => item.is_active).length}</p>
+      <p class="my-0 text-xs text-muted-foreground">siap dipakai untuk akun, akademik, dan operasional</p>
     </div>
-    <div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3 flex flex-col gap-1">
-      <p class="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Eligible PUSAKA</p>
-      <p class="text-2xl font-black text-foreground">
+    <div class="rounded-xl border border-base-300 bg-base-100 px-5 py-4 flex flex-col gap-1.5">
+      <p class="my-0 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Eligible PUSAKA</p>
+      <p class="my-0 text-2xl font-black text-foreground">
         {employees.filter((item) => item.employment_type === 'pns' || item.employment_type === 'pppk').length}
       </p>
-      <p class="text-xs text-muted-foreground">subset yang dapat dikelola di area PUSAKA</p>
+      <p class="my-0 text-xs text-muted-foreground">subset yang dapat dikelola di area PUSAKA</p>
     </div>
   </div>
 
