@@ -113,13 +113,13 @@
 	const currentAvatarInitials = $derived(accountInitials(account));
 	const selectedAvatarLabel = $derived(avatarFile ? `${avatarFile.name} (${formatAvatarFileSize(avatarFile.size)})` : '');
 
-	const infoPanelClass = 'rounded-lg border border-base-300 bg-base-100/70 p-4';
-	const compactPanelClass = 'rounded-lg border border-base-300 bg-base-200/20 px-4 py-3 text-sm text-base-content/70';
-	const emptyPanelClass = 'rounded-lg border border-dashed border-base-300 bg-base-200/20 px-4 py-4 text-sm text-base-content/70';
-	const labelClass = 'text-xs font-medium uppercase tracking-[0.16em] text-base-content/70';
-	const valueClass = 'mt-2 text-sm font-semibold text-base-content';
-	const noteClass = 'mt-2 rounded-md bg-base-200/50 px-3 py-2 text-xs text-base-content/70';
-	const chevronClass = 'mx-2 text-base-content/70/50';
+	const infoPanelClass = 'rounded-lg border border-border bg-card p-4';
+	const compactPanelClass = 'rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground';
+	const emptyPanelClass = 'rounded-lg border border-dashed border-border bg-muted/30 px-4 py-4 text-sm text-muted-foreground';
+	const labelClass = 'text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground';
+	const valueClass = 'mt-2 text-sm font-semibold text-foreground';
+	const noteClass = 'mt-2 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground';
+	const chevronClass = 'mx-2 text-muted-foreground/50';
 
 	function applyOverview(overview: AccountOverview) {
 		account = overview.account;
@@ -582,8 +582,8 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 		<div>
-			<h1 class="text-2xl font-semibold text-base-content">Akun Saya</h1>
-			<p class="mt-1 text-sm text-base-content/70">Identitas login, password, sesi perangkat, dan preferensi pribadi.</p>
+			<h1 class="text-2xl font-black text-foreground">Akun Saya</h1>
+			<p class="mt-1 text-sm text-muted-foreground">Identitas login, password, sesi perangkat, dan preferensi pribadi.</p>
 		</div>
 		<Button variant="outline" onclick={() => void refreshOverview(true)} disabled={refreshLoading}>
 			<RefreshCcwIcon class={`size-4 ${refreshLoading ? 'animate-spin' : ''}`} />
@@ -595,7 +595,7 @@
 		{#snippet pending()}
 			<div class="space-y-4">
 				<Card.Root>
-					<Card.Header class="pb-3">
+					<Card.Header class="px-5 pt-4 pb-3">
 						<Skeleton class="h-5 w-32" />
 						<Skeleton class="h-4 w-72" />
 					</Card.Header>
@@ -611,7 +611,7 @@
 					</Card.Content>
 				</Card.Root>
 				<Card.Root>
-					<Card.Header class="pb-3">
+					<Card.Header class="px-5 pt-4 pb-3">
 						<Skeleton class="h-5 w-40" />
 						<Skeleton class="h-4 w-80" />
 					</Card.Header>
@@ -634,7 +634,7 @@
 			{#if requiresPasswordChange}
 			<div class="mx-auto max-w-3xl space-y-6">
 				<Card.Root class="border-warning/30 bg-warning/10">
-					<Card.Header class="pb-3">
+					<Card.Header class="px-5 pt-4 pb-3">
 						<Card.Title class="text-base">Ganti Password Pertama</Card.Title>
 						<Card.Description>Akun dengan password sementara hanya dapat membuka halaman ini dan logout sampai password diganti.</Card.Description>
 					</Card.Header>
@@ -654,7 +654,7 @@
 				</Card.Root>
 
 				<Card.Root>
-					<Card.Header class="pb-3">
+					<Card.Header class="px-5 pt-4 pb-3">
 						<Card.Title class="text-base">Ubah Password</Card.Title>
 						<Card.Description>Gunakan password baru minimal 8 karakter. Setelah tersimpan, login ulang untuk membuka portal.</Card.Description>
 					</Card.Header>
@@ -681,7 +681,7 @@
 				</Card.Root>
 
 				<Card.Root>
-					<Card.Header class="pb-3">
+					<Card.Header class="px-5 pt-4 pb-3">
 						<Card.Title class="text-base">Logout</Card.Title>
 						<Card.Description>Keluar dari sesi saat ini jika perlu bantuan operator sebelum mengganti password.</Card.Description>
 					</Card.Header>
@@ -701,7 +701,7 @@
 			<div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
 				<div class="space-y-6">
 					<Card.Root>
-						<Card.Header class="pb-3">
+						<Card.Header class="px-5 pt-4 pb-3">
 							<Card.Title class="text-base">Identitas Login</Card.Title>
 							<Card.Description>Data resmi tetap dikelola oleh modul master terkait.</Card.Description>
 						</Card.Header>
@@ -747,7 +747,7 @@
 					</Card.Root>
 
 					<Card.Root>
-						<Card.Header class="pb-3">
+						<Card.Header class="px-5 pt-4 pb-3">
 							<Card.Title class="text-base">Permintaan Perubahan Data Resmi</Card.Title>
 							<Card.Description>Data resmi tertentu dikoreksi melalui persetujuan admin.</Card.Description>
 						</Card.Header>
@@ -758,7 +758,7 @@
 										<label for="account-change-field" class="mb-1.5 block text-sm font-medium">Field Resmi</label>
 										<select
 											id="account-change-field"
-											class="h-10 w-full rounded-md border border-base-300 bg-base-200 px-3 text-sm text-base-content"
+											class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 											bind:value={changeRequestForm.field_key}
 										>
 											{#each officialChangeFields as field (field.field_key)}
@@ -845,7 +845,7 @@
 					</Card.Root>
 
 					<Card.Root>
-						<Card.Header class="pb-3">
+						<Card.Header class="px-5 pt-4 pb-3">
 							<div class="flex items-start justify-between gap-3">
 								<div>
 									<Card.Title class="flex items-center gap-2 text-base">
@@ -888,7 +888,7 @@
 					</Card.Root>
 
 					<Card.Root>
-						<Card.Header class="pb-3">
+						<Card.Header class="px-5 pt-4 pb-3">
 							<Card.Title class="text-base">Kontak Pribadi</Card.Title>
 							<Card.Description>Kontak profil tertaut yang aman diperbarui sendiri.</Card.Description>
 						</Card.Header>
@@ -936,7 +936,7 @@
 					</Card.Root>
 
 					<Card.Root>
-						<Card.Header class="pb-3">
+						<Card.Header class="px-5 pt-4 pb-3">
 							<Card.Title class="text-base">Ubah Password</Card.Title>
 							<Card.Description>Gunakan password baru minimal 8 karakter.</Card.Description>
 						</Card.Header>
@@ -963,7 +963,7 @@
 					</Card.Root>
 
 					<Card.Root>
-						<Card.Header class="pb-3">
+						<Card.Header class="px-5 pt-4 pb-3">
 							<Card.Title class="text-base">Sesi Aktif</Card.Title>
 							<Card.Description>Daftar perangkat yang masih memiliki sesi login aktif.</Card.Description>
 						</Card.Header>
@@ -1039,7 +1039,7 @@
 
 				<div class="space-y-6">
 					<Card.Root>
-						<Card.Header class="pb-3">
+						<Card.Header class="px-5 pt-4 pb-3">
 							<Card.Title class="text-base">Foto Profil</Card.Title>
 							<Card.Description>JPG, PNG, atau WebP maksimal 2 MB.</Card.Description>
 						</Card.Header>
@@ -1099,7 +1099,7 @@
 					</Card.Root>
 
 					<Card.Root>
-						<Card.Header class="pb-3">
+						<Card.Header class="px-5 pt-4 pb-3">
 							<Card.Title class="text-base">Preferensi Tampilan</Card.Title>
 							<Card.Description>Tema aplikasi dan personalisasi sidebar tersimpan di browser dan akun.</Card.Description>
 						</Card.Header>
@@ -1127,7 +1127,7 @@
 					</Card.Root>
 
 					<Card.Root>
-						<Card.Header class="pb-3">
+						<Card.Header class="px-5 pt-4 pb-3">
 							<Card.Title class="text-base">Keluar dari Semua Perangkat</Card.Title>
 							<Card.Description>Gunakan saat akun perlu dikunci ulang dari seluruh perangkat.</Card.Description>
 						</Card.Header>
