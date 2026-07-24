@@ -11,7 +11,6 @@
     if (!browser) return;
     const el = document.getElementById('sidebarOffcanvas');
     if (!el) return;
-    // Use Bootstrap 5 Offcanvas API if available, otherwise manually remove show class
     const w = window as any;
     if (w.bootstrap?.Offcanvas) {
       w.bootstrap.Offcanvas.getInstance(el)?.hide();
@@ -46,6 +45,13 @@
       title: 'PEGAWAI',
       items: [
         { label: 'Daftar Pegawai', icon: 'bi-person-badge', route: '/employees' }
+      ]
+    },
+    {
+      title: 'PERPUSTAKAAN',
+      items: [
+        { label: 'Daftar Buku', icon: 'bi-book', route: '/library' },
+        { label: 'Peminjaman', icon: 'bi-arrow-left-right', route: '/library/loans' }
       ]
     },
     {

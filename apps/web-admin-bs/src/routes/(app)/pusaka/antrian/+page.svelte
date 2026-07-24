@@ -180,7 +180,6 @@
               <thead class="table-light">
                 <tr>
                   <th>#</th>
-                  <th>Pegawai (NIP)</th>
                   <th>Tipe</th>
                   <th>Status</th>
                   <th>Waktu</th>
@@ -191,21 +190,13 @@
                 {#each jobs as job, i}
                   <tr>
                     <td class="text-muted">{i + 1}</td>
+                    <td><span class="badge bg-light text-dark">{job.run_type}</span></td>
                     <td>
-                      {#if job.nama}
-                        <span class="fw-semibold">{job.nama}</span>
-                        {#if job.nip}
-                          <small class="text-muted d-block">{job.nip}</small>
-                        {/if}
-                      {:else}
-                        —
-                      {/if}
+                      <span class="badge {statusBadge(job.status)}">{job.status}</span>
                       {#if (job.status === 'failed' || job.status === 'queued') && job.attempts != null}
                         <small class="text-muted d-block">Percobaan {job.attempts}/{job.max_attempts || 3}</small>
                       {/if}
                     </td>
-                    <td><span class="badge bg-light text-dark">{job.run_type}</span></td>
-                    <td><span class="badge {statusBadge(job.status)}">{job.status}</span></td>
                     <td class="text-muted">{formatDate(job.created_at)}</td>
                     <td>
                       {#if job.status === 'queued' || job.status === 'running'}

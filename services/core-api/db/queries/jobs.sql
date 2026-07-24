@@ -1,5 +1,5 @@
 -- name: ListJobs :many
-SELECT j.id, j.employee_id, e.nama AS employee_nama, COALESCE(e.nip, '')::text AS employee_nip,
+SELECT j.id, j.employee_id, COALESCE(NULLIF(e.nama, ''), '(tanpa nama)')::text AS employee_nama, COALESCE(e.nip, '')::text AS employee_nip,
        j.run_type, j.status, j.error_message,
        j.claimed_by, j.claimed_at, j.attempts, j.max_attempts,
        j.next_retry_at, j.created_at, j.updated_at, j.not_before
@@ -9,7 +9,7 @@ ORDER BY j.created_at DESC
 LIMIT $1 OFFSET $2;
 
 -- name: ListJobsByStatus :many
-SELECT j.id, j.employee_id, e.nama AS employee_nama, COALESCE(e.nip, '')::text AS employee_nip,
+SELECT j.id, j.employee_id, COALESCE(NULLIF(e.nama, ''), '(tanpa nama)')::text AS employee_nama, COALESCE(e.nip, '')::text AS employee_nip,
        j.run_type, j.status, j.error_message,
        j.claimed_by, j.claimed_at, j.attempts, j.max_attempts,
        j.next_retry_at, j.created_at, j.updated_at, j.not_before
@@ -40,7 +40,13 @@ WITH candidate AS (
   JOIN pusaka_accounts pa ON pa.employee_id = j.employee_id
   WHERE (
       (j.status = 'queued' AND (j.not_before IS NULL OR j.not_before <= NOW()))
-      OR (j.status = 'failed' AND j.attempts < j.max_attempts AND j.next_retry_at <= NOW())
+      OR (j.status = 'failed' AND j.attempts < j.max_attempts AND j.next_retry_at <= NOW()
+          AND NOT EXISTS (
+            SELECT 1 FROM jobs newer
+            WHERE newer.employee_id = j.employee_id
+              AND newer.run_type = j.run_type
+              AND newer.status = 'queued'
+          ))
     )
     AND pa.is_enabled = TRUE
     AND pa.pusaka_username <> ''
