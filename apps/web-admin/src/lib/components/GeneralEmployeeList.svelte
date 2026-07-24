@@ -35,6 +35,7 @@
 
   let confirmId = $state<string | null>(null);
   let busyId = $state<string | null>(null);
+  let search = $state('');
   let filterEmploymentType = $state('');
   let filterUnitKerja = $state('');
   let showEditDialog = $state(false);
@@ -66,6 +67,14 @@
       : employees;
     if (filterUnitKerja) {
       scoped = scoped.filter((employee) => employee.unit_kerja === filterUnitKerja);
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      scoped = scoped.filter((e) =>
+        e.nama.toLowerCase().includes(q) ||
+        e.nip.toLowerCase().includes(q) ||
+        e.pegawai_uid.toLowerCase().includes(q)
+      );
     }
     return scoped;
   });
@@ -189,9 +198,14 @@
         <Card.Title class="text-base">Master Pegawai Sekolah</Card.Title>
         <Card.Description>Menampilkan seluruh pegawai sekolah. Operasional akun, jadwal, dan job PUSAKA dikelola dari menu PUSAKA.</Card.Description>
       </div>
-      <div class="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+      <div class="grid gap-3 sm:grid-cols-2 md:grid-cols-[1fr_1fr_1fr_auto]">
+        <div class="sm:col-span-2 md:col-span-1">
+          <p class="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Cari Pegawai</p>
+          <input type="text" bind:value={search} placeholder="🔍 Nama / NIP / ID..."
+            class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+        </div>
         <div>
-          <p class="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Filter Unit Kerja</p>
+          <p class="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Unit Kerja</p>
           <select bind:value={filterUnitKerja} class="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground">
             <option value="">Semua unit</option>
             {#each unitKerjaOptions as unit (unit)}
@@ -221,7 +235,83 @@
         <SuccessPanel title="Master Pegawai Diperbarui" message={success} compact />
       </div>
     {/if}
-    <div class="overflow-x-auto">
+
+    <!-- Mobile Cards -->
+    <div class="block md:hidden">
+      {#if filteredEmployees.length === 0}
+        <div class="p-4">
+          <EmptyStatePanel compact title="Tidak ada pegawai" description="Ubah filter atau tambah pegawai baru." />
+        </div>
+      {:else}
+        <div class="divide-y divide-border">
+          {#each filteredEmployees as e (e.id)}
+            <div class="px-5 py-4 space-y-2">
+              <!-- Nama + Status Aktif -->
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="font-medium text-foreground truncate">{employeeName(e)}</p>
+                  <p class="text-xs text-muted-foreground truncate">NIP {e.nip || 'belum diisi'}</p>
+                </div>
+                <div class="shrink-0">
+                  {#if e.is_active}
+                    <Badge variant="outline" class="text-[10px] border-primary/20 text-primary">Aktif</Badge>
+                  {:else}
+                    <Badge variant="secondary" class="text-[10px]">Nonaktif</Badge>
+                  {/if}
+                </div>
+              </div>
+              <!-- Info baris 2: Unit + Status Kepegawaian -->
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                {#if e.unit_kerja}<span>{e.unit_kerja}</span>{/if}
+                <Badge variant="outline" class="text-[10px]">{employmentLabel(e.employment_type)}</Badge>
+                {#if e.pusaka_eligible}
+                  {#if e.has_pusaka_account}
+                    {#if e.pusaka_is_enabled}
+                      <Badge variant="outline" class="text-[10px] border-primary/20 text-primary">PUSAKA aktif</Badge>
+                    {:else}
+                      <Badge variant="secondary" class="text-[10px]">PUSAKA nonaktif</Badge>
+                    {/if}
+                  {:else}
+                    <Badge variant="secondary" class="text-[10px]">Eligible PUSAKA</Badge>
+                  {/if}
+                {:else}
+                  <Badge variant="secondary" class="text-[10px]">Non PUSAKA</Badge>
+                {/if}
+              </div>
+              <!-- Info baris 3: Tempat/Tanggal Lahir + Jenis Kelamin -->
+              <div class="text-xs text-muted-foreground">
+                {e.tempat_lahir || '—'}, {formatBirthDate(e.tanggal_lahir)} · {genderLabel(e.jenis_kelamin)}
+              </div>
+              <!-- Action Buttons -->
+              <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                {#if e.pusaka_eligible}
+                  <a href={resolve('/pusaka/employees')}>
+                    <Button size="sm" variant="outline" class="text-[11px] px-2 h-7">PUSAKA</Button>
+                  </a>
+                {/if}
+                <Button size="sm" variant="outline" onclick={() => openEditDialog(e)} class="text-[11px] px-2 h-7">Edit</Button>
+                <form method="POST" action="?/nonaktifkan" class="inline">
+                  <input type="hidden" name="id" value={e.id} />
+                  <input type="hidden" name="is_active" value={String(e.is_active)} />
+                  <button type="submit" class="inline-flex items-center justify-center rounded-md h-7 px-2 text-[11px] font-medium border border-input bg-background text-foreground hover:bg-accent transition-colors">
+                    {e.is_active ? 'Nonaktifkan' : 'Aktifkan'}
+                  </button>
+                </form>
+                <form method="POST" action="?/hapus" class="inline">
+                  <input type="hidden" name="id" value={e.id} />
+                  <button type="submit" class="inline-flex items-center justify-center rounded-md h-7 px-2 text-[11px] font-medium text-destructive hover:bg-destructive/10 transition-colors">
+                    Hapus
+                  </button>
+                </form>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+
+    <!-- Desktop Table -->
+    <div class="hidden md:block overflow-x-auto">
     <Table.Root>
       <Table.Header>
         <Table.Row>

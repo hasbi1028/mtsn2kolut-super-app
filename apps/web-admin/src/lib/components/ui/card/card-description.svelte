@@ -10,6 +10,6 @@
 	}: HTMLAttributes<HTMLParagraphElement> & { children?: Snippet } = $props();
 </script>
 
-<p class={cn('text-sm text-on-surface/60', className)} {...restProps}>
+<p class={cn('text-sm text-muted-foreground', className)} {...restProps}>
 	{@render children?.()}
 </p>

@@ -10,6 +10,6 @@
 	}: HTMLAttributes<HTMLElement> & { children?: Snippet } = $props();
 </script>
 
-<caption class={cn('text-on-surface/60 mt-4 text-sm', className)} {...restProps}>
+<caption class={cn('text-muted-foreground mt-4 text-sm', className)} {...restProps}>
 	{@render children?.()}
 </caption>

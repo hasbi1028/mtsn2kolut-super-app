@@ -10,6 +10,6 @@
 	}: HTMLAttributes<HTMLHeadingElement> & { children?: Snippet } = $props();
 </script>
 
-<h3 class={cn('text-lg font-semibold tracking-tight text-on-surface', className)} {...restProps}>
+<h3 class={cn('text-lg font-semibold tracking-tight text-foreground', className)} {...restProps}>
 	{@render children?.()}
 </h3>
