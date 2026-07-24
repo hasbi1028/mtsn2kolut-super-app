@@ -1058,3 +1058,68 @@ DO UPDATE SET curriculum_allocation_id = EXCLUDED.curriculum_allocation_id,
               notes = EXCLUDED.notes,
               updated_at = NOW()
 RETURNING *;
+
+-- name: ListSemesters :many
+SELECT s.id, s.academic_year_id, ay.name AS academic_year_name,
+       s.name, s.label, s.start_date, s.end_date, s.is_active,
+       s.created_at, s.updated_at
+FROM semesters s
+JOIN academic_years ay ON ay.id = s.academic_year_id
+ORDER BY s.start_date DESC, s.name DESC;
+
+-- name: GetSemester :one
+SELECT s.id, s.academic_year_id, ay.name AS academic_year_name,
+       s.name, s.label, s.start_date, s.end_date, s.is_active,
+       s.created_at, s.updated_at
+FROM semesters s
+JOIN academic_years ay ON ay.id = s.academic_year_id
+WHERE s.id = $1;
+
+-- name: GetActiveSemester :one
+SELECT s.id, s.academic_year_id, ay.name AS academic_year_name,
+       s.name, s.label, s.start_date, s.end_date, s.is_active,
+       s.created_at, s.updated_at
+FROM semesters s
+JOIN academic_years ay ON ay.id = s.academic_year_id
+WHERE s.is_active = TRUE
+ORDER BY s.start_date DESC
+LIMIT 1;
+
+-- name: CreateSemester :one
+INSERT INTO semesters (id, academic_year_id, name, label, start_date, end_date, is_active)
+VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
+RETURNING *;
+
+-- name: CountSemesterLabelConflicts :one
+SELECT COUNT(*)::int
+FROM semesters
+WHERE LOWER(label) = LOWER(sqlc.arg(label));
+
+-- name: ActivateSemester :one
+UPDATE semesters
+SET is_active = TRUE,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING *;
+
+-- name: DeactivateSemesters :exec
+UPDATE semesters
+SET is_active = FALSE,
+    updated_at = NOW()
+WHERE is_active = TRUE;
+
+-- name: DeactivateSemesterAcademicYears :exec
+UPDATE academic_years
+SET is_active = FALSE,
+    updated_at = NOW()
+WHERE is_active = TRUE;
+
+-- name: ActivateSemesterAcademicYear :one
+UPDATE academic_years
+SET is_active = TRUE,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING *;
+
+-- name: DeleteSemester :exec
+DELETE FROM semesters WHERE id = $1;

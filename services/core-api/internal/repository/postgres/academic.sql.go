@@ -34,6 +34,54 @@ func (q *Queries) ActivateAcademicYear(ctx context.Context, id pgtype.UUID) (Aca
 	return i, err
 }
 
+const activateSemester = `-- name: ActivateSemester :one
+UPDATE semesters
+SET is_active = TRUE,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, academic_year_id, name, label, start_date, end_date, is_active, created_at, updated_at
+`
+
+func (q *Queries) ActivateSemester(ctx context.Context, id pgtype.UUID) (Semester, error) {
+	row := q.db.QueryRow(ctx, activateSemester, id)
+	var i Semester
+	err := row.Scan(
+		&i.ID,
+		&i.AcademicYearID,
+		&i.Name,
+		&i.Label,
+		&i.StartDate,
+		&i.EndDate,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const activateSemesterAcademicYear = `-- name: ActivateSemesterAcademicYear :one
+UPDATE academic_years
+SET is_active = TRUE,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, name, start_date, end_date, is_active, created_at, updated_at
+`
+
+func (q *Queries) ActivateSemesterAcademicYear(ctx context.Context, id pgtype.UUID) (AcademicYear, error) {
+	row := q.db.QueryRow(ctx, activateSemesterAcademicYear, id)
+	var i AcademicYear
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.StartDate,
+		&i.EndDate,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const countAcademicYearNameConflicts = `-- name: CountAcademicYearNameConflicts :one
 SELECT COUNT(*)::int
 FROM academic_years
@@ -56,6 +104,19 @@ WHERE class_id = $1
 
 func (q *Queries) CountActiveHomeroomAssignmentByClass(ctx context.Context, classID pgtype.UUID) (int32, error) {
 	row := q.db.QueryRow(ctx, countActiveHomeroomAssignmentByClass, classID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countSemesterLabelConflicts = `-- name: CountSemesterLabelConflicts :one
+SELECT COUNT(*)::int
+FROM semesters
+WHERE LOWER(label) = LOWER($1)
+`
+
+func (q *Queries) CountSemesterLabelConflicts(ctx context.Context, label string) (int32, error) {
+	row := q.db.QueryRow(ctx, countSemesterLabelConflicts, label)
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -175,6 +236,45 @@ func (q *Queries) CreateSchoolClass(ctx context.Context, arg CreateSchoolClassPa
 	return i, err
 }
 
+const createSemester = `-- name: CreateSemester :one
+INSERT INTO semesters (id, academic_year_id, name, label, start_date, end_date, is_active)
+VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
+RETURNING id, academic_year_id, name, label, start_date, end_date, is_active, created_at, updated_at
+`
+
+type CreateSemesterParams struct {
+	AcademicYearID pgtype.UUID `json:"academic_year_id"`
+	Name           string      `json:"name"`
+	Label          string      `json:"label"`
+	StartDate      pgtype.Date `json:"start_date"`
+	EndDate        pgtype.Date `json:"end_date"`
+	IsActive       bool        `json:"is_active"`
+}
+
+func (q *Queries) CreateSemester(ctx context.Context, arg CreateSemesterParams) (Semester, error) {
+	row := q.db.QueryRow(ctx, createSemester,
+		arg.AcademicYearID,
+		arg.Name,
+		arg.Label,
+		arg.StartDate,
+		arg.EndDate,
+		arg.IsActive,
+	)
+	var i Semester
+	err := row.Scan(
+		&i.ID,
+		&i.AcademicYearID,
+		&i.Name,
+		&i.Label,
+		&i.StartDate,
+		&i.EndDate,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createSubject = `-- name: CreateSubject :one
 INSERT INTO subjects (
     id,
@@ -272,6 +372,30 @@ func (q *Queries) DeactivateAcademicYears(ctx context.Context) error {
 	return err
 }
 
+const deactivateSemesterAcademicYears = `-- name: DeactivateSemesterAcademicYears :exec
+UPDATE academic_years
+SET is_active = FALSE,
+    updated_at = NOW()
+WHERE is_active = TRUE
+`
+
+func (q *Queries) DeactivateSemesterAcademicYears(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deactivateSemesterAcademicYears)
+	return err
+}
+
+const deactivateSemesters = `-- name: DeactivateSemesters :exec
+UPDATE semesters
+SET is_active = FALSE,
+    updated_at = NOW()
+WHERE is_active = TRUE
+`
+
+func (q *Queries) DeactivateSemesters(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deactivateSemesters)
+	return err
+}
+
 const deleteAcademicYear = `-- name: DeleteAcademicYear :exec
 DELETE FROM academic_years WHERE id = $1
 `
@@ -296,6 +420,15 @@ DELETE FROM school_classes WHERE id = $1
 
 func (q *Queries) DeleteSchoolClass(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteSchoolClass, id)
+	return err
+}
+
+const deleteSemester = `-- name: DeleteSemester :exec
+DELETE FROM semesters WHERE id = $1
+`
+
+func (q *Queries) DeleteSemester(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteSemester, id)
 	return err
 }
 
@@ -853,6 +986,48 @@ func (q *Queries) GetActiveCurriculumProfile(ctx context.Context) (CurriculumPro
 	return i, err
 }
 
+const getActiveSemester = `-- name: GetActiveSemester :one
+SELECT s.id, s.academic_year_id, ay.name AS academic_year_name,
+       s.name, s.label, s.start_date, s.end_date, s.is_active,
+       s.created_at, s.updated_at
+FROM semesters s
+JOIN academic_years ay ON ay.id = s.academic_year_id
+WHERE s.is_active = TRUE
+ORDER BY s.start_date DESC
+LIMIT 1
+`
+
+type GetActiveSemesterRow struct {
+	ID               pgtype.UUID        `json:"id"`
+	AcademicYearID   pgtype.UUID        `json:"academic_year_id"`
+	AcademicYearName string             `json:"academic_year_name"`
+	Name             string             `json:"name"`
+	Label            string             `json:"label"`
+	StartDate        pgtype.Date        `json:"start_date"`
+	EndDate          pgtype.Date        `json:"end_date"`
+	IsActive         bool               `json:"is_active"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetActiveSemester(ctx context.Context) (GetActiveSemesterRow, error) {
+	row := q.db.QueryRow(ctx, getActiveSemester)
+	var i GetActiveSemesterRow
+	err := row.Scan(
+		&i.ID,
+		&i.AcademicYearID,
+		&i.AcademicYearName,
+		&i.Name,
+		&i.Label,
+		&i.StartDate,
+		&i.EndDate,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getClassSubjectAssignment = `-- name: GetClassSubjectAssignment :one
 SELECT a.id, a.class_id, c.name AS class_name, c.code AS class_code,
        a.subject_id, s.name AS subject_name, s.code AS subject_code,
@@ -1022,6 +1197,46 @@ func (q *Queries) GetCurriculumSummaryByLevel(ctx context.Context, curriculumPro
 		return nil, err
 	}
 	return items, nil
+}
+
+const getSemester = `-- name: GetSemester :one
+SELECT s.id, s.academic_year_id, ay.name AS academic_year_name,
+       s.name, s.label, s.start_date, s.end_date, s.is_active,
+       s.created_at, s.updated_at
+FROM semesters s
+JOIN academic_years ay ON ay.id = s.academic_year_id
+WHERE s.id = $1
+`
+
+type GetSemesterRow struct {
+	ID               pgtype.UUID        `json:"id"`
+	AcademicYearID   pgtype.UUID        `json:"academic_year_id"`
+	AcademicYearName string             `json:"academic_year_name"`
+	Name             string             `json:"name"`
+	Label            string             `json:"label"`
+	StartDate        pgtype.Date        `json:"start_date"`
+	EndDate          pgtype.Date        `json:"end_date"`
+	IsActive         bool               `json:"is_active"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetSemester(ctx context.Context, id pgtype.UUID) (GetSemesterRow, error) {
+	row := q.db.QueryRow(ctx, getSemester, id)
+	var i GetSemesterRow
+	err := row.Scan(
+		&i.ID,
+		&i.AcademicYearID,
+		&i.AcademicYearName,
+		&i.Name,
+		&i.Label,
+		&i.StartDate,
+		&i.EndDate,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getSubject = `-- name: GetSubject :one
@@ -1664,6 +1879,59 @@ func (q *Queries) ListSchoolClasses(ctx context.Context) ([]ListSchoolClassesRow
 			&i.UpdatedAt,
 			&i.AcademicYearID,
 			&i.AcademicYearName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSemesters = `-- name: ListSemesters :many
+SELECT s.id, s.academic_year_id, ay.name AS academic_year_name,
+       s.name, s.label, s.start_date, s.end_date, s.is_active,
+       s.created_at, s.updated_at
+FROM semesters s
+JOIN academic_years ay ON ay.id = s.academic_year_id
+ORDER BY s.start_date DESC, s.name DESC
+`
+
+type ListSemestersRow struct {
+	ID               pgtype.UUID        `json:"id"`
+	AcademicYearID   pgtype.UUID        `json:"academic_year_id"`
+	AcademicYearName string             `json:"academic_year_name"`
+	Name             string             `json:"name"`
+	Label            string             `json:"label"`
+	StartDate        pgtype.Date        `json:"start_date"`
+	EndDate          pgtype.Date        `json:"end_date"`
+	IsActive         bool               `json:"is_active"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListSemesters(ctx context.Context) ([]ListSemestersRow, error) {
+	rows, err := q.db.Query(ctx, listSemesters)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSemestersRow{}
+	for rows.Next() {
+		var i ListSemestersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AcademicYearID,
+			&i.AcademicYearName,
+			&i.Name,
+			&i.Label,
+			&i.StartDate,
+			&i.EndDate,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

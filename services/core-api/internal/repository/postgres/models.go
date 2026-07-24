@@ -2325,6 +2325,18 @@ type SchoolRoom struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
+type Semester struct {
+	ID             pgtype.UUID        `json:"id"`
+	AcademicYearID pgtype.UUID        `json:"academic_year_id"`
+	Name           string             `json:"name"`
+	Label          string             `json:"label"`
+	StartDate      pgtype.Date        `json:"start_date"`
+	EndDate        pgtype.Date        `json:"end_date"`
+	IsActive       bool               `json:"is_active"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Student struct {
 	ID                   pgtype.UUID        `json:"id"`
 	Nis                  string             `json:"nis"`

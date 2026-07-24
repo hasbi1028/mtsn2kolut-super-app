@@ -68,6 +68,12 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		]
 	},
 	{
+		group: 'Akademik',
+		items: [
+			{ href: '/academic/semesters', label: 'Semester', icon: 'calendar', roles: ['admin'], permissions: ['academic.read'] }
+		]
+	},
+	{
 		group: 'Pengaturan',
 		items: [
 			{ href: '/settings/account', label: 'Akun Saya', icon: 'user', permissions: ['settings.account'], allowAuthenticatedFallback: true },

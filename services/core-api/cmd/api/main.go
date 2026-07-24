@@ -66,6 +66,7 @@ func main() {
 	notificationSvc := service.NewNotification(q)
 	rbacSvc := service.NewRBACWithPool(pool)
 	profileChangeRequestSvc := service.NewProfileChangeRequestWithPool(pool)
+	academicSvc := service.NewSemesterService(q, pool)
 	brandingH := handler.NewBranding(settSvc, getEnv("BRANDING_ASSET_DIR", "data/branding"))
 
 	if err := authSvc.SeedAdmin(mainCtx); err != nil {
@@ -103,6 +104,7 @@ func main() {
 	notificationH := handler.NewNotification(notificationSvc)
 	rbacH := handler.NewRBAC(rbacSvc)
 	profileChangeRequestH := handler.NewProfileChangeRequest(profileChangeRequestSvc)
+	academicH := handler.NewAcademicHandler(academicSvc)
 
 	jwtSecret := mustEnv("JWT_SECRET")
 	workerKey := mustEnv("WORKER_API_KEY")
@@ -225,6 +227,17 @@ func main() {
 			r.With(requirePusakaRead).Get("/api/pusaka/employees/{id}/schedules", empSchedH.List)
 			r.With(requirePusakaManage).Post("/api/pusaka/employees/{id}/schedules", empSchedH.Upsert)
 			r.With(requirePusakaManage).Delete("/api/pusaka/employees/{id}/schedules/{scheduleId}", empSchedH.Delete)
+		})
+
+		// Academic — master data semester
+		r.Group(func(r chi.Router) {
+			r.Use(mw.RequireAnyPermissionOrRole([]string{"academic.read", "academic.manage"}, "admin"))
+			r.Get("/api/academic/semesters", academicH.ListSemesters)
+			r.Get("/api/academic/semesters/active", academicH.GetActiveSemester)
+			r.Get("/api/academic/semesters/{id}", academicH.GetSemester)
+			r.Post("/api/academic/semesters", academicH.CreateSemester)
+			r.Post("/api/academic/semesters/{id}/activate", academicH.ActivateSemester)
+			r.Delete("/api/academic/semesters/{id}", academicH.DeleteSemester)
 		})
 
 		// Jobs / Attendance / Schedules / Settings — admin-only; Users/RBAC pilot use dynamic permissions.
