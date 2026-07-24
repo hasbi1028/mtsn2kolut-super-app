@@ -9,11 +9,11 @@
 </script>
 
 <Card.Root>
-  <Card.Header class="pb-3">
+  <Card.Header class="px-5 pt-4 pb-3">
     <Card.Title class="text-base">Tambah Pegawai</Card.Title>
     <Card.Description>Master data pegawai sekolah. Integrasi PUSAKA bersifat opsional dan hanya berlaku untuk pegawai PNS atau PPPK.</Card.Description>
   </Card.Header>
-  <Card.Content>
+  <Card.Content class="px-5 pb-5">
     {#if form?.tambahSuccess}
       <div class="mb-4 rounded-lg border border-success/20 bg-success/10 px-4 py-3 text-sm text-foreground">
         {form.tambahSuccess}

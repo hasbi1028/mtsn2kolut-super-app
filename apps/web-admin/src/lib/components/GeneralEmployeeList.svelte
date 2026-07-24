@@ -183,7 +183,7 @@
 </script>
 
 <Card.Root>
-  <Card.Header class="pb-3">
+  <Card.Header class="px-5 pt-4 pb-3">
     <div class="flex flex-col gap-4">
       <div>
         <Card.Title class="text-base">Master Pegawai Sekolah</Card.Title>
