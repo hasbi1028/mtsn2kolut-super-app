@@ -3,7 +3,6 @@
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
-	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { toast } from '$lib/components/ui/sonner';
@@ -157,18 +156,18 @@
 		</div>
 		<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_auto_auto_auto] xl:items-end">
 			<div class="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-				<Input type="date" bind:value={startDate} class="h-10 min-w-0 bg-base-100" />
-				<span class="text-center text-sm text-base-content/70">s/d</span>
-				<Input type="date" bind:value={endDate} class="h-10 min-w-0 bg-base-100" />
+				<input type="date" bind:value={startDate} class="h-9 min-w-0 rounded-lg border border-input bg-background px-2 text-xs text-foreground" />
+				<span class="text-center text-xs text-base-content/70">s/d</span>
+				<input type="date" bind:value={endDate} class="h-9 min-w-0 rounded-lg border border-input bg-background px-2 text-xs text-foreground" />
 			</div>
 			<div class="flex items-center gap-1.5">
-				<button class="btn btn-ghost btn-xs h-7 px-2 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(1); startDate = d.toISOString().slice(0,10); const e = new Date(t); e.setMonth(e.getMonth()+1,0); endDate = e.toISOString().slice(0,10); void load(); }}>
+				<button class="inline-flex items-center justify-center rounded-lg h-7 px-2.5 text-[11px] font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(1); startDate = d.toISOString().slice(0,10); const e = new Date(t); e.setMonth(e.getMonth()+1,0); endDate = e.toISOString().slice(0,10); void load(); }}>
 					Bulan Ini
 				</button>
-				<button class="btn btn-ghost btn-xs h-7 px-2 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(d.getDate() - 29); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
+				<button class="inline-flex items-center justify-center rounded-lg h-7 px-2.5 text-[11px] font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors" onclick={() => { const t = todayWita(); const d = new Date(t); d.setDate(d.getDate() - 29); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
 					30 Hari
 				</button>
-				<button class="btn btn-ghost btn-xs h-7 px-2 text-[11px] font-semibold text-primary hover:bg-primary/10" onclick={() => { const t = todayWita(); const d = new Date(t); d.setMonth(d.getMonth()-2, 1); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
+				<button class="inline-flex items-center justify-center rounded-lg h-7 px-2.5 text-[11px] font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors" onclick={() => { const t = todayWita(); const d = new Date(t); d.setMonth(d.getMonth()-2, 1); startDate = d.toISOString().slice(0,10); endDate = t; void load(); }}>
 					3 Bulan
 				</button>
 			</div>

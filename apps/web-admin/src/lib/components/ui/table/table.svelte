@@ -11,7 +11,7 @@
 </script>
 
 <div class="relative w-full overflow-auto">
-	<table class={cn('table table-zebra w-full', className)} {...restProps}>
+	<table class={cn('w-full text-sm', className)} {...restProps}>
 		{@render children?.()}
 	</table>
 </div>

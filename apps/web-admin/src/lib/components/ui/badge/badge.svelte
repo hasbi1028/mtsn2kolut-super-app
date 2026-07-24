@@ -17,13 +17,17 @@
 	} = $props();
 
 	const variantClasses: Record<Variant, string> = {
-		default: 'badge',
-		secondary: 'badge badge-soft',
-		destructive: 'badge badge-error',
-		outline: 'badge badge-outline'
+		default: 'bg-primary/10 text-primary border border-primary/20',
+		secondary: 'bg-secondary/30 text-secondary-foreground border border-secondary/30',
+		destructive: 'bg-destructive/10 text-destructive border border-destructive/20',
+		outline: 'bg-transparent text-foreground border border-border'
 	};
 </script>
 
-<div class={cn('badge', variantClasses[variant], className)} {...restProps}>
+<span class={cn(
+	'inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold leading-none uppercase tracking-wider whitespace-nowrap',
+	variantClasses[variant],
+	className
+)} {...restProps}>
 	{@render children?.()}
-</div>
+</span>
