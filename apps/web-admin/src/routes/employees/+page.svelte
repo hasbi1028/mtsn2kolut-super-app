@@ -1,4 +1,6 @@
 <script lang="ts">
+  import * as Dialog from '$lib/components/ui/dialog';
+  import { Button } from '$lib/components/ui/button';
   import EmployeeForm from '$lib/components/EmployeeForm.svelte';
   import GeneralEmployeeList from '$lib/components/GeneralEmployeeList.svelte';
 
@@ -21,26 +23,30 @@
   };
 
   let employees = $derived(data.employees as Employee[]);
+
+  let showTambahDialog = $state(false);
+
+  // Auto-tutup dialog setelah sukses tambah pegawai
+  $effect(() => {
+    if (form?.tambahSuccess) {
+      showTambahDialog = false;
+    }
+  });
 </script>
 
 <svelte:head><title>Pegawai — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
-  <div>
-    <h1 class="text-2xl font-black text-base-content">Master Pegawai</h1>
-    <p class="mt-1 text-sm text-base-content/70">Data seluruh pegawai sekolah. Integrasi akun, jadwal, dan job PUSAKA dikelola terpisah dari area ini.</p>
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-black text-base-content">Master Pegawai</h1>
+      <p class="mt-1 text-sm text-base-content/70">Data seluruh pegawai sekolah. Integrasi akun, jadwal, dan job PUSAKA dikelola terpisah dari area ini.</p>
+    </div>
+    <Button onclick={() => showTambahDialog = true} class="shrink-0">
+      + Tambah Pegawai
+    </Button>
   </div>
 
-  {#if form?.tambahSuccess}
-    <div class="rounded-xl border border-success/20 bg-success/10 px-5 py-4 text-sm text-foreground">
-      {form.tambahSuccess}
-    </div>
-  {/if}
-  {#if form?.tambahError}
-    <div class="rounded-xl border border-destructive/20 bg-destructive/10 px-5 py-4 text-sm text-foreground">
-      {form.tambahError}
-    </div>
-  {/if}
   {#if form?.hapusSuccess}
     <div class="rounded-xl border border-success/20 bg-success/10 px-5 py-4 text-sm text-foreground">
       {form.hapusSuccess}
@@ -82,6 +88,17 @@
     </div>
   </div>
 
-  <EmployeeForm {form} />
   <GeneralEmployeeList {employees} {form} />
 </div>
+
+<Dialog.Root bind:open={showTambahDialog}>
+  <Dialog.Content>
+    <div class="space-y-4">
+      <div>
+        <h2 class="text-lg font-semibold text-foreground">Tambah Pegawai</h2>
+        <p class="text-sm text-muted-foreground">Master data pegawai sekolah. Integrasi PUSAKA bersifat opsional dan hanya berlaku untuk pegawai PNS atau PPPK.</p>
+      </div>
+      <EmployeeForm {form} onclose={() => showTambahDialog = false} />
+    </div>
+  </Dialog.Content>
+</Dialog.Root>
