@@ -31,6 +31,15 @@
 	let loadedFilterKey = $state('');
 	let jobsRequestId = 0;
 
+	// Job counts per status for the stat bar
+	const jobCounts = $derived({
+		queued:    jobs.filter(j => j.status === 'queued').length,
+		running:   jobs.filter(j => j.status === 'running').length,
+		success:   jobs.filter(j => j.status === 'success').length,
+		failed:    jobs.filter(j => j.status === 'failed').length,
+		cancelled: jobs.filter(j => j.status === 'cancelled').length,
+	});
+
 	const statusOptions = [
 		{ value: '', label: 'Semua Status' },
 		{ value: 'queued',    label: 'Antri' },
@@ -177,7 +186,7 @@
 				<select
 					bind:value={filterStatus}
 					onchange={load}
-					class="select select-bordered h-10"
+					class="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 				>
 					{#each statusOptions as o (o.value)}
 						<option value={o.value}>{o.label}</option>
@@ -186,7 +195,7 @@
 				<select
 					bind:value={filterType}
 					onchange={load}
-					class="select select-bordered h-10"
+					class="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 				>
 					{#each typeOptions as o (o.value)}
 						<option value={o.value}>{o.label}</option>
@@ -198,6 +207,42 @@
 			</div>
 		</Card.Content>
 	</Card.Root>
+
+	<!-- Stat bar: quick glance at job counts per status -->
+	{#if jobs.length > 0}
+		<div class="flex flex-wrap items-center gap-2">
+			{#if jobCounts.queued > 0}
+				<span class="inline-flex items-center gap-1.5 rounded-lg border border-base-300 bg-base-100 px-2.5 py-1 text-[11px] font-medium text-base-content/70">
+					<span class="inline-flex h-2 w-2 rounded-full bg-info"></span>
+					Antri {jobCounts.queued}
+				</span>
+			{/if}
+			{#if jobCounts.running > 0}
+				<span class="inline-flex items-center gap-1.5 rounded-lg border border-base-300 bg-base-100 px-2.5 py-1 text-[11px] font-medium text-base-content/70">
+					<span class="inline-flex h-2 w-2 rounded-full bg-warning"></span>
+					Berjalan {jobCounts.running}
+				</span>
+			{/if}
+			{#if jobCounts.success > 0}
+				<span class="inline-flex items-center gap-1.5 rounded-lg border border-base-300 bg-base-100 px-2.5 py-1 text-[11px] font-medium text-base-content/70">
+					<span class="inline-flex h-2 w-2 rounded-full bg-success"></span>
+					Sukses {jobCounts.success}
+				</span>
+			{/if}
+			{#if jobCounts.failed > 0}
+				<span class="inline-flex items-center gap-1.5 rounded-lg border border-base-300 bg-base-100 px-2.5 py-1 text-[11px] font-medium text-base-content/70">
+					<span class="inline-flex h-2 w-2 rounded-full bg-destructive"></span>
+					Gagal {jobCounts.failed}
+				</span>
+			{/if}
+			{#if jobCounts.cancelled > 0}
+				<span class="inline-flex items-center gap-1.5 rounded-lg border border-base-300 bg-base-100 px-2.5 py-1 text-[11px] font-medium text-base-content/70">
+					<span class="inline-flex h-2 w-2 rounded-full bg-base-300"></span>
+					Dibatalkan {jobCounts.cancelled}
+				</span>
+			{/if}
+		</div>
+	{/if}
 
 	<Card.Root class="overflow-hidden border-base-300 shadow-sm">
 		<Card.Content class="p-0">
