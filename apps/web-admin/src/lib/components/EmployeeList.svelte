@@ -595,7 +595,7 @@
       <Input placeholder="🔍 Cari nama / ID / NIP..." bind:value={search} class="w-full border border-input bg-background px-3 h-10" oninput={() => { page = 1; }} />
       <div class="flex items-center gap-2">
         <span class="text-xs text-muted-foreground font-medium whitespace-nowrap shrink-0 hidden sm:inline">Status:</span>
-        <select bind:value={filterMode} class="select select-bordered w-full sm:w-44 h-10 border border-input bg-background px-3 text-sm" onchange={() => { page = 1; }}>
+        <select bind:value={filterMode} class="w-full sm:w-44 h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onchange={() => { page = 1; }}>
           <option value="all">Semua</option>
           <option value="configured">Akun aktif</option>
           <option value="needs_setup">Belum setup</option>

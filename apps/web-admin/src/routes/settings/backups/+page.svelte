@@ -195,10 +195,10 @@
 	}
 
 	function statusBadgeClass(value: string | undefined) {
-		if (value === 'ok') return 'badge badge-success';
-		if (value === 'warning') return 'badge badge-warning';
-		if (value === 'error') return 'badge badge-error';
-		return 'badge badge-outline';
+		if (value === 'ok') return 'bg-success/10 text-success border border-success/20';
+		if (value === 'warning') return 'bg-warning/10 text-warning border border-warning/20';
+		if (value === 'error') return 'bg-destructive/10 text-destructive border border-destructive/20';
+		return 'bg-transparent text-muted-foreground border border-border';
 	}
 
 	function kindLabel(kind: string) {
@@ -266,16 +266,16 @@
 				</div>
 				<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
 					<input
-						class="input input-bordered input-sm h-10"
+						class="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 						placeholder="Alasan backup manual (opsional)"
 						maxlength="200"
 						bind:value={manualBackupReason}
 						disabled={!canCreate || manualBackupRunning}
 					/>
-					<button class="btn btn-primary" onclick={runManualBackup} disabled={!canCreate || manualBackupRunning}>
+					<button class="inline-flex items-center justify-center gap-2 rounded-lg h-10 px-4 text-sm font-bold text-primary-foreground bg-primary border border-primary hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:pointer-events-none shadow-sm" onclick={runManualBackup} disabled={!canCreate || manualBackupRunning}>
 						{manualBackupRunning ? 'Membuat Backup...' : 'Buat Backup Sekarang'}
 					</button>
-					<button class="btn btn-outline" onclick={() => loadBackups(true)} disabled={refreshing || manualBackupRunning}>
+					<button class="inline-flex items-center justify-center gap-2 rounded-lg h-10 px-4 text-sm font-medium text-foreground border border-input bg-background hover:bg-accent transition-colors disabled:opacity-40 disabled:pointer-events-none" onclick={() => loadBackups(true)} disabled={refreshing || manualBackupRunning}>
 						{refreshing ? 'Memuat...' : 'Refresh Status'}
 					</button>
 				</div>
@@ -316,7 +316,7 @@
 			<div>
 				<p class="font-semibold">Backup Center belum dapat dimuat</p>
 				<p class="mt-1">{errorMessage}</p>
-				<button class="btn btn-outline btn-sm mt-2" onclick={() => loadBackups(true)}>Coba Lagi</button>
+				<button class="inline-flex items-center justify-center rounded-lg h-8 px-3 text-xs font-medium border border-input bg-background text-foreground hover:bg-accent transition-colors mt-2" onclick={() => loadBackups(true)}>Coba Lagi</button>
 			</div>
 		</div>
 	{:else if status}
@@ -378,7 +378,7 @@
 						<p class="text-sm text-base-content/70">Hanya file <code>.dump</code> dari direktori backup resmi yang ditampilkan.</p>
 					</div>
 					{#if status.latest_backup && canDownload}
-						<a class="btn btn-outline btn-sm" href={downloadHref(status.latest_backup.id)}>
+						<a class="inline-flex items-center justify-center rounded-lg h-8 px-3 text-xs font-medium border border-input bg-background text-foreground hover:bg-accent transition-colors" href={downloadHref(status.latest_backup.id)}>
 							Download Latest
 						</a>
 					{/if}
@@ -388,7 +388,7 @@
 					<div class="alert alert-info m-4 shadow-sm"><span>Belum ada file backup PostgreSQL yang tersedia.</span></div>
 				{:else}
 					<div class="overflow-x-auto">
-						<table class="table table-zebra w-full min-w-[980px]">
+						<table class="w-full min-w-[980px]">
 							<thead>
 								<tr>
 									<th>File</th>
@@ -405,7 +405,7 @@
 										<td>
 											<div class="font-medium text-base-content">{backup.name}</div>
 											{#if backup.is_latest}
-												<span class="badge badge-xs badge-success mt-1">latest</span>
+												<span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider bg-success/10 text-success border border-success/20 mt-1">latest</span>
 											{/if}
 										</td>
 										<td class="text-base-content/70">{formatDate(backup.created_at)}</td>
@@ -420,20 +420,24 @@
 										</td>
 										<td class="text-right">
 											{#if canRestorePlan || (canDownload && backup.downloadable)}
-												<div class="dropdown dropdown-end">
-													<button class="btn btn-sm btn-outline">
+												<div class="relative">
+													<button class="inline-flex items-center justify-center gap-1.5 rounded-lg h-8 px-3 text-xs font-medium border border-input bg-background text-foreground hover:bg-accent transition-colors"
+														onclick={(ev) => {
+															const menu = ev.currentTarget.nextElementSibling as HTMLElement;
+															if (menu) menu.classList.toggle('hidden');
+														}}>
 														Aksi
 														<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 															<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
 														</svg>
 													</button>
-													<ul class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow-sm border border-base-300">
+													<ul class="hidden absolute right-0 z-50 mt-1 w-52 rounded-lg border border-border bg-card p-1 shadow-xl" onclick={(ev) => ev.stopPropagation()}>
 														{#if canRestorePlan}
-															<li><button class="btn btn-ghost btn-sm justify-start" onclick={() => validateRestore(backup)} disabled={restoreBusyID === backup.id}>{restoreBusyID === backup.id ? 'Memeriksa...' : 'Validasi'}</button></li>
-															<li><button class="btn btn-ghost btn-sm justify-start" onclick={() => generateRestoreCommand(backup)} disabled={restoreBusyID === backup.id}>{restoreBusyID === backup.id ? 'Memeriksa...' : 'SOP Restore'}</button></li>
+															<li><button class="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent transition-colors" onclick={() => validateRestore(backup)} disabled={restoreBusyID === backup.id}>{restoreBusyID === backup.id ? 'Memeriksa...' : 'Validasi'}</button></li>
+															<li><button class="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent transition-colors" onclick={() => generateRestoreCommand(backup)} disabled={restoreBusyID === backup.id}>{restoreBusyID === backup.id ? 'Memeriksa...' : 'SOP Restore'}</button></li>
 														{/if}
 														{#if canDownload && backup.downloadable}
-															<li><a class="btn btn-ghost btn-sm justify-start" href={downloadHref(backup.id)}>Download</a></li>
+															<li><a class="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent transition-colors" href={downloadHref(backup.id)}>Download</a></li>
 														{:else}
 															<li><span class="text-xs text-base-content/70 px-3 py-2 block">Butuh izin download</span></li>
 														{/if}

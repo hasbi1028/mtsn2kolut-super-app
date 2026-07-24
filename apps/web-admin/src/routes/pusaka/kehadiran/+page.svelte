@@ -286,9 +286,9 @@
 				<!-- Date Range + Terapkan (inline) -->
 				<div class="flex flex-wrap items-center gap-2">
 					<div class="flex items-center gap-1.5">
-						<input type="date" bind:value={startDate} class="input input-bordered h-9 min-w-0 border border-input bg-background px-2 text-xs" />
+						<input type="date" bind:value={startDate} class="h-9 min-w-0 rounded-lg border border-input bg-background px-2 text-xs text-foreground" />
 						<span class="text-xs text-muted-foreground font-medium" aria-hidden="true">⟶</span>
-						<input type="date" bind:value={endDate} class="input input-bordered h-9 min-w-0 border border-input bg-background px-2 text-xs" />
+						<input type="date" bind:value={endDate} class="h-9 min-w-0 rounded-lg border border-input bg-background px-2 text-xs text-foreground" />
 					</div>
 					<button class="inline-flex items-center justify-center rounded-lg h-9 px-4 text-sm font-bold text-primary-foreground bg-primary border border-primary hover:bg-primary/90 transition-colors" onclick={() => void load()}>
 						{#if refreshing}<span class="loading loading-spinner loading-xs"></span>{/if}

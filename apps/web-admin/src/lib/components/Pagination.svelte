@@ -58,7 +58,7 @@
         <span class="text-[10px] text-muted-foreground font-medium whitespace-nowrap">Per halaman</span>
         <select
           onchange={handlePerPageChange}
-          class="select select-bordered h-7 min-w-[68px] border border-input bg-background px-1.5 text-[11px] font-medium text-foreground"
+          class="h-7 min-w-[68px] rounded-lg border border-input bg-background px-1.5 text-[11px] font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           value={perPage}
         >
           {#each PER_PAGE_OPTIONS as opt}
