@@ -8,6 +8,10 @@ const config = {
 	},
 	kit: {
 		adapter: adapter(),
+		paths: {
+			base: '',
+			relative: false
+		},
 		experimental: {
 			remoteFunctions: true
 		}
