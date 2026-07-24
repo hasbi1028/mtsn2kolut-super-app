@@ -5,8 +5,24 @@ import (
 	"net/http"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+func hpgUUID(s string) pgtype.UUID {
+	var u pgtype.UUID
+	if s == "" { return u }
+	_ = u.Scan(s)
+	return u
+}
+
+func hnumeric(v float64) pgtype.Numeric {
+	var n pgtype.Numeric
+	_ = n.Scan(v)
+	return n
+}
 
 type CurriculumHandler struct {
 	svc         *service.CurriculumService
@@ -110,6 +126,46 @@ func (h *CurriculumHandler) DeleteProfile(w http.ResponseWriter, r *http.Request
 	api.NoContent(w)
 }
 
+// PUT /api/academic/curriculum/profiles/{id}
+func (h *CurriculumHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		api.BadRequest(w, "id kurikulum wajib diisi")
+		return
+	}
+	var body struct {
+		Code                string `json:"code"`
+		Name                string `json:"name"`
+		RegulationReference string `json:"regulation_reference"`
+		EducationLevel      string `json:"education_level"`
+		EffectiveYearID     string `json:"effective_academic_year_id"`
+		Status              string `json:"status"`
+		Notes               string `json:"notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "format data tidak valid")
+		return
+	}
+	if body.Code == "" || body.Name == "" {
+		api.BadRequest(w, "code dan name wajib diisi")
+		return
+	}
+	profile, err := h.svc.UpdateProfile(r.Context(), id, service.CurriculumProfileCreateParams{
+		Code:                body.Code,
+		Name:                body.Name,
+		RegulationReference: body.RegulationReference,
+		EducationLevel:      body.EducationLevel,
+		EffectiveYearID:     body.EffectiveYearID,
+		Status:              body.Status,
+		Notes:               body.Notes,
+	})
+	if err != nil {
+		writeDomainOrInternal(w, err, "gagal mengupdate kurikulum")
+		return
+	}
+	api.OK(w, profile)
+}
+
 // ─── Subject Allocations ─────────────────────────────────────────
 
 // GET /api/academic/curriculum/profiles/{id}/allocations?level=VII
@@ -171,6 +227,47 @@ func (h *CurriculumHandler) DeleteAllocation(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	api.NoContent(w)
+}
+
+// PUT /api/academic/curriculum/allocations/{id}
+func (h *CurriculumHandler) UpdateAllocation(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		api.BadRequest(w, "id alokasi wajib diisi")
+		return
+	}
+	var body struct {
+		SubjectID string  `json:"subject_id"`
+		Level     string  `json:"level"`
+		Group     string  `json:"subject_group"`
+		Intra     float64 `json:"intra_weekly_hours"`
+		Koku      float64 `json:"koku_weekly_hours"`
+		Total     float64 `json:"total_weekly_hours"`
+		Notes     string  `json:"notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "format data tidak valid")
+		return
+	}
+	allocation, err := h.svc.UpdateAllocation(r.Context(), id, db.UpdateCurriculumAllocationParams{
+		SubjectID:           hpgUUID(body.SubjectID),
+		Level:               body.Level,
+		SubjectGroup:        body.Group,
+		IntraWeeklyHours:    hnumeric(body.Intra),
+		KokuWeeklyHours:     hnumeric(body.Koku),
+		TotalWeeklyHours:    hnumeric(body.Total),
+		CountsForSchedule:   true,
+		CountsForReport:     true,
+		CountsForAssessment: true,
+		CountsForRanking:    true,
+		IsRequired:          true,
+		Notes:               body.Notes,
+	})
+	if err != nil {
+		writeDomainOrInternal(w, err, "gagal mengupdate alokasi")
+		return
+	}
+	api.OK(w, allocation)
 }
 
 // ─── Class Assignments ───────────────────────────────────────────

@@ -118,6 +118,24 @@ func (s *CurriculumService) DeleteProfile(ctx context.Context, id string) error 
 	return s.q.DeleteCurriculumProfile(ctx, pgUUID(id))
 }
 
+func (s *CurriculumService) UpdateProfile(ctx context.Context, id string, params CurriculumProfileCreateParams) (*CurriculumProfile, error) {
+	row, err := s.q.UpdateCurriculumProfile(ctx, db.UpdateCurriculumProfileParams{
+		Code:                    params.Code,
+		Name:                    params.Name,
+		RegulationReference:     params.RegulationReference,
+		EducationLevel:          params.EducationLevel,
+		EffectiveAcademicYearID: pgUUID(params.EffectiveYearID),
+		Status:                  params.Status,
+		Notes:                   params.Notes,
+		ID:                      pgUUID(id),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("update curriculum profile: %w", err)
+	}
+	result := dbProfileToService(row)
+	return &result, nil
+}
+
 // ─── Subject Allocations ─────────────────────────────────────────
 
 type SubjectAllocation struct {
@@ -223,6 +241,33 @@ func (s *CurriculumService) CreateAllocation(ctx context.Context, profileID, sub
 
 func (s *CurriculumService) DeleteAllocation(ctx context.Context, id string) error {
 	return s.q.DeleteCurriculumAllocation(ctx, pgUUID(id))
+}
+
+func (s *CurriculumService) UpdateAllocation(ctx context.Context, id string, params db.UpdateCurriculumAllocationParams) (*SubjectAllocation, error) {
+	_, err := s.q.UpdateCurriculumAllocation(ctx, db.UpdateCurriculumAllocationParams{
+		SubjectID:           params.SubjectID,
+		Level:               params.Level,
+		SubjectGroup:        params.SubjectGroup,
+		IntraAnnualHours:    params.IntraAnnualHours,
+		KokuAnnualHours:     params.KokuAnnualHours,
+		TotalAnnualHours:    params.TotalAnnualHours,
+		IntraWeeklyHours:    params.IntraWeeklyHours,
+		KokuWeeklyHours:     params.KokuWeeklyHours,
+		TotalWeeklyHours:    params.TotalWeeklyHours,
+		LessonMinutes:       params.LessonMinutes,
+		DisplayOrder:        params.DisplayOrder,
+		CountsForSchedule:   params.CountsForSchedule,
+		CountsForReport:     params.CountsForReport,
+		CountsForAssessment: params.CountsForAssessment,
+		CountsForRanking:    params.CountsForRanking,
+		IsRequired:          params.IsRequired,
+		Notes:               params.Notes,
+		ID:                  pgUUID(id),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("update allocation: %w", err)
+	}
+	return nil, fmt.Errorf("not implemented: readback")
 }
 
 // ─── Class Assignments ───────────────────────────────────────────

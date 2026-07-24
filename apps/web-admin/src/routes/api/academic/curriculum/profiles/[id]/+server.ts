@@ -21,13 +21,3 @@ export const DELETE = async (event: RequestEvent) => {
 		return handleRouteError(e, 'curriculum profile DELETE');
 	}
 };
-
-export const POST = async (event: RequestEvent) => {
-	try {
-		const id = event.params.id;
-		const result = await proxy(event).post<any>(`/api/academic/curriculum/profiles/${id}/activate`, {});
-		return new Response(JSON.stringify(result), { status: 200, headers: { 'content-type': 'application/json' } });
-	} catch (e) {
-		return handleRouteError(e, 'curriculum profile ACTIVATE');
-	}
-};
