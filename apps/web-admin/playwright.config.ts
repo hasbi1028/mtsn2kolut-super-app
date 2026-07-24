@@ -15,7 +15,7 @@ export default defineConfig({
   projects: [
     {
       name: 'desktop-chrome',
-      testMatch: '**/academic-desktop.spec.ts',
+      testMatch: ['**/academic-desktop.spec.ts', '**/academic-crud.spec.ts'],
       use: { browserName: 'chromium', viewport: { width: 1440, height: 900 } },
     },
     {
