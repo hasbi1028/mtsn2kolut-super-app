@@ -32,26 +32,26 @@
 			.filter((group) => group.items.length > 0);
 	});
 
-	// Icon map (same as original, kept for compatibility)
-	const iconMap: Record<string, { viewBox: string; path: string }> = {
-		home: { viewBox: '0 0 24 24', path: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1' },
-		clock: { viewBox: '0 0 24 24', path: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
-		users: { viewBox: '0 0 24 24', path: 'M12 4.354a4 4 0 110 7.292 4 4 0 010-7.292zM15 21H9a2 2 0 01-2-2V12a2 2 0 012-2h6a2 2 0 012 2v7a2 2 0 01-2 2z' },
-		calendar: { viewBox: '0 0 24 24', path: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
-		'bar-chart': { viewBox: '0 0 24 24', path: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
-		send: { viewBox: '0 0 24 24', path: 'M12 19l9 2-9-18-9 18 9-2zm0 0v-8' },
-		'refresh-cw': { viewBox: '0 0 24 24', path: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' },
-		user: { viewBox: '0 0 24 24', path: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
-		building: { viewBox: '0 0 24 24', path: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
-		shield: { viewBox: '0 0 24 24', path: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
-		image: { viewBox: '0 0 24 24', path: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' },
-		database: { viewBox: '0 0 24 24', path: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4' },
-		'file-text': { viewBox: '0 0 24 24', path: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-		menu: { viewBox: '0 0 24 24', path: 'M4 6h16M4 12h16M4 18h16' },
-		'x-circle': { viewBox: '0 0 24 24', path: 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z' }
+	// Icon map — font/emoji based (instead of SVG)
+	const iconFontMap: Record<string, string> = {
+		home: '⌂',
+		clock: '⏰',
+		users: '👥',
+		calendar: '📅',
+		'bar-chart': '📊',
+		send: '📨',
+		'refresh-cw': '🔄',
+		user: '👤',
+		building: '🏢',
+		shield: '🛡',
+		image: '🖼',
+		database: '💾',
+		'file-text': '📄',
+		menu: '☰',
+		'x-circle': '✕',
 	};
 
-	const getIconPath = (iconName: string) => iconMap[iconName] ?? null;
+	const getIconFont = (iconName: string) => iconFontMap[iconName] ?? '○';
 </script>
 
 <!-- ═══ CBT-style Sidebar ═══ -->
@@ -111,21 +111,17 @@
 						{@const href = resolve(item.href as '/')}
 						{@const pathParts = href.split('/').filter(Boolean)}
 						{@const isActive = page.url.pathname === href || (pathParts.length >= 2 && page.url.pathname.startsWith(href + '/'))}
-						{@const icon = getIconPath(item.icon)}
+						{@const iconFont = getIconFont(item.icon)}
 
 						<a
 							href={href}
 							class="admin-nav-item group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all lg:px-4 lg:py-2 {isActive
-								? 'bg-primary text-primary-foreground shadow-sm shadow-primary/15'
-								: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+								? 'bg-primary/5 text-primary border-l-2 border-primary rounded-l-none'
+								: 'text-muted-foreground hover:bg-muted hover:text-foreground border-l-2 border-transparent'}"
 							onclick={() => (isMobileMenuOpen = false)}
 						>
-							<span class="icon flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-base leading-none {isActive ? 'bg-white/15 text-primary-foreground' : 'bg-muted/60 text-muted-foreground group-hover:text-primary'}">
-								{#if icon}
-									<svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width={isActive ? 2.2 : 1.6} viewBox={icon.viewBox}>
-										<path stroke-linecap="round" stroke-linejoin="round" d={icon.path} />
-									</svg>
-								{/if}
+							<span class="icon flex h-6 w-6 shrink-0 items-center justify-center text-sm leading-none {isActive ? 'text-primary' : 'text-muted-foreground'}">
+								{iconFont}
 							</span>
 							<span class="label truncate">{item.label}</span>
 						</a>
