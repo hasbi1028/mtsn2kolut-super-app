@@ -735,7 +735,7 @@
 		{/snippet}
 	</AsyncContent>
 
-	<div role="tablist" class="tabs tabs-box bg-base-100 overflow-x-auto flex-nowrap">
+	<div role="tablist" class="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-muted p-1 text-muted-foreground overflow-x-auto flex-nowrap">
 		{#each [
 			{ id: 'ringkasan', label: 'Ringkasan' },
 			{ id: 'pegawai', label: 'Akun Pegawai' },

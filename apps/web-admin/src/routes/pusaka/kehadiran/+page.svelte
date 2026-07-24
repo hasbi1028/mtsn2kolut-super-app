@@ -352,7 +352,7 @@
 
 					{#snippet children(value)}
 					<div class="hidden overflow-x-auto lg:block">
-					<table class="table table-zebra table-xs">
+					<table class="w-full text-xs">
 						<thead>
 							<tr>
 								<th>Tanggal</th>
@@ -374,11 +374,11 @@
 								<td class="text-center">{stripWita(r.jam_pulang)}</td>
 								<td class="text-center">
 									{#if s === 'lengkap'}
-										<span class="badge badge-sm badge-success">Lengkap</span>
+										<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-success/10 text-success border border-success/20">Lengkap</span>
 									{:else if s === 'masuk'}
-										<span class="badge badge-sm badge-warning">Masuk</span>
+										<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-warning/10 text-warning border border-warning/20">Masuk</span>
 									{:else}
-										<span class="badge badge-sm badge-ghost">Belum</span>
+										<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-base-300/30 text-muted-foreground border border-base-300">Belum</span>
 									{/if}
 								</td>
 							</tr>

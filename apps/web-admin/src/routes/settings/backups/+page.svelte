@@ -258,7 +258,7 @@
 		<div class="card-body">
 			<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 				<div class="space-y-2">
-					<p class="badge badge-sm badge-outline uppercase tracking-wider">Pengaturan Sistem</p>
+					<p class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-transparent text-muted-foreground border border-input">Pengaturan Sistem</p>
 					<h1 class="text-2xl font-bold text-base-content md:text-3xl">Backup & Restore</h1>
 					<p class="max-w-3xl text-sm text-base-content/70">
 						Pantau backup PostgreSQL harian, cek kesehatan timer, dan unduh file backup resmi. Sprint ini bersifat read-only: belum ada restore production langsung dari aplikasi.
@@ -467,7 +467,7 @@
 								<h2 class="card-title">Hasil Validasi Restore</h2>
 								<p class="text-sm text-base-content/70">{restoreValidation.backup_id} · {formatDate(restoreValidation.checked_at)}</p>
 							</div>
-							<span class={restoreValidation.valid ? 'badge badge-success' : 'badge badge-error'}>{restoreValidation.valid ? 'Valid' : 'Perlu cek manual'}</span>
+							<span class={restoreValidation.valid ? 'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-success/10 text-success border border-success/20' : 'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-destructive/10 text-destructive border border-destructive/20'}>{restoreValidation.valid ? 'Valid' : 'Perlu cek manual'}</span>
 						</div>
 						<p class="mt-3 text-sm text-base-content/70">Object terbaca: <strong>{restoreValidation.object_count}</strong></p>
 						{#if restoreValidation.preview.length > 0}

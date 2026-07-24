@@ -973,14 +973,15 @@
 							{:else}
 								<div class="space-y-3">
 									{#each sessions as session (session.id)}
-										<details class="collapse collapse-arrow bg-base-100 border border-base-300 rounded-box">
-											<summary class="collapse-title text-sm font-semibold flex items-center gap-2 min-h-0 py-3">
+										<details class="group bg-base-100 border border-base-300 rounded-box overflow-hidden">
+											<summary class="flex cursor-pointer items-center gap-2 px-4 py-3 text-sm font-semibold text-foreground list-none [&::-webkit-details-marker]:hidden">
+												<svg class="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
 												{sessionTitle(session)}
 												{#if isCurrentSession(session, currentSessionId)}
 													<Badge variant="secondary">Perangkat Ini</Badge>
 												{/if}
 											</summary>
-											<div class="collapse-content">
+											<div class="px-4 pb-3">
 												<div class="space-y-3 pt-1">
 													<div class="grid grid-cols-1 gap-2 text-xs text-base-content/70 sm:grid-cols-2">
 														<p>Terakhir aktif: {formatAccountDateTime(session.last_used_at)}</p>
