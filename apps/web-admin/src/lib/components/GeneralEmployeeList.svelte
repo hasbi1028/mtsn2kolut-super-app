@@ -3,7 +3,7 @@
   import * as Table from '$lib/components/ui/table';
   import { Badge } from '$lib/components/ui/badge';
   import { Button } from '$lib/components/ui/button';
-  import { resolve } from '$app/paths';
+  import { enhance } from '$app/forms';
   import * as Dialog from '$lib/components/ui/dialog';
   import { toast } from '$lib/components/ui/sonner';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
@@ -285,11 +285,6 @@
               </div>
               <!-- Action Buttons -->
               <div class="flex flex-wrap items-center gap-1.5 pt-1">
-                {#if e.pusaka_eligible}
-                  <a href={resolve('/pusaka/employees')}>
-                    <Button size="sm" variant="outline" class="text-[11px] px-2 h-7">PUSAKA</Button>
-                  </a>
-                {/if}
                 <Button size="sm" variant="outline" onclick={() => openEditDialog(e)} class="text-[11px] px-2 h-7">Edit</Button>
                 <form method="POST" action="?/nonaktifkan" class="inline">
                   <input type="hidden" name="id" value={e.id} />
@@ -378,11 +373,6 @@
                 </div>
               {:else}
                 <div class="flex flex-wrap items-center justify-end gap-1.5">
-                  {#if e.pusaka_eligible}
-                    <a href={resolve('/pusaka/employees')}>
-                      <Button size="sm" variant="outline" class="text-xs">Kelola PUSAKA</Button>
-                    </a>
-                  {/if}
                   <Button size="sm" variant="outline" onclick={() => openEditDialog(e)} class="text-xs">
                     Edit
                   </Button>
