@@ -34,6 +34,32 @@ func (q *Queries) ActivateAcademicYear(ctx context.Context, id pgtype.UUID) (Aca
 	return i, err
 }
 
+const activateCurriculumProfile = `-- name: ActivateCurriculumProfile :one
+UPDATE curriculum_profiles
+SET status = 'active',
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, code, name, regulation_reference, education_level, effective_academic_year_id, status, notes, created_at, updated_at
+`
+
+func (q *Queries) ActivateCurriculumProfile(ctx context.Context, id pgtype.UUID) (CurriculumProfile, error) {
+	row := q.db.QueryRow(ctx, activateCurriculumProfile, id)
+	var i CurriculumProfile
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.RegulationReference,
+		&i.EducationLevel,
+		&i.EffectiveAcademicYearID,
+		&i.Status,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const activateSemester = `-- name: ActivateSemester :one
 UPDATE semesters
 SET is_active = TRUE,
@@ -109,6 +135,25 @@ func (q *Queries) CountActiveHomeroomAssignmentByClass(ctx context.Context, clas
 	return column_1, err
 }
 
+const countCurriculumProfileCodeConflicts = `-- name: CountCurriculumProfileCodeConflicts :one
+SELECT COUNT(*)::int
+FROM curriculum_profiles
+WHERE id <> $1
+  AND LOWER(code) = LOWER($2)
+`
+
+type CountCurriculumProfileCodeConflictsParams struct {
+	ID   pgtype.UUID `json:"id"`
+	Code string      `json:"code"`
+}
+
+func (q *Queries) CountCurriculumProfileCodeConflicts(ctx context.Context, arg CountCurriculumProfileCodeConflictsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countCurriculumProfileCodeConflicts, arg.ID, arg.Code)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countSemesterLabelConflicts = `-- name: CountSemesterLabelConflicts :one
 SELECT COUNT(*)::int
 FROM semesters
@@ -174,10 +219,46 @@ func (q *Queries) CreateAcademicYear(ctx context.Context, arg CreateAcademicYear
 	return i, err
 }
 
+const createClassCurriculumAssignment = `-- name: CreateClassCurriculumAssignment :one
+
+INSERT INTO class_curriculum_assignments (id, class_id, curriculum_profile_id, is_active, notes)
+VALUES (gen_random_uuid(), $1, $2, $3, $4)
+RETURNING id, class_id, curriculum_profile_id, is_active, notes, created_at, updated_at, semester_id
+`
+
+type CreateClassCurriculumAssignmentParams struct {
+	ClassID             pgtype.UUID `json:"class_id"`
+	CurriculumProfileID pgtype.UUID `json:"curriculum_profile_id"`
+	IsActive            bool        `json:"is_active"`
+	Notes               string      `json:"notes"`
+}
+
+// ─── Class Curriculum Assignments ───────────────────────────────
+func (q *Queries) CreateClassCurriculumAssignment(ctx context.Context, arg CreateClassCurriculumAssignmentParams) (ClassCurriculumAssignment, error) {
+	row := q.db.QueryRow(ctx, createClassCurriculumAssignment,
+		arg.ClassID,
+		arg.CurriculumProfileID,
+		arg.IsActive,
+		arg.Notes,
+	)
+	var i ClassCurriculumAssignment
+	err := row.Scan(
+		&i.ID,
+		&i.ClassID,
+		&i.CurriculumProfileID,
+		&i.IsActive,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SemesterID,
+	)
+	return i, err
+}
+
 const createClassSubjectAssignment = `-- name: CreateClassSubjectAssignment :one
 INSERT INTO class_subject_assignments (id, class_id, subject_id, teacher_employee_id)
 VALUES (gen_random_uuid(), $1, $2, $3)
-RETURNING id, class_id, subject_id, teacher_employee_id, created_at, updated_at
+RETURNING id, class_id, subject_id, teacher_employee_id, created_at, updated_at, semester_id
 `
 
 type CreateClassSubjectAssignmentParams struct {
@@ -194,6 +275,141 @@ func (q *Queries) CreateClassSubjectAssignment(ctx context.Context, arg CreateCl
 		&i.ClassID,
 		&i.SubjectID,
 		&i.TeacherEmployeeID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SemesterID,
+	)
+	return i, err
+}
+
+const createCurriculumAllocation = `-- name: CreateCurriculumAllocation :one
+
+INSERT INTO curriculum_subject_allocations (
+    id, curriculum_profile_id, subject_id, level, subject_group,
+    intra_annual_hours, koku_annual_hours, total_annual_hours,
+    intra_weekly_hours, koku_weekly_hours, total_weekly_hours,
+    lesson_minutes, display_order,
+    counts_for_schedule, counts_for_report, counts_for_assessment, counts_for_ranking,
+    is_required, notes
+) VALUES (
+    gen_random_uuid(), $1, $2, $3, $4,
+    $5, $6, $7,
+    $8, $9, $10,
+    $11, $12,
+    $13, $14, $15, $16,
+    $17, $18
+)
+RETURNING id, curriculum_profile_id, subject_id, level, subject_group, intra_annual_hours, koku_annual_hours, total_annual_hours, intra_weekly_hours, koku_weekly_hours, total_weekly_hours, lesson_minutes, display_order, counts_for_schedule, counts_for_report, counts_for_assessment, counts_for_ranking, is_required, notes, created_at, updated_at
+`
+
+type CreateCurriculumAllocationParams struct {
+	CurriculumProfileID pgtype.UUID    `json:"curriculum_profile_id"`
+	SubjectID           pgtype.UUID    `json:"subject_id"`
+	Level               string         `json:"level"`
+	SubjectGroup        string         `json:"subject_group"`
+	IntraAnnualHours    int32          `json:"intra_annual_hours"`
+	KokuAnnualHours     int32          `json:"koku_annual_hours"`
+	TotalAnnualHours    int32          `json:"total_annual_hours"`
+	IntraWeeklyHours    pgtype.Numeric `json:"intra_weekly_hours"`
+	KokuWeeklyHours     pgtype.Numeric `json:"koku_weekly_hours"`
+	TotalWeeklyHours    pgtype.Numeric `json:"total_weekly_hours"`
+	LessonMinutes       int32          `json:"lesson_minutes"`
+	DisplayOrder        int32          `json:"display_order"`
+	CountsForSchedule   bool           `json:"counts_for_schedule"`
+	CountsForReport     bool           `json:"counts_for_report"`
+	CountsForAssessment bool           `json:"counts_for_assessment"`
+	CountsForRanking    bool           `json:"counts_for_ranking"`
+	IsRequired          bool           `json:"is_required"`
+	Notes               string         `json:"notes"`
+}
+
+// ─── Curriculum Subject Allocations ─────────────────────────────
+func (q *Queries) CreateCurriculumAllocation(ctx context.Context, arg CreateCurriculumAllocationParams) (CurriculumSubjectAllocation, error) {
+	row := q.db.QueryRow(ctx, createCurriculumAllocation,
+		arg.CurriculumProfileID,
+		arg.SubjectID,
+		arg.Level,
+		arg.SubjectGroup,
+		arg.IntraAnnualHours,
+		arg.KokuAnnualHours,
+		arg.TotalAnnualHours,
+		arg.IntraWeeklyHours,
+		arg.KokuWeeklyHours,
+		arg.TotalWeeklyHours,
+		arg.LessonMinutes,
+		arg.DisplayOrder,
+		arg.CountsForSchedule,
+		arg.CountsForReport,
+		arg.CountsForAssessment,
+		arg.CountsForRanking,
+		arg.IsRequired,
+		arg.Notes,
+	)
+	var i CurriculumSubjectAllocation
+	err := row.Scan(
+		&i.ID,
+		&i.CurriculumProfileID,
+		&i.SubjectID,
+		&i.Level,
+		&i.SubjectGroup,
+		&i.IntraAnnualHours,
+		&i.KokuAnnualHours,
+		&i.TotalAnnualHours,
+		&i.IntraWeeklyHours,
+		&i.KokuWeeklyHours,
+		&i.TotalWeeklyHours,
+		&i.LessonMinutes,
+		&i.DisplayOrder,
+		&i.CountsForSchedule,
+		&i.CountsForReport,
+		&i.CountsForAssessment,
+		&i.CountsForRanking,
+		&i.IsRequired,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createCurriculumProfile = `-- name: CreateCurriculumProfile :one
+
+INSERT INTO curriculum_profiles (id, code, name, regulation_reference, education_level, effective_academic_year_id, status, notes)
+VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
+RETURNING id, code, name, regulation_reference, education_level, effective_academic_year_id, status, notes, created_at, updated_at
+`
+
+type CreateCurriculumProfileParams struct {
+	Code                    string      `json:"code"`
+	Name                    string      `json:"name"`
+	RegulationReference     string      `json:"regulation_reference"`
+	EducationLevel          string      `json:"education_level"`
+	EffectiveAcademicYearID pgtype.UUID `json:"effective_academic_year_id"`
+	Status                  string      `json:"status"`
+	Notes                   string      `json:"notes"`
+}
+
+// ─── Curriculum Profiles ────────────────────────────────────────
+func (q *Queries) CreateCurriculumProfile(ctx context.Context, arg CreateCurriculumProfileParams) (CurriculumProfile, error) {
+	row := q.db.QueryRow(ctx, createCurriculumProfile,
+		arg.Code,
+		arg.Name,
+		arg.RegulationReference,
+		arg.EducationLevel,
+		arg.EffectiveAcademicYearID,
+		arg.Status,
+		arg.Notes,
+	)
+	var i CurriculumProfile
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.RegulationReference,
+		&i.EducationLevel,
+		&i.EffectiveAcademicYearID,
+		&i.Status,
+		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -372,6 +588,18 @@ func (q *Queries) DeactivateAcademicYears(ctx context.Context) error {
 	return err
 }
 
+const deactivateCurriculumProfiles = `-- name: DeactivateCurriculumProfiles :exec
+UPDATE curriculum_profiles
+SET status = CASE WHEN id = $1 THEN 'active' ELSE 'archived' END,
+    updated_at = NOW()
+WHERE id = $1 OR status = 'active'
+`
+
+func (q *Queries) DeactivateCurriculumProfiles(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deactivateCurriculumProfiles, id)
+	return err
+}
+
 const deactivateSemesterAcademicYears = `-- name: DeactivateSemesterAcademicYears :exec
 UPDATE academic_years
 SET is_active = FALSE,
@@ -405,12 +633,39 @@ func (q *Queries) DeleteAcademicYear(ctx context.Context, id pgtype.UUID) error 
 	return err
 }
 
+const deleteClassCurriculumAssignment = `-- name: DeleteClassCurriculumAssignment :exec
+DELETE FROM class_curriculum_assignments WHERE id = $1
+`
+
+func (q *Queries) DeleteClassCurriculumAssignment(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteClassCurriculumAssignment, id)
+	return err
+}
+
 const deleteClassSubjectAssignment = `-- name: DeleteClassSubjectAssignment :exec
 DELETE FROM class_subject_assignments WHERE id = $1
 `
 
 func (q *Queries) DeleteClassSubjectAssignment(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteClassSubjectAssignment, id)
+	return err
+}
+
+const deleteCurriculumAllocation = `-- name: DeleteCurriculumAllocation :exec
+DELETE FROM curriculum_subject_allocations WHERE id = $1
+`
+
+func (q *Queries) DeleteCurriculumAllocation(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteCurriculumAllocation, id)
+	return err
+}
+
+const deleteCurriculumProfile = `-- name: DeleteCurriculumProfile :exec
+DELETE FROM curriculum_profiles WHERE id = $1
+`
+
+func (q *Queries) DeleteCurriculumProfile(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteCurriculumProfile, id)
 	return err
 }
 
@@ -464,7 +719,7 @@ active_students AS (
     WHERE s.is_active = TRUE
 ),
 active_assignments AS (
-    SELECT csa.id, csa.class_id, csa.subject_id, csa.teacher_employee_id, csa.created_at, csa.updated_at
+    SELECT csa.id, csa.class_id, csa.subject_id, csa.teacher_employee_id, csa.created_at, csa.updated_at, csa.semester_id
     FROM class_subject_assignments csa
     JOIN active_classes c ON c.id = csa.class_id
 ),
@@ -731,12 +986,12 @@ active_students AS (
     WHERE s.is_active = TRUE
 ),
 active_assignments AS (
-    SELECT csa.id, csa.class_id, csa.subject_id, csa.teacher_employee_id, csa.created_at, csa.updated_at
+    SELECT csa.id, csa.class_id, csa.subject_id, csa.teacher_employee_id, csa.created_at, csa.updated_at, csa.semester_id
     FROM class_subject_assignments csa
     JOIN active_classes c ON c.id = csa.class_id
 ),
 report_assignments AS (
-    SELECT csa.id, csa.class_id, csa.subject_id, csa.teacher_employee_id, csa.created_at, csa.updated_at
+    SELECT csa.id, csa.class_id, csa.subject_id, csa.teacher_employee_id, csa.created_at, csa.updated_at, csa.semester_id
     FROM active_assignments csa
     JOIN subjects s ON s.id = csa.subject_id
     WHERE s.is_active = TRUE
@@ -1313,9 +1568,18 @@ type GetSubjectAssignmentByClassSubjectParams struct {
 	SubjectID pgtype.UUID `json:"subject_id"`
 }
 
-func (q *Queries) GetSubjectAssignmentByClassSubject(ctx context.Context, arg GetSubjectAssignmentByClassSubjectParams) (ClassSubjectAssignment, error) {
+type GetSubjectAssignmentByClassSubjectRow struct {
+	ID                pgtype.UUID        `json:"id"`
+	ClassID           pgtype.UUID        `json:"class_id"`
+	SubjectID         pgtype.UUID        `json:"subject_id"`
+	TeacherEmployeeID pgtype.UUID        `json:"teacher_employee_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetSubjectAssignmentByClassSubject(ctx context.Context, arg GetSubjectAssignmentByClassSubjectParams) (GetSubjectAssignmentByClassSubjectRow, error) {
 	row := q.db.QueryRow(ctx, getSubjectAssignmentByClassSubject, arg.ClassID, arg.SubjectID)
-	var i ClassSubjectAssignment
+	var i GetSubjectAssignmentByClassSubjectRow
 	err := row.Scan(
 		&i.ID,
 		&i.ClassID,
@@ -1539,6 +1803,66 @@ func (q *Queries) ListAcademicYears(ctx context.Context) ([]AcademicYear, error)
 			&i.StartDate,
 			&i.EndDate,
 			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listActiveAssignmentsBySemester = `-- name: ListActiveAssignmentsBySemester :many
+SELECT cca.id, cca.class_id, sc.code AS class_code, sc.name AS class_name, sc.level AS class_level,
+       cca.curriculum_profile_id, cp.code AS curriculum_code, cp.name AS curriculum_name,
+       cca.is_active, cca.notes, cca.created_at, cca.updated_at
+FROM class_curriculum_assignments cca
+JOIN school_classes sc ON sc.id = cca.class_id
+JOIN curriculum_profiles cp ON cp.id = cca.curriculum_profile_id
+WHERE cca.is_active = TRUE
+  AND ($1::uuid IS NULL OR cca.class_id = $1::uuid)
+ORDER BY sc.level ASC, sc.name ASC
+`
+
+type ListActiveAssignmentsBySemesterRow struct {
+	ID                  pgtype.UUID        `json:"id"`
+	ClassID             pgtype.UUID        `json:"class_id"`
+	ClassCode           string             `json:"class_code"`
+	ClassName           string             `json:"class_name"`
+	ClassLevel          string             `json:"class_level"`
+	CurriculumProfileID pgtype.UUID        `json:"curriculum_profile_id"`
+	CurriculumCode      string             `json:"curriculum_code"`
+	CurriculumName      string             `json:"curriculum_name"`
+	IsActive            bool               `json:"is_active"`
+	Notes               string             `json:"notes"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListActiveAssignmentsBySemester(ctx context.Context, classID pgtype.UUID) ([]ListActiveAssignmentsBySemesterRow, error) {
+	rows, err := q.db.Query(ctx, listActiveAssignmentsBySemester, classID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListActiveAssignmentsBySemesterRow{}
+	for rows.Next() {
+		var i ListActiveAssignmentsBySemesterRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClassID,
+			&i.ClassCode,
+			&i.ClassName,
+			&i.ClassLevel,
+			&i.CurriculumProfileID,
+			&i.CurriculumCode,
+			&i.CurriculumName,
+			&i.IsActive,
+			&i.Notes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -2604,6 +2928,151 @@ func (q *Queries) SumClassAdditionalWeeklyHoursExceptAssignment(ctx context.Cont
 	return column_1, err
 }
 
+const updateCurriculumAllocation = `-- name: UpdateCurriculumAllocation :one
+UPDATE curriculum_subject_allocations
+SET subject_id = $1,
+    level = $2,
+    subject_group = $3,
+    intra_annual_hours = $4,
+    koku_annual_hours = $5,
+    total_annual_hours = $6,
+    intra_weekly_hours = $7,
+    koku_weekly_hours = $8,
+    total_weekly_hours = $9,
+    lesson_minutes = $10,
+    display_order = $11,
+    counts_for_schedule = $12,
+    counts_for_report = $13,
+    counts_for_assessment = $14,
+    counts_for_ranking = $15,
+    is_required = $16,
+    notes = $17,
+    updated_at = NOW()
+WHERE id = $18
+RETURNING id, curriculum_profile_id, subject_id, level, subject_group, intra_annual_hours, koku_annual_hours, total_annual_hours, intra_weekly_hours, koku_weekly_hours, total_weekly_hours, lesson_minutes, display_order, counts_for_schedule, counts_for_report, counts_for_assessment, counts_for_ranking, is_required, notes, created_at, updated_at
+`
+
+type UpdateCurriculumAllocationParams struct {
+	SubjectID           pgtype.UUID    `json:"subject_id"`
+	Level               string         `json:"level"`
+	SubjectGroup        string         `json:"subject_group"`
+	IntraAnnualHours    int32          `json:"intra_annual_hours"`
+	KokuAnnualHours     int32          `json:"koku_annual_hours"`
+	TotalAnnualHours    int32          `json:"total_annual_hours"`
+	IntraWeeklyHours    pgtype.Numeric `json:"intra_weekly_hours"`
+	KokuWeeklyHours     pgtype.Numeric `json:"koku_weekly_hours"`
+	TotalWeeklyHours    pgtype.Numeric `json:"total_weekly_hours"`
+	LessonMinutes       int32          `json:"lesson_minutes"`
+	DisplayOrder        int32          `json:"display_order"`
+	CountsForSchedule   bool           `json:"counts_for_schedule"`
+	CountsForReport     bool           `json:"counts_for_report"`
+	CountsForAssessment bool           `json:"counts_for_assessment"`
+	CountsForRanking    bool           `json:"counts_for_ranking"`
+	IsRequired          bool           `json:"is_required"`
+	Notes               string         `json:"notes"`
+	ID                  pgtype.UUID    `json:"id"`
+}
+
+func (q *Queries) UpdateCurriculumAllocation(ctx context.Context, arg UpdateCurriculumAllocationParams) (CurriculumSubjectAllocation, error) {
+	row := q.db.QueryRow(ctx, updateCurriculumAllocation,
+		arg.SubjectID,
+		arg.Level,
+		arg.SubjectGroup,
+		arg.IntraAnnualHours,
+		arg.KokuAnnualHours,
+		arg.TotalAnnualHours,
+		arg.IntraWeeklyHours,
+		arg.KokuWeeklyHours,
+		arg.TotalWeeklyHours,
+		arg.LessonMinutes,
+		arg.DisplayOrder,
+		arg.CountsForSchedule,
+		arg.CountsForReport,
+		arg.CountsForAssessment,
+		arg.CountsForRanking,
+		arg.IsRequired,
+		arg.Notes,
+		arg.ID,
+	)
+	var i CurriculumSubjectAllocation
+	err := row.Scan(
+		&i.ID,
+		&i.CurriculumProfileID,
+		&i.SubjectID,
+		&i.Level,
+		&i.SubjectGroup,
+		&i.IntraAnnualHours,
+		&i.KokuAnnualHours,
+		&i.TotalAnnualHours,
+		&i.IntraWeeklyHours,
+		&i.KokuWeeklyHours,
+		&i.TotalWeeklyHours,
+		&i.LessonMinutes,
+		&i.DisplayOrder,
+		&i.CountsForSchedule,
+		&i.CountsForReport,
+		&i.CountsForAssessment,
+		&i.CountsForRanking,
+		&i.IsRequired,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateCurriculumProfile = `-- name: UpdateCurriculumProfile :one
+UPDATE curriculum_profiles
+SET code = $1,
+    name = $2,
+    regulation_reference = $3,
+    education_level = $4,
+    effective_academic_year_id = $5,
+    status = $6,
+    notes = $7,
+    updated_at = NOW()
+WHERE id = $8
+RETURNING id, code, name, regulation_reference, education_level, effective_academic_year_id, status, notes, created_at, updated_at
+`
+
+type UpdateCurriculumProfileParams struct {
+	Code                    string      `json:"code"`
+	Name                    string      `json:"name"`
+	RegulationReference     string      `json:"regulation_reference"`
+	EducationLevel          string      `json:"education_level"`
+	EffectiveAcademicYearID pgtype.UUID `json:"effective_academic_year_id"`
+	Status                  string      `json:"status"`
+	Notes                   string      `json:"notes"`
+	ID                      pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateCurriculumProfile(ctx context.Context, arg UpdateCurriculumProfileParams) (CurriculumProfile, error) {
+	row := q.db.QueryRow(ctx, updateCurriculumProfile,
+		arg.Code,
+		arg.Name,
+		arg.RegulationReference,
+		arg.EducationLevel,
+		arg.EffectiveAcademicYearID,
+		arg.Status,
+		arg.Notes,
+		arg.ID,
+	)
+	var i CurriculumProfile
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.RegulationReference,
+		&i.EducationLevel,
+		&i.EffectiveAcademicYearID,
+		&i.Status,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateSubject = `-- name: UpdateSubject :one
 UPDATE subjects
 SET code = $1,
@@ -2782,7 +3251,7 @@ FROM validated
 ON CONFLICT (class_id, subject_id)
 DO UPDATE SET teacher_employee_id = EXCLUDED.teacher_employee_id,
               updated_at = NOW()
-RETURNING id, class_id, subject_id, teacher_employee_id, created_at, updated_at
+RETURNING id, class_id, subject_id, teacher_employee_id, created_at, updated_at, semester_id
 `
 
 type UpsertSubjectAssignmentMatrixCellParams struct {
@@ -2801,6 +3270,7 @@ func (q *Queries) UpsertSubjectAssignmentMatrixCell(ctx context.Context, arg Ups
 		&i.TeacherEmployeeID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SemesterID,
 	)
 	return i, err
 }

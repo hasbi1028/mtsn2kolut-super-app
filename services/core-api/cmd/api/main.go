@@ -67,6 +67,7 @@ func main() {
 	rbacSvc := service.NewRBACWithPool(pool)
 	profileChangeRequestSvc := service.NewProfileChangeRequestWithPool(pool)
 	academicSvc := service.NewSemesterService(q, pool)
+	curriculumSvc := service.NewCurriculumService(q)
 	brandingH := handler.NewBranding(settSvc, getEnv("BRANDING_ASSET_DIR", "data/branding"))
 
 	if err := authSvc.SeedAdmin(mainCtx); err != nil {
@@ -105,6 +106,7 @@ func main() {
 	rbacH := handler.NewRBAC(rbacSvc)
 	profileChangeRequestH := handler.NewProfileChangeRequest(profileChangeRequestSvc)
 	academicH := handler.NewAcademicHandler(academicSvc)
+	curriculumH := handler.NewCurriculumHandler(curriculumSvc, academicSvc)
 
 	jwtSecret := mustEnv("JWT_SECRET")
 	workerKey := mustEnv("WORKER_API_KEY")
@@ -241,6 +243,17 @@ func main() {
 			r.Get("/api/academic/rombels", academicH.ListSchoolClasses)
 			r.Post("/api/academic/rombels", academicH.CreateSchoolClass)
 			r.Delete("/api/academic/rombels/{id}", academicH.DeleteSchoolClass)
+			r.Get("/api/academic/curriculum/profiles", curriculumH.ListProfiles)
+			r.Get("/api/academic/curriculum/profiles/active", curriculumH.GetActiveProfile)
+			r.Post("/api/academic/curriculum/profiles", curriculumH.CreateProfile)
+			r.Post("/api/academic/curriculum/profiles/{id}/activate", curriculumH.ActivateProfile)
+			r.Delete("/api/academic/curriculum/profiles/{id}", curriculumH.DeleteProfile)
+			r.Get("/api/academic/curriculum/profiles/{id}/allocations", curriculumH.ListAllocations)
+			r.Post("/api/academic/curriculum/profiles/{id}/allocations", curriculumH.CreateAllocation)
+			r.Delete("/api/academic/curriculum/allocations/{id}", curriculumH.DeleteAllocation)
+			r.Get("/api/academic/curriculum/assignments", curriculumH.ListAssignments)
+			r.Post("/api/academic/curriculum/assignments", curriculumH.CreateAssignment)
+			r.Delete("/api/academic/curriculum/assignments/{id}", curriculumH.DeleteAssignment)
 		})
 
 		// Jobs / Attendance / Schedules / Settings — admin-only; Users/RBAC pilot use dynamic permissions.

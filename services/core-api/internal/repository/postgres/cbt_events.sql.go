@@ -50,7 +50,7 @@ func (q *Queries) CreateCbtEventMember(ctx context.Context, arg CreateCbtEventMe
 const createCbtExamEvent = `-- name: CreateCbtExamEvent :one
 INSERT INTO cbt_exam_events (title, exam_type, scope, target_levels, academic_year_id, status)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at, target_levels, sop_state, sop_state_updated_at, sop_state_updated_by, sop_state_note
+RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at, target_levels, sop_state, sop_state_updated_at, sop_state_updated_by, sop_state_note, semester_id
 `
 
 type CreateCbtExamEventParams struct {
@@ -86,6 +86,7 @@ func (q *Queries) CreateCbtExamEvent(ctx context.Context, arg CreateCbtExamEvent
 		&i.SopStateUpdatedAt,
 		&i.SopStateUpdatedBy,
 		&i.SopStateNote,
+		&i.SemesterID,
 	)
 	return i, err
 }
@@ -1916,7 +1917,7 @@ const updateCbtExamEvent = `-- name: UpdateCbtExamEvent :one
 UPDATE cbt_exam_events
 SET title = $2, exam_type = $3, scope = $4, target_levels = $5, academic_year_id = $6, updated_at = NOW()
 WHERE id = $1
-RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at, target_levels, sop_state, sop_state_updated_at, sop_state_updated_by, sop_state_note
+RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at, target_levels, sop_state, sop_state_updated_at, sop_state_updated_by, sop_state_note, semester_id
 `
 
 type UpdateCbtExamEventParams struct {
@@ -1952,6 +1953,7 @@ func (q *Queries) UpdateCbtExamEvent(ctx context.Context, arg UpdateCbtExamEvent
 		&i.SopStateUpdatedAt,
 		&i.SopStateUpdatedBy,
 		&i.SopStateNote,
+		&i.SemesterID,
 	)
 	return i, err
 }
@@ -1960,7 +1962,7 @@ const updateCbtExamEventStatus = `-- name: UpdateCbtExamEventStatus :one
 UPDATE cbt_exam_events
 SET status = $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at, target_levels, sop_state, sop_state_updated_at, sop_state_updated_by, sop_state_note
+RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at, target_levels, sop_state, sop_state_updated_at, sop_state_updated_by, sop_state_note, semester_id
 `
 
 type UpdateCbtExamEventStatusParams struct {
@@ -1985,6 +1987,7 @@ func (q *Queries) UpdateCbtExamEventStatus(ctx context.Context, arg UpdateCbtExa
 		&i.SopStateUpdatedAt,
 		&i.SopStateUpdatedBy,
 		&i.SopStateNote,
+		&i.SemesterID,
 	)
 	return i, err
 }

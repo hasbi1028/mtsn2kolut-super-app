@@ -215,7 +215,7 @@ FROM target_assessment
 JOIN students st ON st.class_id = target_assessment.class_id
 WHERE st.is_active = TRUE
 ON CONFLICT (assessment_id, student_id) DO NOTHING
-RETURNING id, assessment_id, student_id, status, evidence_url, evidence_note, score, feedback, submitted_at, graded_at, graded_by_username, created_at, updated_at
+RETURNING id, assessment_id, student_id, status, evidence_url, evidence_note, score, feedback, submitted_at, graded_at, graded_by_username, created_at, updated_at, semester_id
 `
 
 type GenerateNonTestSubmissionsForClassParams struct {
@@ -246,6 +246,7 @@ func (q *Queries) GenerateNonTestSubmissionsForClass(ctx context.Context, arg Ge
 			&i.GradedByUsername,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SemesterID,
 		); err != nil {
 			return nil, err
 		}
@@ -967,7 +968,7 @@ SET
   graded_at = EXCLUDED.graded_at,
   graded_by_username = EXCLUDED.graded_by_username,
   updated_at = NOW()
-RETURNING id, assessment_id, student_id, status, evidence_url, evidence_note, score, feedback, submitted_at, graded_at, graded_by_username, created_at, updated_at
+RETURNING id, assessment_id, student_id, status, evidence_url, evidence_note, score, feedback, submitted_at, graded_at, graded_by_username, created_at, updated_at, semester_id
 `
 
 type UpsertNonTestSubmissionParams struct {
@@ -1011,6 +1012,7 @@ func (q *Queries) UpsertNonTestSubmission(ctx context.Context, arg UpsertNonTest
 		&i.GradedByUsername,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SemesterID,
 	)
 	return i, err
 }

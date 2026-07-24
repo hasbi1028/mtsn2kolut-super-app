@@ -89,7 +89,7 @@ WITH deactivate_existing AS (
         $2,
         $7
     )
-    RETURNING id, class_id, employee_id, academic_year_id, start_date, end_date, is_active, notes, created_at, updated_at
+    RETURNING id, class_id, employee_id, academic_year_id, start_date, end_date, is_active, notes, created_at, updated_at, semester_id
 )
 SELECT
     inserted.id,
@@ -178,7 +178,7 @@ WITH inserted AS (
         $2,
         $3
     )
-    RETURNING id, class_id, subject_id, teacher_employee_id, created_at, updated_at
+    RETURNING id, class_id, subject_id, teacher_employee_id, created_at, updated_at, semester_id
 )
 SELECT
     inserted.id,
@@ -270,7 +270,7 @@ WITH inserted AS (
             AND lpt.day_of_week = $2
         )
       )
-    RETURNING id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at, lesson_period_id, slot_type, lesson_hours
+    RETURNING id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at, lesson_period_id, slot_type, lesson_hours, semester_id
 )
 SELECT
     inserted.id,
@@ -1141,7 +1141,7 @@ WITH target AS (
         notes = $4,
         updated_at = NOW()
     WHERE class_homeroom_assignments.id = $1
-    RETURNING id, class_id, employee_id, academic_year_id, start_date, end_date, is_active, notes, created_at, updated_at
+    RETURNING id, class_id, employee_id, academic_year_id, start_date, end_date, is_active, notes, created_at, updated_at, semester_id
 )
 SELECT
     updated.id,
@@ -1337,7 +1337,7 @@ WITH updated AS (
         updated_at = NOW()
     WHERE class_subject_assignments.class_id = $3
       AND class_subject_assignments.id = $4
-    RETURNING id, class_id, subject_id, teacher_employee_id, created_at, updated_at
+    RETURNING id, class_id, subject_id, teacher_employee_id, created_at, updated_at, semester_id
 )
 SELECT
     updated.id,
@@ -1436,7 +1436,7 @@ WITH updated AS (
             AND lpt.day_of_week = $2
         )
       )
-    RETURNING timetable_slots.id, timetable_slots.assignment_id, timetable_slots.day_of_week, timetable_slots.start_time, timetable_slots.end_time, timetable_slots.room_label, timetable_slots.notes, timetable_slots.created_at, timetable_slots.updated_at, timetable_slots.lesson_period_id, timetable_slots.slot_type, timetable_slots.lesson_hours
+    RETURNING timetable_slots.id, timetable_slots.assignment_id, timetable_slots.day_of_week, timetable_slots.start_time, timetable_slots.end_time, timetable_slots.room_label, timetable_slots.notes, timetable_slots.created_at, timetable_slots.updated_at, timetable_slots.lesson_period_id, timetable_slots.slot_type, timetable_slots.lesson_hours, timetable_slots.semester_id
 )
 SELECT
     updated.id,

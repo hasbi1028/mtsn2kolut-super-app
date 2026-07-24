@@ -1123,3 +1123,112 @@ RETURNING *;
 
 -- name: DeleteSemester :exec
 DELETE FROM semesters WHERE id = $1;
+
+-- ─── Curriculum Profiles ────────────────────────────────────────
+
+-- name: CreateCurriculumProfile :one
+INSERT INTO curriculum_profiles (id, code, name, regulation_reference, education_level, effective_academic_year_id, status, notes)
+VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
+RETURNING *;
+
+-- name: UpdateCurriculumProfile :one
+UPDATE curriculum_profiles
+SET code = $1,
+    name = $2,
+    regulation_reference = $3,
+    education_level = $4,
+    effective_academic_year_id = $5,
+    status = $6,
+    notes = $7,
+    updated_at = NOW()
+WHERE id = $8
+RETURNING *;
+
+-- name: DeleteCurriculumProfile :exec
+DELETE FROM curriculum_profiles WHERE id = $1;
+
+-- name: CountCurriculumProfileCodeConflicts :one
+SELECT COUNT(*)::int
+FROM curriculum_profiles
+WHERE id <> sqlc.arg(id)
+  AND LOWER(code) = LOWER(sqlc.arg(code));
+
+-- name: ActivateCurriculumProfile :one
+UPDATE curriculum_profiles
+SET status = 'active',
+    updated_at = NOW()
+WHERE id = $1
+RETURNING *;
+
+-- name: DeactivateCurriculumProfiles :exec
+UPDATE curriculum_profiles
+SET status = CASE WHEN id = $1 THEN 'active' ELSE 'archived' END,
+    updated_at = NOW()
+WHERE id = $1 OR status = 'active';
+
+-- ─── Curriculum Subject Allocations ─────────────────────────────
+
+-- name: CreateCurriculumAllocation :one
+INSERT INTO curriculum_subject_allocations (
+    id, curriculum_profile_id, subject_id, level, subject_group,
+    intra_annual_hours, koku_annual_hours, total_annual_hours,
+    intra_weekly_hours, koku_weekly_hours, total_weekly_hours,
+    lesson_minutes, display_order,
+    counts_for_schedule, counts_for_report, counts_for_assessment, counts_for_ranking,
+    is_required, notes
+) VALUES (
+    gen_random_uuid(), $1, $2, $3, $4,
+    $5, $6, $7,
+    $8, $9, $10,
+    $11, $12,
+    $13, $14, $15, $16,
+    $17, $18
+)
+RETURNING *;
+
+-- name: UpdateCurriculumAllocation :one
+UPDATE curriculum_subject_allocations
+SET subject_id = $1,
+    level = $2,
+    subject_group = $3,
+    intra_annual_hours = $4,
+    koku_annual_hours = $5,
+    total_annual_hours = $6,
+    intra_weekly_hours = $7,
+    koku_weekly_hours = $8,
+    total_weekly_hours = $9,
+    lesson_minutes = $10,
+    display_order = $11,
+    counts_for_schedule = $12,
+    counts_for_report = $13,
+    counts_for_assessment = $14,
+    counts_for_ranking = $15,
+    is_required = $16,
+    notes = $17,
+    updated_at = NOW()
+WHERE id = $18
+RETURNING *;
+
+-- name: DeleteCurriculumAllocation :exec
+DELETE FROM curriculum_subject_allocations WHERE id = $1;
+
+-- ─── Class Curriculum Assignments ───────────────────────────────
+
+-- name: CreateClassCurriculumAssignment :one
+INSERT INTO class_curriculum_assignments (id, class_id, curriculum_profile_id, is_active, notes)
+VALUES (gen_random_uuid(), $1, $2, $3, $4)
+RETURNING *;
+
+-- name: DeleteClassCurriculumAssignment :exec
+DELETE FROM class_curriculum_assignments WHERE id = $1;
+
+-- name: ListActiveAssignmentsBySemester :many
+SELECT cca.id, cca.class_id, sc.code AS class_code, sc.name AS class_name, sc.level AS class_level,
+       cca.curriculum_profile_id, cp.code AS curriculum_code, cp.name AS curriculum_name,
+       cca.is_active, cca.notes, cca.created_at, cca.updated_at
+FROM class_curriculum_assignments cca
+JOIN school_classes sc ON sc.id = cca.class_id
+JOIN curriculum_profiles cp ON cp.id = cca.curriculum_profile_id
+WHERE cca.is_active = TRUE
+  AND (sqlc.narg(class_id)::uuid IS NULL OR cca.class_id = sqlc.narg(class_id)::uuid)
+ORDER BY sc.level ASC, sc.name ASC;

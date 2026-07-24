@@ -14,7 +14,7 @@ import (
 const createGradeComponent = `-- name: CreateGradeComponent :one
 INSERT INTO grade_components (assignment_id, title, category, weight, max_score, is_published)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, assignment_id, title, category, weight, max_score, is_published, created_at, updated_at
+RETURNING id, assignment_id, title, category, weight, max_score, is_published, created_at, updated_at, semester_id
 `
 
 type CreateGradeComponentParams struct {
@@ -46,6 +46,7 @@ func (q *Queries) CreateGradeComponent(ctx context.Context, arg CreateGradeCompo
 		&i.IsPublished,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SemesterID,
 	)
 	return i, err
 }
@@ -120,9 +121,17 @@ FROM grade_assignment_finalizations
 WHERE assignment_id = $1
 `
 
-func (q *Queries) GetGradeAssignmentFinalization(ctx context.Context, assignmentID pgtype.UUID) (GradeAssignmentFinalization, error) {
+type GetGradeAssignmentFinalizationRow struct {
+	AssignmentID pgtype.UUID        `json:"assignment_id"`
+	FinalizedBy  string             `json:"finalized_by"`
+	Notes        string             `json:"notes"`
+	FinalizedAt  pgtype.Timestamptz `json:"finalized_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetGradeAssignmentFinalization(ctx context.Context, assignmentID pgtype.UUID) (GetGradeAssignmentFinalizationRow, error) {
 	row := q.db.QueryRow(ctx, getGradeAssignmentFinalization, assignmentID)
-	var i GradeAssignmentFinalization
+	var i GetGradeAssignmentFinalizationRow
 	err := row.Scan(
 		&i.AssignmentID,
 		&i.FinalizedBy,
@@ -140,9 +149,21 @@ FROM grade_components gc
 WHERE gc.id = $1
 `
 
-func (q *Queries) GetGradeComponent(ctx context.Context, id pgtype.UUID) (GradeComponent, error) {
+type GetGradeComponentRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	AssignmentID pgtype.UUID        `json:"assignment_id"`
+	Title        string             `json:"title"`
+	Category     string             `json:"category"`
+	Weight       float64            `json:"weight"`
+	MaxScore     float64            `json:"max_score"`
+	IsPublished  bool               `json:"is_published"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetGradeComponent(ctx context.Context, id pgtype.UUID) (GetGradeComponentRow, error) {
 	row := q.db.QueryRow(ctx, getGradeComponent, id)
-	var i GradeComponent
+	var i GetGradeComponentRow
 	err := row.Scan(
 		&i.ID,
 		&i.AssignmentID,
@@ -611,7 +632,7 @@ SET title = $2,
     max_score = $5,
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, assignment_id, title, category, weight, max_score, is_published, created_at, updated_at
+RETURNING id, assignment_id, title, category, weight, max_score, is_published, created_at, updated_at, semester_id
 `
 
 type UpdateGradeComponentParams struct {
@@ -641,6 +662,7 @@ func (q *Queries) UpdateGradeComponent(ctx context.Context, arg UpdateGradeCompo
 		&i.IsPublished,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SemesterID,
 	)
 	return i, err
 }
@@ -650,7 +672,7 @@ UPDATE grade_components
 SET is_published = $2,
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, assignment_id, title, category, weight, max_score, is_published, created_at, updated_at
+RETURNING id, assignment_id, title, category, weight, max_score, is_published, created_at, updated_at, semester_id
 `
 
 type UpdateGradeComponentPublishStateParams struct {
@@ -671,6 +693,7 @@ func (q *Queries) UpdateGradeComponentPublishState(ctx context.Context, arg Upda
 		&i.IsPublished,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SemesterID,
 	)
 	return i, err
 }
@@ -683,7 +706,7 @@ SET finalized_by = EXCLUDED.finalized_by,
     notes = EXCLUDED.notes,
     finalized_at = NOW(),
     updated_at = NOW()
-RETURNING assignment_id, finalized_by, notes, finalized_at, updated_at
+RETURNING assignment_id, finalized_by, notes, finalized_at, updated_at, semester_id
 `
 
 type UpsertGradeAssignmentFinalizationParams struct {
@@ -701,6 +724,7 @@ func (q *Queries) UpsertGradeAssignmentFinalization(ctx context.Context, arg Ups
 		&i.Notes,
 		&i.FinalizedAt,
 		&i.UpdatedAt,
+		&i.SemesterID,
 	)
 	return i, err
 }
@@ -714,7 +738,7 @@ ON CONFLICT (component_id, student_id) DO UPDATE
       graded_by  = EXCLUDED.graded_by,
       graded_at  = NOW(),
       updated_at = NOW()
-RETURNING id, component_id, student_id, score, notes, graded_by, graded_at, created_at, updated_at
+RETURNING id, component_id, student_id, score, notes, graded_by, graded_at, created_at, updated_at, semester_id
 `
 
 type UpsertGradeEntryParams struct {
@@ -744,6 +768,7 @@ func (q *Queries) UpsertGradeEntry(ctx context.Context, arg UpsertGradeEntryPara
 		&i.GradedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SemesterID,
 	)
 	return i, err
 }

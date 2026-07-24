@@ -167,7 +167,7 @@ VALUES (
     $5, $6, $7, $8,
     $9
 )
-RETURNING id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at, lesson_period_id, slot_type, lesson_hours
+RETURNING id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at, lesson_period_id, slot_type, lesson_hours, semester_id
 `
 
 type CreateTimetableSlotParams struct {
@@ -208,6 +208,7 @@ func (q *Queries) CreateTimetableSlot(ctx context.Context, arg CreateTimetableSl
 		&i.LessonPeriodID,
 		&i.SlotType,
 		&i.LessonHours,
+		&i.SemesterID,
 	)
 	return i, err
 }
@@ -265,9 +266,24 @@ FROM timetable_slots
 WHERE id = $1
 `
 
-func (q *Queries) GetTimetableSlot(ctx context.Context, id pgtype.UUID) (TimetableSlot, error) {
+type GetTimetableSlotRow struct {
+	ID             pgtype.UUID        `json:"id"`
+	AssignmentID   pgtype.UUID        `json:"assignment_id"`
+	DayOfWeek      int16              `json:"day_of_week"`
+	StartTime      pgtype.Time        `json:"start_time"`
+	EndTime        pgtype.Time        `json:"end_time"`
+	RoomLabel      string             `json:"room_label"`
+	Notes          string             `json:"notes"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	LessonPeriodID pgtype.UUID        `json:"lesson_period_id"`
+	SlotType       string             `json:"slot_type"`
+	LessonHours    pgtype.Numeric     `json:"lesson_hours"`
+}
+
+func (q *Queries) GetTimetableSlot(ctx context.Context, id pgtype.UUID) (GetTimetableSlotRow, error) {
 	row := q.db.QueryRow(ctx, getTimetableSlot, id)
-	var i TimetableSlot
+	var i GetTimetableSlotRow
 	err := row.Scan(
 		&i.ID,
 		&i.AssignmentID,
@@ -1334,7 +1350,7 @@ SET assignment_id = $1,
     lesson_hours = $9,
     updated_at = NOW()
 WHERE id = $10
-RETURNING id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at, lesson_period_id, slot_type, lesson_hours
+RETURNING id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at, lesson_period_id, slot_type, lesson_hours, semester_id
 `
 
 type UpdateTimetableSlotParams struct {
@@ -1377,6 +1393,7 @@ func (q *Queries) UpdateTimetableSlot(ctx context.Context, arg UpdateTimetableSl
 		&i.LessonPeriodID,
 		&i.SlotType,
 		&i.LessonHours,
+		&i.SemesterID,
 	)
 	return i, err
 }

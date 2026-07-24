@@ -1142,6 +1142,7 @@ type CbtExamEvent struct {
 	SopStateUpdatedAt pgtype.Timestamptz `json:"sop_state_updated_at"`
 	SopStateUpdatedBy pgtype.UUID        `json:"sop_state_updated_by"`
 	SopStateNote      string             `json:"sop_state_note"`
+	SemesterID        pgtype.UUID        `json:"semester_id"`
 }
 
 type CbtExamParticipant struct {
@@ -1480,6 +1481,7 @@ type ClassCurriculumAssignment struct {
 	Notes               string             `json:"notes"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	SemesterID          pgtype.UUID        `json:"semester_id"`
 }
 
 type ClassHomeroomAssignment struct {
@@ -1493,6 +1495,7 @@ type ClassHomeroomAssignment struct {
 	Notes          string             `json:"notes"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	SemesterID     pgtype.UUID        `json:"semester_id"`
 }
 
 type ClassJournalAttendance struct {
@@ -1540,6 +1543,7 @@ type ClassSubjectAssignment struct {
 	TeacherEmployeeID pgtype.UUID        `json:"teacher_employee_id"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	SemesterID        pgtype.UUID        `json:"semester_id"`
 }
 
 type CounselingSession struct {
@@ -1896,6 +1900,7 @@ type GradeAssignmentFinalization struct {
 	Notes        string             `json:"notes"`
 	FinalizedAt  pgtype.Timestamptz `json:"finalized_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	SemesterID   pgtype.UUID        `json:"semester_id"`
 }
 
 type GradeComponent struct {
@@ -1908,6 +1913,7 @@ type GradeComponent struct {
 	IsPublished  bool               `json:"is_published"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	SemesterID   pgtype.UUID        `json:"semester_id"`
 }
 
 type GradeEntry struct {
@@ -1920,6 +1926,7 @@ type GradeEntry struct {
 	GradedAt    pgtype.Timestamptz `json:"graded_at"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	SemesterID  pgtype.UUID        `json:"semester_id"`
 }
 
 type GradeStudentSubjectDescription struct {
@@ -2134,6 +2141,7 @@ type NonTestAssessmentSubmission struct {
 	GradedByUsername string             `json:"graded_by_username"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	SemesterID       pgtype.UUID        `json:"semester_id"`
 }
 
 type OutgoingLetter struct {
@@ -2557,6 +2565,7 @@ type TimetableSlot struct {
 	LessonPeriodID pgtype.UUID        `json:"lesson_period_id"`
 	SlotType       string             `json:"slot_type"`
 	LessonHours    pgtype.Numeric     `json:"lesson_hours"`
+	SemesterID     pgtype.UUID        `json:"semester_id"`
 }
 
 type User struct {
