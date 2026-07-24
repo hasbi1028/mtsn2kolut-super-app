@@ -51,3 +51,16 @@ export const PUT = async (event: RequestEvent) => {
 		return handleRouteError(e, 'employees/:id PUT');
 	}
 };
+
+export const DELETE = async (event: RequestEvent) => {
+	try {
+		const id = requiredRouteParam(event.params.id, 'id');
+		await proxy(event).del(apiPath`/api/employees/${id}`);
+		return new Response(null, { status: 204 });
+	} catch (e) {
+		if (e instanceof ApiError && e.status === 404) {
+			return json({ error: 'Pegawai tidak ditemukan' }, { status: 404 });
+		}
+		return handleRouteError(e, 'employees/:id DELETE');
+	}
+};
