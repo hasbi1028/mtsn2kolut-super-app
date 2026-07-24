@@ -237,19 +237,17 @@
       <div class="space-y-2 lg:col-span-1">
         <h2 class="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-0.5">Daftar</h2>
         {#each profiles as p (p.id)}
-          <Card.Root class="cursor-pointer transition-all hover:border-primary/30 {selectedProfile?.id === p.id ? 'border-primary ring-1 ring-primary/20' : ''} {p.status === 'archived' ? 'opacity-60' : ''}" onclick={() => selectProfile(p)}>
-            <Card.Content class="p-3.5">
-              <div class="flex items-center justify-between gap-2">
-                <div class="min-w-0">
-                  <div class="flex items-center gap-1.5">
-                    <span class="text-sm font-semibold text-foreground truncate">{p.code}</span>
-                    <Badge variant={statusBadge(p.status)} class="text-[9px] px-1.5">{p.status}</Badge>
-                  </div>
-                  <p class="mt-0.5 text-xs text-muted-foreground truncate">{p.name}</p>
+          <button type="button" class="w-full text-left cursor-pointer transition-all hover:border-primary/30 rounded-xl border border-border bg-base-100 shadow-sm p-3.5 {selectedProfile?.id === p.id ? 'border-primary ring-1 ring-primary/20' : ''} {p.status === 'archived' ? 'opacity-60' : ''}" onclick={() => selectProfile(p)}>
+            <div class="flex items-center justify-between gap-2">
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-sm font-semibold text-foreground truncate">{p.code}</span>
+                  <Badge variant={statusBadge(p.status)} class="text-[9px] px-1.5">{p.status}</Badge>
                 </div>
+                <p class="mt-0.5 text-xs text-muted-foreground truncate">{p.name}</p>
               </div>
-            </Card.Content>
-          </Card.Root>
+            </div>
+          </button>
         {/each}
       </div>
 
@@ -280,20 +278,18 @@
       {#if !showDetail || !selectedProfile}
         <!-- List -->
         {#each profiles as p (p.id)}
-          <Card.Root class="cursor-pointer active:scale-[0.98] transition-transform {p.status === 'archived' ? 'opacity-60' : ''}" onclick={() => selectProfile(p)}>
-            <Card.Content class="p-4">
-              <div class="flex items-center justify-between gap-2">
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-1.5">
-                    <span class="text-sm font-semibold text-foreground">{p.code}</span>
-                    <Badge variant={statusBadge(p.status)} class="text-[9px] px-1.5">{p.status}</Badge>
-                  </div>
-                  <p class="mt-0.5 text-xs text-muted-foreground">{p.name}</p>
+          <button type="button" class="w-full text-left cursor-pointer active:scale-[0.98] transition-transform rounded-xl border border-border bg-base-100 shadow-sm p-4 {p.status === 'archived' ? 'opacity-60' : ''}" onclick={() => selectProfile(p)}>
+            <div class="flex items-center justify-between gap-2">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-sm font-semibold text-foreground">{p.code}</span>
+                  <Badge variant={statusBadge(p.status)} class="text-[9px] px-1.5">{p.status}</Badge>
                 </div>
-                <svg class="w-4 h-4 text-muted-foreground shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                <p class="mt-0.5 text-xs text-muted-foreground">{p.name}</p>
               </div>
-            </Card.Content>
-          </Card.Root>
+              <svg class="w-4 h-4 text-muted-foreground shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+          </button>
         {/each}
       {:else}
         <!-- Detail full screen mobile -->
