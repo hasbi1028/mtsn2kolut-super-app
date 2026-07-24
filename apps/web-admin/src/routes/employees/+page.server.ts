@@ -29,9 +29,14 @@ function extractEmployees(payload: EmployeesPayload | Employee[]): Employee[] {
   return payload.items ?? payload.data?.items ?? [];
 }
 
-export const load: PageServerLoad = async ({ fetch, url, locals }) => {
+function getCookieHeaders(request: Request, url: URL): Record<string, string> {
+  const cookie = request.headers.get('cookie') || url.searchParams.toString();
+  return cookie ? { cookie } : {};
+}
+
+export const load: PageServerLoad = async ({ fetch, url, request }) => {
   const res = await fetch(`${url.origin}/api/employees`, {
-    headers: { cookie: url.searchParams.toString() }
+    headers: getCookieHeaders(request, url),
   });
 
   if (!res.ok) {
@@ -80,7 +85,7 @@ export const actions: Actions = {
 
     const res = await fetch(`${url.origin}/api/employees`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...getCookieHeaders(request, url) },
       body: JSON.stringify(body),
     });
 
@@ -106,11 +111,21 @@ export const actions: Actions = {
 
     const res = await fetch(`${url.origin}/api/employees/${id}`, {
       method: 'DELETE',
+      headers: getCookieHeaders(request, url),
     });
 
     if (!res.ok) {
       let errMsg = 'Gagal menghapus pegawai.';
-      try { const e = await res.json(); errMsg = e.error || e.message || errMsg; } catch {}
+      try {
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('json')) {
+          const e = await res.json();
+          errMsg = e.error || e.message || errMsg;
+        } else {
+          const text = await res.text();
+          if (text && text.length < 200) errMsg = text;
+        }
+      } catch {}
       return fail(res.status, { hapusError: errMsg });
     }
 
@@ -129,13 +144,22 @@ export const actions: Actions = {
 
     const res = await fetch(`${url.origin}/api/employees/${id}/status`, {
       method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...getCookieHeaders(request, url) },
       body: JSON.stringify({ is_active: !isActive }),
     });
 
     if (!res.ok) {
       let errMsg = 'Gagal mengubah status pegawai.';
-      try { const e = await res.json(); errMsg = e.error || e.message || errMsg; } catch {}
+      try {
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('json')) {
+          const e = await res.json();
+          errMsg = e.error || e.message || errMsg;
+        } else {
+          const text = await res.text();
+          if (text && text.length < 200) errMsg = text;
+        }
+      } catch {}
       return fail(res.status, { nonaktifError: errMsg });
     }
 
