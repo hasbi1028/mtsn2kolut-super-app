@@ -113,6 +113,9 @@ func main() {
 	kesiswaanSvc := service.NewKesiswaanService(q)
 	kesiswaanH := handler.NewKesiswaanHandler(kesiswaanSvc)
 
+	timetableSvc := service.NewTimetableService(q)
+	timetableH := handler.NewTimetableHandler(timetableSvc)
+
 	jwtSecret := mustEnv("JWT_SECRET")
 	workerKey := mustEnv("WORKER_API_KEY")
 	internalAPIKey := getEnv("INTERNAL_API_KEY", "")
@@ -273,6 +276,15 @@ func main() {
 			r.Use(mw.RequireAnyPermissionOrRole([]string{"kesiswaan.read", "kesiswaan.manage"}, "admin"))
 			r.Get("/api/kesiswaan/murid", kesiswaanH.ListMurid)
 			r.Put("/api/kesiswaan/murid/{id}/profile", kesiswaanH.UpdateMuridProfile)
+		})
+
+		// Timetable — jadwal pelajaran
+		r.Group(func(r chi.Router) {
+			r.Use(mw.RequireAnyPermissionOrRole([]string{"academic.read", "academic.manage"}, "admin"))
+			r.Get("/api/academic/timetable/weekly", timetableH.GetWeeklyData)
+			r.Post("/api/academic/timetable/slots", timetableH.CreateSlot)
+			r.Put("/api/academic/timetable/slots/{id}", timetableH.UpdateSlot)
+			r.Delete("/api/academic/timetable/slots/{id}", timetableH.DeleteSlot)
 		})
 
 		// Jobs / Attendance / Schedules / Settings — admin-only; Users/RBAC pilot use dynamic permissions.
