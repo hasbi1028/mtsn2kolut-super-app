@@ -41,6 +41,26 @@
       {form.tambahError}
     </div>
   {/if}
+  {#if form?.hapusSuccess}
+    <div class="rounded-xl border border-success/20 bg-success/10 px-5 py-4 text-sm text-foreground">
+      {form.hapusSuccess}
+    </div>
+  {/if}
+  {#if form?.hapusError}
+    <div class="rounded-xl border border-destructive/20 bg-destructive/10 px-5 py-4 text-sm text-foreground">
+      {form.hapusError}
+    </div>
+  {/if}
+  {#if form?.nonaktifSuccess}
+    <div class="rounded-xl border border-success/20 bg-success/10 px-5 py-4 text-sm text-foreground">
+      {form.nonaktifSuccess}
+    </div>
+  {/if}
+  {#if form?.nonaktifError}
+    <div class="rounded-xl border border-destructive/20 bg-destructive/10 px-5 py-4 text-sm text-foreground">
+      {form.nonaktifError}
+    </div>
+  {/if}
 
   <div class="grid gap-4 md:grid-cols-3">
     <div class="rounded-xl border border-base-300 bg-base-100 px-5 py-4 flex flex-col gap-1.5">
@@ -62,6 +82,6 @@
     </div>
   </div>
 
-  <EmployeeForm />
-  <GeneralEmployeeList {employees} />
+  <EmployeeForm {form} />
+  <GeneralEmployeeList {employees} {form} />
 </div>

@@ -28,9 +28,10 @@
     is_active: boolean;
   }
 
-  let { employees, onreload }: {
+  let { employees, onreload, form }: {
     employees: Employee[];
     onreload?: () => void | Promise<void>;
+    form?: { hapusSuccess?: string; hapusError?: string; nonaktifSuccess?: string; nonaktifError?: string };
   } = $props();
 
   let confirmId = $state<string | null>(null);
@@ -385,14 +386,14 @@
                   <Button size="sm" variant="outline" onclick={() => openEditDialog(e)} class="text-xs">
                     Edit
                   </Button>
-                  <form method="POST" action="?/nonaktifkan" class="inline">
+                  <form method="POST" action="?/nonaktifkan" class="inline" use:enhance>
                     <input type="hidden" name="id" value={e.id} />
                     <input type="hidden" name="is_active" value={String(e.is_active)} />
                     <button type="submit" class="inline-flex items-center justify-center rounded-md h-8 px-3 text-xs font-medium border border-input bg-background text-foreground hover:bg-accent transition-colors">
                       {e.is_active ? 'Nonaktifkan' : 'Aktifkan'}
                     </button>
                   </form>
-                  <form method="POST" action="?/hapus" class="inline">
+                  <form method="POST" action="?/hapus" class="inline" use:enhance>
                     <input type="hidden" name="id" value={e.id} />
                     <button type="submit" class="inline-flex items-center justify-center rounded-md h-8 px-3 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors">
                       Hapus
