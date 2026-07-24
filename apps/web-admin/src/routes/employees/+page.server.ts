@@ -109,7 +109,9 @@ export const actions: Actions = {
     });
 
     if (!res.ok) {
-      return fail(res.status, { hapusError: 'Gagal menghapus pegawai.' });
+      let errMsg = 'Gagal menghapus pegawai.';
+      try { const e = await res.json(); errMsg = e.error || e.message || errMsg; } catch {}
+      return fail(res.status, { hapusError: errMsg });
     }
 
     return { hapusSuccess: 'Pegawai berhasil dihapus.' };
@@ -132,7 +134,9 @@ export const actions: Actions = {
     });
 
     if (!res.ok) {
-      return fail(res.status, { nonaktifError: 'Gagal mengubah status pegawai.' });
+      let errMsg = 'Gagal mengubah status pegawai.';
+      try { const e = await res.json(); errMsg = e.error || e.message || errMsg; } catch {}
+      return fail(res.status, { nonaktifError: errMsg });
     }
 
     return { nonaktifSuccess: `Pegawai ${isActive ? 'dinonaktifkan' : 'diaktifkan'}.` };
