@@ -19,7 +19,7 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 	let activeSemester: { id: string; label: string; academic_year_id: string } | null = null;
 	if (semRes.ok) {
 		const sem = await semRes.json();
-		activeSemester = sem.data ?? null;
+		activeSemester = sem?.data ?? sem ?? null;
 	}
 
 	let items: Rombel[] = [];
