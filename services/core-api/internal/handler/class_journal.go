@@ -139,6 +139,21 @@ func (h *ClassJournal) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, map[string]string{"status": "ok"})
 }
 
+// GET /api/class-journal/sessions/{id}
+func (h *ClassJournal) GetSession(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("id")
+	if sessionID == "" {
+		api.BadRequest(w, "session_id wajib diisi")
+		return
+	}
+	session, err := h.svc.GetSession(r.Context(), sessionID)
+	if err != nil {
+		writeDomainOrInternal(w, err, "gagal memuat jurnal")
+		return
+	}
+	api.OK(w, session)
+}
+
 // GET /api/class-journal/summary?assignment_id=
 func (h *ClassJournal) AttendanceSummary(w http.ResponseWriter, r *http.Request) {
 	assignmentID := r.URL.Query().Get("assignment_id")

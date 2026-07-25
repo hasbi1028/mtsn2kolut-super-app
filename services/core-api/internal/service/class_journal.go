@@ -336,9 +336,26 @@ func (s *ClassJournal) AttendanceSummary(ctx context.Context, assignmentID strin
 // ─── Delete Session ───
 
 func (s *ClassJournal) DeleteSession(ctx context.Context, id string) error {
-	err := s.q.DeleteJournalSession(ctx, pgUUID(id))
+	return s.q.DeleteJournalSession(ctx, pgUUID(id))
+}
+
+func (s *ClassJournal) GetSession(ctx context.Context, id string) (*JournalOverviewItem, error) {
+	row, err := s.q.GetJournalSession(ctx, pgUUID(id))
 	if err != nil {
-		return fmt.Errorf("delete journal session: %w", err)
+		return nil, fmt.Errorf("get session: %w", err)
 	}
-	return nil
+	return &JournalOverviewItem{
+		ID:          pgUUIDString(row.ID),
+		AssignmentID: pgUUIDString(row.AssignmentID),
+		Tanggal:     row.Tanggal.Time.Format("2006-01-02"),
+		PertemuanKe: row.PertemuanKe,
+		Materi:      row.Materi,
+		Kegiatan:    row.Kegiatan,
+		Catatan:     row.Catatan,
+		GuruHadir:   row.GuruHadir,
+		ClassName:   row.ClassName,
+		ClassCode:   row.ClassCode,
+		SubjectName: row.SubjectName,
+		TeacherName: row.TeacherName,
+	}, nil
 }

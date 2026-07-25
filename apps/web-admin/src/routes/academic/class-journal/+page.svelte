@@ -267,7 +267,7 @@
                 <td class="px-3 py-2 text-xs text-muted-foreground hidden md:table-cell max-w-[200px] truncate">{s.kegiatan || '—'}</td>
                 <td class="px-3 py-2 text-center">{#if s.guru_hadir}<span class="text-[10px] text-green-600 font-semibold bg-green-50 px-1.5 py-0.5 rounded">Hadir</span>{:else}<span class="text-[10px] text-muted-foreground">—</span>{/if}</td>
                 <td class="px-3 py-2 text-right whitespace-nowrap space-x-1">
-                  <button class="text-xs text-primary hover:underline" onclick={() => openAttendance(s)}>Absensi</button>
+                  <a href={`/academic/class-journal/attendance/${s.id}`} class="text-xs text-primary hover:underline">Absensi</a>
                   <button class="text-xs text-destructive hover:underline" onclick={() => deleteSession(s.id, s.tanggal)}>Hapus</button>
                 </td>
               </tr>{/each}
@@ -277,7 +277,7 @@
         <!-- Mobile card list -->
         <div class="lg:hidden space-y-2">
           {#each sessions as s (s.id)}
-            <div class="rounded-xl border border-border bg-base-100 shadow-sm p-3 space-y-1.5" role="button" onclick={() => openAttendance(s)}>
+            <div class="rounded-xl border border-border bg-base-100 shadow-sm p-3 space-y-1.5">
               <div class="flex items-center justify-between">
                 <span class="text-sm font-semibold">{s.tanggal}</span>
                 <span class="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">#{s.pertemuan_ke}</span>
@@ -285,7 +285,7 @@
               <p class="text-xs text-muted-foreground">{s.materi || '—'}</p>
               <div class="flex justify-between items-center pt-0.5">
                 <button class="text-xs text-destructive hover:underline" onclick={(e) => { e.stopPropagation(); deleteSession(s.id, s.tanggal); }}>Hapus</button>
-                {#if s.guru_hadir}<span class="text-[10px] text-green-600">Guru Hadir</span>{/if}
+                <a href={`/academic/class-journal/attendance/${s.id}`} class="text-xs text-primary hover:underline">Absensi →</a>
               </div>
             </div>
           {/each}
