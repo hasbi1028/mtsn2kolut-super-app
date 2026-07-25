@@ -245,18 +245,60 @@ type AttendanceItem struct {
 }
 
 func (s *ClassJournal) ListAttendances(ctx context.Context, sessionID string) ([]AttendanceItem, error) {
+	// First try stored records
 	rows, err := s.q.ListJournalAttendances(ctx, pgUUID(sessionID))
 	if err != nil {
 		return nil, fmt.Errorf("list attendances: %w", err)
 	}
-	items := make([]AttendanceItem, len(rows))
-	for i, r := range rows {
-		items[i] = AttendanceItem{
-			ID: pgUUIDString(r.ID), SessionID: pgUUIDString(r.SessionID),
-			StudentID: pgUUIDString(r.StudentID), Status: string(r.Status),
-			Catatan: r.Catatan, NIS: r.Nis, NISN: r.Nisn,
-			Nama: r.Nama, Gender: string(r.Gender),
+
+	// If we already have records, return them
+	if len(rows) > 0 {
+		items := make([]AttendanceItem, len(rows))
+		for i, r := range rows {
+			items[i] = AttendanceItem{
+				ID: pgUUIDString(r.ID), SessionID: pgUUIDString(r.SessionID),
+				StudentID: pgUUIDString(r.StudentID), Status: string(r.Status),
+				Catatan: r.Catatan, NIS: r.Nis, NISN: r.Nisn,
+				Nama: r.Nama, Gender: string(r.Gender),
+			}
 		}
+		return items, nil
+	}
+
+	// No records yet — get class_id from session and list students in that class
+	session, err := s.q.GetJournalSession(ctx, pgUUID(sessionID))
+	if err != nil {
+		// If session not found, return empty
+		return []AttendanceItem{}, nil
+	}
+
+	classID := session.ClassID
+	if !classID.Valid {
+		return []AttendanceItem{}, nil
+	}
+
+	// List students in the class with default "hadir" status
+	students, err := s.q.ListStudentsByClassWithParents(ctx, classID)
+	if err != nil {
+		return nil, fmt.Errorf("list students by class for attendance: %w", err)
+	}
+
+	items := make([]AttendanceItem, 0, len(students))
+	seen := make(map[string]bool)
+	for _, st := range students {
+		sid := pgUUIDString(st.StudentID)
+		if seen[sid] {
+			continue
+		}
+		seen[sid] = true
+		items = append(items, AttendanceItem{
+			StudentID: sid,
+			Status:    "hadir",
+			NIS:       st.Nis,
+			NISN:      st.Nisn,
+			Nama:      st.StudentName,
+			Gender:    string(st.Gender),
+		})
 	}
 	return items, nil
 }
