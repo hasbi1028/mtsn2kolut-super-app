@@ -20,6 +20,7 @@
 
   // — Tab state
   let activeTab = $state<'journal' | 'rekap'>('journal');
+  let lastSessionCount = $state(0);
 
   // — Step 1a: Select class
   let selectedClassId = $state('');
@@ -69,8 +70,8 @@
       const r = await fetch(`/api/class-journal?assignment_id=${selectedAssignmentId}`);
       if (r.ok) {
         const p = await r.json();
-        // proxy get() already unwraps {"data": [...]} → just [...]
         sessions = Array.isArray(p) ? p : (p?.data ?? []);
+        lastSessionCount = sessions.length;
       }
     } catch(e) { console.log('loadSessions: error', e); }
     finally { loading = false; }
@@ -85,6 +86,16 @@
     } catch {}
     finally { summaryLoading = false; }
   }
+
+  // — Auto-refresh saat pindah tab
+  $effect(() => {
+    if (activeTab === 'rekap' && selectedAssignmentId) {
+      loadSummary();
+    }
+    if (activeTab === 'journal' && selectedAssignmentId && sessions.length === 0) {
+      loadSessions();
+    }
+  });
 
   // — Summary helpers
   let totalStudents = $derived(summaryData.length);
@@ -152,16 +163,38 @@
         method: 'PUT', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ records: attendances.map(a => ({ student_id: a.student_id, status: a.status, catatan: a.catatan || '' })) }),
       });
-      if (r.ok) { toast.success('Kehadiran tersimpan'); }
+      if (r.ok) {
+        toast.success('Kehadiran tersimpan');
+        // Refresh summary & session list after saving attendance
+        await Promise.all([loadSessions(), loadSummary()]);
+        selectedSession = null;
+      }
       else { const e = await r.json().catch(() => ({})); toast.error(e?.error || 'Gagal'); }
     } catch { toast.error('Gagal'); }
     finally { attLoading = false; }
   }
+
+  let rekapInfo = $derived(
+    sessions.length > lastSessionCount
+      ? { text: `+${sessions.length - lastSessionCount} pertemuan baru`, type: 'info' as const }
+      : summaryData.length > 0
+      ? { text: `${totalPertemuan} pertemuan`, type: 'default' as const }
+      : null
+  );
+
+  // — Status badge helpers
+  const statusMeta: Record<string, { label: string; activeClass: string; inactiveClass: string }> = {
+    hadir:  { label: 'H', activeClass: 'bg-green-600 text-white ring-2 ring-green-300', inactiveClass: 'text-green-700 bg-green-50 hover:bg-green-100 border-green-200' },
+    sakit:  { label: 'S', activeClass: 'bg-yellow-500 text-white ring-2 ring-yellow-300', inactiveClass: 'text-yellow-700 bg-yellow-50 hover:bg-yellow-100 border-yellow-200' },
+    izin:   { label: 'I', activeClass: 'bg-blue-600 text-white ring-2 ring-blue-300', inactiveClass: 'text-blue-700 bg-blue-50 hover:bg-blue-100 border-blue-200' },
+    alpha:  { label: 'A', activeClass: 'bg-red-600 text-white ring-2 ring-red-300', inactiveClass: 'text-red-700 bg-red-50 hover:bg-red-100 border-red-200' },
+  };
 </script>
 
 <svelte:head><title>Jurnal Belajar Harian — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-4 max-w-screen-xl mx-auto">
+  <!-- Header -->
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
     <div><h1 class="text-xl font-black">Jurnal Belajar Harian</h1><p class="text-sm text-muted-foreground">Catat kegiatan belajar & kehadiran murid per pertemuan.</p></div>
   </div>
@@ -194,20 +227,26 @@
   </Card.Root>
 
   {#if selectedAssignment}
-    <!-- Tab buttons -->
+    <!-- Tabs -->
     <div class="flex border-b border-border gap-1">
       <button class="px-4 py-2 text-sm font-semibold transition-colors border-b-2 -mb-[1px] {activeTab === 'journal' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}" onclick={() => activeTab = 'journal'}>
         📝 Catatan Jurnal
       </button>
       <button class="px-4 py-2 text-sm font-semibold transition-colors border-b-2 -mb-[1px] {activeTab === 'rekap' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}" onclick={() => activeTab = 'rekap'}>
         📊 Rekap Absensi
+        {#if rekapInfo && activeTab !== 'rekap'}
+          <span class="ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-primary/10 text-primary">{totalPertemuan}</span>
+        {/if}
       </button>
     </div>
 
     <!-- Tab: Catatan Jurnal -->
     {#if activeTab === 'journal'}
       <div class="flex justify-between items-center">
-        <p class="text-sm font-medium">{selectedAssignment.class_code} — {selectedAssignment.subject_name}</p>
+        <div>
+          <p class="text-sm font-medium">{selectedAssignment.class_code} — {selectedAssignment.subject_name}</p>
+          <p class="text-xs text-muted-foreground">{sessions.length} pertemuan</p>
+        </div>
         <Button onclick={() => showCreate = true} size="sm">+ Catat Pertemuan</Button>
       </div>
 
@@ -226,7 +265,7 @@
                 <td class="px-3 py-2 text-xs text-muted-foreground">{s.pertemuan_ke}</td>
                 <td class="px-3 py-2 text-xs">{s.materi || '—'}</td>
                 <td class="px-3 py-2 text-xs text-muted-foreground hidden md:table-cell max-w-[200px] truncate">{s.kegiatan || '—'}</td>
-                <td class="px-3 py-2 text-center">{#if s.guru_hadir}<span class="text-[10px] text-primary">Hadir</span>{:else}<span class="text-[10px] text-muted-foreground">—</span>{/if}</td>
+                <td class="px-3 py-2 text-center">{#if s.guru_hadir}<span class="text-[10px] text-green-600 font-semibold bg-green-50 px-1.5 py-0.5 rounded">Hadir</span>{:else}<span class="text-[10px] text-muted-foreground">—</span>{/if}</td>
                 <td class="px-3 py-2 text-right whitespace-nowrap space-x-1">
                   <button class="text-xs text-primary hover:underline" onclick={() => openAttendance(s)}>Absensi</button>
                   <button class="text-xs text-destructive hover:underline" onclick={() => deleteSession(s.id, s.tanggal)}>Hapus</button>
@@ -238,12 +277,15 @@
         <!-- Mobile card list -->
         <div class="lg:hidden space-y-2">
           {#each sessions as s (s.id)}
-            <div class="rounded-xl border border-border bg-base-100 shadow-sm p-3 space-y-1" role="button" onclick={() => openAttendance(s)}>
-              <div class="flex items-center justify-between"><span class="text-sm font-semibold">{s.tanggal}</span><span class="text-xs text-muted-foreground">#{s.pertemuan_ke}</span></div>
-              <p class="text-xs">{s.materi || '—'}</p>
-              <div class="flex justify-between items-center">
+            <div class="rounded-xl border border-border bg-base-100 shadow-sm p-3 space-y-1.5" role="button" onclick={() => openAttendance(s)}>
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-semibold">{s.tanggal}</span>
+                <span class="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">#{s.pertemuan_ke}</span>
+              </div>
+              <p class="text-xs text-muted-foreground">{s.materi || '—'}</p>
+              <div class="flex justify-between items-center pt-0.5">
                 <button class="text-xs text-destructive hover:underline" onclick={(e) => { e.stopPropagation(); deleteSession(s.id, s.tanggal); }}>Hapus</button>
-                <span class="text-[10px] text-primary">Absensi →</span>
+                {#if s.guru_hadir}<span class="text-[10px] text-green-600">Guru Hadir</span>{/if}
               </div>
             </div>
           {/each}
@@ -260,26 +302,34 @@
       {:else}
         <!-- Summary stats -->
         <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          <Card.Root class="p-3 text-center bg-green-50/50 border-green-200">
+          <Card.Root class="p-3 text-center bg-green-50 border-green-200">
             <p class="text-lg font-black text-green-700">{totalHadir}</p>
             <p class="text-[10px] font-semibold uppercase text-green-600">Hadir</p>
           </Card.Root>
-          <Card.Root class="p-3 text-center bg-yellow-50/50 border-yellow-200">
+          <Card.Root class="p-3 text-center bg-yellow-50 border-yellow-200">
             <p class="text-lg font-black text-yellow-700">{totalSakit}</p>
             <p class="text-[10px] font-semibold uppercase text-yellow-600">Sakit</p>
           </Card.Root>
-          <Card.Root class="p-3 text-center bg-blue-50/50 border-blue-200">
+          <Card.Root class="p-3 text-center bg-blue-50 border-blue-200">
             <p class="text-lg font-black text-blue-700">{totalIzin}</p>
             <p class="text-[10px] font-semibold uppercase text-blue-600">Izin</p>
           </Card.Root>
-          <Card.Root class="p-3 text-center bg-red-50/50 border-red-200">
+          <Card.Root class="p-3 text-center bg-red-50 border-red-200">
             <p class="text-lg font-black text-red-700">{totalAlpha}</p>
             <p class="text-[10px] font-semibold uppercase text-red-600">Alpha</p>
           </Card.Root>
-          <Card.Root class="p-3 text-center bg-primary-50/50 border-primary-200">
+          <Card.Root class="p-3 text-center bg-primary-50 border-primary-200">
             <p class="text-lg font-black {rateClass(avgAttendanceRate)}">{avgAttendanceRate}%</p>
             <p class="text-[10px] font-semibold uppercase text-muted-foreground">Kehadiran</p>
           </Card.Root>
+        </div>
+
+        <!-- Info bar -->
+        <div class="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{totalStudents} siswa · {totalPertemuan} total pertemuan</span>
+          {#if sessions.length > 0}
+            <span class="text-primary">{sessions.length} sesi tercatat</span>
+          {/if}
         </div>
 
         <!-- Desktop table -->
@@ -305,22 +355,22 @@
         <!-- Mobile cards -->
         <div class="md:hidden space-y-2">
           {#each summaryData as s (s.student_id)}
-            <div class="rounded-xl border border-border bg-base-100 shadow-sm p-3 space-y-1">
+            <div class="rounded-xl border border-border bg-base-100 shadow-sm p-3 space-y-1.5">
               <div class="flex items-center justify-between">
                 <span class="text-sm font-semibold">{s.nama}</span>
-                <span class="text-xs font-bold {s.total_pertemuan > 0 ? rateClass(Math.round(s.hadir / s.total_pertemuan * 100)) : ''}">
+                <span class="text-xs font-bold {s.total_pertemuan > 0 ? rateClass(Math.round(s.hadir / s.total_pertemuan * 100)) : ''} bg-muted/20 px-2 py-0.5 rounded-full">
                   {s.total_pertemuan > 0 ? Math.round(s.hadir / s.total_pertemuan * 100) + '%' : '—'}
                 </span>
               </div>
-              <div class="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                <span>NIS: {s.nis}</span>
-                <span>Pertemuan: {s.total_pertemuan}</span>
+              <div class="flex items-center gap-3 text-xs text-muted-foreground">
+                <span>📋 {s.total_pertemuan} pertemuan</span>
+                <span>🆔 {s.nis}</span>
               </div>
-              <div class="flex gap-3 pt-1">
-                <span class="text-xs text-green-600">H: {s.hadir}</span>
-                <span class="text-xs text-yellow-600">S: {s.sakit}</span>
-                <span class="text-xs text-blue-600">I: {s.izin}</span>
-                <span class="text-xs text-red-600">A: {s.alpha}</span>
+              <div class="flex gap-2 pt-0.5">
+                <span class="text-xs font-semibold text-green-700 bg-green-50 px-2 py-0.5 rounded">H {s.hadir}</span>
+                <span class="text-xs font-semibold text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded">S {s.sakit}</span>
+                <span class="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">I {s.izin}</span>
+                <span class="text-xs font-semibold text-red-700 bg-red-50 px-2 py-0.5 rounded">A {s.alpha}</span>
               </div>
             </div>
           {/each}
@@ -358,33 +408,53 @@
 </Dialog.Root>
 
 <!-- Dialog absensi murid -->
-<Dialog.Root open={!!selectedSession} onOpenChange={(v) => { if (!v) selectedSession = null; }}>
+<Dialog.Root open={!!selectedSession} onOpenChange={(v: boolean) => { if (!v) { selectedSession = null; } }}>
   <Dialog.Content class="max-w-2xl"><div class="space-y-4">
-    <h2 class="text-base font-semibold">Absensi Jurnal</h2>
+    <div class="flex items-center justify-between">
+      <h2 class="text-base font-semibold">Absensi Jurnal</h2>
+      {#if selectedSession}
+        <span class="text-xs font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">#{selectedSession.pertemuan_ke}</span>
+      {/if}
+    </div>
     {#if selectedSession}
-      <p class="text-xs text-muted-foreground">{selectedSession.tanggal} — Pertemuan #{selectedSession.pertemuan_ke}<br/>{selectedSession.materi}</p>
+      <div class="flex items-center gap-2 text-xs text-muted-foreground bg-muted/20 px-3 py-2 rounded-lg">
+        <span class="font-semibold">{selectedSession.tanggal}</span>
+        <span class="text-muted-foreground/50">|</span>
+        <span>{selectedSession.materi || '—'}</span>
+      </div>
     {/if}
 
     {#if attLoading}
-      <p class="text-sm text-muted-foreground">Memuat...</p>
+      <p class="text-sm text-muted-foreground py-4 text-center">Memuat data siswa...</p>
     {:else if attendances.length === 0}
-      <p class="text-sm text-muted-foreground">Belum ada data kehadiran. Pastikan ada murid terdaftar di rombel ini.</p>
+      <p class="text-sm text-muted-foreground py-4 text-center">Belum ada data kehadiran. Pastikan ada murid terdaftar di rombel ini.</p>
     {:else}
-      <div class="max-h-80 overflow-y-auto space-y-1">
+      <div class="max-h-80 overflow-y-auto space-y-1.5 pr-1">
         {#each attendances as a, idx}
-          <div class="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 hover:bg-muted/10">
-            <div class="min-w-0 flex-1"><span class="text-sm font-medium">{a.nama}</span><span class="text-xs text-muted-foreground ml-2">({a.nis})</span></div>
-            <div class="flex gap-1">
+          <div class="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 hover:bg-muted/10 transition-colors">
+            <div class="min-w-0 flex-1 flex items-center gap-2">
+              <span class="text-xs font-medium text-muted-foreground w-5 shrink-0">{idx + 1}.</span>
+              <span class="text-sm font-medium truncate">{a.nama}</span>
+              <span class="text-[10px] text-muted-foreground hidden sm:inline">({a.nis})</span>
+            </div>
+            <div class="flex gap-1.5 shrink-0">
               {#each ['hadir', 'sakit', 'izin', 'alpha'] as st}
-                <button class="px-2 py-0.5 text-[10px] font-semibold uppercase rounded-md transition-colors {a.status === st ? 'bg-primary text-primary-foreground' : 'bg-muted/30 text-muted-foreground hover:bg-muted/50'}" onclick={() => setStatus(idx, st)}>{st}</button>
+                <button
+                  class="w-8 h-8 text-xs font-bold rounded-lg border transition-all {a.status === st ? statusMeta[st].activeClass : statusMeta[st].inactiveClass}"
+                  onclick={() => setStatus(idx, st)}
+                  title={st}
+                >{statusMeta[st].label}</button>
               {/each}
             </div>
           </div>
         {/each}
       </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <Button variant="outline" onclick={() => selectedSession = null}>Tutup</Button>
-        <LoadingButton onclick={() => void saveAttendances()} loading={attLoading}>Simpan Kehadiran</LoadingButton>
+      <div class="flex items-center justify-between pt-2 border-t border-border">
+        <p class="text-xs text-muted-foreground">{attendances.length} siswa</p>
+        <div class="flex gap-2">
+          <Button variant="outline" onclick={() => selectedSession = null} size="sm">Tutup</Button>
+          <LoadingButton onclick={() => void saveAttendances()} loading={attLoading} size="sm">Simpan Kehadiran</LoadingButton>
+        </div>
       </div>
     {/if}
   </div></Dialog.Content>
