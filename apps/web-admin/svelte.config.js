@@ -13,7 +13,12 @@ const config = {
 			relative: false
 		},
 		csrf: {
-			checkOrigin: false
+			checkOrigin: true,
+			trustedOrigins: [
+				'https://mtsn2kolut.sch.id',
+				'https://www.mtsn2kolut.sch.id',
+				'http://localhost:8021',
+			]
 		},
 		experimental: {
 			remoteFunctions: true
