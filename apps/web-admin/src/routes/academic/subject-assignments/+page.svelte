@@ -99,8 +99,11 @@
     return subjects;
   }
   function filteredClasses() {
-    if (!filterLevel) return classes;
-    return classes.filter(c => c.level === filterLevel);
+    if (!filterLevel) return [...classes].sort((a, b) => {
+      const order = ['VII', 'VIII', 'IX'];
+      return (order.indexOf(a.level) - order.indexOf(b.level)) || a.code.localeCompare(b.code);
+    });
+    return classes.filter(c => c.level === filterLevel).sort((a, b) => a.code.localeCompare(b.code));
   }
 
   let teacherMap: Record<string, string> = $derived(
