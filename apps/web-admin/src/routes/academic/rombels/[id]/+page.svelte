@@ -197,8 +197,9 @@
       const res = await fetch('/api/employees');
       if (res.ok) {
         const p = await res.json();
-        // employees in {data: [...]} or [...] format
-        employees = (Array.isArray(p) ? p : (p.data ?? [])).map((e: any) => ({
+        // Handle both {items: [...]} and {data: [...]} and plain [...]
+        const list = Array.isArray(p) ? p : (p?.items ?? p?.data ?? []);
+        employees = list.map((e: any) => ({
           id: e.id, nama: e.nama, nip: e.nip ?? ''
         }));
       }
