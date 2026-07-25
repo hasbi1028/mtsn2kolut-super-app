@@ -8,18 +8,12 @@ export const load: PageServerLoad = async ({ fetch, locals }) => {
 	const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 	if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
-	// Load classes + assignments from timetable weekly
 	const res = await fetch(`${API_BASE}/api/academic/timetable/weekly`, { headers });
-
 	let classes: any[] = [];
-	let assignments: any[] = [];
-
 	if (res.ok) {
 		const payload = await res.json();
 		const d = payload.data ?? {};
 		classes = d.classes ?? [];
-		assignments = d.assignments ?? [];
 	}
-
-	return { classes, assignments };
+	return { classes };
 };
