@@ -263,3 +263,13 @@ func (s *ClassJournal) AttendanceSummary(ctx context.Context, assignmentID strin
 	}
 	return items, nil
 }
+
+// ─── Delete Session ───
+
+func (s *ClassJournal) DeleteSession(ctx context.Context, id string) error {
+	err := s.q.DeleteJournalSession(ctx, pgUUID(id))
+	if err != nil {
+		return fmt.Errorf("delete journal session: %w", err)
+	}
+	return nil
+}

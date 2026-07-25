@@ -299,6 +299,7 @@ func main() {
 			r.Post("/api/class-journal/sessions", journalH.CreateSession)
 			r.Get("/api/class-journal/sessions/{id}/attendances", journalH.ListAttendances)
 			r.Put("/api/class-journal/sessions/{id}/attendances", journalH.BulkUpsertAttendances)
+			r.Delete("/api/class-journal/sessions/{id}", journalH.DeleteSession)
 			r.Get("/api/class-journal/summary", journalH.AttendanceSummary)
 			r.Post("/api/academic/rombel/{id}/timetable-slots/{slotID}/journal-session", journalH.OpenSessionFromTimetableSlot)
 		})

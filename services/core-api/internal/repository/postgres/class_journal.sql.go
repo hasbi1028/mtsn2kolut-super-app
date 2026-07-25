@@ -69,15 +69,6 @@ func (q *Queries) CreateJournalSession(ctx context.Context, arg CreateJournalSes
 	return i, err
 }
 
-const deleteJournalSession = `-- name: DeleteJournalSession :exec
-DELETE FROM class_journal_sessions WHERE id = $1
-`
-
-func (q *Queries) DeleteJournalSession(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteJournalSession, id)
-	return err
-}
-
 const getJournalSession = `-- name: GetJournalSession :one
 SELECT
     s.id, s.assignment_id, s.timetable_slot_id, s.tanggal, s.pertemuan_ke,
@@ -481,4 +472,13 @@ func (q *Queries) UpsertJournalAttendance(ctx context.Context, arg UpsertJournal
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const deleteJournalSession = `-- name: DeleteJournalSession :exec
+DELETE FROM class_journal_sessions WHERE id = $1
+`
+
+func (q *Queries) DeleteJournalSession(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteJournalSession, id)
+	return err
 }

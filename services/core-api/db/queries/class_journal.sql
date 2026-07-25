@@ -119,3 +119,6 @@ LEFT JOIN class_journal_attendances a ON a.session_id = js.id AND a.student_id =
 WHERE csa.id = $1
 GROUP BY st.id, st.nis, st.nisn, st.nama
 ORDER BY st.nama ASC;
+
+-- name: DeleteJournalSession :exec
+DELETE FROM class_journal_sessions WHERE id = $1;

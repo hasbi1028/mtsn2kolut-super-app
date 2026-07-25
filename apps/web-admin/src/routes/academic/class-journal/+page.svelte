@@ -64,6 +64,15 @@
     finally { createLoading = false; }
   }
 
+  async function deleteSession(id: string, tanggal: string) {
+    if (!confirm(`Hapus jurnal tanggal ${tanggal}?`)) return;
+    try {
+      const r = await fetch(`/api/class-journal/sessions/${id}`, { method: 'DELETE' });
+      if (r.ok || r.status === 204) { toast.success('Jurnal dihapus'); await loadSessions(); }
+      else toast.error('Gagal');
+    } catch { toast.error('Gagal'); }
+  }
+
   async function openAttendance(session: Session) {
     selectedSession = session;
     attLoading = true;
@@ -136,7 +145,10 @@
               <td class="px-3 py-2 text-xs">{s.materi || '—'}</td>
               <td class="px-3 py-2 text-xs text-muted-foreground hidden md:table-cell max-w-[200px] truncate">{s.kegiatan || '—'}</td>
               <td class="px-3 py-2 text-center">{#if s.guru_hadir}<span class="text-[10px] text-primary">Hadir</span>{:else}<span class="text-[10px] text-muted-foreground">—</span>{/if}</td>
-              <td class="px-3 py-2 text-right"><button class="text-xs text-primary hover:underline" onclick={() => openAttendance(s)}>Absensi</button></td>
+              <td class="px-3 py-2 text-right whitespace-nowrap space-x-1">
+                <button class="text-xs text-primary hover:underline" onclick={() => openAttendance(s)}>Absensi</button>
+                <button class="text-xs text-destructive hover:underline" onclick={() => deleteSession(s.id, s.tanggal)}>Hapus</button>
+              </td>
             </tr>{/each}
           </tbody>
         </table>
@@ -147,7 +159,10 @@
           <div class="rounded-xl border border-border bg-base-100 shadow-sm p-3 space-y-1" role="button" onclick={() => openAttendance(s)}>
             <div class="flex items-center justify-between"><span class="text-sm font-semibold">{s.tanggal}</span><span class="text-xs text-muted-foreground">#{s.pertemuan_ke}</span></div>
             <p class="text-xs">{s.materi || '—'}</p>
-            <div class="flex justify-end"><span class="text-[10px] text-primary">Absensi →</span></div>
+            <div class="flex justify-between items-center">
+              <button class="text-xs text-destructive hover:underline" onclick={(e) => { e.stopPropagation(); deleteSession(s.id, s.tanggal); }}>Hapus</button>
+              <span class="text-[10px] text-primary">Absensi →</span>
+            </div>
           </div>
         {/each}
       </div>
