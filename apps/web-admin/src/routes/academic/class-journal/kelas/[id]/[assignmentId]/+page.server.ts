@@ -13,7 +13,7 @@ export const load: PageServerLoad = async ({ fetch, params }) => {
 
 	if (res.ok) {
 		const payload = await res.json();
-		const d = payload.data ?? {};
+		const d = payload?.data ?? payload ?? {};
 		const assignments: Assignment[] = d.assignments ?? [];
 		assignment = assignments.find((a: Assignment) => a.id === assignmentId) ?? null;
 	}

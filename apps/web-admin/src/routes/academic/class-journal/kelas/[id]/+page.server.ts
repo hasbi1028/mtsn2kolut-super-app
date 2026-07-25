@@ -14,7 +14,8 @@ export const load: PageServerLoad = async ({ fetch, params }) => {
 
 	if (res.ok) {
 		const payload = await res.json();
-		const d = payload.data ?? {};
+		// BFF proxy already unwraps {data: {...}} → just {...}
+		const d = payload?.data ?? payload ?? {};
 		const classes: any[] = d.classes ?? [];
 		const assignments: Assignment[] = d.assignments ?? [];
 		kelas = classes.find((c: any) => c.id === id) ?? null;

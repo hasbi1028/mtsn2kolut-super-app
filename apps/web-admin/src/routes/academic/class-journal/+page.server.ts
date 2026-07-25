@@ -12,7 +12,7 @@ export const load: PageServerLoad = async ({ fetch, locals }) => {
 	let classes: any[] = [];
 	if (res.ok) {
 		const payload = await res.json();
-		const d = payload.data ?? {};
+		const d = payload?.data ?? payload ?? {};
 		classes = d.classes ?? [];
 	}
 	return { classes };
