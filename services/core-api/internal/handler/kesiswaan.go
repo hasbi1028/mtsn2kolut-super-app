@@ -58,3 +58,40 @@ func (h *KesiswaanHandler) UpdateMuridProfile(w http.ResponseWriter, r *http.Req
 	}
 	api.OK(w, map[string]string{"status": "ok"})
 }
+
+// POST /api/kesiswaan/murid
+func (h *KesiswaanHandler) CreateMurid(w http.ResponseWriter, r *http.Request) {
+	var body service.CreateStudentRequest
+	if !decodeJSON(w, r, &body, 0) {
+		return
+	}
+	if body.NIS == "" || body.Nama == "" || body.Gender == "" {
+		api.BadRequest(w, "NIS, nama, dan gender wajib diisi")
+		return
+	}
+	if body.Gender != "L" && body.Gender != "P" {
+		api.BadRequest(w, "Gender harus L atau P")
+		return
+	}
+	id, err := h.svc.CreateStudent(r.Context(), body)
+	if err != nil {
+		writeDomainOrInternal(w, err, "gagal membuat murid")
+		return
+	}
+	api.OK(w, map[string]string{"id": id})
+}
+
+// DELETE /api/kesiswaan/murid/{id}
+func (h *KesiswaanHandler) DeleteMurid(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		api.BadRequest(w, "id murid wajib diisi")
+		return
+	}
+	err := h.svc.DeleteStudent(r.Context(), id)
+	if err != nil {
+		writeDomainOrInternal(w, err, "gagal menghapus murid")
+		return
+	}
+	api.OK(w, map[string]string{"status": "ok"})
+}

@@ -1870,3 +1870,69 @@ func (q *Queries) UpdateViolationCategory(ctx context.Context, arg UpdateViolati
 	)
 	return i, err
 }
+
+const createKesiswaanStudent = `-- name: CreateKesiswaanStudent :one
+INSERT INTO students (
+    nis, nisn, nama, gender, class_id, status, is_active,
+    nik, tempat_lahir, tanggal_lahir, alamat, agama, phone,
+    parent_name, parent_phone
+) VALUES (
+    $1, $2, $3, $4,
+    CASE WHEN $5::UUID IS NULL THEN NULL ELSE $5::UUID END,
+    COALESCE($6, 'active'), COALESCE($7, true),
+    $8, $9,
+    CASE WHEN $10::DATE IS NULL THEN NULL ELSE $10::DATE END,
+    $11, $12, $13, $14, $15
+)
+RETURNING id
+`
+
+type CreateKesiswaanStudentParams struct {
+	NIS           string      `json:"nis"`
+	NISN          string      `json:"nisn"`
+	Nama          string      `json:"nama"`
+	Gender        string      `json:"gender"`
+	ClassID       pgtype.UUID `json:"class_id"`
+	Status        string      `json:"status"`
+	IsActive      bool        `json:"is_active"`
+	NIK           string      `json:"nik"`
+	TempatLahir   string      `json:"tempat_lahir"`
+	TanggalLahir  pgtype.Date `json:"tanggal_lahir"`
+	Alamat        string      `json:"alamat"`
+	Agama         string      `json:"agama"`
+	Phone         string      `json:"phone"`
+	ParentName    string      `json:"parent_name"`
+	ParentPhone   string      `json:"parent_phone"`
+}
+
+func (q *Queries) CreateKesiswaanStudent(ctx context.Context, arg CreateKesiswaanStudentParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, createKesiswaanStudent,
+		arg.NIS,
+		arg.NISN,
+		arg.Nama,
+		arg.Gender,
+		arg.ClassID,
+		arg.Status,
+		arg.IsActive,
+		arg.NIK,
+		arg.TempatLahir,
+		arg.TanggalLahir,
+		arg.Alamat,
+		arg.Agama,
+		arg.Phone,
+		arg.ParentName,
+		arg.ParentPhone,
+	)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const deleteKesiswaanStudent = `-- name: DeleteKesiswaanStudent :exec
+DELETE FROM students WHERE id = $1
+`
+
+func (q *Queries) DeleteKesiswaanStudent(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteKesiswaanStudent, id)
+	return err
+}

@@ -531,3 +531,21 @@ SET status = $2,
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;
+
+-- name: CreateKesiswaanStudent :one
+INSERT INTO students (
+    nis, nisn, nama, gender, class_id, status, is_active,
+    nik, tempat_lahir, tanggal_lahir, alamat, agama, phone,
+    parent_name, parent_phone
+) VALUES (
+    $1, $2, $3, $4,
+    CASE WHEN $5::UUID IS NULL THEN NULL ELSE $5::UUID END,
+    COALESCE($6, 'active'), COALESCE($7, true),
+    $8, $9,
+    CASE WHEN $10::DATE IS NULL THEN NULL ELSE $10::DATE END,
+    $11, $12, $13, $14, $15
+)
+RETURNING id;
+
+-- name: DeleteKesiswaanStudent :exec
+DELETE FROM students WHERE id = $1;

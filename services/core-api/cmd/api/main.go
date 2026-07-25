@@ -279,6 +279,8 @@ func main() {
 			r.Use(mw.RequireAnyPermissionOrRole([]string{"kesiswaan.read", "kesiswaan.manage"}, "admin"))
 			r.Get("/api/kesiswaan/murid", kesiswaanH.ListMurid)
 			r.Put("/api/kesiswaan/murid/{id}/profile", kesiswaanH.UpdateMuridProfile)
+			r.Post("/api/kesiswaan/murid", kesiswaanH.CreateMurid)
+			r.Delete("/api/kesiswaan/murid/{id}", kesiswaanH.DeleteMurid)
 		})
 
 		// Timetable — jadwal pelajaran

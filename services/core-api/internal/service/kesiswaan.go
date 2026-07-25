@@ -115,3 +115,71 @@ func (s *KesiswaanService) UpdateProfile(ctx context.Context, id, nik, tempatLah
 	}
 	return nil
 }
+
+// ─── Create Student ───
+
+type CreateStudentRequest struct {
+	NIS          string `json:"nis"`
+	NISN         string `json:"nisn"`
+	Nama         string `json:"nama"`
+	Gender       string `json:"gender"`
+	ClassID      string `json:"class_id"`
+	Status       string `json:"status"`
+	NIK          string `json:"nik"`
+	TempatLahir  string `json:"tempat_lahir"`
+	TanggalLahir string `json:"tanggal_lahir"`
+	Alamat       string `json:"alamat"`
+	Agama        string `json:"agama"`
+	Phone        string `json:"phone"`
+	ParentName   string `json:"parent_name"`
+	ParentPhone  string `json:"parent_phone"`
+}
+
+func (s *KesiswaanService) CreateStudent(ctx context.Context, req CreateStudentRequest) (string, error) {
+	var classID pgtype.UUID
+	if req.ClassID != "" {
+		classID = pgUUID(req.ClassID)
+	}
+	var tgl pgtype.Date
+	if req.TanggalLahir != "" {
+		parsed, err := time.Parse("2006-01-02", req.TanggalLahir)
+		if err == nil {
+			tgl = pgtype.Date{Time: parsed, Valid: true}
+		}
+	}
+	status := req.Status
+	if status == "" {
+		status = "active"
+	}
+	id, err := s.q.CreateKesiswaanStudent(ctx, db.CreateKesiswaanStudentParams{
+		NIS:          req.NIS,
+		NISN:         req.NISN,
+		Nama:         req.Nama,
+		Gender:       req.Gender,
+		ClassID:      classID,
+		Status:       status,
+		IsActive:     status == "active",
+		NIK:          req.NIK,
+		TempatLahir:  req.TempatLahir,
+		TanggalLahir: tgl,
+		Alamat:       req.Alamat,
+		Agama:        req.Agama,
+		Phone:        req.Phone,
+		ParentName:   req.ParentName,
+		ParentPhone:  req.ParentPhone,
+	})
+	if err != nil {
+		return "", fmt.Errorf("create student: %w", err)
+	}
+	return pgUUIDString(id), nil
+}
+
+// ─── Delete Student ───
+
+func (s *KesiswaanService) DeleteStudent(ctx context.Context, id string) error {
+	err := s.q.DeleteKesiswaanStudent(ctx, pgUUID(id))
+	if err != nil {
+		return fmt.Errorf("delete student: %w", err)
+	}
+	return nil
+}

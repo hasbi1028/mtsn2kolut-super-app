@@ -8,13 +8,22 @@ export const load: PageServerLoad = async ({ fetch, locals }) => {
 	const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 	if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
-	const res = await fetch(`${API_BASE}/api/kesiswaan/murid`, { headers });
+	const [muridRes, rombelRes] = await Promise.all([
+		fetch(`${API_BASE}/api/kesiswaan/murid`, { headers }),
+		fetch(`${API_BASE}/api/academic/rombels`, { headers }),
+	]);
 
 	let murid: any[] = [];
-	if (res.ok) {
-		const payload = await res.json();
+	if (muridRes.ok) {
+		const payload = await muridRes.json();
 		murid = payload.data ?? [];
 	}
 
-	return { murid };
+	let rombels: any[] = [];
+	if (rombelRes.ok) {
+		const payload = await rombelRes.json();
+		rombels = payload.data ?? [];
+	}
+
+	return { murid, rombels };
 };
