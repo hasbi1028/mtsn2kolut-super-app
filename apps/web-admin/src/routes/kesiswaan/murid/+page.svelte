@@ -247,8 +247,6 @@
     pageSizeOptions={[25, 50, 100]}
     defaultLimit={25}
     itemLabel="murid"
-    showPageSize={false}
-    showFirstLast={false}
     siblingCount={2}
     loading={loading}
     onchange={onPaginationChange}
