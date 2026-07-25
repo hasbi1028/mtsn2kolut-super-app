@@ -1,9 +1,7 @@
 <script lang="ts">
-  import { Badge } from '$lib/components/ui/badge';
   import { Button } from '$lib/components/ui/button';
   import * as Card from '$lib/components/ui/card';
   import * as Dialog from '$lib/components/ui/dialog';
-  import * as Select from '$lib/components/ui/select';
   import { Input } from '$lib/components/ui/input';
   import { toast } from '$lib/components/ui/sonner';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
@@ -13,11 +11,15 @@
   type Class = { id: string; code: string; name: string; level: string; };
   type Assignment = { id: string; class_id: string; class_code: string; class_name: string; subject_name: string; teacher_name: string; };
   type Session = { id: string; assignment_id: string; tanggal: string; pertemuan_ke: number; materi: string; kegiatan: string; catatan: string; guru_hadir: boolean; class_name: string; subject_name: string; teacher_name: string; };
+  type SummaryItem = { student_id: string; nis: string; nisn: string; nama: string; total_pertemuan: number; hadir: number; sakit: number; izin: number; alpha: number; };
 
   let classes = $state<Class[]>(data.classes ?? []);
   let assignments = $state<Assignment[]>(data.assignments ?? []);
   let sessions = $state<Session[]>([]);
   let loading = $state(false);
+
+  // — Tab state
+  let activeTab = $state<'journal' | 'rekap'>('journal');
 
   // — Step 1a: Select class
   let selectedClassId = $state('');
@@ -39,20 +41,25 @@
   let createForm = $state({ tanggal: new Date().toISOString().slice(0,10), materi: '', kegiatan: '', catatan: '', guru_hadir: true });
   let createLoading = $state(false);
 
-  // — Step 3: Attendance
+  // — Step 3: Attendance (per-session)
   let selectedSession = $state<Session | null>(null);
   let attendances = $state<any[]>([]);
   let attLoading = $state(false);
+
+  // — Summary data
+  let summaryData = $state<SummaryItem[]>([]);
+  let summaryLoading = $state(false);
 
   async function selectClass(id: string) {
     selectedClassId = id;
     selectedAssignmentId = '';
     sessions = [];
+    summaryData = [];
   }
 
   async function selectAssignment(id: string) {
     selectedAssignmentId = id;
-    await loadSessions();
+    await Promise.all([loadSessions(), loadSummary()]);
   }
 
   async function loadSessions() {
@@ -63,6 +70,33 @@
       if (r.ok) { const p = await r.json(); sessions = p.data ?? []; }
     } catch {}
     finally { loading = false; }
+  }
+
+  async function loadSummary() {
+    if (!selectedAssignmentId) return;
+    summaryLoading = true;
+    try {
+      const r = await fetch(`/api/class-journal/summary?assignment_id=${selectedAssignmentId}`);
+      if (r.ok) { const p = await r.json(); summaryData = p.data ?? []; }
+    } catch {}
+    finally { summaryLoading = false; }
+  }
+
+  // — Summary helpers
+  let totalStudents = $derived(summaryData.length);
+  let totalHadir = $derived(summaryData.reduce((s, i) => s + i.hadir, 0));
+  let totalSakit = $derived(summaryData.reduce((s, i) => s + i.sakit, 0));
+  let totalIzin = $derived(summaryData.reduce((s, i) => s + i.izin, 0));
+  let totalAlpha = $derived(summaryData.reduce((s, i) => s + i.alpha, 0));
+  let totalPertemuan = $derived(summaryData.reduce((s, i) => s + i.total_pertemuan, 0));
+  let avgAttendanceRate = $derived(
+    totalPertemuan > 0 ? Math.round((totalHadir / totalPertemuan) * 100) : 0
+  );
+
+  function rateClass(rate: number): string {
+    if (rate >= 95) return 'text-green-600';
+    if (rate >= 80) return 'text-yellow-600';
+    return 'text-red-600';
   }
 
   async function submitCreate() {
@@ -77,7 +111,7 @@
         toast.success(`Pertemuan ke-${p.data?.pertemuan_ke || '?'} tersimpan`);
         showCreate = false;
         createForm = { tanggal: new Date().toISOString().slice(0,10), materi: '', kegiatan: '', catatan: '', guru_hadir: true };
-        await loadSessions();
+        await Promise.all([loadSessions(), loadSummary()]);
       } else { const e = await r.json().catch(() => ({})); toast.error(e?.error || 'Gagal'); }
     } catch { toast.error('Gagal'); }
     finally { createLoading = false; }
@@ -87,7 +121,7 @@
     if (!confirm(`Hapus jurnal tanggal ${tanggal}?`)) return;
     try {
       const r = await fetch(`/api/class-journal/sessions/${id}`, { method: 'DELETE' });
-      if (r.ok || r.status === 204) { toast.success('Jurnal dihapus'); await loadSessions(); }
+      if (r.ok || r.status === 204) { toast.success('Jurnal dihapus'); await Promise.all([loadSessions(), loadSummary()]); }
       else toast.error('Gagal');
     } catch { toast.error('Gagal'); }
   }
@@ -156,50 +190,141 @@
   </Card.Root>
 
   {#if selectedAssignment}
-    <div class="flex justify-between items-center">
-      <p class="text-sm font-medium">{selectedAssignment.class_code} — {selectedAssignment.subject_name}</p>
-      <Button onclick={() => showCreate = true} size="sm">+ Catat Pertemuan</Button>
+    <!-- Tab buttons -->
+    <div class="flex border-b border-border gap-1">
+      <button class="px-4 py-2 text-sm font-semibold transition-colors border-b-2 -mb-[1px] {activeTab === 'journal' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}" onclick={() => activeTab = 'journal'}>
+        📝 Catatan Jurnal
+      </button>
+      <button class="px-4 py-2 text-sm font-semibold transition-colors border-b-2 -mb-[1px] {activeTab === 'rekap' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}" onclick={() => activeTab = 'rekap'}>
+        📊 Rekap Absensi
+      </button>
     </div>
 
-    <!-- Sessions List -->
-    {#if loading}
-      <p class="text-sm text-muted-foreground">Memuat jurnal...</p>
-    {:else if sessions.length === 0}
-      <Card.Root><Card.Content class="p-8 text-center"><p class="text-sm text-muted-foreground">Belum ada catatan jurnal untuk mapel ini.</p></Card.Content></Card.Root>
-    {:else}
-      <!-- Desktop table -->
-      <div class="hidden lg:block overflow-x-auto rounded-lg border border-border">
-        <table class="w-full text-sm">
-          <thead><tr class="bg-muted/30 text-muted-foreground text-xs uppercase"><th class="px-3 py-2 text-left">Tanggal</th><th class="px-3 py-2 text-left">#</th><th class="px-3 py-2 text-left">Materi</th><th class="px-3 py-2 text-left hidden md:table-cell">Kegiatan</th><th class="px-3 py-2 text-center">Guru</th><th class="px-3 py-2 text-right">Aksi</th></tr></thead>
-          <tbody class="divide-y divide-border">
-            {#each sessions as s (s.id)}<tr class="hover:bg-muted/10">
-              <td class="px-3 py-2 text-xs whitespace-nowrap">{s.tanggal}</td>
-              <td class="px-3 py-2 text-xs text-muted-foreground">{s.pertemuan_ke}</td>
-              <td class="px-3 py-2 text-xs">{s.materi || '—'}</td>
-              <td class="px-3 py-2 text-xs text-muted-foreground hidden md:table-cell max-w-[200px] truncate">{s.kegiatan || '—'}</td>
-              <td class="px-3 py-2 text-center">{#if s.guru_hadir}<span class="text-[10px] text-primary">Hadir</span>{:else}<span class="text-[10px] text-muted-foreground">—</span>{/if}</td>
-              <td class="px-3 py-2 text-right whitespace-nowrap space-x-1">
-                <button class="text-xs text-primary hover:underline" onclick={() => openAttendance(s)}>Absensi</button>
-                <button class="text-xs text-destructive hover:underline" onclick={() => deleteSession(s.id, s.tanggal)}>Hapus</button>
-              </td>
-            </tr>{/each}
-          </tbody>
-        </table>
+    <!-- Tab: Catatan Jurnal -->
+    {#if activeTab === 'journal'}
+      <div class="flex justify-between items-center">
+        <p class="text-sm font-medium">{selectedAssignment.class_code} — {selectedAssignment.subject_name}</p>
+        <Button onclick={() => showCreate = true} size="sm">+ Catat Pertemuan</Button>
       </div>
-      <!-- Mobile card list -->
-      <div class="lg:hidden space-y-2">
-        {#each sessions as s (s.id)}
-          <div class="rounded-xl border border-border bg-base-100 shadow-sm p-3 space-y-1" role="button" onclick={() => openAttendance(s)}>
-            <div class="flex items-center justify-between"><span class="text-sm font-semibold">{s.tanggal}</span><span class="text-xs text-muted-foreground">#{s.pertemuan_ke}</span></div>
-            <p class="text-xs">{s.materi || '—'}</p>
-            <div class="flex justify-between items-center">
-              <button class="text-xs text-destructive hover:underline" onclick={(e) => { e.stopPropagation(); deleteSession(s.id, s.tanggal); }}>Hapus</button>
-              <span class="text-[10px] text-primary">Absensi →</span>
+
+      {#if loading}
+        <p class="text-sm text-muted-foreground">Memuat jurnal...</p>
+      {:else if sessions.length === 0}
+        <Card.Root><Card.Content class="p-8 text-center"><p class="text-sm text-muted-foreground">Belum ada catatan jurnal untuk mapel ini. Klik "+ Catat Pertemuan" untuk memulai.</p></Card.Content></Card.Root>
+      {:else}
+        <!-- Desktop table -->
+        <div class="hidden lg:block overflow-x-auto rounded-lg border border-border">
+          <table class="w-full text-sm">
+            <thead><tr class="bg-muted/30 text-muted-foreground text-xs uppercase"><th class="px-3 py-2 text-left">Tanggal</th><th class="px-3 py-2 text-left">#</th><th class="px-3 py-2 text-left">Materi</th><th class="px-3 py-2 text-left hidden md:table-cell">Kegiatan</th><th class="px-3 py-2 text-center">Guru</th><th class="px-3 py-2 text-right">Aksi</th></tr></thead>
+            <tbody class="divide-y divide-border">
+              {#each sessions as s (s.id)}<tr class="hover:bg-muted/10">
+                <td class="px-3 py-2 text-xs whitespace-nowrap">{s.tanggal}</td>
+                <td class="px-3 py-2 text-xs text-muted-foreground">{s.pertemuan_ke}</td>
+                <td class="px-3 py-2 text-xs">{s.materi || '—'}</td>
+                <td class="px-3 py-2 text-xs text-muted-foreground hidden md:table-cell max-w-[200px] truncate">{s.kegiatan || '—'}</td>
+                <td class="px-3 py-2 text-center">{#if s.guru_hadir}<span class="text-[10px] text-primary">Hadir</span>{:else}<span class="text-[10px] text-muted-foreground">—</span>{/if}</td>
+                <td class="px-3 py-2 text-right whitespace-nowrap space-x-1">
+                  <button class="text-xs text-primary hover:underline" onclick={() => openAttendance(s)}>Absensi</button>
+                  <button class="text-xs text-destructive hover:underline" onclick={() => deleteSession(s.id, s.tanggal)}>Hapus</button>
+                </td>
+              </tr>{/each}
+            </tbody>
+          </table>
+        </div>
+        <!-- Mobile card list -->
+        <div class="lg:hidden space-y-2">
+          {#each sessions as s (s.id)}
+            <div class="rounded-xl border border-border bg-base-100 shadow-sm p-3 space-y-1" role="button" onclick={() => openAttendance(s)}>
+              <div class="flex items-center justify-between"><span class="text-sm font-semibold">{s.tanggal}</span><span class="text-xs text-muted-foreground">#{s.pertemuan_ke}</span></div>
+              <p class="text-xs">{s.materi || '—'}</p>
+              <div class="flex justify-between items-center">
+                <button class="text-xs text-destructive hover:underline" onclick={(e) => { e.stopPropagation(); deleteSession(s.id, s.tanggal); }}>Hapus</button>
+                <span class="text-[10px] text-primary">Absensi →</span>
+              </div>
             </div>
-          </div>
-        {/each}
-      </div>
+          {/each}
+        </div>
+      {/if}
     {/if}
+
+    <!-- Tab: Rekap Absensi -->
+    {#if activeTab === 'rekap'}
+      {#if summaryLoading}
+        <p class="text-sm text-muted-foreground">Memuat rekap...</p>
+      {:else if summaryData.length === 0}
+        <Card.Root><Card.Content class="p-8 text-center"><p class="text-sm text-muted-foreground">Belum ada data kehadiran. Catat pertemuan dan isi absensi dulu.</p></Card.Content></Card.Root>
+      {:else}
+        <!-- Summary stats -->
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <Card.Root class="p-3 text-center bg-green-50/50 border-green-200">
+            <p class="text-lg font-black text-green-700">{totalHadir}</p>
+            <p class="text-[10px] font-semibold uppercase text-green-600">Hadir</p>
+          </Card.Root>
+          <Card.Root class="p-3 text-center bg-yellow-50/50 border-yellow-200">
+            <p class="text-lg font-black text-yellow-700">{totalSakit}</p>
+            <p class="text-[10px] font-semibold uppercase text-yellow-600">Sakit</p>
+          </Card.Root>
+          <Card.Root class="p-3 text-center bg-blue-50/50 border-blue-200">
+            <p class="text-lg font-black text-blue-700">{totalIzin}</p>
+            <p class="text-[10px] font-semibold uppercase text-blue-600">Izin</p>
+          </Card.Root>
+          <Card.Root class="p-3 text-center bg-red-50/50 border-red-200">
+            <p class="text-lg font-black text-red-700">{totalAlpha}</p>
+            <p class="text-[10px] font-semibold uppercase text-red-600">Alpha</p>
+          </Card.Root>
+          <Card.Root class="p-3 text-center bg-primary-50/50 border-primary-200">
+            <p class="text-lg font-black {rateClass(avgAttendanceRate)}">{avgAttendanceRate}%</p>
+            <p class="text-[10px] font-semibold uppercase text-muted-foreground">Kehadiran</p>
+          </Card.Root>
+        </div>
+
+        <!-- Desktop table -->
+        <div class="hidden md:block overflow-x-auto rounded-lg border border-border">
+          <table class="w-full text-sm">
+            <thead><tr class="bg-muted/30 text-muted-foreground text-xs uppercase"><th class="px-3 py-2 text-left">Murid</th><th class="px-3 py-2 text-center">NIS</th><th class="px-3 py-2 text-center">Pertemuan</th><th class="px-3 py-2 text-center">Hadir</th><th class="px-3 py-2 text-center">Sakit</th><th class="px-3 py-2 text-center">Izin</th><th class="px-3 py-2 text-center">Alpha</th><th class="px-3 py-2 text-center">%</th></tr></thead>
+            <tbody class="divide-y divide-border">
+              {#each summaryData as s (s.student_id)}<tr class="hover:bg-muted/10">
+                <td class="px-3 py-2 text-xs font-medium">{s.nama}</td>
+                <td class="px-3 py-2 text-xs text-muted-foreground text-center">{s.nis}</td>
+                <td class="px-3 py-2 text-xs text-center">{s.total_pertemuan}</td>
+                <td class="px-3 py-2 text-xs text-center text-green-600 font-semibold">{s.hadir}</td>
+                <td class="px-3 py-2 text-xs text-center text-yellow-600">{s.sakit}</td>
+                <td class="px-3 py-2 text-xs text-center text-blue-600">{s.izin}</td>
+                <td class="px-3 py-2 text-xs text-center text-red-600">{s.alpha}</td>
+                <td class="px-3 py-2 text-xs text-center font-semibold {s.total_pertemuan > 0 ? rateClass(Math.round(s.hadir / s.total_pertemuan * 100)) : ''}">
+                  {s.total_pertemuan > 0 ? Math.round(s.hadir / s.total_pertemuan * 100) + '%' : '—'}
+                </td>
+              </tr>{/each}
+            </tbody>
+          </table>
+        </div>
+        <!-- Mobile cards -->
+        <div class="md:hidden space-y-2">
+          {#each summaryData as s (s.student_id)}
+            <div class="rounded-xl border border-border bg-base-100 shadow-sm p-3 space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-semibold">{s.nama}</span>
+                <span class="text-xs font-bold {s.total_pertemuan > 0 ? rateClass(Math.round(s.hadir / s.total_pertemuan * 100)) : ''}">
+                  {s.total_pertemuan > 0 ? Math.round(s.hadir / s.total_pertemuan * 100) + '%' : '—'}
+                </span>
+              </div>
+              <div class="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                <span>NIS: {s.nis}</span>
+                <span>Pertemuan: {s.total_pertemuan}</span>
+              </div>
+              <div class="flex gap-3 pt-1">
+                <span class="text-xs text-green-600">H: {s.hadir}</span>
+                <span class="text-xs text-yellow-600">S: {s.sakit}</span>
+                <span class="text-xs text-blue-600">I: {s.izin}</span>
+                <span class="text-xs text-red-600">A: {s.alpha}</span>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    {/if}
+  {:else if selectedClassId && filteredAssignments.length === 0}
+    <Card.Root><Card.Content class="p-8 text-center"><p class="text-sm text-muted-foreground">Tidak ada mata pelajaran untuk kelas ini. Silakan assign guru terlebih dahulu.</p></Card.Content></Card.Root>
   {/if}
 </div>
 
