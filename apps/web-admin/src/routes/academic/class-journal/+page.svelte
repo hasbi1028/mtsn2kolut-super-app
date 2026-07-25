@@ -67,8 +67,12 @@
     loading = true;
     try {
       const r = await fetch(`/api/class-journal?assignment_id=${selectedAssignmentId}`);
-      if (r.ok) { const p = await r.json(); sessions = p.data ?? []; }
-    } catch {}
+      if (r.ok) {
+        const p = await r.json();
+        // proxy get() already unwraps {"data": [...]} → just [...]
+        sessions = Array.isArray(p) ? p : (p?.data ?? []);
+      }
+    } catch(e) { console.log('loadSessions: error', e); }
     finally { loading = false; }
   }
 
@@ -77,7 +81,7 @@
     summaryLoading = true;
     try {
       const r = await fetch(`/api/class-journal/summary?assignment_id=${selectedAssignmentId}`);
-      if (r.ok) { const p = await r.json(); summaryData = p.data ?? []; }
+      if (r.ok) { const p = await r.json(); summaryData = Array.isArray(p) ? p : (p?.data ?? []); }
     } catch {}
     finally { summaryLoading = false; }
   }
@@ -108,7 +112,7 @@
       });
       if (r.ok) {
         const p = await r.json();
-        toast.success(`Pertemuan ke-${p.data?.pertemuan_ke || '?'} tersimpan`);
+        toast.success(`Pertemuan ke-${p?.pertemuan_ke || '?'} tersimpan`);
         showCreate = false;
         createForm = { tanggal: new Date().toISOString().slice(0,10), materi: '', kegiatan: '', catatan: '', guru_hadir: true };
         await Promise.all([loadSessions(), loadSummary()]);
@@ -131,7 +135,7 @@
     attLoading = true;
     try {
       const r = await fetch(`/api/class-journal/sessions/${session.id}/attendances`);
-      if (r.ok) { const p = await r.json(); attendances = p.data ?? []; }
+      if (r.ok) { const p = await r.json(); attendances = Array.isArray(p) ? p : (p?.data ?? []); }
     } catch {}
     finally { attLoading = false; }
   }
