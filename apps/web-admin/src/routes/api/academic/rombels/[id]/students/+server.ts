@@ -1,0 +1,29 @@
+import type { RequestEvent } from '@sveltejs/kit';
+import { handleRouteError, proxy } from '$lib/server/api';
+
+export const GET = async (event: RequestEvent) => {
+	try {
+		const id = event.params.id;
+		const items = await proxy(event).get<any[]>(`/api/academic/rombels/${id}/students`);
+		return new Response(JSON.stringify({ items }), {
+			status: 200,
+			headers: { 'content-type': 'application/json' },
+		});
+	} catch (e) {
+		return handleRouteError(e, 'rombel students GET');
+	}
+};
+
+export const POST = async (event: RequestEvent) => {
+	try {
+		const id = event.params.id;
+		const body = await event.request.json();
+		const result = await proxy(event).post<any>(`/api/academic/rombels/${id}/students`, body);
+		return new Response(JSON.stringify(result), {
+			status: 200,
+			headers: { 'content-type': 'application/json' },
+		});
+	} catch (e) {
+		return handleRouteError(e, 'rombel students POST');
+	}
+};

@@ -26,6 +26,13 @@ type JournalSessionOpenResult struct {
 	Created       bool
 }
 
+// ─── Helpers ───
+
+type CreateSessionResult struct {
+	ID          string `json:"id"`
+	PertemuanKe int32  `json:"pertemuan_ke"`
+}
+
 // ─── Overview ───
 
 type JournalOverviewItem struct {
@@ -76,10 +83,10 @@ type CreateSessionRequest struct {
 	GuruHadir       bool   `json:"guru_hadir"`
 }
 
-func (s *ClassJournal) CreateSession(ctx context.Context, req CreateSessionRequest) (string, error) {
+func (s *ClassJournal) CreateSession(ctx context.Context, req CreateSessionRequest) (*CreateSessionResult, error) {
 	tanggal, err := time.Parse("2006-01-02", req.Tanggal)
 	if err != nil {
-		return "", fmt.Errorf("format tanggal tidak valid, gunakan YYYY-MM-DD")
+		return nil, fmt.Errorf("format tanggal tidak valid, gunakan YYYY-MM-DD")
 	}
 
 	// Check if session already exists for this assignment+date
@@ -90,7 +97,7 @@ func (s *ClassJournal) CreateSession(ctx context.Context, req CreateSessionReque
 		})
 		if err == nil {
 			// Session already exists, return existing ID
-			return pgUUIDString(existingID), nil
+			return &CreateSessionResult{ID: pgUUIDString(existingID)}, nil
 		}
 	} else {
 		existingID, err := s.q.GetJournalSessionIDByTimetableSlotDate(ctx, db.GetJournalSessionIDByTimetableSlotDateParams{
@@ -98,14 +105,14 @@ func (s *ClassJournal) CreateSession(ctx context.Context, req CreateSessionReque
 			Tanggal:         pgtype.Date{Time: tanggal, Valid: true},
 		})
 		if err == nil {
-			return pgUUIDString(existingID), nil
+			return &CreateSessionResult{ID: pgUUIDString(existingID)}, nil
 		}
 	}
 
 	// Get next pertemuan_ke
 	next, err := s.q.NextJournalMeetingNumber(ctx, pgUUID(req.AssignmentID))
 	if err != nil {
-		return "", fmt.Errorf("next meeting: %w", err)
+		return nil, fmt.Errorf("next meeting: %w", err)
 	}
 
 	var slotID pgtype.UUID
@@ -124,9 +131,9 @@ func (s *ClassJournal) CreateSession(ctx context.Context, req CreateSessionReque
 		GuruHadir:       req.GuruHadir,
 	})
 	if err != nil {
-		return "", fmt.Errorf("create session: %w", err)
+		return nil, fmt.Errorf("create session: %w", err)
 	}
-	return pgUUIDString(session.ID), nil
+	return &CreateSessionResult{ID: pgUUIDString(session.ID), PertemuanKe: next}, nil
 }
 
 // ─── Open From Timetable Slot ───

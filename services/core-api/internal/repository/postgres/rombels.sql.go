@@ -11,6 +11,40 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const assignStudentToClass = `-- name: AssignStudentToClass :exec
+UPDATE students
+SET class_id = $2,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+type AssignStudentToClassParams struct {
+	ID      pgtype.UUID `json:"id"`
+	ClassID pgtype.UUID `json:"class_id"`
+}
+
+func (q *Queries) AssignStudentToClass(ctx context.Context, arg AssignStudentToClassParams) error {
+	_, err := q.db.Exec(ctx, assignStudentToClass, arg.ID, arg.ClassID)
+	return err
+}
+
+const bulkAssignStudentsToClass = `-- name: BulkAssignStudentsToClass :exec
+UPDATE students
+SET class_id = $2,
+    updated_at = NOW()
+WHERE id = ANY($1::uuid[])
+`
+
+type BulkAssignStudentsToClassParams struct {
+	Column1 []pgtype.UUID `json:"column_1"`
+	ClassID pgtype.UUID   `json:"class_id"`
+}
+
+func (q *Queries) BulkAssignStudentsToClass(ctx context.Context, arg BulkAssignStudentsToClassParams) error {
+	_, err := q.db.Exec(ctx, bulkAssignStudentsToClass, arg.Column1, arg.ClassID)
+	return err
+}
+
 const countRombelCodeConflicts = `-- name: CountRombelCodeConflicts :one
 SELECT COUNT(*)::int
 FROM school_classes candidate
@@ -1118,6 +1152,65 @@ func (q *Queries) ListStudentsByClassWithParents(ctx context.Context, classID pg
 		return nil, err
 	}
 	return items, nil
+}
+
+const listUnassignedStudents = `-- name: ListUnassignedStudents :many
+SELECT s.id, s.nis, s.nisn, s.nama, s.gender,
+       s.is_active, s.status
+FROM students s
+WHERE s.class_id IS NULL
+  AND s.is_active = TRUE
+ORDER BY s.nama ASC
+`
+
+type ListUnassignedStudentsRow struct {
+	ID       pgtype.UUID       `json:"id"`
+	Nis      string            `json:"nis"`
+	Nisn     string            `json:"nisn"`
+	Nama     string            `json:"nama"`
+	Gender   GenderEnum        `json:"gender"`
+	IsActive bool              `json:"is_active"`
+	Status   StudentStatusEnum `json:"status"`
+}
+
+func (q *Queries) ListUnassignedStudents(ctx context.Context) ([]ListUnassignedStudentsRow, error) {
+	rows, err := q.db.Query(ctx, listUnassignedStudents)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUnassignedStudentsRow{}
+	for rows.Next() {
+		var i ListUnassignedStudentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nis,
+			&i.Nisn,
+			&i.Nama,
+			&i.Gender,
+			&i.IsActive,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const removeStudentFromClass = `-- name: RemoveStudentFromClass :exec
+UPDATE students
+SET class_id = NULL,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+func (q *Queries) RemoveStudentFromClass(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, removeStudentFromClass, id)
+	return err
 }
 
 const updateHomeroomAssignment = `-- name: UpdateHomeroomAssignment :one

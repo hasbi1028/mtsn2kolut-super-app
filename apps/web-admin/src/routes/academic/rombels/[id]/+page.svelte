@@ -1,0 +1,258 @@
+<script lang="ts">
+  import { Button } from '$lib/components/ui/button';
+  import * as Card from '$lib/components/ui/card';
+  import * as Dialog from '$lib/components/ui/dialog';
+  import { Input } from '$lib/components/ui/input';
+  import { toast } from '$lib/components/ui/sonner';
+  import LoadingButton from '$lib/components/LoadingButton.svelte';
+
+  let { data } = $props();
+
+  type Student = {
+    student_id: string;
+    nis: string;
+    nisn: string;
+    student_name: string;
+    gender: string;
+    is_active: boolean;
+    status: string;
+  };
+
+  type RombelDetail = {
+    id: string;
+    code: string;
+    name: string;
+    level: string;
+    is_active: boolean;
+    academic_year_name: string;
+  };
+
+  let detail = $state<RombelDetail | null>(data.detail);
+  let students = $state<Student[]>(data.students ?? []);
+  let loading = $state(false);
+
+  // — Assign student dialog
+  let showAssign = $state(false);
+  let unassignedList = $state<{ id: string; nis: string; nisn: string; nama: string; gender: string }[]>([]);
+  let selectedStudents = $state<Set<string>>(new Set());
+  let assignLoading = $state(false);
+  let searchUnassigned = $state('');
+
+  async function loadStudents() {
+    if (!detail) return;
+    loading = true;
+    try {
+      const res = await fetch(`/api/academic/rombels/${detail.id}/students`);
+      if (res.ok) {
+        const p = await res.json();
+        students = p.items ?? [];
+      }
+    } catch { toast.error('Gagal memuat siswa'); }
+    finally { loading = false; }
+  }
+
+  async function openAssignDialog() {
+    showAssign = true;
+    selectedStudents = new Set();
+    try {
+      const res = await fetch('/api/academic/rombels/unassigned-students');
+      if (res.ok) {
+        const p = await res.json();
+        unassignedList = p.items ?? [];
+      } else {
+        unassignedList = [];
+      }
+    } catch {
+      unassignedList = [];
+      toast.error('Gagal memuat daftar siswa');
+    }
+  }
+
+  function toggleSelectStudent(id: string) {
+    const next = new Set(selectedStudents);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    selectedStudents = next;
+  }
+
+  async function submitAssign() {
+    const ids = Array.from(selectedStudents);
+    if (ids.length === 0) { toast.error('Pilih siswa terlebih dahulu'); return; }
+    if (!detail) return;
+    assignLoading = true;
+    try {
+      const res = await fetch(`/api/academic/rombels/${detail.id}/students`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ student_ids: ids }),
+      });
+      if (res.ok) {
+        toast.success(`${ids.length} siswa ditambahkan`);
+        showAssign = false;
+        await loadStudents();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body?.error || 'Gagal');
+      }
+    } catch { toast.error('Gagal'); }
+    finally { assignLoading = false; }
+  }
+
+  async function removeStudent(studentId: string, studentName: string) {
+    if (!confirm(`Hapus "${studentName}" dari rombel?`)) return;
+    try {
+      const res = await fetch(`/api/academic/rombels/${detail!.id}/students/${studentId}`, { method: 'DELETE' });
+      if (res.ok || res.status === 204) {
+        toast.success(`${studentName} dihapus dari rombel`);
+        await loadStudents();
+      } else {
+        toast.error('Gagal menghapus siswa');
+      }
+    } catch { toast.error('Gagal'); }
+  }
+
+  let filteredUnassigned = $derived(
+    searchUnassigned
+      ? unassignedList.filter(s =>
+          s.nama.toLowerCase().includes(searchUnassigned.toLowerCase()) ||
+          s.nis.includes(searchUnassigned)
+        )
+      : unassignedList
+  );
+</script>
+
+<svelte:head>
+  <title>{detail?.code ?? 'Rombel'} — MTSN 2 Kolut</title>
+</svelte:head>
+
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <a href="/academic/rombels" class="text-sm text-primary hover:underline">&larr; Kembali ke Rombel</a>
+      {#if detail}
+        <h1 class="text-2xl font-black text-foreground mt-1">{detail.code} — {detail.name}</h1>
+        <p class="text-sm text-muted-foreground">
+          {detail.level} &middot; {detail.academic_year_name}
+        </p>
+      {:else}
+        <h1 class="text-2xl font-black text-foreground mt-1">Rombel tidak ditemukan</h1>
+      {/if}
+    </div>
+    <Button onclick={openAssignDialog}>+ Tambah Siswa</Button>
+  </div>
+
+  <!-- Student list -->
+  {#if loading}
+    <p class="text-sm text-muted-foreground">Memuat siswa...</p>
+  {:else if students.length === 0}
+    <Card.Root>
+      <Card.Content class="p-8 text-center">
+        <p class="text-sm text-muted-foreground">Belum ada siswa di rombel ini. Klik "+ Tambah Siswa" untuk menambahkan.</p>
+      </Card.Content>
+    </Card.Root>
+  {:else}
+    <Card.Root>
+      <Card.Content class="p-0">
+        <!-- Desktop table -->
+        <div class="hidden md:block overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-muted/30 text-muted-foreground text-xs uppercase">
+                <th class="px-4 py-2.5 text-left">No</th>
+                <th class="px-4 py-2.5 text-left">Nama</th>
+                <th class="px-4 py-2.5 text-left">NIS</th>
+                <th class="px-4 py-2.5 text-left">NISN</th>
+                <th class="px-4 py-2.5 text-center">JK</th>
+                <th class="px-4 py-2.5 text-center">Status</th>
+                <th class="px-4 py-2.5 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-border">
+              {#each students as s, idx (s.student_id)}
+                <tr class="hover:bg-muted/10">
+                  <td class="px-4 py-2.5 text-xs text-muted-foreground">{idx + 1}</td>
+                  <td class="px-4 py-2.5 text-sm font-medium">{s.student_name}</td>
+                  <td class="px-4 py-2.5 text-xs text-muted-foreground">{s.nis}</td>
+                  <td class="px-4 py-2.5 text-xs text-muted-foreground">{s.nisn || '—'}</td>
+                  <td class="px-4 py-2.5 text-xs text-center">{s.gender === 'L' ? 'L' : 'P'}</td>
+                  <td class="px-4 py-2.5 text-center">
+                    {#if s.is_active}
+                      <span class="text-[10px] font-semibold text-green-600">Aktif</span>
+                    {:else}
+                      <span class="text-[10px] font-semibold text-muted-foreground">Nonaktif</span>
+                    {/if}
+                  </td>
+                  <td class="px-4 py-2.5 text-right">
+                    <button
+                      class="text-xs text-destructive hover:underline"
+                      onclick={() => removeStudent(s.student_id, s.student_name)}
+                    >Kelupakan</button>
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+        <!-- Mobile cards -->
+        <div class="md:hidden space-y-1 p-3">
+          {#each students as s, idx (s.student_id)}
+            <div class="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium truncate">{s.student_name}</p>
+                <p class="text-xs text-muted-foreground">{s.nis}</p>
+              </div>
+              <button
+                class="text-xs text-destructive hover:underline shrink-0 ml-2"
+                onclick={() => removeStudent(s.student_id, s.student_name)}
+              >Kelupakan</button>
+            </div>
+          {/each}
+        </div>
+      </Card.Content>
+    </Card.Root>
+  {/if}
+</div>
+
+<!-- Dialog Assign Siswa -->
+<Dialog.Root bind:open={showAssign}>
+  <Dialog.Content class="max-w-lg">
+    <div class="space-y-4">
+      <h2 class="text-base font-semibold">Tambah Siswa ke {detail?.code ?? 'Rombel'}</h2>
+
+      <div>
+        <Input
+          placeholder="Cari nama atau NIS..."
+          bind:value={searchUnassigned}
+        />
+      </div>
+
+      {#if unassignedList.length === 0}
+        <p class="text-sm text-muted-foreground text-center py-4">
+          Semua siswa sudah memiliki rombel, atau tidak ada siswa aktif tanpa rombel.
+        </p>
+      {:else}
+        <div class="max-h-64 overflow-y-auto space-y-1">
+          {#each filteredUnassigned as s (s.id)}
+            <label class="flex items-center gap-3 rounded-lg border border-border px-3 py-2 hover:bg-muted/10 cursor-pointer">
+              <input type="checkbox" checked={selectedStudents.has(s.id)} onchange={() => toggleSelectStudent(s.id)} class="size-4 accent-primary" />
+              <div class="min-w-0 flex-1">
+                <span class="text-sm font-medium">{s.nama}</span>
+                <span class="text-xs text-muted-foreground ml-2">NIS: {s.nis}</span>
+              </div>
+            </label>
+          {/each}
+        </div>
+      {/if}
+
+      <div class="flex justify-between items-center pt-2">
+        <p class="text-xs text-muted-foreground">{selectedStudents.size} siswa dipilih</p>
+        <div class="flex gap-2">
+          <Button variant="outline" onclick={() => (showAssign = false)}>Batal</Button>
+          <LoadingButton onclick={() => void submitAssign()} loading={assignLoading} loadingLabel="Menambahkan...">
+            Tambahkan ({selectedStudents.size})
+          </LoadingButton>
+        </div>
+      </div>
+    </div>
+  </Dialog.Content>
+</Dialog.Root>

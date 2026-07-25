@@ -577,3 +577,29 @@ LEFT JOIN academic_years ay ON ay.id = updated.academic_year_id;
 -- name: DeleteHomeroomAssignment :exec
 DELETE FROM class_homeroom_assignments
 WHERE id = $1;
+
+-- name: AssignStudentToClass :exec
+UPDATE students
+SET class_id = $2,
+    updated_at = NOW()
+WHERE id = $1;
+
+-- name: BulkAssignStudentsToClass :exec
+UPDATE students
+SET class_id = $2,
+    updated_at = NOW()
+WHERE id = ANY($1::uuid[]);
+
+-- name: RemoveStudentFromClass :exec
+UPDATE students
+SET class_id = NULL,
+    updated_at = NOW()
+WHERE id = $1;
+
+-- name: ListUnassignedStudents :many
+SELECT s.id, s.nis, s.nisn, s.nama, s.gender,
+       s.is_active, s.status
+FROM students s
+WHERE s.class_id IS NULL
+  AND s.is_active = TRUE
+ORDER BY s.nama ASC;

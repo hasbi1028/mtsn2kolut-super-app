@@ -110,6 +110,21 @@ func (h *AcademicHandler) DeleteSemester(w http.ResponseWriter, r *http.Request)
 
 // ─── SchoolClass (Rombel) ────────────────────────────────────────
 
+// GET /api/academic/rombels/{id}
+func (h *AcademicHandler) GetSchoolClass(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		api.BadRequest(w, "id rombel wajib diisi")
+		return
+	}
+	class, err := h.semesterSvc.GetSchoolClass(r.Context(), id)
+	if err != nil {
+		writeDomainOrInternal(w, err, "gagal memuat rombel")
+		return
+	}
+	api.OK(w, class)
+}
+
 // GET /api/academic/rombels
 func (h *AcademicHandler) ListSchoolClasses(w http.ResponseWriter, r *http.Request) {
 	classes, err := h.semesterSvc.ListSchoolClasses(r.Context())
@@ -160,6 +175,79 @@ func (h *AcademicHandler) DeleteSchoolClass(w http.ResponseWriter, r *http.Reque
 	}
 	if err := h.semesterSvc.DeleteSchoolClass(r.Context(), id); err != nil {
 		writeDomainOrInternal(w, err, "gagal menghapus rombel")
+		return
+	}
+	api.NoContent(w)
+}
+
+// ─── Rombel Student Management ────────────────────────────────────
+
+// GET /api/academic/rombels/{id}/students
+func (h *AcademicHandler) ListRombelStudents(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		api.BadRequest(w, "id rombel wajib diisi")
+		return
+	}
+	students, err := h.semesterSvc.ListStudentsByClass(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, students)
+}
+
+// GET /api/academic/rombels/unassigned-students
+func (h *AcademicHandler) ListUnassignedStudents(w http.ResponseWriter, r *http.Request) {
+	students, err := h.semesterSvc.ListUnassignedStudents(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, students)
+}
+
+// POST /api/academic/rombels/{id}/students
+func (h *AcademicHandler) AssignStudent(w http.ResponseWriter, r *http.Request) {
+	classID := r.PathValue("id")
+	if classID == "" {
+		api.BadRequest(w, "id rombel wajib diisi")
+		return
+	}
+	var body struct {
+		StudentID   string   `json:"student_id"`
+		StudentIDs  []string `json:"student_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "format data tidak valid")
+		return
+	}
+	if len(body.StudentIDs) > 0 {
+		if err := h.semesterSvc.BulkAssignStudentsToClass(r.Context(), body.StudentIDs, classID); err != nil {
+			writeDomainOrInternal(w, err, "gagal menambahkan siswa")
+			return
+		}
+	} else if body.StudentID != "" {
+		if err := h.semesterSvc.AssignStudentToClass(r.Context(), body.StudentID, classID); err != nil {
+			writeDomainOrInternal(w, err, "gagal menambahkan siswa")
+			return
+		}
+	} else {
+		api.BadRequest(w, "student_id atau student_ids wajib diisi")
+		return
+	}
+	api.OK(w, map[string]string{"status": "ok"})
+}
+
+// DELETE /api/academic/rombels/{id}/students/{studentId}
+func (h *AcademicHandler) RemoveStudentFromClass(w http.ResponseWriter, r *http.Request) {
+	studentID := r.PathValue("studentId")
+	if studentID == "" {
+		api.BadRequest(w, "id siswa wajib diisi")
+		return
+	}
+	if err := h.semesterSvc.RemoveStudentFromClass(r.Context(), studentID); err != nil {
+		writeDomainOrInternal(w, err, "gagal menghapus siswa dari rombel")
 		return
 	}
 	api.NoContent(w)

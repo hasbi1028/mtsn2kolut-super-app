@@ -139,12 +139,12 @@
         <h2 class="text-lg font-bold text-foreground">Kelas {level}</h2>
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {#each kelas as rombel (rombel.id)}
-            <Card.Root class="relative overflow-hidden {rombel.is_active ? '' : 'opacity-60'}">
+            <Card.Root class="relative overflow-hidden cursor-pointer hover:shadow-md transition-shadow {rombel.is_active ? '' : 'opacity-60'}" onclick={() => window.location.href = `/academic/rombels/${rombel.id}`}>
               <Card.Content class="p-5">
                 <div class="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 class="text-base font-semibold text-foreground">{rombel.name}</h3>
-                    <p class="mt-0.5 text-xs text-muted-foreground">{rombel.academic_year_name}</p>
+                  <div class="flex-1 min-w-0">
+                    <h3 class="text-base font-semibold text-foreground">{rombel.code}</h3>
+                    <p class="mt-0.5 text-xs text-muted-foreground truncate">{rombel.name}</p>
                     <Badge variant="secondary" class="mt-2 text-[10px]">{rombel.level}</Badge>
                   </div>
                   <Button

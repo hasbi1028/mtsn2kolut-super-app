@@ -44,12 +44,12 @@ func (h *ClassJournal) CreateSession(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "tanggal wajib diisi")
 		return
 	}
-	id, err := h.svc.CreateSession(r.Context(), body)
+	result, err := h.svc.CreateSession(r.Context(), body)
 	if err != nil {
 		writeDomainOrInternal(w, err, "gagal membuat jurnal")
 		return
 	}
-	api.OK(w, map[string]string{"id": id})
+	api.OK(w, result)
 }
 
 // POST /api/academic/rombel/{id}/timetable-slots/{slotID}/journal-session

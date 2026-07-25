@@ -1454,6 +1454,43 @@ func (q *Queries) GetCurriculumSummaryByLevel(ctx context.Context, curriculumPro
 	return items, nil
 }
 
+const getSchoolClass = `-- name: GetSchoolClass :one
+SELECT c.id, c.code, c.name, c.level, c.is_active, c.created_at, c.updated_at,
+       c.academic_year_id, a.name AS academic_year_name
+FROM school_classes c
+JOIN academic_years a ON a.id = c.academic_year_id
+WHERE c.id = $1
+`
+
+type GetSchoolClassRow struct {
+	ID               pgtype.UUID        `json:"id"`
+	Code             string             `json:"code"`
+	Name             string             `json:"name"`
+	Level            string             `json:"level"`
+	IsActive         bool               `json:"is_active"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	AcademicYearID   pgtype.UUID        `json:"academic_year_id"`
+	AcademicYearName string             `json:"academic_year_name"`
+}
+
+func (q *Queries) GetSchoolClass(ctx context.Context, id pgtype.UUID) (GetSchoolClassRow, error) {
+	row := q.db.QueryRow(ctx, getSchoolClass, id)
+	var i GetSchoolClassRow
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.Level,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AcademicYearID,
+		&i.AcademicYearName,
+	)
+	return i, err
+}
+
 const getSemester = `-- name: GetSemester :one
 SELECT s.id, s.academic_year_id, ay.name AS academic_year_name,
        s.name, s.label, s.start_date, s.end_date, s.is_active,

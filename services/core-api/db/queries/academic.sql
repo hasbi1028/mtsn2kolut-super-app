@@ -46,6 +46,13 @@ INSERT INTO school_classes (id, academic_year_id, code, name, level, is_active)
 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
 RETURNING *;
 
+-- name: GetSchoolClass :one
+SELECT c.id, c.code, c.name, c.level, c.is_active, c.created_at, c.updated_at,
+       c.academic_year_id, a.name AS academic_year_name
+FROM school_classes c
+JOIN academic_years a ON a.id = c.academic_year_id
+WHERE c.id = $1;
+
 -- name: DeleteSchoolClass :exec
 DELETE FROM school_classes WHERE id = $1;
 

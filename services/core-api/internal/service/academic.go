@@ -271,3 +271,134 @@ func (s *SemesterService) CreateSchoolClass(ctx context.Context, params SchoolCl
 func (s *SemesterService) DeleteSchoolClass(ctx context.Context, id string) error {
 	return s.q.DeleteSchoolClass(ctx, pgUUID(id))
 }
+
+func (s *SemesterService) GetSchoolClass(ctx context.Context, id string) (*SchoolClass, error) {
+	row, err := s.q.GetSchoolClass(ctx, pgUUID(id))
+	if err != nil {
+		return nil, fmt.Errorf("get school class: %w", err)
+	}
+	result := SchoolClass{
+		ID:               pgUUIDString(row.ID),
+		Code:             row.Code,
+		Name:             row.Name,
+		Level:            row.Level,
+		IsActive:         row.IsActive,
+		CreatedAt:        row.CreatedAt.Time.Format(time.RFC3339),
+		UpdatedAt:        row.UpdatedAt.Time.Format(time.RFC3339),
+		AcademicYearID:   pgUUIDString(row.AcademicYearID),
+		AcademicYearName: row.AcademicYearName,
+	}
+	return &result, nil
+}
+
+// ─── Rombel Student Management ────────────────────────────────────
+
+type RombelStudentItem struct {
+	ID       string `json:"id"`
+	NIS      string `json:"nis"`
+	NISN     string `json:"nisn"`
+	Nama     string `json:"nama"`
+	Gender   string `json:"gender"`
+	IsActive bool   `json:"is_active"`
+	Status   string `json:"status"`
+}
+
+type StudentWithRelationsRow struct {
+	StudentID          string `json:"student_id"`
+	NIS                string `json:"nis"`
+	NISN               string `json:"nisn"`
+	StudentName        string `json:"student_name"`
+	Gender             string `json:"gender"`
+	ParentName         string `json:"parent_name"`
+	ParentPhone        string `json:"parent_phone"`
+	StudentPhone       string `json:"student_phone"`
+	StudentAddress     string `json:"student_address"`
+	IsActive           bool   `json:"is_active"`
+	Status             string `json:"status"`
+	ParentID           string `json:"parent_id"`
+	ParentNama         string `json:"parent_nama"`
+	ParentPhoneLinked  string `json:"parent_phone_linked"`
+	ParentAddress      string `json:"parent_address"`
+	ParentOccupation   string `json:"parent_occupation"`
+	ParentIncomeBand   string `json:"parent_income_band"`
+	ParentNIK          string `json:"parent_nik"`
+	Relationship       string `json:"relationship"`
+	IsPrimaryContact   bool   `json:"is_primary_contact"`
+	RelationshipNotes  string `json:"relationship_notes"`
+}
+
+func (s *SemesterService) ListStudentsByClass(ctx context.Context, classID string) ([]StudentWithRelationsRow, error) {
+	rows, err := s.q.ListStudentsByClassWithParents(ctx, pgUUID(classID))
+	if err != nil {
+		return nil, fmt.Errorf("list students by class: %w", err)
+	}
+	items := make([]StudentWithRelationsRow, len(rows))
+	for i, r := range rows {
+		items[i] = StudentWithRelationsRow{
+			StudentID:         pgUUIDString(r.StudentID),
+			NIS:               r.Nis,
+			NISN:              r.Nisn,
+			StudentName:       r.StudentName,
+			Gender:            string(r.Gender),
+			ParentName:        r.ParentName,
+			ParentPhone:       r.ParentPhone,
+			StudentPhone:      r.StudentPhone,
+			StudentAddress:    r.StudentAddress,
+			IsActive:          r.IsActive,
+			Status:            string(r.Status),
+			ParentID:          pgUUIDString(r.ParentID),
+			ParentNama:        r.ParentNama,
+			ParentPhoneLinked: r.ParentPhoneLinked,
+			ParentAddress:     r.ParentAddress,
+			ParentOccupation:  r.ParentOccupation,
+			ParentIncomeBand:  r.ParentIncomeBand,
+			ParentNIK:         r.ParentNik,
+			Relationship:      fmt.Sprintf("%v", r.Relationship),
+			IsPrimaryContact:  r.IsPrimaryContact,
+			RelationshipNotes: r.RelationshipNotes,
+		}
+	}
+	return items, nil
+}
+
+func (s *SemesterService) ListUnassignedStudents(ctx context.Context) ([]RombelStudentItem, error) {
+	rows, err := s.q.ListUnassignedStudents(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list unassigned students: %w", err)
+	}
+	items := make([]RombelStudentItem, len(rows))
+	for i, r := range rows {
+		items[i] = RombelStudentItem{
+			ID:       pgUUIDString(r.ID),
+			NIS:      r.Nis,
+			NISN:     r.Nisn,
+			Nama:     r.Nama,
+			Gender:   string(r.Gender),
+			IsActive: r.IsActive,
+			Status:   string(r.Status),
+		}
+	}
+	return items, nil
+}
+
+func (s *SemesterService) AssignStudentToClass(ctx context.Context, studentID, classID string) error {
+	return s.q.AssignStudentToClass(ctx, db.AssignStudentToClassParams{
+		ID:      pgUUID(studentID),
+		ClassID: pgUUID(classID),
+	})
+}
+
+func (s *SemesterService) BulkAssignStudentsToClass(ctx context.Context, studentIDs []string, classID string) error {
+	ids := make([]pgtype.UUID, len(studentIDs))
+	for i, id := range studentIDs {
+		ids[i] = pgUUID(id)
+	}
+	return s.q.BulkAssignStudentsToClass(ctx, db.BulkAssignStudentsToClassParams{
+		Column1: ids,
+		ClassID: pgUUID(classID),
+	})
+}
+
+func (s *SemesterService) RemoveStudentFromClass(ctx context.Context, studentID string) error {
+	return s.q.RemoveStudentFromClass(ctx, pgUUID(studentID))
+}

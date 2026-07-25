@@ -112,7 +112,7 @@
       });
       if (r.ok) {
         const p = await r.json();
-        toast.success(`Pertemuan ke-${p?.pertemuan_ke || '?'} tersimpan`);
+        toast.success(`Pertemuan ke-${p?.pertemuan_ke ?? '?'} tersimpan`);
         showCreate = false;
         createForm = { tanggal: new Date().toISOString().slice(0,10), materi: '', kegiatan: '', catatan: '', guru_hadir: true };
         await Promise.all([loadSessions(), loadSummary()]);
@@ -173,16 +173,16 @@
       <div class="flex flex-col sm:flex-row gap-3">
         <div class="flex-1 min-w-0">
           <label class="text-xs font-medium text-muted-foreground mb-1 block">Kelas</label>
-          <select class="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm" onchange={(e) => selectClass((e.target as HTMLSelectElement).value)}>
+          <select class="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm" bind:value={selectedClassId} onchange={() => selectClass(selectedClassId)}>
             <option value="">— Pilih Kelas —</option>
             {#each classes as c}
-              <option value={c.id} selected={c.id === selectedClassId}>{c.code} — {c.name}</option>
+              <option value={c.id}>{c.code}</option>
             {/each}
           </select>
         </div>
         <div class="flex-1 min-w-0">
           <label class="text-xs font-medium text-muted-foreground mb-1 block">Mata Pelajaran</label>
-          <select class="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm" disabled={!selectedClassId} value={selectedAssignmentId} onchange={(e) => selectAssignment((e.target as HTMLSelectElement).value)}>
+          <select class="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm" disabled={!selectedClassId} bind:value={selectedAssignmentId} onchange={() => selectAssignment(selectedAssignmentId)}>
             <option value="">{selectedClassId ? '— Pilih Mapel —' : 'Pilih kelas terlebih dahulu'}</option>
             {#each filteredAssignments as a}
               <option value={a.id}>{a.subject_name} ({a.teacher_name})</option>
