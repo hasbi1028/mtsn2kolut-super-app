@@ -82,6 +82,26 @@ func (s *ClassJournal) CreateSession(ctx context.Context, req CreateSessionReque
 		return "", fmt.Errorf("format tanggal tidak valid, gunakan YYYY-MM-DD")
 	}
 
+	// Check if session already exists for this assignment+date
+	if req.TimetableSlotID == "" {
+		existingID, err := s.q.GetJournalSessionIDByAssignmentDate(ctx, db.GetJournalSessionIDByAssignmentDateParams{
+			AssignmentID: pgUUID(req.AssignmentID),
+			Tanggal:      pgtype.Date{Time: tanggal, Valid: true},
+		})
+		if err == nil {
+			// Session already exists, return existing ID
+			return pgUUIDString(existingID), nil
+		}
+	} else {
+		existingID, err := s.q.GetJournalSessionIDByTimetableSlotDate(ctx, db.GetJournalSessionIDByTimetableSlotDateParams{
+			TimetableSlotID: pgUUID(req.TimetableSlotID),
+			Tanggal:         pgtype.Date{Time: tanggal, Valid: true},
+		})
+		if err == nil {
+			return pgUUIDString(existingID), nil
+		}
+	}
+
 	// Get next pertemuan_ke
 	next, err := s.q.NextJournalMeetingNumber(ctx, pgUUID(req.AssignmentID))
 	if err != nil {
