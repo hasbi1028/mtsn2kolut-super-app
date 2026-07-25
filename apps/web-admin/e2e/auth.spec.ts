@@ -190,7 +190,7 @@ test.describe('AUTH — Redirect & Session', () => {
     expect(page.url()).toContain('/academic/subject-assignments');
   });
 
-  test('TC-AUTH-10: Complete logout clears session', async ({ browser }) => {
+  test('TC-AUTH-10: Sidebar logout link clears session and redirects to landing', async ({ browser }) => {
     const page = await browser.newPage();
 
     // Login first
@@ -200,13 +200,20 @@ test.describe('AUTH — Redirect & Session', () => {
     await page.click('button[type="submit"]');
     await page.waitForTimeout(2000);
 
-    // Logout
-    await page.goto(`${BASE}/logout`, { waitUntil: 'networkidle' });
-    await page.waitForTimeout(2000);
-
-    // Should be redirected to landing page
-    expect(page.url()).toBe(`${BASE}/`);
-
+    // Find the Keluar link in sidebar  
+    const logoutLink = page.locator('a[href="/logout"]');
+    await expect(logoutLink).toBeVisible();
+    
+    // Click the sidebar logout link
+    await logoutLink.click();
+    
+    // Wait for full page navigation to complete
+    await page.waitForURL(`${BASE}/`, { timeout: 15000 });
+    
+    // Should be on landing page, NOT dashboard
+    const body = await page.textContent('body') || '';
+    const isDashboard = body.includes('Dashboard') && page.url() === `${BASE}/`;
+    
     // Access protected page → should redirect to login
     await page.goto(`${BASE}/academic/subject-assignments`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(2000);

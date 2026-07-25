@@ -154,7 +154,8 @@
 			await fetch('/api/auth/logout', { method: 'POST' });
 		} finally {
 			clearCbtComposerDrafts();
-			location.href = '/login';
+			// Full page redirect to /logout so server clears cookies
+			window.location.href = '/logout';
 		}
 	}
 
