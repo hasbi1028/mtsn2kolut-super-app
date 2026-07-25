@@ -109,7 +109,7 @@
 						onchange={changeLimit}
 					>
 						{#each pageSizeOptions as option}
-							<option value={option}>{option}</option>
+							<option value={option}>{option === 0 ? 'Semua' : option}</option>
 						{/each}
 					</select>
 					<span>per halaman</span>

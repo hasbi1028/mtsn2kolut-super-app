@@ -244,7 +244,7 @@
     bind:page={pageMurid}
     bind:limit={perPage}
     {total}
-    pageSizeOptions={[25, 50, 100]}
+    pageSizeOptions={[25, 50, 100, 0]}
     defaultLimit={25}
     itemLabel="murid"
     siblingCount={2}

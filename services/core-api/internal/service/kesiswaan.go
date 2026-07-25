@@ -103,16 +103,18 @@ func (s *KesiswaanService) ListStudents(ctx context.Context, search, status, cla
 		items[i] = item
 	}
 
-	// Apply pagination slicing
-	start := (page - 1) * perPage
-	if start > len(items) {
-		items = []StudentItem{}
-	} else {
-		end := start + perPage
-		if end > len(items) {
-			end = len(items)
+	// Apply pagination slicing (skip if perPage=0 = "Semua")
+	if perPage > 0 {
+		start := (page - 1) * perPage
+		if start > len(items) {
+			items = []StudentItem{}
+		} else {
+			end := start + perPage
+			if end > len(items) {
+				end = len(items)
+			}
+			items = items[start:end]
 		}
-		items = items[start:end]
 	}
 
 	return items, total, nil

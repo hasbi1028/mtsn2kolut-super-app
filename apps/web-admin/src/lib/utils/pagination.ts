@@ -40,17 +40,18 @@ export function offsetForPage(page: number, limit: number): number {
 
 export function calculatePaginationRange(total: number, page: number, limit: number) {
 	const safeTotal = Math.max(0, total);
-	const safeLimit = Math.max(1, limit);
-	const pageCount = Math.max(1, Math.ceil(safeTotal / safeLimit));
+	// If limit is 0, treat as "show all" - single page with all items
+	const pageSize = limit === 0 ? safeTotal || 1 : Math.max(1, limit);
+	const pageCount = Math.max(1, Math.ceil(safeTotal / pageSize));
 	const safePage = Math.min(Math.max(1, Math.floor(page)), pageCount);
-	const offset = offsetForPage(safePage, safeLimit);
+	const offset = offsetForPage(safePage, pageSize);
 	return {
 		page: safePage,
-		limit: safeLimit,
+		limit: pageSize,
 		offset,
 		pageCount,
 		start: safeTotal === 0 ? 0 : offset + 1,
-		end: Math.min(safeTotal, safePage * safeLimit),
+		end: Math.min(safeTotal, safePage * pageSize),
 		hasPrevious: safePage > 1,
 		hasNext: safePage < pageCount
 	};

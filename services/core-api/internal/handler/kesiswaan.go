@@ -32,12 +32,19 @@ func (h *KesiswaanHandler) ListMurid(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
+	// Return pagination metadata, but if perPage=0, it means "Semua"
+	var pages int64
+	if perPage > 0 {
+		pages = (total + int64(perPage) - 1) / int64(perPage)
+	} else {
+		pages = 1
+	}
 	api.JSON(w, http.StatusOK, map[string]any{
 		"data":     items,
 		"total":    total,
 		"page":     page,
 		"per_page": perPage,
-		"pages":    (total + int64(perPage) - 1) / int64(perPage),
+		"pages":    pages,
 	})
 }
 
