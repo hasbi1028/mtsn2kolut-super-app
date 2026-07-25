@@ -10,14 +10,27 @@
 
   let { data } = $props();
 
+  type Class = { id: string; code: string; name: string; level: string; };
   type Assignment = { id: string; class_id: string; class_code: string; class_name: string; subject_name: string; teacher_name: string; };
   type Session = { id: string; assignment_id: string; tanggal: string; pertemuan_ke: number; materi: string; kegiatan: string; catatan: string; guru_hadir: boolean; class_name: string; subject_name: string; teacher_name: string; };
 
+  let classes = $state<Class[]>(data.classes ?? []);
   let assignments = $state<Assignment[]>(data.assignments ?? []);
   let sessions = $state<Session[]>([]);
   let loading = $state(false);
 
-  // — Step 1: Select assignment
+  // — Step 1a: Select class
+  let selectedClassId = $state('');
+  let selectedClass = $derived(classes.find(c => c.id === selectedClassId));
+
+  // — Step 1b: Filtered assignments by selected class
+  let filteredAssignments = $derived(
+    selectedClassId
+      ? assignments.filter(a => a.class_id === selectedClassId)
+      : []
+  );
+
+  // — Step 1c: Select assignment
   let selectedAssignmentId = $state('');
   let selectedAssignment = $derived(assignments.find(a => a.id === selectedAssignmentId));
 
@@ -30,6 +43,12 @@
   let selectedSession = $state<Session | null>(null);
   let attendances = $state<any[]>([]);
   let attLoading = $state(false);
+
+  async function selectClass(id: string) {
+    selectedClassId = id;
+    selectedAssignmentId = '';
+    sessions = [];
+  }
 
   async function selectAssignment(id: string) {
     selectedAssignmentId = id;
@@ -109,16 +128,30 @@
     <div><h1 class="text-xl font-black">Jurnal Belajar Harian</h1><p class="text-sm text-muted-foreground">Catat kegiatan belajar & kehadiran murid per pertemuan.</p></div>
   </div>
 
-  <!-- Step 1: Pilih mapel -->
+  <!-- Step 1: Pilih Kelas & Mapel -->
   <Card.Root>
-    <Card.Header class="px-4 pt-3 pb-1"><Card.Title class="text-sm font-semibold">Pilih Mata Pelajaran</Card.Title></Card.Header>
-    <Card.Content class="px-4 pb-3">
-      <select class="flex h-9 w-full max-w-md rounded-lg border border-input bg-background px-3 text-sm" onchange={(e) => selectAssignment((e.target as HTMLSelectElement).value)}>
-        <option value="">Pilih rombel & mapel...</option>
-        {#each assignments as a}
-          <option value={a.id}>{a.class_code} — {a.subject_name} ({a.teacher_name})</option>
-        {/each}
-      </select>
+    <Card.Header class="px-4 pt-3 pb-1"><Card.Title class="text-sm font-semibold">Pilih Kelas & Mata Pelajaran</Card.Title></Card.Header>
+    <Card.Content class="px-4 pb-3 space-y-3">
+      <div class="flex flex-col sm:flex-row gap-3">
+        <div class="flex-1 min-w-0">
+          <label class="text-xs font-medium text-muted-foreground mb-1 block">Kelas</label>
+          <select class="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm" onchange={(e) => selectClass((e.target as HTMLSelectElement).value)}>
+            <option value="">— Pilih Kelas —</option>
+            {#each classes as c}
+              <option value={c.id} selected={c.id === selectedClassId}>{c.code} — {c.name}</option>
+            {/each}
+          </select>
+        </div>
+        <div class="flex-1 min-w-0">
+          <label class="text-xs font-medium text-muted-foreground mb-1 block">Mata Pelajaran</label>
+          <select class="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm" disabled={!selectedClassId} value={selectedAssignmentId} onchange={(e) => selectAssignment((e.target as HTMLSelectElement).value)}>
+            <option value="">{selectedClassId ? '— Pilih Mapel —' : 'Pilih kelas terlebih dahulu'}</option>
+            {#each filteredAssignments as a}
+              <option value={a.id}>{a.subject_name} ({a.teacher_name})</option>
+            {/each}
+          </select>
+        </div>
+      </div>
     </Card.Content>
   </Card.Root>
 
