@@ -402,3 +402,74 @@ func (s *SemesterService) BulkAssignStudentsToClass(ctx context.Context, student
 func (s *SemesterService) RemoveStudentFromClass(ctx context.Context, studentID string) error {
 	return s.q.RemoveStudentFromClass(ctx, pgUUID(studentID))
 }
+
+// ─── Homeroom (Wali Kelas) ────────────────────────────────────────
+
+type HomeroomAssignmentItem struct {
+	ID              string `json:"id"`
+	ClassID         string `json:"class_id"`
+	ClassCode       string `json:"class_code"`
+	ClassName       string `json:"class_name"`
+	EmployeeID      string `json:"employee_id"`
+	EmployeeName    string `json:"employee_name"`
+	AcademicYearID  string `json:"academic_year_id"`
+	AcademicYearName string `json:"academic_year_name"`
+	StartDate       string `json:"start_date"`
+	EndDate         string `json:"end_date"`
+	IsActive        bool   `json:"is_active"`
+	Notes           string `json:"notes"`
+}
+
+func (s *SemesterService) GetActiveHomeroom(ctx context.Context, classID string) (*HomeroomAssignmentItem, error) {
+	assignments, err := s.q.ListHomeroomAssignmentsByClass(ctx, pgUUID(classID))
+	if err != nil {
+		return nil, fmt.Errorf("list homeroom assignments: %w", err)
+	}
+	for _, a := range assignments {
+		if a.IsActive {
+			item := HomeroomAssignmentItem{
+				ID:              pgUUIDString(a.ID),
+				ClassID:         pgUUIDString(a.ClassID),
+				ClassCode:       a.ClassCode,
+				ClassName:       a.ClassName,
+				EmployeeID:      pgUUIDString(a.EmployeeID),
+				EmployeeName:    a.EmployeeName,
+				AcademicYearID:  pgUUIDString(a.AcademicYearID),
+				AcademicYearName: a.AcademicYearName,
+				StartDate:       a.StartDate.Time.Format("2006-01-02"),
+				EndDate:         a.EndDate.Time.Format("2006-01-02"),
+				IsActive:        a.IsActive,
+				Notes:           a.Notes,
+			}
+			return &item, nil
+		}
+	}
+	return nil, nil
+}
+
+func (s *SemesterService) SetHomeroomTeacher(ctx context.Context, classID, employeeID string) (*HomeroomAssignmentItem, error) {
+	assignment, err := s.q.CreateHomeroomAssignment(ctx, db.CreateHomeroomAssignmentParams{
+		ClassID:                pgUUID(classID),
+		EmployeeID:             pgUUID(employeeID),
+		HomeroomIsActive:       true,
+		HomeroomAcademicYearID: nil,
+		HomeroomStartDate:      nil,
+		HomeroomEndDate:        pgtype.Date{},
+		Notes:                  "",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create homeroom assignment: %w", err)
+	}
+	return &HomeroomAssignmentItem{
+		ID:              pgUUIDString(assignment.ID),
+		ClassID:         pgUUIDString(assignment.ClassID),
+		ClassCode:       assignment.ClassCode,
+		ClassName:       assignment.ClassName,
+		EmployeeID:      pgUUIDString(assignment.EmployeeID),
+		EmployeeName:    assignment.EmployeeName,
+		AcademicYearID:  pgUUIDString(assignment.AcademicYearID),
+		AcademicYearName: assignment.AcademicYearName,
+		StartDate:       assignment.StartDate.Time.Format("2006-01-02"),
+		IsActive:        assignment.IsActive,
+	}, nil
+}

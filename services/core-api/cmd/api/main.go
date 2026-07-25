@@ -259,6 +259,8 @@ func main() {
 			r.Post("/api/academic/rombels/{id}/students", academicH.AssignStudent)
 			r.Delete("/api/academic/rombels/{id}/students/{studentId}", academicH.RemoveStudentFromClass)
 			r.Delete("/api/academic/rombels/{id}", academicH.DeleteSchoolClass)
+			r.Get("/api/academic/rombels/{id}/homeroom", academicH.GetHomeroom)
+			r.Post("/api/academic/rombels/{id}/homeroom", academicH.SetHomeroom)
 			r.Get("/api/academic/curriculum/profiles", curriculumH.ListProfiles)
 			r.Get("/api/academic/curriculum/profiles/active", curriculumH.GetActiveProfile)
 			r.Post("/api/academic/curriculum/profiles", curriculumH.CreateProfile)

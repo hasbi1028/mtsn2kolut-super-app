@@ -180,6 +180,49 @@ func (h *AcademicHandler) DeleteSchoolClass(w http.ResponseWriter, r *http.Reque
 	api.NoContent(w)
 }
 
+// ─── Rombel Homeroom (Wali Kelas) ─────────────────────────────────
+
+// GET /api/academic/rombels/{id}/homeroom
+func (h *AcademicHandler) GetHomeroom(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		api.BadRequest(w, "id rombel wajib diisi")
+		return
+	}
+	homeroom, err := h.semesterSvc.GetActiveHomeroom(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, homeroom)
+}
+
+// POST /api/academic/rombels/{id}/homeroom
+func (h *AcademicHandler) SetHomeroom(w http.ResponseWriter, r *http.Request) {
+	classID := r.PathValue("id")
+	if classID == "" {
+		api.BadRequest(w, "id rombel wajib diisi")
+		return
+	}
+	var body struct {
+		EmployeeID string `json:"employee_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "format data tidak valid")
+		return
+	}
+	if body.EmployeeID == "" {
+		api.BadRequest(w, "employee_id wajib diisi")
+		return
+	}
+	result, err := h.semesterSvc.SetHomeroomTeacher(r.Context(), classID, body.EmployeeID)
+	if err != nil {
+		writeDomainOrInternal(w, err, "gagal mengatur wali kelas")
+		return
+	}
+	api.OK(w, result)
+}
+
 // ─── Rombel Student Management ────────────────────────────────────
 
 // GET /api/academic/rombels/{id}/students
