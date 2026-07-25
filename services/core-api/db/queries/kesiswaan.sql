@@ -538,12 +538,21 @@ INSERT INTO students (
     nik, tempat_lahir, tanggal_lahir, alamat, agama, phone,
     parent_name, parent_phone
 ) VALUES (
-    $1, $2, $3, $4,
-    CASE WHEN $5::UUID IS NULL THEN NULL ELSE $5::UUID END,
-    COALESCE($6, 'active'), COALESCE($7, true),
-    $8, $9,
-    CASE WHEN $10::DATE IS NULL THEN NULL ELSE $10::DATE END,
-    $11, $12, $13, $14, $15
+    sqlc.arg(nis)::text,
+    sqlc.arg(nisn)::text,
+    sqlc.arg(nama)::text,
+    sqlc.arg(gender)::gender_enum,
+    CASE WHEN sqlc.arg(class_id)::UUID IS NULL THEN NULL ELSE sqlc.arg(class_id)::UUID END,
+    COALESCE(sqlc.arg(status)::text, 'active'),
+    COALESCE(sqlc.arg(is_active)::boolean, true),
+    sqlc.arg(nik)::text,
+    sqlc.arg(tempat_lahir)::text,
+    CASE WHEN sqlc.arg(tanggal_lahir)::DATE IS NULL THEN NULL ELSE sqlc.arg(tanggal_lahir)::DATE END,
+    sqlc.arg(alamat)::text,
+    sqlc.arg(agama)::text,
+    sqlc.arg(phone)::text,
+    sqlc.arg(parent_name)::text,
+    sqlc.arg(parent_phone)::text
 )
 RETURNING id;
 

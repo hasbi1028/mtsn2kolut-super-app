@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"mtsn2kolut-super-app/backend/internal/api"
 	"mtsn2kolut-super-app/backend/internal/service"
 	"net/http"
@@ -14,18 +15,41 @@ func NewKesiswaanHandler(svc *service.KesiswaanService) *KesiswaanHandler {
 	return &KesiswaanHandler{svc: svc}
 }
 
-// GET /api/kesiswaan/murid?search=&status=&class_id=
+// GET /api/kesiswaan/murid?search=&status=&class_id=&page=1&per_page=25
 func (h *KesiswaanHandler) ListMurid(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
 	status := r.URL.Query().Get("status")
 	classID := r.URL.Query().Get("class_id")
+	page := parseIntParam(r.URL.Query().Get("page"), 1)
+	perPage := parseIntParam(r.URL.Query().Get("per_page"), 25)
 
-	items, err := h.svc.ListStudents(r.Context(), search, status, classID)
+	if perPage > 100 {
+		perPage = 100
+	}
+
+	items, total, err := h.svc.ListStudents(r.Context(), search, status, classID, page, perPage)
 	if err != nil {
 		api.Internal(w, err)
 		return
 	}
-	api.OK(w, items)
+	api.JSON(w, http.StatusOK, map[string]any{
+		"data":     items,
+		"total":    total,
+		"page":     page,
+		"per_page": perPage,
+		"pages":    (total + int64(perPage) - 1) / int64(perPage),
+	})
+}
+
+func parseIntParam(s string, defaultVal int) int {
+	if s == "" {
+		return defaultVal
+	}
+	var v int
+	if _, err := fmt.Sscanf(s, "%d", &v); err != nil || v < 1 {
+		return defaultVal
+	}
+	return v
 }
 
 // PUT /api/kesiswaan/murid/{id}/profile

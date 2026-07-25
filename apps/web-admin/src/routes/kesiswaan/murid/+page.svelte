@@ -8,6 +8,7 @@
   import LoadingButton from '$lib/components/LoadingButton.svelte';
   import { page } from '$app/state';
   import { enhance } from '$app/forms';
+  import { goto } from '$app/navigation';
 
   let { data } = $props();
 
@@ -23,6 +24,10 @@
 
   let murid = $state<Murid[]>(data.murid ?? []);
   let rombels = $state<Rombel[]>(data.rombels ?? []);
+  let total = $state(data.total ?? 0);
+  let pages = $state(data.pages ?? 0);
+  let currentPage = $state(data.page ?? 1);
+  let perPage = $state(data.perPage ?? 25);
   let loading = $state(false);
 
   // — Search / Filter
@@ -152,6 +157,20 @@
   function genderLabel(g: string): string {
     return g === 'L' ? 'Lk' : g === 'P' ? 'Pr' : g;
   }
+
+  function pageRange(): number[] {
+    const range: number[] = [];
+    const start = Math.max(1, currentPage - 2);
+    const end = Math.min(pages, currentPage + 2);
+    for (let i = start; i <= end; i++) range.push(i);
+    return range;
+  }
+
+  function goToPage(p: number) {
+    if (p < 1 || p > pages) return;
+    currentPage = p;
+    goto(`?page=${p}&per_page=${perPage}`, { keepFocus: true });
+  }
 </script>
 
 <svelte:head><title>Data Murid — MTSN 2 Kolut</title></svelte:head>
@@ -178,7 +197,7 @@
       <option value="mutasi">Mutasi</option>
       <option value="dropout">Dropout</option>
     </select>
-    <span class="text-xs text-muted-foreground">{filtered().length} murid</span>
+    <span class="text-xs text-muted-foreground">{total} murid</span>
   </div>
 
   {#if filtered().length === 0}
@@ -225,6 +244,24 @@
         </div>
       {/each}
     </div>
+  {/if}
+
+  <!-- Pagination -->
+  {#if pages > 1}
+    <div class="flex items-center justify-center gap-1 pt-4 pb-2">
+      <button class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors {currentPage <= 1 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted/20 border border-border'}" disabled={currentPage <= 1} onclick={() => goToPage(currentPage - 1)}>
+        ‹ Prev
+      </button>
+      {#each pageRange() as p}
+        <button class="min-w-[28px] px-2 py-1 text-xs font-medium rounded-md transition-colors {p === currentPage ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/20 border border-border'}" onclick={() => goToPage(p)}>
+          {p}
+        </button>
+      {/each}
+      <button class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors {currentPage >= pages ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted/20 border border-border'}" disabled={currentPage >= pages} onclick={() => goToPage(currentPage + 1)}>
+        Next ›
+      </button>
+    </div>
+    <p class="text-center text-[10px] text-muted-foreground">Halaman {currentPage} dari {pages} ({total} murid)</p>
   {/if}
 </div>
 

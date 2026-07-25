@@ -44,19 +44,38 @@ type StudentItem struct {
 	UpdatedAt            time.Time  `json:"updated_at"`
 }
 
-func (s *KesiswaanService) ListStudents(ctx context.Context, search, status, classID string) ([]StudentItem, error) {
+func (s *KesiswaanService) ListStudents(ctx context.Context, search, status, classID string, page, perPage int) ([]StudentItem, int64, error) {
 	var cid pgtype.UUID
 	if classID != "" {
 		cid = pgUUID(classID)
 	}
+
+	// Count total
+	total, err := s.q.CountKesiswaanStudents(ctx, db.CountKesiswaanStudentsParams{
+		Search:            search,
+		Status:            status,
+		ClassID:           cid,
+		TeacherEmployeeID: pgUUID(""),
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("count students: %w", err)
+	}
+
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 {
+		perPage = 25
+	}
+
 	rows, err := s.q.ListKesiswaanStudents(ctx, db.ListKesiswaanStudentsParams{
 		Search:            search,
 		Status:            status,
 		ClassID:           cid,
-		TeacherEmployeeID: pgUUID("00000000-0000-0000-0000-000000000000"),
+		TeacherEmployeeID: pgUUID(""),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("list students: %w", err)
+		return nil, 0, fmt.Errorf("list students: %w", err)
 	}
 	items := make([]StudentItem, len(rows))
 	for i, r := range rows {
@@ -83,7 +102,20 @@ func (s *KesiswaanService) ListStudents(ctx context.Context, search, status, cla
 		}
 		items[i] = item
 	}
-	return items, nil
+
+	// Apply pagination slicing
+	start := (page - 1) * perPage
+	if start > len(items) {
+		items = []StudentItem{}
+	} else {
+		end := start + perPage
+		if end > len(items) {
+			end = len(items)
+		}
+		items = items[start:end]
+	}
+
+	return items, total, nil
 }
 
 func (s *KesiswaanService) UpdateProfile(ctx context.Context, id, nik, tempatLahir, alamat, agama, phone, parentName, parentPhone string, tanggalLahir string, anakKe int) error {
@@ -151,22 +183,23 @@ func (s *KesiswaanService) CreateStudent(ctx context.Context, req CreateStudentR
 	if status == "" {
 		status = "active"
 	}
+	genderEnum := db.GenderEnum(req.Gender)
 	id, err := s.q.CreateKesiswaanStudent(ctx, db.CreateKesiswaanStudentParams{
-		NIS:          req.NIS,
-		NISN:         req.NISN,
-		Nama:         req.Nama,
-		Gender:       req.Gender,
-		ClassID:      classID,
-		Status:       status,
-		IsActive:     status == "active",
-		NIK:          req.NIK,
-		TempatLahir:  req.TempatLahir,
-		TanggalLahir: tgl,
-		Alamat:       req.Alamat,
-		Agama:        req.Agama,
-		Phone:        req.Phone,
-		ParentName:   req.ParentName,
-		ParentPhone:  req.ParentPhone,
+		Nis:           req.NIS,
+		Nisn:          req.NISN,
+		Nama:          req.Nama,
+		Gender:        genderEnum,
+		ClassID:       classID,
+		Status:        status,
+		IsActive:      status == "active",
+		Nik:           req.NIK,
+		TempatLahir:   req.TempatLahir,
+		TanggalLahir:  tgl,
+		Alamat:        req.Alamat,
+		Agama:         req.Agama,
+		Phone:         req.Phone,
+		ParentName:    req.ParentName,
+		ParentPhone:   req.ParentPhone,
 	})
 	if err != nil {
 		return "", fmt.Errorf("create student: %w", err)
