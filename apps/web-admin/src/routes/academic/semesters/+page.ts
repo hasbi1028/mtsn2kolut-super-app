@@ -16,7 +16,7 @@ export const load: PageLoad = async ({ fetch, url, parent }) => {
 	const isAdmin = user?.role === 'admin' || user?.roles?.includes('admin');
 	if (!isAdmin) throw redirect(302, '/');
 
-	const res = await fetch(`${url.origin}/api/academic/semesters`);
+	const res = await fetch('/api/academic/semesters');
 	if (!res.ok) {
 		const items: Semester[] = [];
 		return { items };

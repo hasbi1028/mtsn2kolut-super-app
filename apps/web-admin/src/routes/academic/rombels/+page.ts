@@ -12,8 +12,8 @@ type Rombel = {
 
 export const load: PageLoad = async ({ fetch, url }) => {
 	const [semRes, rombelRes] = await Promise.all([
-		fetch(`${url.origin}/api/academic/semesters/active`),
-		fetch(`${url.origin}/api/academic/rombels`),
+		fetch('/api/academic/semesters/active'),
+		fetch('/api/academic/rombels'),
 	]);
 
 	let activeSemester: { id: string; label: string; academic_year_id: string } | null = null;

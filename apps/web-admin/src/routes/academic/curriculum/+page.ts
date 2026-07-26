@@ -7,8 +7,8 @@ export const load: PageLoad = async ({ fetch, url, parent }) => {
 	if (!isAdmin) throw redirect(302, '/');
 
 	const [profilesRes, rombelsRes] = await Promise.all([
-		fetch(`${url.origin}/api/academic/curriculum/profiles`),
-		fetch(`${url.origin}/api/academic/rombels`),
+		fetch('/api/academic/curriculum/profiles'),
+		fetch('/api/academic/rombels'),
 	]);
 	let profiles: any[] = [];
 	let rombels: any[] = [];
