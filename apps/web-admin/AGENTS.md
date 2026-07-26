@@ -63,6 +63,87 @@ This app is the SvelteKit admin frontend for MTs Negeri 2 Kolaka Utara.
 
 ---
 
+## ═══ STATE PERSISTENCE PATTERN ═══
+
+### Masalah
+
+SvelteKit SPA navigation menghancurkan (destroy) komponen lama dan membuat baru. Semua `$state` hilang saat pindah halaman.
+
+### Solusi Wajib — 3 Tingkatan Persistence
+
+Setiap state yang penting (tab, filter, draft, wizard step) WAJIB dipersist dengan salah satu metode berikut:
+
+#### 1️⃣ URL Search Params — untuk view/filter state (PRIORITAS)
+
+```svelte
+<script lang="ts">
+  import { readUrlParam, writeUrlParam } from '$lib/stores/persistent';
+
+  // Baca dari URL saat mount (survive refresh)
+  let activeTab = $state(readUrlParam('tab', 'journal'));
+
+  // Simpan ke URL saat berubah
+  function setTab(tab: string) {
+    activeTab = tab;
+    writeUrlParam('tab', tab);
+  }
+</script>
+```
+
+**Gunakan untuk:** tab aktif, pagination, search query, date range filter, sort order.
+**Keuntungan:** bisa di-bookmark, bisa refresh, state aman.
+
+#### 2️⃣ SessionStorage Store — untuk wizard/flow state
+
+Gunakan `persistState()` atau store khusus dari `$lib/stores/`:
+
+```svelte
+<script lang="ts">
+  import { persistState } from '$lib/stores/persistent';
+  import { journalFlow } from '$lib/stores/journal-flow.svelte';
+
+  // Simple: generic store
+  const filterStore = persistState('search_filter', '');
+  $filterStore = 'cari sesuatu';  // auto-save ke sessionStorage
+
+  // Complex: dedicated store dengan business logic
+  $journalFlow = { ...$journalFlow, selectedClassId: kelas.id };
+</script>
+```
+
+**Gunakan untuk:** multi-step wizard, selected items, data sementara antar halaman.
+**Keuntungan:** bertahan selama tab browser (session), simple API.
+
+#### 3️⃣ Draft Auto-Save — untuk form input
+
+```svelte
+<script lang="ts">
+  import { journalDraft } from '$lib/stores/journal-draft.svelte';
+  // atau
+  import { createDraft } from '$lib/stores/persistent';
+
+  // Init dari saved draft
+  let form = $state({ ...journalDraft });
+
+  // Clear setelah submit sukses
+  journalDraft.clear();
+</script>
+```
+
+**Gunakan untuk:** form create/edit, multi-step form, input panjang.
+**Keuntungan:** tidak kehilangan input saat tidak sengaja navigasi.
+
+### Aturan
+
+1. **URL params adalah PRIORITAS UTAMA** — untuk semua view state (tab, filter, pagination).
+2. **SessionStorage untuk Wizard** — gunakan `persistState()` atau store dedicated.
+3. **Hindari `$state` tanpa persistence** — kecuali state yang benar-benar lokal (popup open/close, hover).
+4. **Hindari `localStorage` kecuali** — sidebar collapse, theme preference, data yang perlu survive tab close.
+5. **Semua store ada di `$lib/stores/`** — jangan bikin store di komponen. Satu file per domain (journal-flow, employee, dsb).
+6. **Gunakan `writeUrlParams()` untuk batch update** — lebih efisien dari individual `writeUrlParam()`.
+7. **File utility:** `$lib/stores/persistent.ts` — berisi `persistState()`, `readUrlParam()`, `writeUrlParam()`, `writeUrlParams()`, `createDraft()`.
+8. **Untuk tab state:** selalu kombinasikan URL param + `<svelte:window>` atau `onMount` restore agar state survive refresh.
+
 ## ═══ CSS & TAILWIND v4 ARCHITECTURE ═══
 
 ### CSS Cascade Layer — DaisyUI + Tailwind v4 Import Order (KRITIS)
