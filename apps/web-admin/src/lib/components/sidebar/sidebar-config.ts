@@ -71,11 +71,11 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		group: 'Akademik',
 		items: [
 			{ href: '/academic/semesters', label: 'Semester', icon: 'calendar', roles: ['admin'], permissions: ['academic.read'] },
-			{ href: '/academic/rombels', label: 'Rombel', icon: 'users', roles: ['admin'], permissions: ['academic.read'] },
+			{ href: '/academic/rombels', label: 'Rombel', icon: 'users', roles: ['admin', 'guru'], permissions: ['academic.read'] },
 			{ href: '/academic/curriculum', label: 'Kurikulum', icon: 'book', roles: ['admin'], permissions: ['academic.read'] },
 			{ href: '/academic/subject-assignments', label: 'Assign Guru', icon: 'users', roles: ['admin'], permissions: ['academic.read'] },
 			{ href: '/academic/timetable', label: 'Jadwal Pelajaran', icon: 'calendar', roles: ['admin'], permissions: ['academic.read'] },
-			{ href: '/academic/class-journal', label: 'Jurnal Harian', icon: 'book', roles: ['admin'], permissions: ['journal.read'] }
+			{ href: '/academic/class-journal', label: 'Jurnal Harian', icon: 'book', roles: ['admin', 'guru'], permissions: ['journal.read'] }
 		]
 	},
 	{
