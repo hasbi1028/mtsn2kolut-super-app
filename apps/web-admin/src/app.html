@@ -10,18 +10,37 @@
 		<div style="display: contents">%sveltekit.body%</div>
 		<!-- Loading indicator for SPA initial load -->
 		<div id="splash" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#f8fafc;z-index:9999;transition:opacity .3s">
-			<div style="display:flex;flex-direction:column;align-items:center;gap:12px">
-				<div style="width:32px;height:32px;border:3px solid #e2e8f0;border-top-color:#16a34a;border-radius:50%;animation:spin .8s linear infinite"></div>
-				<p style="margin:0;font-size:13px;color:#64748b;font-family:system-ui,sans-serif;font-weight:600">Memuat aplikasi...</p>
+			<div style="display:flex;flex-direction:column;align-items:center;gap:14px">
+				<div style="width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#16a34a;border-radius:50%;animation:spin .8s linear infinite"></div>
+				<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+					<p style="margin:0;font-size:13px;color:#64748b;font-family:system-ui,sans-serif;font-weight:600">Memuat aplikasi...</p>
+					<p style="margin:0;font-size:10px;color:#94a3b8;font-family:system-ui,sans-serif;font-weight:500">dibuat oleh Hasbi Awal, S. Kom.</p>
+				</div>
 			</div>
 		</div>
 		<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 		<script>
-			// Hide splash screen when SvelteKit mounts
-			document.addEventListener('DOMContentLoaded', () => {
-				const el = document.getElementById('splash');
-				if (el) setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 100);
-			});
+			// Hide splash screen after minimum 1s + SvelteKit mount
+			(function() {
+				var start = Date.now();
+				var MIN_DISPLAY = 1000; // minimum 1 detik
+				function hideSplash() {
+					var el = document.getElementById('splash');
+					if (!el) return;
+					var elapsed = Date.now() - start;
+					var remaining = Math.max(0, MIN_DISPLAY - elapsed);
+					setTimeout(function() {
+						el.style.opacity = '0';
+						setTimeout(function() { el.remove(); }, 300);
+					}, remaining);
+				}
+				// If SvelteKit already mounted via DOMContentLoaded
+				document.addEventListener('DOMContentLoaded', hideSplash);
+				// Fallback: if everything loads before DOMContentLoaded
+				if (document.readyState === 'complete' || document.readyState === 'interactive') {
+					hideSplash();
+				}
+			})();
 		</script>
 	</body>
 </html>
