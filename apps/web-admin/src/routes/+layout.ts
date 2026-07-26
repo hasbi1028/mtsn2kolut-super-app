@@ -14,6 +14,15 @@ export const load: LayoutLoad = async ({ fetch, url }) => {
 		if (r.ok) branding = normalizeBranding(await r.json());
 	} catch { /* keep default */ }
 
+	// Fetch maintenance status
+	try {
+		const r = await fetch('/api/system/maintenance/status');
+		if (r.ok) {
+			const payload = await r.json();
+			// just consume, not used in layout currently
+		}
+	} catch { /* ignore */ }
+
 	// Fetch current user (auth check via cookies)
 	try {
 		const r = await fetch('/api/auth/account');
