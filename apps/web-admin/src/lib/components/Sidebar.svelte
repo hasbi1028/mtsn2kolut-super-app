@@ -22,6 +22,8 @@
 			.map((group) => {
 				const items = group.items.filter((item) => {
 					if (userRoles.includes('admin')) return true;
+					// If roles is explicitly set and user doesn't match → hide (even if permission matches)
+					if (item.roles && !item.roles.some((r: string) => userRoles.includes(r))) return false;
 					if (item.permissions && item.permissions.some((p: string) => userPermissions.includes(p))) return true;
 					if (item.roles && item.roles.some((r: string) => userRoles.includes(r))) return true;
 					if (item.allowAuthenticatedFallback && user) return true;
