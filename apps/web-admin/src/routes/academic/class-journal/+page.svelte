@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as Card from '$lib/components/ui/card';
+  import { journalFlow } from '$lib/stores/journal-flow.svelte';
 
   let { data } = $props();
 
@@ -17,6 +18,10 @@
       }))
       .filter(g => g.items.length > 0)
   );
+
+  function selectClass(c: Class) {
+    $journalFlow = { ...$journalFlow, selectedClassId: c.id, selectedClassCode: c.code };
+  }
 </script>
 
 <svelte:head><title>Pilih Kelas — Jurnal Belajar — MTSN 2 Kolut</title></svelte:head>
@@ -40,7 +45,7 @@
         <h2 class="text-base font-bold text-foreground">Kelas {group.level}</h2>
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {#each group.items as c}
-            <a href={`/academic/class-journal/kelas/${c.id}`} class="block no-underline">
+            <a href={`/academic/class-journal/kelas/${c.id}`} onclick={() => selectClass(c)} class="block no-underline">
               <Card.Root class="hover:shadow-md hover:border-primary/30 transition-all cursor-pointer h-full">
                 <Card.Content class="p-5 flex flex-col items-center justify-center text-center gap-1 h-full">
                   <span class="text-3xl">🏫</span>

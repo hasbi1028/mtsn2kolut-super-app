@@ -6,19 +6,46 @@
   import { toast } from '$lib/components/ui/sonner';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
   import { page } from '$app/state';
+  import { journalFlow } from '$lib/stores/journal-flow.svelte';
+  import { journalDraft } from '$lib/stores/journal-draft.svelte';
+  import { onMount } from 'svelte';
 
   let { data } = $props();
 
   let assignment = $state(data.assignment);
   let sessions = $state<any[]>([]);
   let loading = $state(false);
+
+  // — Tab state via URL search params
   let activeTab = $state<'journal' | 'rekap'>('journal');
+
+  function setTab(tab: 'journal' | 'rekap') {
+    activeTab = tab;
+    const url = new URL(page.url);
+    if (tab === 'rekap') url.searchParams.set('tab', 'rekap');
+    else url.searchParams.delete('tab');
+    history.replaceState({}, '', url);
+    // Persist to store
+    $journalFlow = { ...$journalFlow, lastTab: tab };
+  }
+
+  // Restore tab from URL param (survives refresh) on mount
+  onMount(() => {
+    const urlTab = page.url.searchParams.get('tab');
+    if (urlTab === 'journal' || urlTab === 'rekap') {
+      activeTab = urlTab;
+    }
+  });
 
   let roles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
   let isAdmin = $derived(roles.includes('admin'));
   let showCreate = $state(false);
-  let createForm = $state({ tanggal: new Date().toISOString().slice(0,10), materi: '', kegiatan: '', catatan: '', guru_hadir: true });
+  // — Create form uses global draft store (sessionStorage-backed)
+  let createForm = $state({ ...$journalDraft });
   let createLoading = $state(false);
+
+  // Sync back to store on input change
+  $effect(() => { if (!showCreate) { $journalDraft = { ...createForm }; } });
 
   // — Edit session
   let editSession = $state<any | null>(null);
@@ -80,7 +107,8 @@
         const p = await r.json();
         toast.success(`Pertemuan ke-${p?.pertemuan_ke ?? '?'} tersimpan`);
         showCreate = false;
-        createForm = { tanggal: new Date().toISOString().slice(0,10), materi: '', kegiatan: '', catatan: '', guru_hadir: true };
+        journalDraft.clear();
+        createForm = { ...$journalDraft };
         await Promise.all([loadSessions(), loadSummary()]);
       } else { const e = await r.json().catch(() => ({})); toast.error(e?.error || 'Gagal'); }
     } catch { toast.error('Gagal'); }
@@ -146,8 +174,8 @@
 
   <!-- Tabs -->
   <div class="flex border-b border-border gap-1">
-    <button class="px-4 py-2 text-sm font-semibold transition-colors border-b-2 -mb-[1px] {activeTab === 'journal' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}" onclick={() => activeTab = 'journal'}>📝 Catatan Jurnal</button>
-    <button class="px-4 py-2 text-sm font-semibold transition-colors border-b-2 -mb-[1px] {activeTab === 'rekap' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}" onclick={() => activeTab = 'rekap'}>📊 Rekap Absensi ({totalPertemuan})</button>
+    <button class="px-4 py-2 text-sm font-semibold transition-colors border-b-2 -mb-[1px] {activeTab === 'journal' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}" onclick={() => setTab('journal')}>📝 Catatan Jurnal</button>
+    <button class="px-4 py-2 text-sm font-semibold transition-colors border-b-2 -mb-[1px] {activeTab === 'rekap' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}" onclick={() => setTab('rekap')}>📊 Rekap Absensi ({totalPertemuan})</button>
   </div>
 
   {#if activeTab === 'journal'}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as Card from '$lib/components/ui/card';
+  import { journalFlow } from '$lib/stores/journal-flow.svelte';
 
   let { data } = $props();
 
@@ -8,6 +9,10 @@
 
   let kelas = $state<Kelas | null>(data.kelas);
   let mapels = $state<Assignment[]>(data.mapels ?? []);
+
+  function selectMapel(m: Assignment, k: Kelas | null) {
+    $journalFlow = { ...$journalFlow, selectedClassId: k?.id ?? m.class_id, selectedClassCode: k?.code ?? m.class_code };
+  }
 </script>
 
 <svelte:head><title>Pilih Mapel {kelas?.code ?? ''} — MTSN 2 Kolut</title></svelte:head>
@@ -32,7 +37,7 @@
   {:else}
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {#each mapels as m}
-        <a href={`/academic/class-journal/kelas/${kelas?.id}/${m.id}`} class="block no-underline">
+        <a href={`/academic/class-journal/kelas/${kelas?.id}/${m.id}`} onclick={() => selectMapel(m, kelas)} class="block no-underline">
           <Card.Root class="hover:shadow-md hover:border-primary/30 transition-all cursor-pointer h-full">
             <Card.Content class="p-4 flex flex-col gap-2 h-full">
               <div class="flex items-start gap-3">
