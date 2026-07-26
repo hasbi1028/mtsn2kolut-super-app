@@ -5,6 +5,7 @@
   import { Input } from '$lib/components/ui/input';
   import { toast } from '$lib/components/ui/sonner';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
+  import { page } from '$app/state';
 
   let { data } = $props();
 
@@ -12,6 +13,9 @@
   let sessions = $state<any[]>([]);
   let loading = $state(false);
   let activeTab = $state<'journal' | 'rekap'>('journal');
+
+  let roles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
+  let isAdmin = $derived(roles.includes('admin'));
   let showCreate = $state(false);
   let createForm = $state({ tanggal: new Date().toISOString().slice(0,10), materi: '', kegiatan: '', catatan: '', guru_hadir: true });
   let createLoading = $state(false);
@@ -165,8 +169,10 @@
               <td class="px-3 py-2 text-center">{#if s.guru_hadir}<span class="text-[10px] text-green-600 font-semibold bg-green-50 px-1.5 py-0.5 rounded">Hadir</span>{:else}<span class="text-[10px] text-muted-foreground">—</span>{/if}</td>
               <td class="px-3 py-2 text-right whitespace-nowrap space-x-1">
                 <a href={`/academic/class-journal/attendance/${s.id}`} class="text-xs text-primary hover:underline">Absensi</a>
-                <button class="text-xs text-primary hover:underline ml-1" onclick={() => openEdit(s)}>Edit</button>
-                <button class="text-xs text-destructive hover:underline ml-1" onclick={() => deleteSession(s.id, s.tanggal)}>Hapus</button>
+                {#if isAdmin}
+                  <button class="text-xs text-primary hover:underline ml-1" onclick={() => openEdit(s)}>Edit</button>
+                  <button class="text-xs text-destructive hover:underline ml-1" onclick={() => deleteSession(s.id, s.tanggal)}>Hapus</button>
+                {/if}
               </td>
             </tr>{/each}
           </tbody>
@@ -181,9 +187,15 @@
             </div>
             <p class="text-xs text-muted-foreground">{s.materi || '—'}</p>
             <div class="flex justify-between items-center pt-0.5">
-              <button class="text-xs text-destructive hover:underline" onclick={() => deleteSession(s.id, s.tanggal)}>Hapus</button>
+              {#if isAdmin}
+                <button class="text-xs text-destructive hover:underline" onclick={() => deleteSession(s.id, s.tanggal)}>Hapus</button>
+              {:else}
+                <span></span>
+              {/if}
               <div class="flex gap-2">
-                <button class="text-xs text-primary hover:underline" onclick={() => openEdit(s)}>Edit</button>
+                {#if isAdmin}
+                  <button class="text-xs text-primary hover:underline" onclick={() => openEdit(s)}>Edit</button>
+                {/if}
                 <a href={`/academic/class-journal/attendance/${s.id}`} class="text-xs text-primary hover:underline">Absensi →</a>
               </div>
             </div>

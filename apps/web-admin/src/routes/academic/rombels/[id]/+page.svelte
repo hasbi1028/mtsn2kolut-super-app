@@ -5,8 +5,12 @@
   import { Input } from '$lib/components/ui/input';
   import { toast } from '$lib/components/ui/sonner';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
+  import { page } from '$app/state';
 
   let { data } = $props();
+
+  let roles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
+  let isAdmin = $derived(roles.includes('admin'));
 
   type Student = {
     student_id: string;
@@ -266,7 +270,9 @@
         <h1 class="text-2xl font-black text-foreground mt-1">Rombel tidak ditemukan</h1>
       {/if}
     </div>
-    <Button onclick={openAssignDialog}>+ Tambah Siswa</Button>
+    {#if isAdmin}
+      <Button onclick={openAssignDialog}>+ Tambah Siswa</Button>
+    {/if}
   </div>
 
   <!-- Wali Kelas Card -->
@@ -285,9 +291,11 @@
           {/if}
         </div>
       </div>
-      <Button size="sm" variant="outline" onclick={openWaliDialog}>
-        {homeroom ? 'Ganti' : 'Pilih'}
-      </Button>
+      {#if isAdmin}
+        <Button size="sm" variant="outline" onclick={openWaliDialog}>
+          {homeroom ? 'Ganti' : 'Pilih'}
+        </Button>
+      {/if}
     </Card.Content>
   </Card.Root>
 
@@ -336,6 +344,7 @@
                     {/if}
                   </td>
                   <td class="px-4 py-2.5 text-right">
+                    {#if isAdmin}
                     <div class="inline-flex items-center gap-1">
                       <button
                         class="text-xs text-primary hover:underline"
@@ -346,6 +355,7 @@
                         onclick={() => removeStudent(s.student_id, s.student_name)}
                       >Kelupakan</button>
                     </div>
+                    {/if}
                   </td>
                 </tr>
               {/each}
@@ -361,6 +371,7 @@
                 <p class="text-xs text-muted-foreground">{s.nis}</p>
               </div>
               <div class="flex items-center gap-1 shrink-0 ml-2">
+                {#if isAdmin}
                 <button
                   class="text-xs text-primary hover:underline"
                   onclick={() => openPindahDialog(s.student_id, s.student_name)}
@@ -369,6 +380,7 @@
                   class="text-xs text-destructive hover:underline"
                   onclick={() => removeStudent(s.student_id, s.student_name)}
                 >Kelupakan</button>
+                {/if}
               </div>
             </div>
           {/each}
