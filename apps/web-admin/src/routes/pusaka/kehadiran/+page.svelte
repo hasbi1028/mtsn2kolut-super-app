@@ -11,6 +11,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { readClientJson } from '$lib/client/api';
+	import { readUrlParam, writeUrlParams } from '$lib/stores/persistent';
 
 	interface AttendanceRecord {
 		id: string;
@@ -41,13 +42,20 @@
 
 	let records   = $state<AttendanceRecord[]>([]);
 	let total     = $state<number | null>(null);
-	let startDate = $state('');
-	let endDate   = $state('');
+	// Init dates from URL params (persist across navigation + refresh)
+	let startDate = $state(readUrlParam('startDate', ''));
+	let endDate   = $state(readUrlParam('endDate', ''));
 	let recordsPromise = $state<Promise<AttendanceOverview> | null>(null);
 	let refreshing = $state(false);
 	let sendingTelegram = $state(false);
 	let loadedRangeKey = $state('');
 	let attendanceRequestId = 0;
+
+// Persist date range to URL params
+$effect(() => {
+	const s = startDate, e = endDate;
+	writeUrlParams({ startDate: s || null, endDate: e || null });
+});
 
 	function todayWita() {
 		return new Intl.DateTimeFormat('en-CA', {
