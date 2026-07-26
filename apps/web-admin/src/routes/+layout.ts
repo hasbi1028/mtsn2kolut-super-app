@@ -2,6 +2,7 @@ import type { LayoutLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
 import { defaultBranding, normalizeBranding, type BrandingSettings } from '$lib/branding';
 import type { AccountIdentity } from '$lib/client/account';
+import { accountDisplayName } from '$lib/client/account';
 
 export const ssr = false;
 
@@ -22,10 +23,13 @@ export const load: LayoutLoad = async ({ fetch, url }) => {
 		if (r.ok) {
 			const payload = await r.json();
 			account = payload as AccountIdentity;
-			// Derive user from account
+			// Derive user from account — include display info
 			user = {
 				id: account.id,
 				username: account.username,
+				display_name: account.display_name,
+				profile_nama: account.profile_nama,
+				profile_type: account.profile_type,
 				role: account.role,
 				roles: account.roles ?? [account.role],
 			};

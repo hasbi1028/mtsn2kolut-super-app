@@ -93,7 +93,7 @@
 				<span class="truncate">{branding.short_name}</span>
 			</div>
 			<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-content shadow-sm">
-				{user?.username?.substring(0, 2).toUpperCase() || '??'}
+				{user?.display_name?.substring(0, 2).toUpperCase() || user?.profile_nama?.substring(0, 2).toUpperCase() || user?.username?.substring(0, 2).toUpperCase() || '??'}
 			</div>
 		</header>
 

@@ -141,7 +141,7 @@
 			<div class="welcome-text">
 				<h1 class="welcome-title">Dashboard</h1>
 				<p class="welcome-subtitle">
-					Selamat datang, <span class="welcome-name">{data.user?.username || 'Pengguna'}</span>
+					Selamat datang, <span class="welcome-name">{data.user?.display_name || data.user?.profile_nama || data.user?.username || 'Pengguna'}</span>
 				</p>
 			</div>
 			<div class="welcome-time">
@@ -165,7 +165,7 @@
 					</svg>
 				</div>
 				<div class="stat-label">Pengguna</div>
-				<div class="stat-value">{data.user?.username || 'Pengguna'}</div>
+				<div class="stat-value">{data.user?.display_name || data.user?.profile_nama || data.user?.username || 'Pengguna'}</div>
 				<div class="stat-sublabel">{isAdmin ? 'Administrator' : 'Pengguna'}</div>
 			</div>
 

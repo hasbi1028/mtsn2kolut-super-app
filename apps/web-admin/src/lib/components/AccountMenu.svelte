@@ -61,7 +61,7 @@
 	const effectiveAccount = $derived(accountFromProps(account, user));
 	const displayName = $derived(accountDisplayName(effectiveAccount));
 	const compactName = $derived(shortDisplayName(displayName));
-	const username = $derived(effectiveAccount?.username?.trim() || user?.username?.trim() || 'akun');
+	const username = $derived(user?.display_name || user?.profile_nama || effectiveAccount?.display_name || effectiveAccount?.profile_nama || effectiveAccount?.username?.trim() || user?.username?.trim() || 'akun');
 	const activeRoles = $derived(activeRoleCodes(effectiveAccount, user));
 	const initials = $derived(accountInitials(effectiveAccount));
 	const avatarUrl = $derived(accountAvatarUrl(effectiveAccount));

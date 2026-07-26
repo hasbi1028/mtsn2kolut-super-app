@@ -148,7 +148,7 @@
 				</div>
 				<div class="min-w-0">
 					<p class="text-[9px] font-bold tracking-wide text-muted-foreground">Masuk sebagai</p>
-					<p class="truncate text-[11px] font-black text-foreground">{user?.username || 'Anonymous'}</p>
+					<p class="truncate text-[11px] font-black text-foreground">{user?.display_name || user?.profile_nama || user?.username || 'Anonymous'}</p>
 				</div>
 			</div>
 		</div>
