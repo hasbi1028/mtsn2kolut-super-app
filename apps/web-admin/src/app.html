@@ -20,26 +20,27 @@
 		</div>
 		<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 		<script>
-			// Hide splash screen after minimum 1s + SvelteKit mount
+			// Splash controller — exposed for SvelteKit layout to call
 			(function() {
 				var start = Date.now();
-				var MIN_DISPLAY = 1000; // minimum 1 detik
-				function hideSplash() {
-					var el = document.getElementById('splash');
-					if (!el) return;
+				var MIN_DISPLAY = 1000; // minimal 1 detik
+				var hidden = false;
+
+				window.__splashReady = function() {
+					if (hidden) return;
+					hidden = true;
 					var elapsed = Date.now() - start;
 					var remaining = Math.max(0, MIN_DISPLAY - elapsed);
 					setTimeout(function() {
+						var el = document.getElementById('splash');
+						if (!el) return;
 						el.style.opacity = '0';
-						setTimeout(function() { el.remove(); }, 300);
+						setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 300);
 					}, remaining);
-				}
-				// If SvelteKit already mounted via DOMContentLoaded
-				document.addEventListener('DOMContentLoaded', hideSplash);
-				// Fallback: if everything loads before DOMContentLoaded
-				if (document.readyState === 'complete' || document.readyState === 'interactive') {
-					hideSplash();
-				}
+				};
+
+				// Backup: fallback after 10s jika ada masalah
+				setTimeout(window.__splashReady, 10000);
 			})();
 		</script>
 	</body>

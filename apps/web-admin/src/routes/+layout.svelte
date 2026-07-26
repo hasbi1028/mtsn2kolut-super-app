@@ -10,6 +10,13 @@
 	import '../app.css';
 	import { navigating, page } from '$app/state';
 	import { fade } from 'svelte/transition';
+	import { onMount } from 'svelte';
+
+	onMount(() => {
+		if (typeof window !== 'undefined' && typeof window.__splashReady === 'function') {
+			window.__splashReady();
+		}
+	});
 
 	let { children, data } = $props();
 	let isLogin = $derived(page.url.pathname === '/login');
