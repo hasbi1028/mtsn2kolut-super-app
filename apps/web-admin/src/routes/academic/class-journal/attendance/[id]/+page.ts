@@ -1,4 +1,4 @@
-import type { PageServerLoad } from './$types.js';
+import type { PageLoad } from './$types.js';
 
 export const load: PageServerLoad = async ({ fetch, params }) => {
 	const id = params.id;

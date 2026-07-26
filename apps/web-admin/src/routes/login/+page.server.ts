@@ -1,13 +1,8 @@
 import { dev } from '$app/environment';
 import { fail, redirect } from '@sveltejs/kit';
-import type { Actions, PageServerLoad } from './$types';
+import type { Actions } from './$types';
 import { ApiError, apiLoginWithFetch } from '$lib/server/api';
 import { safeSameOriginRedirectPath } from '$lib/server/redirects';
-
-export const load: PageServerLoad = async ({ locals, url }) => {
-	if (locals.user) throw redirect(302, safeSameOriginRedirectPath(url.searchParams.get('from')));
-	return {};
-};
 
 export const actions: Actions = {
 	default: async ({ request, cookies, url, getClientAddress, fetch }) => {
@@ -41,7 +36,6 @@ export const actions: Actions = {
 			}
 			return fail(500, { error: 'Server error, coba lagi' });
 		}
-
 
 		throw redirect(302, mustChangePassword ? '/settings/account' : safeSameOriginRedirectPath(url.searchParams.get('from')));
 	},

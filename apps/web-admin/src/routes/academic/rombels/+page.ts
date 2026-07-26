@@ -1,4 +1,4 @@
-import type { PageServerLoad } from './$types.js';
+import type { PageLoad } from './$types.js';
 
 type Rombel = {
 	id: string;
@@ -10,7 +10,7 @@ type Rombel = {
 	academic_year_name: string;
 };
 
-export const load: PageServerLoad = async ({ fetch, url }) => {
+export const load: PageLoad = async ({ fetch, url }) => {
 	const [semRes, rombelRes] = await Promise.all([
 		fetch(`${url.origin}/api/academic/semesters/active`),
 		fetch(`${url.origin}/api/academic/rombels`),

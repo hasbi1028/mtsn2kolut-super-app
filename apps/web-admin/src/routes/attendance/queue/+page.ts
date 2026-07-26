@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
-import type { PageServerLoad } from './$types';
+import type { PageLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
-	throw redirect(307, '/pusaka/summary');
+	throw redirect(307, '/pusaka/antrian');
 };

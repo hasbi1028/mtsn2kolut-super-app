@@ -1,6 +1,6 @@
-import type { PageServerLoad } from './$types.js';
+import type { PageLoad } from './$types.js';
 
-export const load: PageServerLoad = async ({ fetch, locals }) => {
+export const load: PageLoad = async ({ fetch, parent }) => {
 	const res = await fetch('/api/academic/timetable/weekly');
 	let classes: any[] = [];
 
@@ -11,7 +11,7 @@ export const load: PageServerLoad = async ({ fetch, locals }) => {
 		const assignments: any[] = d.assignments ?? [];
 
 		// Filter for non-admin: only show classes where the teacher has assignments
-		const user = locals.user;
+		const parentData = await parent(); const user = parentData.user;
 		const isAdmin = user?.role === 'admin' || user?.roles?.includes('admin');
 		if (!isAdmin && user?.employee_id) {
 			const teacherClassIds = new Set(

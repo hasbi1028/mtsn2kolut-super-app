@@ -1,0 +1,41 @@
+import type { LayoutLoad } from './$types';
+import { redirect } from '@sveltejs/kit';
+import { defaultBranding, normalizeBranding, type BrandingSettings } from '$lib/branding';
+import type { AccountIdentity } from '$lib/client/account';
+
+export const ssr = false;
+
+export const load: LayoutLoad = async ({ fetch, url }) => {
+	let user: Record<string, unknown> | null = null;
+	let account: AccountIdentity | null = null;
+	let branding: BrandingSettings = defaultBranding;
+
+	// Fetch branding (public)
+	try {
+		const r = await fetch('/api/public/branding');
+		if (r.ok) branding = normalizeBranding(await r.json());
+	} catch { /* keep default */ }
+
+	// Fetch current user (auth check via cookies)
+	try {
+		const r = await fetch('/api/auth/account');
+		if (r.ok) {
+			const payload = await r.json();
+			account = payload as AccountIdentity;
+			// Derive user from account
+			user = {
+				id: account.id,
+				username: account.username,
+				role: account.role,
+				roles: account.roles ?? [account.role],
+			};
+		}
+	} catch { /* not authenticated */ }
+
+	// Redirect to login if not authenticated (skip login page itself)
+	if (!user && url.pathname !== '/login') {
+		throw redirect(302, `/login?from=${encodeURIComponent(url.pathname + url.search)}`);
+	}
+
+	return { user, account, branding } as Record<string, unknown>;
+};

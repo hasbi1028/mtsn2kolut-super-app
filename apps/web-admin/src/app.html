@@ -6,7 +6,22 @@
 		<meta name="text-scale" content="scale" />
 		%sveltekit.head%
 	</head>
-	<body data-sveltekit-preload-data="hover">
+	<body data-sveltekit-preload-data="off">
 		<div style="display: contents">%sveltekit.body%</div>
+		<!-- Loading indicator for SPA initial load -->
+		<div id="splash" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#f8fafc;z-index:9999;transition:opacity .3s">
+			<div style="display:flex;flex-direction:column;align-items:center;gap:12px">
+				<div style="width:32px;height:32px;border:3px solid #e2e8f0;border-top-color:#16a34a;border-radius:50%;animation:spin .8s linear infinite"></div>
+				<p style="margin:0;font-size:13px;color:#64748b;font-family:system-ui,sans-serif;font-weight:600">Memuat aplikasi...</p>
+			</div>
+		</div>
+		<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+		<script>
+			// Hide splash screen when SvelteKit mounts
+			document.addEventListener('DOMContentLoaded', () => {
+				const el = document.getElementById('splash');
+				if (el) setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 100);
+			});
+		</script>
 	</body>
 </html>
