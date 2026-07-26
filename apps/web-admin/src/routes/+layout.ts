@@ -2,9 +2,6 @@ import type { LayoutLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
 import { defaultBranding, normalizeBranding, type BrandingSettings } from '$lib/branding';
 import type { AccountIdentity } from '$lib/client/account';
-import { accountDisplayName } from '$lib/client/account';
-
-export const ssr = false;
 
 export const load: LayoutLoad = async ({ fetch, url }) => {
 	let user: Record<string, unknown> | null = null;

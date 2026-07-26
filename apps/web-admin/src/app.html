@@ -6,42 +6,7 @@
 		<meta name="text-scale" content="scale" />
 		%sveltekit.head%
 	</head>
-	<body data-sveltekit-preload-data="off">
+	<body data-sveltekit-preload-data="hover">
 		<div style="display: contents">%sveltekit.body%</div>
-		<!-- Loading indicator for SPA initial load -->
-		<div id="splash" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#f8fafc;z-index:9999;transition:opacity .3s">
-			<div style="display:flex;flex-direction:column;align-items:center;gap:14px">
-				<div style="width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#16a34a;border-radius:50%;animation:spin .8s linear infinite"></div>
-				<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-					<p style="margin:0;font-size:13px;color:#64748b;font-family:system-ui,sans-serif;font-weight:600">Memuat aplikasi...</p>
-					<p style="margin:0;font-size:10px;color:#94a3b8;font-family:system-ui,sans-serif;font-weight:500">dibuat oleh Hasbi Awal, S. Kom.</p>
-				</div>
-			</div>
-		</div>
-		<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
-		<script>
-			// Splash controller — exposed for SvelteKit layout to call
-			(function() {
-				var start = Date.now();
-				var MIN_DISPLAY = 1000; // minimal 1 detik
-				var hidden = false;
-
-				window.__splashReady = function() {
-					if (hidden) return;
-					hidden = true;
-					var elapsed = Date.now() - start;
-					var remaining = Math.max(0, MIN_DISPLAY - elapsed);
-					setTimeout(function() {
-						var el = document.getElementById('splash');
-						if (!el) return;
-						el.style.opacity = '0';
-						setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 300);
-					}, remaining);
-				};
-
-				// Backup: fallback after 10s jika ada masalah
-				setTimeout(window.__splashReady, 10000);
-			})();
-		</script>
 	</body>
 </html>
