@@ -1,9 +1,12 @@
 import type { PageServerLoad } from './$types.js';
 import { env } from '$env/dynamic/private';
+import { redirect } from '@sveltejs/kit';
+import { hasAnyRole } from '$lib/server/route-access';
 
 const API_BASE = (env.API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 
 export const load: PageServerLoad = async ({ fetch, locals }) => {
+	if (!hasAnyRole(locals.user, ['admin'])) throw redirect(302, '/');
 	const accessToken = locals.accessToken as string | undefined;
 	const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 	if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
@@ -17,11 +20,10 @@ export const load: PageServerLoad = async ({ fetch, locals }) => {
 
 	if (res.ok) {
 		const payload = await res.json();
-		const d = payload.data ?? {};
-		classes = d.classes ?? [];
-		subjects = d.subjects ?? [];
-		teachers = d.teachers ?? [];
-		cells = d.cells ?? [];
+		classes = payload.classes ?? [];
+		subjects = payload.subjects ?? [];
+		teachers = payload.teachers ?? [];
+		cells = payload.cells ?? [];
 	}
 
 	return { classes, subjects, teachers, cells };

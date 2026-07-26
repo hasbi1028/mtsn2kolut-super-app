@@ -1,4 +1,6 @@
 import type { PageServerLoad } from './$types.js';
+import { redirect } from '@sveltejs/kit';
+import { hasAnyRole } from '$lib/server/route-access';
 
 type Semester = {
   id: string;
@@ -11,7 +13,8 @@ type Semester = {
   is_active: boolean;
 };
 
-export const load: PageServerLoad = async ({ fetch, url }) => {
+export const load: PageServerLoad = async ({ fetch, locals, url }) => {
+	if (!hasAnyRole(locals.user, ['admin'])) throw redirect(302, '/');
   const res = await fetch(`${url.origin}/api/academic/semesters`);
   if (!res.ok) {
     const items: Semester[] = [];

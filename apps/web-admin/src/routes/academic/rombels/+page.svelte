@@ -6,8 +6,12 @@
   import { Input } from '$lib/components/ui/input';
   import { toast } from '$lib/components/ui/sonner';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
+  import { page } from '$app/state';
 
   let { data } = $props();
+
+  let roles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
+  let isAdmin = $derived(roles.includes('admin'));
 
   type Rombel = {
     id: string;
@@ -124,7 +128,9 @@
         {/if}
       </p>
     </div>
-    <Button onclick={() => (showTambah = true)} disabled={!activeSemester}>+ Tambah Rombel</Button>
+    {#if isAdmin}
+      <Button onclick={() => (showTambah = true)} disabled={!activeSemester}>+ Tambah Rombel</Button>
+    {/if}
   </div>
 
   {#if Object.keys(grouped).length === 0}
@@ -147,6 +153,7 @@
                     <p class="mt-0.5 text-xs text-muted-foreground truncate">{rombel.name}</p>
                     <Badge variant="secondary" class="mt-2 text-[10px]">{rombel.level}</Badge>
                   </div>
+                  {#if isAdmin}
                   <Button
                     size="sm"
                     variant="outline"
@@ -154,6 +161,7 @@
                     onclick={() => void hapusRombel(rombel.id, rombel.name)}
                     disabled={deleteLoading === rombel.id}
                   >Hapus</Button>
+                  {/if}
                 </div>
               </Card.Content>
             </Card.Root>
