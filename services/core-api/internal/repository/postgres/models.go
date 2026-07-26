@@ -2034,6 +2034,14 @@ type Job struct {
 	NotBefore    pgtype.Timestamptz `json:"not_before"`
 }
 
+type JournalEditLog struct {
+	ID        pgtype.UUID        `json:"id"`
+	SessionID pgtype.UUID        `json:"session_id"`
+	EditedBy  pgtype.UUID        `json:"edited_by"`
+	EditedAt  pgtype.Timestamptz `json:"edited_at"`
+	Changes   []byte             `json:"changes"`
+}
+
 type LessonPeriodTemplate struct {
 	ID                pgtype.UUID        `json:"id"`
 	AcademicYearID    pgtype.UUID        `json:"academic_year_id"`

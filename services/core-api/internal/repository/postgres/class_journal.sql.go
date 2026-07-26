@@ -180,6 +180,22 @@ func (q *Queries) GetJournalSessionIDByTimetableSlotDate(ctx context.Context, ar
 	return id, err
 }
 
+const insertJournalEditLog = `-- name: InsertJournalEditLog :exec
+INSERT INTO journal_edit_logs (session_id, edited_by, changes)
+VALUES ($1, $2, $3)
+`
+
+type InsertJournalEditLogParams struct {
+	SessionID pgtype.UUID `json:"session_id"`
+	EditedBy  pgtype.UUID `json:"edited_by"`
+	Changes   []byte      `json:"changes"`
+}
+
+func (q *Queries) InsertJournalEditLog(ctx context.Context, arg InsertJournalEditLogParams) error {
+	_, err := q.db.Exec(ctx, insertJournalEditLog, arg.SessionID, arg.EditedBy, arg.Changes)
+	return err
+}
+
 const listJournalAttendanceSummary = `-- name: ListJournalAttendanceSummary :many
 SELECT
     st.id          AS student_id,
@@ -288,6 +304,52 @@ func (q *Queries) ListJournalAttendances(ctx context.Context, sessionID pgtype.U
 			&i.Nisn,
 			&i.Nama,
 			&i.Gender,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listJournalEditLogs = `-- name: ListJournalEditLogs :many
+SELECT
+    l.id, l.session_id, l.edited_by, l.edited_at, l.changes,
+    e.nama AS edited_by_name
+FROM journal_edit_logs l
+JOIN employees e ON e.id = l.edited_by
+WHERE l.session_id = $1
+ORDER BY l.edited_at DESC
+`
+
+type ListJournalEditLogsRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	SessionID    pgtype.UUID        `json:"session_id"`
+	EditedBy     pgtype.UUID        `json:"edited_by"`
+	EditedAt     pgtype.Timestamptz `json:"edited_at"`
+	Changes      []byte             `json:"changes"`
+	EditedByName string             `json:"edited_by_name"`
+}
+
+func (q *Queries) ListJournalEditLogs(ctx context.Context, sessionID pgtype.UUID) ([]ListJournalEditLogsRow, error) {
+	rows, err := q.db.Query(ctx, listJournalEditLogs, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListJournalEditLogsRow{}
+	for rows.Next() {
+		var i ListJournalEditLogsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.EditedBy,
+			&i.EditedAt,
+			&i.Changes,
+			&i.EditedByName,
 		); err != nil {
 			return nil, err
 		}

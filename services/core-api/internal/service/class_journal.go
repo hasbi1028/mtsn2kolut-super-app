@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -358,4 +359,100 @@ func (s *ClassJournal) GetSession(ctx context.Context, id string) (*JournalOverv
 		SubjectName: row.SubjectName,
 		TeacherName: row.TeacherName,
 	}, nil
+}
+
+type UpdateSessionRequest struct {
+	Materi   string `json:"materi"`
+	Kegiatan string `json:"kegiatan"`
+	Catatan  string `json:"catatan"`
+	GuruHadir bool  `json:"guru_hadir"`
+}
+
+func (s *ClassJournal) UpdateSession(ctx context.Context, id, employeeID string, req UpdateSessionRequest) error {
+	// Get old session data for audit log
+	old, err := s.q.GetJournalSession(ctx, pgUUID(id))
+	if err != nil {
+		return fmt.Errorf("get session for update: %w", err)
+	}
+
+	// Build changes
+	var changes []map[string]string
+	if old.Materi != req.Materi {
+		changes = append(changes, map[string]string{"field": "materi", "old": old.Materi, "new": req.Materi})
+	}
+	if old.Kegiatan != req.Kegiatan {
+		changes = append(changes, map[string]string{"field": "kegiatan", "old": old.Kegiatan, "new": req.Kegiatan})
+	}
+	if old.Catatan != req.Catatan {
+		changes = append(changes, map[string]string{"field": "catatan", "old": old.Catatan, "new": req.Catatan})
+	}
+	if old.GuruHadir != req.GuruHadir {
+		oldVal := "tidak hadir"
+		if old.GuruHadir { oldVal = "hadir" }
+		newVal := "tidak hadir"
+		if req.GuruHadir { newVal = "hadir" }
+		changes = append(changes, map[string]string{"field": "guru_hadir", "old": oldVal, "new": newVal})
+	}
+
+	if len(changes) == 0 {
+		return nil // nothing changed
+	}
+
+	// Marshal changes to JSON
+	changesJSON, err := json.Marshal(changes)
+	if err != nil {
+		return fmt.Errorf("marshal changes: %w", err)
+	}
+
+	// Update session
+	_, err = s.q.UpdateJournalSession(ctx, db.UpdateJournalSessionParams{
+		ID:       pgUUID(id),
+		Materi:   req.Materi,
+		Kegiatan: req.Kegiatan,
+		Catatan:  req.Catatan,
+		GuruHadir: req.GuruHadir,
+	})
+	if err != nil {
+		return fmt.Errorf("update session: %w", err)
+	}
+
+	// Log to audit
+	err = s.q.InsertJournalEditLog(ctx, db.InsertJournalEditLogParams{
+		SessionID: pgUUID(id),
+		EditedBy:  pgUUID(employeeID),
+		Changes:   changesJSON,
+	})
+	if err != nil {
+		return fmt.Errorf("log edit: %w", err)
+	}
+
+	return nil
+}
+
+type EditLogEntry struct {
+	ID        string          `json:"id"`
+	SessionID string          `json:"session_id"`
+	EditedBy  string          `json:"edited_by"`
+	EditedAt  string          `json:"edited_at"`
+	Changes   json.RawMessage `json:"changes"`
+	EditedByName string       `json:"edited_by_name"`
+}
+
+func (s *ClassJournal) ListEditLogs(ctx context.Context, sessionID string) ([]EditLogEntry, error) {
+	rows, err := s.q.ListJournalEditLogs(ctx, pgUUID(sessionID))
+	if err != nil {
+		return nil, fmt.Errorf("list edit logs: %w", err)
+	}
+	items := make([]EditLogEntry, len(rows))
+	for i, r := range rows {
+		items[i] = EditLogEntry{
+			ID:        pgUUIDString(r.ID),
+			SessionID: pgUUIDString(r.SessionID),
+			EditedBy:  pgUUIDString(r.EditedBy),
+			EditedAt:  r.EditedAt.Time.Format("2006-01-02 15:04:05"),
+			Changes:   r.Changes,
+			EditedByName: r.EditedByName,
+		}
+	}
+	return items, nil
 }

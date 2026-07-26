@@ -307,6 +307,8 @@ func main() {
 			r.Get("/api/class-journal/sessions/{id}/attendances", journalH.ListAttendances)
 			r.Put("/api/class-journal/sessions/{id}/attendances", journalH.BulkUpsertAttendances)
 			r.Get("/api/class-journal/sessions/{id}", journalH.GetSession)
+			r.Put("/api/class-journal/sessions/{id}", journalH.UpdateSession)
+			r.Get("/api/class-journal/sessions/{id}/edit-logs", journalH.ListEditLogs)
 			r.Delete("/api/class-journal/sessions/{id}", journalH.DeleteSession)
 			r.Get("/api/class-journal/summary", journalH.AttendanceSummary)
 			r.Post("/api/academic/rombel/{id}/timetable-slots/{slotID}/journal-session", journalH.OpenSessionFromTimetableSlot)

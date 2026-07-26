@@ -15,6 +15,15 @@
   let showCreate = $state(false);
   let createForm = $state({ tanggal: new Date().toISOString().slice(0,10), materi: '', kegiatan: '', catatan: '', guru_hadir: true });
   let createLoading = $state(false);
+
+  // — Edit session
+  let editSession = $state<any | null>(null);
+  let editForm = $state({ materi: '', kegiatan: '', catatan: '', guru_hadir: true });
+  let editLoading = $state(false);
+  let editLogs = $state<any[]>([]);
+  let showEditLogs = $state(false);
+  let editLogsLoading = $state(false);
+
   let summaryData = $state<any[]>([]);
   let summaryLoading = $state(false);
 
@@ -82,6 +91,39 @@
       else toast.error('Gagal');
     } catch { toast.error('Gagal'); }
   }
+
+  function openEdit(s: any) {
+    editSession = s;
+    editForm = { materi: s.materi || '', kegiatan: s.kegiatan || '', catatan: s.catatan || '', guru_hadir: s.guru_hadir };
+  }
+
+  async function submitEdit() {
+    if (!editSession) return;
+    editLoading = true;
+    try {
+      const r = await fetch(`/api/class-journal/sessions/${editSession.id}`, {
+        method: 'PUT', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(editForm),
+      });
+      if (r.ok) {
+        toast.success('Jurnal diperbarui');
+        editSession = null;
+        await Promise.all([loadSessions(), loadSummary()]);
+      } else { const e = await r.json().catch(() => ({})); toast.error(e?.error || 'Gagal'); }
+    } catch { toast.error('Gagal'); }
+    finally { editLoading = false; }
+  }
+
+  async function openEditLogs(s: any) {
+    editSession = s;
+    showEditLogs = true;
+    editLogsLoading = true;
+    try {
+      const r = await fetch(`/api/class-journal/sessions/${s.id}/edit-logs`);
+      if (r.ok) { const p = await r.json(); editLogs = Array.isArray(p) ? p : (p?.data ?? []); }
+    } catch {}
+    finally { editLogsLoading = false; }
+  }
 </script>
 
 <svelte:head><title>Jurnal {assignment?.class_code ?? ''} — MTSN 2 Kolut</title></svelte:head>
@@ -123,7 +165,8 @@
               <td class="px-3 py-2 text-center">{#if s.guru_hadir}<span class="text-[10px] text-green-600 font-semibold bg-green-50 px-1.5 py-0.5 rounded">Hadir</span>{:else}<span class="text-[10px] text-muted-foreground">—</span>{/if}</td>
               <td class="px-3 py-2 text-right whitespace-nowrap space-x-1">
                 <a href={`/academic/class-journal/attendance/${s.id}`} class="text-xs text-primary hover:underline">Absensi</a>
-                <button class="text-xs text-destructive hover:underline" onclick={() => deleteSession(s.id, s.tanggal)}>Hapus</button>
+                <button class="text-xs text-primary hover:underline ml-1" onclick={() => openEdit(s)}>Edit</button>
+                <button class="text-xs text-destructive hover:underline ml-1" onclick={() => deleteSession(s.id, s.tanggal)}>Hapus</button>
               </td>
             </tr>{/each}
           </tbody>
@@ -139,7 +182,10 @@
             <p class="text-xs text-muted-foreground">{s.materi || '—'}</p>
             <div class="flex justify-between items-center pt-0.5">
               <button class="text-xs text-destructive hover:underline" onclick={() => deleteSession(s.id, s.tanggal)}>Hapus</button>
-              <a href={`/academic/class-journal/attendance/${s.id}`} class="text-xs text-primary hover:underline">Absensi →</a>
+              <div class="flex gap-2">
+                <button class="text-xs text-primary hover:underline" onclick={() => openEdit(s)}>Edit</button>
+                <a href={`/academic/class-journal/attendance/${s.id}`} class="text-xs text-primary hover:underline">Absensi →</a>
+              </div>
             </div>
           </div>
         {/each}
@@ -215,6 +261,74 @@
         <Button variant="outline" onclick={() => showCreate = false}>Batal</Button>
         <LoadingButton onclick={() => void submitCreate()} loading={createLoading}>Simpan</LoadingButton>
       </div>
+    </div></Dialog.Content>
+  </Dialog.Root>
+
+  <!-- Dialog Edit Jurnal -->
+  <Dialog.Root open={!!editSession && !showEditLogs} onOpenChange={(v: boolean) => { if (!v) { editSession = null; } }}>
+    <Dialog.Content><div class="space-y-4">
+      <h2 class="text-base font-semibold">Edit Jurnal</h2>
+      {#if editSession}<p class="text-xs text-muted-foreground">{editSession.tanggal} — Pertemuan #{editSession.pertemuan_ke}</p>{/if}
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div class="space-y-1 sm:col-span-2"><label class="text-xs font-medium text-muted-foreground">Materi</label><Input bind:value={editForm.materi} placeholder="Materi yang diajarkan" /></div>
+        <div class="space-y-1 sm:col-span-2"><label class="text-xs font-medium text-muted-foreground">Kegiatan</label>
+          <textarea bind:value={editForm.kegiatan} placeholder="Deskripsi kegiatan" class="flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm min-h-[60px]"></textarea>
+        </div>
+        <div class="space-y-1 sm:col-span-2"><label class="text-xs font-medium text-muted-foreground">Catatan</label><Input bind:value={editForm.catatan} placeholder="Catatan tambahan" /></div>
+        <div class="space-y-1"><label class="text-xs font-medium text-muted-foreground">Guru Hadir</label>
+          <label class="flex items-center gap-2 h-9"><input type="checkbox" bind:checked={editForm.guru_hadir} class="toggle" /> <span class="text-sm">{editForm.guru_hadir ? 'Hadir' : 'Tidak Hadir'}</span></label>
+        </div>
+      </div>
+      {#if editSession}
+        <button class="text-xs text-muted-foreground hover:text-primary hover:underline" onclick={() => openEditLogs(editSession)}>Lihat Riwayat Perubahan →</button>
+      {/if}
+      <div class="flex justify-end gap-2 pt-2">
+        <Button variant="outline" onclick={() => editSession = null}>Batal</Button>
+        <LoadingButton onclick={() => void submitEdit()} loading={editLoading}>Simpan Perubahan</LoadingButton>
+      </div>
+    </div></Dialog.Content>
+  </Dialog.Root>
+
+  <!-- Dialog Riwayat Edit -->
+  <Dialog.Root bind:open={showEditLogs}>
+    <Dialog.Content class="max-w-lg"><div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-base font-semibold">📜 Riwayat Perubahan</h2>
+        <Button variant="outline" size="sm" onclick={() => showEditLogs = false}>Tutup</Button>
+      </div>
+      {#if editSession}
+        <p class="text-xs text-muted-foreground">{editSession.tanggal} — Pertemuan #{editSession.pertemuan_ke}</p>
+      {/if}
+      {#if editLogsLoading}
+        <p class="text-sm text-muted-foreground">Memuat riwayat...</p>
+      {:else if editLogs.length === 0}
+        <p class="text-sm text-muted-foreground py-4 text-center">Belum ada riwayat perubahan.</p>
+      {:else}
+        <div class="space-y-3 max-h-80 overflow-y-auto">
+          {#each editLogs as log}
+            <div class="rounded-lg border border-border p-3 space-y-1">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-semibold text-foreground">{log.edited_by_name}</span>
+                <span class="text-muted-foreground">{log.edited_at}</span>
+              </div>
+              {#if log.changes && log.changes.length > 0}
+                <div class="space-y-0.5">
+                  {#each log.changes as ch}
+                    <div class="text-[11px] text-muted-foreground flex gap-1">
+                      <span class="font-medium capitalize min-w-[70px]">{ch.field.replace('_', ' ')}:</span>
+                      <span class="text-red-600 line-through">{ch.old || '—'}</span>
+                      <span>→</span>
+                      <span class="text-green-600">{ch.new || '—'}</span>
+                    </div>
+                  {/each}
+                </div>
+              {:else}
+                <p class="text-[11px] text-muted-foreground">Tidak ada detail perubahan</p>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
     </div></Dialog.Content>
   </Dialog.Root>
 </div>

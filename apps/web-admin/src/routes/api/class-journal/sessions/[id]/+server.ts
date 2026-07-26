@@ -10,6 +10,16 @@ export const GET = async (event: RequestEvent) => {
 	}
 };
 
+export const PUT = async (event: RequestEvent) => {
+	try {
+		const body = await event.request.json();
+		const result = await proxy(event).put<any>(`/api/class-journal/sessions/${event.params.id}`, body);
+		return new Response(JSON.stringify(result), { status: 200, headers: { 'content-type': 'application/json' } });
+	} catch (e) {
+		return handleRouteError(e, 'journal session PUT');
+	}
+};
+
 export const DELETE = async (event: RequestEvent) => {
 	try {
 		const result = await proxy(event).del<any>(`/api/class-journal/sessions/${event.params.id}`);

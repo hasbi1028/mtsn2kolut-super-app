@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"mtsn2kolut-super-app/backend/internal/api"
@@ -152,6 +153,49 @@ func (h *ClassJournal) GetSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, session)
+}
+
+// PUT /api/class-journal/sessions/{id}
+func (h *ClassJournal) UpdateSession(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("id")
+	if sessionID == "" {
+		api.BadRequest(w, "session_id wajib diisi")
+		return
+	}
+
+	employeeID := r.Context().Value("employee_id")
+	empID, ok := employeeID.(string)
+	if !ok || empID == "" {
+		api.Unauthorized(w)
+		return
+	}
+
+	var body service.UpdateSessionRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "format data tidak valid")
+		return
+	}
+
+	if err := h.svc.UpdateSession(r.Context(), sessionID, empID, body); err != nil {
+		writeDomainOrInternal(w, err, "gagal memperbarui jurnal")
+		return
+	}
+	api.OK(w, map[string]string{"status": "ok"})
+}
+
+// GET /api/class-journal/sessions/{id}/edit-logs
+func (h *ClassJournal) ListEditLogs(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("id")
+	if sessionID == "" {
+		api.BadRequest(w, "session_id wajib diisi")
+		return
+	}
+	logs, err := h.svc.ListEditLogs(r.Context(), sessionID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, logs)
 }
 
 // GET /api/class-journal/summary?assignment_id=

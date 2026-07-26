@@ -72,6 +72,19 @@ RETURNING id, assignment_id, tanggal, pertemuan_ke, materi, kegiatan, catatan, g
 -- name: DeleteJournalSession :exec
 DELETE FROM class_journal_sessions WHERE id = $1;
 
+-- name: InsertJournalEditLog :exec
+INSERT INTO journal_edit_logs (session_id, edited_by, changes)
+VALUES ($1, $2, $3);
+
+-- name: ListJournalEditLogs :many
+SELECT
+    l.id, l.session_id, l.edited_by, l.edited_at, l.changes,
+    e.nama AS edited_by_name
+FROM journal_edit_logs l
+JOIN employees e ON e.id = l.edited_by
+WHERE l.session_id = $1
+ORDER BY l.edited_at DESC;
+
 -- name: UpsertJournalAttendance :one
 INSERT INTO class_journal_attendances (session_id, student_id, status, catatan)
 SELECT
