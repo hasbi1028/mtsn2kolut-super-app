@@ -136,7 +136,7 @@
     try {
       const r = await fetch('/api/academic/timetable/weekly');
       if (r.ok) {
-        const p = await r.json(); const d = p.data ?? {};
+        const p = await r.json(); const d = p.data ?? p ?? {};
         classes = d.classes ?? []; subjects = d.subjects ?? [];
         teachers = d.teachers ?? []; assignments = d.assignments ?? []; slots = d.slots ?? [];
       }
