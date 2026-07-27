@@ -176,9 +176,7 @@
               <Card.Content class="p-5">
                 <div class="flex items-start justify-between gap-3">
                   <div class="flex-1 min-w-0">
-                    <a href={`/academic/rombels/${rombel.id}`} class="hover:text-primary transition-colors">
-                      <h3 class="text-base font-semibold text-foreground">{rombel.code}</h3>
-                    </a>
+                    <h3 class="text-base font-semibold text-foreground">{rombel.code}</h3>
                     <p class="mt-0.5 text-xs text-muted-foreground truncate">{rombel.name}</p>
                     <div class="flex gap-1.5 mt-2">
                       <Badge variant="secondary" class="text-[10px]">{rombel.level}</Badge>
@@ -194,6 +192,10 @@
                     </div>
                   {/if}
                 </div>
+                <a href={`/academic/rombels/${rombel.id}`} class="mt-3 flex items-center justify-between rounded-lg border border-primary/10 bg-primary/5 px-3 py-2 transition-colors hover:bg-primary/10">
+                  <span class="text-xs font-semibold text-primary">👥 Lihat Murid</span>
+                  <svg class="w-3.5 h-3.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </a>
               </Card.Content>
             </Card.Root>
           {/each}
