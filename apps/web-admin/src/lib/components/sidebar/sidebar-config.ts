@@ -57,6 +57,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 			{ href: '/pusaka/employees', label: 'Pegawai PUSAKA', icon: 'users', roles: ['admin'], permissions: ['pusaka.manage'] },
 			{ href: '/pusaka/kehadiran', label: 'Data Kehadiran', icon: 'calendar', roles: ['admin'], permissions: ['pusaka.read'] },
 			{ href: '/pusaka/summary', label: 'Ringkasan Kehadiran', icon: 'bar-chart', roles: ['admin'], permissions: ['pusaka.read'] },
+			{ href: '/pusaka/rekap-jadwal', label: 'Jadwal Rekap', icon: 'clock', roles: ['admin'], permissions: ['pusaka.read'] },
 			{ href: '/pusaka/telegram-laporan', label: 'Laporan Telegram', icon: 'send', roles: ['admin'], permissions: ['pusaka.manage'] },
 			{ href: '/pusaka/antrian', label: 'Antrian Sinkronisasi', icon: 'refresh-cw', roles: ['admin'], permissions: ['pusaka.manage'] }
 		]
