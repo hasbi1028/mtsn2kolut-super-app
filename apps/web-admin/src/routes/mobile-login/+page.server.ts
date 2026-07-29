@@ -1,0 +1,42 @@
+import { dev } from '$app/environment';
+import { fail, redirect } from '@sveltejs/kit';
+import type { Actions } from './$types';
+import { ApiError, apiLoginWithFetch } from '$lib/server/api';
+import { safeSameOriginRedirectPath } from '$lib/server/redirects';
+
+export const actions: Actions = {
+  default: async ({ request, cookies, url, getClientAddress, fetch }) => {
+    const data = await request.formData();
+    const username = String(data.get('username') ?? '').trim();
+    const password = String(data.get('password') ?? '');
+    let mustChangePassword = false;
+
+    try {
+      const pair = await apiLoginWithFetch(fetch, username, password, {
+        userAgent: request.headers.get('user-agent') ?? '',
+        ipAddress: getClientAddress(),
+      });
+      mustChangePassword = pair.must_change_password === true;
+      cookies.set('access_token', pair.access_token, {
+        path: '/', httpOnly: true, sameSite: 'lax',
+        secure: !dev,
+        maxAge: 60 * 60,
+      });
+      cookies.set('refresh_token', pair.refresh_token, {
+        path: '/', httpOnly: true, sameSite: 'lax',
+        secure: !dev,
+        maxAge: 7 * 24 * 60 * 60,
+      });
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) {
+        return fail(401, { error: 'Username atau password salah' });
+      }
+      if (e instanceof ApiError && e.status === 403) {
+        return fail(403, { error: e.message || 'Akun sedang dinonaktifkan.' });
+      }
+      return fail(500, { error: 'Server error, coba lagi' });
+    }
+
+    throw redirect(302, mustChangePassword ? '/settings/account' : safeSameOriginRedirectPath(url.searchParams.get('from')));
+  },
+};
