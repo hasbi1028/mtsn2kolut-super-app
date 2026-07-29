@@ -222,8 +222,8 @@
 		schedules = null;
 		try {
 			const res = await fetch('/api/pusaka/schedules');
-			const data = await readClientApiData<{ items?: PusakaSchedule[] }>(res, 'Gagal memuat jadwal');
-			schedules = data.items ?? [];
+			const data = await readClientApiData<PusakaSchedule[]>(res, 'Gagal memuat jadwal');
+			schedules = Array.isArray(data) ? data : [];
 		} catch {
 			schedules = [];
 		}
@@ -501,7 +501,10 @@
 			</a>
 		</div>
 
-		<!-- ═══ Jadwal Otomatis Rekap ═══ -->
+	{/snippet}
+</AsyncContent>
+
+		<!-- ═══ Jadwal Otomatis Rekap ═══ (di luar AsyncContent) -->
 		<Card.Root class="overflow-hidden border-base-300 shadow-sm">
 			<Card.Header class="px-4 py-3">
 				<div class="flex items-center justify-between">
@@ -545,8 +548,6 @@
 				</button>
 			</Card.Content>
 		</Card.Root>
-		{/snippet}
-	</AsyncContent>
 
 </div>
 
