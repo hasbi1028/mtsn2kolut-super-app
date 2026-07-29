@@ -10,6 +10,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>Keluar — MTsN 2 Kolut</title>
+</svelte:head>
+
 <div class="flex min-h-screen items-center justify-center bg-base-200 p-6">
 	<div class="text-center space-y-4">
 		<div class="mx-auto w-10 h-10 border-[3px] border-primary border-t-transparent rounded-full animate-spin"></div>

@@ -11,6 +11,6 @@ export function safeSameOriginRedirectPath(value: string | null | undefined, fal
 	if (decoded.includes('\\')) return fallback;
 	if (/[\u0000-\u001F\u007F]/.test(decoded)) return fallback;
 	if (/^[a-z][a-z0-9+.-]*:/i.test(decoded)) return fallback;
-	if (decoded === '/login' || decoded.startsWith('/login?') || decoded.startsWith('/login#')) return fallback;
+	if (decoded === '/login' || decoded.startsWith('/login?') || decoded.startsWith('/login#') || decoded === '/logout' || decoded === '/mobile-login') return fallback;
 	return decoded;
 }

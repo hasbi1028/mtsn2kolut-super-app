@@ -22,7 +22,7 @@ const PUBLIC_API_PREFIXES = [
 
 const PUBLIC_PAGE_PREFIXES = ['/s/idc/', '/portal/siswa/qr-login'] as const;
 
-const PUBLIC_AUTH_EXACT_PATHS = ['/login', '/maintenance', '/manifest.webmanifest', '/mobile-login'] as const;
+const PUBLIC_AUTH_EXACT_PATHS = ['/login', '/logout', '/maintenance', '/manifest.webmanifest', '/mobile-login'] as const;
 
 export function matchesPathSegment(pathname: string, prefix: string) {
 	const normalizedPrefix = prefix === '/' ? '/' : prefix.replace(/\/$/, '');

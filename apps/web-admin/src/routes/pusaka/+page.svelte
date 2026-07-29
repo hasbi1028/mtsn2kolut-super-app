@@ -213,6 +213,69 @@
 	const triggerSched  = ()          => act('sched',      () => fetch('/api/pusaka/scheduler/tick', { method: 'POST' }), 'Jadwal otomatis dijalankan');
 	const cancelAll     = ()          => act('cancel_all', () => fetch('/api/pusaka/jobs/cancel-all',{ method: 'POST' }), 'Semua antrian dibatalkan');
 
+	// ── Schedule management ──
+	type PusakaSchedule = { id: string; label: string; run_type: string; run_time: string; is_enabled: boolean };
+	let schedules = $state<PusakaSchedule[] | null>(null);
+	let saving = $state(false);
+
+	async function loadSchedules() {
+		schedules = null;
+		try {
+			const res = await fetch('/api/pusaka/schedules');
+			const data = await readClientApiData<{ items?: PusakaSchedule[] }>(res, 'Gagal memuat jadwal');
+			schedules = data.items ?? [];
+		} catch {
+			schedules = [];
+		}
+	}
+
+	async function createSchedule() {
+		saving = true;
+		try {
+			const res = await fetch('/api/pusaka/schedules', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ label: 'Rekap Harian', run_time: '23:00', run_type: 'morning', is_enabled: true })
+			});
+			if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Gagal membuat jadwal'); }
+			toast.success('Jadwal baru ditambahkan (jam 23:00 WITA)');
+			await loadSchedules();
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Gagal membuat jadwal');
+		} finally { saving = false; }
+	}
+
+	async function updateSchedule(sched: PusakaSchedule) {
+		try {
+			const res = await fetch(`/api/pusaka/schedules/${sched.id}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ label: sched.label, run_time: sched.run_time, is_enabled: sched.is_enabled })
+			});
+			if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Gagal menyimpan'); }
+			toast.success(`Jadwal diubah ke jam ${sched.run_time} WITA`);
+			await loadSchedules();
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Gagal menyimpan jadwal');
+		}
+	}
+
+	async function toggleSchedule(sched: PusakaSchedule) {
+		sched.is_enabled = !sched.is_enabled;
+		await updateSchedule(sched);
+	}
+
+	async function deleteSchedule(sched: PusakaSchedule) {
+		try {
+			const res = await fetch(`/api/pusaka/schedules/${sched.id}`, { method: 'DELETE' });
+			if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Gagal menghapus'); }
+			toast.success('Jadwal dihapus');
+			await loadSchedules();
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Gagal menghapus jadwal');
+		}
+	}
+
 	function showToast(msg: string, type: 'ok' | 'err' = 'ok') {
 		if (type === 'ok') toast.success(msg);
 		else toast.error(msg);
@@ -247,6 +310,7 @@
 			metadata: { page_key: 'pusaka' }
 		});
 		void loadOverview();
+		void loadSchedules();
 		const itv = setInterval(() => void refreshOverview(false), 10_000);
 		return () => clearInterval(itv);
 	});
@@ -436,6 +500,51 @@
 				</div>
 			</a>
 		</div>
+
+		<!-- ═══ Jadwal Otomatis Rekap ═══ -->
+		<Card.Root class="overflow-hidden border-base-300 shadow-sm">
+			<Card.Header class="px-4 py-3">
+				<div class="flex items-center justify-between">
+					<Card.Title class="text-sm font-bold">⏰ Jadwal Otomatis Rekap</Card.Title>
+					<Button variant="ghost" size="sm" onclick={() => void loadSchedules()} class="text-xs h-7 px-2">🔄</Button>
+				</div>
+			</Card.Header>
+			<Card.Content class="p-4 space-y-3">
+				{#if schedules === null}
+					<Skeleton class="h-10 w-full" />
+				{:else if schedules.length === 0}
+					<p class="text-xs text-base-content/60">Belum ada jadwal otomatis. Tambah jadwal untuk rekap harian.</p>
+				{:else}
+					{#each schedules as sched (sched.id)}
+						<div class="flex items-center gap-3 rounded-lg border border-base-300 p-3">
+							<div class="flex-1 min-w-0">
+								<p class="text-sm font-semibold">{sched.label || 'Rekap Harian'}</p>
+								<p class="text-xs text-base-content/60">Jam {sched.run_time} WITA · {sched.run_type === 'morning' ? 'Rekap' : sched.run_type}</p>
+							</div>
+							<input type="time" bind:value={sched.run_time}
+								onchange={() => void updateSchedule(sched)}
+								class="h-8 rounded-lg border border-input bg-background px-2 text-xs" />
+							<button
+								type="button"
+								role="switch"
+								aria-checked={sched.is_enabled}
+								onclick={() => void toggleSchedule(sched)}
+								class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors {sched.is_enabled ? 'bg-primary' : 'bg-base-300'}"
+							>
+								<span class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform ring-0 transition {sched.is_enabled ? 'translate-x-4' : 'translate-x-0'}" />
+							</button>
+							<button type="button" onclick={() => void deleteSchedule(sched)}
+								class="text-xs text-destructive hover:underline shrink-0">Hapus</button>
+						</div>
+					{/each}
+				{/if}
+				<button type="button" onclick={() => void createSchedule()}
+					disabled={saving}
+					class="w-full text-xs font-medium text-primary hover:underline py-1">
+					+ Tambah Jadwal Baru
+				</button>
+			</Card.Content>
+		</Card.Root>
 		{/snippet}
 	</AsyncContent>
 

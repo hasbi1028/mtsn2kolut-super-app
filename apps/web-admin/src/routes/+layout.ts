@@ -42,8 +42,8 @@ export const load: LayoutLoad = async ({ fetch, url }) => {
 		}
 	} catch { /* not authenticated */ }
 
-	// Redirect to login if not authenticated (skip login page itself)
-	if (!user && url.pathname !== '/login') {
+	// Redirect to login if not authenticated (skip login page itself and mobile-login)
+	if (!user && url.pathname !== '/login' && url.pathname !== '/logout' && url.pathname !== '/mobile-login') {
 		throw redirect(302, `/login?from=${encodeURIComponent(url.pathname + url.search)}`);
 	}
 
