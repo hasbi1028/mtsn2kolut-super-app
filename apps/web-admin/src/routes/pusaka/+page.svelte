@@ -213,6 +213,87 @@
 	const triggerSched  = ()          => act('sched',      () => fetch('/api/pusaka/scheduler/tick', { method: 'POST' }), 'Jadwal otomatis dijalankan');
 	const cancelAll     = ()          => act('cancel_all', () => fetch('/api/pusaka/jobs/cancel-all',{ method: 'POST' }), 'Semua antrian dibatalkan');
 
+	// ── Rekap & Kirim Laporan (1 tombol) ──
+	type JobStats = { queued: number; running: number; success: number; failed: number };
+	let rekapKirimPhase = $state<'idle' | 'rekaping' | 'mengirim' | 'done' | 'error'>('idle');
+	let rekapKirimProgress = $state({ done: 0, total: 0 });
+	const rekapKirimBusy = $derived(rekapKirimPhase === 'rekaping' || rekapKirimPhase === 'mengirim');
+	const rekapKirimPct = $derived(rekapKirimProgress.total > 0 ? Math.round((rekapKirimProgress.done / rekapKirimProgress.total) * 100) : 0);
+
+	function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
+
+	function todayWita() {
+		return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Makassar', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+	}
+
+	async function fetchJobStats(): Promise<JobStats> {
+		const res = await fetch('/api/pusaka/jobs/stats');
+		return readClientApiData<JobStats>(res, 'Gagal memuat status antrian');
+	}
+
+	async function runRekapDanKirim() {
+		if (rekapKirimBusy) return;
+		rekapKirimPhase = 'rekaping';
+		rekapKirimProgress = { done: 0, total: 0 };
+		operationState = { tone: 'info', title: 'Rekap & Kirim Laporan', message: 'Menjalankan rekap absen semua pegawai...' };
+
+		try {
+			// 1. Baseline antrian sebelum run-all
+			const before = await fetchJobStats();
+
+			// 2. Jalankan rekap massal (morning)
+			const runRes = await fetch('/api/pusaka/jobs/run-all', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ run_type: 'morning' })
+			});
+			const runData = await readClientApiData<PusakaActionResponse>(runRes, 'Gagal menjalankan rekap massal');
+			const inserted = runData.inserted ?? 0;
+
+			// 3. Tunggu job selesai (poll tiap 5 detik, max 5 menit)
+			if (inserted > 0) {
+				rekapKirimProgress = { done: 0, total: inserted };
+				const deadline = Date.now() + 5 * 60 * 1000;
+				let lastDone = 0;
+				while (Date.now() < deadline) {
+					await sleep(5000);
+					const stats = await fetchJobStats();
+					lastDone = Math.max(0, (stats.success + stats.failed) - (before.success + before.failed));
+					rekapKirimProgress = { done: Math.min(lastDone, inserted), total: inserted };
+					if (stats.queued === 0 && stats.running === 0) break;
+					if (lastDone >= inserted) break;
+				}
+			} else {
+				rekapKirimProgress = { done: 1, total: 1 };
+			}
+
+			// 4. Kirim laporan Telegram hari ini
+			rekapKirimPhase = 'mengirim';
+			operationState = { tone: 'info', title: 'Mengirim Laporan', message: 'Rekap selesai. Mengirim laporan ke Telegram...' };
+			const sendRes = await fetch('/api/pusaka/attendance-telegram/send', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ date: todayWita(), include_caption: true, include_image: true })
+			});
+			const sendData = await readClientApiData<{ target_chat_id_masked?: string }>(sendRes, 'Gagal mengirim laporan Telegram');
+			const target = sendData?.target_chat_id_masked ?? 'Telegram';
+
+			rekapKirimPhase = 'done';
+			operationState = {
+				tone: 'success',
+				title: 'Rekap & Laporan Selesai',
+				message: `Rekap selesai (${rekapKirimProgress.done}/${rekapKirimProgress.total} proses) — laporan terkirim ke ${target}.`,
+			};
+			showToast(`Laporan terkirim ke ${target}`, 'ok');
+		} catch (error) {
+			rekapKirimPhase = 'error';
+			operationState = { tone: 'error', title: 'Rekap & Kirim Gagal', message: overviewErrorMessage(error) };
+			showToast(overviewErrorMessage(error), 'err');
+		} finally {
+			await refreshOverview(true);
+		}
+	}
+
 	function showToast(msg: string, type: 'ok' | 'err' = 'ok') {
 		if (type === 'ok') toast.success(msg);
 		else toast.error(msg);
@@ -293,7 +374,38 @@
 					Batalkan
 				</LoadingButton>
 			{/if}
+			<LoadingButton size="sm" onclick={() => void runRekapDanKirim()} loading={rekapKirimBusy} loadingLabel="Memproses..." label="" class="shrink-0 text-primary border-primary/40 hover:bg-primary/10" disabled={rekapKirimBusy}>
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+				{rekapKirimPhase === 'done' ? 'Selesai ✓' : rekapKirimPhase === 'error' ? 'Coba Lagi' : 'Rekap & Kirim Laporan'}
+			</LoadingButton>
 		</div>
+
+		<!-- Progress rekap & kirim -->
+		{#if rekapKirimBusy || rekapKirimPhase === 'done' || rekapKirimPhase === 'error'}
+			<div class="rounded-xl border {rekapKirimPhase === 'error' ? 'border-destructive/30 bg-destructive/5' : 'border-primary/30 bg-primary/5'} p-3">
+				<div class="flex items-center justify-between text-xs">
+					<span class="font-semibold text-base-content">
+						{#if rekapKirimPhase === 'rekaping'}
+							Merekap absen semua pegawai... {rekapKirimProgress.done}/{rekapKirimProgress.total} selesai
+						{:else if rekapKirimPhase === 'mengirim'}
+							Mengirim laporan ke Telegram...
+						{:else if rekapKirimPhase === 'done'}
+							✅ Rekap selesai — laporan terkirim ke Telegram
+						{:else}
+							⚠️ Proses gagal — lihat detail di bawah
+						{/if}
+					</span>
+					{#if rekapKirimPhase === 'rekaping'}
+						<span class="font-bold text-primary">{rekapKirimPct}%</span>
+					{/if}
+				</div>
+				{#if rekapKirimPhase === 'rekaping'}
+					<div class="mt-2 h-2 w-full overflow-hidden rounded-full bg-base-300">
+						<div class="h-full rounded-full bg-primary transition-all duration-500" style="width: {rekapKirimPct}%"></div>
+					</div>
+				{/if}
+			</div>
+		{/if}
 	</div>
 
 	{#if operationState}
