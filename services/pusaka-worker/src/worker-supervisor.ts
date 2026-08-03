@@ -14,6 +14,7 @@ import {
 } from './api-client.js';
 import { log } from './logger.js';
 import { processClaimedJob } from './pusaka-runner.js';
+import type { WorkerHealthSnapshot } from './health-server.js';
 import type { ConsumerState, RuntimeConfig } from './types.js';
 
 type WorkerSupervisorDeps = {
@@ -55,6 +56,7 @@ export class WorkerSupervisor {
   private nextConsumerNumber = 1;
   private lastConfigSyncAt = '';
   private shuttingDown = false;
+  private readonly startedAt = new Date().toISOString();
   private readonly shutdownController = new AbortController();
   private readonly shutdownReportedJobIds = new Set<string>();
 
@@ -74,6 +76,20 @@ export class WorkerSupervisor {
     }, WORKER_HEARTBEAT_MS);
     this.reconcileConsumers();
     this.installSignalHandlers();
+  }
+
+  getStatus(): WorkerHealthSnapshot {
+    return {
+      workerId: WORKER_ID,
+      startedAt: this.startedAt,
+      status: this.shuttingDown ? 'shutting_down' : 'running',
+      activeConsumers: Array.from(this.consumers.values()).filter(
+        (state) => !state.stopRequested,
+      ).length,
+      targetConcurrency: this.runtimeConfig.maxConcurrent,
+      headless: this.runtimeConfig.headless,
+      lastConfigSyncAt: this.lastConfigSyncAt,
+    };
   }
 
   private async consumerLoop(state: ConsumerState): Promise<void> {

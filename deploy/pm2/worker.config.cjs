@@ -10,6 +10,7 @@ module.exports = {
       env_file: rootPath('services/pusaka-worker/.env'),
       env: {
         NODE_ENV: 'production',
+        WORKER_PORT: '8091',
         WORKER_CONCURRENCY: '5',
         HEADLESS: 'true',
         POLL_MS: '8000',

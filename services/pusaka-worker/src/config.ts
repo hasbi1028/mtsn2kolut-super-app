@@ -115,6 +115,13 @@ export const WORKER_HEARTBEAT_MS = parsePositiveNumber('WORKER_HEARTBEAT_MS', 30
   max: 60000,
   integer: true,
 });
+// Port HTTP untuk health/metrics server (DomCloud & PM2). Prioritas:
+// WORKER_PORT → PORT (konvensi platform PaaS) → 8091.
+export const HTTP_PORT = parsePositiveNumber(
+  'WORKER_PORT',
+  parsePositiveNumber('PORT', 8091, { min: 1, max: 65535, integer: true }),
+  { min: 1, max: 65535, integer: true },
+);
 export const SCRAPE_RETRIES = parsePositiveNumber('SCRAPE_RETRIES', 3, {
   min: 1,
   max: 10,
