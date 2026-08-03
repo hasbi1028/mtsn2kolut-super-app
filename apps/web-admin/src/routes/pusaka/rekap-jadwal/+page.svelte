@@ -37,6 +37,69 @@
 	let saving = $state(false);
 	let scheduleRequestId = 0;
 
+	// ── Rekap & Kirim Laporan (1 tombol, sama seperti di Monitor Kehadiran) ──
+	type JobStats = { queued: number; running: number; success: number; failed: number };
+	let rekapKirimPhase = $state<'idle' | 'rekaping' | 'mengirim' | 'done' | 'error'>('idle');
+	let rekapKirimProgress = $state({ done: 0, total: 0 });
+	const rekapKirimBusy = $derived(rekapKirimPhase === 'rekaping' || rekapKirimPhase === 'mengirim');
+	const rekapKirimPct = $derived(rekapKirimProgress.total > 0 ? Math.round((rekapKirimProgress.done / rekapKirimProgress.total) * 100) : 0);
+
+	function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
+
+	function todayWita() {
+		return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Makassar', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+	}
+
+	async function fetchJobStats(): Promise<JobStats> {
+		const res = await fetch('/api/pusaka/jobs/stats');
+		return readClientApiData<JobStats>(res, 'Gagal memuat status antrian');
+	}
+
+	async function runRekapDanKirim() {
+		if (rekapKirimBusy) return;
+		rekapKirimPhase = 'rekaping';
+		rekapKirimProgress = { done: 0, total: 0 };
+		try {
+			const before = await fetchJobStats();
+			const runRes = await fetch('/api/pusaka/jobs/run-all', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ run_type: 'morning' })
+			});
+			const runData = await readClientApiData<{ inserted?: number; skipped?: number }>(runRes, 'Gagal menjalankan rekap massal');
+			const inserted = runData.inserted ?? 0;
+
+			if (inserted > 0) {
+				rekapKirimProgress = { done: 0, total: inserted };
+				const deadline = Date.now() + 5 * 60 * 1000;
+				while (Date.now() < deadline) {
+					await sleep(5000);
+					const stats = await fetchJobStats();
+					const done = Math.max(0, (stats.success + stats.failed) - (before.success + before.failed));
+					rekapKirimProgress = { done: Math.min(done, inserted), total: inserted };
+					if (stats.queued === 0 && stats.running === 0) break;
+					if (done >= inserted) break;
+				}
+			} else {
+				rekapKirimProgress = { done: 1, total: 1 };
+			}
+
+			rekapKirimPhase = 'mengirim';
+			const sendRes = await fetch('/api/pusaka/attendance-telegram/send', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ date: todayWita(), include_caption: true, include_image: true })
+			});
+			const sendData = await readClientApiData<{ target_chat_id_masked?: string }>(sendRes, 'Gagal mengirim laporan Telegram');
+			const target = sendData?.target_chat_id_masked ?? 'Telegram';
+			rekapKirimPhase = 'done';
+			toast.success(`Rekap selesai (${rekapKirimProgress.done}/${rekapKirimProgress.total}) — laporan terkirim ke ${target}`);
+		} catch (e) {
+			rekapKirimPhase = 'error';
+			toast.error(e instanceof Error ? e.message : 'Rekap & kirim gagal');
+		}
+	}
+
 	// Form jadwal baru
 	let newLabel = $state('');
 	let newTime = $state('23:00');
@@ -204,11 +267,40 @@
 				<span class="font-medium text-base-content">Jadwal Otomatis</span>
 			</div>
 		</div>
-		<Button size="sm" onclick={() => (showForm = !showForm)} class="shrink-0 gap-1">
-			<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
-			{showForm ? 'Batal' : 'Tambah Jadwal'}
-		</Button>
+		<div class="flex flex-wrap items-center gap-2">
+			<LoadingButton size="sm" variant="outline" onclick={() => void runRekapDanKirim()} loading={rekapKirimBusy} loadingLabel="Memproses..." label="" class="shrink-0 text-primary border-primary/50 hover:bg-primary/10" disabled={rekapKirimBusy}>
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+				{rekapKirimPhase === 'done' ? 'Selesai ✓' : rekapKirimPhase === 'error' ? 'Coba Lagi' : 'Rekap & Kirim Laporan'}
+			</LoadingButton>
+			<Button size="sm" onclick={() => (showForm = !showForm)} class="shrink-0 gap-1">
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+				{showForm ? 'Batal' : 'Tambah Jadwal'}
+			</Button>
+		</div>
 	</div>
+
+	<!-- Progress rekap & kirim -->
+	{#if rekapKirimBusy}
+		<div class="rounded-xl border border-primary/30 bg-primary/5 p-3">
+			<div class="flex items-center justify-between text-xs">
+				<span class="font-semibold text-base-content">
+					{#if rekapKirimPhase === 'rekaping'}
+						Merekap absen semua pegawai... {rekapKirimProgress.done}/{rekapKirimProgress.total} selesai
+					{:else}
+						Mengirim laporan ke Telegram...
+					{/if}
+				</span>
+				{#if rekapKirimPhase === 'rekaping'}
+					<span class="font-bold text-primary">{rekapKirimPct}%</span>
+				{/if}
+			</div>
+			{#if rekapKirimPhase === 'rekaping'}
+				<div class="mt-2 h-2 w-full overflow-hidden rounded-full bg-base-300">
+					<div class="h-full rounded-full bg-primary transition-all duration-500" style="width: {rekapKirimPct}%"></div>
+				</div>
+			{/if}
+		</div>
+	{/if}
 
 	<!-- Form tambah -->
 	{#if showForm}
