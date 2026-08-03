@@ -94,11 +94,18 @@ if (!WORKER_API_KEY && !isExplicitLocalOrTestEnv()) {
 }
 export const WORKER_ID =
   process.env.WORKER_ID ?? `worker-${os.hostname()}-${process.pid}`;
-export const DEFAULT_MAX_CONCURRENT = parsePositiveNumber('WORKER_CONCURRENCY', 5, {
+export const DEFAULT_MAX_CONCURRENT = parsePositiveNumber('WORKER_CONCURRENCY', 3, {
   min: RUNTIME_CONFIG_LIMITS.maxConcurrent.min,
   max: RUNTIME_CONFIG_LIMITS.maxConcurrent.max,
   integer: true,
 });
+/**
+ * Hard cap concurrency per instance (Opsi D — hybrid).
+ * Default 3 kalau env WORKER_CONCURRENCY tidak diset; bisa dinaikkan
+ * per instance via env. Backend (setting global di UI) TIDAK boleh
+ * menaikkan di atas cap ini — cap menentukan batas maksimum instance.
+ */
+export const WORKER_CONCURRENCY_CAP: number = DEFAULT_MAX_CONCURRENT;
 export const DEFAULT_HEADLESS = parseBoolean('HEADLESS', true);
 export const POLL_MS = parsePositiveNumber('POLL_MS', 8000, {
   min: 500,

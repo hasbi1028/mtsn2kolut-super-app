@@ -67,7 +67,7 @@ beberapa hari. Karena itu worker punya **watchdog otomatis**:
 |----------|---------|------------|
 | `WORKER_PORT` | `8091` | Port HTTP health (override kalau `PORT` tidak di-inject) |
 | `WORKER_ID` | `worker-<hostname>-<pid>` | Nama worker (muncul di /health & status backend) |
-| `WORKER_CONCURRENCY` | `5` | Maks konsumen paralel awal (di-override backend saat sync) |
+| `WORKER_CONCURRENCY` | `3` | **Hard cap per instance** — backend TIDAK bisa menaikkan di atas nilai ini. Default aman `3`; naikkan per instance sesuai RAM |
 | `HEADLESS` | `true` | Mode headless browser |
 | `POLL_MS` | `8000` | Interval polling job |
 | `BROWSER_CHECK_MS` | `21600000` (6 jam) | Interval watchdog cek/install Chromium |
@@ -84,5 +84,46 @@ beberapa hari. Karena itu worker punya **watchdog otomatis**:
   (di DomCloud itu berarti server DomCloud sendiri).
 - Worker harus tetap jalan sebagai proses panjang; jangan matikan via panel
   "stop on idle" (kalau DomCloud punya opsi itu).
-- `Passengerfile.json` tersedia untuk mode standalone (`passenger start`) dan
-  sebagai referensi konfigurasi Nginx Passenger di panel.
+- `Passengerfile.json` tersedia untuk mode standalone (`passenger start`) dan sebagai
+  referensi konfigurasi Nginx Passenger di panel.
+
+## ⚙️ Mengatur Concurrency dengan Banyak Instance
+
+Worker mensinkronkan `max_concurrent` dari backend (setting global di UI
+`/settings`) setiap ~30 detik. Kalau deploy **banyak instance**, semua akan
+ikut nilai global yang sama → total concurrent = instance × nilai global
+(mis. 5 × 35 = 175 — terlalu besar & berisiko diblokir PUSAKA Kemenag).
+
+**Solusi (hybrid):** `WORKER_CONCURRENCY` = **hard cap per instance**
+(default `3`). Backend tidak bisa menaikkan di atas cap, tapi tetap bisa
+**menurunkan semua serentak** lewat UI (kontrol darurat).
+
+```
+concurrency efektif tiap instance = min(setting backend, WORKER_CONCURRENCY)
+```
+
+### Contoh — 5 Instance (default 3 → total 15, aman)
+
+| Instance | `WORKER_CONCURRENCY` | Efektif (jika backend ≥ 3) |
+|----------|---------------------|----------------------------|
+| worker-1 | *(tidak diset)* | 3 |
+| worker-2 | *(tidak diset)* | 3 |
+| worker-3 | *(tidak diset)* | 3 |
+| worker-4 | *(tidak diset)* | 3 |
+| worker-5 | *(tidak diset)* | 3 |
+| **Total** | | **15** |
+
+Mau total 35? Set `WORKER_CONCURRENCY=7` di semua instance
+(5 × 7 = 35 — batas yang sudah terbukti aman). Untuk instance RAM 1GB
+tetap pakai default `3`.
+
+### Aturan Praktis
+
+1. **UI `/settings` (Max Concurrent)** = nilai global; set angka tertinggi
+   yang diizinkan (mis. 35) sebagai ceiling.
+2. **Env `WORKER_CONCURRENCY` per instance** = batas masing-masing (default 3);
+   naikkan hanya untuk instance yang RAM-nya cukup.
+3. Mau turunkan semua sekarang? Cukup ubah UI → semua instance ikut turun
+   dalam ≤30 detik.
+4. Cap default 3 berlaku otomatis walau env tidak diset — aman kalau lupa
+   mengatur env di instance baru.

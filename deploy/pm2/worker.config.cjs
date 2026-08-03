@@ -13,7 +13,6 @@ module.exports = {
         WORKER_PORT: '8091',
         PLAYWRIGHT_BROWSERS_PATH: '0',
         BROWSER_CHECK_MS: '21600000',
-        WORKER_CONCURRENCY: '5',
         HEADLESS: 'true',
         POLL_MS: '8000',
         SCRAPE_RETRIES: '3',
