@@ -2,6 +2,7 @@ import 'dotenv/config';
 
 import {
   BACKEND_URL,
+  BROWSER_CHECK_MS,
   CONFIG_SYNC_MS,
   HTTP_PORT,
   POLL_MS,
@@ -9,6 +10,7 @@ import {
   WORKER_ID,
   createRuntimeConfig,
 } from './config.js';
+import { ensureBrowserInstalled, startBrowserWatchdog } from './browser-guard.js';
 import { startHealthServer } from './health-server.js';
 import { ensureLogDirectories, log } from './logger.js';
 import { pruneOldScreenshots } from './pusaka-runner.js';
@@ -31,4 +33,13 @@ log('INFO', 'worker starting', {
 
 const supervisor = new WorkerSupervisor(runtimeConfig);
 startHealthServer(() => supervisor.getStatus());
+
+// Pastikan Chromium ada sebelum mulai memproses job (DomCloud sering
+// menghapus browser cache; watchdog akan install ulang otomatis).
+const browserReady = await ensureBrowserInstalled();
+if (!browserReady) {
+  log('ERROR', 'chromium unavailable at startup — watchdog akan coba install ulang', {});
+}
+startBrowserWatchdog(BROWSER_CHECK_MS);
+
 supervisor.start();

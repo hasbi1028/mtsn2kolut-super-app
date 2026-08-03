@@ -29,10 +29,30 @@ Passenger untuk Node.js memberikan env `PORT` dan app cukup `listen` di port itu
    ter-install saat `npm install --production`).
 5. Health check di DomCloud: path `/health` — worker dianggap hidup jika 200.
 
-> Catatan: kalau DomCloud menginstal browser Playwright terpisah, pastikan
-> `playwright install chromium` (dengan deps OS) dijalankan sekali —
-> misalnya via command di panel: `npx playwright install --with-deps chromium`.
-> Worker butuh Chromium untuk scrape PUSAKA Kemenag.
+### Chromium — Auto-Install (Watchdog)
+
+Worker butuh Chromium untuk scrape PUSAKA Kemenag. DomCloud dikenal sering
+**menghapus browser cache** (folder `~/.cache/ms-playwright`), kadang tiap
+beberapa hari. Karena itu worker punya **watchdog otomatis**:
+
+- **Saat start**: cek executable Chromium → kalau hilang, langsung
+  `npx playwright install chromium` sebelum mulai memproses job.
+- **Periodik** (default tiap 6 jam, atur via `BROWSER_CHECK_MS`): cek ulang —
+  kalau browser dihapus platform, worker meng-install ulang sendiri tanpa
+  perlu turun tangan manual.
+- **`PLAYWRIGHT_BROWSERS_PATH=0`**: browser di-install ke dalam folder project
+  (`node_modules/playwright-core/.local-browsers`), bukan `~/.cache` —
+  lebih tahan terhadap pembersihan cache home oleh platform.
+- Status saat sedang install di `/health`: `"status": "starting"` (HTTP 200),
+  berubah `"running"` setelah worker siap.
+
+> Jika DomCloud juga mereset **seluruh** folder app (termasuk `node_modules`),
+> `npm install` akan menjalankan `postinstall` (build) dan watchdog akan
+> meng-install Chromium kembali saat start — worker pulih sendiri.
+
+> Deps OS browser (libnss3, dll): biasanya sudah ada di image Passenger
+> DomCloud. Kalau muncul error `libnss3.so` saat scrape, jalankan sekali via
+> panel: `npx playwright install-deps chromium` (butuh akses root/apt).
 
 ## Environment Variables WAJIB
 
@@ -50,6 +70,8 @@ Passenger untuk Node.js memberikan env `PORT` dan app cukup `listen` di port itu
 | `WORKER_CONCURRENCY` | `5` | Maks konsumen paralel awal (di-override backend saat sync) |
 | `HEADLESS` | `true` | Mode headless browser |
 | `POLL_MS` | `8000` | Interval polling job |
+| `BROWSER_CHECK_MS` | `21600000` (6 jam) | Interval watchdog cek/install Chromium |
+| `PLAYWRIGHT_BROWSERS_PATH` | `0` | Browser di dalam folder project (tahan pembersihan cache) |
 | `WORKER_LOG_PATH` | `../logs/worker.log` | Lokasi log |
 | `SCREENSHOT_DIR` | `../logs/screenshots` | Lokasi screenshot debug |
 

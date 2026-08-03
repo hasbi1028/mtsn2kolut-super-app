@@ -55,6 +55,7 @@ export class WorkerSupervisor {
   private heartbeatTimer?: NodeJS.Timeout;
   private nextConsumerNumber = 1;
   private lastConfigSyncAt = '';
+  private started = false;
   private shuttingDown = false;
   private readonly startedAt = new Date().toISOString();
   private readonly shutdownController = new AbortController();
@@ -66,6 +67,7 @@ export class WorkerSupervisor {
   ) {}
 
   start(): void {
+    this.started = true;
     void this.syncRuntimeConfig();
     void this.heartbeatLoop();
     this.configTimer = this.deps.setInterval(() => {
@@ -82,7 +84,7 @@ export class WorkerSupervisor {
     return {
       workerId: WORKER_ID,
       startedAt: this.startedAt,
-      status: this.shuttingDown ? 'shutting_down' : 'running',
+      status: !this.started ? 'starting' : this.shuttingDown ? 'shutting_down' : 'running',
       activeConsumers: Array.from(this.consumers.values()).filter(
         (state) => !state.stopRequested,
       ).length,

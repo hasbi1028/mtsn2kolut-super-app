@@ -122,6 +122,13 @@ export const HTTP_PORT = parsePositiveNumber(
   parsePositiveNumber('PORT', 8091, { min: 1, max: 65535, integer: true }),
   { min: 1, max: 65535, integer: true },
 );
+// Interval watchdog browser: cek executable Chromium, kalau hilang
+// (mis. dihapus platform PaaS seperti DomCloud) install ulang otomatis.
+export const BROWSER_CHECK_MS = parsePositiveNumber('BROWSER_CHECK_MS', 6 * 60 * 60 * 1000, {
+  min: 10 * 60 * 1000,
+  max: 24 * 60 * 60 * 1000,
+  integer: true,
+});
 export const SCRAPE_RETRIES = parsePositiveNumber('SCRAPE_RETRIES', 3, {
   min: 1,
   max: 10,
