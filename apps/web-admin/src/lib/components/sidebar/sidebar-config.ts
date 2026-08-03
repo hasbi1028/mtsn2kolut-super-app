@@ -88,6 +88,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	{
 		group: 'Pengaturan',
 		items: [
+			{ href: '/settings', label: 'Pengaturan Umum', icon: 'settings', roles: ['admin'], permissions: ['settings.account'] },
 			{ href: '/settings/account', label: 'Akun Saya', icon: 'user', permissions: ['settings.account'], allowAuthenticatedFallback: true },
 			{ href: '/settings/school-profile', label: 'Profil Madrasah', icon: 'building', roles: ['admin'], permissions: ['settings.school_profile'] },
 			{ href: '/settings/users', label: 'Pengguna', icon: 'users', roles: ['admin'], permissions: ['users.read'] },
