@@ -39,7 +39,7 @@
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3 items-end">
       <div>
         <label for="max-concurrent" class="mb-1.5 block text-sm font-medium">Max Concurrent</label>
-        <Input id="max-concurrent" type="number" min="1" max="20" bind:value={settings.max_concurrent} class="w-full" />
+        <Input id="max-concurrent" type="number" min="1" max="35" bind:value={settings.max_concurrent} class="w-full" />
       </div>
       <div class="flex items-center gap-3 pb-1">
         <input id="headless-mode" type="checkbox" bind:checked={settings.headless}
