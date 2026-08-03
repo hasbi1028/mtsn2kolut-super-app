@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"math/rand"
 	"strconv"
@@ -82,6 +84,11 @@ type telegramReportSender interface {
 	SendReport(ctx context.Context, in SendAttendanceTelegramReportInput) (AttendanceTelegramReportResult, error)
 }
 
+type telegramSender interface {
+	telegramReportSender
+	SendAlertText(ctx context.Context, text string) (string, error)
+}
+
 type auditCleaner interface {
 	CleanupOld(ctx context.Context) (int64, error)
 }
@@ -90,7 +97,7 @@ type PusakaScheduler struct {
 	store       schedulerStore
 	jobs        pusakaSchedulerJobRunner
 	sett        *Setting
-	telegram    telegramReportSender
+	telegram    telegramSender
 	loc         *time.Location
 	audit       auditCleaner
 	lastCleanup time.Time
@@ -99,6 +106,14 @@ type PusakaScheduler struct {
 
 const (
 	settingTelegramAfterRekapPendingDate = "telegram_after_rekap_pending_date"
+
+	workerStatusKeyPrefix       = "worker_status:"
+	workerAlertKeyPrefix        = "worker_alert:"
+	workerOfflineThreshold      = 5 * time.Minute
+	workerActiveThreshold       = 2 * time.Minute
+	workerAlertCooldown         = 6 * time.Hour
+	workerStatusRetention       = 7 * 24 * time.Hour
+	lastWorkerStatusCleanupKey  = "last_worker_status_cleanup_date"
 )
 
 type PusakaSchedulerResult struct {
@@ -110,7 +125,7 @@ type PusakaSchedulerResult struct {
 	DocumentNotifications int64  `json:"document_notifications"`
 }
 
-func NewPusakaScheduler(store *db.Queries, jobs *PusakaJob, sett *Setting, audit *Audit, telegram telegramReportSender) *PusakaScheduler {
+func NewPusakaScheduler(store *db.Queries, jobs *PusakaJob, sett *Setting, audit *Audit, telegram telegramSender) *PusakaScheduler {
 	loc, err := time.LoadLocation("Asia/Makassar")
 	if err != nil {
 		loc = time.FixedZone("WITA", 8*60*60)
@@ -362,6 +377,149 @@ func (s *PusakaScheduler) runTick(ctx context.Context) {
 	}
 
 	s.maybeCleanupAudit(ctx)
+	s.maybeAlertWorkerHealth(ctx)
+	s.maybeCleanupWorkerStatus(ctx)
+}
+
+// maybeAlertWorkerHealth memantau heartbeat worker (worker_status:*) setiap
+// tick dan mengirim alert Telegram ketika sebuah worker:
+//   - OFFLINE (heartbeat > 5 menit) — dengan cooldown 6 jam untuk pengulangan
+//   - kembali ONLINE setelah sebelumnya offline
+// State alert disimpan di app_settings (worker_alert:<worker_id>) untuk
+// menghindari notifikasi berulang tanpa batas.
+func (s *PusakaScheduler) maybeAlertWorkerHealth(ctx context.Context) {
+	if s.sett == nil || s.telegram == nil {
+		return
+	}
+	rows, err := s.sett.List(ctx)
+	if err != nil {
+		return
+	}
+
+	now := time.Now().UTC()
+	activeCutoff := now.Add(-workerActiveThreshold)
+	offlineCutoff := now.Add(-workerOfflineThreshold)
+
+	type alertState struct {
+		state string
+		at    time.Time
+	}
+	alerts := make(map[string]alertState)
+	for _, row := range rows {
+		if !strings.HasPrefix(row.Key, workerAlertKeyPrefix) {
+			continue
+		}
+		workerID := strings.TrimPrefix(row.Key, workerAlertKeyPrefix)
+		var a struct {
+			State string `json:"state"`
+			At    string `json:"at"`
+		}
+		if json.Unmarshal([]byte(row.Value), &a) != nil {
+			continue
+		}
+		at, _ := time.Parse(time.RFC3339, a.At)
+		alerts[workerID] = alertState{state: a.State, at: at}
+	}
+
+	for _, row := range rows {
+		if !strings.HasPrefix(row.Key, workerStatusKeyPrefix) {
+			continue
+		}
+		workerID := strings.TrimPrefix(row.Key, workerStatusKeyPrefix)
+		var wd struct {
+			ReportedAt string `json:"reported_at"`
+		}
+		if json.Unmarshal([]byte(row.Value), &wd) != nil || wd.ReportedAt == "" {
+			continue
+		}
+		reportedAt, err := time.Parse(time.RFC3339, wd.ReportedAt)
+		if err != nil {
+			continue
+		}
+
+		st := alerts[workerID]
+		lastHeartbeat := reportedAt.In(s.loc).Format("02 Jan 15:04")
+
+		switch {
+		case reportedAt.Before(offlineCutoff):
+			// Worker OFFLINE — kirim alert (pertama kali atau setelah cooldown).
+			if st.state != "offline" || now.Sub(st.at) >= workerAlertCooldown {
+				text := fmt.Sprintf("⚠️ *Worker OFFLINE*\nID: `%s`\nHeartbeat terakhir: %s\nCek instance DomCloud/server worker.", workerID, lastHeartbeat)
+				if _, sendErr := s.telegram.SendAlertText(ctx, text); sendErr == nil {
+					_ = s.sett.Upsert(ctx, workerAlertKeyPrefix+workerID, fmt.Sprintf(`{"state":"offline","at":%q}`, now.Format(time.RFC3339)))
+					slog.Warn("worker health alert: offline", "worker_id", workerID, "reported_at", wd.ReportedAt)
+				} else {
+					slog.Error("worker health alert: send failed", "worker_id", workerID, "error", sendErr)
+				}
+			}
+		case reportedAt.After(activeCutoff) && st.state == "offline":
+			// Worker kembali online setelah offline.
+			text := fmt.Sprintf("✅ *Worker Kembali Online*\nID: `%s`\nHeartbeat aktif kembali.", workerID)
+			if _, sendErr := s.telegram.SendAlertText(ctx, text); sendErr == nil {
+				_ = s.sett.Upsert(ctx, workerAlertKeyPrefix+workerID, fmt.Sprintf(`{"state":"online","at":%q}`, now.Format(time.RFC3339)))
+				slog.Info("worker health alert: back online", "worker_id", workerID)
+			}
+		}
+	}
+}
+
+// maybeCleanupWorkerStatus menghapus worker_status:* dan worker_alert:* yang
+// lebih tua dari 7 hari (sekali sehari) supaya app_settings tidak menumpuk.
+func (s *PusakaScheduler) maybeCleanupWorkerStatus(ctx context.Context) {
+	if s.sett == nil {
+		return
+	}
+	row, err := s.store.GetSetting(ctx, lastWorkerStatusCleanupKey)
+	if err == nil {
+		if lastDate, parseErr := time.Parse(time.DateOnly, row.Value); parseErr == nil {
+			localNow := time.Now().In(s.loc)
+			if lastDate.Year() == localNow.Year() && lastDate.YearDay() == localNow.YearDay() {
+				return
+			}
+		}
+	}
+
+	rows, err := s.sett.List(ctx)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().UTC().Add(-workerStatusRetention)
+	deleted := 0
+	for _, row := range rows {
+		isStatus := strings.HasPrefix(row.Key, workerStatusKeyPrefix)
+		isAlert := strings.HasPrefix(row.Key, workerAlertKeyPrefix)
+		if !isStatus && !isAlert {
+			continue
+		}
+		var tsStr string
+		if isStatus {
+			var wd struct {
+				ReportedAt string `json:"reported_at"`
+			}
+			if json.Unmarshal([]byte(row.Value), &wd) != nil {
+				continue
+			}
+			tsStr = wd.ReportedAt
+		} else {
+			var a struct {
+				At string `json:"at"`
+			}
+			if json.Unmarshal([]byte(row.Value), &a) != nil {
+				continue
+			}
+			tsStr = a.At
+		}
+		ts, parseErr := time.Parse(time.RFC3339, tsStr)
+		if parseErr == nil && ts.Before(cutoff) {
+			if delErr := s.sett.Delete(ctx, row.Key); delErr == nil {
+				deleted++
+			}
+		}
+	}
+	_ = s.sett.Upsert(ctx, lastWorkerStatusCleanupKey, time.Now().In(s.loc).Format(time.DateOnly))
+	if deleted > 0 {
+		slog.Info("worker status cleanup: deleted old entries", "deleted", deleted)
+	}
 }
 
 func (s *PusakaScheduler) maybeCleanupAudit(ctx context.Context) {

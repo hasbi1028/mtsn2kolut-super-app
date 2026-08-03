@@ -367,6 +367,23 @@ func (s *PusakaAttendanceTelegram) sendTelegram(ctx context.Context, chatID, cap
 	return s.doTelegram(req)
 }
 
+// SendAlertText mengirim pesan teks singkat (alert worker offline/online)
+// ke chat id Telegram yang dikonfigurasi. Dipakai scheduler health monitoring.
+func (s *PusakaAttendanceTelegram) SendAlertText(ctx context.Context, text string) (string, error) {
+	if s == nil || s.botToken == "" {
+		return "", ErrAttendanceTelegramNotConfigured
+	}
+	settings, err := s.GetSettings(ctx)
+	if err != nil {
+		return "", err
+	}
+	chatID := strings.TrimSpace(settings.TargetChatID)
+	if chatID == "" {
+		chatID = attendanceTelegramDefaultChatID
+	}
+	return s.sendTelegram(ctx, chatID, text, nil, false)
+}
+
 func (s *PusakaAttendanceTelegram) telegramRequest(ctx context.Context, method string, fields map[string]string) (string, error) {
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
