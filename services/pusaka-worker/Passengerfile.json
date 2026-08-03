@@ -1,0 +1,8 @@
+{
+  "app_type": "node",
+  "startup_file": "dist/index.js",
+  "environment": "production",
+  "log_file": "passenger.log",
+  "pid_file": "passenger.pid",
+  "restart_dir": "tmp"
+}
