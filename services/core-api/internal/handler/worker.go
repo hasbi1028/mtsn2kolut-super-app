@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -302,10 +303,19 @@ func (h *PusakaWorker) GetStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	activeWorkers := make([]map[string]any, 0)
-	cutoff := time.Now().UTC().Add(-2 * time.Minute)
+	now := time.Now().UTC()
+	activeCutoff := now.Add(-2 * time.Minute)
+	staleCutoff := now.Add(-10 * time.Minute)
+	keepCutoff := now.Add(-24 * time.Hour)
 
+	workers := make([]map[string]any, 0)
+	activeCount := 0
+	globalMaxConcurrent := ""
 	for _, row := range rows {
+		if row.Key == "max_concurrent" {
+			globalMaxConcurrent = row.Value
+			continue
+		}
 		if !strings.HasPrefix(row.Key, "worker_status:") {
 			continue
 		}
@@ -315,28 +325,62 @@ func (h *PusakaWorker) GetStatus(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Check if worker is still active
-		if reportedAtStr, ok := workerData["reported_at"].(string); ok {
-			reportedAt, err := time.Parse(time.RFC3339, reportedAtStr)
-			if err != nil || reportedAt.Before(cutoff) {
-				continue
-			}
-		} else {
+		reportedAtStr, ok := workerData["reported_at"].(string)
+		if !ok {
+			continue
+		}
+		reportedAt, err := time.Parse(time.RFC3339, reportedAtStr)
+		if err != nil || reportedAt.Before(keepCutoff) {
 			continue
 		}
 
-		activeWorkers = append(activeWorkers, workerData)
+		// Klasifikasi status: active (< 2 mnt), stale (2–10 mnt), offline (> 10 mnt).
+		status := "offline"
+		switch {
+		case reportedAt.After(activeCutoff):
+			status = "active"
+			activeCount++
+		case reportedAt.After(staleCutoff):
+			status = "stale"
+		}
+		workerData["status"] = status
+		workers = append(workers, workerData)
 	}
 
+	// Urutkan: active → stale → offline, lalu by worker_id.
+	sort.Slice(workers, func(i, j int) bool {
+		si, _ := workers[i]["status"].(string)
+		sj, _ := workers[j]["status"].(string)
+		if si != sj {
+			return statusRank(si) < statusRank(sj)
+		}
+		wi, _ := workers[i]["worker_id"].(string)
+		wj, _ := workers[j]["worker_id"].(string)
+		return wi < wj
+	})
+
 	api.OK(w, map[string]any{
-		"active_workers": activeWorkers,
-		"total":          len(activeWorkers),
+		"workers":               workers,
+		"total":                 len(workers),
+		"active_count":          activeCount,
 		"queue": map[string]int64{
 			"queued":  stats.Queued,
 			"running": stats.Running,
 			"success": stats.Success,
 			"failed":  stats.Failed,
 		},
-		"last_checked": time.Now().UTC(),
+		"global_max_concurrent": globalMaxConcurrent,
+		"last_checked":          now,
 	})
+}
+
+func statusRank(status string) int {
+	switch status {
+	case "active":
+		return 0
+	case "stale":
+		return 1
+	default:
+		return 2
+	}
 }

@@ -43,6 +43,7 @@
 		'bar-chart': '📊',
 		send: '📨',
 		'refresh-cw': '🔄',
+		server: '🖥',
 		user: '👤',
 		building: '🏢',
 		shield: '🛡',
