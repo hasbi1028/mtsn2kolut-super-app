@@ -201,6 +201,13 @@ SET label              = $2,
     run_time           = $3,
     is_enabled         = $4,
     send_telegram_after = $5,
+    -- Reset anti-duplikat saat jam diubah atau jadwal baru diaktifkan,
+    -- supaya scheduler memproses ulang di waktu baru (atau saat di-enable).
+    last_enqueued_for_date = CASE
+        WHEN $3 <> run_time THEN NULL
+        WHEN $4 AND NOT is_enabled THEN NULL
+        ELSE last_enqueued_for_date
+    END,
     updated_at         = NOW()
 WHERE id = $1
 RETURNING id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date, send_telegram_after
