@@ -4,7 +4,7 @@ import { apiPath, handleRouteError, proxy, readRequestJson } from '$lib/server/a
 
 interface GoSchedule {
 	id: string; label: string; run_type: string;
-	run_time: string; is_enabled: boolean;
+	run_time: string; is_enabled: boolean; send_telegram_after: boolean;
 }
 
 export const GET = async (event: RequestEvent) => {
@@ -36,6 +36,7 @@ export const PUT = async (event: RequestEvent) => {
 				label: s.label,
 				run_time: s.run_time,
 				is_enabled: s.is_enabled,
+				send_telegram_after: s.send_telegram_after,
 			})
 		));
 		return json({ ok: true });

@@ -2309,6 +2309,7 @@ type Schedule struct {
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	LastEnqueuedForDate pgtype.Date        `json:"last_enqueued_for_date"`
+	SendTelegramAfter   bool               `json:"send_telegram_after"`
 }
 
 type SchoolClass struct {

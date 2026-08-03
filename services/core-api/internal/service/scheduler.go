@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -64,6 +65,7 @@ type schedulerStore interface {
 	ResetScheduleEnqueueState(ctx context.Context, arg db.ResetScheduleEnqueueStateParams) error
 	ClaimDueEmployeeSchedules(ctx context.Context, arg db.ClaimDueEmployeeSchedulesParams) ([]db.ClaimDueEmployeeSchedulesRow, error)
 	ResetEmployeeScheduleEnqueueState(ctx context.Context, arg db.ResetEmployeeScheduleEnqueueStateParams) error
+	CountJobsByStatus(ctx context.Context, status db.JobStatusEnum) (int64, error)
 	GetSetting(ctx context.Context, key string) (db.AppSetting, error)
 	CreateDocumentCycleReminderEvents(ctx context.Context, today pgtype.Date) (int64, error)
 	CreateDocumentCycleReminderNotifications(ctx context.Context, today pgtype.Date) (int64, error)
@@ -76,6 +78,10 @@ type pusakaSchedulerJobRunner interface {
 	RecoverStaleRunning(ctx context.Context, olderThan time.Duration) (int64, error)
 }
 
+type telegramReportSender interface {
+	SendReport(ctx context.Context, in SendAttendanceTelegramReportInput) (AttendanceTelegramReportResult, error)
+}
+
 type auditCleaner interface {
 	CleanupOld(ctx context.Context) (int64, error)
 }
@@ -84,11 +90,16 @@ type PusakaScheduler struct {
 	store       schedulerStore
 	jobs        pusakaSchedulerJobRunner
 	sett        *Setting
+	telegram    telegramReportSender
 	loc         *time.Location
 	audit       auditCleaner
 	lastCleanup time.Time
 	cancel      context.CancelFunc
 }
+
+const (
+	settingTelegramAfterRekapPendingDate = "telegram_after_rekap_pending_date"
+)
 
 type PusakaSchedulerResult struct {
 	CheckedAt             string `json:"checked_at"`
@@ -99,12 +110,12 @@ type PusakaSchedulerResult struct {
 	DocumentNotifications int64  `json:"document_notifications"`
 }
 
-func NewPusakaScheduler(store *db.Queries, jobs *PusakaJob, sett *Setting, audit *Audit) *PusakaScheduler {
+func NewPusakaScheduler(store *db.Queries, jobs *PusakaJob, sett *Setting, audit *Audit, telegram telegramReportSender) *PusakaScheduler {
 	loc, err := time.LoadLocation("Asia/Makassar")
 	if err != nil {
 		loc = time.FixedZone("WITA", 8*60*60)
 	}
-	return &PusakaScheduler{store: store, jobs: jobs, sett: sett, loc: loc, audit: audit}
+	return &PusakaScheduler{store: store, jobs: jobs, sett: sett, telegram: telegram, loc: loc, audit: audit}
 }
 
 func (s *PusakaScheduler) Start(ctx context.Context) {
@@ -178,6 +189,14 @@ func (s *PusakaScheduler) Tick(ctx context.Context, now time.Time) (PusakaSchedu
 		}
 		result.Enqueued += inserted
 		result.Skipped += skipped
+		if schedule.SendTelegramAfter && inserted > 0 {
+			_ = s.sett.Upsert(ctx, settingTelegramAfterRekapPendingDate, today.Time.Format("2006-01-02"))
+			slog.Info("scheduler: telegram after rekap armed",
+				"schedule_id", schedule.ID.String(),
+				"schedule_label", schedule.Label,
+				"inserted", inserted,
+				"date", today.Time.Format("2006-01-02"))
+		}
 	}
 
 	// Process per-employee checkin/checkout schedules
@@ -265,7 +284,59 @@ func (s *PusakaScheduler) Tick(ctx context.Context, now time.Time) (PusakaSchedu
 		"scheduler_last_skipped":    strconv.Itoa(result.Skipped),
 	})
 
+	s.maybeSendTelegramAfterRekap(ctx, today)
+
 	return result, nil
+}
+
+// maybeSendTelegramAfterRekap mengirim laporan Telegram otomatis ketika
+// jadwal rekap dengan flag send_telegram_after sudah selesai memproses
+// semua job pegawai (queued = 0 dan running = 0) pada hari yang sama.
+func (s *PusakaScheduler) maybeSendTelegramAfterRekap(ctx context.Context, today pgtype.Date) {
+	if s.telegram == nil {
+		return
+	}
+	pendingRow, err := s.store.GetSetting(ctx, settingTelegramAfterRekapPendingDate)
+	if err != nil {
+		return
+	}
+	pendingDate := strings.TrimSpace(pendingRow.Value)
+	todayStr := today.Time.Format("2006-01-02")
+	if pendingDate == "" {
+		return
+	}
+	if pendingDate != todayStr {
+		// Tanggal berganti tanpa sempat kirim — reset agar tidak kirim telat.
+		_ = s.sett.Upsert(ctx, settingTelegramAfterRekapPendingDate, "")
+		return
+	}
+
+	queued, err := s.store.CountJobsByStatus(ctx, db.JobStatusEnumQueued)
+	if err != nil || queued > 0 {
+		return
+	}
+	running, err := s.store.CountJobsByStatus(ctx, db.JobStatusEnumRunning)
+	if err != nil || running > 0 {
+		return
+	}
+
+	res, sendErr := s.telegram.SendReport(ctx, SendAttendanceTelegramReportInput{
+		Date:           todayStr,
+		IncludeCaption: true,
+		IncludeImage:   true,
+		SendMode:       "after_rekap",
+	})
+	if sendErr != nil {
+		slog.Error("scheduler: telegram after rekap send failed", "error", sendErr, "date", todayStr)
+		_ = s.setStatus(ctx, map[string]string{"scheduler_last_error": "telegram after rekap: " + sendErr.Error()})
+		return
+	}
+	_ = s.sett.Upsert(ctx, settingTelegramAfterRekapPendingDate, "")
+	slog.Info("scheduler: telegram after rekap sent",
+		"date", todayStr,
+		"target", res.TargetChatIDMasked,
+		"total_employees", res.TotalEmployees,
+		"checked_in", res.CheckedIn)
 }
 
 func (s *PusakaScheduler) defaultMaxAttempts(ctx context.Context) int32 {

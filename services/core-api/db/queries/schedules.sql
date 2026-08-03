@@ -1,24 +1,25 @@
 -- name: ListSchedules :many
-SELECT id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date
+SELECT *
 FROM schedules
 ORDER BY run_type ASC, run_time ASC;
 
 -- name: GetSchedule :one
-SELECT id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date
+SELECT *
 FROM schedules
 WHERE id = $1;
 
 -- name: CreateSchedule :one
-INSERT INTO schedules (label, run_time, run_type, is_enabled)
-VALUES ($1, $2, $3, $4)
+INSERT INTO schedules (label, run_time, run_type, is_enabled, send_telegram_after)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: UpdateScheduleByID :one
 UPDATE schedules
-SET label      = $2,
-    run_time   = $3,
-    is_enabled = $4,
-    updated_at = NOW()
+SET label              = $2,
+    run_time           = $3,
+    is_enabled         = $4,
+    send_telegram_after = $5,
+    updated_at         = NOW()
 WHERE id = $1
 RETURNING *;
 
@@ -35,7 +36,7 @@ WITH due AS (
     AND (last_enqueued_for_date IS NULL OR last_enqueued_for_date < $1)
   RETURNING *
 )
-SELECT id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date
+SELECT id, label, run_time, run_type, is_enabled, send_telegram_after, created_at, updated_at, last_enqueued_for_date
 FROM due
 ORDER BY run_time ASC;
 

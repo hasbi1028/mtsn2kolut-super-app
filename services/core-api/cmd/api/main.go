@@ -62,7 +62,7 @@ func main() {
 		OffsiteStaleThreshold: time.Duration(int32Env("POSTGRES_BACKUP_OFFSITE_STALE_HOURS", int32(service.DefaultOffsiteBackupStaleHours))) * time.Hour,
 	})
 	systemMaintenanceSvc := service.NewSystemMaintenance(q, systemBackupSvc)
-	pusakaSchedulerSvc := service.NewPusakaScheduler(q, pusakaJobSvc, settSvc, auditSvc)
+	pusakaSchedulerSvc := service.NewPusakaScheduler(q, pusakaJobSvc, settSvc, auditSvc, pusakaAttendanceTelegramSvc)
 	notificationSvc := service.NewNotification(q)
 	rbacSvc := service.NewRBACWithPool(pool)
 	profileChangeRequestSvc := service.NewProfileChangeRequestWithPool(pool)

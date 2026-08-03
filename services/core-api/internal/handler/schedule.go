@@ -45,10 +45,11 @@ func (h *PusakaSchedule) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Label     string `json:"label"`
-		RunTime   string `json:"run_time"`
-		RunType   string `json:"run_type"`
-		IsEnabled bool   `json:"is_enabled"`
+		Label             string `json:"label"`
+		RunTime           string `json:"run_time"`
+		RunType           string `json:"run_type"`
+		IsEnabled         bool   `json:"is_enabled"`
+		SendTelegramAfter bool   `json:"send_telegram_after"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "Data yang dikirim tidak valid")
@@ -63,10 +64,11 @@ func (h *PusakaSchedule) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sched, err := h.svc.Create(r.Context(), db.CreateScheduleParams{
-		Label:     body.Label,
-		RunTime:   body.RunTime,
-		RunType:   db.RunTypeEnum(body.RunType),
-		IsEnabled: body.IsEnabled,
+		Label:             body.Label,
+		RunTime:           body.RunTime,
+		RunType:           db.RunTypeEnum(body.RunType),
+		IsEnabled:         body.IsEnabled,
+		SendTelegramAfter: body.SendTelegramAfter,
 	})
 	if err != nil {
 		api.Internal(w, err)
@@ -86,19 +88,21 @@ func (h *PusakaSchedule) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Label     string `json:"label"`
-		RunTime   string `json:"run_time"`
-		IsEnabled bool   `json:"is_enabled"`
+		Label             string `json:"label"`
+		RunTime           string `json:"run_time"`
+		IsEnabled         bool   `json:"is_enabled"`
+		SendTelegramAfter bool   `json:"send_telegram_after"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "Data yang dikirim tidak valid")
 		return
 	}
 	sched, err := h.svc.UpdateByID(r.Context(), db.UpdateScheduleByIDParams{
-		ID:        id,
-		Label:     body.Label,
-		RunTime:   body.RunTime,
-		IsEnabled: body.IsEnabled,
+		ID:                id,
+		Label:             body.Label,
+		RunTime:           body.RunTime,
+		IsEnabled:         body.IsEnabled,
+		SendTelegramAfter: body.SendTelegramAfter,
 	})
 	if err != nil {
 		api.Internal(w, err)

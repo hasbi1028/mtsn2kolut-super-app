@@ -19,9 +19,9 @@ WITH due AS (
   WHERE is_enabled = TRUE
     AND run_time <= $2
     AND (last_enqueued_for_date IS NULL OR last_enqueued_for_date < $1)
-  RETURNING id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date
+  RETURNING id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date, send_telegram_after
 )
-SELECT id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date
+SELECT id, label, run_time, run_type, is_enabled, send_telegram_after, created_at, updated_at, last_enqueued_for_date
 FROM due
 ORDER BY run_time ASC
 `
@@ -37,6 +37,7 @@ type ClaimDueSchedulesRow struct {
 	RunTime             string             `json:"run_time"`
 	RunType             RunTypeEnum        `json:"run_type"`
 	IsEnabled           bool               `json:"is_enabled"`
+	SendTelegramAfter   bool               `json:"send_telegram_after"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	LastEnqueuedForDate pgtype.Date        `json:"last_enqueued_for_date"`
@@ -57,6 +58,7 @@ func (q *Queries) ClaimDueSchedules(ctx context.Context, arg ClaimDueSchedulesPa
 			&i.RunTime,
 			&i.RunType,
 			&i.IsEnabled,
+			&i.SendTelegramAfter,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.LastEnqueuedForDate,
@@ -72,16 +74,17 @@ func (q *Queries) ClaimDueSchedules(ctx context.Context, arg ClaimDueSchedulesPa
 }
 
 const createSchedule = `-- name: CreateSchedule :one
-INSERT INTO schedules (label, run_time, run_type, is_enabled)
-VALUES ($1, $2, $3, $4)
-RETURNING id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date
+INSERT INTO schedules (label, run_time, run_type, is_enabled, send_telegram_after)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date, send_telegram_after
 `
 
 type CreateScheduleParams struct {
-	Label     string      `json:"label"`
-	RunTime   string      `json:"run_time"`
-	RunType   RunTypeEnum `json:"run_type"`
-	IsEnabled bool        `json:"is_enabled"`
+	Label             string      `json:"label"`
+	RunTime           string      `json:"run_time"`
+	RunType           RunTypeEnum `json:"run_type"`
+	IsEnabled         bool        `json:"is_enabled"`
+	SendTelegramAfter bool        `json:"send_telegram_after"`
 }
 
 func (q *Queries) CreateSchedule(ctx context.Context, arg CreateScheduleParams) (Schedule, error) {
@@ -90,6 +93,7 @@ func (q *Queries) CreateSchedule(ctx context.Context, arg CreateScheduleParams) 
 		arg.RunTime,
 		arg.RunType,
 		arg.IsEnabled,
+		arg.SendTelegramAfter,
 	)
 	var i Schedule
 	err := row.Scan(
@@ -101,6 +105,7 @@ func (q *Queries) CreateSchedule(ctx context.Context, arg CreateScheduleParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastEnqueuedForDate,
+		&i.SendTelegramAfter,
 	)
 	return i, err
 }
@@ -115,7 +120,7 @@ func (q *Queries) DeleteScheduleByID(ctx context.Context, id pgtype.UUID) error 
 }
 
 const getSchedule = `-- name: GetSchedule :one
-SELECT id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date
+SELECT id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date, send_telegram_after
 FROM schedules
 WHERE id = $1
 `
@@ -132,12 +137,13 @@ func (q *Queries) GetSchedule(ctx context.Context, id pgtype.UUID) (Schedule, er
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastEnqueuedForDate,
+		&i.SendTelegramAfter,
 	)
 	return i, err
 }
 
 const listSchedules = `-- name: ListSchedules :many
-SELECT id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date
+SELECT id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date, send_telegram_after
 FROM schedules
 ORDER BY run_type ASC, run_time ASC
 `
@@ -160,6 +166,7 @@ func (q *Queries) ListSchedules(ctx context.Context) ([]Schedule, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.LastEnqueuedForDate,
+			&i.SendTelegramAfter,
 		); err != nil {
 			return nil, err
 		}
@@ -190,19 +197,21 @@ func (q *Queries) ResetScheduleEnqueueState(ctx context.Context, arg ResetSchedu
 
 const updateScheduleByID = `-- name: UpdateScheduleByID :one
 UPDATE schedules
-SET label      = $2,
-    run_time   = $3,
-    is_enabled = $4,
-    updated_at = NOW()
+SET label              = $2,
+    run_time           = $3,
+    is_enabled         = $4,
+    send_telegram_after = $5,
+    updated_at         = NOW()
 WHERE id = $1
-RETURNING id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date
+RETURNING id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date, send_telegram_after
 `
 
 type UpdateScheduleByIDParams struct {
-	ID        pgtype.UUID `json:"id"`
-	Label     string      `json:"label"`
-	RunTime   string      `json:"run_time"`
-	IsEnabled bool        `json:"is_enabled"`
+	ID                pgtype.UUID `json:"id"`
+	Label             string      `json:"label"`
+	RunTime           string      `json:"run_time"`
+	IsEnabled         bool        `json:"is_enabled"`
+	SendTelegramAfter bool        `json:"send_telegram_after"`
 }
 
 func (q *Queries) UpdateScheduleByID(ctx context.Context, arg UpdateScheduleByIDParams) (Schedule, error) {
@@ -211,6 +220,7 @@ func (q *Queries) UpdateScheduleByID(ctx context.Context, arg UpdateScheduleByID
 		arg.Label,
 		arg.RunTime,
 		arg.IsEnabled,
+		arg.SendTelegramAfter,
 	)
 	var i Schedule
 	err := row.Scan(
@@ -222,6 +232,7 @@ func (q *Queries) UpdateScheduleByID(ctx context.Context, arg UpdateScheduleByID
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastEnqueuedForDate,
+		&i.SendTelegramAfter,
 	)
 	return i, err
 }

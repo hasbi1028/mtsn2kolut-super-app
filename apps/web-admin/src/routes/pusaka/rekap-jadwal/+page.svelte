@@ -15,7 +15,7 @@
 
 	type PusakaSchedule = {
 		id: string; label: string; run_type: string;
-		run_time: string; is_enabled: boolean;
+		run_time: string; is_enabled: boolean; send_telegram_after?: boolean;
 		last_enqueued_for_date?: string | null;
 		created_at?: string; updated_at?: string;
 	};
@@ -108,7 +108,8 @@
 					label: newLabel.trim(),
 					run_time: newTime,
 					run_type: newType,
-					is_enabled: true
+					is_enabled: true,
+					send_telegram_after: false
 				})
 			});
 			if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Gagal membuat'); }
@@ -128,7 +129,7 @@
 			const res = await fetch(`/api/pusaka/schedules/${sched.id}`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ label: sched.label, run_time: sched.run_time, is_enabled: sched.is_enabled })
+				body: JSON.stringify({ label: sched.label, run_time: sched.run_time, is_enabled: sched.is_enabled, send_telegram_after: sched.send_telegram_after ?? false })
 			});
 			if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Gagal'); }
 		} catch (e) {
@@ -142,13 +143,31 @@
 			const res = await fetch(`/api/pusaka/schedules/${sched.id}`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ label: sched.label, run_time: sched.run_time, is_enabled: sched.is_enabled })
+				body: JSON.stringify({ label: sched.label, run_time: sched.run_time, is_enabled: sched.is_enabled, send_telegram_after: sched.send_telegram_after ?? false })
 			});
 			if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Gagal'); }
 			toast.success(`Jadwal "${sched.label}" diubah ke jam ${sched.run_time} WITA`);
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Gagal menyimpan jadwal');
 			await refreshSchedules();
+		}
+	}
+
+	async function toggleTelegramAfter(sched: PusakaSchedule) {
+		sched.send_telegram_after = !(sched.send_telegram_after ?? false);
+		try {
+			const res = await fetch(`/api/pusaka/schedules/${sched.id}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ label: sched.label, run_time: sched.run_time, is_enabled: sched.is_enabled, send_telegram_after: sched.send_telegram_after })
+			});
+			if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Gagal'); }
+			toast.success(sched.send_telegram_after
+				? `Jadwal "${sched.label}" akan kirim Telegram otomatis setelah rekap selesai`
+				: `Jadwal "${sched.label}" tidak kirim Telegram otomatis`);
+		} catch (e) {
+			sched.send_telegram_after = !(sched.send_telegram_after ?? false);
+			toast.error(e instanceof Error ? e.message : 'Gagal mengubah pengaturan Telegram');
 		}
 	}
 
@@ -246,6 +265,7 @@
 							<Table.Head>Jam</Table.Head>
 							<Table.Head>Tipe</Table.Head>
 							<Table.Head>Status</Table.Head>
+							<Table.Head>Kirim Telegram</Table.Head>
 							<Table.Head>Terakhir Jalan</Table.Head>
 							<Table.Head class="text-right">Aksi</Table.Head>
 						</Table.Row>
@@ -269,6 +289,14 @@
 										<span class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform ring-0 transition {sched.is_enabled ? 'translate-x-4' : 'translate-x-0'}" />
 									</button>
 								</Table.Cell>
+								<Table.Cell>
+									<button type="button" role="switch" aria-checked={sched.send_telegram_after ?? false}
+										onclick={() => void toggleTelegramAfter(sched)}
+										title={sched.send_telegram_after ? 'Kirim Telegram otomatis setelah rekap selesai' : 'Aktifkan kirim Telegram otomatis setelah rekap selesai'}
+										class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors {sched.send_telegram_after ? 'bg-emerald-500' : 'bg-base-300'}">
+										<span class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform ring-0 transition {sched.send_telegram_after ? 'translate-x-4' : 'translate-x-0'}" />
+									</button>
+								</Table.Cell>
 								<Table.Cell class="text-xs text-base-content/60">{fmtDt(sched.last_enqueued_for_date)}</Table.Cell>
 								<Table.Cell class="text-right">
 									<button type="button" onclick={() => void deleteSchedule(sched)}
@@ -277,7 +305,7 @@
 							</Table.Row>
 						{:else}
 							<Table.Row>
-								<Table.Cell colspan={6} class="p-6">
+								<Table.Cell colspan={7} class="p-6">
 									<EmptyStatePanel compact title="Belum ada jadwal" description="Klik 'Tambah Jadwal' untuk membuat jadwal otomatis rekap." />
 								</Table.Cell>
 							</Table.Row>
@@ -311,6 +339,14 @@
 									<span class="text-[10px] text-base-content/50">Terakhir: {fmtDt(sched.last_enqueued_for_date)}</span>
 									<button type="button" onclick={() => void deleteSchedule(sched)}
 										class="ml-auto text-xs text-destructive hover:underline">Hapus</button>
+								</div>
+								<div class="flex items-center gap-2">
+									<button type="button" role="switch" aria-checked={sched.send_telegram_after ?? false}
+										onclick={() => void toggleTelegramAfter(sched)}
+										class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors {sched.send_telegram_after ? 'bg-emerald-500' : 'bg-base-300'}">
+										<span class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform ring-0 transition {sched.send_telegram_after ? 'translate-x-4' : 'translate-x-0'}" />
+									</button>
+									<span class="text-[10px] text-base-content/60">Kirim Telegram otomatis setelah rekap selesai</span>
 								</div>
 							</li>
 						{/each}
