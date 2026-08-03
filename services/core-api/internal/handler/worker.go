@@ -250,7 +250,102 @@ func (h *PusakaWorker) Config(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Override concurrency per worker (Fase 2):
+	// kalau worker_id dikirim dan ada setting worker_cap:<id>,
+	// max_concurrent = min(global, cap override).
+	workerID := r.URL.Query().Get("worker_id")
+	workerCap := ""
+	if workerID != "" {
+		for _, row := range rows {
+			if row.Key == "worker_cap:"+workerID {
+				workerCap = row.Value
+				break
+			}
+		}
+		if workerCap != "" {
+			if globalRaw, ok := cfg["max_concurrent"]; ok {
+				if global, err1 := strconv.Atoi(globalRaw); err1 == nil {
+					if capVal, err2 := strconv.Atoi(workerCap); err2 == nil && capVal > 0 && capVal < global {
+						cfg["max_concurrent"] = strconv.Itoa(capVal)
+					}
+				}
+			}
+		}
+	}
+	cfg["worker_cap"] = workerCap
+
 	api.OK(w, cfg)
+}
+
+const workerCapKeyPrefix = "worker_cap:"
+
+func (h *PusakaWorker) ListCaps(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	rows, err := h.sett.List(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	caps := make([]map[string]any, 0)
+	for _, row := range rows {
+		if !strings.HasPrefix(row.Key, workerCapKeyPrefix) {
+			continue
+		}
+		capVal, err := strconv.Atoi(row.Value)
+		if err != nil || capVal <= 0 {
+			continue
+		}
+		caps = append(caps, map[string]any{
+			"worker_id": strings.TrimPrefix(row.Key, workerCapKeyPrefix),
+			"cap":       capVal,
+		})
+	}
+	api.OK(w, map[string]any{"caps": caps})
+}
+
+func (h *PusakaWorker) SetCap(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	workerID := chi.URLParam(r, "worker_id")
+	if workerID == "" {
+		api.BadRequest(w, "worker_id required")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	var body struct {
+		Cap int `json:"cap"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Cap < 1 || body.Cap > 50 {
+		api.BadRequest(w, "cap harus antara 1 dan 50")
+		return
+	}
+	if err := h.sett.Upsert(r.Context(), workerCapKeyPrefix+workerID, strconv.Itoa(body.Cap)); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]any{"worker_id": workerID, "cap": body.Cap})
+}
+
+func (h *PusakaWorker) DeleteCap(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	workerID := chi.URLParam(r, "worker_id")
+	if workerID == "" {
+		api.BadRequest(w, "worker_id required")
+		return
+	}
+	if err := h.sett.Delete(r.Context(), workerCapKeyPrefix+workerID); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]bool{"ok": true})
 }
 
 func (h *PusakaWorker) Heartbeat(w http.ResponseWriter, r *http.Request) {

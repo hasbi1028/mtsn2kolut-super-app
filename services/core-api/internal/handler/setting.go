@@ -17,7 +17,9 @@ type Setting struct {
 
 type settingService interface {
 	List(ctx context.Context) ([]db.AppSetting, error)
+	Get(ctx context.Context, key string) (db.AppSetting, error)
 	Upsert(ctx context.Context, key, value string) error
+	Delete(ctx context.Context, key string) error
 	SchoolProfile(ctx context.Context) (service.SchoolProfile, error)
 	UpdateSchoolProfile(ctx context.Context, profile service.SchoolProfile) (service.SchoolProfile, error)
 }

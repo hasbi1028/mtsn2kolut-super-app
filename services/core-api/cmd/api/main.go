@@ -352,6 +352,9 @@ func main() {
 
 			r.Post("/api/pusaka/scheduler/tick", pusakaSchedulerH.Tick)
 			r.Get("/api/pusaka/worker/status", pusakaWorkerH.GetStatus)
+			r.Get("/api/pusaka/worker/caps", pusakaWorkerH.ListCaps)
+			r.Put("/api/pusaka/worker/caps/{worker_id}", pusakaWorkerH.SetCap)
+			r.Delete("/api/pusaka/worker/caps/{worker_id}", pusakaWorkerH.DeleteCap)
 		})
 
 		r.With(requireUsersRead).Get("/api/users", userH.List)

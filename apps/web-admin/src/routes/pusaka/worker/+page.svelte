@@ -4,7 +4,9 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { toast } from '$lib/components/ui/sonner';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { readClientApiData } from '$lib/client/api';
@@ -30,6 +32,7 @@
 	};
 
 	type FilterKey = 'all' | 'active' | 'stale' | 'offline';
+	type WorkerCap = { worker_id: string; cap: number };
 
 	const REFRESH_MS = 15_000;
 
@@ -40,6 +43,9 @@
 	let refreshTimer: ReturnType<typeof setInterval> | undefined;
 	let filter = $state<FilterKey>(readUrlParam('status', 'all') as FilterKey);
 	let isRefreshing = $state(false);
+	let caps = $state<Record<string, number>>({});
+	let capDrafts = $state<Record<string, string>>({});
+	let capSaving = $state<Record<string, boolean>>({});
 
 	const filterOptions: { key: FilterKey; label: string }[] = [
 		{ key: 'all', label: 'Semua' },
@@ -80,6 +86,71 @@
 		}
 	}
 
+	async function loadCaps(): Promise<void> {
+		try {
+			const res = await fetch('/api/pusaka/worker/caps');
+			const payload = await readClientApiData<{ caps: WorkerCap[] }>(res);
+			const map: Record<string, number> = {};
+			const drafts: Record<string, string> = {};
+			for (const c of payload.caps ?? []) {
+				map[c.worker_id] = c.cap;
+				drafts[c.worker_id] = String(c.cap);
+			}
+			caps = map;
+			capDrafts = drafts;
+		} catch {
+			// Gagal memuat caps tidak boleh menggagalkan halaman utama.
+		}
+	}
+
+	async function saveCap(workerId: string): Promise<void> {
+		const raw = capDrafts[workerId];
+		const cap = Number(raw);
+		if (!Number.isInteger(cap) || cap < 1 || cap > 35) {
+			toast.error('Cap harus bilangan bulat antara 1 dan 35');
+			return;
+		}
+		capSaving = { ...capSaving, [workerId]: true };
+		try {
+			const res = await fetch(`/api/pusaka/worker/caps/${encodeURIComponent(workerId)}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ cap })
+			});
+			const payload = await readClientApiData<{ cap: number }>(res);
+			caps = { ...caps, [workerId]: payload.cap };
+			capDrafts = { ...capDrafts, [workerId]: String(payload.cap) };
+			toast.success(`Cap ${workerId} diatur ke ${payload.cap} (berlaku ≤30 detik)`);
+			void loadWorkerStatus(true);
+		} catch (e) {
+			toast.error((e as Error)?.message ?? 'Gagal menyimpan cap');
+		} finally {
+			capSaving = { ...capSaving, [workerId]: false };
+		}
+	}
+
+	async function resetCap(workerId: string): Promise<void> {
+		capSaving = { ...capSaving, [workerId]: true };
+		try {
+			const res = await fetch(`/api/pusaka/worker/caps/${encodeURIComponent(workerId)}`, {
+				method: 'DELETE'
+			});
+			await readClientApiData<{ ok: boolean }>(res);
+			const next = { ...caps };
+			delete next[workerId];
+			caps = next;
+			const drafts = { ...capDrafts };
+			delete drafts[workerId];
+			capDrafts = drafts;
+			toast.success(`Cap ${workerId} direset — kembali ke env/global`);
+			void loadWorkerStatus(true);
+		} catch (e) {
+			toast.error((e as Error)?.message ?? 'Gagal mereset cap');
+		} finally {
+			capSaving = { ...capSaving, [workerId]: false };
+		}
+	}
+
 	function setFilter(key: FilterKey): void {
 		filter = key;
 		writeUrlParam('status', key);
@@ -117,6 +188,7 @@
 
 	onMount(() => {
 		void loadWorkerStatus();
+		void loadCaps();
 		refreshTimer = setInterval(() => {
 			if (!document.hidden) {
 				void loadWorkerStatus(true);
@@ -253,6 +325,7 @@
 							<Table.Head class="text-right">Konsumen</Table.Head>
 							<Table.Head class="text-right">Target</Table.Head>
 							<Table.Head>Mode</Table.Head>
+							<Table.Head>Cap (Override)</Table.Head>
 							<Table.Head>Sync Config</Table.Head>
 							<Table.Head>Heartbeat</Table.Head>
 						</Table.Row>
@@ -270,6 +343,45 @@
 									<span class="text-xs {w.headless ? 'text-muted-foreground' : 'text-amber-600'}">
 										{w.headless ? 'Headless' : 'Terbuka'}
 									</span>
+								</Table.Cell>
+								<Table.Cell>
+									<div class="flex items-center gap-1">
+										<Input
+											type="number"
+											min="1"
+											max="35"
+											placeholder={w.target_concurrency ? `env ${w.target_concurrency}` : '—'}
+											value={capDrafts[w.worker_id] ?? ''}
+											oninput={(e: { currentTarget: HTMLInputElement }) =>
+												(capDrafts = { ...capDrafts, [w.worker_id]: e.currentTarget.value })}
+											class="h-8 w-16 text-xs"
+										/>
+										<Button
+											variant="outline"
+											size="sm"
+											class="h-8 px-2 text-xs"
+											onclick={() => void saveCap(w.worker_id)}
+											disabled={capSaving[w.worker_id]}
+										>
+											Simpan
+										</Button>
+										{#if caps[w.worker_id] !== undefined}
+											<Button
+												variant="ghost"
+												size="sm"
+												class="h-8 px-2 text-xs text-rose-600"
+												onclick={() => void resetCap(w.worker_id)}
+												disabled={capSaving[w.worker_id]}
+											>
+												Reset
+											</Button>
+										{/if}
+									</div>
+									{#if caps[w.worker_id] !== undefined}
+										<p class="mt-0.5 text-[10px] text-muted-foreground">
+											override aktif: {caps[w.worker_id]}
+										</p>
+									{/if}
 								</Table.Cell>
 								<Table.Cell class="text-xs text-muted-foreground">{formatRelative(w.last_sync_at)}</Table.Cell>
 								<Table.Cell class="text-xs text-muted-foreground">{formatRelative(w.reported_at)}</Table.Cell>

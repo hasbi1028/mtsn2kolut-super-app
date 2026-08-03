@@ -15,6 +15,7 @@ type settingStore interface {
 	ListSettings(ctx context.Context) ([]db.AppSetting, error)
 	GetSetting(ctx context.Context, key string) (db.AppSetting, error)
 	UpsertSetting(ctx context.Context, arg db.UpsertSettingParams) error
+	DeleteSetting(ctx context.Context, key string) error
 }
 
 type Setting struct {
@@ -68,6 +69,10 @@ func (s *Setting) Get(ctx context.Context, key string) (db.AppSetting, error) {
 
 func (s *Setting) Upsert(ctx context.Context, key, value string) error {
 	return s.q.UpsertSetting(ctx, db.UpsertSettingParams{Key: key, Value: value})
+}
+
+func (s *Setting) Delete(ctx context.Context, key string) error {
+	return s.q.DeleteSetting(ctx, key)
 }
 
 func (s *Setting) SchoolProfile(ctx context.Context) (SchoolProfile, error) {

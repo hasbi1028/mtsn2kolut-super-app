@@ -102,6 +102,19 @@ ikut nilai global yang sama → total concurrent = instance × nilai global
 concurrency efektif tiap instance = min(setting backend, WORKER_CONCURRENCY)
 ```
 
+**Mulai versi Manajemen Worker (Fase 2):** ada juga **override per worker via
+UI** (`/pusaka/worker` → kolom "Cap"). Urutan prioritas (nilai terkecil yang
+menang):
+
+```
+concurrency efektif = min(setting global UI, override per worker (UI), WORKER_CONCURRENCY env)
+```
+
+- **Atur dari UI** → langsung tersimpan di backend, worker menyesuaikan ≤30 detik.
+- **Reset dari UI** → hapus override, kembali ke env/global.
+- Env `WORKER_CONCURRENCY` tetap jadi **batas terakhir** yang tidak bisa
+  dilampaui instance.
+
 ### Contoh — 5 Instance (default 3 → total 15, aman)
 
 | Instance | `WORKER_CONCURRENCY` | Efektif (jika backend ≥ 3) |

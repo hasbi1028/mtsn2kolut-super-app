@@ -191,7 +191,7 @@ export async function claimJob(signal?: AbortSignal): Promise<ClaimedJob | null>
 export async function fetchRuntimeConfig(): Promise<Partial<RuntimeConfig>> {
   const response = await workerFetch(
     'fetch runtime config',
-    `${BACKEND_URL}/api/pusaka/worker/config`,
+    `${BACKEND_URL}/api/pusaka/worker/config?worker_id=${encodeURIComponent(WORKER_ID)}`,
     {
       method: 'GET',
       headers: workerHeaders(),

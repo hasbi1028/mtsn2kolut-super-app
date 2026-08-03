@@ -9,3 +9,6 @@ ON CONFLICT (key) DO UPDATE
 
 -- name: ListSettings :many
 SELECT key, value, updated_at FROM app_settings ORDER BY key;
+
+-- name: DeleteSetting :exec
+DELETE FROM app_settings WHERE key = $1;
