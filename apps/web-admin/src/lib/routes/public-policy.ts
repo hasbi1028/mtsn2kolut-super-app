@@ -17,7 +17,10 @@ const PUBLIC_API_PREFIXES = [
 	'/api/public/site/pages/',
 	'/api/public/site/posts/',
 	'/api/public/site/announcements/',
-	'/api/public/student-cards/'
+	'/api/public/student-cards/',
+	// Passthrough worker API: auth tetap divalidasi core-api (WORKER_API_KEY),
+	// bukan sesi browser — lihat routes/api/pusaka/worker/[...path]/+server.ts
+	'/api/pusaka/worker/'
 ] as const;
 
 const PUBLIC_PAGE_PREFIXES = ['/s/idc/', '/portal/siswa/qr-login'] as const;

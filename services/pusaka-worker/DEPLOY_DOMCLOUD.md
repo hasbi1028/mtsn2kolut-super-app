@@ -58,7 +58,7 @@ beberapa hari. Karena itu worker punya **watchdog otomatis**:
 
 | Variabel | Contoh | Keterangan |
 |----------|--------|------------|
-| `BACKEND_URL` | `https://mtsn2kolut.sch.id` | URL core-api (TANPA kredensial) |
+| `BACKEND_URL` | `https://mtsn2kolut.sch.id` | URL core-api (TANPA kredensial). Bisa pakai domain publik — web-admin punya route passthrough `/api/pusaka/worker/*` yang meneruskan `WORKER_API_KEY` ke core-api (auth tetap divalidasi backend) |
 | `WORKER_API_KEY` | `<rahasia>` | API key worker (sama dengan `WORKER_API_KEY` di backend/.env) |
 
 ## Environment Opsional
@@ -80,8 +80,8 @@ beberapa hari. Karena itu worker punya **watchdog otomatis**:
 - **Worker TIDAK menyentuh PostgreSQL** — komunikasi hanya via `BACKEND_URL`
   (canonical `/api/pusaka/worker/*`).
 - **`BACKEND_URL` dari DomCloud** harus bisa diakses worker: pakai URL publik
-  (`https://mtsn2kolut.sch.id`) atau IP server backend — **jangan** `localhost`
-  (di DomCloud itu berarti server DomCloud sendiri).
+  (`https://mtsn2kolut.sch.id` — didukung route passthrough BFF) — **jangan**
+  `localhost` (di DomCloud itu berarti server DomCloud sendiri).
 - Worker harus tetap jalan sebagai proses panjang; jangan matikan via panel
   "stop on idle" (kalau DomCloud punya opsi itu).
 - `Passengerfile.json` tersedia untuk mode standalone (`passenger start`) dan sebagai
