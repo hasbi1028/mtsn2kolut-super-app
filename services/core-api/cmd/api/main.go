@@ -120,7 +120,7 @@ func main() {
 	journalH := handler.NewClassJournal(journalSvc)
 
 	jwtSecret := mustEnv("JWT_SECRET")
-	workerKey := mustEnv("WORKER_API_KEY")
+	workerKey := strings.TrimSpace(mustEnv("WORKER_API_KEY"))
 	internalAPIKey := getEnv("INTERNAL_API_KEY", "")
 	trustedProxies := splitCSVEnv("TRUSTED_PROXY_CIDRS")
 	authRateLimit := ratelimit.RateLimitWithTrustedProxies(5, 1, trustedProxies)

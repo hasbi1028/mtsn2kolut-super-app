@@ -88,7 +88,8 @@ if (!RAW_BACKEND_URL && !isExplicitLocalOrTestEnv()) {
   throw new Error('Invalid worker config: BACKEND_URL is required outside local/test/development');
 }
 export const BACKEND_URL = normalizeBackendUrl(RAW_BACKEND_URL ?? 'http://localhost:8080');
-export const WORKER_API_KEY = process.env.WORKER_API_KEY ?? '';
+// Trim + strip kutip tak terlihat hasil copy-paste .env (mis. "key" atau 'key').
+export const WORKER_API_KEY = (process.env.WORKER_API_KEY ?? '').trim().replace(/^["']|["']$/g, '');
 if (!WORKER_API_KEY && !isExplicitLocalOrTestEnv()) {
   throw new Error('Invalid worker config: WORKER_API_KEY is required');
 }

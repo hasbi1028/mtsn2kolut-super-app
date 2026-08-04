@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"crypto/subtle"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -237,7 +238,14 @@ func WorkerKey(key string) func(http.Handler) http.Handler {
 			if got == "" {
 				got = bearerToken(r)
 			}
+			// Toleran terhadap spasi tak terlihat hasil copy-paste .env.
+			got = strings.TrimSpace(got)
 			if subtle.ConstantTimeCompare([]byte(got), []byte(key)) != 1 {
+				slog.Warn("worker key mismatch",
+					"got_len", len(got),
+					"want_len", len(key),
+					"path", r.URL.Path,
+					"remote_addr", r.RemoteAddr)
 				api.Unauthorized(w)
 				return
 			}
