@@ -161,6 +161,10 @@ export const LOG_PATH =
   process.env.WORKER_LOG_PATH ?? path.resolve('../logs/worker.log');
 export const SCREENSHOT_DIR =
   process.env.SCREENSHOT_DIR ?? path.resolve('../logs/screenshots');
+// Direktori sesi login PUSAKA (storageState per akun) — 1 akun = 1 sesi
+// yang dipakai ulang supaya perilaku seperti manusia & tidak login tiap job.
+export const SESSION_DIR =
+  process.env.SESSION_DIR ?? path.resolve('../logs/sessions');
 
 export const BASE_URL = 'https://pusaka-v3.kemenag.go.id';
 export const BASE_LAT = -3.2163111;
@@ -172,10 +176,12 @@ export const BROWSER_ARGS = [
   '--disable-gpu',
   '--disable-extensions',
   '--disable-background-networking',
+  // Sembunyikan tanda otomasi Playwright dari WAF/anti-bot.
+  '--disable-blink-features=AutomationControlled',
 ];
 
 export const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 export function createRuntimeConfig(): RuntimeConfig {
   return {

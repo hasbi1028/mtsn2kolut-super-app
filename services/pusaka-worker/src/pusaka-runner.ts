@@ -11,6 +11,7 @@ import {
   SCRAPE_RETRIES,
   SCRAPE_RETRY_MS,
   SCREENSHOT_DIR,
+  SESSION_DIR,
   USER_AGENT,
 } from './config.js';
 import { log } from './logger.js';
@@ -27,6 +28,40 @@ const SCREENSHOT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 function usernameHash(username: string): string {
   return crypto.createHash('sha256').update(username).digest('hex').slice(0, 12);
+}
+
+function sessionPathFor(username: string): string {
+  return path.join(SESSION_DIR, `${usernameHash(username)}.json`);
+}
+
+async function saveSession(
+  context: BrowserContext,
+  username: string,
+): Promise<void> {
+  try {
+    fs.mkdirSync(SESSION_DIR, { recursive: true, mode: 0o700 });
+    fs.chmodSync(SESSION_DIR, 0o700);
+    const file = sessionPathFor(username);
+    await context.storageState({ path: file });
+    fs.chmodSync(file, 0o600);
+    log('INFO', 'session saved', { ...usernameContext(username), file });
+  } catch (error) {
+    log('WARN', 'session save failed', {
+      ...usernameContext(username),
+      error: (error as Error)?.message,
+    });
+  }
+}
+
+async function applyStealth(context: BrowserContext): Promise<void> {
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+  });
+}
+
+function sessionStorageState(username: string): Record<string, unknown> | undefined {
+  const file = sessionPathFor(username);
+  return fs.existsSync(file) ? { storageState: file } : undefined;
 }
 
 function usernameContext(username: string): Record<string, string> {
@@ -228,11 +263,33 @@ async function loginToPusaka(
   username: string,
   password: string,
   label: string,
+  context?: BrowserContext,
 ): Promise<void> {
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
-  await page.getByRole('link', { name: /login/i }).first().waitFor({
-    state: 'visible',
-  });
+  const loginLink = page.getByRole('link', { name: /login/i }).first();
+  const loginVisible = await loginLink.isVisible().catch(() => false);
+  if (!loginVisible) {
+    // Tidak ada link login — pastikan ini benar-benar sesi aktif (ada elemen
+    // dashboard), BUKAN halaman kosong/blank karena diblokir WAF.
+    const dashboardHint = page
+      .getByRole('link', { name: /Absensi|Dashboard|Beranda|Profil/i })
+      .first();
+    const dashboardVisible = await dashboardHint.isVisible().catch(() => false);
+    if (!dashboardVisible) {
+      const bodyText = await page.locator('body').innerText().catch(() => '');
+      if (!/absensi|dashboard|beranda|profil|selamat\s+datang/i.test(bodyText)) {
+        throw new Error(
+          'Halaman PUSAKA tidak menampilkan login maupun dashboard — kemungkinan diblokir WAF (halaman kosong)',
+        );
+      }
+    }
+    log('INFO', `${label}: session reuse (sudah login)`, {
+      ...usernameContext(username),
+      url: page.url(),
+    });
+    return;
+  }
+  await loginLink.waitFor({ state: 'visible' });
   await page.getByRole('link', { name: /login/i }).first().click();
   await page.getByPlaceholder('Username').fill(username);
   await page.getByPlaceholder('Password').fill(password);
@@ -259,6 +316,9 @@ async function loginToPusaka(
       ...usernameContext(username),
       url: page.url(),
     });
+    if (context) {
+      await saveSession(context, username);
+    }
     return;
   } catch (urlError) {
     if ((urlError as Error)?.message?.includes('username/password')) {
@@ -277,6 +337,9 @@ async function loginToPusaka(
       ...usernameContext(username),
       url: page.url(),
     });
+    if (context) {
+      await saveSession(context, username);
+    }
     return;
   }
 
@@ -363,7 +426,10 @@ async function scrapeOnce(
 ): Promise<AttendanceRecord> {
   throwIfCancelled(signal);
   const browser = await chromium.launch(getBrowserOpts(runtimeConfig));
-  const context = await browser.newContext(getContextOpts());
+  const context = await browser.newContext(
+    getContextOpts(sessionStorageState(username)),
+  );
+  await applyStealth(context);
   context.setDefaultTimeout(ACTION_TIMEOUT);
   const page = await context.newPage();
   const unregisterAbortCleanup = registerAbortCleanup(signal, () => ({
@@ -374,7 +440,7 @@ async function scrapeOnce(
 
   try {
     throwIfCancelled(signal);
-    await loginToPusaka(page, username, password, 'scrape');
+    await loginToPusaka(page, username, password, 'scrape', context);
     await blockAssets(page);
 
     const absensiLink = page.getByRole('link', { name: /Absensi/i }).first();
@@ -430,8 +496,13 @@ async function checkin(
   );
   const browser = await chromium.launch(getBrowserOpts(runtimeConfig));
   const context = await browser.newContext(
-    getContextOpts({ geolocation: geo, permissions: ['geolocation'] }),
+    getContextOpts({
+      geolocation: geo,
+      permissions: ['geolocation'],
+      ...sessionStorageState(username),
+    }),
   );
+  await applyStealth(context);
   context.setDefaultTimeout(ACTION_TIMEOUT);
   const page = await context.newPage();
   const unregisterAbortCleanup = registerAbortCleanup(signal, () => ({
@@ -447,7 +518,7 @@ async function checkin(
       lng: geo.longitude.toFixed(7),
     });
     throwIfCancelled(signal);
-    await loginToPusaka(page, username, password, label);
+    await loginToPusaka(page, username, password, label, context);
     await page.goto(`${BASE_URL}/profile/presence`, {
       waitUntil: 'domcontentloaded',
     });
@@ -508,8 +579,13 @@ async function checkout(
   );
   const browser = await chromium.launch(getBrowserOpts(runtimeConfig));
   const context = await browser.newContext(
-    getContextOpts({ geolocation: geo, permissions: ['geolocation'] }),
+    getContextOpts({
+      geolocation: geo,
+      permissions: ['geolocation'],
+      ...sessionStorageState(username),
+    }),
   );
+  await applyStealth(context);
   context.setDefaultTimeout(ACTION_TIMEOUT);
   const page = await context.newPage();
   const unregisterAbortCleanup = registerAbortCleanup(signal, () => ({
@@ -525,7 +601,7 @@ async function checkout(
       lng: geo.longitude.toFixed(7),
     });
     throwIfCancelled(signal);
-    await loginToPusaka(page, username, password, label);
+    await loginToPusaka(page, username, password, label, context);
     await page.goto(`${BASE_URL}/profile/presence`, {
       waitUntil: 'domcontentloaded',
     });
