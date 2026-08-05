@@ -51,6 +51,12 @@ func (h *PusakaWorker) Claim(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "worker_id required")
 		return
 	}
+	// Worker yang dinonaktifkan admin tidak menerima job apa pun
+	// (204 = seperti antrean kosong, worker tetap hidup & terpantau).
+	if !h.isWorkerEnabled(r.Context(), body.WorkerID) {
+		api.JSON(w, http.StatusNoContent, nil)
+		return
+	}
 	job, err := h.jobs.Claim(r.Context(), body.WorkerID)
 	if errors.Is(err, domain.ErrNoJob) {
 		api.JSON(w, http.StatusNoContent, nil)
@@ -273,11 +279,99 @@ func (h *PusakaWorker) Config(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	cfg["worker_cap"] = workerCap
+	cfg["worker_enabled"] = "true"
+	if workerID != "" && !h.isWorkerEnabled(r.Context(), workerID) {
+		cfg["worker_enabled"] = "false"
+	}
 
 	api.OK(w, cfg)
 }
 
 const workerCapKeyPrefix = "worker_cap:"
+const workerEnabledKeyPrefix = "worker_enabled:"
+
+// isWorkerEnabled — worker aktif secara default; admin bisa menonaktifkan
+// via setting worker_enabled:<id> = "false".
+func (h *PusakaWorker) isWorkerEnabled(ctx context.Context, workerID string) bool {
+	if workerID == "" {
+		return true
+	}
+	setting, err := h.sett.Get(ctx, workerEnabledKeyPrefix+workerID)
+	if err != nil || setting.Value == "" {
+		return true
+	}
+	return !strings.EqualFold(strings.TrimSpace(setting.Value), "false")
+}
+
+func (h *PusakaWorker) ListEnabled(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	rows, err := h.sett.List(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	disabled := make([]string, 0)
+	for _, row := range rows {
+		if strings.HasPrefix(row.Key, workerEnabledKeyPrefix) &&
+			strings.EqualFold(strings.TrimSpace(row.Value), "false") {
+			disabled = append(disabled, strings.TrimPrefix(row.Key, workerEnabledKeyPrefix))
+		}
+	}
+	api.OK(w, map[string]any{"disabled": disabled})
+}
+
+func (h *PusakaWorker) SetWorkerEnabled(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	workerID := chi.URLParam(r, "worker_id")
+	if workerID == "" {
+		api.BadRequest(w, "worker_id required")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "Body tidak valid")
+		return
+	}
+	if body.Enabled {
+		// true = default → hapus override supaya bersih.
+		if err := h.sett.Delete(r.Context(), workerEnabledKeyPrefix+workerID); err != nil {
+			api.Internal(w, err)
+			return
+		}
+	} else {
+		if err := h.sett.Upsert(r.Context(), workerEnabledKeyPrefix+workerID, "false"); err != nil {
+			api.Internal(w, err)
+			return
+		}
+	}
+	api.OK(w, map[string]any{"worker_id": workerID, "enabled": body.Enabled})
+}
+
+func (h *PusakaWorker) DeleteWorkerEnabled(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	workerID := chi.URLParam(r, "worker_id")
+	if workerID == "" {
+		api.BadRequest(w, "worker_id required")
+		return
+	}
+	if err := h.sett.Delete(r.Context(), workerEnabledKeyPrefix+workerID); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]bool{"ok": true})
+}
 
 func (h *PusakaWorker) ListCaps(w http.ResponseWriter, r *http.Request) {
 	if !adminAccessAllowed(r) {
@@ -439,6 +533,8 @@ func (h *PusakaWorker) GetStatus(w http.ResponseWriter, r *http.Request) {
 			status = "stale"
 		}
 		workerData["status"] = status
+		workerID, _ := workerData["worker_id"].(string)
+		workerData["enabled"] = h.isWorkerEnabled(r.Context(), workerID)
 		workers = append(workers, workerData)
 	}
 

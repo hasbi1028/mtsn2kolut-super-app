@@ -355,6 +355,9 @@ func main() {
 			r.Get("/api/pusaka/worker/caps", pusakaWorkerH.ListCaps)
 			r.Put("/api/pusaka/worker/caps/{worker_id}", pusakaWorkerH.SetCap)
 			r.Delete("/api/pusaka/worker/caps/{worker_id}", pusakaWorkerH.DeleteCap)
+			r.Get("/api/pusaka/worker/enabled", pusakaWorkerH.ListEnabled)
+			r.Put("/api/pusaka/worker/enabled/{worker_id}", pusakaWorkerH.SetWorkerEnabled)
+			r.Delete("/api/pusaka/worker/enabled/{worker_id}", pusakaWorkerH.DeleteWorkerEnabled)
 		})
 
 		r.With(requireUsersRead).Get("/api/users", userH.List)

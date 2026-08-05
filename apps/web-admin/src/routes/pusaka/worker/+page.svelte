@@ -15,6 +15,7 @@
 	type WorkerInfo = {
 		worker_id: string;
 		status: 'active' | 'stale' | 'offline';
+		enabled?: boolean;
 		active_consumers: number;
 		target_concurrency: number;
 		headless: boolean;
@@ -46,6 +47,7 @@
 	let caps = $state<Record<string, number>>({});
 	let capDrafts = $state<Record<string, string>>({});
 	let capSaving = $state<Record<string, boolean>>({});
+	let enabling = $state<Record<string, boolean>>({});
 
 	const filterOptions: { key: FilterKey; label: string }[] = [
 		{ key: 'all', label: 'Semua' },
@@ -148,6 +150,32 @@
 			toast.error((e as Error)?.message ?? 'Gagal mereset cap');
 		} finally {
 			capSaving = { ...capSaving, [workerId]: false };
+		}
+	}
+
+	async function toggleEnabled(w: WorkerInfo): Promise<void> {
+		const next = !(w.enabled ?? true);
+		enabling = { ...enabling, [w.worker_id]: true };
+		try {
+			const res = await fetch(
+				`/api/pusaka/worker/enabled/${encodeURIComponent(w.worker_id)}`,
+				{
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ enabled: next })
+				}
+			);
+			const payload = await readClientApiData<{ enabled: boolean }>(res);
+			w.enabled = payload.enabled;
+			toast.success(
+				next
+					? `${w.worker_id} diaktifkan — akan menerima job lagi`
+					: `${w.worker_id} dinonaktifkan — tidak akan menerima job`
+			);
+		} catch (e) {
+			toast.error((e as Error)?.message ?? 'Gagal mengubah status worker');
+		} finally {
+			enabling = { ...enabling, [w.worker_id]: false };
 		}
 	}
 
@@ -322,6 +350,7 @@
 						<Table.Row class="hover:bg-transparent">
 							<Table.Head>Worker</Table.Head>
 							<Table.Head>Status</Table.Head>
+							<Table.Head>Aktif</Table.Head>
 							<Table.Head class="text-right">Konsumen</Table.Head>
 							<Table.Head class="text-right">Target</Table.Head>
 							<Table.Head>Mode</Table.Head>
@@ -336,6 +365,29 @@
 								<Table.Cell class="font-mono text-xs font-semibold">{w.worker_id}</Table.Cell>
 								<Table.Cell>
 									<Badge class={statusBadgeClass[w.status]}>{statusLabel[w.status]}</Badge>
+								</Table.Cell>
+								<Table.Cell>
+									<div class="flex items-center gap-2">
+										<Badge
+											class={w.enabled === false
+												? 'border-transparent bg-slate-200 text-slate-600'
+												: 'border-transparent bg-emerald-100 text-emerald-700'}
+										>
+											{w.enabled === false ? 'NONAKTIF' : 'AKTIF'}
+										</Badge>
+										<Button
+											variant="outline"
+											size="sm"
+											disabled={enabling[w.worker_id]}
+											onclick={() => void toggleEnabled(w)}
+										>
+											{enabling[w.worker_id]
+												? '…'
+												: w.enabled === false
+													? 'Aktifkan'
+													: 'Nonaktifkan'}
+										</Button>
+									</div>
 								</Table.Cell>
 								<Table.Cell class="text-right font-semibold tabular-nums">{w.active_consumers ?? 0}</Table.Cell>
 								<Table.Cell class="text-right tabular-nums text-muted-foreground">{w.target_concurrency ?? 0}</Table.Cell>
